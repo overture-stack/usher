@@ -10,6 +10,13 @@ Newest first.
 
 **Done:**
 
+- Closed two open design questions in `permissions-model.md`:
+    - Existence disclosure: "discoverable-but-inaccessible" mode will not be introduced at any
+      version; existence is denied along with access, unconditionally.
+    - Admin listing vs. data access: PAP admins can enumerate all resources platform-wide for
+      operational purposes, but that does not extend to reading, downloading, or sharing data.
+      Any such action requires an explicit logged grant through the permissions system.
+
 - Updated `permissions-model.md` with additions from the AuthZ Framework and iMS UAC
   Requirements document reviews:
     - `user_groups` and `group_category_grants` added to the core entity list (design gap noted;

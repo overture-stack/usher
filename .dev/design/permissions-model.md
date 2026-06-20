@@ -400,6 +400,13 @@ The adversarial framing: if a PAP admin account is compromised, the attacker gai
 to grant themselves access, but that grant is logged. They do not have silent, unlogged access
 to all private data by virtue of the admin role alone.
 
+**Admin listing vs. data access are distinct.** PAP admins can enumerate all resources
+platform-wide for operational and support purposes (e.g. permission management, audit,
+troubleshooting). This listing capability does not extend to reading, downloading, or sharing
+resource data. To do any of those, an admin must explicitly grant themselves access through the
+permissions system, which produces a logged event. The audit trail is the control: admin power
+is bounded and visible, never silent.
+
 ### Resource ownership and delegated sharing
 
 A user who submits data to a resource is its **owner**. The owner should eventually be able to:
@@ -453,16 +460,14 @@ submission service (Lyric) assigns the appropriate category at ingest; Usher enf
 A separate question from access: should a user who cannot read a private record be able to
 tell that it exists?
 
-The current model fully denies existence: excluded records do not appear in counts,
-aggregations, or result sets. This is the safest default and the right starting point.
+**Decided: no.** Existence is denied along with access. Excluded records do not appear in
+counts, aggregations, or result sets. A user who cannot read a resource does not know it
+exists: not in listings, not in search, not in any other surface.
 
-A future variant (discoverable-but-inaccessible) would allow users to see that records exist
-(potentially as opaque placeholders in search results) without seeing their content. This
-supports collaboration discovery: a researcher can see that private data on a topic exists and
-contact the owner to request access, without the owner needing to advertise it elsewhere.
-Implementing this requires the constraint token to carry an "existence-visible, content-denied"
-state distinct from "fully excluded", and the PEP plugin to render that state differently. This
-is not planned for the first version.
+This is a hard invariant, not a configuration option. In clinical and genomic research contexts,
+knowing that a sensitive dataset exists is itself sensitive information; existence revelation is
+an information disclosure vulnerability (OWASP A01). A "discoverable-but-inaccessible" mode
+will not be introduced at any version.
 
 ---
 
