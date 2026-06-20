@@ -6,6 +6,58 @@ Newest first.
 
 ---
 
+## 2026-06-20
+
+**Done:**
+
+- Created `.dev/design/admin-model.md` covering: OIDC-first admin identification (claim-based,
+  no `platform_admins` table), admin role taxonomy (platform admin, category steward, resource
+  owner, service account), bootstrap (delegated to the identity provider), self-grant flow (TTL
+  mandatory, `self_grant: true` audit flag, no special-casing in constraint token), admin listing
+  visibility (metadata yes, record counts no), admin API separation from PEP plugin path, service
+  account hybrid model (Keycloak client credentials for auth + Usher `service_accounts` table for
+  fine-grained capabilities), audit log integrity (DB-level INSERT-only role, out-of-band stdout
+  log, optional append-only external store), OIDC adapter design note, open questions, and
+  non-obvious constraints (IdP audit scope boundary, token TTL deprovisioning lag, category naming
+  operator responsibility).
+- Updated `permissions-model.md`: added cross-reference to `admin-model.md` in the status note.
+- Updated `concepts.md`: added PAP admin / platform admin synonymy note to the PAP section, with
+  link to `admin-model.md`.
+- Updated `design/README.md`: added `admin-model.md` to the coverage table; added four new
+  entries to the "Decisions needed before implementation" table (self-grant step-up auth,
+  list-all-users, break-glass, rogue admin scenario).
+- Updated `roadmap.md`: added "Admin model design" section recording what is resolved and what
+  remains open.
+
+**Decisions:**
+
+- OIDC-first admin model: the identity provider (Keycloak or any OIDC-compliant provider) is
+  the source of truth for platform admin role assignment. Usher reads the claim from the
+  validated token on every request. No `platform_admins` table; no Usher bootstrap logic.
+- Usher's policy database scope: fine-grained grants only (memberships, category_grants,
+  resource_categories, service_accounts). Usher does not write to the IdP for any grant
+  operation.
+- Service accounts: hybrid model. Keycloak provides authentication via client credentials flow;
+  Usher's own `service_accounts` table stores fine-grained capability sets. Platform admins
+  manage service account capabilities through the Usher management UI.
+- Bootstrap, admin hierarchy, and deprovisioning are all IdP concerns, outside Usher's scope.
+- OPA deferred: not a v1 dependency. The structured ABAC model does not require a general-purpose
+  policy engine at this scale.
+- Admin listing: full resource metadata including category tag assignments is visible to platform
+  admins; record counts and record contents are not.
+- Constraint token issued to platform admins is identical in structure to any other constraint
+  token; the admin capability is in the admin API layer, not in the token.
+
+**Open threads:**
+
+- Self-grant step-up authentication (MFA re-prompt)
+- Self-grant notification to resource owners
+- "List all users" capability scope and PHI implications
+- Break-glass emergency access deployment procedure
+- Rogue admin scenario (compromised account impact on peer admin data grants)
+
+---
+
 ## 2026-06-19
 
 **Done:**

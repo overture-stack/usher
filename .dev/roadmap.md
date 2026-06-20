@@ -9,6 +9,24 @@ marked `[in progress]`. Completed items are removed; `sessions.md` is the histor
 
 These must be completed or sufficiently resolved before the relevant implementation phase begins.
 
+### Admin model design
+
+Platform admin, category steward, resource owner, and service account roles are now specified in
+`admin-model.md`. Still open:
+
+- Self-grant step-up authentication: MFA re-prompt at point of self-grant? (NIST SP 800-63B
+  recommends; defer to v1+ if TTL and audit controls are accepted as sufficient)
+- Self-grant notification: alert resource owner when a platform admin self-grants access?
+- "List all users" capability: scope and PHI implications (scoped-to-resource vs global dump)
+- Break-glass emergency access: deployment runbook procedure when all platform admins are
+  unavailable
+- Rogue admin scenario: can a compromised platform admin account revoke peer admin data grants?
+
+Resolved this session: bootstrap (delegated to IdP), admin hierarchy (IdP configuration concern),
+admin deprovisioning (automatic via token TTL when IdP role is revoked), OPA (deferred).
+
+See `.dev/design/admin-model.md`.
+
 ### Complete permissions model
 
 The structure (hybrid role + attribute, data categories, memberships, category grants) is defined.

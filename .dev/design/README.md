@@ -35,6 +35,7 @@ designed).
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps | reference |
 | [security-workflow.md](security-workflow.md) | Token issuance, constraint lifecycle, revocation, fail-secure | specced |
 | [permissions-model.md](permissions-model.md) | Hybrid role + attribute model, data categories, cohort semantics, OCAP, private data sharing | in progress |
+| [admin-model.md](admin-model.md) | Admin role taxonomy, OIDC-first admin identification, bootstrap, self-grant, service accounts, audit integrity | in progress |
 | [plugin-integration.md](plugin-integration.md) | Per-app plugin design, shared client library | not started |
 | [management-ui.md](management-ui.md) | Access management UI (PAP layer) | not started |
 
@@ -78,6 +79,10 @@ cross-application implications and should not be resolved by a single developer 
 | User groups design: Keycloak sync or PAP-only? Grant composition across overlapping groups? Revocation when a user leaves a group? | [permissions-model.md](permissions-model.md) | Core data model; management UI |
 | JWE algorithm selection: AES-256-GCM for content; RSA-OAEP or ECDH-ES for key wrap? | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |
 | Role capability definitions: what actions does each role permit beyond resource access? | [permissions-model.md](permissions-model.md) | Constraint resolution; management UI |
+| Self-grant step-up authentication: should initiating a self-grant require MFA re-prompt? | [admin-model.md](admin-model.md) | Self-grant UX; NIST SP 800-63B alignment |
+| "List all users" capability: can platform admins enumerate all registered users? | [admin-model.md](admin-model.md) | Admin API design; PHI policy |
+| Break-glass emergency access: documented procedure if all platform admins are unavailable? | [admin-model.md](admin-model.md) | Deployment runbook |
+| Rogue admin scenario: can a compromised platform admin account revoke peer admin data grants? | [admin-model.md](admin-model.md) | Admin API design |
 
 ## Why we are building Usher rather than adopting an existing tool
 

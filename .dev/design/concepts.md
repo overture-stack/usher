@@ -76,6 +76,13 @@ VIP lists are maintained, and access tiers are defined.
 In Usher: the management UI (planned). Administrators assign users to resources, set roles, and
 grant or revoke data category access, without needing access to Keycloak or any IdP admin panel.
 
+**PAP admin and platform admin are synonymous.** "Platform admin" is the user-facing term for
+the system-wide authorization administrator role. "PAP admin" is the internal architecture
+shorthand. Design documents may use either; user-facing text (management UI, operator
+documentation) should use "platform admin". See [admin-model.md](admin-model.md) for the full
+admin model, including how Usher identifies platform admins, the bootstrap model, and the
+self-grant flow.
+
 ### PEP: Policy Enforcement Point
 
 The PEP is where the policy decision is actually enforced. It intercepts a request, asks the PDP
