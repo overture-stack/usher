@@ -35,6 +35,7 @@ designed).
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps | reference |
 | [security-workflow.md](security-workflow.md) | Token issuance, constraint lifecycle, revocation, fail-secure | specced |
 | [permissions-model.md](permissions-model.md) | Hybrid role + attribute model, data categories, cohort semantics, OCAP, private data sharing | in progress |
+| [admin-model.md](admin-model.md) | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity | in progress |
 | [plugin-integration.md](plugin-integration.md) | Per-app plugin design, shared client library | not started |
 | [management-ui.md](management-ui.md) | Access management UI (PAP layer) | not started |
 
@@ -78,6 +79,10 @@ cross-application implications and should not be resolved by a single developer 
 | User groups design: Keycloak sync or PAP-only? Grant composition across overlapping groups? Revocation when a user leaves a group? | [permissions-model.md](permissions-model.md) | Core data model; management UI |
 | JWE algorithm selection: AES-256-GCM for content; RSA-OAEP or ECDH-ES for key wrap? | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |
 | Role capability definitions: what actions does each role permit beyond resource access? | [permissions-model.md](permissions-model.md) | Constraint resolution; management UI |
+| Self-grant peer revocability: can any platform admin revoke a peer's self-grant, or only the creator? | [admin-model.md](admin-model.md) | Admin API grant management endpoints |
+| Self-grant compensating controls: step-up auth and owner notification cannot both be deferred to v1+ | [admin-model.md](admin-model.md) | Self-grant UX; notification infrastructure |
+| "List all users" capability: scoped-to-resource direction agreed; global directory requires deliberate PHI decision | [admin-model.md](admin-model.md) | Admin API design |
+| Break-glass emergency access: deployment runbook procedure when all platform admins are unavailable | [admin-model.md](admin-model.md) | Deployment runbook |
 
 ## Why we are building Usher rather than adopting an existing tool
 

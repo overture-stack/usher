@@ -6,6 +6,10 @@ questions: multi-category intersection access (OCAP compliance posture), user gr
 data stewardship and resource ownership scoping, write permissions for Lyric, embargo scheduling,
 field-level restriction implementation, and role capability definitions._
 
+The three privileged roles introduced here (platform admin, category steward, resource owner)
+are fully specified in [admin-model.md](admin-model.md), which covers lifecycle, OIDC-first
+identification, bootstrap, the self-grant flow, service accounts, and audit integrity.
+
 See [security-threat-model.md](security-threat-model.md) for the full OWASP Top 10:2025 mapping.
 
 **Primary OWASP categories relevant here:**

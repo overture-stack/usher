@@ -9,6 +9,27 @@ marked `[in progress]`. Completed items are removed; `sessions.md` is the histor
 
 These must be completed or sufficiently resolved before the relevant implementation phase begins.
 
+### Admin model: open questions
+
+Role taxonomy, OIDC-first identification, bootstrap, self-grant flow, service accounts, and
+audit integrity are documented in `.dev/design/admin-model.md`. The following must be resolved
+before the admin API is implemented:
+
+- **Self-grant compensating controls:** step-up authentication (MFA re-prompt) and resource
+  owner notification are linked: if step-up is deferred to v1+, owner notification is required
+  for v1. Both cannot be deferred simultaneously. Notification requires infrastructure design.
+- **Self-grant peer revocability:** self-grants are standard grants; any platform admin can
+  revoke any grant, including a peer's active self-grant. Decide whether to restrict self-grant
+  revocation to the creator or leave it open to all platform admins.
+- **Break-glass procedure:** if all platform admins are unavailable, recovery goes through the
+  IdP (Keycloak). The deployment runbook must document who is authorised to perform IdP-level
+  role assignment and what audit trail is expected from the IdP layer.
+
+Lower priority (can follow v1):
+- Self-grant step-up authentication (NIST SP 800-63B recommended; see compensating controls above)
+- Audit event schema formalisation (minimum fields defined in admin-model.md; formal schema TBD)
+- Multi-tenancy admin scope
+
 ### Complete permissions model
 
 The structure (hybrid role + attribute, data categories, memberships, category grants) is defined.
@@ -56,6 +77,18 @@ be chosen, documented, and applied consistently. See OWASP A04 gap in
 High-availability design: how multiple Usher instances share state (the policy database is the
 source of truth; instances are stateless beyond in-flight request handling). Container strategy,
 health check endpoints, and expected pod/replica configuration.
+
+### Keycloak realm configuration via Terraform operator
+
+A Keycloak Terraform operator is currently under evaluation in overture-dev for applying realm
+settings declaratively (roles, clients, realm config) without requiring manual Keycloak UI
+work. If adopted, the Usher deployment can ship a Terraform module that provisions the
+`usher-platform-admin` role, the Lyric service account client, and other required realm
+configuration automatically.
+
+Track evaluation outcome and update the deployment architecture doc accordingly. If adopted,
+this partially addresses the break-glass runbook gap: the Terraform state becomes the audit
+record for IdP configuration changes.
 
 ---
 

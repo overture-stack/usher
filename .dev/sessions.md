@@ -6,6 +6,30 @@ Newest first.
 
 ---
 
+## 2026-06-22
+
+Applied design review feedback and brought branch changes into local docs; also added Keycloak
+Terraform operator roadmap item and corrected sessions.md format to lean style.
+
+- `.dev/design/admin-model.md`: new file; self-grant endpoint technically enforces TTL and flag (not convention); self-grant/notification compensating controls explicitly coupled (cannot both defer to v1+); peer revocability flagged as pre-ship decision; GET /admin/users replaced with resource-scoped member lookup; structured audit event schema table added; Keycloak Terraform operator noted in bootstrap section
+- `.dev/design/permissions-model.md`, `.dev/design/concepts.md`: cross-references to admin-model.md added
+- `.dev/design/README.md`: admin-model.md added to coverage table; four new "Decisions needed before implementation" rows
+- `.dev/roadmap.md`: "Admin model: open questions" section added; Keycloak Terraform operator item added under Deployment architecture
+
+---
+
+## 2026-06-20
+
+Documented the admin model covering OIDC-first identification, role taxonomy, bootstrap,
+self-grant flow, service accounts, and audit integrity.
+
+- `.dev/design/admin-model.md`: new document (produced in web chat; applied to local tree); OIDC-first identification (no platform_admins table), bootstrap delegated to IdP, self-grant TTL mandatory, service account hybrid auth model, audit log INSERT-only + out-of-band stdout controls, OPA deferred
+- `.dev/design/permissions-model.md`, `.dev/design/concepts.md`: cross-references to admin-model.md
+- `.dev/design/README.md`: admin-model.md added to coverage table; open questions registered
+- `.dev/roadmap.md`: admin model resolved items and open questions recorded
+
+---
+
 ## 2026-06-19
 
 **Done:**
