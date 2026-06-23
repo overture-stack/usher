@@ -1,10 +1,11 @@
 # Permissions Model
 
 _Status: in progress. Core structure, grant composition semantics, category-to-field mapping,
-OCAP considerations, and private data sharing use cases (iMS) are now documented. Open design
-questions: multi-category intersection access (OCAP compliance posture), user groups detail,
-data stewardship and resource ownership scoping, write permissions for Lyric, embargo scheduling,
-field-level restriction implementation, and role capability definitions._
+OCAP considerations, private data sharing use cases (iMS), submitter/custodian distinction,
+category assignment defaults hierarchy, and category change propagation are now documented.
+Open design questions: multi-category intersection access (OCAP compliance posture), user groups
+detail, data stewardship and resource ownership scoping, write permissions for Lyric, embargo
+scheduling, field-level restriction implementation, and role capability definitions._
 
 The three privileged roles introduced here (platform admin, category steward, resource owner)
 are fully specified in [admin-model.md](admin-model.md), which covers lifecycle, OIDC-first
@@ -441,20 +442,92 @@ section. The three management roles are now:
 | Category steward (OCAP) | One category across all resources | No (unless separately granted) |
 | Custodian | Their designated resource(s) only | Yes; holds member access |
 
-**Open question: when and how is custodianship assigned?**
-- At submission time: the Lyric service account passes a flag or role identifier that designates
-  the submitter as custodian. Requires a capability addition to the Lyric service account model
-  and agreement on the submission-time protocol.
-- Post-submission: a platform admin designates a custodian separately after the resource exists.
-  Simpler for v1; requires an admin step for every submission.
-- Configurable per deployment: a platform-level setting determines whether submitters are
-  automatically custodians or must be explicitly designated. Flexible; adds configuration
-  surface.
+**Custodianship assignment: resolved approach.**
+Lyric (and Song, if applicable) can create a cohort and designate the submitter as its
+custodian at submission time, if the submitter holds custodian-level permissions. This resolves
+the pre-configuration requirement: cohorts do not need to exist in Usher before the first
+submission. The submission flow itself creates the cohort and optionally elevates the submitter
+to custodian in a single operation.
 
-This must be resolved before the management UI and service account capability set are finalised.
+For submitters who are not custodians, a platform admin designates a custodian separately after
+the resource is created. The submission proceeds regardless; custodian designation is an
+additional step.
+
+The Lyric service account capability set needs to include cohort/study creation on behalf of
+a custodian-level submitter as a first-class operation, distinct from the basic `CREATE_RESOURCE`
+path. See [admin-model.md](admin-model.md) for the service account model.
+
+This must be reflected in the management UI and service account capability design.
 
 In the first version, custodianship actions are performed by a platform admin on the
 custodian's behalf. Delegated self-management by custodians is a later capability.
+
+### Category assignment defaults and override hierarchy
+
+When a cohort is created, which data categories it receives is determined by a chain of
+defaults. Each layer can override the one above:
+
+1. **Platform default.** Deployment-wide baseline: examples are "all cohorts are controlled
+   access unless otherwise specified" or "all cohorts are open by default." Set by a platform
+   admin and applies to every new cohort that does not specify otherwise.
+
+2. **Cohort-level policy.** A per-cohort setting that overrides the platform default. Set by the
+   cohort custodian or a platform admin when the cohort is created or updated subsequently.
+
+3. **Submission-time assignment.** When Lyric creates a cohort at submission time (or when a
+   submitter is adding records to an existing cohort), the submitter is shown the category the
+   cohort will receive based on the cohort or platform default. Submitters who hold custodian-level
+   may override the assignment at this point. Submitters who do not hold custodian-level see the
+   warning but cannot change it; the default applies.
+
+4. **Post-submission steward changes.** A custodian or category steward can adjust a cohort's
+   category assignment after submission. This updates `resource_categories` in Usher's policy
+   tables. The underlying submitted records are unchanged; see "Access control does not modify
+   data" in [concepts.md](concepts.md).
+
+The data immutability principle applies throughout: Usher enforces category policies by filtering
+at the PEP layer, not by modifying submitted records. A field like `isIndigenous` or `isControlled`
+in the ES index is set by the submitter at ingest and is owned by the data; Usher reads it to
+identify which records fall under a given category. Changing which categories a cohort has in
+`resource_categories` changes which filter conditions are applied; it does not rewrite records.
+
+### Category change propagation
+
+When a cohort's category assignment changes (a data category is added or removed from a resource),
+the effects on existing users must be handled explicitly.
+
+**Tightening (adding a category to a resource):**
+
+A resource that was previously uncategorized or had fewer categories gains a new category. Users
+who are members of the resource but do not hold a grant for the new category will have records
+filtered from their queries at the next constraint token refresh. No special revocation action
+is required from the user's side — the filter takes effect automatically. However:
+
+- Affected users (those who had broader access before the change) must be notified. Silent
+  tightening is unacceptable: users who received records in one query and no longer receive them
+  in the next should understand why.
+- Custodians or stewards who want to pre-grant affected users access before the change takes
+  effect can do so via the standard grant flow before updating `resource_categories`.
+- The tightening event must produce a structured audit log entry: which category was added,
+  which resource, by whom, and at what timestamp. The set of affected users (those who had access
+  before but not after) must be derivable from this entry combined with the current `memberships`
+  and `category_grants` tables.
+
+**Loosening (removing a category from a resource):**
+
+A resource loses a category. Users who were previously filtered by it are no longer filtered at
+the next token refresh. No active revocation is needed: the PEP plugin simply has fewer exclusion
+conditions. Records that were previously excluded become visible to all members of the resource
+who hold appropriate memberships.
+
+Loosening a category with OCAP or governance implications (for example, removing `indigenous_data`
+restrictions) is a governance decision and must carry the same audit rigour as tightening. The
+fact that loosening requires no technical revocation does not reduce the administrative weight of
+the decision.
+
+**Audit requirements for both directions:** every change to `resource_categories` produces a
+structured audit event, regardless of direction. The event records: actor, resource, category added
+or removed, timestamp, and the direction of change. Reversals are also logged.
 
 ### Embargo
 

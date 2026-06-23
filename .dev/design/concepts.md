@@ -7,6 +7,34 @@ adversarial perspective and wants to understand the defensive design counterpart
 
 ---
 
+## Access control does not modify data
+
+Usher controls who can see data. It does not modify the underlying records to enforce that
+control.
+
+This is a hard design boundary. Access policies — including content-based rules such as
+"access if fieldA equals X" — are computed against the data and expressed as constraints
+returned to the requesting application. The data itself is never modified as a side effect of
+a policy decision. There are no permission-driven data migrations, no field redactions written
+back to the source, and no synthetic columns added to support access logic.
+
+This matters for two reasons:
+
+**Provenance integrity.** The data that was submitted is the data that exists. Usher cannot
+corrupt, alter, or annotate source records. Any system that reads the underlying store directly
+(outside Usher's control) sees exactly what was submitted.
+
+**Non-invasive adoption.** Usher can be applied to an existing dataset without any migration or
+transformation of the stored records. The access policy layer is additive and external; the data
+layer is untouched.
+
+When field-level access control is needed (see the field-level restriction section in
+[permissions-model.md](permissions-model.md)), Usher expresses which fields a given user is
+allowed to see as a constraint in the token. The application (via its PEP plugin) omits those
+fields from the response. The underlying record in the data store is complete and unchanged.
+
+---
+
 ## Authentication vs authorization
 
 These two words are often used interchangeably but they describe distinct steps.

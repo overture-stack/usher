@@ -48,10 +48,12 @@ Still needed:
   a user is removed from a group? (entities are placeholders; design not yet done)
 - Data stewardship scoping: `category_steward` capability data model (OCAP prerequisite; must be
   designed before management UI work begins; see permissions-model.md, OCAP section)
-- Custodianship assignment timing: when and how is a submitter designated as custodian? Options:
-  at submission time via Lyric service account flag; post-submission by a platform admin;
-  or configurable per deployment. Must be resolved before management UI and Lyric service
-  account capabilities are finalised. See permissions-model.md "Submitters and custodians".
+- Custodian notification design: when tightening changes reduce access for existing members,
+  affected users must be notified. Notification mechanism not yet designed. Blocks category
+  change propagation in the management UI; see permissions-model.md "Category change propagation".
+- Category change propagation UI: the management UI must surface a pre-grant flow (grant affected
+  users before tightening takes effect) and the set of affected users derivable from the audit
+  entry; see permissions-model.md "Category change propagation".
 
 See `.dev/design/permissions-model.md`.
 
