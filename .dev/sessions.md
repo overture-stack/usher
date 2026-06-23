@@ -14,7 +14,9 @@ Terraform operator roadmap item and corrected sessions.md format to lean style.
 - `.dev/design/admin-model.md`: new file; self-grant endpoint technically enforces TTL and flag (not convention); self-grant/notification compensating controls explicitly coupled (cannot both defer to v1+); peer revocability flagged as pre-ship decision; GET /admin/users replaced with resource-scoped member lookup; structured audit event schema table added; Keycloak Terraform operator noted in bootstrap section
 - `.dev/design/permissions-model.md`, `.dev/design/concepts.md`: cross-references to admin-model.md added
 - `.dev/design/README.md`: admin-model.md added to coverage table; four new "Decisions needed before implementation" rows
-- `.dev/roadmap.md`: "Admin model: open questions" section added; Keycloak Terraform operator item added under Deployment architecture
+- `.dev/roadmap.md`: "Admin model: open questions" section added; Keycloak Terraform operator item added under Deployment architecture; custodianship assignment timing added to "Complete permissions model"
+- `.dev/design/permissions-model.md`: "Resource ownership" section replaced with "Submitters and custodians": submitter (provenance, member access) and custodian (management rights, optional per-resource designation) are now distinct; assignment timing left as open question
+- `.dev/design/admin-model.md`: role taxonomy updated to list submitter and custodian as separate rows with capabilities and data access clarified
 
 ---
 

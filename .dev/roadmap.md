@@ -48,6 +48,10 @@ Still needed:
   a user is removed from a group? (entities are placeholders; design not yet done)
 - Data stewardship scoping: `category_steward` capability data model (OCAP prerequisite; must be
   designed before management UI work begins; see permissions-model.md, OCAP section)
+- Custodianship assignment timing: when and how is a submitter designated as custodian? Options:
+  at submission time via Lyric service account flag; post-submission by a platform admin;
+  or configurable per deployment. Must be resolved before management UI and Lyric service
+  account capabilities are finalised. See permissions-model.md "Submitters and custodians".
 
 See `.dev/design/permissions-model.md`.
 

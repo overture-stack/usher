@@ -41,10 +41,17 @@ user-facing text should use "platform admin".
 |---|---|---|---|
 | Platform admin (= PAP admin) | Platform-wide | Manages all grants, all resources | No; must self-grant explicitly |
 | Category steward | One or more data categories | Manages grants for their categories across all resources | No (unless separately granted as a user) |
-| Resource owner | Their own resource | Manages grants within their resource | Yes; they are the submitter |
+| Custodian | Their designated resource(s) | Manages grants within their resource; sets visibility policy | Yes; holds member access |
+| Submitter | Their submitted resource | Data provenance; member access to own data | Yes; member access only |
 | Service account | Explicitly enumerated capabilities | Performs system operations only | No |
 
-A user may hold more than one role independently. A resource owner can also be a category steward
+**Submitter vs. custodian:** submission establishes data provenance and gives the submitter
+member access to their own resource. It does not automatically confer management rights.
+Custodianship is an optional, per-resource designation: some submitters are also custodians;
+others are not. A custodian need not be the submitter. See permissions-model.md "Submitters and
+custodians" for the full model and the open question on assignment timing.
+
+A user may hold more than one role independently. A custodian can also be a category steward
 for an unrelated category; those roles are independent and neither implies the other.
 
 Platform admins and category stewards are privileged actors whose operations touch the policy

@@ -411,26 +411,50 @@ resource data. To do any of those, an admin must explicitly grant themselves acc
 permissions system, which produces a logged event. The audit trail is the control: admin power
 is bounded and visible, never silent.
 
-### Resource ownership and delegated sharing
+### Submitters and custodians: separating provenance from management rights
 
-A user who submits data to a resource is its **owner**. The owner should eventually be able to:
-- Grant and revoke access for other users (individually or by group) without admin involvement.
-- Set a default visibility policy for their resource (private, embargoed with release date,
-  public).
-- Transfer ownership to another user.
+Submission and custodianship are distinct roles that can overlap but do not have to.
 
-This is the resource owner variant of the data stewardship capability introduced in the OCAP
-section. The scoping is narrower: the owner has steward rights over their own resource only,
-not over a data category platform-wide. The two roles are distinct:
+**Submitter:** the user who uploaded data via Lyric. Submission establishes data provenance. A
+submitter automatically receives a `membership` on the resource (they can access what they
+submitted), but submission does not automatically confer management rights. A submitter who has
+not been designated as custodian cannot grant access to others, change visibility policy, or
+share records.
 
-| Role | Scope |
-|---|---|
-| Platform PAP admin | Manages grants for any resource; no implicit data access |
-| Category steward (OCAP) | Manages grants for a specific category across all resources |
-| Resource owner | Manages grants for their own resource only; holds data access |
+**Custodian (resource-level):** a designated role on a specific resource that grants management
+rights: granting and revoking access for other users, setting visibility policy (private,
+embargoed, public), and transferring custodianship. A custodian holds data access as a member
+of the resource and has steward rights scoped to that resource only.
 
-In the first version, resource ownership actions are performed by a PAP admin on the owner's
-behalf. Delegated self-management is a later capability.
+Custodianship is optional and per-resource: some submitters are designated as custodians;
+others are not. A custodian need not be the submitter (for example, a Principal Investigator
+may be designated as custodian for data submitted by a lab technician on their team). A
+platform admin can always act as custodian on behalf of the resource through the standard grant
+management flow.
+
+This is the resource-level variant of the data stewardship capability introduced in the OCAP
+section. The three management roles are now:
+
+| Role | Scope | Data access |
+|---|---|---|
+| Platform admin | All resources; all grants | No; must self-grant explicitly |
+| Category steward (OCAP) | One category across all resources | No (unless separately granted) |
+| Custodian | Their designated resource(s) only | Yes; holds member access |
+
+**Open question: when and how is custodianship assigned?**
+- At submission time: the Lyric service account passes a flag or role identifier that designates
+  the submitter as custodian. Requires a capability addition to the Lyric service account model
+  and agreement on the submission-time protocol.
+- Post-submission: a platform admin designates a custodian separately after the resource exists.
+  Simpler for v1; requires an admin step for every submission.
+- Configurable per deployment: a platform-level setting determines whether submitters are
+  automatically custodians or must be explicitly designated. Flexible; adds configuration
+  surface.
+
+This must be resolved before the management UI and service account capability set are finalised.
+
+In the first version, custodianship actions are performed by a platform admin on the
+custodian's behalf. Delegated self-management by custodians is a later capability.
 
 ### Embargo
 
