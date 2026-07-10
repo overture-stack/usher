@@ -151,24 +151,24 @@ record belongs to, the user holds a grant for that category (directly or via a g
 Equivalently: a record is excluded if the user lacks a grant for ANY category the record
 is tagged with.
 
-The constraint token expresses this as `exclude_categories`: the list of resource-associated
-categories for which the user holds no grant. The PEP plugin translates each excluded category
-into a filter condition using that category's configured field mapping. All exclusion conditions
-are applied as a conjunction (AND): a record is hidden if it is tagged with category A that is
-excluded, OR category B that is excluded (the record fails the filter if any excluded category
-matches).
+The constraint token expresses this as `categories`: the list of data categories the user holds
+grants for within a resource. The PEP plugin computes what to exclude by subtracting the token's
+`categories` from the full set of categories configured for that resource in the plugin config.
+Each absent category produces an exclusion filter using that category's field mapping. Exclusion
+conditions are applied as a conjunction: a record is hidden if it is tagged with any category not
+present in the user's token.
 
 ### Composition across multiple categories
 
 With two independent categories `controlled` and `indigenous` mapped to fields `isControlled`
 and `isIndigenous`:
 
-| User's grants | Excluded categories | Visible records |
+| User's grants | `categories` in token | Visible records |
 |---|---|---|
-| neither | controlled, indigenous | `isControlled=false AND isIndigenous=false` only |
-| controlled only | indigenous | `isIndigenous=false` (open and controlled non-indigenous) |
-| indigenous only | controlled | `isControlled=false` (open and indigenous non-controlled) |
-| both | none | all records |
+| neither | `[]` | `isControlled=false AND isIndigenous=false` only |
+| controlled only | `["controlled"]` | `isIndigenous=false` (open and controlled non-indigenous) |
+| indigenous only | `["indigenous"]` | `isControlled=false` (open and indigenous non-controlled) |
+| both | `["controlled", "indigenous"]` | all records |
 
 **The intersection question:** the visibility rule above means that holding individual grants for
 `controlled` and `indigenous` separately gives access to the `controlled+indigenous` intersection
@@ -177,8 +177,10 @@ open design question with OCAP implications; see Open questions below.
 
 ### Category-to-field mapping
 
-Data categories in Usher's model are named abstractions; the field conditions they map to are
-deployment configuration. The mapping is expressed per-category as a filter predicate:
+Data categories in Usher's model are named abstractions. Usher has no knowledge of what fields
+in any data schema correspond to a category — it works with category names only. The mapping
+from category name to field predicate is deployment configuration that lives in the **PEP plugin
+config**, not in Usher:
 
 ```
 category: indigenous_data
@@ -186,10 +188,11 @@ category: indigenous_data
   value:  true
 ```
 
-A record "belongs to" a category if the configured field condition is true for that record. This
-mapping is what the deployment operator configures; Usher's core model is agnostic to the
-underlying field names. Two deployments can use the same category name (`indigenous_data`) while
-mapping it to entirely different field structures in their ES index.
+A record "belongs to" a category if the configured field condition is true for that record. The
+plugin holds this mapping; it uses it to derive the exclusion filter from the token's `categories`
+list. Two deployments using the same Usher instance can map the same category name
+(`indigenous_data`) to entirely different field names in their respective data schemas, because
+each plugin carries its own config.
 
 ### Write permissions
 
@@ -204,41 +207,75 @@ the PEP layer differs. Write permission design is deferred (see Open questions).
 
 ### Setup
 
-- Resource `RESOURCE_X` has `data_categories: [indigenous_data]`
+Resources and their category assignments:
+- `RESOURCE_X` has `data_categories: [indigenous_data]`
+- `RESOURCE_Y` has `data_categories: [open_access, indigenous_data]`
+
+Users and their grants:
 - User A: `membership(RESOURCE_X, member)`, no category grants
-- User B: `membership(RESOURCE_X, member)`, `category_grant(indigenous_data, RESOURCE_X)`
+- User B: `membership(RESOURCE_X, member)`, `category_grant(indigenous_data, RESOURCE_X)`;
+  `membership(RESOURCE_Y, member)`, `category_grant(open_access, RESOURCE_Y)`
 
-### Constraint output for User A
+Plugin config (Arranger-side; maps category names to ES field predicates):
+```
+indigenous_data → { field: "isIndigenous", value: true }
+open_access     → { field: "isRestricted", value: false }
+```
+
+### Constraint token for User A
 
 ```json
 {
-  "allowed": true,
-  "role": "member",
-  "resources": ["RESOURCE_X"],
-  "record_filters": {
-    "exclude_categories": ["indigenous_data"]
-  },
-  "field_restrictions": {}
+  "sub": "user-a",
+  "aud": "example-service",
+  "iat": 1720000000,
+  "exp": 1720000300,
+  "generatedAt": 1720000000,
+  "resources": {
+    "RESOURCE_X": {
+      "role": "member",
+      "categories": []
+    }
+  }
 }
 ```
 
-The Arranger PEP plugin translates `exclude_categories: ["indigenous_data"]` into a SQON filter
-that removes records tagged with that category from every query result, server-side. User A never
-receives those records, and their queries never reveal that such records exist.
+`RESOURCE_Y` is absent: User A has no membership there. The plugin denies all queries for that
+resource.
 
-### Constraint output for User B
+For `RESOURCE_X`: plugin config lists `[indigenous_data]` as the full category set. The token
+has `categories: []`. Exclusion set: `[indigenous_data]`. The plugin applies
+`isIndigenous=true → exclude` as a SQON filter on every query. User A sees only records where
+`isIndigenous=false`. Their queries never reveal that indigenous records exist — absent from
+results, counts, and aggregations.
+
+### Constraint token for User B
 
 ```json
 {
-  "allowed": true,
-  "role": "member",
-  "resources": ["RESOURCE_X"],
-  "record_filters": {},
-  "field_restrictions": {}
+  "sub": "user-b",
+  "aud": "example-service",
+  "iat": 1720000000,
+  "exp": 1720000300,
+  "generatedAt": 1720000000,
+  "resources": {
+    "RESOURCE_X": {
+      "role": "member",
+      "categories": ["indigenous_data"]
+    },
+    "RESOURCE_Y": {
+      "role": "member",
+      "categories": ["open_access"]
+    }
+  }
 }
 ```
 
-No exclusion filter. User B sees all records in RESOURCE_X.
+For `RESOURCE_X`: full set `[indigenous_data]` minus token `["indigenous_data"]` = no exclusions.
+User B sees all records.
+
+For `RESOURCE_Y`: full set `[open_access, indigenous_data]` minus token `["open_access"]` =
+exclusion set `[indigenous_data]`. User B sees only non-indigenous records in `RESOURCE_Y`.
 
 ---
 
@@ -609,11 +646,41 @@ Can a category grant span multiple resources (e.g. access to `indigenous_data` a
 resources the user is a member of), or is it always resource-specific? Resource-specific is simpler
 and more auditable; a broader scope grant would need careful design to avoid unintended access.
 
+### Constraint token formulation: exclude-list vs. include-list
+
+The worked examples in this document use an exclude-list formulation:
+`exclude_categories: ["indigenous_data"]`. An alternative is an include-list:
+`access_categories: ["open_access"]` — only the categories the user can access.
+
+The two are operationally equivalent: given the full set of categories for a resource, each can
+be derived from the other. But they carry different amounts of information.
+
+**Exclude-list:** the token names categories the user lacks. If the token were ever readable, the
+user would learn which categories exist in the deployment and which ones they are denied. Under
+OCAP, even knowing that an `indigenous_data` category exists could be sensitive.
+
+**Include-list:** the token names only what the user can access. Category names the user is
+denied are absent from the token entirely. The plugin computes the exclusion filter by
+subtracting the include-list from the full category set it holds in its own config.
+
+The JWE encryption means neither formulation leaks information through the token itself — the
+user never sees the token. The distinction matters if tokens ever become readable (for example,
+during debugging, in a future lighter-weight mode, or through a mis-scoped logging incident), and
+for the general principle of least information in protocol design.
+
+**Decided: include-list, field name `categories`.** The constraint token carries `categories`
+(the list of categories the user holds grants for within a resource), not an exclude-list. This
+is consistent with industry practice (OAuth scopes, UMA RPT permissions, GA4GH Passport Visas
+all use positive grants) and with the principle of least information: denied category names are
+absent from the token entirely, not named explicitly. The field name `categories` is unambiguous
+in context: within a per-resource block in the token, it means "categories this user is granted
+access to." See [plugin-integration.md](plugin-integration.md) for the full token schema.
+
 ### Attribute naming
 
-The specific attribute names for the constraint token payload (`resources`, `record_filters`,
-`exclude_categories`, etc.) are illustrative. The final names should be decided when the API
-contract is designed. See [plugin-integration.md](plugin-integration.md).
+The specific attribute names for the constraint token payload (`resources`, `role`, `categories`,
+etc.) are illustrative. The final names should be decided when the API contract is designed. See
+[plugin-integration.md](plugin-integration.md).
 
 ### Expiry and renewal
 

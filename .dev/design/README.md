@@ -3,15 +3,19 @@
 Usher is a standalone authorization service for the Overture platform. It answers "what is this
 user allowed to see?" and returns structured constraints that each Overture application enforces.
 It is not an authentication service; that job belongs to the identity provider (Keycloak, Azure
-Entra, etc.). See [concepts.md](concepts.md) for the distinction and the vocabulary used throughout
-these documents.
+Entra, etc.).
+
+**New to the terminology?** Start with [glossary.md](glossary.md): one or two sentences per term,
+grouped by theme. [concepts.md](concepts.md) covers the same vocabulary in more depth with
+rationale and context.
 
 ## Reading order
 
 These documents are interconnected. The recommended path depends on what you are trying to
 understand.
 
-**New to Usher:** [concepts.md](concepts.md) (vocabulary and security primitives), then
+**New to Usher:** [glossary.md](glossary.md) (quick term lookup), then
+[concepts.md](concepts.md) (vocabulary and security primitives with rationale), then
 [security-workflow.md](security-workflow.md) (how the token system works end to end), then
 [permissions-model.md](permissions-model.md) (the data model and access rules).
 
@@ -22,15 +26,17 @@ mapping and gap analysis), then [security-workflow.md](security-workflow.md) for
 **Reviewing the permissions model:** [concepts.md](concepts.md) (especially "The permissions model
 entities"), then [permissions-model.md](permissions-model.md).
 
-**Planning a PEP plugin:** [security-workflow.md](security-workflow.md) (what the plugin must do
-and when), then [permissions-model.md](permissions-model.md) (what the constraint payload
-contains), then [plugin-integration.md](plugin-integration.md) (the API contract, not yet
+**Planning a PEP plugin:** [glossary.md](glossary.md) (especially the Integration concepts and
+System architecture roles sections), then [security-workflow.md](security-workflow.md) (what the
+plugin must do and when), then [permissions-model.md](permissions-model.md) (what the constraint
+payload contains), then [plugin-integration.md](plugin-integration.md) (the API contract, not yet
 designed).
 
 ## Document coverage
 
 | Document | Topic | Status |
 |---|---|---|
+| [glossary.md](glossary.md) | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts | reference |
 | [concepts.md](concepts.md) | ABAC vocabulary, security primitives, permissions model entities | reference |
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps | reference |
 | [security-workflow.md](security-workflow.md) | Token issuance, constraint lifecycle, revocation, fail-secure | specced |

@@ -394,7 +394,7 @@ Usher reads all admin state from the validated OIDC token. The adapter interface
   indicate a service account token.
 
 The adapter is the only component that knows it is talking to a specific provider. The rest of
-Usher's code works with a validated, normalised claim set. The monorepo will contain a
+Usher's code works with a validated, normalized claim set. The monorepo will contain a
 `packages/oidc-keycloak` adapter and a `packages/oidc-generic` fallback.
 
 **OPA note:** Open Policy Agent was considered as a policy evaluation engine. It is not a v1
@@ -434,7 +434,7 @@ member lookup, it must be evaluated for PHI implications before design begins.
 
 **Break-glass emergency access:** if all platform admins are unavailable (accounts locked, staff
 unavailable), recovery requires assigning the platform admin role in the identity provider.
-This is an IdP administration operation. The deployment runbook must document who is authorised
+This is an IdP administration operation. The deployment runbook must document who is authorized
 to perform this operation and what audit trail is expected at the IdP layer.
 
 **Multi-tenancy admin scope (out of v1):** in a multi-tenant deployment, it is unclear whether

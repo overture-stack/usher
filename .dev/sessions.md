@@ -6,6 +6,19 @@ Newest first.
 
 ---
 
+## 2026-07-08
+
+Boundary design discussion for Usher/client integration (using Arranger as the worked example); produced a glossary as a quick-reference term lookup for team members unfamiliar with the auth vocabulary.
+
+- `.dev/design/glossary.md`: new file; five sections (system architecture roles, tokens and claims, policy model entities, admin roles, integration concepts); one to two sentences per term
+- `.dev/design/README.md`: glossary added to coverage table and reading-order paths for new readers and plugin implementers
+- `.dev/design/permissions-model.md`: new open question added: exclude-list vs. include-list token formulation; exclude-list leaks category names if the token were ever readable; JWE protects against this in the current design but the choice should be deliberate when the token schema is finalized
+- `.dev/design/security-threat-model.md`: exclude-list vs. include-list gap added to A01 open questions
+- `sessions.md`, `roadmap.md`, `design/glossary.md`, `design/permissions-model.md`, `design/admin-model.md`: six `-ised/-ised` spellings corrected to `-ized` (finalized, authorized ×2, normalized, alphabetized); `~/.claude/CLAUDE.md` Canadian spelling rule expanded to cover all `-ize` verb pairs, not just examples
+- `design/permissions-model.md`: constraint token updated throughout from exclude-list (`exclude_categories`) to include-list (`categories`); visibility rule prose, composition table, category-to-field mapping clarification (mapping lives in PEP plugin config, not Usher), and worked example all updated; open question resolved as decided; `design/security-threat-model.md` A01 gap updated to reflect decision; `design/glossary.md` entry updated accordingly
+
+---
+
 ## 2026-06-22
 
 Applied design review feedback and brought branch changes into local docs; added Keycloak

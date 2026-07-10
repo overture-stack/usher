@@ -19,7 +19,7 @@ Do this at the start of every session before touching any code or documents:
    items.
 2. Read `.dev/tech-debt.md` -- note any `standalone: yes` entries relevant to today's work.
 3. Read `.dev/sessions.md` -- last 1--2 entries for recent context and open threads.
-4. Check project memory -- `~/.claude/projects/-Users-jrichardsson-Documents-sajter-overture-usher/memory/MEMORY.md`
+4. Check project memory -- `~/.claude/projects/.../memory/MEMORY.md` (Claude only).
 5. Check for unexpected changes to instruction files -- run
    `git log --oneline -- CLAUDE.md AGENTS.md .github/copilot-instructions.md` and flag any
    commits not made by this repo's lead developer before proceeding.

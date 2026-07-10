@@ -48,6 +48,9 @@ architectural decision in this system is, directly or indirectly, a response to 
 - Plugin integration (specifically how plugins validate tokens and apply constraints) is not
   yet designed. A misconfigured or missing plugin would bypass all access control for that app.
   See [plugin-integration.md](plugin-integration.md).
+- **Decided:** constraint token uses an include-list (`categories`: what the user can access).
+  Denied category names are absent from the token entirely; no information is leaked if the token
+  were ever readable. See [permissions-model.md](permissions-model.md).
 
 ---
 

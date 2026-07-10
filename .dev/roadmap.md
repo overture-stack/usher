@@ -22,7 +22,7 @@ before the admin API is implemented:
   revoke any grant, including a peer's active self-grant. Decide whether to restrict self-grant
   revocation to the creator or leave it open to all platform admins.
 - **Break-glass procedure:** if all platform admins are unavailable, recovery goes through the
-  IdP (Keycloak). The deployment runbook must document who is authorised to perform IdP-level
+  IdP (Keycloak). The deployment runbook must document who is authorized to perform IdP-level
   role assignment and what audit trail is expected from the IdP layer.
 
 Lower priority (can follow v1):
