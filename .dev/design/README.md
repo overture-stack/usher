@@ -1,7 +1,7 @@
 # Usher: Design Index
 
 Usher is a standalone authorization service for the Overture platform. It answers "what is this
-user allowed to see?" and returns structured constraints that each Overture application enforces.
+user allowed to see?" and returns structured grants that each Overture application enforces.
 It is not an authentication service; that job belongs to the identity provider (Keycloak, Azure
 Entra, etc.).
 
@@ -20,6 +20,7 @@ understand.
 **New to Usher:** [docs/intro.md](../../docs/intro.md) (problem and patterns overview), then
 [glossary.md](glossary.md) (quick term lookup), then
 [concepts.md](../../docs/concepts.md) (vocabulary and security primitives with rationale), then
+[architecture.md](architecture.md) (component responsibilities and the stateless app principle), then
 [security-workflow.md](security-workflow.md) (how the token system works end to end), then
 [permissions-model.md](permissions-model.md) (the data model and access rules).
 
@@ -30,24 +31,25 @@ mapping and gap analysis), then [security-workflow.md](security-workflow.md) for
 **Reviewing the permissions model:** [concepts.md](../../docs/concepts.md) (especially "The permissions model
 entities"), then [permissions-model.md](permissions-model.md).
 
-**Planning a PEP plugin:** [glossary.md](glossary.md) (especially the Integration concepts and
-System architecture roles sections), then [security-workflow.md](security-workflow.md) (what the
-plugin must do and when), then [permissions-model.md](permissions-model.md) (what the constraint
-payload contains), then [plugin-integration.md](plugin-integration.md) (the API contract, not yet
-designed).
+**Planning a PEP plugin:** [architecture.md](architecture.md) (what each layer owns; which
+responsibilities belong to usher-bridge vs the plugin), then
+[security-workflow.md](security-workflow.md) (what the plugin must do and when), then
+[permissions-model.md](permissions-model.md) (what the grants payload contains), then
+[plugin-integration.md](plugin-integration.md) (the API contract, not yet designed).
 
 ## Document coverage
 
 | Document | Topic | Status |
 |---|---|---|
 | [glossary.md](glossary.md) | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts | reference |
+| [architecture.md](architecture.md) | Component responsibilities (Keycloak, controller, bridge, plugin, infrastructure); stateless client app principle | in progress |
 | [concepts.md](../../docs/concepts.md) | ABAC vocabulary, security primitives, permissions model entities | reference |
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps | reference |
-| [security-workflow.md](security-workflow.md) | Token issuance, constraint lifecycle, revocation, fail-secure | specced |
+| [security-workflow.md](security-workflow.md) | Token issuance, grants token lifecycle, revocation, multi-instance propagation, fail-secure | specced |
 | [permissions-model.md](permissions-model.md) | Hybrid role + attribute model, data categories, cohort semantics, OCAP, private data sharing | in progress |
 | [admin-model.md](admin-model.md) | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity | in progress |
 | [decisions.md](decisions.md) | Tools reviewed before building; architectural decisions with rationale | reference |
-| [plugin-integration.md](plugin-integration.md) | Per-app plugin design, shared client library | not started |
+| [plugin-integration.md](plugin-integration.md) | Per-app plugin design, bridge library (`usher-bridge`) | not started |
 | [management-ui.md](management-ui.md) | Access management UI (PAP layer) | not started |
 
 **Security standard:** OWASP Top 10:2025. Usher may handle personal health information; the
@@ -57,7 +59,7 @@ threat model and design are calibrated accordingly. See
 ## What is and is not specced
 
 **Specced:** The security workflow is the most fully designed part of Usher. The mechanism for
-issuing constraint tokens, how plugins validate them locally, how permission changes propagate
+issuing grants tokens, how plugins validate them locally, how permission changes propagate
 within a bounded window, how emergency revocation works, and how the system behaves when the
 revocation channel is unavailable are all documented in [security-workflow.md](security-workflow.md)
 with explicit rationale for each design decision.
@@ -69,8 +71,8 @@ designed: role capability definitions, the field-level restriction implementatio
 groups detail, data stewardship scoping, and write permissions for Lyric. See
 [permissions-model.md](permissions-model.md).
 
-**Not yet started:** How app plugins are built and configured, how decryption keys are distributed
-to plugins at deploy time, the API contract (specific endpoints, request/response shapes, error
+**Not yet started:** How app plugins are built and configured, how the decryption key is distributed
+to the bridge at client app deploy time, the API contract (specific endpoints, request/response shapes, error
 codes), the SQL schema in detail, deployment architecture, multi-tenancy, rate limiting on the
 Usher API itself, and the management UI design are all open. Stubs with known requirements and
 open questions are in [plugin-integration.md](plugin-integration.md) and
@@ -84,16 +86,16 @@ cross-application implications and should not be resolved by a single developer 
 
 | Question | Documented in | Blocks |
 |---|---|---|
-| Overlapping cohort access semantics: if a record belongs to cohorts A and B and a user is a member of A only, do they see it? (OR vs AND) | [permissions-model.md](permissions-model.md) | Core constraint resolution |
+| Overlapping cohort access semantics: if a record belongs to cohorts A and B and a user is a member of A only, do they see it? (OR vs AND) | [permissions-model.md](permissions-model.md) | Core grants resolution |
 | Multi-category intersection: does holding `controlled` and `indigenous` grants separately auto-grant access to records tagged with both? | [permissions-model.md](permissions-model.md) | OCAP compliance posture; data model |
 | Data stewardship scoping: how is a `category_steward` capability stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; OCAP deployments |
 | User groups design: Keycloak sync or PAP-only? Grant composition across overlapping groups? Revocation when a user leaves a group? | [permissions-model.md](permissions-model.md) | Core data model; management UI |
 | JWE algorithm selection: AES-256-GCM for content; RSA-OAEP or ECDH-ES for key wrap? | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |
 | Role capability definitions: what actions does each role permit beyond resource access? | [permissions-model.md](permissions-model.md) | Constraint resolution; management UI |
-| Self-grant peer revocability: can any platform admin revoke a peer's self-grant, or only the creator? | [admin-model.md](admin-model.md) | Admin API grant management endpoints |
+| Self-grant peer revocability: can any admin revoke a peer's self-grant, or only the creator? | [admin-model.md](admin-model.md) | Admin API grant management endpoints |
 | Self-grant compensating controls: step-up auth and owner notification cannot both be deferred to v1+ | [admin-model.md](admin-model.md) | Self-grant UX; notification infrastructure |
 | "List all users" capability: scoped-to-resource direction agreed; global directory requires deliberate PHI decision | [admin-model.md](admin-model.md) | Admin API design |
-| Break-glass emergency access: deployment runbook procedure when all platform admins are unavailable | [admin-model.md](admin-model.md) | Deployment runbook |
+| Break-glass emergency access: deployment runbook procedure when all admins are unavailable | [admin-model.md](admin-model.md) | Deployment runbook |
 
 ## Why we are building Usher rather than adopting an existing tool
 
@@ -101,7 +103,7 @@ See [decisions.md](decisions.md) for the full evaluation, including what each re
 contributed to the design. In summary: Cerbos (closest match architecturally) produces binary
 allow/deny decisions and has no management UI; OPA is a general-purpose policy engine whose
 evaluation model does not fit a grant-data-lookup use case, though its partial evaluation concept
-directly influenced the constraint token design; Cerbos Hub is commercial SaaS. The combination of
-structured constraint output, a built-in management UI, IdP abstraction, and per-app plugin
+directly influenced the grants token design; Cerbos Hub is commercial SaaS. The combination of
+structured grants output, a built-in management UI, IdP abstraction, and per-app plugin
 integration makes the scope specific enough that these tools would be adapters rather than
 foundations.

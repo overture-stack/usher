@@ -20,7 +20,7 @@ categories. In Usher this is the management API and UI. See [admin-model.md](adm
 
 **PDP (Policy Decision Point)**
 The component that evaluates policy and computes an access decision. In Usher this is the
-constraint computation engine. External clients see only its output (the constraint token), never
+grants computation engine. External clients see only its output (the grants token), never
 the computation itself.
 
 **PEP (Policy Enforcement Point)**
@@ -29,32 +29,34 @@ access. In Overture, each application has its own PEP implemented as a plugin. T
 decide — it enforces what the PDP computed. See [plugin-integration.md](plugin-integration.md).
 
 **PEP plugin**
-An app-specific library built on `usher-client` that translates the constraint payload into the
-app's native filter format. Examples: `usher-arranger` (constraint to SQON),
-`usher-lyric` (constraint to Lyric query conditions).
+An app-specific library built on `usher-bridge` that translates the grants payload into the
+app's native filter format. Examples: `usher-arranger` (grants payload to SQON),
+`usher-lyric` (grants payload to Lyric query conditions).
 
-**`usher-client`**
-The shared library that implements the Usher protocol: token exchange, local caching, constraint
-token decryption and validation, and revocation channel maintenance. All PEP plugins build on top
-of it.
+**`usher-bridge`**
+The shared library that implements the Usher protocol in client apps: token exchange with
+the controller, local caching, grants token decryption and validation, revocation channel
+maintenance, and fail-secure session suspension. All PEP plugins build on top of it. Named for
+the drawbridge analogy: open when the controller connection is healthy, raised (returning 503)
+when it is not.
 
 ---
 
 ## Tokens and claims
 
 **Audience**
-The target service for which a constraint token is issued — for example, a specific Arranger
+The target service for which a grants token is issued — for example, a specific Arranger
 instance. A token is scoped to one audience; Usher includes only the resources managed by that
 audience in the token, keeping the token focused and the plugin's job simple. Modelled on the
 `aud` claim in OAuth 2.0 Token Exchange (RFC 8693).
 
-**Constraint token**
-A JWE-encrypted token issued by Usher containing the user's access constraints for a specific
+**Grants token**
+A JWE-encrypted token issued by Usher containing the user's access grants for a specific
 service. Cached by the plugin for its TTL; decrypted and validated locally on each subsequent
 request without a round-trip to Usher. See [security-workflow.md](security-workflow.md).
 
 **`generatedAt`**
-A claim embedded in every constraint token recording when Usher computed the constraint payload.
+A claim embedded in every grants token recording when Usher computed the grants payload.
 Used for the fast-path refresh: if no policy changed since `generatedAt`, Usher can reissue
 without a full recomputation.
 
@@ -63,16 +65,16 @@ A JWT issued by the IdP identifying the authenticated user. Short-lived. Passed 
 application to the PEP plugin, which presents it to Usher's token exchange endpoint.
 
 **JWE (JSON Web Encryption)**
-An encrypted JWT. Constraint tokens use JWE so that the plugin can decrypt and validate them
-locally, while preventing the end user from reading their own constraints. Contrast with JWS
+An encrypted JWT. Grants tokens use JWE so that the plugin can decrypt and validate them
+locally, while preventing the end user from reading their own grants. Contrast with JWS
 (signed but readable by anyone holding the token).
 
 **JWT (JSON Web Token)**
-The container format for both IdP tokens (signed JWS) and constraint payloads (encrypted JWE).
+The container format for both IdP tokens (signed JWS) and grants payloads (encrypted JWE).
 The two are structurally similar but serve different purposes and must not be confused.
 
 **TTL (time-to-live)**
-How long a cached constraint token is considered valid before the plugin must request a fresh one
+How long a cached grants token is considered valid before the plugin must request a fresh one
 from Usher's exchange endpoint.
 
 ---
@@ -91,7 +93,7 @@ category means that category's content is excluded from the user's view. See
 
 **Cohort**
 The Overture-platform term for a Usher resource. A virtual grouping of data records defined by
-shared characteristics. Unlike Song/Lyric studies (one record belongs to exactly one study),
+shared characteristics. Unlike Song/Lyric "studies" (one record belongs to exactly one study),
 records can belong to multiple cohorts simultaneously.
 
 **Data category**
@@ -99,7 +101,7 @@ A named access dimension that applies to a subset of records or fields within a 
 Examples: `indigenous_data`, `controlled_access`. Categories are defined at the platform level;
 access requires an explicit category grant. See [permissions-model.md](permissions-model.md).
 
-**`categories`** _(per-resource field in constraint token)_
+**`categories`** _(per-resource field in grants token)_
 The include-list of data categories the user holds grants for within a specific resource. Only
 granted categories appear; denied categories are absent entirely, revealing nothing about what
 the user cannot access. The PEP plugin derives what to filter by subtracting this list from the
@@ -117,7 +119,7 @@ granted access. Usher makes no assumptions about what the data is, where it is s
 schema it follows. In Overture the concrete term is cohort.
 
 **Role**
-A coarse-grained capability label attached to a membership (for example `member`, `curator`).
+A coarse-grained capability label attached to a membership (for example `member`, `owner`).
 Describes what kind of actions a user can perform within a resource, independent of which data
 categories they can access.
 
@@ -125,18 +127,18 @@ categories they can access.
 
 ## Admin roles
 
-**Category steward**
+**Steward**
 A user with grant-management rights over one or more data categories across all resources, without
-holding full platform admin rights. Required for OCAP-compliant deployments where community-level
+holding full admin rights. Required for OCAP-compliant deployments where community-level
 data sovereignty must be delegated to community representatives rather than held by platform staff.
 See [permissions-model.md](permissions-model.md).
 
-**Custodian**
+**Owner**
 A user designated with management rights over a specific resource: granting and revoking access,
-setting visibility policy, and transferring custodianship. A custodian holds member-level data
+setting visibility policy, and transferring ownership. An Owner holds member-level data
 access to their resource. Distinct from the submitter role, though a single person can hold both.
 
-**Platform admin (PAP admin)**
+**Admin (PAP admin)**
 A user identified by an OIDC token claim (`usher_roles: platform_admin`) who can manage all
 grants platform-wide. Does not have implicit data access; must explicitly self-grant access to any
 resource they want to read, with a mandatory TTL and a logged audit event. See
@@ -150,7 +152,7 @@ client credentials, not user sessions. See [admin-model.md](admin-model.md).
 **Submitter**
 The user who uploaded data via Lyric. Submission establishes provenance and confers automatic
 member access to the resulting resource; it does not confer management rights unless the user is
-also designated as custodian.
+also designated as owner.
 
 ---
 
@@ -159,7 +161,7 @@ also designated as custodian.
 **Fail-secure**
 The design principle that uncertainty about authorization state defaults to denial of access rather
 than continuation of service. Applied at multiple points: revocation channel disruption, token
-decryption failure, and a resource absent from the constraint token all produce denial, not access.
+decryption failure, and a resource absent from the grants token all produce denial, not access.
 
 **Grace period**
 The configurable window after the revocation channel goes silent before the plugin enters
@@ -167,14 +169,13 @@ revocation-uncertain mode. Exists to tolerate brief network interruptions withou
 suspending all user sessions.
 
 **Open access**
-A deployment configuration where unauthenticated requests (no bearer token) are served records
-that carry no access-controlled data category. Disabled by default in the PEP plugin; operators
-opt in explicitly. The plugin derives the anonymous exclusion filter from its own category config
-without calling Usher.
+A data tier in which records require no authentication. The controller issues an anonymous grants
+token (no IdP bearer required); bridge and plugin handle it identically to an authenticated token.
+See [security-workflow.md — Grant computation pipeline](security-workflow.md#grant-computation-pipeline).
 
 **Revocation**
 The invalidation of a user's access, recorded as a `revoked_at` timestamp in Usher's database.
-Applies to all constraint tokens the plugin holds for that user regardless of their individual
+Applies to all grants tokens the plugin holds for that user regardless of their individual
 TTLs. See [security-workflow.md](security-workflow.md).
 
 **Revocation channel**
@@ -189,15 +190,17 @@ the fail-secure default: uncertainty about revocation status produces denial, no
 
 **Server-side filter** _(Arranger-specific)_
 A SQON filter injected into every Arranger query by the plugin before the query reaches the search
-engine. The primary mechanism for record-level access enforcement in Arranger; the output of
-translating `exclude_categories` into SQON.
+engine. The primary mechanism for record-level access enforcement in Arranger; derived by
+subtracting the token's `categories` include-list from the plugin's full category config, then
+translating each absent category into a SQON expression.
 
 **SQON (Structured Query Object Notation)** _(Arranger-specific)_
-Arranger's filter expression format. The `usher-arranger` plugin translates excluded categories
-from the constraint token into SQON and applies them as server-side filters on every query.
+Arranger's filter expression format. The `usher-arranger` plugin derives the exclusion set from
+the `categories` include-list in the grants payload and translates it into SQON server-side
+filters applied to every query.
 
 **Token exchange**
 The call a PEP plugin makes to Usher presenting an IdP bearer token and receiving a scoped
-constraint token in return. The `audience` parameter identifies the calling service; Usher
+grants token in return. The `audience` parameter identifies the calling service; Usher
 returns a token containing only the resources that service manages. Modelled on OAuth 2.0 Token
 Exchange (RFC 8693). See [plugin-integration.md](plugin-integration.md).

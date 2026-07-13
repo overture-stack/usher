@@ -7,7 +7,7 @@ Internal guide for contributors. For community contribution guidelines, see `CON
 
 Usher is a standalone ABAC (Attribute-Based Access Control) authorization service for the
 Overture platform. It answers "what is this user allowed to see?" for any Overture application
-and returns encrypted constraint tokens that per-app plugins enforce at the query layer.
+and returns encrypted grants tokens that per-app plugins enforce at the query layer.
 
 Usher is not an authentication service. Authentication is delegated to the configured identity
 provider (Keycloak, Azure Entra ID, or any OIDC-compatible provider).

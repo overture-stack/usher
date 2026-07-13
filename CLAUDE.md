@@ -3,11 +3,11 @@
 ## What this is
 
 Usher is a standalone ABAC authorization service for the Overture platform. It answers "what is
-this user allowed to see?" and returns encrypted constraint tokens that per-app plugins enforce.
+this user allowed to see?" and returns encrypted grants tokens that per-app plugins enforce.
 It is designed to handle personal health records and is calibrated accordingly throughout. The
 service is currently in the design phase; no implementation has begun.
 
-Key concepts (PDP, PAP, PEP, JWE, fail-secure, constraint tokens) are defined in
+Key concepts (PDP, PAP, PEP, JWE, fail-secure, grants tokens) are defined in
 `docs/concepts.md`. The OWASP Top 10:2025 threat model is in
 `.dev/design/security-threat-model.md`.
 

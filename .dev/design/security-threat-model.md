@@ -32,11 +32,11 @@ architectural decision in this system is, directly or indirectly, a response to 
 | Design choice | Addresses |
 |---|---|
 | Deny by default: data category access requires an explicit grant; membership alone does not grant category access | Prevents implicit allow |
-| Constraint enforcement is server-side (PEP plugins apply filters before queries reach the data layer) | Prevents client-side bypass |
+| Server-side enforcement (PEP plugins apply filters before queries reach the data layer) | Prevents client-side bypass |
 | JWE tokens are opaque to the token holder | Prevents a user reading their own restrictions and crafting bypass queries |
 | Emergency revocation with per-user `revoked_at` | Prevents continued access after authorization is withdrawn |
 | Fail-secure on revocation channel disruption | Prevents an adversary from sustaining access by blocking revocation signals |
-| Constraint tokens are short-lived (5-minute TTL) | Limits exposure window of a stolen or leaked token |
+| Grants tokens are short-lived (5-minute TTL) | Limits exposure window of a stolen or leaked token |
 
 **Gaps and open questions:**
 - Role capability definitions are not yet specced. Until they are, it is not possible to verify
@@ -45,10 +45,10 @@ architectural decision in this system is, directly or indirectly, a response to 
 - Field-level restriction enforcement is not yet designed. Records may be visible at the row level
   but sensitive fields within them are not yet protected. See
   [permissions-model.md](permissions-model.md).
-- Plugin integration (specifically how plugins validate tokens and apply constraints) is not
+- Plugin integration (specifically how plugins validate tokens and apply the grants payload) is not
   yet designed. A misconfigured or missing plugin would bypass all access control for that app.
   See [plugin-integration.md](plugin-integration.md).
-- **Decided:** constraint token uses an include-list (`categories`: what the user can access).
+- **Decided:** grants token uses an include-list (`categories`: what the user can access).
   Denied category names are absent from the token entirely; no information is leaked if the token
   were ever readable. See [permissions-model.md](permissions-model.md).
 
@@ -94,12 +94,12 @@ should be established before the first release.
 
 ### A04 — Cryptographic Failures
 
-Constraint tokens carry authorization policy for personal health data. Cryptographic strength is
+Grants tokens carry authorization policy for personal health data. Cryptographic strength is
 non-negotiable.
 
 | Design choice | Addresses |
 |---|---|
-| JWE (not JWS) for constraint tokens | Payload is encrypted; interception does not reveal access constraints |
+| JWE (not JWS) for grants tokens | Payload is encrypted; interception does not reveal the grants payload |
 | JWE algorithm choices must be strong: AES-256-GCM for content encryption, RSA-OAEP or ECDH-ES for key wrap | Prevents cryptographic downgrade attacks |
 | All communication between plugins, Usher, IdP, and database must use TLS | Prevents interception of tokens and policy data in transit |
 | `generatedAt` and other claims are encrypted inside the JWE | Prevents an attacker from learning the structure of access restrictions |
@@ -119,19 +119,19 @@ non-negotiable.
 ### A05 — Injection
 
 Usher constructs queries against its own database and against IdP APIs. Plugins translate
-constraint payloads into app-native queries (SQON, SQL, etc.).
+grants payloads into app-native queries (SQON, SQL, etc.).
 
 | Design choice | Addresses |
 |---|---|
 | All Usher database queries must use parameterized statements or an ORM that handles parameter binding | Prevents SQL injection into Usher's policy store |
-| Resource IDs, category names, and user identifiers from constraint payloads must be validated against an allowlist before plugins use them to construct queries | Prevents constraint payload injection into downstream queries |
+| Resource IDs, category names, and user identifiers from grants payloads must be validated against an allowlist before plugins use them to construct queries | Prevents grants payload injection into downstream queries |
 | Usher's API validates all input at the boundary (type, length, format) | Prevents malformed input from reaching internal logic |
 
 **Gaps:** Plugin-side injection prevention is the most significant gap. Each PEP plugin
-translates constraint data into a native query format. If a plugin concatenates constraint values
+translates grants payload data into a native query format. If a plugin concatenates grants payload values
 into a query string rather than parameterizing them, it creates an injection path where a
 compromised Usher policy store could inject into an app's data layer. Plugin design must enforce
-parameterized constraint application. See [plugin-integration.md](plugin-integration.md).
+parameterized application of grants payload data. See [plugin-integration.md](plugin-integration.md).
 
 ---
 
@@ -145,8 +145,8 @@ to fix.
 |---|---|
 | Fail-secure on revocation channel disruption | Adversarial condition designed for explicitly: an adversary blocking revocation signals gains nothing |
 | Category grants are additive (deny by default) | The system does not need to know every denied category; it only grants what is explicitly authorized |
-| JWE opacity: a token holder cannot read their own constraints | Prevents the authorization model itself from being used as an oracle for probing access boundaries |
-| Constraint enforcement is centralized in each app's plugin layer, not distributed across application logic | Single enforcement point reduces the risk of inconsistent or forgotten enforcement |
+| JWE opacity: a token holder cannot read their own grants | Prevents the authorization model itself from being used as an oracle for probing access boundaries |
+| Grants enforcement is centralized in each app's plugin layer, not distributed across application logic | Single enforcement point reduces the risk of inconsistent or forgotten enforcement |
 | Horizontal scaling with no shared in-memory state | Usher instances do not trust each other's in-memory state; all state lives in the database |
 
 **PHR-specific design note:** In health data contexts, "insecure design" includes designing for
@@ -162,14 +162,14 @@ Usher delegates authentication to the IdP but must validate what it receives str
 | Design choice | Addresses |
 |---|---|
 | Strict IdP token validation: `aud`, `iss`, `exp`, scope checked on every exchange; not just signature | Prevents token reuse across systems, expired token acceptance, and scope escalation |
-| Constraint tokens are short-lived (5-minute TTL) | Limits the useful lifetime of a stolen constraint token |
+| Grants tokens are short-lived (5-minute TTL) | Limits the useful lifetime of a stolen grants token |
 | Revocation applies immediately to known-compromised identities | Allows rapid response to credential compromise |
 | Usher does not implement authentication itself; it delegates to established IdP infrastructure | Prevents reinventing authentication mechanisms (a common source of authentication failures) |
 
 **Gaps:**
-- What Usher does when the IdP is unavailable at constraint token exchange time is not yet
+- What Usher does when the IdP is unavailable at grants token exchange time is not yet
   designed. The fail-secure principle implies: if the IdP cannot validate the bearer token, Usher
-  should reject the request rather than issuing a constraint token based on an unvalidated claim.
+  should reject the request rather than issuing a grants token based on an unvalidated claim.
 - Multi-factor authentication is an IdP concern; Usher should document that MFA is expected to
   be enforced at the IdP level for any deployment handling sensitive health data.
 
@@ -177,19 +177,19 @@ Usher delegates authentication to the IdP but must validate what it receives str
 
 ### A08 — Software or Data Integrity Failures
 
-Usher's authorization decisions depend on the integrity of its policy store and the constraint
+Usher's authorization decisions depend on the integrity of its policy store and the grants
 tokens it issues.
 
 | Design choice | Addresses |
 |---|---|
 | JWE tokens are tamper-evident: the encryption scheme includes authentication (AEAD) | A modified token is rejected at decryption; the alteration is detectable |
-| Constraint payload must be validated against a schema on every decode | Prevents malformed or unexpected payloads from propagating to app query layers |
+| Grants payload must be validated against a schema on every decode | Prevents malformed or unexpected payloads from propagating to app query layers |
 | Policy store changes must be transactional: partial writes should not leave policy in an inconsistent state | Prevents a partially applied permission change from creating an exploitable gap |
 | The `generatedAt` claim is inside the encrypted envelope | Prevents replay attacks using an old token with a manipulated timestamp |
 
 **Gaps:**
 - Database integrity controls (foreign key constraints, audit triggers) are not yet designed.
-- Constraint payload schema version handling: if the schema changes, old tokens must be rejected
+- Grants payload schema version handling: if the schema changes, old tokens must be rejected
   cleanly, not silently misinterpreted. A schema version claim inside the JWE is one approach.
 
 ---
@@ -203,7 +203,7 @@ In a PHR context, the audit log is not optional. It is a legal and ethical requi
 | Every authorization decision (allowed or denied) should be logged: user identity, resource, data categories in scope, timestamp, decision | Provides the audit trail required for health data governance and breach investigation |
 | Every revocation event logged: who triggered it, scope, timestamp | Enables forensic reconstruction of access control changes |
 | Revocation-uncertain mode transitions must be logged and alertable | Makes attempted revocation channel suppression observable |
-| Logs must never contain the constraint token payload, health record identifiers, or raw bearer tokens | Prevents the audit log from becoming a secondary sensitive data exposure |
+| Logs must never contain the grants token payload, health record identifiers, or raw bearer tokens | Prevents the audit log from becoming a secondary sensitive data exposure |
 | Structured log format (JSON) | Parseable by log aggregators; prerequisite for effective monitoring and alerting |
 
 **Gaps:**
@@ -221,11 +221,11 @@ In a PHR context, the audit log is not optional. It is a legal and ethical requi
 | Fail-secure: if revocation status cannot be confirmed, sessions are suspended (not silently permitted) | Errors in the revocation channel result in safe failure, not continued unauthorized access |
 | Revocation-uncertain mode returns 503 (unavailable), not 401 (unauthenticated) or 200 (permitted) | Error response does not reveal internal state; does not grant access; allows recovery without re-auth |
 | JWE decryption failure must reject the token cleanly, not partially process it | A corrupt or tampered token is rejected at the boundary |
-| Plugin errors during constraint application must fail the request, not apply partial constraints | A half-applied constraint could produce a result set that is more permissive than intended |
+| Plugin errors during grants payload application must fail the request, not apply a partial grants payload | A half-applied grants payload could produce a result set that is more permissive than intended |
 
 **Gaps:**
 - What Usher does when its own database is unavailable is not yet specified. Since Usher cannot
-  compute constraints without policy data, the only safe behaviour is to reject all constraint
+  compute grants without policy data, the only safe behaviour is to reject all grants
   token exchanges and fail plugins into revocation-uncertain mode.
 - Error responses from Usher must not include internal state, stack traces, or policy details.
   This must be enforced at the API layer.

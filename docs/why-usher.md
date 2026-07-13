@@ -2,6 +2,10 @@
 
 > If you are not yet familiar with the access control problem Usher addresses, read
 > [docs/intro.md](intro.md) first. This document assumes that context.
+>
+> This document is primarily aimed at developers and architects evaluating or integrating Usher.
+> If you are exploring adoption from a governance or research perspective,
+> [Concepts](concepts.md) covers the data access tier model, roles, and grants more directly.
 
 Access control for a data platform is not a single problem. It is a stack of problems, each
 handled at a different layer. Understanding where Usher fits requires understanding what each layer
@@ -53,14 +57,14 @@ changes to caching clients.
 
 Usher is designed to work with Keycloak, not replace it. Keycloak authenticates the user and
 establishes coarse membership; Usher resolves the fine-grained grant set and delivers it to the
-application as a constraint token the plugin applies to every query.
+application as a grants token the plugin applies to every query.
 
 **OPA (Open Policy Agent)**
 
 OPA is a general-purpose policy engine. Policies are written in Rego and evaluated against input
 data. OPA is used widely for Kubernetes admission control and API gateway authorization, and its
 partial evaluation feature can produce residual expressions rather than just allow/deny decisions.
-That concept directly influenced Usher's constraint token design: the token is a pre-computed,
+That concept directly influenced Usher's grants token design: the token is a pre-computed,
 encrypted residual that the plugin applies at the data layer.
 
 OPA is a tool Usher could build upon, not a tool that makes Usher unnecessary. As a standalone
@@ -78,8 +82,11 @@ call to resolve authorization decisions. Cerbos's API design is a reference for 
 
 The gap: Cerbos decisions are binary (allow/deny). Usher's use case requires a structured output:
 not just "can this user see data?" but "which categories of data can they see, in which resources?"
-That structured answer is what the constraint token delivers. It cannot come from Cerbos without
+That structured answer is what the grants token delivers. It cannot come from Cerbos without
 significant application-side wrapping.
+
+For the full technical evaluation of OPA and Cerbos, including what each tool contributed to
+the design, see [decisions.md](https://github.com/overture-stack/usher/blob/main/.dev/design/decisions.md).
 
 **Zanzibar-style relationship stores (SpiceDB, AuthZed, others)**
 
@@ -88,9 +95,9 @@ is a member of group B, which has viewer access to document C. This model is pow
 social-graph-style permissions and scales to very large relationship sets.
 
 It is a different model from Usher's. Usher's grants are explicit, tabular (user holds category X
-in resource Y), and resolved into a constraint token that the plugin applies as a query predicate.
+in resource Y), and resolved into a grants token that the plugin applies as a query predicate.
 Zanzibar-style systems answer "does user A have access to object C?" rather than "what is the full
-set of things user A can see, expressed as a filter?" The constraint token pattern is not native to
+set of things user A can see, expressed as a filter?" The grants token pattern is not native to
 these systems. Deploying a Zanzibar-style store also carries meaningful operational overhead that
 is hard to justify for platforms that do not need its relationship-graph capabilities.
 
@@ -118,7 +125,7 @@ platform scale.
 
 Across the tools above, Usher's specific contribution is the combination of:
 
-- **Structured constraint output.** The constraint token tells the application not just whether the
+- **Structured grants output.** The grants token tells the application not just whether the
   user has access, but what they have access to, expressed as a filter the plugin applies to every
   query.
 - **Built-in grant management.** A management interface for non-technical administrators to assign
@@ -141,11 +148,11 @@ Across the tools above, Usher's specific contribution is the combination of:
 - **Not an authentication service.** Usher does not issue identity tokens or manage sessions.
   It requires an identity provider (Keycloak or compatible) to be in place.
 - **Not a data proxy.** Usher does not sit between the application and the data layer. It issues
-  constraint tokens; enforcement happens inside the application plugin.
+  grants tokens; enforcement happens inside the application plugin.
 - **Not a general-purpose policy engine.** Usher's policy model is specific: explicit grants over
   resources and categories. It is not designed for complex conditional policies or relationship
   graphs. Teams with those requirements may find OPA or a Zanzibar-style system a better fit,
   potentially with Usher's management and delivery layer on top.
 - **Not a compliance framework.** Usher provides the technical mechanism for access control. The
   policies (who gets access, under what conditions, reviewed by whom) are a governance and
-  organisational concern that Usher implements but does not define.
+  organizational concern that Usher implements but does not define.

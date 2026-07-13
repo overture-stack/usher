@@ -22,13 +22,13 @@ used here. See [security-threat-model.md](security-threat-model.md) for the full
 ## Overview
 
 ```
-User --IdP JWT--> App (with Usher plugin / PEP)
+User --IdP JWT--> App (with usher-bridge + plugin / PEP)
                         |
-                        | Exchange IdP JWT for constraint token (once per TTL window)
+                        | Bridge exchanges IdP JWT for grants token (once per TTL window)
                         |
                         v
                  +-------------+
-                 |    Usher    |
+                 |  Controller |
                  |    (PDP)    |
                  +------+------+
                         |
@@ -40,25 +40,28 @@ User --IdP JWT--> App (with Usher plugin / PEP)
              |                     |
              +----------+----------+
                         |
-                 Compute constraints
+                 Compute grants
                         |
                         v
-              Encrypted constraint token (JWE)
-              [ payload, readable only by plugins with the key: ]
+              Encrypted grants token (JWE)
+              [ payload, readable only by the bridge (via the decryption key): ]
               {
-                "sub": "user-id",
-                "role": "member",
-                "resources": ["RESOURCE_A", "RESOURCE_B"],
-                "record_filters": { "exclude_categories": ["indigenous_data"] },
-                "field_restrictions": { ... },
+                "sub": "user-id",           // null for anonymous access
+                "iss": "https://usher.example.org",
+                "aud": "arranger-prod",
+                "iat": 1718611200,
+                "exp": 1718611500,
                 "generatedAt": "2026-06-17T10:00:00Z",
-                "exp": "2026-06-17T10:05:00Z"
+                "grants": {
+                  "COHORT_A": { "role": "member", "categories": ["indigenous"] },
+                  "COHORT_B": { "role": "owner",  "categories": [] }
+                }
               }
                         |
                         v
-             Plugin caches token; validates locally on
+             Bridge caches token; validates locally on
              every request within the TTL window.
-             Translates constraints into app-native format:
+             Plugin translates grants payload into app-native format:
                - Arranger: SQON filter object
                - Lyric: database WHERE clause
                - Stage: API query parameters
@@ -66,21 +69,21 @@ User --IdP JWT--> App (with Usher plugin / PEP)
 
 ---
 
-## Constraint token format: JWE
+## Grants token format: JWE
 
-Usher issues constraint tokens as **JWE (JSON Web Encryption)**: encrypted JWTs, not merely
+Usher issues grants tokens as **JWE (JSON Web Encryption)**: encrypted JWTs, not merely
 signed ones. See [concepts.md, JWS vs JWE](../../docs/concepts.md#jws-json-web-signature-signed-jwt)
 for the distinction.
 
 ### Design rationale
 
-**Why encrypted (not just signed):** A user who can read their own constraint token knows exactly
+**Why encrypted (not just signed):** A user who can read their own grants token knows exactly
 which filters are applied to their queries. In sensitive data contexts, even knowing the shape of
 the restriction may be information they should not have. JWE prevents a token holder from reading
-the constraints it encodes.
+the grants it encodes.
 
 **Why self-contained (not opaque):** An opaque token requires a network call to Usher to resolve
-its contents. Self-contained tokens are validated and decoded locally by plugins using the
+its contents. Self-contained tokens are validated and decoded locally by the bridge using the
 decryption key. This removes Usher from the hot path of every request, which is the mechanism that
 caused per-request auth service crashes in prior deployments.
 
@@ -88,9 +91,9 @@ caused per-request auth service crashes in prior deployments.
 JWT libraries. No custom token infrastructure is needed, and any security engineer can audit the
 implementation against a published standard.
 
-**The decryption key** is a shared secret provisioned to each plugin at deploy time. It is not
-the user's key; users never have it. The key distribution mechanism (how plugins receive and
-rotate this key securely) is a deployment concern not yet designed; see
+**The decryption key** is a shared secret provisioned to each bridge instance at deploy time. It
+is not the user's key; users never have it. The key distribution mechanism (how the bridge
+receives and rotates this key securely) is a deployment concern not yet designed; see
 [plugin-integration.md](plugin-integration.md).
 
 ---
@@ -111,27 +114,115 @@ log out and back in, and without waiting for IdP JWT expiry (which can be hours 
 
 ### Mechanism
 
-1. On first request (or on constraint token expiry), the plugin sends the user's IdP JWT to Usher.
-2. Usher validates the IdP JWT with the configured provider, resolves the user's current
-   permissions, and returns a JWE constraint token with a short TTL (default: 5 minutes,
+1. On first request (or on grants token expiry), the bridge sends the user's IdP JWT to the
+   controller.
+2. The controller validates the IdP JWT with the configured provider, resolves the user's current
+   permissions, and returns a JWE grants token with a short TTL (default: 5 minutes,
    configurable per deployment).
-3. The plugin caches the constraint token. All requests within the TTL window are validated and
-   processed locally, with no Usher network call.
-4. On TTL expiry, the plugin sends both the expired token and the current IdP JWT to Usher for
-   refresh.
+3. The bridge caches the grants token. All requests within the TTL window are validated and
+   processed locally, with no controller network call.
+4. On TTL expiry, the bridge sends both the expired token and the current IdP JWT to the
+   controller for refresh.
 5. Usher decrypts the expired token and reads the embedded `generatedAt` timestamp. It compares
    this against the user's last policy change in its database:
-   - **No change since `generatedAt`:** re-issue a new JWE with the same constraints and a
+   - **No change since `generatedAt`:** re-issue a new JWE with the same grants and a
      refreshed TTL. Fast path: no full policy query.
-   - **Change detected:** re-compute constraints from the policy store and issue a new JWE with
-     updated constraints.
+   - **Change detected:** recompute grants from the policy store and issue a new JWE with
+     updated grants.
 
 The `generatedAt` claim serves as a debounce marker: the fast-path refresh skips the full policy
 computation unless something has actually changed. Permission changes propagate within at most one
 TTL window for any active user.
 
 **Load comparison:** a user making 100 requests per minute on a 5-minute TTL triggers 1 Usher
-call instead of 500. The constraint computation cost is amortized across the TTL window.
+call instead of 500. The grants computation cost is amortized across the TTL window.
+
+---
+
+## Grant computation pipeline
+
+Grants are computed additively. Every user starts with no access; the controller adds grants
+in three tiers, in order, and stops where the user's credentials no longer qualify. The result
+is a `grants` object containing every resource the user may access and the categories they hold
+within it.
+
+### Tiers
+
+**1. Open grants (always computed, for all users including anonymous)**
+
+Any resource marked as open data contributes a grant entry for that resource. No IdP token is
+required. An unauthenticated request produces a grants token containing only open-tier grants.
+
+**2. Registered grants (computed if an authenticated IdP token is present)**
+
+For authenticated users, the controller resolves their membership records and adds grants for
+every resource where the user holds a membership with a `registered` or higher tier role.
+`categories: []` in the token means member access with no category grants — the user sees
+uncategorized records only.
+
+**3. Controlled grants (computed for authenticated users with explicit category grants)**
+
+On top of registration, the controller resolves explicit category grant records for the user
+and adds the granted categories to the relevant resource's `categories` list. These grants are
+stored with expiry timestamps and are checked at issuance time; expired grants are silently
+omitted.
+
+### Why the additive model matters
+
+- **Uniform code path.** The bridge and plugin handle the same token structure regardless of
+  whether the user is anonymous, a basic member, or a full-access researcher. The plugin
+  translates the `grants` map into its query format; tiers are invisible to it.
+- **Universal audit log.** Because even anonymous access triggers a token exchange, every data
+  access — open or controlled — appears in Usher's audit log with the token's `generatedAt`
+  timestamp and computed grants. Open data access is not invisible.
+- **Consistent fail-secure.** The bridge's revocation channel and fail-secure mode apply to all
+  tokens, including anonymous ones. A revocation of open access (resource taken offline,
+  misconfiguration) propagates through the same path as a user-level revocation.
+
+### Token structure
+
+The `grants` object in the token payload is a map keyed by resource ID. Each entry carries:
+
+```json
+"RESOURCE_ID": {
+  "role":       "member | owner | public",
+  "categories": ["category-a", "category-b"]
+}
+```
+
+A resource absent from the map means the user has no access to it at all. `categories: []`
+means the user has role-level access to uncategorized records only. The plugin derives what to
+filter out by subtracting this list from the full set of sensitive categories in its own config.
+
+**Anonymous token example** (no IdP bearer token; only open resources present):
+```json
+{
+  "sub": null,
+  "aud": "arranger-prod",
+  "iat": 1718611200,
+  "exp": 1718611500,
+  "generatedAt": "2026-06-17T10:00:00Z",
+  "grants": {
+    "OPEN_COHORT": { "role": "public", "categories": [] }
+  }
+}
+```
+
+**Authenticated token example** (member of two cohorts, explicit category grant on one):
+```json
+{
+  "sub": "user-id",
+  "iss": "https://usher.example.org",
+  "aud": "arranger-prod",
+  "iat": 1718611200,
+  "exp": 1718611500,
+  "generatedAt": "2026-06-17T10:00:00Z",
+  "grants": {
+    "COHORT_A": { "role": "member", "categories": ["indigenous"] },
+    "COHORT_B": { "role": "owner",  "categories": [] }
+  }
+}
+```
 
 ---
 
@@ -139,13 +230,13 @@ call instead of 500. The constraint computation cost is amortized across the TTL
 
 ### Problem
 
-TTL-based caching means a constraint token remains valid for up to 5 minutes after a permission
+TTL-based caching means a grants token remains valid for up to 5 minutes after a permission
 change. For routine changes this is acceptable. For emergencies (a compromised account, an access
 violation, a resource being taken offline), even 5 minutes is too long.
 
 ### Mechanism: per-user revocation timestamp
 
-Usher maintains a `revoked_at` timestamp per user. Revocation means: any constraint token for
+Usher maintains a `revoked_at` timestamp per user. Revocation means: any grants token for
 this user with `generatedAt` earlier than `revoked_at` is invalid, regardless of its TTL.
 
 This does not require tracking individual token IDs. Usher stores one timestamp per user and
@@ -154,12 +245,12 @@ anchor for this check.
 
 ### Propagation: push + poll
 
-**Push (primary):** On revocation, Usher immediately pushes a revocation event to connected
-plugins (via SSE or webhook) containing the user ID and `revoked_at` timestamp. Plugins that
-receive this event drop the cached constraint token for that user immediately. Revocation takes
-effect on the next request, within seconds.
+**Push (primary):** On revocation, the controller immediately pushes a revocation event to
+connected bridges (via SSE or WebSocket) containing the user ID and `revoked_at` timestamp.
+Bridges that receive this event drop the cached grants token for that user immediately.
+Revocation takes effect on the next request, within seconds.
 
-**Poll (fallback):** Plugins poll a lightweight endpoint at a short interval (default: 30
+**Poll (fallback):** Bridges poll a lightweight endpoint at a short interval (default: 30
 seconds):
 
 ```
@@ -167,25 +258,54 @@ GET /revocations?since=<timestamp>
 ```
 
 This returns the list of user IDs whose revocation state changed since the given timestamp. In
-normal operation the response is empty and cheap. A plugin that missed the push event picks up
+normal operation the response is empty and cheap. A bridge that missed the push event picks up
 the revocation within one poll interval.
 
 Worst-case revocation propagation: poll interval (30 seconds), not token TTL (5 minutes). Push
 provides speed; poll provides reliability.
 
+### Multi-instance propagation
+
+A horizontally scaled Usher deployment runs multiple controller instances behind a load balancer.
+A revocation request may reach any instance. Without coordination, only that instance would push
+the revocation event to its connected bridge subscribers; bridges connected to other instances
+would not be notified until their next poll.
+
+To avoid this, every controller instance publishes revocation events to a **Valkey pub/sub
+channel** immediately after writing `revoked_at` to PostgreSQL. All instances subscribe to this
+channel and push the event to each of their connected bridge subscribers on receipt.
+
+The sequence for a revocation processed by instance A, with bridges connected to both A and B:
+
+1. Instance A writes `revoked_at` to PostgreSQL.
+2. Instance A publishes the revocation event to the Valkey channel.
+3. Instance A pushes the event to its own connected bridges directly.
+4. Instance B receives the Valkey pub/sub message.
+5. Instance B pushes the event to its own connected bridges.
+
+The poll endpoint (`GET /revocations?since=<timestamp>`) reads from PostgreSQL, which is already
+updated in step 1. Bridges using the poll fallback reach the correct state regardless of which
+controller instance they poll.
+
+Controller instances are stateless between requests beyond their Valkey channel subscription.
+No direct instance-to-instance coordination is needed: Valkey is the message bus.
+
+See [architecture.md](architecture.md) for the full component breakdown and Valkey's two distinct
+roles (shared cache and revocation pub/sub).
+
 ### Revocation scope
 
 - **Single user:** the standard case.
 - **All users of a resource:** when a resource is misconfigured or its data compromised.
-- **Global:** break-glass; all active constraint tokens platform-wide are invalidated. The
+- **Global:** break-glass; all active grants tokens platform-wide are invalidated. The
   management UI must require explicit operator confirmation for this action.
 
 ### Interaction with the token refresh fast path
 
-When a revoked user's token expires and the plugin requests a refresh, Usher decrypts the expired
+When a revoked user's token expires and the bridge requests a refresh, the controller decrypts the expired
 token, reads `generatedAt`, and compares it against `revoked_at`. Since `generatedAt` is earlier
 than `revoked_at`, the fast path is skipped. Usher either rejects the refresh (if access remains
-revoked) or re-computes constraints (if access has been reinstated).
+revoked) or recomputes grants (if access has been reinstated).
 
 ---
 
@@ -194,19 +314,19 @@ revoked) or re-computes constraints (if access has been reinstated).
 ### Threat model
 
 An adversary who can selectively block revocation traffic (push events not delivered, poll
-requests timing out) while leaving application traffic intact keeps a revoked constraint token
+requests timing out) while leaving application traffic intact keeps a revoked grants token
 valid for the duration of its TTL. This is an active attack on the revocation mechanism.
 
 ### Design response
 
-**If a plugin cannot confirm revocation status, it does not trust cached tokens.**
+**If a bridge cannot confirm revocation status, it does not trust cached tokens.**
 
-Each plugin tracks the timestamp of its last successful revocation check (push received, or poll
+Each bridge tracks the timestamp of its last successful revocation check (push received, or poll
 returned successfully). If this timestamp exceeds a configurable grace period (default: 60
-seconds) without a new successful check, the plugin enters **revocation-uncertain mode**.
+seconds) without a new successful check, the bridge enters **revocation-uncertain mode**.
 
 In revocation-uncertain mode:
-- Cached constraint tokens are **suspended**, not expired. Requests are rejected with a "service
+- Cached grants tokens are **suspended**, not expired. Requests are rejected with a "service
   temporarily unavailable" response (HTTP 503), not a "session ended" response (HTTP 401).
 - The distinction matters: a suspended session resumes automatically when connectivity is restored
   and revocation status is confirmed, without requiring re-authentication. An expired session
@@ -222,9 +342,9 @@ heartbeat is needed.
 **The operational trade-off.** Legitimate users are also affected when the revocation channel is
 disrupted. This is a deliberate choice: the threat of an adversary exploiting a blocked revocation
 channel outweighs the inconvenience of a brief service interruption. Operators should treat Usher
-as a high-availability dependency with reliable network paths to all app plugins. The grace period
-is the tunable knob: shorter values tighten security; longer values allow more tolerance for
-transient network conditions.
+as a high-availability dependency with reliable network paths to all bridge instances. The grace
+period is the tunable knob: shorter values tighten security; longer values allow more tolerance
+for transient network conditions.
 
 ---
 
@@ -236,7 +356,7 @@ Usher validates incoming IdP tokens against a configured provider. The provider 
 - Any OpenID Connect-compatible provider
 
 Apps forward the user's bearer token to Usher on first exchange. Usher handles IdP validation.
-Subsequent requests within the TTL window use the locally cached constraint token, so IdP
+Subsequent requests within the TTL window use the locally cached grants token, so IdP
 connectivity is not in the hot path.
 
 ---
@@ -245,15 +365,15 @@ connectivity is not in the hot path.
 
 ### Decryption key distribution
 
-How do plugins receive and rotate the JWE decryption key securely? Options include: provisioned
-as an environment variable at deploy time, fetched from a secrets manager (Vault, AWS Secrets
-Manager) at startup, or issued by Usher itself via a key-exchange endpoint that requires mutual
-authentication. Key rotation strategy (how often, how plugins pick up a new key without
-downtime) is also unresolved. See [plugin-integration.md](plugin-integration.md).
+How does the bridge receive and rotate the JWE decryption key securely? Options include:
+provisioned as an environment variable at deploy time, fetched from a secrets manager (Vault, AWS
+Secrets Manager) at startup, or issued by the controller itself via a key-exchange endpoint that
+requires mutual authentication. Key rotation strategy (how often, how the bridge picks up a new
+key without downtime) is also unresolved. See [plugin-integration.md](plugin-integration.md).
 
 ### Grace period configurability scope
 
-Should the grace period (default 60s) be configurable globally, per-plugin, or per-resource? A
+Should the grace period (default 60s) be configurable globally, per-bridge, or per-resource? A
 resource containing highly sensitive data may warrant a shorter grace period than one with
 lower-sensitivity data.
 

@@ -1,12 +1,12 @@
 # Usher — Copilot Instructions
 
 Usher is a standalone ABAC authorization service for the Overture platform. It issues encrypted
-constraint tokens (JWE) that per-app plugins enforce. It is designed for personal health records
+grants tokens (JWE) that per-app plugins enforce. It is designed for personal health records
 and may be subject to health privacy legislation. Currently in the design phase.
 
 ## Key references
 
-- `.dev/design/concepts.md`: vocabulary: ABAC, PDP/PAP/PEP, JWE, fail-secure, constraint tokens
+- `.dev/design/concepts.md`: vocabulary: ABAC, PDP/PAP/PEP, JWE, fail-secure, grants tokens
 - `.dev/design/security-threat-model.md`: OWASP Top 10:2025 mapping; addressed vs. open gaps
 - `.dev/design/README.md`: design index with coverage status (specced / in progress / not started)
 - `.dev/roadmap.md`: planned work
@@ -27,7 +27,7 @@ and may be subject to health privacy legislation. Currently in the design phase.
 Flag these immediately:
 - String-concatenated queries of any kind
 - User-supplied values forwarded to queries without allowlist validation
-- Credentials, tokens, or constraint payloads in log output
+- Credentials, tokens, or grants payloads in log output
 - HTTP (not HTTPS) for any non-localhost URL
 - Missing `aud`/`iss`/`exp` validation on tokens
 - Default or empty decryption key accepted at startup

@@ -3,12 +3,12 @@
 ## What this is
 
 Usher is a standalone ABAC authorization service for the Overture platform. It answers "what is
-this user allowed to see?" and returns encrypted constraint tokens (JWE) that per-app plugins
+this user allowed to see?" and returns encrypted grants tokens (JWE) that per-app plugins
 enforce. It is designed to handle personal health information and may be subject to applicable
 health privacy legislation. The service is currently in the design phase; no implementation has
 begun.
 
-Key concepts (PDP, PAP, PEP, JWE, fail-secure, constraint tokens) are in
+Key concepts (PDP, PAP, PEP, JWE, fail-secure, grants tokens) are in
 `docs/concepts.md`. The OWASP Top 10:2025 threat model is in
 `.dev/design/security-threat-model.md`. The design index is at `.dev/design/README.md`.
 
@@ -78,7 +78,7 @@ When syncing this project's agentics integration against the template: read
 
 - String-concatenated queries (SQL, ES DSL, SQON construction)
 - User-supplied field names forwarded to queries without allowlist validation
-- Credentials, tokens, or constraint payloads in any log output
+- Credentials, tokens, or grants payloads in any log output
 - HTTP (not HTTPS) for any non-localhost communication
 - Missing or unvalidated `aud`/`iss`/`exp`/scope claims on tokens
 - Default or empty JWE decryption key accepted at startup

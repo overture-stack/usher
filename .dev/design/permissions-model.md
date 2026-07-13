@@ -1,65 +1,138 @@
 # Permissions Model
 
-_Status: in progress. Core structure, grant composition semantics, category-to-field mapping,
-OCAP considerations, private data sharing use cases (iMS), submitter/custodian distinction,
-category assignment defaults hierarchy, and category change propagation are now documented.
-Open design questions: multi-category intersection access (OCAP compliance posture), user groups
-detail, data stewardship and resource ownership scoping, write permissions for Lyric, embargo
-scheduling, field-level restriction implementation, and role capability definitions._
+_Status: in progress. The core model, visibility rule, grant composition, field-level restriction
+options, OCAP considerations, and private data sharing patterns are documented. Resolved design
+decisions are in their own section. Open questions are at the end._
 
-The three privileged roles introduced here (platform admin, category steward, resource owner)
-are fully specified in [admin-model.md](admin-model.md), which covers lifecycle, OIDC-first
-identification, bootstrap, the self-grant flow, service accounts, and audit integrity.
-
-See [security-threat-model.md](security-threat-model.md) for the full OWASP Top 10:2025 mapping.
-
-**Primary OWASP categories relevant here:**
-- **A01 — Broken Access Control:** deny by default (category access requires explicit grant);
-  the permissions model is the policy layer Usher enforces. Gaps in this model are gaps in access
-  control. Field-level restriction design is an open A01 gap.
-- **A06 — Insecure Design:** the hybrid role + attribute model was chosen specifically to avoid
-  role proliferation, which leads to misconfigured or overlooked role assignments. Each design
-  choice should be examined for "what does an adversary gain if this is wrong?"
+This document defines what Usher tracks and how it uses that data to answer "what can this user
+see?" It does not cover how those decisions are administered (see [admin-model.md](admin-model.md))
+or how the token system works end to end (see [security-workflow.md](security-workflow.md)). The
+OWASP threat model is in [security-threat-model.md](security-threat-model.md).
 
 ---
 
-## Model-agnostic intent
+## Design approach
 
-The permissions model uses generic terms (`resource`, `membership`, `category`) rather than
-domain-specific ones (`study`, `patient`, `dataset`). Domain terminology appears only in the
-management UI layer (configurable per deployment) and in worked examples.
+### Model-agnostic language
 
-In the Overture context, a "resource" is a **cohort**: a virtual grouping of data records
-defined by shared characteristics, not a siloed container. Unlike studies (where a record belongs
-to exactly one study), cohorts can overlap; a record can belong to multiple cohorts simultaneously.
-In another deployment it might be a dataset, project, or patient cohort under a different name.
-The underlying model is the same.
+The permissions model uses generic terms: `resource`, `membership`, `category`. Domain-specific
+names (`study`, `patient`, `cohort`, `dataset`) appear only in the management UI layer,
+configurable per deployment, and in worked examples in this document.
 
-The access semantics of overlapping cohorts are an open design question (see Open questions below).
+In the Overture context, a resource is a **cohort**: a virtual grouping of records defined by
+shared characteristics, not a siloed container. Unlike studies (where a record belongs to exactly
+one study), cohorts can overlap: a record can belong to multiple cohorts simultaneously. In another
+deployment the same concept might be called a dataset, a project, or a patient cohort. The
+underlying model is the same.
 
----
+The access semantics of overlapping cohorts are an open design question; see Open questions.
 
-## Hybrid role + attribute model
+### Hybrid role and attribute model
 
-Usher uses a **hybrid of RBAC and ABAC**:
+Usher combines role-based and attribute-based access control rather than relying on either alone.
 
-- **Roles** capture coarse-grained capabilities: what kind of actions a user can perform (curator,
-  member, viewer). A role is a label for a class of behaviours.
-- **Attributes** capture contextual scope: which specific resources those actions apply to, and
-  under what data-category restrictions.
+**Roles** capture coarse-grained capability: what kind of actions a user can perform (`owner`,
+`member`). A role is a label for a class of behaviours.
+
+**Attributes** capture contextual scope: which specific resources those actions apply to, and under
+what data-category restrictions.
 
 This combination avoids two failure modes:
-- Pure RBAC: roles proliferate as rules become contextual ("study-A-indigenous-curator" vs
-  "study-A-non-indigenous-curator" etc.)
-- Pure ABAC: policy rules become difficult to manage and audit without role abstraction as a
-  simplifying layer
 
-Two users can hold the same role in the same resource and still have meaningfully different access,
+- **Pure RBAC:** roles proliferate as rules become contextual. A platform with two roles and three
+  data categories across five resources could require dozens of role combinations
+  (`study-A-indigenous-member`, `study-A-non-indigenous-member`, etc.) to express the full
+  policy space.
+- **Pure ABAC:** without role abstraction as a simplifying layer, policy rules become difficult to
+  manage and audit.
+
+Two users can hold the same role in the same resource and have meaningfully different access,
 depending on their data category grants. The role describes capability; the grant describes scope.
 
 ---
 
-## Core entities
+## Core concepts
+
+### Resources
+
+A resource is a named grouping of data. Resources are defined through the management UI by
+administrators. In Overture deployments, a resource is typically a cohort; in other deployments it
+might be a dataset, a project, or any other logical unit defined by the deployment.
+
+Resources have data categories assigned to them. A resource with no categories assigned is fully
+visible to all its members.
+
+### Memberships
+
+A membership records a user's role within a specific resource. A user must have a membership in a
+resource before any data in that resource is accessible to them.
+
+A user can hold multiple roles in the same resource simultaneously. Roles are coarse capability
+labels, not a strict hierarchy; overlap is expected and valid. Effective permissions at constraint
+resolution time are the union of all role capabilities across every membership the user holds in
+that resource.
+
+**Multiple roles per user per resource are supported; effective access is the union of all roles
+held.** The grants computation engine must consult all of a user's memberships in a resource,
+not just the first or highest-priority one.
+
+### Data categories
+
+A data category is a named access dimension. Categories are defined at the platform level and
+assigned to resources. Examples: `indigenous_data`, `controlled_access`, `restricted_clinical`.
+
+Categories are independent axes: holding a grant for one category does not imply holding a grant
+for another, even within the same resource. What a category name means in terms of actual records
+or fields is deployment configuration that lives in the enforcement plugin, not in Usher.
+
+### Category grants
+
+A category grant is an explicit record: this user may access records tagged with this category
+within this resource. Without a grant, access to categorized records is denied. Deny by default is
+a fundamental invariant: membership in a resource alone is never sufficient for access to
+categorized records or fields. The absence of a grant is always a denial.
+
+Grants are additive. A user's effective access to a resource's categorized data is the union of
+their personal grants and any grants held by groups they belong to.
+
+Grants have two origins:
+
+- **Internal:** created by an administrator through the management UI. Usher owns the full
+  lifecycle.
+- **External:** originated from a GA4GH Passport `ControlledAccessGrants` Visa, validated by
+  Keycloak and mapped to a `category_grant` automatically. Usher inherits the Visa's `expires`
+  timestamp as `expires_at`. See [concepts.md](../../docs/concepts.md) for the full GA4GH Passport
+  flow.
+
+Local administrators can revoke an externally-originated grant. Local policy can always restrict
+access downward; it cannot grant access that no Visa covers. The `granted_by` column records the
+origin (internal admin ID or external Visa issuer identifier) for auditability.
+
+**Grant expiry.** The `expires_at` field supports time-limited grants. When a grant expires, the
+revocation mechanism fires: the same path as a manual revocation, with the same fail-secure grace
+period. The researcher must re-authenticate to resume access. This keeps revocation behaviour
+consistent regardless of whether a grant was revoked manually or lapsed naturally.
+
+### User groups
+
+User groups are a first-class entity: a group can hold memberships in resources and hold category
+grants directly, independent of any individual user's grants. A user's effective access is the
+union of their personal grants and all grants held by groups they belong to.
+
+Groups exist to make administration tractable at scale: granting access to a research team should
+be one operation, not one per team member. In deployments using GA4GH Passports, a Keycloak group
+membership can be mapped to a Usher group automatically, allowing institutional group affiliations
+to propagate without manual management.
+
+**Design gap.** User groups are not yet fully designed. The entities below are placeholders; the
+open questions are in the Open questions section.
+
+---
+
+## Entity schema
+
+The logical model. Specific column names, types, and indexes are not yet specified: see the
+database schema design item in the roadmap.
 
 ```
 users                  (id, idp_subject, email, display_name)
@@ -75,137 +148,34 @@ category_grants        (user_id, data_category_id, resource_id, granted_by, gran
 group_category_grants  (group_id, data_category_id, resource_id, granted_by, granted_at, expires_at)
 ```
 
-_Note: specific column names, types, and indexes are not yet designed. This is a logical model,
-not a schema._
-
-### roles
-
-Coarse-grained capability labels. Expected examples: `curator`, `member`. The exact set of roles
-is a deployment decision, not hardcoded in Usher. Roles are defined through the management UI.
-
-### data_categories
-
-Named access tiers that apply to subsets of records or fields within a resource. Examples:
-`indigenous_data`, `controlled_access`, `restricted_clinical`. Categories are defined at the
-platform level and assigned to resources by operators.
-
-### resource_categories
-
-Associates data categories with resources. A resource can have zero or more categories. If a
-resource has no categories, all members see all records and fields (subject to role permissions).
-
-### user_groups
-
-_Design gap: not yet fully designed. The entities above are placeholders; the details need
-explicit design work before implementation._
-
-Collections of users with shared access needs. Groups exist to make administration tractable at
-scale: granting access to a research team of 40 people should be one operation, not 40. Groups
-are a first-class entity: a group can hold memberships in resources and hold category grants
-directly, separately from any individual user's grants. A user's effective access is the union
-of their personal grants and all grants held by groups they belong to.
-
-Groups belong to the same operational context as users and are managed through the PAP layer.
-In deployments using GA4GH Passports, a Keycloak group membership can be mapped to a Usher
-group automatically, allowing institutional group affiliations to propagate into Usher without
-manual management.
-
-### memberships
-
-Records a user's role within a specific resource. A user can have at most one role per resource
-(TBD: whether multiple roles per resource per user is needed is unresolved).
-
-### category_grants
-
-Records an explicit grant allowing a specific user to access records and fields associated with a
-data category within a specific resource. Category grants are additive: without a grant, access to
-categorized records/fields is denied for members of that resource.
-
-The `expires_at` field supports time-limited grants. **Design decision:** grant expiry triggers the
-`revoked_at` revocation mechanism (the same path as a manual revocation). The fail-secure grace
-period applies. The researcher must re-authenticate to resume access. This keeps the revocation
-behaviour consistent regardless of whether a grant was revoked manually or lapsed naturally.
-
-Grants have two origins:
-
-- **Internal:** created by an administrator through the management UI (PAP layer). Usher owns the
-  full lifecycle.
-- **External:** originated from a GA4GH Passport `ControlledAccessGrants` Visa, validated by
-  Keycloak and mapped to a `category_grant` automatically. Usher inherits the Visa's `expires`
-  timestamp as `expires_at`. See [concepts.md, GA4GH Passports and federated identity](../../docs/concepts.md)
-  for the full flow.
-
-Local administrators can revoke an externally-originated grant. Local policy can always restrict
-access downward; it cannot grant access that no Visa covers. The `granted_by` column should record
-the origin (internal admin ID vs external Visa issuer identifier) for auditability.
-
 ---
 
-## Grant composition and visibility semantics
+## How access is resolved
 
 ### The visibility rule
 
 A record is visible to a user if, for every data category associated with the resource that the
 record belongs to, the user holds a grant for that category (directly or via a group).
 
-Equivalently: a record is excluded if the user lacks a grant for ANY category the record
+Stated the other way: a record is excluded if the user lacks a grant for any category the record
 is tagged with.
 
-The constraint token expresses this as `categories`: the list of data categories the user holds
-grants for within a resource. The PEP plugin computes what to exclude by subtracting the token's
-`categories` from the full set of categories configured for that resource in the plugin config.
-Each absent category produces an exclusion filter using that category's field mapping. Exclusion
-conditions are applied as a conjunction: a record is hidden if it is tagged with any category not
-present in the user's token.
+The grants token expresses this as `categories`: the include-list of data categories the user
+holds grants for within a resource. Denied category names are absent from the token entirely rather
+than named explicitly; this is consistent with how OAuth scopes, UMA RPT permissions, and GA4GH
+Passport Visas express positive grants, and with the principle of least information. The enforcement
+plugin computes what to exclude by subtracting the token's `categories` from the full category set
+configured for that resource. Each absent category produces an exclusion filter using that
+category's field mapping. Exclusion conditions are applied as a conjunction: a record is hidden if
+it is tagged with any category not present in the user's token.
 
-### Composition across multiple categories
+Excluded records do not appear in counts, aggregations, or result sets; their existence is not
+disclosed. This is a hard invariant: existence revelation is an information disclosure vulnerability
+(OWASP A01), and a discoverable-but-inaccessible mode will not be introduced.
 
-With two independent categories `controlled` and `indigenous` mapped to fields `isControlled`
-and `isIndigenous`:
+### Worked example
 
-| User's grants | `categories` in token | Visible records |
-|---|---|---|
-| neither | `[]` | `isControlled=false AND isIndigenous=false` only |
-| controlled only | `["controlled"]` | `isIndigenous=false` (open and controlled non-indigenous) |
-| indigenous only | `["indigenous"]` | `isControlled=false` (open and indigenous non-controlled) |
-| both | `["controlled", "indigenous"]` | all records |
-
-**The intersection question:** the visibility rule above means that holding individual grants for
-`controlled` and `indigenous` separately gives access to the `controlled+indigenous` intersection
-automatically (because no unganted category remains). Whether this is the intended behaviour is an
-open design question with OCAP implications; see Open questions below.
-
-### Category-to-field mapping
-
-Data categories in Usher's model are named abstractions. Usher has no knowledge of what fields
-in any data schema correspond to a category — it works with category names only. The mapping
-from category name to field predicate is deployment configuration that lives in the **PEP plugin
-config**, not in Usher:
-
-```
-category: indigenous_data
-  field:  isIndigenous
-  value:  true
-```
-
-A record "belongs to" a category if the configured field condition is true for that record. The
-plugin holds this mapping; it uses it to derive the exclusion filter from the token's `categories`
-list. Two deployments using the same Usher instance can map the same category name
-(`indigenous_data`) to entirely different field names in their respective data schemas, because
-each plugin carries its own config.
-
-### Write permissions
-
-The same grant model extends to write operations in submission services (e.g. Lyric). A grant's
-scope applies to the operation type the consuming service enforces; for Arranger this is always
-read, and for Lyric it is read and/or write. The data model does not change; the interpretation at
-the PEP layer differs. Write permission design is deferred (see Open questions).
-
----
-
-## Constraint resolution: worked example
-
-### Setup
+**Setup:**
 
 Resources and their category assignments:
 - `RESOURCE_X` has `data_categories: [indigenous_data]`
@@ -216,13 +186,13 @@ Users and their grants:
 - User B: `membership(RESOURCE_X, member)`, `category_grant(indigenous_data, RESOURCE_X)`;
   `membership(RESOURCE_Y, member)`, `category_grant(open_access, RESOURCE_Y)`
 
-Plugin config (Arranger-side; maps category names to ES field predicates):
+Plugin config (Arranger-side; maps category names to Elasticsearch field predicates):
 ```
 indigenous_data → { field: "isIndigenous", value: true }
 open_access     → { field: "isRestricted", value: false }
 ```
 
-### Constraint token for User A
+**Grants token for User A:**
 
 ```json
 {
@@ -231,7 +201,7 @@ open_access     → { field: "isRestricted", value: false }
   "iat": 1720000000,
   "exp": 1720000300,
   "generatedAt": 1720000000,
-  "resources": {
+  "grants": {
     "RESOURCE_X": {
       "role": "member",
       "categories": []
@@ -243,13 +213,13 @@ open_access     → { field: "isRestricted", value: false }
 `RESOURCE_Y` is absent: User A has no membership there. The plugin denies all queries for that
 resource.
 
-For `RESOURCE_X`: plugin config lists `[indigenous_data]` as the full category set. The token
+For `RESOURCE_X`: the plugin config lists `[indigenous_data]` as the full category set. The token
 has `categories: []`. Exclusion set: `[indigenous_data]`. The plugin applies
-`isIndigenous=true → exclude` as a SQON filter on every query. User A sees only records where
-`isIndigenous=false`. Their queries never reveal that indigenous records exist — absent from
-results, counts, and aggregations.
+`isIndigenous=true → exclude` as a filter on every query. User A sees only records where
+`isIndigenous=false`. Their queries never reveal that indigenous records exist: absent from results,
+counts, and aggregations.
 
-### Constraint token for User B
+**Grants token for User B:**
 
 ```json
 {
@@ -258,7 +228,7 @@ results, counts, and aggregations.
   "iat": 1720000000,
   "exp": 1720000300,
   "generatedAt": 1720000000,
-  "resources": {
+  "grants": {
     "RESOURCE_X": {
       "role": "member",
       "categories": ["indigenous_data"]
@@ -277,458 +247,379 @@ User B sees all records.
 For `RESOURCE_Y`: full set `[open_access, indigenous_data]` minus token `["open_access"]` =
 exclusion set `[indigenous_data]`. User B sees only non-indigenous records in `RESOURCE_Y`.
 
+The token examples above use the canonical `grants` map structure. For the full token schema,
+standard JWT claims, and anonymous token form, see
+[security-workflow.md — Token structure](security-workflow.md#token-structure).
+
+### Composition across categories
+
+With two independent categories `controlled` and `indigenous` mapped to fields `isControlled`
+and `isIndigenous`:
+
+| User's grants | `categories` in token | Visible records |
+|---|---|---|
+| neither | `[]` | `isControlled=false AND isIndigenous=false` only |
+| controlled only | `["controlled"]` | `isIndigenous=false` (open and controlled non-indigenous) |
+| indigenous only | `["indigenous"]` | `isControlled=false` (open and indigenous non-controlled) |
+| both | `["controlled", "indigenous"]` | all records |
+
+The current visibility rule means holding individual grants for `controlled` and `indigenous`
+separately gives automatic access to the `controlled+indigenous` intersection, because no ungranted
+category remains. Whether this is the intended behaviour is an open question with OCAP implications;
+see Open questions.
+
+---
+
+## Category-to-field mapping
+
+Data categories in Usher's model are named abstractions. Usher has no knowledge of what fields in
+any data schema correspond to a category: it works with category names only. The mapping from
+category name to field predicate is deployment configuration that lives in the enforcement plugin:
+
+```
+category: indigenous_data
+  field:  isIndigenous
+  value:  true
+```
+
+A record belongs to a category if the configured field condition is true for that record. The plugin
+holds this mapping and uses it to derive the exclusion filter from the token's `categories` list.
+Two deployments using the same Usher instance can map the same category name (`indigenous_data`) to
+entirely different field names in their respective schemas, because each plugin carries its own
+config.
+
 ---
 
 ## Field-level restrictions
 
 Field-level restrictions control which fields within a record a user can see, independent of
-whether they can see the record itself.
+whether they can see the record itself. The implementation approach is not yet chosen.
 
-_This section needs more design work. The options are defined; the implementation approach is not
-yet chosen._
+**A. Resource-level restrictions.** Restrictions are uniform across all users with access to a
+resource. All members of resource X cannot see `clinical_notes`, regardless of role. Simple;
+appropriate when the resource itself defines what is visible. Cannot differentiate access by role.
 
-### Options
+**B. Role-in-resource restrictions.** Restrictions vary by role within a resource. A `member` in
+resource X cannot see `clinical_notes`; an `owner` can. Adds role-differentiated field access.
+Requires a matrix of role-by-field rules per resource; increases management UI complexity.
 
-**A. Resource-level restrictions**
-Restrictions are uniform across all users with access to a resource.
-All users of resource X cannot see field `clinical_notes`, regardless of role.
+**C. Category-based field restrictions (preferred for extensibility).** Fields are tagged with data
+categories using the same model that governs record-level access. A user's category grants
+determine which fields they can see.
 
-Simple; appropriate when the resource itself defines what is visible. Cannot differentiate access
-by role.
+```
+field_categories(field_name, data_category_id)
+```
 
-**B. Role-in-resource restrictions**
-Restrictions vary by role within a resource.
-"member" in resource X cannot see `clinical_notes`; "curator" can.
+A user who holds the `indigenous_data` grant sees fields tagged `indigenous_data`. Without the
+grant, those fields are masked or absent. This reuses the existing category framework with no new
+model concepts and unifies record-level and field-level access control under one mechanism.
 
-Adds role-differentiated field access. Requires the data model to track a matrix of role-by-field
-rules per resource. Management UI complexity increases accordingly.
+**D. User-level overrides.** Per-user, per-resource field exceptions on top of the base model.
+Maximum flexibility; operationally expensive and difficult to audit. Treat as a deferred extension.
 
-**C. Category-based field restrictions (preferred for extensibility)**
-Fields are tagged with data categories using the same category model that governs record-level
-access. A user's category grants determine which fields they can see, using the same
-`category_grants` entity with no new model concepts.
-
-`field_categories(field_name, data_category_id)`: this field belongs to this category.
-
-If a user has the `indigenous_data` grant, they see fields tagged `indigenous_data`. If not,
-those fields are masked or absent. This reuses the existing category framework and unifies
-record-level and field-level access control under a single mechanism.
-
-**D. User-level overrides**
-Per-user, per-resource field exceptions on top of the base model.
-
-Maximum flexibility. Operationally expensive; difficult to audit. Should be treated as a deferred
-extension, not a foundation.
-
-### Recommendation
-
-Start with **A (resource-level)** for initial implementation; it is simple and sufficient for most
-cases. Design the model to accommodate **C (category-based)** as the primary extension path, since
-it reuses existing model concepts and keeps the mental model unified. Defer B and D until a
-concrete use case requires them.
+**Recommendation:** start with A for initial implementation; it is simple and sufficient for most
+cases. Design for C as the primary extension path: it reuses existing concepts and keeps the mental
+model unified. Defer B and D until a concrete use case requires them.
 
 ---
 
-## OCAP compliance considerations
+## Use case: private data sharing
+
+### The primary scenario
+
+A user submits data. That data is private by default: invisible to everyone except the submitter.
+The submitter, or an administrator on their behalf, can grant specific other users access. Those
+other users may belong to entirely different groups; group membership is not a prerequisite for
+receiving a direct grant.
+
+In Usher's model:
+- The submitted dataset is a **resource**.
+- A `private` data category is associated with that resource.
+- The submitter holds a `membership` (as Owner or Member) and a `category_grant` for
+  `private` in that resource.
+- Granting another user access means giving them a `membership` (viewer role) and a
+  `category_grant` for `private` in that specific resource.
+- Revoking the grant removes their `category_grant`, immediately triggering the revocation
+  propagation path.
+
+This is peer-to-peer sharing mediated by an administrator in the first version. Delegated
+self-management by the submitter (without administrator involvement) is a later capability.
+
+### Submitters and owners
+
+Submission and ownership are distinct roles that can overlap but do not have to.
+
+**Submitter:** the user who uploaded data via Lyric. Submission establishes data provenance. A
+submitter automatically receives a `membership` on the resource, but submission does not
+automatically confer management rights. A submitter who has not been designated as owner cannot
+grant access to others, change visibility policy, or share records.
+
+**Owner (resource-level):** a designated role on a specific resource that grants management
+rights: granting and revoking access for other users, setting visibility policy (private,
+embargoed, public), and transferring ownership. An Owner holds data access as a member of
+the resource and has stewardship rights scoped to that resource only.
+
+Ownership is optional and per-resource. An Owner need not be the submitter: a Principal
+Investigator may be designated as owner for data submitted by a lab technician on their team.
+An Admin can always act as owner on behalf of the resource through the standard
+grant management flow.
+
+The three management roles:
+
+| Role | Scope | Data access |
+|---|---|---|
+| Admin | All resources; all grants | No; must self-grant explicitly |
+| Steward (OCAP) | One category across all resources | No (unless separately granted) |
+| Owner | Their designated resource(s) only | Yes; holds member access |
+
+**Ownership assignment at submission time (resolved).** Lyric can create a cohort and designate
+the submitter as its owner at submission time, if the submitter holds owner-level
+permissions. Cohorts do not need to exist in Usher before the first submission: the submission flow
+creates the cohort and optionally elevates the submitter to owner in a single operation.
+
+For submitters who are not owners, an admin designates an Owner separately after the
+resource is created. The submission proceeds regardless; owner designation is an additional
+step.
+
+The Lyric service account capability set needs to include cohort creation on behalf of a
+owner-level submitter as a first-class operation, distinct from the basic `CREATE_RESOURCE`
+path. See [admin-model.md](admin-model.md) for the service account model.
+
+### No system-wide access to private data
+
+Private data is private to its resource. There is no role, flag, or capability that grants a user
+visibility across all private resources platform-wide.
+
+This applies to admins. An Admin can manage grants but does not hold implicit
+data access. Being the administrator of the authorization system is explicitly separated from being
+a reader of the data that system protects. An administrator who needs to access a specific resource
+must be granted access through the standard grant flow, and that grant is auditable.
+
+This separation means:
+- Support staff managing permissions cannot read the private data they are granting access to.
+- No "superuser" bypass exists at the Usher layer for reading private records.
+- Any user who can read private data in a resource holds an explicit, traceable grant for it.
+
+The adversarial framing: if an Admin account is compromised, the attacker gains the ability to
+grant themselves access, but that grant is logged. They do not have silent, unlogged access to all
+private data by virtue of the admin role alone.
+
+admins can enumerate all resources platform-wide for operational purposes (permission
+management, audit, troubleshooting). That listing capability does not extend to reading,
+downloading, or sharing resource data.
+
+---
+
+## Use case: OCAP-compliant deployments
 
 OCAP (Ownership, Control, Access, and Possession) is a framework developed by the First Nations
 Information Governance Centre (FNIGC) asserting Indigenous data sovereignty: communities own their
 data collectively, control how it is collected and used, can access it at any time, and must
 possess it, meaning the mechanisms of custody and stewardship are under their control, not
-delegated to outside institutions.
+delegated to outside institutions. See https://fnigc.ca/ocap-training/ for the canonical
+definition.
 
-See https://fnigc.ca/ocap-training/ for the canonical definition.
-
-This is not a niche edge case. Any Overture deployment handling Indigenous health data, genomic
-data, or community-held research data is required to honour OCAP, and the authorization model is
-directly load-bearing for compliance.
+Any Overture deployment handling Indigenous health data, genomic data, or community-held research
+data is required to honour OCAP. The authorization model is directly load-bearing for compliance.
 
 ### How the generic model supports OCAP
 
-Usher's model is not OCAP-specific, but it is OCAP-compatible by design. The points of alignment:
-
 **Granular data categorization.** `data_categories` can represent any access dimension, including
-`indigenous_data` as a named category distinct from `controlled_access`. These are independent
-axes; access to one does not imply access to the other, and the intersection requires explicit
-grants for both (subject to the intersection open question below).
+`indigenous_data` as a category distinct from `controlled_access`. These are independent axes;
+access to one does not imply access to the other.
 
 **Deny by default.** Records tagged `indigenous_data` are hidden from any user without an explicit
-grant for that category, regardless of what other access they hold. There is no "fallback visible"
-state.
+grant for that category, regardless of what other access they hold.
 
-**Rapid revocation.** The push+poll revocation channel and the 60-second fail-secure grace period
-mean that a revoked grant propagates to all enforcing plugins within a bounded window. This
-supports community control: if a community withdraws consent for a researcher's access, the
-revocation is effective promptly, not deferred to token expiry.
+**Rapid revocation.** The push+poll revocation channel and the fail-secure grace period mean that
+a revoked grant propagates to all enforcing plugins within a bounded window. If a community
+withdraws consent for a researcher's access, the revocation is effective promptly, not deferred to
+token expiry.
 
 **Audit trail.** `granted_by` on `category_grants` records who granted access and whether the
-grant was internal or externally originated (GA4GH Passport). This is the baseline for any
-sovereignty audit: who approved what, when, and on whose authority.
+grant was internal or externally originated. This is the baseline for a sovereignty audit: who
+approved what, when, and on whose authority.
 
-### The additional capability OCAP requires: data stewardship
+### Data stewardship: the additional OCAP requirement
 
 The generic admin model (platform-level administrators who can manage all grants) is insufficient
-for OCAP. Indigenous data stewards (community members or designated representatives with authority
-over their community's data) must be able to manage grants for their data category without holding
-platform-wide admin rights. This is not OCAP-specific; it is a general capability of delegated
-category administration. OCAP is the concrete use case that makes this a requirement rather than a
-nice-to-have.
+for OCAP. Indigenous data stewards, community members or designated representatives with authority
+over their community's data, must be able to manage grants for their data category without holding
+platform-wide admin rights.
 
 In Usher's terms: a user can hold a `category_steward` capability scoped to one or more data
-categories. Within those categories, they can grant and revoke access as if they were a PAP admin,
+categories. Within those categories, they can grant and revoke access as if they were an Admin,
 but only for the data categories they steward. They cannot see or modify grants for other
 categories, and they cannot modify resource structure or role assignments.
 
-This is a new role/capability dimension not yet in the permissions model. It affects both the
-data model (how stewardship scope is stored) and the management UI (stewards need their own
-scoped view of the PAP). Design is deferred but the requirement is captured here.
+This capability dimension is not yet in the data model. Its design (how stewardship scope is
+stored; the capability check in the PAP layer) is an open question and a prerequisite for
+OCAP-compliant deployments. See Open questions.
 
 ### What OCAP does not require Usher to change
 
 OCAP does not prescribe how data is stored, indexed, or structured. It prescribes who controls
-access decisions. Usher's model-agnostic approach (categories are named, field mappings are
-deployment config) means that OCAP-compliant and non-OCAP deployments use identical Usher code;
-compliance is a function of how the deployment is configured and administered, not of Usher's
-internals.
+access decisions. Usher's model-agnostic approach (categories are named; field mappings are
+deployment config) means that OCAP-compliant and non-OCAP deployments use identical Usher code.
+Compliance is a function of how the deployment is configured and administered.
 
 ---
 
-## Private data sharing, resource ownership, and embargo
+## Category management
 
-These use cases come from the iMS Data Portal UAC Requirements document and represent the
-primary motivation for the first version of Usher. They must be satisfiable by the generic model
-without any iMS-specific code in Usher's core.
+### Category assignment defaults
 
-### The primary use case: private data sharing between users
+When a cohort is created, its data category assignments are determined by a chain of defaults. Each
+layer can override the one above:
 
-A user submits data. That data is private by default: invisible to everyone except the submitter.
-The submitter (or an admin on their behalf) can grant specific other users access to that data.
-Those other users may belong to entirely different groups; group membership is not a prerequisite
-for receiving a direct grant. Nobody else can see the data.
-
-In Usher's model:
-- The submitted dataset is a **resource**.
-- A `private` data category is associated with that resource.
-- The submitter holds a `membership` (as curator or owner role) and a `category_grant` for
-  `private` in that resource.
-- Granting another user access means giving them a `membership` (viewer role) and a
-  `category_grant` for `private` in that specific resource.
-- The grantee does not need to be in any of the same groups as the submitter. Group membership
-  and direct grants are independent paths to access.
-- Revoking the grant removes their `category_grant`, immediately triggering the revocation
-  propagation path.
-
-This is peer-to-peer sharing mediated by an admin in the first version. The longer-term
-capability (the submitter managing their own grants without admin involvement) is resource
-ownership delegation (see below).
-
-### No system-wide access to private data
-
-Private data is private to its resource, not just to the data category. There is no role, flag,
-or capability that grants a user visibility across all private resources platform-wide.
-
-This applies to PAP administrators as well. A PAP admin can manage grants (create, revoke,
-view audit records) but does not hold implicit data access. Being the administrator of the
-authorization system is explicitly separated from being a reader of the data that system
-protects. A PAP admin who needs to access a specific resource must be granted access to that
-resource the same way any other user would be, and that grant is auditable.
-
-This is a separation-of-duties requirement, not an incidental property. It means:
-- Support staff managing permissions cannot read the private data they are granting access to.
-- No "superuser" bypass exists at the Usher layer for reading private records.
-- Any user who can read private data in a resource holds an explicit, traceable grant for it.
-
-The adversarial framing: if a PAP admin account is compromised, the attacker gains the ability
-to grant themselves access, but that grant is logged. They do not have silent, unlogged access
-to all private data by virtue of the admin role alone.
-
-**Admin listing vs. data access are distinct.** PAP admins can enumerate all resources
-platform-wide for operational and support purposes (e.g. permission management, audit,
-troubleshooting). This listing capability does not extend to reading, downloading, or sharing
-resource data. To do any of those, an admin must explicitly grant themselves access through the
-permissions system, which produces a logged event. The audit trail is the control: admin power
-is bounded and visible, never silent.
-
-### Submitters and custodians: separating provenance from management rights
-
-Submission and custodianship are distinct roles that can overlap but do not have to.
-
-**Submitter:** the user who uploaded data via Lyric. Submission establishes data provenance. A
-submitter automatically receives a `membership` on the resource (they can access what they
-submitted), but submission does not automatically confer management rights. A submitter who has
-not been designated as custodian cannot grant access to others, change visibility policy, or
-share records.
-
-**Custodian (resource-level):** a designated role on a specific resource that grants management
-rights: granting and revoking access for other users, setting visibility policy (private,
-embargoed, public), and transferring custodianship. A custodian holds data access as a member
-of the resource and has steward rights scoped to that resource only.
-
-Custodianship is optional and per-resource: some submitters are designated as custodians;
-others are not. A custodian need not be the submitter (for example, a Principal Investigator
-may be designated as custodian for data submitted by a lab technician on their team). A
-platform admin can always act as custodian on behalf of the resource through the standard grant
-management flow.
-
-This is the resource-level variant of the data stewardship capability introduced in the OCAP
-section. The three management roles are now:
-
-| Role | Scope | Data access |
-|---|---|---|
-| Platform admin | All resources; all grants | No; must self-grant explicitly |
-| Category steward (OCAP) | One category across all resources | No (unless separately granted) |
-| Custodian | Their designated resource(s) only | Yes; holds member access |
-
-**Custodianship assignment: resolved approach.**
-Lyric (and Song, if applicable) can create a cohort and designate the submitter as its
-custodian at submission time, if the submitter holds custodian-level permissions. This resolves
-the pre-configuration requirement: cohorts do not need to exist in Usher before the first
-submission. The submission flow itself creates the cohort and optionally elevates the submitter
-to custodian in a single operation.
-
-For submitters who are not custodians, a platform admin designates a custodian separately after
-the resource is created. The submission proceeds regardless; custodian designation is an
-additional step.
-
-The Lyric service account capability set needs to include cohort/study creation on behalf of
-a custodian-level submitter as a first-class operation, distinct from the basic `CREATE_RESOURCE`
-path. See [admin-model.md](admin-model.md) for the service account model.
-
-This must be reflected in the management UI and service account capability design.
-
-In the first version, custodianship actions are performed by a platform admin on the
-custodian's behalf. Delegated self-management by custodians is a later capability.
-
-### Category assignment defaults and override hierarchy
-
-When a cohort is created, which data categories it receives is determined by a chain of
-defaults. Each layer can override the one above:
-
-1. **Platform default.** Deployment-wide baseline: examples are "all cohorts are controlled
-   access unless otherwise specified" or "all cohorts are open by default." Set by a platform
-   admin and applies to every new cohort that does not specify otherwise.
-
-2. **Cohort-level policy.** A per-cohort setting that overrides the platform default. Set by the
-   cohort custodian or a platform admin when the cohort is created or updated subsequently.
-
-3. **Submission-time assignment.** When Lyric creates a cohort at submission time (or when a
-   submitter is adding records to an existing cohort), the submitter is shown the category the
-   cohort will receive based on the cohort or platform default. Submitters who hold custodian-level
-   may override the assignment at this point. Submitters who do not hold custodian-level see the
-   warning but cannot change it; the default applies.
-
-4. **Post-submission steward changes.** A custodian or category steward can adjust a cohort's
+1. **Platform default.** Deployment-wide baseline: for example, "all cohorts are controlled access
+   unless otherwise specified." Set by an admin; applies to every new cohort that does not
+   specify otherwise.
+2. **Cohort-level policy.** A per-cohort override of the platform default. Set by the cohort
+   owner or an admin when the cohort is created or updated.
+3. **Submission-time assignment.** When Lyric creates a cohort at submission time, the submitter
+   is shown the category the cohort will receive based on the platform or cohort default. Submitters
+   with owner-level permissions may override the assignment at this point. Submitters without
+   owner-level see the assignment but cannot change it.
+4. **Post-submission steward changes.** An Owner or steward can adjust a cohort's
    category assignment after submission. This updates `resource_categories` in Usher's policy
-   tables. The underlying submitted records are unchanged; see "Access control does not modify
-   data" in [concepts.md](../../docs/concepts.md).
-
-The data immutability principle applies throughout: Usher enforces category policies by filtering
-at the PEP layer, not by modifying submitted records. A field like `isIndigenous` or `isControlled`
-in the ES index is set by the submitter at ingest and is owned by the data; Usher reads it to
-identify which records fall under a given category. Changing which categories a cohort has in
-`resource_categories` changes which filter conditions are applied; it does not rewrite records.
+   tables. The underlying submitted records are unchanged; Usher enforces category policies by
+   filtering at the PEP layer, not by modifying records.
 
 ### Category change propagation
 
-When a cohort's category assignment changes (a data category is added or removed from a resource),
-the effects on existing users must be handled explicitly.
+When a cohort's category assignment changes (a category is added or removed), the effects on
+existing users must be handled explicitly.
 
-**Tightening (adding a category to a resource):**
+**Tightening (adding a category).**
 
-A resource that was previously uncategorized or had fewer categories gains a new category. Users
-who are members of the resource but do not hold a grant for the new category will have records
-filtered from their queries at the next constraint token refresh. No special revocation action
-is required from the user's side — the filter takes effect automatically. However:
+Users who are members of the resource but do not hold a grant for the new category will have
+records filtered from their queries at the next grants token refresh. No revocation action is
+needed from the user's side: the filter takes effect automatically. However:
+- Affected users must be notified. Silent tightening is unacceptable: a user who received records
+  in one query and no longer receives them in the next should understand why.
+- Owners or stewards who want to pre-grant affected users before the change takes effect can do
+  so via the standard grant flow before updating `resource_categories`.
+- The tightening event must produce a structured audit log entry: which category was added, which
+  resource, by whom, and when. The set of affected users must be derivable from this entry combined
+  with the current `memberships` and `category_grants` tables.
 
-- Affected users (those who had broader access before the change) must be notified. Silent
-  tightening is unacceptable: users who received records in one query and no longer receive them
-  in the next should understand why.
-- Custodians or stewards who want to pre-grant affected users access before the change takes
-  effect can do so via the standard grant flow before updating `resource_categories`.
-- The tightening event must produce a structured audit log entry: which category was added,
-  which resource, by whom, and at what timestamp. The set of affected users (those who had access
-  before but not after) must be derivable from this entry combined with the current `memberships`
-  and `category_grants` tables.
+**Loosening (removing a category).**
 
-**Loosening (removing a category from a resource):**
+Users previously filtered by the removed category are no longer filtered at the next token refresh.
+No active revocation is needed. Records that were previously excluded become visible to all members
+with appropriate memberships.
 
-A resource loses a category. Users who were previously filtered by it are no longer filtered at
-the next token refresh. No active revocation is needed: the PEP plugin simply has fewer exclusion
-conditions. Records that were previously excluded become visible to all members of the resource
-who hold appropriate memberships.
+Loosening a category with OCAP or governance implications (removing `indigenous_data` restrictions,
+for example) is a governance decision and carries the same audit rigour as tightening. The fact
+that loosening requires no technical revocation does not reduce its administrative weight.
 
-Loosening a category with OCAP or governance implications (for example, removing `indigenous_data`
-restrictions) is a governance decision and must carry the same audit rigour as tightening. The
-fact that loosening requires no technical revocation does not reduce the administrative weight of
-the decision.
-
-**Audit requirements for both directions:** every change to `resource_categories` produces a
-structured audit event, regardless of direction. The event records: actor, resource, category added
-or removed, timestamp, and the direction of change. Reversals are also logged.
+Every change to `resource_categories` produces a structured audit event regardless of direction,
+recording: actor, resource, category added or removed, direction, and timestamp.
 
 ### Embargo
 
-An embargoed resource is private until a specified date, after which it becomes publicly
-visible without any further admin action.
+An embargoed resource is private until a specified date, after which it becomes publicly visible
+without any further admin action.
 
-In Usher's model, embargo maps to a `category_grant` on the `private` category with
-`expires_at` set to the release date. When the grant expires, the revocation mechanism fires
-and the records become visible at whatever access tier applies once `private` is no longer
-gated. The submitter sets the release date at submission time; it can be updated by the owner
-or an admin before it fires.
+In Usher's model, embargo maps to a `category_grant` on the `private` category with `expires_at`
+set to the release date. When the grant expires, the revocation mechanism fires and the records
+become visible at whatever access tier applies once `private` is no longer gated. The submitter
+sets the release date at submission time; an Owner or admin can update it before it fires.
 
-Two design questions embargo surfaces:
+Two open questions embargo surfaces:
 
-**Scheduled release without an active session.** The `revoked_at` revocation mechanism is
-driven by user sessions; plugins check revocation state when a token is refreshed or validated.
-A release with no active user session will not propagate until the next session touches the
-resource. Whether this latency is acceptable for embargo (releasing "tomorrow at midnight" vs.
-"some time after midnight when the next user happens to query") depends on the deployment's
-precision requirements. A background job polling for expired embargo grants and explicitly firing
-the revocation channel is the clean fix, but is not yet designed.
+**Scheduled release without an active session.** The revocation mechanism is driven by user
+sessions: plugins check revocation state when a token is refreshed. A release with no active user
+session will not propagate until the next session touches the resource. Whether this latency is
+acceptable depends on the deployment's precision requirements. A background job polling for expired
+embargo grants and explicitly firing the revocation channel is the clean fix; it is not yet
+designed.
 
 **Default visibility.** The iMS requirement is: data is public by default unless the submitter
-sets an embargo. This inverts Usher's deny-by-default principle for uncategorized data; an
-uncategorized resource is visible to all members. The resolution is that "public" and "private"
-are both explicit category choices at submission time, not Usher's global default. The
-submission service (Lyric) assigns the appropriate category at ingest; Usher enforces it.
-
-### Visibility of private records (existence disclosure)
-
-A separate question from access: should a user who cannot read a private record be able to
-tell that it exists?
-
-**Decided: no.** Existence is denied along with access. Excluded records do not appear in
-counts, aggregations, or result sets. A user who cannot read a resource does not know it
-exists: not in listings, not in search, not in any other surface.
-
-This is a hard invariant, not a configuration option. In clinical and genomic research contexts,
-knowing that a sensitive dataset exists is itself sensitive information; existence revelation is
-an information disclosure vulnerability (OWASP A01). A "discoverable-but-inaccessible" mode
-will not be introduced at any version.
+sets an embargo. This inverts Usher's deny-by-default principle for uncategorized data (an
+uncategorized resource is visible to all members). The resolution: "public" and "private" are both
+explicit category choices at submission time, not Usher's global default. The submission service
+(Lyric) assigns the appropriate category at ingest; Usher enforces it.
 
 ---
 
 ## Open questions
 
+These questions require deliberate answers before the relevant implementation work can begin. Most
+have OCAP, legal, or cross-application implications and should not be resolved by a single
+developer in isolation.
+
 ### Overlapping cohort access semantics
 
-In the Overture model, a resource is a cohort, and cohorts can overlap: a data record can belong
-to multiple cohorts simultaneously. When a user is a member of cohort A but not cohort B, and a
-record belongs to both:
+A data record can belong to multiple cohorts simultaneously. When a user is a member of cohort A
+but not cohort B, and a record belongs to both:
 
-- **OR semantics:** the user sees the record (membership in any cohort it belongs to is sufficient).
-  More permissive; operationally simpler; risks exposing records the user was not explicitly
-  approved for across the overlapping cohort.
+- **OR semantics:** the user sees the record (membership in any cohort it belongs to is
+  sufficient). More permissive; risks exposing records the user was not explicitly approved for
+  across the overlapping cohort.
 - **AND semantics:** the user does not see the record (membership in all cohorts it belongs to is
-  required). Aligns with deny-by-default; more conservative; may exclude legitimate access.
+  required). Aligns with deny-by-default; more conservative.
 
-This is the resource-scope analogue of the multi-category intersection question. The right answer
-depends on the privacy model of the deployment. For iMS private data sharing in particular (where
-the `private` category is the primary access gate), OR semantics may be acceptable if categories
-are the real enforcement mechanism. But the question needs a deliberate answer before implementation.
-
-### Role capabilities
-
-What specific capabilities does each role confer, beyond "can access resources they are a member
-of"? For example: can a "curator" invite other users to a resource? Can a "member" export data?
-These capability rules need to be specified before implementation.
-
-### Multiple roles per user per resource
-
-Is it valid for a user to hold more than one role in the same resource simultaneously (e.g. both
-"member" and "curator" of the same study)? If so, how are the role-level permissions composed
-at constraint resolution time?
-
-### Category grant scope
-
-Can a category grant span multiple resources (e.g. access to `indigenous_data` across all
-resources the user is a member of), or is it always resource-specific? Resource-specific is simpler
-and more auditable; a broader scope grant would need careful design to avoid unintended access.
-
-### Constraint token formulation: exclude-list vs. include-list
-
-The worked examples in this document use an exclude-list formulation:
-`exclude_categories: ["indigenous_data"]`. An alternative is an include-list:
-`access_categories: ["open_access"]` — only the categories the user can access.
-
-The two are operationally equivalent: given the full set of categories for a resource, each can
-be derived from the other. But they carry different amounts of information.
-
-**Exclude-list:** the token names categories the user lacks. If the token were ever readable, the
-user would learn which categories exist in the deployment and which ones they are denied. Under
-OCAP, even knowing that an `indigenous_data` category exists could be sensitive.
-
-**Include-list:** the token names only what the user can access. Category names the user is
-denied are absent from the token entirely. The plugin computes the exclusion filter by
-subtracting the include-list from the full category set it holds in its own config.
-
-The JWE encryption means neither formulation leaks information through the token itself — the
-user never sees the token. The distinction matters if tokens ever become readable (for example,
-during debugging, in a future lighter-weight mode, or through a mis-scoped logging incident), and
-for the general principle of least information in protocol design.
-
-**Decided: include-list, field name `categories`.** The constraint token carries `categories`
-(the list of categories the user holds grants for within a resource), not an exclude-list. This
-is consistent with industry practice (OAuth scopes, UMA RPT permissions, GA4GH Passport Visas
-all use positive grants) and with the principle of least information: denied category names are
-absent from the token entirely, not named explicitly. The field name `categories` is unambiguous
-in context: within a per-resource block in the token, it means "categories this user is granted
-access to." See [plugin-integration.md](plugin-integration.md) for the full token schema.
-
-### Attribute naming
-
-The specific attribute names for the constraint token payload (`resources`, `role`, `categories`,
-etc.) are illustrative. The final names should be decided when the API contract is designed. See
-[plugin-integration.md](plugin-integration.md).
-
-### Expiry and renewal
-
-`category_grants.expires_at` supports time-limited access. **Decided:** grant expiry triggers the
-`revoked_at` mechanism (same path as manual revocation). Consistent behaviour, no special case.
-The renewal flow (whether the management UI surfaces an expiring-grant notification or a renewal
-request workflow) is not yet designed and does not block implementation of the core model.
+For iMS private data sharing (where `private` is the primary access gate), OR semantics may be
+acceptable if categories are the real enforcement mechanism. The question needs a deliberate answer
+before implementation.
 
 ### Multi-category intersection access
 
-The current visibility rule (a record is visible if the user holds grants for all of its tagged
-categories) means that holding individual `controlled` and `indigenous` grants separately gives
-automatic access to the `controlled+indigenous` intersection. An earlier design iteration (the
-AuthZ Framework document, 2025) treated intersections as requiring their own explicit grant
-separate from the component grants; having `controlled` access and `indigenous` access did not
-imply having `controlled+indigenous` access.
+The current visibility rule means holding individual grants for `controlled` and `indigenous`
+separately gives automatic access to the `controlled+indigenous` intersection. An earlier design
+iteration (the AuthZ Framework document, 2025) required an explicit grant for the intersection
+separately from the component grants.
 
-The stricter (AuthZ doc) interpretation is more OCAP-safe: being approved for "controlled data"
-and separately approved for "indigenous data" does not auto-approve "controlled indigenous data",
-which may be the most sensitive combination and warrant its own governance decision. However, it
-makes the grant model more complex: users needing access to the intersection must be granted it
-explicitly in addition to the components.
+The stricter interpretation is more OCAP-safe: being approved for "controlled data" and separately
+approved for "indigenous data" does not auto-approve "controlled indigenous data", which may be the
+most sensitive combination and warrant its own governance decision. It also makes the grant model
+more complex.
 
-**This needs a deliberate decision before implementation.** The choice affects the data model
-(whether combinations are represented as named categories or handled by grant composition rules),
-the management UI (whether admins see and grant combinations explicitly), and OCAP compliance
-posture. Recommend discussing with data stewards and OCAP practitioners before deciding.
+**Recommend discussing with data stewards and OCAP practitioners before deciding.** The choice
+affects the data model, the management UI, and OCAP compliance posture.
+
+### Role capabilities
+
+What specific actions does each role permit beyond "can access resources they are a member of"?
+Can an `owner` invite other users to a resource? Can a `member` export data? These capability
+rules need to be specified before implementation.
+
+### Category grant scope
+
+Can a category grant span multiple resources (access to `indigenous_data` across all resources the
+user is a member of), or is it always resource-specific? Resource-specific is simpler and more
+auditable; a broader scope grant would need careful design to avoid unintended access.
+
+### Attribute naming
+
+The top-level map name (`grants`) and the per-resource fields (`role`, `categories`) are settled;
+see [security-workflow.md — Token structure](security-workflow.md#token-structure) for the
+canonical schema and worked examples. The remaining open question is field-level restriction
+representation: attribute names for field restrictions (if included in the token at all) are not
+yet decided. See [plugin-integration.md](plugin-integration.md).
 
 ### User groups design
 
-`user_groups` and `group_category_grants` are in the entity list but not yet designed. Open
-questions: how are group memberships managed (only internally via PAP, or synced from Keycloak
-groups)? When a user belongs to multiple groups with overlapping grants, how are those composed
-(union is the natural answer but needs to be stated explicitly)? Can a group hold a membership
-role in a resource, or only category grants? Does removing a user from a group immediately trigger
-revocation of that group's grants for that user?
+`user_groups` and `group_category_grants` are in the entity schema but not yet designed. Open
+questions: how are group memberships managed (PAP-only, or synced from Keycloak groups)? When a
+user belongs to multiple groups with overlapping grants, how are those composed (union is the
+natural answer, but must be stated explicitly)? Can a group hold a membership role in a resource,
+or only category grants? Does removing a user from a group immediately trigger revocation of that
+group's grants for that user?
 
 ### Write permissions (Lyric)
 
-The grant model extends naturally to write operations: a grant with `operation: write` (or a
-separate `write_grants` table) would allow the PEP plugin in Lyric to enforce which records or
-fields a user is permitted to submit or modify. The data model shape is clear; the Lyric plugin
-design is not. Deferred until Lyric integration is in scope.
+The grant model extends to write operations: a grant governing write access would allow the PEP
+plugin in Lyric to enforce which records or fields a user is permitted to submit or modify. The
+data model shape is clear; the Lyric plugin design is not. Deferred until Lyric integration is in
+scope.
 
 ### Data stewardship scoping
 
-The OCAP section introduces the concept of a `category_steward` capability: a user who can
-manage grants for specific data categories without holding platform-wide admin rights. The data
-model for stewardship scope (which categories a steward governs) and the capability check in the
-PAP layer are not yet designed. This is a prerequisite for OCAP-compliant deployments and should
-be designed before the management UI work begins.
+A user with `category_steward` capability can manage grants for specific data categories without
+platform-wide admin rights. The data model for stewardship scope (which categories a steward
+governs) and the capability check in the PAP layer are not yet designed. This is a prerequisite
+for OCAP-compliant deployments and should be designed before the management UI work begins.

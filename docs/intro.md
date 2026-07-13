@@ -2,7 +2,7 @@
 
 Not all data should be accessible to all users. Implementing that constraint correctly, consistently, and in a way that can evolve as policies change is the core challenge we need to address here.
 
-> Before we go any further, if you're not familiar with authorization concepts like OAuth 2.0, JWTs, or the standard patterns for access control systems, the [Identity Access Management (IAM) Primer](iam-primer.md) covers that background. This document introduces technical vocabulary as it becomes relevant and for further reference on more general terminology you may also consult the [Concepts and Vocabulary](concepts.md) guide at any point.
+> Not familiar with OAuth 2.0, JWTs, or access control basics? Start with the [IAM Primer](iam-primer.md). Technical vocabulary is introduced here as it becomes relevant; see [Where to go next](#where-to-go-next) for persona-specific reading paths.
 
 ---
 
@@ -66,26 +66,39 @@ Usher is Overture's [authorization](concepts.md#authentication-vs-authorization)
 
 **Grants** are explicit records: this user holds access to this category within this resource. Usher enforces deny-by-default. No grant means no access, always.
 
-**[The constraint token](concepts.md#constraint-tokens)** is Usher's encrypted answer to the question "what can this user see?" It contains the categories the user holds grants for within each resource the requesting application manages. The application's plugin decrypts it locally and applies it as a filter on every query before the query reaches the data layer. Users cannot read the token's contents.
+**[The grants token](concepts.md#grants-tokens)** is Usher's encrypted answer to the question "what can this user see?" It contains the categories the user holds grants for within each resource the requesting application manages. The application's plugin decrypts it locally and applies it as a filter on every query before the query reaches the data layer. Users cannot read the token's contents.
 
 **The revocation channel** is a push notification stream (SSE or WebSocket) backed by a poll endpoint. Active plugins subscribe; Usher emits on any grant change. If the channel is silent for longer than a configurable grace period, the plugin suspends access and returns 503 until connectivity is restored.
 
 **Usher does not touch the underlying data.** It does not write to the data store, run migrations, or modify records. Access policy is applied at query time by the plugin. A deployment can adopt Usher without touching the data it protects, and removing it leaves no data artefacts behind.
 
+**Community data governance.** For deployments where a specific community holds data sovereignty rights over their contributed data, Usher's **Steward** role enables a community representative to govern grants for their data categories independently of platform administrators. See [Concepts](concepts.md#privileged-roles) for the Steward and Admin roles.
+
 ---
 
 ## Where to go next
 
-The design documents cover each of these mechanisms in detail:
+**New to OAuth, JWTs, or access control systems?**
+Start with [IAM Primer](iam-primer.md): it covers the background (OAuth 2.0, OIDC, JWTs,
+PDP/PEP/PAP) before Usher-specific vocabulary.
 
-- [Why Usher](why-usher.md): how Usher relates to adjacent tools (Keycloak, OPA, Cerbos, SpiceDB) and what it specifically adds
-- [Concepts](concepts.md): detailed explanations of the core patterns and vocabulary (ABAC, PDP/PAP/PEP, data access tiers, constraint tokens, fail-secure, revocation)
-- [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md): the full document set with a recommended reading order by role
+**Evaluating Usher for your deployment** (PI, data manager, governance lead)
+- [Concepts](concepts.md): the data access tier model, how grants work, what the Steward and
+  Admin roles enable, and data sovereignty support
+- [Why Usher](why-usher.md): how Usher relates to adjacent tools and what it specifically adds
+
+**Working with data on a Usher-enabled platform** (researcher, analyst)
+- [Concepts](concepts.md): data access tiers, what a category grant means for what you can see
+
+**Building or integrating with Usher** (developer, integration engineer)
+- [Concepts](concepts.md): ABAC, PDP/PAP/PEP, grants tokens, fail-secure, revocation
+- [Why Usher](why-usher.md): architectural context and tool comparisons
+- [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md): full document set with reading order by role
+- [Plugin integration](https://github.com/overture-stack/usher/blob/main/.dev/design/plugin-integration.md): the API contract for building an enforcement plugin
 - [Permissions model](https://github.com/overture-stack/usher/blob/main/.dev/design/permissions-model.md): resources, categories, grants, and visibility semantics
 - [Security model](https://github.com/overture-stack/usher/blob/main/.dev/design/security-threat-model.md): OWASP Top 10 mapping and security design decisions
-- [Plugin integration](https://github.com/overture-stack/usher/blob/main/.dev/design/plugin-integration.md): the API contract for building an enforcement plugin
-- [Glossary](https://github.com/overture-stack/usher/blob/main/.dev/design/glossary.md): quick-reference definitions for terms used across the design documents
+- [Glossary](https://github.com/overture-stack/usher/blob/main/.dev/design/glossary.md): quick-reference definitions
 
-For authorization background before going into the design:
-
-- [IAM Primer](iam-primer.md): OAuth 2.0, JWTs, PEP/PDP/PAP, and related standards
+**Any of the above may become a Steward or Admin.** Stewards govern data category access for a
+specific community or data type; Admins manage the platform authorization model. Both are covered
+in [Concepts](concepts.md) and the [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md).

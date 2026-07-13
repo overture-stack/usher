@@ -1,9 +1,8 @@
 # Concepts and Vocabulary
 
 This document explains the security and authorization concepts referenced throughout the Usher
-design documents. Each concept is framed around the problem it solves (the threat or limitation
-it exists to address), which should be useful for anyone who approaches security from an
-adversarial perspective and wants to understand the defensive design counterparts.
+design documents. Security-specific concepts are framed around the threat or limitation they
+address; structural model concepts are framed around the design problem they solve.
 
 ---
 
@@ -30,7 +29,7 @@ layer is untouched.
 
 When field-level access control is needed (see the field-level restriction section in
 [permissions-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/permissions-model.md)), Usher expresses which fields a given user is
-allowed to see as a constraint in the token. The application (via its PEP plugin) omits those
+allowed to see as grants in the token. The application (via its PEP plugin) omits those
 fields from the response. The underlying record in the data store is complete and unchanged.
 
 ---
@@ -45,8 +44,8 @@ identity: "this is user alice@example.com".
 
 **Authorization** answers: _what are you allowed to do?_ Given a confirmed identity, it determines
 what that identity is permitted to access, read, or modify. The output is a decision and, in
-Usher's case, a set of constraints: "alice can access studies A and B, but not C, and cannot see
-fields tagged as indigenous_data".
+Usher's case, a structured set of grants: "alice holds member access to cohort A with a category
+grant for indigenous_data, and member access to cohort B with no category grants".
 
 Usher is an authorization service. Authentication is delegated to the identity provider (IdP).
 Conflating the two is a common design error: an IdP that also owns authorization policy becomes a
@@ -69,12 +68,12 @@ own role. This is the role proliferation problem.
 
 **ABAC (Attribute-Based Access Control)** makes access decisions based on attributes of the user,
 the resource, and the context, evaluated against policies. Instead of "is this user an admin?",
-ABAC asks "does this user have the 'curator' role in study A, and does study A contain
-indigenous_data, and does this user hold an explicit grant for indigenous_data in study A?"
+ABAC asks "does this user have the 'owner' role in cohort A, and does cohort A contain
+indigenous_data, and does this user hold an explicit grant for indigenous_data in cohort A?"
 
 ABAC handles contextual access rules without proliferating roles. The cost is a more complex
 policy model and a more complex enforcement mechanism. Usher uses a hybrid: roles for coarse
-capability (curator vs member), attributes for scope (which resources, which data categories).
+capability (owner vs member), attributes for scope (which resources, which data categories).
 
 ---
 
@@ -91,7 +90,7 @@ Analogy: the usher checking your ticket. They don't make the rules; they apply t
 which section you're allowed into and what you're not allowed to bring in.
 
 In Usher: the running service itself. It receives a user identity, validates it with the IdP,
-looks up the user's policy in the database, and returns an encrypted constraint token.
+looks up the user's policy in the database, and returns an encrypted grants token.
 
 ### PAP: Policy Administration Point
 
@@ -104,12 +103,7 @@ VIP lists are maintained, and access tiers are defined.
 In Usher: the management UI (planned). Administrators assign users to resources, set roles, and
 grant or revoke data category access, without needing access to Keycloak or any IdP admin panel.
 
-**PAP admin and platform admin are synonymous.** "Platform admin" is the user-facing term for
-the system-wide authorization administrator role. "PAP admin" is the internal architecture
-shorthand. Design documents may use either; user-facing text (management UI, operator
-documentation) should use "platform admin". See [admin-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/admin-model.md) for the full
-admin model: OIDC-first identification, bootstrap, self-grant flow, service accounts, and audit
-integrity controls.
+The platform-wide authorization administrator role is **Admin** (architecture shorthand: **PAP admin**). See [Privileged roles](#privileged-roles) below for the description, and [admin-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/admin-model.md) for the implementation design.
 
 ### PEP: Policy Enforcement Point
 
@@ -120,7 +114,7 @@ Analogy: the physical door and the staff member checking tickets. The PDP (usher
 decision; the PEP (door + staff) is what physically stops you from entering.
 
 In Usher: the per-app plugins (`@overture-stack/usher-arranger`, etc.). They intercept incoming
-requests, validate the constraint token, and translate the constraints into the app's native
+requests, validate the grants token, and translate the grants payload into the app's native
 filter format (SQON, database query conditions, etc.).
 
 ### PIP: Policy Information Point
@@ -174,7 +168,7 @@ resource Y and holds a category grant for category Z within resource Y" is.
 
 ### Roles and memberships
 
-A **role** is a coarse-grained capability label: `curator`, `member`, `viewer`. It describes what
+A **role** is a coarse-grained capability label: `owner`, `member`. It describes what
 kind of actions a user can perform within a resource. Roles are defined at the platform level; the
 exact set is a deployment decision.
 
@@ -239,6 +233,26 @@ through that group lose it, and revocation propagates through the standard chann
 Groups do not create a separate access model; they are a convenience layer over the same entity
 structure individual users use.
 
+### Privileged roles
+
+Beyond the resource-level roles (`owner`, `member`), Usher defines two roles with broader scope.
+Actions taken in these roles are always logged as auditable events.
+
+**Steward** holds grant-management rights over one or more data categories, across all resources
+in the platform. A Steward can approve or revoke category grants for the categories they govern
+without holding full Admin rights. This is the governance role for deployments where a specific
+community needs direct control over who accesses their data: a community representative is
+designated as Steward for their data category and governs grants for it independently of platform
+staff. For OCAP-compliant deployments, the Steward role is what makes the difference between the
+platform controlling access to community data and the community controlling it.
+
+**Admin** holds platform-wide authorization management rights: creating resources, assigning
+roles, managing any grant, and performing emergency revocations. An Admin does not have implicit
+data access and must explicitly self-grant access to any resource they want to read, with a
+mandatory time limit and a logged audit event. The full Admin model, including bootstrap, self-grant
+flow, and audit integrity design, is in
+[admin-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/admin-model.md).
+
 ---
 
 ## Data access tiers
@@ -249,8 +263,9 @@ organizing principle for how Usher's permissions model is applied in practice.
 
 **Open:** no authentication required. Data is publicly accessible to any user, including anonymous
 requests. Aggregated statistics, counts without record-level detail, and published datasets with
-no privacy risk fall into this tier. Usher is not involved: requests pass through unauthenticated
-and unconstrained.
+no privacy risk fall into this tier. The bridge requests an anonymous grants token from the
+controller (no IdP bearer needed); the controller returns a token containing only open-tier grants.
+This keeps all access — including anonymous — audited and fail-secure.
 
 **Registered:** the user must have a confirmed identity and must have accepted the platform's
 terms of access. No further approval is required beyond that. This tier is appropriate when
@@ -258,42 +273,48 @@ accountability matters but a full approval process would be disproportionate, fo
 summarized clinical data or non-sensitive genomic aggregates where knowing who accessed the data
 is sufficient protection.
 
-In Usher terms: the user authenticates, Usher issues a constraint token, and membership alone is
+In Usher terms: the user authenticates, Usher issues a grants token, and membership alone is
 sufficient to access all uncategorized records and fields within the resources the user belongs to.
 
-**Controlled:** access requires an explicit, per-dataset approval from a data access authority.
-Typically this is a Data Access Committee (DAC) that reviews a researcher's application and
-approves or denies access based on their research purpose and institution. Each dataset may have
-its own DAC with its own criteria.
+**Controlled:** access requires an explicit, per-dataset approval. In simpler deployments, an
+Admin or Steward grants access directly through the management UI. In larger or federated
+deployments, a Data Access Committee (DAC) reviews researcher applications and approves or
+denies access based on research purpose and institution; approved grants can be mapped
+automatically via GA4GH Passports if configured.
 
 In Usher terms: records and fields tagged with a data category require an explicit `category_grant`
 in Usher's policy store. Membership without a grant is not sufficient. This is the deny-by-default
 principle expressed at the tier level.
 
-| Tier       | Usher mechanism                                                                  |
-|------------|----------------------------------------------------------------------------------|
-| Open       | No constraint token required; no Usher involvement                               |
-| Registered | Constraint token issued on authentication; membership grants access to uncategorized data |
-| Controlled | Access to categorized records and fields requires an explicit `category_grant`   |
+| Tier       | Usher mechanism                                                                        |
+|------------|----------------------------------------------------------------------------------------|
+| Open       | Anonymous grants token issued (no IdP bearer needed); open-tier grants only            |
+| Registered | Grants token issued on authentication; membership grants access to uncategorized data  |
+| Controlled | Access to categorized records requires an explicit `category_grant` in the policy store |
 
 The data category and category grant concepts in the permissions model exist specifically to
 implement the Controlled tier. The Open and Registered tiers follow from the same model by
-absence: no categories on a resource means all members see all records (Registered). No Usher
-involvement means no constraint at all (Open).
+absence: no categories on a resource means all members see all records (Registered). An anonymous
+token with only open-tier grants means the user sees only open records (Open).
+
+For how the controller computes grants across all three tiers in a single additive pipeline, see
+[security-workflow.md — Grant computation pipeline](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md#grant-computation-pipeline).
 
 ---
 
 ## GA4GH Passports and federated identity
 
-The three-tier model describes what level of access is required. It does not address a practical
-problem in genomics and health research: researchers from one institution often need access to
-data held by another institution, and those institutions do not share the same identity
-infrastructure.
+This section covers an optional integration path. Deployments that manage all grants internally,
+through the management UI or a local approval workflow, do not need Passport support. Passport
+integration is relevant when researchers hold access approvals issued by institutions outside the
+deployment, and those approvals need to be honoured automatically.
 
-Without a shared standard, each data holder must establish a direct trust relationship with each
-institution whose researchers they serve. That does not scale. GA4GH Passports are the solution.
+The scenario: a researcher at one institution holds a data access approval issued by a data access
+committee (DAC) at a different institution. Those two institutions do not share identity
+infrastructure. Without a shared standard, each data holder must establish a direct trust
+relationship with each approving institution. That does not scale.
 
-GA4GH (Global Alliance for Genomics and Health) is an international standards body. Their
+GA4GH (Global Alliance for Genomics and Health) is an international standards body whose
 **Passport** specification defines a standard format for expressing access claims inside OIDC
 tokens: specifically, a structured JWT claim (`ga4gh_passport_v1`) that any OIDC-compliant
 identity system can carry. It is not a new protocol; it is a defined schema for access grants
@@ -329,7 +350,7 @@ Keycloak's job, via a GA4GH Passport extension. Keycloak validates each Visa's s
 the issuer's public JWKS endpoint, checks the issuer against a configured trusted-issuers list,
 verifies expiry, and maps validated claims to Keycloak token attributes. Usher reads those
 attributes and maps them to `category_grants` in its policy store. The per-app PEP plugins see
-only the constraint token and have no awareness of whether a grant came from an internal admin
+only the grants token and have no awareness of whether a grant came from an internal admin
 action or an external Passport Visa.
 
 ### The flow
@@ -343,7 +364,7 @@ Researcher obtains Visas from external DAC via REMS or similar
        checks issuer against trusted-issuers list
        maps ControlledAccessGrants claims to Keycloak token attributes
   -> Usher reads Keycloak attributes, maps to category_grants
-  -> Usher issues JWE constraint token
+  -> Usher issues JWE grants token
   -> PEP plugin enforces it as normal (unchanged)
 ```
 
@@ -396,21 +417,21 @@ the decryption key. JWE also includes a signature, so it is both confidential an
 Analogy: a sealed, tamper-evident envelope. Only the recipient with the right key can open and
 read the contents. The seal proves it was not already opened and resealed.
 
-Usher issues constraint tokens as JWE. The claims inside (which resources the user can access,
-which data categories they are excluded from, when the token was generated) are visible only to
+Usher issues grants tokens as JWE. The claims inside (which resources the user holds grants
+for, which data categories they hold within each resource, when the token was generated) are visible only to
 app plugins that hold the decryption key. The user holding the token cannot read their own
-constraints.
+grants.
 
-**Why this matters adversarially:** a user who can read their own constraint token knows exactly
+**Why this matters adversarially:** a user who can read their own grants token knows exactly
 what filters are being applied to their queries. In a sensitive data context, even the shape of
-the restriction (you are excluded from `indigenous_data` records in study X) may itself be
+the restriction (you are excluded from `indigenous_data` records in cohort X) may itself be
 information they should not have. JWE prevents this.
 
 ---
 
-## Token TTL (Time to Live)
+## Grants token TTL
 
-A token's TTL is how long it is valid after issuance. After the TTL expires, the token is
+A grants token's TTL is how long it is valid after issuance. After the TTL expires, the token is
 rejected regardless of its content.
 
 TTL is a security control, not a convenience feature. The threat it mitigates: if a token is
@@ -418,7 +439,7 @@ compromised (intercepted, stolen, leaked), the attacker can use it to impersonat
 short TTL limits the window of exposure: a stolen token is useless after a few minutes.
 
 The tradeoff: shorter TTL means more frequent re-issuance, which means more calls to the
-authorization service, which means more load and latency. Usher's constraint tokens use a short
+authorization service, which means more load and latency. Usher's grants tokens use a short
 TTL (suggested default: 5 minutes) combined with local validation (plugins validate and cache
 the token without calling Usher on each request) to get short exposure windows without
 per-request overhead.
@@ -438,7 +459,7 @@ stop someone from entering, your only options are: (1) wait for the ticket to ex
 
 Usher uses approach (3): each user has a `revoked_at` timestamp in the policy store. Any token
 with a `generatedAt` earlier than the user's `revoked_at` is treated as invalid. This works
-because `generatedAt` is embedded (encrypted) in every constraint token. The revocation signal
+because `generatedAt` is embedded (encrypted) in every grants token. The revocation signal
 propagates to plugins via push (immediate, best-effort) and poll (30-second interval, reliable
 fallback).
 
@@ -476,21 +497,28 @@ legitimate users.
 
 ---
 
-## Constraint tokens
+## Grants tokens
 
-A standard authorization decision is binary: allowed or denied. A **constraint token** extends
+A standard authorization decision is binary: allowed or denied. A **grants token** extends
 this with structured data describing the specific conditions under which access is allowed.
 
-Rather than "alice is allowed to query the dataset", a constraint token says "alice is allowed to
-query the dataset, restricted to resources A and B, with records tagged `indigenous_data` excluded,
-and with no access to fields tagged `controlled_clinical`".
+Rather than "alice is allowed to query the dataset", a grants token says "alice holds member
+access to resources A and B; within resource A she holds a category grant for `indigenous_data`;
+within resource B she holds no category grants".
 
-The app plugin (PEP) reads the constraints and applies them to the outgoing query, before the
-query reaches the data layer. The constraint is enforced server-side, not client-side: the client
-never receives data it was not supposed to see, and cannot bypass the constraint by modifying the
+The app plugin (PEP) reads the grants payload and applies it to the outgoing query, before the
+query reaches the data layer. The grants payload is enforced server-side, not client-side: the
+client never receives data it was not supposed to see, and cannot bypass it by modifying the
 query.
 
-Constraint tokens are the core mechanism by which Usher delegates enforcement to per-app plugins
+Grants tokens are the core mechanism by which Usher delegates enforcement to per-app plugins
 without requiring those plugins to understand the full policy model. The plugin does not need to
-know why a user is excluded from certain data; it only needs to translate the constraint object
+know why a user is excluded from certain data; it only needs to translate the grants payload
 into its app's native query format.
+
+Each grants token is scoped to a specific **audience**: the application service that requested
+it. Usher includes in the token only the resources that service manages, keeping the payload
+focused and preventing one service from reading another service's grants. A platform
+running multiple data applications issues a separate token for each; the user's effective access
+is the same across them, but each service sees only its own slice. An application must verify that
+a presented token names it as the intended audience before trusting the token's contents.

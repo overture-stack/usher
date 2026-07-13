@@ -6,7 +6,7 @@ design questions: self-grant step-up authentication, self-grant owner notificati
 users" scope and PHI implications, break-glass emergency access, rogue admin peer-grant impact,
 and structured audit event schema._
 
-See [permissions-model.md](permissions-model.md) for the grant model that platform admins manage.
+See [permissions-model.md](permissions-model.md) for the grant model that admins manage.
 See [concepts.md](../../docs/concepts.md) for PAP / PDP / PEP vocabulary.
 See [security-threat-model.md](security-threat-model.md) for A09 (audit) and A01 (access control)
 mapping.
@@ -15,23 +15,19 @@ mapping.
 
 ## Overview
 
-The permissions model introduced three privileged roles: platform admin, category steward, and
-resource owner. This document specifies them fully. It covers:
+The permissions model introduced three privileged roles: Admin, Steward, and Owner. This document specifies them fully. It covers:
 
 - Role taxonomy and what each role can and cannot do
-- How Usher identifies and validates platform admin status (OIDC-first; no Usher-managed admin
+- How Usher identifies and validates admin status (OIDC-first; no Usher-managed admin
   table)
 - The bootstrap model (delegated to the identity provider)
-- The self-grant flow: how a platform admin obtains data access when legitimately needed
-- What metadata platform admins can see when listing resources
+- The self-grant flow: how an admin obtains data access when legitimately needed
+- What metadata admins can see when listing resources
 - Service accounts: how automated processes authenticate and what they are permitted to do
 - Audit log integrity controls
 - The OIDC adapter boundary: what Keycloak (or any OIDC provider) owns versus what Usher owns
 
-**PAP admin and platform admin are synonymous.** "Platform admin" is the user-facing term used
-in the management UI and in communications with operators. "PAP admin" is the internal
-architecture shorthand (PAP = Policy Administration Point). Design documents may use either;
-user-facing text should use "platform admin".
+**Admin** is the term used throughout for the platform-wide authorization administrator role. The architecture shorthand **PAP admin** (Policy Administration Point) refers to the same role and may appear in technical contexts.
 
 ---
 
@@ -39,28 +35,28 @@ user-facing text should use "platform admin".
 
 | Role | Scope | Primary capability | Holds data access |
 |---|---|---|---|
-| Platform admin (= PAP admin) | Platform-wide | Manages all grants, all resources | No; must self-grant explicitly |
-| Category steward | One or more data categories | Manages grants for their categories across all resources | No (unless separately granted as a user) |
-| Custodian | Their designated resource(s) | Manages grants within their resource; sets visibility policy | Yes; holds member access |
+| Admin | Platform-wide | Manages all grants, all resources | No; must self-grant explicitly |
+| Steward | One or more data categories | Manages grants for their categories across all resources | No (unless separately granted as a user) |
+| Owner | Their designated resource(s) | Manages grants within their resource; sets visibility policy | Yes; holds member access |
 | Submitter | Their submitted resource | Data provenance; member access to own data | Yes; member access only |
 | Service account | Explicitly enumerated capabilities | Performs system operations only | No |
 
-**Submitter vs. custodian:** submission establishes data provenance and gives the submitter
+**Submitter vs. owner:** submission establishes data provenance and gives the submitter
 member access to their own resource. It does not automatically confer management rights.
-Custodianship is an optional, per-resource designation: some submitters are also custodians;
-others are not. A custodian need not be the submitter. See permissions-model.md "Submitters and
-custodians" for the full model and the open question on assignment timing.
+Ownership is an optional, per-resource designation: some submitters are also owners;
+others are not. An Owner need not be the submitter. See permissions-model.md "Submitters and
+owners" for the full model and the open question on assignment timing.
 
-A user may hold more than one role independently. A custodian can also be a category steward
+A user may hold more than one role independently. An Owner can also be a steward
 for an unrelated category; those roles are independent and neither implies the other.
 
-Platform admins and category stewards are privileged actors whose operations touch the policy
+Admins and stewards are privileged actors whose operations touch the policy
 store. Neither role grants data access automatically: that requires a separate, explicit, logged
 grant through the same permissions system that governs all users.
 
 ---
 
-## Platform admin: capabilities and constraints
+## Admin: capabilities and constraints
 
 ### Can
 
@@ -74,36 +70,36 @@ grant through the same permissions system that governs all users.
 
 - Read, download, or query record data without an explicit self-grant
 - Delete or modify audit log entries
-- Bypass the constraint token path to access data; the separation of admin capability from data
+- Bypass the grants token path to access data; the separation of admin capability from data
   access is a hard design requirement, not a policy convention
-- Create or revoke other platform admins; that is an identity provider operation, outside
+- Create or revoke other admins; that is an identity provider operation, outside
   Usher's scope (see the Bootstrap section)
 
-### How Usher determines platform admin status
+### How Usher determines admin status
 
 Usher reads admin status from the validated OIDC token on every request to the admin API. No
 database lookup is required; the token claim is authoritative.
 
 The claim check is OIDC-provider-specific and configurable via the OIDC adapter:
 
-- **Keycloak (default adapter):** `realm_access.roles` contains the configured platform admin
+- **Keycloak (default adapter):** `realm_access.roles` contains the configured admin
   role name (default: `usher-platform-admin`).
 - **Generic OIDC adapter:** a configurable top-level claim (e.g. `usher_admin: true`), or a
   path in the token namespace, evaluated against a configured expected value.
 
-Usher never caches or persists platform admin status between requests. The token is validated
+Usher never caches or persists admin status between requests. The token is validated
 and the claim is inspected on every admin API call. This is the fail-secure default: if the IdP
-revokes the platform admin role, the next token issued will not carry the claim, and that user's
+revokes the admin role, the next token issued will not carry the claim, and that user's
 access to the admin API ends at the next token expiry. Keep token TTLs short (15 minutes or
 less; see the Non-obvious constraints section).
 
-**Adversarial framing:** if a platform admin account is compromised, the attacker gains grant
+**Adversarial framing:** if an admin account is compromised, the attacker gains grant
 management power. But every action they take is logged, they do not gain silent unlogged data
-access, and their platform admin status disappears automatically when the IdP role is revoked.
+access, and their admin status disappears automatically when the IdP role is revoked.
 
 ---
 
-## Bootstrap: how the first platform admin is established
+## Bootstrap: how the first admin is established
 
 Usher has no bootstrap logic of its own. The identity provider handles this entirely.
 
@@ -116,17 +112,17 @@ Usher has no bootstrap logic of its own. The identity provider handles this enti
    for manual Keycloak UI work.
 2. That Keycloak admin creates a realm for Usher and defines a realm role named
    `usher-platform-admin` (the exact name is configurable in the Usher adapter config).
-3. The Keycloak admin assigns that role to the user who will be the first Usher platform admin.
+3. The Keycloak admin assigns that role to the user who will be the first Usher admin.
 4. When that user authenticates, their OIDC token carries the `usher-platform-admin` claim.
-   Usher reads the claim, recognises platform admin status, and the management API and UI become
+   Usher reads the claim, recognises admin status, and the management API and UI become
    available. No Usher-side initialisation is required.
 
 Usher has no `BOOTSTRAP_ADMIN_EMAIL` configuration, no `platform_admins` table, and no startup
-warning for missing admins. Adding or removing platform admins is a Keycloak (or IdP) operation.
+warning for missing admins. Adding or removing admins is a Keycloak (or IdP) operation.
 Usher application code has no role in that lifecycle.
 
 **For alternative OIDC providers:** the concept is identical. The provider-specific mechanism
-for assigning the platform admin signal to a user (a role, a group, a custom claim) is
+for assigning the admin signal to a user (a role, a group, a custom claim) is
 configured in the adapter. Usher reads the result from the token.
 
 **Security note:** the Keycloak realm administrator credential is infrastructure-tier: store it
@@ -139,23 +135,23 @@ constraints section).
 
 ## Self-grant flow
 
-When a platform admin needs data access (incident investigation, data quality audit, operational
+When an admin needs data access (incident investigation, data quality audit, operational
 support), they must explicitly grant themselves access through the same permissions system that
 governs all users. The grant is logged, traceable, and requires a deliberate action.
 
 ### Mechanics
 
-1. Platform admin navigates to the resource in the management UI (or calls the admin API self-
+1. Admin navigates to the resource in the management UI (or calls the admin API self-
    grant endpoint).
 2. They specify the resource, the data categories needed, and a TTL.
 3. Usher creates a standard `membership` plus `category_grant` record. The `granted_by` field
    is set to the admin's own `user_id`, flagging this as a self-grant. The audit log entry
    carries `"self_grant": true`.
 4. The self-grant endpoint enforces the TTL requirement and the audit flag. The standard grant
-   endpoint rejects self-targeting by platform admins with an error directing them to the
+   endpoint rejects self-targeting by admins with an error directing them to the
    self-grant endpoint. This is technical enforcement, not convention.
 5. The resulting grant behaves identically to any other grant for PEP plugin purposes. The
-   constraint token carries no platform admin flag; the plugin sees the same token structure
+   grants token carries no admin flag; the plugin sees the same token structure
    regardless of whether the grantee is an admin.
 
 ### TTL requirement
@@ -167,8 +163,8 @@ governs all users. The grant is logged, traceable, and requires a deliberate act
 
 ### Self-grant revocability
 
-Self-grants are standard grants in the policy database. Any platform admin can revoke any grant,
-including another admin's self-grant. This means a compromised platform admin account could
+Self-grants are standard grants in the policy database. Any admin can revoke any grant,
+including another admin's self-grant. This means a compromised admin account could
 revoke a legitimate admin's active self-grant (e.g. an ongoing incident investigation). The
 audit trail records the revocation and identifies the actor.
 
@@ -190,7 +186,7 @@ simultaneously. This dependency must be resolved as a v1 design decision.
 
 ## Admin listing: resource metadata visibility
 
-When a platform admin lists resources, they see:
+When an admin lists resources, they see:
 
 ### Visible
 
@@ -211,7 +207,7 @@ When a platform admin lists resources, they see:
 ### On category tag visibility
 
 Category assignments (for example, "this resource has `indigenous_data` tagged") are visible to
-platform admins. Rationale: categories are platform-level configuration, not user data. An admin
+admins. Rationale: categories are platform-level configuration, not user data. An admin
 managing `indigenous_data` grants cannot do their job without knowing which resources carry that
 category. The sensitive information is the records themselves, not the access control structure.
 
@@ -219,7 +215,7 @@ This is a deliberate decision. It should be revisited if a specific deployment d
 category assignments are themselves sensitive (for example, if knowing that a resource has a
 particular category implies something about the population it describes).
 
-**Operator guidance:** resource names and descriptions are visible to platform admins and are
+**Operator guidance:** resource names and descriptions are visible to admins and are
 set by deployment operators. Names that embed sensitive information could constitute an
 information disclosure even without record access. Operators must follow naming conventions that
 use identifiers or non-sensitive labels. Usher cannot enforce this; it is a deployment policy
@@ -230,7 +226,7 @@ decision.
 ## Admin API
 
 The admin API is not served through the PEP plugin path. It is a separate surface, authenticated
-by Usher directly: the bearer token is validated and the OIDC platform admin claim is checked on
+by Usher directly: the bearer token is validated and the OIDC admin claim is checked on
 every request.
 
 ```
@@ -245,9 +241,9 @@ POST   /admin/service-accounts       register a service account
 PUT    /admin/service-accounts/{id}  update service account capabilities
 ```
 
-**Constraint token for platform admins:** identical in structure to any other constraint token.
-It carries no platform admin flag. If a platform admin has not self-granted access to a
-resource, their constraint token reflects that: they see no records in data applications, just
+**Grants token for admins:** identical in structure to any other grants token.
+It carries no admin flag. If an admin has not self-granted access to a
+resource, their grants token reflects that: they see no records in data applications, just
 like any other non-member user.
 
 This cleanly separates two concerns: admin operations go through the admin API; data queries go
@@ -265,7 +261,7 @@ decision on PHI implications before design begins.
 ## Service accounts
 
 Automated processes (Lyric at ingest, migration tooling, monitoring scripts) need to interact
-with Usher without being platform admins. A service account is a narrowly-scoped, non-human
+with Usher without being admins. A service account is a narrowly-scoped, non-human
 identity with an explicitly enumerated capability set.
 
 ### Authentication
@@ -279,7 +275,7 @@ to distinguish service account requests from human user requests.
 
 Keycloak provides authentication and the coarse-grained signal that the token belongs to a
 service account. Usher maintains its own `service_accounts` table keyed on the `client_id` from
-the token, recording which specific capabilities that service account holds. Platform admins
+the token, recording which specific capabilities that service account holds. Admins
 manage this table through the Usher management UI.
 
 Fine-grained capabilities (`CREATE_RESOURCE`, `ASSOCIATE_CATEGORY`, `CREATE_MEMBERSHIP`, and
@@ -289,12 +285,17 @@ handles identity, Usher handles fine-grained authorization.
 
 ### Properties
 
-- Service accounts are distinct from platform admins and cannot self-grant data access.
-- They cannot create, modify, or revoke category grants for users.
+- Service accounts are distinct from admins and cannot self-grant data access.
+- They cannot create, modify, or revoke category grants for users directly.
+  **Note:** `CREATE_MEMBERSHIP` with an `owner` role is an indirect path to category grant
+  management: an Owner can grant and revoke category access for other users within their resource.
+  A compromised service account holding `CREATE_MEMBERSHIP` could assign a malicious actor as
+  Owner of any newly created resource. Scope this capability carefully; consider whether
+  service accounts should be restricted to creating `member`-level memberships only.
 - They cannot read or modify audit log entries.
 - All service account actions are logged with the `client_id` as the actor, distinguishable
   from human admin actions in the audit trail.
-- Platform admins can revoke all capabilities for a service account by removing or disabling
+- Admins can revoke all capabilities for a service account by removing or disabling
   its entry in the `service_accounts` table. The next service account request will fail the
   capability check.
 
@@ -305,7 +306,7 @@ capability set:
 
 - `CREATE_RESOURCE`: create a new resource record
 - `ASSOCIATE_CATEGORY`: tag a resource with one or more data categories at creation time
-- `CREATE_MEMBERSHIP` (optional): assign the submitter as resource owner or curator
+- `CREATE_MEMBERSHIP` (optional): assign the submitter as Owner or Member
 
 The Lyric service account holds exactly these capabilities and nothing else. It cannot read
 grants, modify memberships for arbitrary users, or access any data.
@@ -324,7 +325,7 @@ credential tokens are preferred over long-lived API keys.
 
 ## Audit log integrity
 
-If platform admins can modify or delete audit records, every other control in this document
+If admins can modify or delete audit records, every other control in this document
 collapses. The tamper chain to guard against:
 
 1. Rogue admin grants themselves access.
@@ -375,7 +376,7 @@ Every audit event emitted to stdout must include at minimum:
 | `self_grant` | boolean | true only for self-grant events |
 | `categories` | string[] or null | data categories affected, if applicable |
 
-Events must never include constraint token payloads, health record identifiers, bearer tokens,
+Events must never include grants token payloads, health record identifiers, bearer tokens,
 or any field value that is itself controlled-access data.
 
 ---
@@ -385,7 +386,7 @@ or any field value that is itself controlled-access data.
 Usher reads all admin state from the validated OIDC token. The adapter interface must expose:
 
 - **Token validation:** verify signature against the provider's JWKS, check expiry and issuer.
-- **Claim extraction:** pull `sub` (user subject), `email`, and the platform admin indicator.
+- **Claim extraction:** pull `sub` (user subject), `email`, and the admin indicator.
 - **Admin claim configuration:** the claim path and value to check are configurable. Default for
   Keycloak: `realm_access.roles` contains `usher-platform-admin`. For a generic OIDC provider:
   a configurable top-level claim path and expected value.
@@ -399,7 +400,7 @@ Usher's code works with a validated, normalized claim set. The monorepo will con
 
 **OPA note:** Open Policy Agent was considered as a policy evaluation engine. It is not a v1
 dependency. Usher's ABAC model is structured (defined schema: memberships, category_grants,
-resource_categories), and constraint computation is a mechanical derivation from that data
+resource_categories), and grants computation is a mechanical derivation from that data
 rather than open-ended policy composition. OPA adds operational complexity without clear benefit
 at this scale. Revisit if the policy model grows to require arbitrary composition or distributed
 policy bundle updates across many enforcement points simultaneously.
@@ -415,15 +416,15 @@ re-authentication? NIST SP 800-63B recommends step-up for high-impact operations
 yes. Defer to v1+ only if owner notification (below) is implemented in v1 as the compensating
 control.
 
-**Self-grant owner notification:** when a platform admin self-grants access to a resource,
+**Self-grant owner notification:** when an admin self-grants access to a resource,
 should the resource owner receive an out-of-band notification? This is the primary compensating
 control when step-up auth is deferred. Requires notification infrastructure design. If step-up
 is deferred to v1+, this is required for v1. Both cannot be deferred simultaneously.
 
 **Self-grant peer revocability (decision needed before admin API ships):** self-grants are
-standard grants; any platform admin can revoke any grant, including a peer's self-grant. A
+standard grants; any admin can revoke any grant, including a peer's self-grant. A
 compromised account could revoke a legitimate admin's active self-grant. Policy options: (a)
-any platform admin can revoke any grant including self-grants (simplest; current default); (b)
+any admin can revoke any grant including self-grants (simplest; current default); (b)
 self-grants are revocable only by their creator or by a super-admin tier (requires additional
 model complexity). A decision is needed before the admin API grant management endpoints are
 implemented.
@@ -432,13 +433,13 @@ implemented.
 API section). If a specific use case arises that requires listing users beyond resource-scoped
 member lookup, it must be evaluated for PHI implications before design begins.
 
-**Break-glass emergency access:** if all platform admins are unavailable (accounts locked, staff
-unavailable), recovery requires assigning the platform admin role in the identity provider.
+**Break-glass emergency access:** if all admins are unavailable (accounts locked, staff
+unavailable), recovery requires assigning the admin role in the identity provider.
 This is an IdP administration operation. The deployment runbook must document who is authorized
 to perform this operation and what audit trail is expected at the IdP layer.
 
 **Multi-tenancy admin scope (out of v1):** in a multi-tenant deployment, it is unclear whether
-a platform admin is scoped to a tenant or is truly platform-wide. Not designed; do not
+an admin is scoped to a tenant or is truly platform-wide. Not designed; do not
 implement.
 
 ---
@@ -452,12 +453,12 @@ database access controls are a separate layer. Document this boundary in the dep
 architecture document.
 
 **Keycloak admin operations are outside Usher's audit scope:** actions taken by Keycloak realm
-administrators (assigning or revoking the platform admin role, disabling user accounts) are
+administrators (assigning or revoking the admin role, disabling user accounts) are
 logged by Keycloak's own audit system, not by Usher's audit log. The boundary must be explicitly
 documented so that security auditors understand that Usher's audit log is not a complete record
 of all privilege changes on the platform. Both logs are required for a complete audit trail.
 
-**Token TTL bounds the deprovisioning lag:** when a platform admin's role is revoked in the
+**Token TTL bounds the deprovisioning lag:** when an admin's role is revoked in the
 identity provider, any token they already hold remains valid until expiry. Deployments must
 configure short token TTLs (15 minutes or less) to bound this exposure window. Usher's fail-
 secure default means it always reads the claim from the current token; it never trusts a cached

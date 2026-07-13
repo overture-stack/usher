@@ -5,8 +5,8 @@ happens when a user logs in, where the token comes from, what it contains, and h
 services fit into that picture. It is intended for readers who are not yet familiar with OAuth 2.0,
 [JWTs](concepts.md#jwts-signed-jws-vs-encrypted-jwe), or the standard roles in an access control system.
 
-If you are already comfortable with these, skip directly to [concepts.md](concepts.md) or
-[intro.md](intro.md).
+If you are already comfortable with these, skip directly to [intro.md](intro.md) or
+[concepts.md](concepts.md).
 
 ---
 
@@ -95,7 +95,7 @@ header.payload.signature
 - **Header:** metadata about the token: the algorithm used to sign or encrypt it.
 - **Payload:** the claims: the actual data the token carries.
 - **Signature (or encryption):** a cryptographic value that lets receivers verify the token has
-  not been tampered with (signed) or that only authorised parties can read it (encrypted).
+  not been tampered with (signed) or that only authorized parties can read it (encrypted).
 
 **Standard claims in a JWT payload:**
 
@@ -115,10 +115,10 @@ is a common security error.
 
 **Signed vs encrypted.** The Keycloak-issued tokens described above are signed ([JWS](concepts.md#jws-json-web-signature-signed-jwt)): anyone with
 the public key can read the payload, and the signature proves the token was issued by Keycloak and
-has not been modified. Usher's [constraint tokens](concepts.md#constraint-tokens) are encrypted ([JWE](concepts.md#jwe-json-web-encryption-encrypted-jwt)): only the intended recipient
+has not been modified. Usher's [grants tokens](concepts.md#grants-tokens) are encrypted ([JWE](concepts.md#jwe-json-web-encryption-encrypted-jwt)): only the intended recipient
 (the enforcement plugin) can read the payload. This distinction matters because users forward their
 access token with every request; if it were encrypted, they could not use it as a bearer credential.
-The constraint token is different: it contains access constraints the user should not be able to
+The grants token is different: it contains the user's grants, which they should not be able to
 read. See [concepts.md](concepts.md#jwts-signed-jws-vs-encrypted-jwe) for the full treatment.
 
 > **Authoritative reference:** [jwt.io](https://jwt.io/) (interactive debugger and introduction)
@@ -155,7 +155,7 @@ in the Usher design and are worth knowing before reading the design documents:
   requests, applies the constraints the PDP returned, and ensures the user only receives what they
   are permitted to see. In Usher, each application's plugin is the PEP.
 - **[PAP](concepts.md#pap-policy-administration-point) (Policy Administration Point):** the interface through which administrators define and
-  manage policy: who has access to what. Usher's management UI is the PAP.
+  manage policy: who has access to what. Usher's management UI (planned) is the PAP.
 
 These roles are always present in an access control system; the question is which software plays
 each one. In a system without a dedicated authorization service, the application plays all three
@@ -179,5 +179,5 @@ fourth component, the [PIP](concepts.md#pip-policy-information-point).
   the authoritative reference for authentication assurance levels and credential management
 
 From here, [concepts.md](concepts.md) covers the authorization-specific vocabulary ([ABAC](concepts.md#rbac-vs-abac), the
-[permissions model](concepts.md#the-permissions-model-entities), constraint tokens, [fail-secure](concepts.md#fail-secure-vs-fail-open), [revocation](concepts.md#revocation-the-self-contained-token-problem)) in the depth needed to follow the
+[permissions model](concepts.md#the-permissions-model-entities), grants tokens, [fail-secure](concepts.md#fail-secure-vs-fail-open), [revocation](concepts.md#revocation-the-self-contained-token-problem)) in the depth needed to follow the
 design documents.

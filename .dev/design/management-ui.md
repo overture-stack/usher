@@ -19,7 +19,7 @@ as "studies"; "memberships" appear as "study enrolments").
 ## Known scope
 
 - **Resource management:** register and describe resources available in Usher.
-- **Role management:** define the roles available for assignment (e.g. curator, member).
+- **Role management:** define the roles available for assignment (e.g. owner, member).
 - **Data category management:** define data categories and assign them to resources.
 - **Membership management:** assign users to resources with a role; view and revoke memberships.
 - **Category grant management:** grant or revoke user access to specific data categories within a

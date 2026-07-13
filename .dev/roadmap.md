@@ -1,7 +1,7 @@
 # Usher Roadmap
 
 Planned work across design, implementation, integration, and infrastructure. Items are open unless
-marked `[in progress]`. Completed items are removed; `sessions.md` is the historical record.
+marked `[in progress]`. Completed items are removed; `.dev/sessions/` is the historical record.
 
 ---
 
@@ -27,7 +27,7 @@ before the admin API is implemented:
 
 Lower priority (can follow v1):
 - Self-grant step-up authentication (NIST SP 800-63B recommended; see compensating controls above)
-- Audit event schema formalisation (minimum fields defined in admin-model.md; formal schema TBD)
+- Audit event schema formalization (minimum fields defined in admin-model.md; formal schema TBD)
 - Multi-tenancy admin scope
 
 ### Complete permissions model
@@ -35,7 +35,6 @@ Lower priority (can follow v1):
 The structure (hybrid role + attribute, data categories, memberships, category grants) is defined.
 Still needed:
 - Role capability definitions: what specific actions does each role permit beyond resource access?
-- Multiple roles per user per resource: supported or not?
 - Field-level restriction implementation approach (options A-D analysed; recommendation: start with
   A, extend to C; formal choice not yet committed)
 - Category grant scope: always resource-specific, or can a grant span multiple resources?
@@ -60,11 +59,11 @@ See `.dev/design/permissions-model.md`.
 ### Plugin integration design
 
 API contract, request/response shapes, and error codes for:
-- Constraint token exchange endpoint
+- Grants token exchange endpoint
 - Revocation poll endpoint (`GET /revocations?since=<timestamp>`)
 - Push event subscription (SSE or WebSocket)
 
-Also needed: JWE decryption key distribution and rotation strategy; constraint payload schema
+Also needed: JWE decryption key distribution and rotation strategy; grants payload schema
 version handling. See `.dev/design/plugin-integration.md`.
 
 ### Database schema design
@@ -96,47 +95,101 @@ Track evaluation outcome and update the deployment architecture doc accordingly.
 this partially addresses the break-glass runbook gap: the Terraform state becomes the audit
 record for IdP configuration changes.
 
+### Researcher experience design
+
+Several aspects of the researcher-facing experience require design decisions before they can be
+implemented or documented. These gaps were identified during an audience-perspective review of the
+consumer-facing docs.
+
+- **Access request workflow.** When a researcher needs access to categorized data, how do they
+  initiate the request? Options: a self-service form in the management UI that a Steward or Admin
+  reviews and approves; an external DAC integration via REMS/GA4GH Passport; or an out-of-band
+  process (institutional or email). The in-product request flow is not yet designed. This is
+  prerequisite to the researcher journey documentation and related to the DACO-style approval
+  workflows in Future scope (the difference: DACO is about ethics-review-gated access
+  specifically; this covers the general grant request path).
+- **Denied access user experience.** When a member has no category grant for a given category,
+  records tagged with that category are excluded from their results. The user-facing manifestation
+  of this exclusion is a plugin design decision: an empty result set, a reduced count, an
+  informative message, or no indication at all. Each option has UX and privacy implications.
+  Existence denial is a hard invariant (OWASP A01); revealing that records exist but are
+  inaccessible violates that invariant, but revealing nothing may confuse researchers who expect
+  records they know exist.
+- **Category grant expiry and renewal.** Category grants carry an `expires_at`. No mechanism is
+  designed for notifying researchers before their grant expires or for guiding them through
+  renewal. This is distinct from the custodian notification item in the permissions model section
+  (which covers tightening changes applied by an admin or owner): this covers the researcher's own
+  expiry and renewal cycle.
+
 ---
 
 ## Implementation: Core service
 
 ### Technology stack selection
 
-Language (TypeScript strongly preferred for Overture ecosystem consistency), HTTP framework
-(Fastify is a strong candidate for performance-sensitive auth path), and database (PostgreSQL is
-the likely choice; confirm before implementation).
+- **Language:** TypeScript (confirmed; Overture ecosystem consistency).
+- **HTTP framework:** **decision required before implementation begins.** Two genuine candidates:
+  - **Fastify:** performant, TypeScript-native, Pino built in, larger ecosystem, `@fastify/express`
+    compatibility shim for any existing Express middleware that needs to run inside the controller.
+    Battle-tested at scale; most relevant prior art for this kind of service.
+  - **Hono:** newer, lightweight, edge/multi-runtime native. Strong TypeScript ergonomics and a
+    clean middleware API. Smaller ecosystem and fewer production references at this service's
+    security and concurrency profile. Worth evaluating seriously if the team is already investing
+    in it elsewhere.
+  Note: PEP plugins (`usher-arranger`, `usher-lyric`) are Express middleware for their respective
+  target applications and are unaffected by this choice; they communicate with the controller over
+  HTTP regardless of framework.
+- **Structured logging:** Pino (strongly preferred; to confirm with HTTP framework). Integrates
+  natively with Fastify; outputs structured JSON by default; one of the fastest Node.js loggers,
+  which matters on the auth hot path. Audit events are dual-channel: stored in the policy database
+  (queryable source of truth for governance reviews) and emitted as Pino structured log lines
+  (forwarded to a log aggregator for real-time alerting and external system integration). Both
+  channels are required; the database alone is insufficient for real-time security monitoring.
+- **Policy store:** PostgreSQL (confirmed). Handles grants, memberships, categories, `revoked_at`
+  timestamps, and the audit log; requires transactions and foreign-key integrity.
+- **Shared cache and revocation pub/sub:** Valkey (confirmed; already deployed in the Overture
+  environment; protocol-compatible with Redis). Needed alongside PostgreSQL, not a replacement.
+  Two roles: caching computed grants payloads across Usher instances (the `generatedAt`
+  fast-path), and pub/sub backbone for the push revocation channel (one instance processes a
+  revocation; Valkey notifies SSE subscribers on all others). Valkey Streams provides durable
+  in-process event passing for v1; see Kafka in Future scope for external consumer fan-out.
 
 ### IdP integration
 
 OIDC token validation: discovery endpoint consumption, public key caching and rotation, strict
 claim validation (`aud`, `iss`, `exp`, scope). Must handle IdP unavailability fail-secure:
-if the IdP cannot validate a bearer token, reject the constraint token exchange request.
+if the IdP cannot validate a bearer token, reject the grants token exchange request.
 
-### Constraint computation engine
+### Grants computation engine
 
 Given a validated user identity, resolve current permissions from the policy database and compute
-the constraint payload. Must support the `generatedAt`-based fast-path refresh (skip full
+the grants payload. Must support the `generatedAt`-based fast-path refresh (skip full
 computation if no policy change since `generatedAt`).
 
 ### JWE token issuance
 
-Encrypt and sign the constraint payload using the selected JWE algorithms. Embed `generatedAt`
+Encrypt and sign the grants payload using the selected JWE algorithms. Embed `generatedAt`
 and `exp`. The decryption key must not have a default value; Usher must refuse to start if
 unconfigured.
 
 ### Revocation system
 
 - Per-user `revoked_at` timestamp in the policy database
-- Push channel: SSE or WebSocket endpoint for plugin subscriptions; emit on revocation
+- Push channel: SSE or WebSocket endpoint for bridge subscriptions; emit on revocation
 - Poll endpoint: `GET /revocations?since=<timestamp>` returning changed user IDs
 - Revocation scopes: single user, all users of a resource, global (with confirmation)
 
 ### Audit logging
 
-Structured JSON log for every authorization decision (user, resource, categories in scope,
-decision, timestamp) and every revocation event (actor, scope, timestamp). Must never include
-constraint token payloads, health record identifiers, or bearer tokens. Retention policy to be
-defined at deployment time.
+Structured JSON log (via Pino) for every authorization decision (user, resource, categories in
+scope, decision, timestamp) and every revocation event (actor, scope, timestamp). Must never
+include grants token payloads, health record identifiers, or bearer tokens. Retention policy
+to be defined at deployment time.
+
+Audit events are dual-channel: stored in the policy database and emitted as structured log lines.
+The database is the queryable source of truth; the log stream is the channel for real-time
+alerting, intrusion detection, and SIEM integration. See Technology stack selection for the
+Pino/Valkey/Kafka split across these channels.
 
 ### Policy database
 
@@ -147,11 +200,11 @@ controls: transactions, foreign key constraints, and audit triggers for policy c
 
 ## Implementation: Integration
 
-### `@overture-stack/usher-client`
+### `@overture-stack/usher-bridge`
 
-Shared library consumed by all per-app plugins:
-- JWE token exchange with Usher
-- Local token validation and constraint extraction (decryption)
+Shared library embedded in all client apps (via the per-app plugin):
+- JWE token exchange with the controller
+- Local token validation and grants payload extraction (decryption)
 - TTL-aware caching
 - Revocation channel: push subscription with reconnection logic; poll fallback
 - Revocation-uncertain mode: suspend sessions after grace period; return 503
@@ -159,12 +212,12 @@ Shared library consumed by all per-app plugins:
 
 ### `@overture-stack/usher-arranger`
 
-Express middleware for `arranger-graphql-router`. Translates Usher constraint payload into
+Express middleware for `arranger-graphql-router`. Translates Usher grants payload into
 Arranger server-side SQON filters. First integration target.
 
 ### Additional per-app plugins
 
-`@overture-stack/usher-lyric` and others as needed, each translating constraints into that app's
+`@overture-stack/usher-lyric` and others as needed, each translating the grants payload into that app's
 native query format.
 
 ---
@@ -179,6 +232,40 @@ High-level scope:
 - Category grant management (with expiry support)
 - Emergency revocation controls (single user / resource / global)
 - Audit log viewer
+
+---
+
+## Documentation
+
+### Docs-tier gaps: blocked on prior design
+
+- **Researcher journey guide.** A page describing the researcher experience: requesting access,
+  receiving approval, understanding what is visible and what is not, and renewing before expiry.
+  Blocked on the access request workflow design (see Researcher experience design above).
+- **Denied access user experience documentation.** What a researcher sees when records are
+  excluded from their results. Blocked on the denied access UX design decision.
+- **Category grant expiry and renewal guide.** The researcher experience of time-limited access:
+  expiry notification, renewal path, and what happens when a grant lapses. Blocked on expiry
+  notification design.
+- **Grants token payload schema.** The token structure is described conceptually in
+  concepts.md but the actual payload schema (field names, types, the `categories` include-list
+  structure, `generatedAt`) is not documented in docs/. Blocked on schema finalization in
+  plugin-integration.md.
+
+### `/docs/` integration guide
+
+Consumer-facing companion to `plugin-integration.md`: a lighter guide for developers building
+enforcement plugins, framed for the integration use case rather than the full design rationale.
+Blocked on `plugin-integration.md` design being completed.
+
+### `/docs/` administration guide
+
+Consumer-facing companion to `admin-model.md` and `management-ui.md`: how to configure and
+administer a running Usher deployment (resources, categories, grants, roles, revocation).
+Must cover data tier classification: who decides what tier applies to a given dataset and how
+that is configured in a deployment. This is a real operator question not answered anywhere in
+current docs or design.
+Blocked on admin model open questions being resolved and management UI design being completed.
 
 ---
 
@@ -198,3 +285,13 @@ in initial scope; the architecture should not preclude it.
 ### Additional IdP connectors
 
 Beyond Keycloak and Azure Entra: other OIDC providers, SAML-based IdPs.
+
+### Security event streaming (Kafka)
+
+For durable, replayable security event streams destined for external consumers (SIEM platforms,
+compliance audit pipelines, alerting systems), Kafka is the natural upgrade from Valkey Streams.
+Not needed for v1, where Pino log forwarding and Valkey pub/sub cover real-time notification
+needs. Kafka becomes relevant when fan-out to multiple independent external consumers is required,
+or when events must survive a Usher restart and be replayable. Adding it later requires no
+architectural changes to the core service: the same audit events already being logged and stored
+become the source.

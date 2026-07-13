@@ -19,7 +19,7 @@ this and its REST API design is a reference for Usher's decision API: a clear re
 (principal, resource, action) and a structured, auditable response.
 
 **Why not adopted.** Two gaps: decisions are binary (allow/deny), and there is no management UI.
-Usher's use case requires a structured constraint output rather than a pass/fail answer: the
+Usher's use case requires a structured grants output rather than a pass/fail answer: the
 application needs to know not just "can this user see data?" but "which categories of data can they
 see, in which resources?" That structured answer cannot come from Cerbos without significant
 wrapping. The absence of a management UI is a separate gap (addressed by Cerbos Hub, see below).
@@ -36,9 +36,9 @@ API gateway authorization.
 OPA from Kubernetes work know how to operate it, write policies, and integrate it into CI/CD. Using
 OPA as Usher's evaluation engine would have offered ecosystem familiarity as an adoption benefit.
 
-**What we borrowed.** OPA's concept of partial evaluation directly influenced the constraint token
+**What we borrowed.** OPA's concept of partial evaluation directly influenced the grants token
 design. In partial evaluation, OPA accepts some known facts and some unknown ones, and produces a
-residual: an unevaluated expression that represents the remaining constraints. Usher's constraint
+residual: an unevaluated expression that represents the remaining grants. Usher's grants
 token is the same idea in a different form: rather than returning a binary answer, Usher returns the
 full set of category grants for the requesting application. The plugin applies that set as a query
 filter, which is structurally a residual evaluation applied at the data layer.
@@ -68,7 +68,7 @@ conditions. This is worth reconsidering before implementing any conditional eval
 ### OPA at the enforcement layer
 
 Separate from its role as a decision engine, OPA was considered as a component within enforcement
-plugins: the per-application code that receives the constraint token and translates it into
+plugins: the per-application code that receives the grants token and translates it into
 data-layer query filters.
 
 **Why we looked at it.** The mapping from a category grant set to a concrete query filter (e.g.,
@@ -116,13 +116,13 @@ governance inquiries. This is not a nice-to-have. Usher's design includes the ma
 
 ## Architectural decisions
 
-### Constraint token over binary allow/deny
+### Grants token over binary allow/deny
 
 A binary response from the PDP (allowed/denied) requires every application to call back to the
 decision service on every data access, or to cache a broad allow/deny that cannot express partial
 access. Neither fits a platform where a user may be permitted to see some records and not others.
 
-Usher returns a structured constraint token: the full set of category grants the user holds, scoped
+Usher returns a structured grants token: the full set of category grants the user holds, scoped
 to the resources the requesting application manages. The application plugin applies this as a
 query-time filter. A single token fetch covers the session; the plugin uses it for every query
 without a round-trip per request.
@@ -133,17 +133,19 @@ query language and schema knowledge that Usher cannot have.
 
 ---
 
-### JWE (encrypted) over JWS (signed) for the constraint token
+### JWE (encrypted) over JWS (signed) for the grants token
 
 A signed token (JWS) is readable by anyone with the public key, including the user. A user who can
-read their own constraint token can enumerate which categories they do not hold grants for and
+read their own grants token can enumerate which categories they do not hold grants for and
 potentially craft queries to probe or bypass enforcement.
 
-The constraint token is encrypted (JWE) and decrypted only by the application plugin. The user
+The grants token is encrypted (JWE) and decrypted only by the application plugin. The user
 receives and forwards an opaque token they cannot inspect.
 
-**Tradeoffs accepted.** Each plugin needs a decryption key provisioned at deploy time. Key
-distribution and rotation are operational concerns that would not exist with a signed token.
+**Tradeoffs accepted.** Each bridge instance needs a decryption key provisioned at deploy time.
+Key distribution and rotation are operational concerns that would not exist with a signed token. For
+the full mechanism and rationale, see
+[security-workflow.md — Grants token format](security-workflow.md#grants-token-format-jwe).
 
 ---
 
@@ -175,6 +177,8 @@ on expiry. The TTL is a backstop, not the primary revocation mechanism.
 
 **Tradeoffs accepted.** Plugins must maintain a persistent connection to the revocation channel.
 If the channel is disrupted, the plugin cannot know whether its cached grants are still valid.
+For the mechanism (push + poll, multi-instance propagation), see
+[security-workflow.md — Emergency access revocation](security-workflow.md#emergency-access-revocation).
 
 ---
 
@@ -190,7 +194,8 @@ silences the channel gains no access; they only cause a service disruption.
 
 **Tradeoffs accepted.** A revocation channel outage becomes a data access outage. This is the
 correct behaviour for a system handling sensitive or health-adjacent data, and is a deliberate
-design choice rather than an oversight.
+design choice rather than an oversight. For the failure behaviour and grace period design, see
+[security-workflow.md — Revocation channel integrity](security-workflow.md#revocation-channel-integrity-and-fail-secure-behaviour).
 
 ---
 
@@ -198,7 +203,7 @@ design choice rather than an oversight.
 
 Usher does not know the schema of the data it protects. It does not query the data store, run
 migrations, or write to any data table. It holds grants (user, resource, category) and issues
-constraint tokens. What those categories mean in terms of actual records or fields is
+grants tokens. What those categories mean in terms of actual records or fields is
 application-specific configuration that lives in the plugin.
 
 This allows Usher to be adopted without modifying the data being protected, and removed without
@@ -208,3 +213,32 @@ search index) without needing format-specific logic.
 **Tradeoffs accepted.** Usher cannot validate that a category or resource name corresponds to
 anything real in the data layer. Misconfigured grants (referencing a nonexistent category) are
 silent. Validation is the responsibility of the management UI and the plugin configuration.
+
+---
+
+### Additive grant pipeline with anonymous grants token for open data
+
+A common alternative for open data is to handle unauthenticated requests outside the
+authorization system: the plugin applies an exclusion filter for all sensitive categories, no
+token exchange occurs, and open access is unlogged. This creates two code paths (authenticated
+vs. anonymous) and leaves open access invisible to the audit trail.
+
+Usher issues a grants token for every request, including unauthenticated ones. For anonymous
+users the controller computes only the open-data tier (no IdP token validation, no membership
+lookup): the result is a grants token containing only open-resource grants. The bridge and
+plugin handle this token identically to an authenticated one.
+
+Grant computation is additive across three tiers, always in order:
+
+1. **Open** — computed for all users, including anonymous; no IdP token required
+2. **Registered** — computed for authenticated users with a membership in the resource
+3. **Controlled** — computed for authenticated users with an explicit category grant record
+
+Standards consulted: GA4GH Data Access Framework (open/registered/controlled tier model),
+NIST SP 800-162 (ABAC), NIST SP 800-207 (Zero Trust).
+
+**Tradeoffs accepted.** Every unauthenticated request triggers a token exchange call to the
+controller. For high-traffic open-access deployments this is additional load compared to a
+static exclusion filter. The cost is mitigated by the `generatedAt` fast-path cache and by
+Valkey-backed shared cache across controller instances; it is accepted in exchange for audit
+completeness and a single code path across all access tiers.
