@@ -29,7 +29,7 @@ transformation of the stored records. The access policy layer is additive and ex
 layer is untouched.
 
 When field-level access control is needed (see the field-level restriction section in
-[permissions-model.md](permissions-model.md)), Usher expresses which fields a given user is
+[permissions-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/permissions-model.md)), Usher expresses which fields a given user is
 allowed to see as a constraint in the token. The application (via its PEP plugin) omits those
 fields from the response. The underlying record in the data store is complete and unchanged.
 
@@ -107,7 +107,7 @@ grant or revoke data category access, without needing access to Keycloak or any 
 **PAP admin and platform admin are synonymous.** "Platform admin" is the user-facing term for
 the system-wide authorization administrator role. "PAP admin" is the internal architecture
 shorthand. Design documents may use either; user-facing text (management UI, operator
-documentation) should use "platform admin". See [admin-model.md](admin-model.md) for the full
+documentation) should use "platform admin". See [admin-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/admin-model.md) for the full
 admin model: OIDC-first identification, bootstrap, self-grant flow, service accounts, and audit
 integrity controls.
 

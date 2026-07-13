@@ -5,8 +5,11 @@ user allowed to see?" and returns structured constraints that each Overture appl
 It is not an authentication service; that job belongs to the identity provider (Keycloak, Azure
 Entra, etc.).
 
+**New to Usher entirely?** Start with [docs/intro.md](../../docs/intro.md): a problem-first
+overview that introduces the patterns before the design detail.
+
 **New to the terminology?** Start with [glossary.md](glossary.md): one or two sentences per term,
-grouped by theme. [concepts.md](concepts.md) covers the same vocabulary in more depth with
+grouped by theme. [concepts.md](../../docs/concepts.md) covers the same vocabulary in more depth with
 rationale and context.
 
 ## Reading order
@@ -14,16 +17,17 @@ rationale and context.
 These documents are interconnected. The recommended path depends on what you are trying to
 understand.
 
-**New to Usher:** [glossary.md](glossary.md) (quick term lookup), then
-[concepts.md](concepts.md) (vocabulary and security primitives with rationale), then
+**New to Usher:** [docs/intro.md](../../docs/intro.md) (problem and patterns overview), then
+[glossary.md](glossary.md) (quick term lookup), then
+[concepts.md](../../docs/concepts.md) (vocabulary and security primitives with rationale), then
 [security-workflow.md](security-workflow.md) (how the token system works end to end), then
 [permissions-model.md](permissions-model.md) (the data model and access rules).
 
 **Reviewing the security design:** [security-threat-model.md](security-threat-model.md) (OWASP
 mapping and gap analysis), then [security-workflow.md](security-workflow.md) for mechanism detail.
-[concepts.md](concepts.md) is the vocabulary reference for both.
+[concepts.md](../../docs/concepts.md) is the vocabulary reference for both.
 
-**Reviewing the permissions model:** [concepts.md](concepts.md) (especially "The permissions model
+**Reviewing the permissions model:** [concepts.md](../../docs/concepts.md) (especially "The permissions model
 entities"), then [permissions-model.md](permissions-model.md).
 
 **Planning a PEP plugin:** [glossary.md](glossary.md) (especially the Integration concepts and
@@ -37,11 +41,12 @@ designed).
 | Document | Topic | Status |
 |---|---|---|
 | [glossary.md](glossary.md) | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts | reference |
-| [concepts.md](concepts.md) | ABAC vocabulary, security primitives, permissions model entities | reference |
+| [concepts.md](../../docs/concepts.md) | ABAC vocabulary, security primitives, permissions model entities | reference |
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps | reference |
 | [security-workflow.md](security-workflow.md) | Token issuance, constraint lifecycle, revocation, fail-secure | specced |
 | [permissions-model.md](permissions-model.md) | Hybrid role + attribute model, data categories, cohort semantics, OCAP, private data sharing | in progress |
 | [admin-model.md](admin-model.md) | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity | in progress |
+| [decisions.md](decisions.md) | Tools reviewed before building; architectural decisions with rationale | reference |
 | [plugin-integration.md](plugin-integration.md) | Per-app plugin design, shared client library | not started |
 | [management-ui.md](management-ui.md) | Access management UI (PAP layer) | not started |
 
@@ -92,18 +97,11 @@ cross-application implications and should not be resolved by a single developer 
 
 ## Why we are building Usher rather than adopting an existing tool
 
-Three established tools were reviewed before deciding to build:
-
-**Cerbos:** standalone PDP service, REST API, YAML policies. Closest match architecturally.
-Gaps: no management UI, decisions are allow/deny only (no structured constraint output), would
-need significant wrapping for SQON/field-masking use cases. Good reference for API design.
-
-**OPA (Open Policy Agent):** industry standard, very powerful, policy-as-code in Rego. Gaps:
-steep learning curve, no management UI, still requires building the access management layer. Better
-suited to infrastructure policy than app-level data access control.
-
-**Cerbos Hub:** commercial SaaS management UI on top of Cerbos. Not self-hosted, not open-source.
-
-The combination of structured constraint output, a custom management UI, IdP abstraction, and
-per-app plugin integration makes the scope specific enough that these tools would be adapters
-rather than foundations.
+See [decisions.md](decisions.md) for the full evaluation, including what each reviewed tool
+contributed to the design. In summary: Cerbos (closest match architecturally) produces binary
+allow/deny decisions and has no management UI; OPA is a general-purpose policy engine whose
+evaluation model does not fit a grant-data-lookup use case, though its partial evaluation concept
+directly influenced the constraint token design; Cerbos Hub is commercial SaaS. The combination of
+structured constraint output, a built-in management UI, IdP abstraction, and per-app plugin
+integration makes the scope specific enough that these tools would be adapters rather than
+foundations.

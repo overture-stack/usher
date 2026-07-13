@@ -8,7 +8,7 @@ It is designed to handle personal health records and is calibrated accordingly t
 service is currently in the design phase; no implementation has begun.
 
 Key concepts (PDP, PAP, PEP, JWE, fail-secure, constraint tokens) are defined in
-`.dev/design/concepts.md`. The OWASP Top 10:2025 threat model is in
+`docs/concepts.md`. The OWASP Top 10:2025 threat model is in
 `.dev/design/security-threat-model.md`.
 
 ## Starting a session

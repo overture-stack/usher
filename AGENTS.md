@@ -9,7 +9,7 @@ health privacy legislation. The service is currently in the design phase; no imp
 begun.
 
 Key concepts (PDP, PAP, PEP, JWE, fail-secure, constraint tokens) are in
-`.dev/design/concepts.md`. The OWASP Top 10:2025 threat model is in
+`docs/concepts.md`. The OWASP Top 10:2025 threat model is in
 `.dev/design/security-threat-model.md`. The design index is at `.dev/design/README.md`.
 
 ## Session start checklist

@@ -12,7 +12,7 @@ Grouped by theme; alphabetized within each group.
 **IdP (Identity Provider)**
 The system that authenticates users and issues identity tokens. In Overture deployments this is
 Keycloak. Usher does not authenticate users; it relies on a validated IdP token to establish who
-is making a request. See [concepts.md](concepts.md).
+is making a request. See [concepts.md](../../docs/concepts.md).
 
 **PAP (Policy Administration Point)**
 The component where administrators manage policies: grants, memberships, roles, and data

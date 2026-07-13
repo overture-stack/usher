@@ -132,7 +132,7 @@ Grants have two origins:
   full lifecycle.
 - **External:** originated from a GA4GH Passport `ControlledAccessGrants` Visa, validated by
   Keycloak and mapped to a `category_grant` automatically. Usher inherits the Visa's `expires`
-  timestamp as `expires_at`. See [concepts.md, GA4GH Passports and federated identity](concepts.md)
+  timestamp as `expires_at`. See [concepts.md, GA4GH Passports and federated identity](../../docs/concepts.md)
   for the full flow.
 
 Local administrators can revoke an externally-originated grant. Local policy can always restrict
@@ -520,7 +520,7 @@ defaults. Each layer can override the one above:
 4. **Post-submission steward changes.** A custodian or category steward can adjust a cohort's
    category assignment after submission. This updates `resource_categories` in Usher's policy
    tables. The underlying submitted records are unchanged; see "Access control does not modify
-   data" in [concepts.md](concepts.md).
+   data" in [concepts.md](../../docs/concepts.md).
 
 The data immutability principle applies throughout: Usher enforces category policies by filtering
 at the PEP layer, not by modifying submitted records. A field like `isIndigenous` or `isControlled`

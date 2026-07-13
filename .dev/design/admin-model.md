@@ -7,7 +7,7 @@ users" scope and PHI implications, break-glass emergency access, rogue admin pee
 and structured audit event schema._
 
 See [permissions-model.md](permissions-model.md) for the grant model that platform admins manage.
-See [concepts.md](concepts.md) for PAP / PDP / PEP vocabulary.
+See [concepts.md](../../docs/concepts.md) for PAP / PDP / PEP vocabulary.
 See [security-threat-model.md](security-threat-model.md) for A09 (audit) and A01 (access control)
 mapping.
 

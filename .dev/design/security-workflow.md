@@ -3,7 +3,7 @@
 _Status: specced. This is the most fully designed part of Usher. Rationale is documented for each
 decision._
 
-See [concepts.md](concepts.md) for definitions of JWE, PDP, PEP, fail-secure, and other terms
+See [concepts.md](../../docs/concepts.md) for definitions of JWE, PDP, PEP, fail-secure, and other terms
 used here. See [security-threat-model.md](security-threat-model.md) for the full OWASP Top
 10:2025 mapping.
 
@@ -69,7 +69,7 @@ User --IdP JWT--> App (with Usher plugin / PEP)
 ## Constraint token format: JWE
 
 Usher issues constraint tokens as **JWE (JSON Web Encryption)**: encrypted JWTs, not merely
-signed ones. See [concepts.md, JWS vs JWE](concepts.md#jws-json-web-signature-signed-jwt)
+signed ones. See [concepts.md, JWS vs JWE](../../docs/concepts.md#jws-json-web-signature-signed-jwt)
 for the distinction.
 
 ### Design rationale
