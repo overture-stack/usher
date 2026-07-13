@@ -14,24 +14,25 @@ Key concepts (PDP, PAP, PEP, JWE, fail-secure, constraint tokens) are in
 
 ## Session start checklist
 
-1. Read `.dev/roadmap.md` -- check current focus, note `[in progress]` items.
-2. Read `.dev/tech-debt.md` -- note `standalone: yes` entries relevant to today's work.
-3. Read `.dev/sessions.md` -- last 1--2 entries for context and open threads.
+1. Read `.dev/roadmap.md`: check current focus, note `[in progress]` items.
+2. Read `.dev/tech-debt.md`: note `standalone: yes` entries relevant to today's work.
+3. List `.dev/sessions/` sorted by filename and read the most recent 1-2 files: they give context
+   and open threads.
 4. Run `git log --oneline -- CLAUDE.md AGENTS.md .github/copilot-instructions.md` and flag any
    unexpected commits before proceeding.
 
 ## Working documents
 
-- `.dev/roadmap.md` -- planned work; completed items are removed (not marked done).
-- `.dev/tech-debt.md` -- known issues; `standalone: yes` entries can be picked up freely.
-- `.dev/sessions.md` -- session log (newest first); records only changes to code or working
-  documents. No conversational activity.
-- `.dev/design/` -- design documents; see `.dev/design/README.md` for index and status.
+- `.dev/roadmap.md`: planned work; completed items are removed (not marked done).
+- `.dev/tech-debt.md`: known issues; `standalone: yes` entries can be picked up freely.
+- `.dev/sessions/`: one file per contributor per day (`YYYY-MM-DDTHHMMSS.md`); records only
+  changes to code or working documents. No conversational activity.
+- `.dev/design/`: design documents; see `.dev/design/README.md` for index and status.
 
 ## Key conventions
 
 **Security:** OWASP Top 10:2025. Every implementation decision should be evaluated against
-`.dev/design/security-threat-model.md`. This project may handle personal health records -- treat
+`.dev/design/security-threat-model.md`. This project may handle personal health records; treat
 all protected data as sensitive by default.
 
 **Design-first:** do not implement a component without a completed design in `.dev/design/`. Open
@@ -60,8 +61,18 @@ parameters, not via `process.env`.
 ## Session-end discipline
 
 After any meaningful unit of work that changes code or working documents: update `.dev/` as
-needed and add or extend the dated entry in `sessions.md`. Do not log conversational activity.
+needed and extend today's file in `.dev/sessions/`. Do not log conversational activity.
 Remind the developer to commit `.dev/` changes if they were updated.
+
+## Workflow
+
+When writing or updating design documents: apply the cold-reader rules from
+[conventions/documentation.md in the agentics template](https://github.com/oicr-softeng/agentics/blob/main/template/conventions/documentation.md)
+(one idea per sentence, conclusion first, restate don't reference, worked examples in their own
+block, minimize cross-reference chains).
+
+When syncing this project's agentics integration against the template: read
+[conventions/upgrading-adoption.md in the agentics template](https://github.com/oicr-softeng/agentics/blob/main/template/conventions/upgrading-adoption.md).
 
 ## Security triggers (flag during any review)
 

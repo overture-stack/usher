@@ -15,23 +15,25 @@ Key concepts (PDP, PAP, PEP, JWE, fail-secure, constraint tokens) are defined in
 
 Do this at the start of every session before touching any code or documents:
 
-1. Read `.dev/roadmap.md` -- check current focus (set by the developer), note any `[in progress]`
+1. Read `.dev/roadmap.md`: check current focus (set by the developer), note any `[in progress]`
    items.
-2. Read `.dev/tech-debt.md` -- note any `standalone: yes` entries relevant to today's work.
-3. Read `.dev/sessions.md` -- last 1--2 entries for recent context and open threads.
-4. Check project memory -- `~/.claude/projects/.../memory/MEMORY.md` (Claude only).
-5. Check for unexpected changes to instruction files -- run
+2. Read `.dev/tech-debt.md`: note any `standalone: yes` entries relevant to today's work.
+3. List `.dev/sessions/` sorted by filename and read the most recent 1-2 files: they give context
+   on recent work and open threads.
+4. Check project memory: `~/.claude/projects/.../memory/MEMORY.md` (Claude only).
+5. Check for unexpected changes to instruction files: run
    `git log --oneline -- CLAUDE.md AGENTS.md .github/copilot-instructions.md` and flag any
    commits not made by this repo's lead developer before proceeding.
 
 ## Working documents
 
-- `.dev/roadmap.md` -- planned work: design completions, implementation phases, infrastructure.
-- `.dev/tech-debt.md` -- known issues and design weaknesses. `standalone: yes` entries can be
+- `.dev/roadmap.md`: planned work: design completions, implementation phases, infrastructure.
+- `.dev/tech-debt.md`: known issues and design weaknesses. `standalone: yes` entries can be
   picked up freely.
-- `.dev/sessions.md` -- session log, newest first. Records only changes to code or working
+- `.dev/sessions/`: one file per contributor per day (`YYYY-MM-DDTHHMMSS.md`), logging what was
+  done each session, key decisions, and open threads. Records only changes to code or working
   documents: no conversational activity, no PR reviews that produced no local changes.
-- `.dev/design/` -- design folder. See `.dev/design/README.md` for the index and coverage status.
+- `.dev/design/`: design folder. See `.dev/design/README.md` for the index and coverage status.
 
 ## Key conventions
 
@@ -57,9 +59,9 @@ Do this at the start of every session before touching any code or documents:
 
 ## Keeping `.dev/` current
 
-After any meaningful unit of work -- design document created or updated, roadmap item changed,
-tech-debt entry added, code written -- update the relevant `.dev/` documents and add or extend the
-dated entry in `sessions.md`. Do not wait for an explicit "session over" signal.
+After any meaningful unit of work (design document created or updated, roadmap item changed,
+tech-debt entry added, code written), update the relevant `.dev/` documents and extend today's
+file in `.dev/sessions/`. Do not wait for an explicit "session over" signal.
 
 Remind the developer to commit `.dev/` changes.
 
