@@ -51,6 +51,7 @@ responsibilities belong to usher-bridge vs the plugin), then
 | [decisions.md](decisions.md) | Tools reviewed before building; architectural decisions with rationale | reference |
 | [plugin-integration.md](plugin-integration.md) | Per-app plugin design, bridge library (`usher-bridge`) | not started |
 | [management-ui.md](management-ui.md) | Access management UI (PAP layer) | not started |
+| [to-discuss.md](to-discuss.md) | Design gaps, inconsistencies, and security properties requiring resolution before implementation | review |
 
 **Security standard:** OWASP Top 10:2025. Usher may handle personal health information; the
 threat model and design are calibrated accordingly. See

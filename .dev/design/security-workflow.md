@@ -51,7 +51,7 @@ User --IdP JWT--> App (with usher-bridge + plugin / PEP)
                 "aud": "arranger-prod",
                 "iat": 1718611200,
                 "exp": 1718611500,
-                "generatedAt": "2026-06-17T10:00:00Z",
+                "generatedAt": 1718611200,
                 "grants": {
                   "COHORT_A": { "role": "member", "categories": ["indigenous"] },
                   "COHORT_B": { "role": "owner",  "categories": [] }
@@ -137,6 +137,16 @@ TTL window for any active user.
 **Load comparison:** a user making 100 requests per minute on a 5-minute TTL triggers 1 Usher
 call instead of 500. The grants computation cost is amortized across the TTL window.
 
+**Default value rationale.** The 5-minute TTL is consistent with short-lived access token
+conventions in OAuth 2.0 deployments and is the upper bound for exposure if a grants token is
+intercepted (the attacker's window is at most 5 minutes, reduced further by push revocation).
+The 30-second poll interval is derived from the worst-case revocation propagation window operators
+should expect in degraded (push-down) conditions. The 60-second grace period is large enough to
+absorb transient network disruptions without false-positive session suspensions, while short
+enough that an adversarial channel silence yields a service disruption rather than a meaningful
+access window. All three are deployment-configurable; deployments handling higher-sensitivity data
+may tighten them.
+
 ---
 
 ## Grant computation pipeline
@@ -194,19 +204,29 @@ A resource absent from the map means the user has no access to it at all. `categ
 means the user has role-level access to uncategorized records only. The plugin derives what to
 filter out by subtracting this list from the full set of sensitive categories in its own config.
 
+`role` values are `member`, `owner`, and `public`. The `public` value is **synthetic**: it is
+assigned by the controller at issuance time for open-tier grants in anonymous tokens and is never
+stored as a membership record in the policy database. A plugin receiving `"role": "public"` should
+treat it as equivalent to the minimum read capability — no management actions, no categorized data
+beyond what `categories` explicitly grants.
+
 **Anonymous token example** (no IdP bearer token; only open resources present):
 ```json
 {
   "sub": null,
+  "iss": "https://usher.example.org",
   "aud": "arranger-prod",
   "iat": 1718611200,
   "exp": 1718611500,
-  "generatedAt": "2026-06-17T10:00:00Z",
+  "generatedAt": 1718611200,
   "grants": {
     "OPEN_COHORT": { "role": "public", "categories": [] }
   }
 }
 ```
+
+`iss` is present in anonymous tokens: the token is still issued by the controller and the bridge
+still validates the `iss` claim. Only `sub` is null; no other standard claims are omitted.
 
 **Authenticated token example** (member of two cohorts, explicit category grant on one):
 ```json
@@ -216,7 +236,7 @@ filter out by subtracting this list from the full set of sensitive categories in
   "aud": "arranger-prod",
   "iat": 1718611200,
   "exp": 1718611500,
-  "generatedAt": "2026-06-17T10:00:00Z",
+  "generatedAt": 1718611200,
   "grants": {
     "COHORT_A": { "role": "member", "categories": ["indigenous"] },
     "COHORT_B": { "role": "owner",  "categories": [] }
@@ -338,6 +358,13 @@ In revocation-uncertain mode:
 connection itself is the liveness signal. A dropped connection that cannot be re-established
 within the grace period is sufficient to trigger revocation-uncertain mode; no separate
 heartbeat is needed.
+
+**Startup behavior.** At bridge startup, no cached tokens exist and the revocation channel is
+not yet established. The bridge must not serve requests until the revocation channel is confirmed
+active: doing so would create a window with no revocation coverage. In practice this means the
+bridge enters a brief initializing state on startup, queuing or rejecting requests until the
+first successful push connection or poll response confirms channel health. The grace period clock
+starts from that point, not from process start.
 
 **The operational trade-off.** Legitimate users are also affected when the revocation channel is
 disrupted. This is a deliberate choice: the threat of an adversary exploiting a blocked revocation
