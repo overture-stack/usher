@@ -62,6 +62,7 @@ documented in `.dev/design/security-threat-model.md`. Security concerns are trea
 design requirements, not afterthoughts.
 
 Key principles:
+
 - Fail-secure: errors in the authorization path must deny, not permit
 - Deny by default: data category access requires explicit grants
 - Fail-open is never acceptable in the authorization or revocation path

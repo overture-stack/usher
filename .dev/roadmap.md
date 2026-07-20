@@ -9,6 +9,15 @@ marked `[in progress]`. Completed items are removed; `.dev/sessions/` is the his
 
 These must be completed or sufficiently resolved before the relevant implementation phase begins.
 
+### System context diagram
+
+An architectural diagram showing how Usher connects to each Overture application and
+infrastructure component: portal-ui, Keycloak, clinical-submission (Lyric), Arranger, and
+the PEP plugins. Should capture data flows (token exchange, grant approval, revocation), trust
+boundaries, and the responsibility of each component. Prerequisite for design review sessions
+with portal-ui and for the Usher ↔ portal-ui API contract to be reviewed meaningfully. See
+`.dev/design/architecture.md` for existing component descriptions.
+
 ### Admin model: open questions
 
 Role taxonomy, OIDC-first identification, bootstrap, self-grant flow, service accounts, and
@@ -37,12 +46,8 @@ Still needed:
 - Role capability definitions: what specific actions does each role permit beyond resource access?
 - Field-level restriction implementation approach (options A-D analysed; recommendation: start with
   A, extend to C; formal choice not yet committed)
-- Category grant scope: always resource-specific, or can a grant span multiple resources?
 - Overlapping cohort access semantics: if a record belongs to cohorts A and B and the user is a
   member of A only, do they see it? (OR vs AND; see permissions-model.md Open questions)
-- Multi-category intersection: does holding individual `controlled` and `indigenous` grants
-  auto-grant access to records tagged with both? (OCAP-sensitive; consult data stewards before
-  deciding; see permissions-model.md Open questions)
 - User groups design: Keycloak sync or PAP-only? Composition when groups overlap? Revocation when
   a user is removed from a group? (entities are placeholders; design not yet done)
 - Data stewardship scoping: `category_steward` capability data model (OCAP prerequisite; must be
@@ -55,6 +60,25 @@ Still needed:
   entry; see permissions-model.md "Category change propagation".
 
 See `.dev/design/permissions-model.md`.
+
+### Cohort registration and Lyric integration
+
+The MVP approach for resource creation is pre-registration: an admin creates the study or cohort
+entity in Usher (owner, stewards, category config, field-value identifier) before any data is
+submitted. Submission of unregistered cohorts is rejected. See `.dev/design/to-discuss.md`
+(Ownership and stewardship section) for the full description.
+
+Design work needed before Lyric integration begins:
+- Service account capability set for Lyric: what it can create or query on behalf of owner-level
+  submitters; see `.dev/design/permissions-model.md` (Ownership assignment section) and
+  `.dev/design/admin-model.md` (service account model)
+- Trust model for the Lyric service account: how Lyric authenticates with Usher, what it can
+  assert about the submitting user, and what it cannot override
+- Self-grant prevention check: must be specified before the grant approval endpoint is built;
+  see `.dev/design/to-discuss.md` (Ownership and stewardship section)
+
+Post-MVP: optional submission-time cohort creation shares the same code foundation as
+pre-registration, making pre-registration "run creation before submission."
 
 ### Plugin integration design
 
@@ -94,6 +118,18 @@ configuration automatically.
 Track evaluation outcome and update the deployment architecture doc accordingly. If adopted,
 this partially addresses the break-glass runbook gap: the Terraform state becomes the audit
 record for IdP configuration changes.
+
+### Usher ↔ portal-ui API contract
+
+The endpoints portal-ui calls, the token format it receives, and the error states it must handle.
+Requested as a design deliverable before portal-ui implementation can begin against a mock.
+Distinct from the general plugin integration contract above: this is the portal-facing surface
+specifically, covering the user-facing flows (access request, token exchange, denied-access
+states) in addition to the shared bridge protocol.
+
+Portal-ui work is blocked on Usher's core grants and multi-owner model being built. This contract
+should be drafted and frozen before that implementation completes so portal-ui can start in
+parallel against a mock. Depends on the system context diagram being completed first.
 
 ### Researcher experience design
 
@@ -285,6 +321,20 @@ in initial scope; the architecture should not preclude it.
 ### Additional IdP connectors
 
 Beyond Keycloak and Azure Entra: other OIDC providers, SAML-based IdPs.
+
+### SQON-scoped grants
+
+An optional `sqon` field on `category_grants` that narrows which records within a category a
+grant covers. Enables governance bodies to approve access to a specific subset of their category
+(e.g. "indigenous records from community X only") rather than the full category within a resource.
+Requires SQON evaluation capability in the bridge: the bridge ANDs the grant's SQON filter into
+the query alongside the category-level filter.
+
+Also enables the post-MVP version of FR-08: sharing a filtered subset of records (a SQON-defined
+cohort) rather than a whole study, with the filter state captured in the grant at share time.
+
+See `.dev/design/permissions-model.md` (Multi-category intersection, resolved section) and
+`.dev/design/decisions.md` (FR-08 section) for design rationale.
 
 ### Security event streaming (Kafka)
 

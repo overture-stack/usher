@@ -99,15 +99,15 @@ header.payload.signature
 
 **Standard claims in a JWT payload:**
 
-| Claim | Meaning |
-|---|---|
-| `sub` | Subject: the unique identifier of the user |
-| `iss` | Issuer: the authorization server that issued the token (Keycloak's URL) |
-| `aud` | Audience: the intended recipient(s) of the token |
-| `exp` | Expiry: a Unix timestamp after which the token must be rejected |
-| `iat` | Issued at: when the token was created |
-| `email`, `name`, etc. | Additional identity claims, set by the IdP |
-| `groups`, `roles`, etc. | Membership claims, set by the IdP from its own user configuration |
+| Claim                   | Meaning                                                                 |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `sub`                   | Subject: the unique identifier of the user                              |
+| `iss`                   | Issuer: the authorization server that issued the token (Keycloak's URL) |
+| `aud`                   | Audience: the intended recipient(s) of the token                        |
+| `exp`                   | Expiry: a Unix timestamp after which the token must be rejected         |
+| `iat`                   | Issued at: when the token was created                                   |
+| `email`, `name`, etc.   | Additional identity claims, set by the IdP                              |
+| `groups`, `roles`, etc. | Membership claims, set by the IdP from its own user configuration       |
 
 Any service receiving a JWT must validate `iss` (expected issuer), `aud` (expected audience), and
 `exp` (not expired) before trusting its contents. Accepting a token without validating these claims

@@ -33,13 +33,13 @@ The permissions model introduced three privileged roles: Admin, Steward, and Own
 
 ## Role taxonomy
 
-| Role | Scope | Primary capability | Holds data access |
-|---|---|---|---|
-| Admin | Platform-wide | Manages all grants, all resources | No; must self-grant explicitly |
-| Steward | One or more data categories | Manages grants for their categories across all resources | No (unless separately granted as a user) |
-| Owner | Their designated resource(s) | Manages grants within their resource; sets visibility policy | Yes; holds member access |
-| Submitter | Their submitted resource | Data provenance; member access to own data | Yes; member access only |
-| Service account | Explicitly enumerated capabilities | Performs system operations only | No |
+| Role            | Scope                              | Primary capability                                           | Holds data access                        |
+| --------------- | ---------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
+| Admin           | Platform-wide                      | Manages all grants, all resources                            | No; must self-grant explicitly           |
+| Steward         | One or more data categories        | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
+| Owner           | Their designated resource(s)       | Manages grants within their resource; sets visibility policy | Yes; holds member access                 |
+| Submitter       | Their submitted resource           | Data provenance; member access to own data                   | Yes; member access only                  |
+| Service account | Explicitly enumerated capabilities | Performs system operations only                              | No                                       |
 
 **Submitter vs. owner:** submission establishes data provenance and gives the submitter
 member access to their own resource. It does not automatically confer management rights.
@@ -363,18 +363,18 @@ The controls below address each step.
 
 Every audit event emitted to stdout must include at minimum:
 
-| Field | Type | Notes |
-|---|---|---|
-| `timestamp` | ISO 8601 | UTC |
-| `event_type` | string | e.g. `GRANT_CREATED`, `GRANT_REVOKED`, `SELF_GRANT_CREATED`, `RESOURCE_LISTED` |
-| `actor_id` | string | `user_id` for humans; `client_id` for service accounts |
-| `actor_type` | `human` or `service_account` | |
-| `resource_id` | string or null | null for platform-wide events |
-| `target_user_id` | string or null | the user affected, if applicable |
-| `action` | string | verb + object, e.g. `create_category_grant` |
-| `outcome` | `success` or `failure` | |
-| `self_grant` | boolean | true only for self-grant events |
-| `categories` | string[] or null | data categories affected, if applicable |
+| Field            | Type                         | Notes                                                                          |
+| ---------------- | ---------------------------- | ------------------------------------------------------------------------------ |
+| `timestamp`      | ISO 8601                     | UTC                                                                            |
+| `event_type`     | string                       | e.g. `GRANT_CREATED`, `GRANT_REVOKED`, `SELF_GRANT_CREATED`, `RESOURCE_LISTED` |
+| `actor_id`       | string                       | `user_id` for humans; `client_id` for service accounts                         |
+| `actor_type`     | `human` or `service_account` |                                                                                |
+| `resource_id`    | string or null               | null for platform-wide events                                                  |
+| `target_user_id` | string or null               | the user affected, if applicable                                               |
+| `action`         | string                       | verb + object, e.g. `create_category_grant`                                    |
+| `outcome`        | `success` or `failure`       |                                                                                |
+| `self_grant`     | boolean                      | true only for self-grant events                                                |
+| `categories`     | string[] or null             | data categories affected, if applicable                                        |
 
 Events must never include grants token payloads, health record identifiers, bearer tokens,
 or any field value that is itself controlled-access data.

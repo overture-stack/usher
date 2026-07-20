@@ -216,6 +216,25 @@ silent. Validation is the responsibility of the management UI and the plugin con
 
 ---
 
+### FR-08: sharing at study level satisfies snapshot sharing without snapshot machinery
+
+FR-08 from the iMS Data Portal UAC BRD requires that a sharing action captures the dataset
+definition at the time of sharing. In a system where the unit of sharing is a study (all records
+in it, including future ones), the "dataset definition" is simply the study identifier. A
+`category_grant` scoped to that resource is the snapshot: it captures which resource was shared
+and when.
+
+No point-in-time record snapshot is needed for MVP. The grant IS the dataset definition. Future
+records added to the study are automatically covered by the existing grant, which is the intended
+behaviour for study-level access.
+
+**What is deferred.** If a future requirement calls for sharing a filtered subset of records at a
+point in time (a SQON-defined cohort rather than a whole study), the grant would need to carry a
+SQON filter expression capturing the filter state at share time. This is the post-MVP SQON-scoped
+grants extension and is explicitly out of scope for the initial implementation.
+
+---
+
 ### Additive grant pipeline with anonymous grants token for open data
 
 A common alternative for open data is to handle unauthenticated requests outside the

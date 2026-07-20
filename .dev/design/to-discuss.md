@@ -153,6 +153,37 @@ and the Steward capability specification should be treated as a named gap.
 
 ---
 
+## Ownership and stewardship
+
+**[HIGH] Self-grant prevention is not specified in the permissions model.**
+The threat model (A01, insider threat note) states that a steward cannot issue a grant to
+themselves. This rule is not specified in `permissions-model.md` or `admin-model.md`. Without an
+explicit check at the PAP layer, a steward could approve their own category access, bypassing the
+intended governance separation. The check must be specified before the grant approval endpoint is
+implemented: the approving steward's identity must be compared against the grantee identity, and
+self-approval must be rejected. The audit log alone (detecting after the fact) is not a sufficient
+control.
+
+**[MEDIUM] Resource visibility suppression and embargo share implementation concerns.**
+The ownership invariant breach state (resource hidden due to no owner) and the embargo mechanism
+(resource hidden until a scheduled date) both suppress resource visibility without changing user
+grants. They are distinct governance reasons for the same technical effect. The implementation
+must not conflate them: a resource in the orphan-hidden state should not be treated as embargoed,
+and lifting the embargo should not restore a resource that is still ownerless. Whether these share
+a single `visibility` state field with typed reasons, or are separate flags, needs a deliberate
+decision before the data model is finalised.
+
+**[MEDIUM] Clinical submission service to Usher relationship is not designed.**
+The category management section of `permissions-model.md` describes cohort-level category
+assignment defaults applied at submission time, but does not specify how the submission service
+(Lyric) communicates cohort existence and category assignments to Usher. Two approaches: (1)
+pre-registration, where an admin creates the resource in Usher before any data is submitted and
+submission is rejected for unregistered cohorts; (2) submission-time creation, where Lyric creates
+the Usher resource as part of the ingest flow. Both have different trust and privilege implications
+for the Lyric service account. The preferred approach for MVP is pre-registration; submission-time
+creation is an optional post-MVP path sharing the same code foundation. Neither is designed in
+detail. This must be resolved before the Lyric integration work begins.
+
 ## Integration and operations
 
 **[HIGH] GA4GH Passport revocation before Visa expiry has no mechanism.**

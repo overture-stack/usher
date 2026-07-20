@@ -19,6 +19,7 @@ See [concepts.md](../../docs/concepts.md) for the PDP/PAP/PEP/PIP roles referenc
 **Role:** Identity provider (IdP). Handles authentication and issues IdP tokens.
 
 **Owns:**
+
 - Authenticating users: password login, SSO, federated institutional login
 - Issuing IdP tokens (JWS access tokens and ID tokens per OIDC)
 - Maintaining the user directory, groups, and coarse-grained role assignments
@@ -27,6 +28,7 @@ See [concepts.md](../../docs/concepts.md) for the PDP/PAP/PEP/PIP roles referenc
 - Exposing public keys so downstream services can verify IdP token signatures
 
 **Does not own:**
+
 - Data access decisions (which records or fields a user may see) → **controller**
 - Data categories, cohorts, or the grant model → **controller** (policy store)
 - Grants token issuance → **controller**; grants token validation and decryption → **bridge**
@@ -42,6 +44,7 @@ Administration Point). The controller is the central service; the bridge is the 
 connects client apps to it.
 
 **Owns:**
+
 - Validating incoming IdP bearer tokens against Keycloak's public keys (and any configured OIDC
   provider)
 - Resolving user grants and memberships from the policy database
@@ -59,6 +62,7 @@ connects client apps to it.
 - Future: management UI (visual PAP interface)
 
 **Does not own:**
+
 - User authentication → **Keycloak**
 - Querying the data layer or executing data queries → the **client app's** own data layer
 - Translating the grants payload into application-native query formats → **plugin**
@@ -75,6 +79,7 @@ period, the bridge raises and blocks all requests (fail-secure, 503) until conne
 restored.
 
 **Owns:**
+
 - Holding the JWE decryption key (provisioned at client app deploy time)
 - Presenting the user's IdP bearer token to the controller's token exchange endpoint
 - Receiving and locally caching the JWE grants token per user
@@ -90,6 +95,7 @@ restored.
   restored
 
 **Does not own:**
+
 - Translating the grants payload into application-native query formats → **plugin**
 - Access decisions (grant existence, category membership) → **controller**; the bridge only
   confirms the token is valid, current, and not revoked
@@ -104,15 +110,17 @@ translates Usher's grants payload into the client app's native query format. Nam
 integration target: `usher-arranger`, `usher-lyric`.
 
 **Owns:**
+
 - Intercepting incoming data requests before they reach the data layer
 - Calling `usher-bridge` to get the current `GrantsPayload` for the requesting user
 - Translating that payload into the application's query filter format:
-  - `usher-arranger`: SQON filter object injected as a server-side filter in Arranger's GraphQL
-    layer
-  - `usher-lyric`: query conditions injected into Lyric's data access layer
+    - `usher-arranger`: SQON filter object injected as a server-side filter in Arranger's GraphQL
+      layer
+    - `usher-lyric`: query conditions injected into Lyric's data access layer
 - Returning 401 or 503 to the caller when `usher-bridge` signals an invalid or uncertain session
 
 **Does not own:**
+
 - Token exchange, grants caching, revocation channel management, or JWE decryption →
   **bridge**
 - Access decisions and grant logic → **controller**
@@ -126,6 +134,7 @@ integration target: `usher-arranger`, `usher-lyric`.
 Not part of Usher itself; described here to complete the picture.
 
 The client app is **stateless with respect to authorization**. It:
+
 - Receives requests from end users carrying an IdP bearer token
 - Delegates all auth decisions to `usher-bridge` and the plugin
 - Has no awareness of the controller, grants tokens, revocation state, or the grant model
@@ -147,6 +156,7 @@ client apps enforce decisions derived from it, without managing that state thems
 **Role:** Authoritative policy store. The source of truth for all policy decisions.
 
 **Stores:**
+
 - Resources, data categories, and their relationships
 - Memberships: which users hold which roles on which resources
 - Category grants: which users hold which category grants, with expiry timestamps
@@ -181,23 +191,23 @@ distributes events; PostgreSQL is the source of truth.
 
 ## Responsibility at a glance
 
-| Responsibility | Keycloak | Controller | Bridge | Plugin |
-|---|---|---|---|---|
-| Authenticate user | ✓ | | | |
-| Issue IdP token | ✓ | | | |
-| Validate IdP token | | ✓ | | |
-| Resolve user grants | | ✓ | | |
-| Issue grants token (JWE) | | ✓ | | |
-| Hold JWE encryption key | | ✓ | | |
-| Hold JWE decryption key | | | ✓ | |
-| Cache grants token | | | ✓ | |
-| Decrypt and expose `GrantsPayload` | | | ✓ | |
-| Validate grants token locally | | | ✓ | |
-| Subscribe to revocation channel | | | ✓ | |
-| Publish revocation events (cross-instance, via Valkey) | | ✓ | | |
-| Dismiss revoked session | | | ✓ | |
-| Raise on controller loss (fail-secure) | | | ✓ | |
-| Translate grants payload to query filters | | | | ✓ |
-| Intercept and filter data requests | | | | ✓ |
-| Manage policy (grants, memberships, categories) | | ✓ | | |
-| Expose management API and future UI | | ✓ | | |
+| Responsibility                                         | Keycloak | Controller | Bridge | Plugin |
+| ------------------------------------------------------ | -------- | ---------- | ------ | ------ |
+| Authenticate user                                      | ✓        |            |        |        |
+| Issue IdP token                                        | ✓        |            |        |        |
+| Validate IdP token                                     |          | ✓          |        |        |
+| Resolve user grants                                    |          | ✓          |        |        |
+| Issue grants token (JWE)                               |          | ✓          |        |        |
+| Hold JWE encryption key                                |          | ✓          |        |        |
+| Hold JWE decryption key                                |          |            | ✓      |        |
+| Cache grants token                                     |          |            | ✓      |        |
+| Decrypt and expose `GrantsPayload`                     |          |            | ✓      |        |
+| Validate grants token locally                          |          |            | ✓      |        |
+| Subscribe to revocation channel                        |          |            | ✓      |        |
+| Publish revocation events (cross-instance, via Valkey) |          | ✓          |        |        |
+| Dismiss revoked session                                |          |            | ✓      |        |
+| Raise on controller loss (fail-secure)                 |          |            | ✓      |        |
+| Translate grants payload to query filters              |          |            |        | ✓      |
+| Intercept and filter data requests                     |          |            |        | ✓      |
+| Manage policy (grants, memberships, categories)        |          | ✓          |        |        |
+| Expose management API and future UI                    |          | ✓          |        |        |

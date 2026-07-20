@@ -178,35 +178,38 @@ disclosed. This is a hard invariant: existence revelation is an information disc
 **Setup:**
 
 Resources and their category assignments:
+
 - `RESOURCE_X` has `data_categories: [indigenous_data]`
 - `RESOURCE_Y` has `data_categories: [open_access, indigenous_data]`
 
 Users and their grants:
+
 - User A: `membership(RESOURCE_X, member)`, no category grants
 - User B: `membership(RESOURCE_X, member)`, `category_grant(indigenous_data, RESOURCE_X)`;
   `membership(RESOURCE_Y, member)`, `category_grant(open_access, RESOURCE_Y)`
 
 Plugin config (Arranger-side; maps category names to Elasticsearch field predicates):
+
 ```
-indigenous_data → { field: "isIndigenous", value: true }
-open_access     → { field: "isRestricted", value: false }
+indigenous_data → { fieldName: "isIndigenous", value: true }
+open_access     → { fieldName: "isRestricted", value: false }
 ```
 
 **Grants token for User A:**
 
 ```json
 {
-  "sub": "user-a",
-  "aud": "example-service",
-  "iat": 1720000000,
-  "exp": 1720000300,
-  "generatedAt": 1720000000,
-  "grants": {
-    "RESOURCE_X": {
-      "role": "member",
-      "categories": []
-    }
-  }
+	"sub": "user-a",
+	"aud": "example-service",
+	"iat": 1720000000,
+	"exp": 1720000300,
+	"generatedAt": 1720000000,
+	"grants": {
+		"RESOURCE_X": {
+			"role": "member",
+			"categories": []
+		}
+	}
 }
 ```
 
@@ -223,21 +226,21 @@ counts, and aggregations.
 
 ```json
 {
-  "sub": "user-b",
-  "aud": "example-service",
-  "iat": 1720000000,
-  "exp": 1720000300,
-  "generatedAt": 1720000000,
-  "grants": {
-    "RESOURCE_X": {
-      "role": "member",
-      "categories": ["indigenous_data"]
-    },
-    "RESOURCE_Y": {
-      "role": "member",
-      "categories": ["open_access"]
-    }
-  }
+	"sub": "user-b",
+	"aud": "example-service",
+	"iat": 1720000000,
+	"exp": 1720000300,
+	"generatedAt": 1720000000,
+	"grants": {
+		"RESOURCE_X": {
+			"role": "member",
+			"categories": ["indigenous_data"]
+		},
+		"RESOURCE_Y": {
+			"role": "member",
+			"categories": ["open_access"]
+		}
+	}
 }
 ```
 
@@ -256,17 +259,19 @@ standard JWT claims, and anonymous token form, see
 With two independent categories `controlled` and `indigenous` mapped to fields `isControlled`
 and `isIndigenous`:
 
-| User's grants | `categories` in token | Visible records |
-|---|---|---|
-| neither | `[]` | `isControlled=false AND isIndigenous=false` only |
-| controlled only | `["controlled"]` | `isIndigenous=false` (open and controlled non-indigenous) |
-| indigenous only | `["indigenous"]` | `isControlled=false` (open and indigenous non-controlled) |
-| both | `["controlled", "indigenous"]` | all records |
+| User's grants   | `categories` in token          | Visible records                                           |
+| --------------- | ------------------------------ | --------------------------------------------------------- |
+| neither         | `[]`                           | `isControlled=false AND isIndigenous=false` only          |
+| controlled only | `["controlled"]`               | `isIndigenous=false` (open and controlled non-indigenous) |
+| indigenous only | `["indigenous"]`               | `isControlled=false` (open and indigenous non-controlled) |
+| both            | `["controlled", "indigenous"]` | all records                                               |
 
 The current visibility rule means holding individual grants for `controlled` and `indigenous`
 separately gives automatic access to the `controlled+indigenous` intersection, because no ungranted
-category remains. Whether this is the intended behaviour is an open question with OCAP implications;
-see Open questions.
+category remains. This is the intended MVP behaviour: per-resource scoping ensures each grant was
+approved by the relevant governance body for that specific resource, so holding both is sufficient.
+SQON-scoped grants (post-MVP) can narrow further within a category if compound-access governance
+requires it. See the resolved question in Open questions.
 
 ---
 
@@ -334,6 +339,7 @@ other users may belong to entirely different groups; group membership is not a p
 receiving a direct grant.
 
 In Usher's model:
+
 - The submitted dataset is a **resource**.
 - A `private` data category is associated with that resource.
 - The submitter holds a `membership` (as Owner or Member) and a `category_grant` for
@@ -367,11 +373,11 @@ grant management flow.
 
 The three management roles:
 
-| Role | Scope | Data access |
-|---|---|---|
-| Admin | All resources; all grants | No; must self-grant explicitly |
+| Role           | Scope                             | Data access                    |
+| -------------- | --------------------------------- | ------------------------------ |
+| Admin          | All resources; all grants         | No; must self-grant explicitly |
 | Steward (OCAP) | One category across all resources | No (unless separately granted) |
-| Owner | Their designated resource(s) only | Yes; holds member access |
+| Owner          | Their designated resource(s) only | Yes; holds member access       |
 
 **Ownership assignment at submission time (resolved).** Lyric can create a cohort and designate
 the submitter as its owner at submission time, if the submitter holds owner-level
@@ -386,6 +392,60 @@ The Lyric service account capability set needs to include cohort creation on beh
 owner-level submitter as a first-class operation, distinct from the basic `CREATE_RESOURCE`
 path. See [admin-model.md](admin-model.md) for the service account model.
 
+### Ownership cascade and invariants
+
+Every resource must have exactly one owner at all times. Ownership is determined by the following
+cascade, applied in order:
+
+1. **Default:** the submitter becomes the owner.
+2. **Manual assignment:** the submitter can designate a different owner at submission time, or
+   transfer ownership afterward.
+3. **Cohort-level config:** a cohort can specify a fixed owner entity (e.g. an institutional
+   account). Whether submitters in that cohort automatically receive stewardship is a separate
+   per-cohort flag.
+4. **Last-steward promotion (safety net):** if all stewards for a resource except one are removed,
+   the remaining steward is automatically promoted to owner. This is a data-integrity backstop, not
+   a routine path.
+
+`submitter` is immutable audit data on the resource record. It records who uploaded the data and
+never changes regardless of ownership transfers. `owner` is a role that can move.
+
+**No-owner invariant.** Operations that would leave a resource without an owner are blocked. If a
+resource becomes ownerless through an abnormal path (data migration, database inconsistency), the
+system must notify the system administrator. The admin may optionally make the resource temporarily
+invisible to consumers without resetting existing grants: consumers who already held access retain
+their grants, but the resource does not appear in results until the invariant is restored. This
+suppression is distinct from embargo or category restrictions; it is a system-level state flag, not
+a change to any user's grants.
+
+**Transfer-before-removal prerequisite.** Removing stewardship from the current owner requires
+transferring ownership to another entity first. This ordering is enforced by the system: ownership
+transfer must complete before stewardship removal is permitted. There is never a window where a
+resource has no owner during a normal stewardship change.
+
+**Atomicity.** An operation is atomic when it either completes entirely or does not happen at all;
+no intermediate state is observable or persisted. In the last-steward promotion case, removing the
+departing steward and promoting the remaining one execute in a single database transaction. If
+anything fails mid-operation, the whole transaction rolls back: the resource always has an owner.
+The transfer-before-removal ordering makes strict atomicity a safety net; in the normal flow,
+ownership is always settled before stewardship changes.
+
+**Config flag.** Whether ownership can be transferred without the current owner's consent
+("ownership stealing") is configurable. The default is that only the current owner can initiate a
+transfer. The config hierarchy:
+
+- Usher-wide default: ownership transfer requires owner consent
+- Per-cohort override: can tighten or loosen relative to the Usher-wide default
+
+When transfer-without-consent is disabled, removing stewardship from the owner becomes impossible
+for non-admins because the prerequisite (ownership transfer) cannot be triggered. The ownership
+config is cohort-level with Usher-wide defaults.
+
+**Admin override.** System administrators can perform ownership transfers regardless of the config
+flag. This is an unconditional capability; the flag restricts regular users and automation, not
+admins. Admin ownership transfers are logged as `admin.override` audit events (see
+[audit-events.md](audit-events.md)).
+
 ### No system-wide access to private data
 
 Private data is private to its resource. There is no role, flag, or capability that grants a user
@@ -397,6 +457,7 @@ a reader of the data that system protects. An administrator who needs to access 
 must be granted access through the standard grant flow, and that grant is auditable.
 
 This separation means:
+
 - Support staff managing permissions cannot read the private data they are granting access to.
 - No "superuser" bypass exists at the Usher layer for reading private records.
 - Any user who can read private data in a resource holds an explicit, traceable grant for it.
@@ -497,6 +558,7 @@ existing users must be handled explicitly.
 Users who are members of the resource but do not hold a grant for the new category will have
 records filtered from their queries at the next grants token refresh. No revocation action is
 needed from the user's side: the filter takes effect automatically. However:
+
 - Affected users must be notified. Silent tightening is unacceptable: a user who received records
   in one query and no longer receives them in the next should understand why.
 - Owners or stewards who want to pre-grant affected users before the change takes effect can do
@@ -568,18 +630,25 @@ before implementation.
 
 ### Multi-category intersection access
 
-The current visibility rule means holding individual grants for `controlled` and `indigenous`
-separately gives automatic access to the `controlled+indigenous` intersection. An earlier design
-iteration (the AuthZ Framework document, 2025) required an explicit grant for the intersection
-separately from the component grants.
+**Resolved for MVP.** Per-resource scoping dissolves the primary concern: a `controlled` grant for
+COHORT_A and an `indigenous` grant for COHORT_A are distinct entity records, each approved by the
+relevant governance body for that specific resource. Holding both within the same resource means
+both bodies have approved access to their respective category within that resource. A record tagged
+with both categories requires both grants to be present, which is the AND-all-categories
+visibility rule already in the model. No special intersection grant is needed.
 
-The stricter interpretation is more OCAP-safe: being approved for "controlled data" and separately
-approved for "indigenous data" does not auto-approve "controlled indigenous data", which may be the
-most sensitive combination and warrant its own governance decision. It also makes the grant model
-more complex.
+The OCAP concern (was each governance body's approval intended to cover the intersection?) is
+addressed by the per-resource scoping: each approval is scoped to the resource, not to a category
+in isolation. A record in that resource tagged with multiple categories requires all corresponding
+approvals.
 
-**Recommend discussing with data stewards and OCAP practitioners before deciding.** The choice
-affects the data model, the management UI, and OCAP compliance posture.
+**Post-MVP extension: SQON-scoped grants.** If a governance body needs to approve access to a
+specific subset of their category (e.g. "indigenous records from community X only"), a grant can
+optionally carry a SQON filter expression that further narrows the records it covers within the
+category. This is a data model extension (an optional `sqon` field on `category_grants`); it
+requires SQON evaluation capability in the bridge and is deferred to post-MVP.
+
+### Category grant scope
 
 ### Role capabilities
 
@@ -589,9 +658,10 @@ rules need to be specified before implementation.
 
 ### Category grant scope
 
-Can a category grant span multiple resources (access to `indigenous_data` across all resources the
-user is a member of), or is it always resource-specific? Resource-specific is simpler and more
-auditable; a broader scope grant would need careful design to avoid unintended access.
+**Resolved.** Category grants are always resource-specific. A grant for `indigenous_data` in
+COHORT_A is a distinct entity from a grant for `indigenous_data` in COHORT_B. This is simpler and
+more auditable; a broader scope grant would require careful design to avoid unintended access and
+complicates OCAP governance (a steward's authority is resource-scoped, not platform-wide).
 
 ### Attribute naming
 

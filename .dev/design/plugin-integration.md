@@ -38,6 +38,7 @@ The lists below summarise the requirements relevant to implementation, including
 captured in the component description.
 
 **Bridge (`usher-bridge`) — shared by all plugins:**
+
 - Hold the JWE decryption key (provisioned at deploy time; key distribution mechanism TBD)
 - Exchange the user's IdP bearer token for a JWE grants token with the controller; for
   unauthenticated requests, perform the exchange with no bearer token to receive an
@@ -49,10 +50,32 @@ captured in the component description.
 - Enter revocation-uncertain mode and return 503 after the grace period
 
 **Plugin (per-app, e.g. `usher-arranger`) — specific to each integration:**
+
 - Intercept incoming requests and extract the user's IdP bearer token
 - Call the bridge to get the `GrantsPayload` for the requesting user
 - Translate the payload into the app's native query filter format
 - TTL, grace period, and poll interval must be configurable per bridge instance
+
+**Logging (shared responsibility between bridge and plugin):**
+
+Usher logs the policy plane: who holds what grants and when that changes. It has no visibility
+into whether a token was used or what data was returned. Access decisions happen at the plugin
+layer and are that application's audit responsibility.
+
+Each plugin must emit structured log entries for:
+
+| Event            | Required fields                                              |
+| ---------------- | ------------------------------------------------------------ |
+| Access permitted | `user_id`, `resource_id`, `categories_in_scope`, `timestamp` |
+| Access denied    | `user_id`, `resource_id`, `reason`, `timestamp`              |
+
+These events must never contain the grants token payload, raw bearer tokens, or health record
+identifiers.
+
+A complete audit trail for a health data access event requires correlating Usher's policy logs
+(permission in place) with the plugin's access logs (permission exercised). Consuming applications
+must ensure their plugin logs are shipped to the same log aggregation infrastructure as Usher's
+logs, with a shared `user_id` field suitable for cross-system correlation.
 
 ---
 
@@ -64,6 +87,7 @@ The bridge holds the JWE decryption key; plugins do not. How is the key provisio
 bridge at client app deploy time?
 
 Options:
+
 - Environment variable at deploy time (simple, but rotation requires redeploy)
 - Fetched from a secrets manager (Vault, AWS Secrets Manager) at startup
 - Issued by the controller itself via a key-exchange endpoint requiring mutual TLS or a bootstrap
