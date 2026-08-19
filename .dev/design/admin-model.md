@@ -56,15 +56,61 @@ grant through the same permissions system that governs all users.
 
 ---
 
+## EGO replacement scope
+
+Usher is a full replacement for EGO, not an integration partner. The migration path for
+EGO-based deployments (primarily iMS):
+
+1. **Resource migration.** Enumerate EGO groups whose names match the `STUDY-<id>` convention.
+   Create one Usher resource per group, mapping the study identifier to the resource's name and
+   metadata.
+2. **Membership migration.** Map EGO group members to Usher memberships. EGO user UUIDs resolve
+   to Keycloak user IDs (both systems use Keycloak-issued UUIDs for the same user population).
+3. **Policy migration.** EGO policies (`STUDY-<id>` policies with `WRITE` permission for the
+   corresponding group) map to Usher category grants. The category in Usher is deployment-specific;
+   the studies management service's implicit "access to this study" becomes an explicit category
+   grant (for example, `registered` or `controlled_access` depending on deployment policy).
+4. **Service retirement.** The studies management service (the orchestration layer over EGO) is
+   retired. Its operations (creating a study group, adding a member, removing a member) become
+   Usher admin API calls.
+5. **Host application migration.** The migration surface is any code that either calls EGO's
+   authorization endpoints or builds request context from EGO-derived claims. Two categories:
+
+   - **Services calling EGO endpoints directly.** Portals and gateway APIs that validate EGO
+     tokens or resolve EGO group memberships before serving requests. These are updated to use
+     Usher's bridge and token exchange. For services that verify tokens by public key (RS256),
+     **key rotation is a required migration step, distinct from code changes**: Keycloak uses its
+     own signing key pair, so the configured public key at each dependent service must be updated
+     to the Keycloak signing key before the first Keycloak-issued token is accepted. A service
+     still configured with EGO's public key will reject all Keycloak-issued tokens at the signature
+     verification step, regardless of any other migration work.
+   - **Authorization callbacks reading EGO-populated context.** Search deployments may currently
+     express authorization by reading EGO claims that a host application placed into request
+     context. That callback code lives in the host application's own repo, not in the data
+     service's repo, and would not appear in any audit of the data service itself. Identify and
+     migrate these in the same pass.
+
+   Data services that embed a Usher plugin without performing any authentication themselves
+   (for example, a search-server deployment relying entirely on host-supplied context) are not
+   in this migration surface as shipped: there is no EGO call to repoint. What requires migration
+   is the host code that constructs that context.
+
+This migration must be planned and coordinated before any EGO infrastructure is deprovisioned.
+
+---
+
 ## Admin: capabilities and constraints
 
 ### Can
 
-- Enumerate all resources (metadata only; see the Admin listing section)
 - Create, view, modify, and revoke memberships and category grants for any user on any resource
+- Create and manage resources (name, description, category assignments)
+- Enumerate all resources (metadata only; see the Admin listing section)
 - View full audit log
 - Register and manage service accounts in Usher (which capabilities a service account holds)
 - Self-grant data access to a specific resource (see the Self-grant section)
+- Query data applications without SQON filters when the PEP plugin is configured to detect and
+  honour the platform admin role (see plugin-level bypass below)
 
 ### Cannot
 
@@ -223,6 +269,32 @@ decision.
 
 ---
 
+## Plugin-level bypass for platform admins
+
+An admin who needs to view data across all resources without a self-grant (for example, a portal
+admin reviewing the full dataset to respond to a governance inquiry) can be accommodated at the
+plugin layer rather than through a grants token entry. The PEP plugin detects the
+`usher-platform-admin` role in the IdP token and applies no SQON filter for that request.
+
+This is distinct from the self-grant flow:
+
+| Mechanism        | How access is obtained                           | Appears in grants token | Appears in audit log            |
+| ---------------- | ------------------------------------------------ | ----------------------- | ------------------------------- |
+| Self-grant       | Admin creates an explicit grant for themselves   | Yes (standard entry)    | Yes (SELF_GRANT_CREATED event)  |
+| Plugin bypass    | Plugin detects admin role; skips SQON filter     | No                      | Yes (plugin access log entry)   |
+
+The plugin bypass does not create any grant record in Usher's policy database; it is a plugin
+implementation decision. Plugins must log every bypass event as an access log entry (user ID,
+timestamp, resource scope, reason: `platform_admin_bypass`). This keeps the access visible in
+the cross-system audit trail even though no Usher grant event fires.
+
+**Deployment option.** The plugin bypass can be disabled per deployment. Deployments that require
+all data access to be grant-based (including admin access) should disable the bypass and require
+admins to use the self-grant flow. This is the more restrictive posture and should be the default
+for PHI deployments.
+
+---
+
 ## Admin API
 
 The admin API is not served through the PEP plugin path. It is a separate surface, authenticated
@@ -230,16 +302,32 @@ by Usher directly: the bearer token is validated and the OIDC admin claim is che
 every request.
 
 ```
+# Resource lifecycle management
 GET    /admin/resources              list all resources (metadata only)
 GET    /admin/resources/{id}         single resource metadata and grant summary
-GET    /admin/resources/{id}/members users who hold grants on this resource
+POST   /admin/resources              create a resource
+PATCH  /admin/resources/{id}         update resource metadata (name, description)
+GET    /admin/resources/{id}/members users who hold memberships on this resource
+POST   /admin/resources/{id}/members add a membership (user ID + role)
+DELETE /admin/resources/{id}/members/{userId}  remove a membership
+
+# Grant management
 GET    /admin/audit                  audit log query interface
-POST   /admin/grants                 create membership or category grant
+POST   /admin/grants                 create a category grant (or resource membership)
 DELETE /admin/grants/{id}            revoke grant
 POST   /admin/grants/self            self-grant endpoint (enforces TTL; sets self_grant flag)
+PATCH  /admin/grants/{id}/accept     grantee acceptance endpoint (transitions awaiting_acceptance -> active)
+
+# Service accounts
 POST   /admin/service-accounts       register a service account
 PUT    /admin/service-accounts/{id}  update service account capabilities
 ```
+
+**Grant acceptance.** `PATCH /admin/grants/{id}/accept` is called by the grantee (not by an
+admin) to confirm acceptance of a category grant in `awaiting_acceptance` state. It transitions
+the grant to `active` and fires a grants token refresh for the user. The endpoint validates that
+the calling user is the grant's grantee. When auto-accept is enabled at the deployment level,
+this step is skipped and grants are written directly as `active`.
 
 **Grants token for admins:** identical in structure to any other grants token.
 It carries no admin flag. If an admin has not self-granted access to a

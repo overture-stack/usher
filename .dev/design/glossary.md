@@ -85,16 +85,41 @@ from Usher's exchange endpoint.
 A single Arranger index configuration, backed by one ES/OS index. One catalogue maps to one Usher
 resource in the plugin config.
 
+**Auto-accept**
+A configurable Usher flag that makes category grants active immediately on creation, skipping the
+awaiting-acceptance state. Off by default; the default flow requires an explicit acknowledgment
+from the grantee. Enable for deployments where explicit acceptance is not operationally
+appropriate (machine-to-machine sharing, internal pipelines). See [permissions-model.md](permissions-model.md).
+
 **Category grant**
 An explicit, logged record allowing a specific user to access records or fields tagged with a
 specific data category within a specific resource. Grants are additive; lacking a grant for a
 category means that category's content is excluded from the user's view. See
 [permissions-model.md](permissions-model.md).
 
-**Cohort**
-The Overture-platform term for a Usher resource. A virtual grouping of data records defined by
-shared characteristics. Unlike Song/Lyric "studies" (one record belongs to exactly one study),
-records can belong to multiple cohorts simultaneously.
+**Cohort** _(data science sense: applied to data, not people)_
+A named partition of data records sharing one or more defining characteristics, identified by a
+field value or filter expression. Usher uses "cohort" exclusively in this data science sense.
+
+The word carries three senses, and they are not separate things: they often describe the same
+real-world situation from different angles. A single genomics study produces all three at once:
+
+| Sense | "The PEDS-2024 cohort" refers to |
+|---|---|
+| Colloquial | The team of researchers who worked on that study |
+| Clinical or epidemiological | The 500 children enrolled and followed over time |
+| **Data science (this sense)** | **Records where `study_id == "PEDS-2024"`** |
+
+The clinical and data science senses correspond closely: the enrolled children generated the
+records that now form the data science cohort. But the lenses diverge at the point of access
+control. In the clinical sense, access to the cohort means access to information about those
+children. In the data science sense, access means the records matching the predicate are visible
+to you. If a record is later re-categorized or withdrawn, the clinical cohort is unchanged; the
+data science cohort changes automatically because the predicate no longer matches.
+
+Usher manages data records, not people or teams. What those records represent is a deployment
+concern, outside the model. See [concepts.md](../../docs/concepts.md) for the extended discussion
+and access composition implications.
 
 **Data category**
 A named access dimension that applies to a subset of records or fields within a resource.
@@ -113,10 +138,27 @@ Resource absent from the token entirely = no access to that resource.
 A user's association with a resource, carrying a role. Membership alone does not grant access to
 categorized content; category grants are required in addition.
 
+**Pending grant**
+A category grant in one of three states before it becomes (or fails to become) active:
+
+- *Pending* : the invitation was sent to an email address belonging to a user who has not yet
+  registered with the platform. The grant is keyed by email address and cannot appear in any
+  grants token until the user registers and the grant is migrated to their Keycloak user ID.
+- *Awaiting acceptance* : the grant was issued to a registered user (keyed by their Keycloak
+  user ID) who has not yet explicitly confirmed they accept the associated data-sharing
+  responsibility. The grant does not appear in the grants token until accepted.
+- *Active* : the grantee has accepted. The grant appears in grants tokens and is enforced by
+  the plugin.
+
+Only active grants appear in the grants token. See [permissions-model.md](permissions-model.md).
+
 **Resource**
 Usher's generic, model-agnostic unit of managed data: a named grouping to which users can be
 granted access. Usher makes no assumptions about what the data is, where it is stored, or what
-schema it follows. In Overture the concrete term is cohort.
+schema it follows. In Overture the concrete term is cohort. Deployments may expose this concept
+under domain-specific names in their management UI: iMS calls it a study; other deployments may
+use project, dataset, or program. Those names are deployment vocabulary; Usher's internal model
+uses "resource" throughout. See "Deployment vocabulary" in [concepts.md](../../docs/concepts.md).
 
 **Role**
 A coarse-grained capability label attached to a membership (for example `member`, `owner`).
@@ -188,6 +230,12 @@ The state a plugin enters when its revocation channel has been silent for longer
 period. All sessions are suspended and requests return 503 until the channel reconnects. This is
 the fail-secure default: uncertainty about revocation status produces denial, not access.
 
+**EGO**
+Overture's previous authorization service (managing users, groups, and policies). Usher is
+EGO's full replacement, not an integration: deployments that adopt Usher retire EGO and the
+studies management service that orchestrated EGO. Existing EGO group data migrates to Usher
+resources and memberships; see [architecture.md](architecture.md).
+
 **Server-side filter** _(Arranger-specific)_
 A SQON filter injected into every Arranger query by the plugin before the query reaches the search
 engine. The primary mechanism for record-level access enforcement in Arranger; derived by
@@ -204,3 +252,19 @@ The call a PEP plugin makes to Usher presenting an IdP bearer token and receivin
 grants token in return. The `audience` parameter identifies the calling service; Usher
 returns a token containing only the resources that service manages. Modelled on OAuth 2.0 Token
 Exchange (RFC 8693). See [plugin-integration.md](plugin-integration.md).
+
+---
+
+## Related Overture services
+
+**SONG**
+Overture's genomic file metadata service. SONG's scope in Usher-adopting deployments is narrowed
+to file-level manifest data: file checksums, donor/sample links, and file object identifiers.
+Resource metadata (cohort membership, category assignments, ownership, grants, and embargo state)
+is Usher's responsibility. Deployments that do not include SONG are unaffected; Usher does not
+depend on SONG.
+
+**Studies management service** _(iMS-specific; retiring)_
+A stateless orchestration layer that maps SONG studies to EGO groups and policies. Its role is
+absorbed by Usher: resource creation, membership management, and category assignment are all
+Usher admin API operations. The studies management service is retired once EGO is replaced.

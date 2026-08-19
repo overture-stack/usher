@@ -144,15 +144,38 @@ in the management UI layer, which is configured per deployment.
 
 **In the Overture context, a resource is a cohort.** This is a deliberate departure from the
 "study" or "project" vocabulary used in other platforms. Those terms carry a silo implication:
-data belongs to one study, and studies do not overlap. Cohorts are a different model: a cohort is
-a grouping of data records defined by shared characteristics, and the same record can belong to
-multiple cohorts simultaneously.
+data belongs to one study, and studies do not overlap. Cohorts are a different model.
 
-Concretely: a patient's genomic sample might belong to a "rare disease" cohort and a "pediatric"
-cohort at the same time. Those cohorts overlap; they are not separate containers. The venn-diagram
-framing is the right mental model. A researcher granted access to the "rare disease" cohort sees
-its records; a researcher granted access to the "pediatric" cohort sees its records; a researcher
-granted access to both sees the intersection too.
+**What "cohort" means here.** The word carries three common senses, and they are not
+three separate things: they often describe the same real-world situation from different angles.
+A single genomics study produces all three at once:
+
+| Sense | "The PEDS-2024 cohort" refers to |
+|---|---|
+| Colloquial | The team of researchers who worked on that study |
+| Clinical or epidemiological | The 500 children enrolled and followed over time |
+| **Data science (this sense)** | **Records where `study_id == "PEDS-2024"`** |
+
+The clinical and data science senses correspond closely: the enrolled children generated the
+records that now form the data science cohort. Usher uses "cohort" in the data science sense
+because it manages data records, not people or teams.
+
+The two senses diverge precisely at the point of access control. In the clinical sense, access to
+a cohort implies access to information about those people — the subjects are the unit. In the data
+science sense, access means the records matching the predicate are visible to you. If a record is
+later re-categorized or withdrawn, the clinical cohort is unchanged; the data science cohort
+changes automatically because the predicate no longer matches. What those records represent is
+your deployment's concern, outside Usher's model.
+
+A cohort in Usher is not a fixed list of enrolled subjects. It is a named slice of your dataset:
+the same record can satisfy the predicates of multiple cohorts simultaneously, and which cohorts
+a record belongs to is determined by its own field values, not by a separate enrollment step.
+
+Concretely: a genomic sample record might fall into a "rare-disease" cohort (because
+`disease_type == "rare"`) and a "paediatric" cohort (because `age_at_diagnosis < 18`) at the
+same time. Those cohorts overlap; they are not separate containers. A researcher granted access to
+the "rare-disease" cohort sees its records; one granted access to the "paediatric" cohort sees
+its records; one granted access to both sees the intersection too.
 
 This affects how the access model composes when records belong to multiple cohorts. If a record
 belongs to cohort A and cohort B, and a user is a member of cohort A only, should they see that
@@ -494,6 +517,62 @@ sessions resume when Usher is reachable again without requiring re-authenticatio
 intentional: the threat of an adversary blocking the revocation channel to keep a compromised
 session alive is more serious than the inconvenience of a brief service interruption for
 legitimate users.
+
+---
+
+## Deployment vocabulary vs Usher model vocabulary
+
+Usher's model uses generic terms throughout: resource, membership, category grant. This is
+deliberate: the same authorization model applies to any domain, regardless of what that domain
+calls the things it protects.
+
+In practice, every deployment will have its own name for what Usher calls a "resource":
+
+| Deployment | What they call it | Usher model term |
+|---|---|---|
+| iMS (iMicroSeq) | study | resource |
+| OHCRN | project | resource |
+| A clinical trial registry | cohort | resource |
+| A biobank | collection | resource |
+
+These domain-specific names appear in:
+- The management UI's labels (configured per deployment)
+- The plugin's field mapping config (for example, `fieldName: "study_id"` tells the iMS plugin
+  which field identifies records as belonging to a given resource)
+- User-facing documentation for that deployment
+
+They do not appear in Usher's API responses, entity schema, audit records, or internal logic.
+Usher always uses "resource." Domain terms are a presentation layer concern.
+
+**The iMS example.** In iMS, a "study" is a set of records where a specific field (`study_id`)
+shares a common value. A researcher is "in" a study if they have a Usher membership in the
+corresponding resource. When iMS's Arranger plugin is configured with `fieldName: "study_id"`,
+a resource named `PEDS-2024` corresponds to records where `study_id == "PEDS-2024"`. Usher
+never knows about `study_id`; that mapping lives entirely in the plugin config.
+
+This is why Usher's replacement of the studies management service does not introduce a
+"study" concept into Usher's model. The studies management service used `STUDY-<id>` as a
+naming convention to encode domain vocabulary in EGO group names. Usher does not replicate that:
+resources have IDs and names, and what those names mean is up to the deployment.
+
+---
+
+## SONG's narrowed role
+
+In Overture deployments that include both Usher and SONG:
+
+- **Usher** owns resource metadata: which resources exist, their names and descriptions, which
+  data categories apply to them, who holds memberships, and who holds category grants.
+- **SONG** owns file metadata: file checksums, donor/sample identifiers, file object paths, and
+  the links between files and the biological entities they describe.
+
+Prior to Usher, SONG's study records were the authoritative source of what resources existed.
+The studies management service read SONG to discover studies, then created corresponding EGO
+groups. Usher inverts this: Usher is the authoritative source. SONG file records reference Usher
+resource IDs, not the other way around.
+
+Deployments without SONG are fully supported. Usher has no SONG dependency and does not call
+SONG's API.
 
 ---
 

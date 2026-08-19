@@ -235,6 +235,130 @@ grants extension and is explicitly out of scope for the initial implementation.
 
 ---
 
+### Accept/decline invitation flow is the default; auto-accept is configurable
+
+When a category grant is created for a registered user, the default behaviour is that the grant
+enters an *awaiting-acceptance* state: the grantee must explicitly confirm they accept
+data-sharing responsibility before the grant becomes active and appears in their grants token.
+This is distinct from older designs where grant creation immediately activated access.
+
+The reasoning: researchers may not want to hold responsibility over data they did not request, and
+accepting access to health data carries legal and ethical obligations in many jurisdictions. Silent
+activation removes the grantee's ability to make an informed decision.
+
+A configurable `auto-accept` flag (name TBD) bypasses the acceptance step for deployments where
+it is not operationally appropriate (machine-to-machine sharing, internal pipelines, or any case
+where all parties are institutional accounts rather than individual researchers). The flag is off
+by default across all deployments.
+
+Grants sent to an unregistered email address enter the *pending* state (not awaiting-acceptance)
+and remain pending until the user registers. On registration, pending grants are migrated to
+awaiting-acceptance under the user's Keycloak user ID, then follow the standard acceptance flow.
+
+**Tradeoffs accepted.** The acceptance step adds friction to the sharing workflow. This is
+intentional: the friction is the point. Deployments that cannot tolerate it have the auto-accept
+option; deployments handling PHI should leave auto-accept off.
+
+---
+
+### EGO is replaced, not integrated
+
+Usher is the full replacement for EGO (Overture's previous authorization service). The
+integration strategy considered (running Usher alongside EGO and having both manage grants)
+is not adopted. EGO uses a different data model (groups and policies) that does not align cleanly with
+Usher's resource/membership/category-grant model; maintaining both simultaneously doubles the
+failure surface and creates policy synchronization risk with no long-term benefit.
+
+The replacement strategy: enumerate EGO's `STUDY-*` groups, map each to a Usher resource, and
+map EGO group memberships to Usher memberships. The studies management service (which orchestrated
+EGO) is retired; its operations become Usher admin API calls. Backend services in iMS that
+currently call EGO's authorization endpoints are updated to use Usher's bridge and token exchange.
+
+**Tradeoffs accepted.** A full replacement requires a migration event and a coordinated cutover
+for iMS backend services. This is harder than an incremental integration but avoids indefinite
+operational complexity from running two authorization systems.
+
+---
+
+### User IDs (Keycloak subject) as primary identifier; email for pending grants only
+
+Usher uses the Keycloak user ID (the `sub` claim from the OIDC token) as the primary identifier
+for memberships, category grants, audit records, and all API interactions involving registered
+users. Email addresses are not used as identifiers in any active grant or membership record.
+
+The reasoning: user IDs are opaque identifiers with no intrinsic meaning. An email address
+leaked in a token or log exposure reveals PII; a Keycloak UUID reveals nothing without access to
+the IdP. Email addresses can also change; subject IDs are stable for the lifetime of the account.
+
+Email is used in exactly one place: the `pending_grants` entity, where a grant has been sent to
+an address that belongs to a user who has not yet registered. Once the user registers, the pending
+grant is migrated to their Keycloak user ID and the email reference is discarded.
+
+Any portal or consumer-facing feature that needs to display a user's name or email (for example,
+a "shared with me" listing) resolves that information via the Keycloak admin API at the portal
+layer, not by storing email in Usher's policy tables.
+
+**Tradeoffs accepted.** The portal layer bears responsibility for email-to-ID resolution and
+display. This is a deliberate separation: Usher is an authorization service, not a directory.
+
+---
+
+### Usher is the resource lifecycle management layer
+
+Usher's scope extends beyond authorization decisions to owning the full lifecycle of the resources
+it protects: creation, metadata management, membership assignment, category association, visibility
+policy (embargo, orphan state), and retirement.
+
+Previously, a separate "studies management service" handled this orchestration on top of EGO.
+Absorbing those responsibilities into Usher eliminates the orchestration layer and makes Usher the
+single source of truth for resource metadata. Downstream services (Arranger, Lyric) reference
+Usher resource IDs; they do not maintain their own resource registries.
+
+This scope is intentionally generic: Usher manages "resources," not "studies." What a resource
+represents (a study, a dataset, a project, a programme) is a deployment concern expressed through
+the management UI's labelling and the plugin's field mapping config. The core model is the same
+regardless.
+
+**Tradeoffs accepted.** Usher must provide a resource management API surface in addition to its
+authorization API. This expands the implementation scope but removes an entire service from the
+deployment topology.
+
+---
+
+### SONG is file metadata only; Usher owns resource metadata
+
+SONG's role in Usher-adopting deployments is narrowed to file-level manifest data: file
+checksums, donor/sample links, and file object identifiers. SONG is not a source of truth for
+resource metadata (cohort names, category assignments, ownership, or membership).
+
+Previously, the studies management service used SONG as the authoritative record of which studies
+existed. This created a dependency on SONG for authorization decisions, and excluded deployments
+that do not run SONG. Usher owns resource metadata instead: when a resource is created (either by
+an admin or by the Lyric service account at submission time), Usher is the record of that
+resource's existence, name, and category assignments.
+
+Deployments that include SONG use it for its original purpose (file manifests and genomic
+metadata) and Usher for access control. Deployments without SONG are fully supported; Usher has
+no SONG dependency.
+
+---
+
+### "Study" and other domain terms are deployment vocabulary
+
+Usher's model uses generic terms: resource, membership, category grant. Domain-specific vocabulary
+(study, cohort, dataset, project, program) appears only in deployment configuration and management
+UI labelling.
+
+In iMS, what a user calls a "study" maps to a Usher resource where the plugin config identifies
+records using `fieldName: "study_id"`. The string "study" appears in the iMS portal UI and in
+the Arranger plugin configuration; it does not appear in Usher's entity schema or API responses.
+
+This is a deliberate inversion of the EGO/studies-management-service model, where "study" was a
+first-class concept embedded in group names (`STUDY-<id>`) and service logic. Making the model
+generic means Usher can serve deployments with different domain vocabulary without code changes.
+
+---
+
 ### Additive grant pipeline with anonymous grants token for open data
 
 A common alternative for open data is to handle unauthenticated requests outside the

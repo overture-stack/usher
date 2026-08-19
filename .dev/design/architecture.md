@@ -12,6 +12,50 @@ See [concepts.md](../../docs/concepts.md) for the PDP/PAP/PEP/PIP roles referenc
 
 ---
 
+## System scope: Usher as resource lifecycle management layer
+
+Usher's responsibility extends beyond authorization decisions to owning the full lifecycle of the
+resources it protects. This scope is a deliberate expansion from the original "authorization
+service" framing and replaces two components from the previous Overture stack:
+
+### EGO (replaced)
+
+EGO was Overture's previous combined identity and authorization service. It managed users, groups,
+and access policies. Usher replaces EGO's authorization responsibilities entirely; Keycloak (the
+IdP already deployed alongside EGO) handles the identity responsibilities.
+
+EGO is deprovisioned once the migration is complete. See [admin-model.md](admin-model.md) for the
+migration steps.
+
+### Studies management service (retired)
+
+The studies management service was a stateless orchestration layer specific to iMS. It mapped SONG
+studies to EGO groups and policies, and exposed a simplified API for resource membership
+management. All of its operations are absorbed by Usher:
+
+| Studies management service operation | Usher equivalent                              |
+| ------------------------------------ | --------------------------------------------- |
+| Create study group in EGO            | `POST /admin/resources`                       |
+| Add user to study group              | `POST /admin/resources/{id}/members`          |
+| Remove user from study group         | `DELETE /admin/resources/{id}/members/{userId}` |
+| List study members                   | `GET /admin/resources/{id}/members`           |
+| Create EGO policy for study          | Implicit: resource creation creates the access scope |
+
+The service is retired once Usher's resource management API is live and migrated data is verified.
+
+### SONG (narrowed role)
+
+SONG remains in the deployment but its role is narrowed to file-level manifest data: file
+checksums, donor/sample links, and file object identifiers. SONG is no longer the source of truth
+for resource metadata (cohort existence, category assignments, membership, or grants). Usher owns
+that metadata.
+
+Deployments that do not include SONG are fully supported; Usher has no dependency on SONG.
+
+---
+
+---
+
 ## Components
 
 ### Keycloak

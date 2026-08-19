@@ -136,6 +136,14 @@ scripts are permitted to do with the audit table.
 
 ## Permissions and roles
 
+**[INFO] Overlapping cohort semantics are moot for iMS but remain open for generic deployments.**
+In iMS, each submitted sample receives a unique identifier and a distinct `study_id` value. A
+record in iMS belongs to exactly one resource; cohort overlap is structurally impossible under
+the current data model. Neither OR nor AND semantics produces a different result for iMS. The
+question remains open for generic Usher deployments where records can satisfy membership
+predicates of more than one resource simultaneously. Do not close this item until a non-iMS
+deployment requires a concrete decision.
+
 **[MEDIUM] Steward scope: one category vs. one or more — inconsistent across documents.**
 `permissions-model.md` role table says "Steward: one category across all resources."
 `admin-model.md` role table and `concepts.md` both say "one or more data categories."
@@ -173,6 +181,32 @@ and lifting the embargo should not restore a resource that is still ownerless. W
 a single `visibility` state field with typed reasons, or are separate flags, needs a deliberate
 decision before the data model is finalised.
 
+**[MEDIUM] Guardian-to-subject stewardship transfer on age of majority is not designed.**
+When data is submitted for a minor subject, the legal guardian holds stewardship over that
+resource. When the subject reaches the age of majority, their right to govern their own data
+supersedes the guardian's authority. No flow exists for transferring stewardship in this case.
+
+Several design questions are open:
+
+- **Trigger:** Is the transfer initiated by the guardian, by the now-adult subject, or by a
+  platform admin acting on a legal notification? A time-based automatic trigger requires Usher
+  to know the subject's date of birth, which it probably should not store.
+- **Subject identity:** At submission time the subject has no Usher presence. When they reach
+  adulthood and want to claim their data, they must establish an IdP identity and link it to the
+  correct resource. The linkage mechanism is not designed.
+- **Guardian refusal:** If the guardian does not initiate a transfer and the subject is now of
+  age, what recourse does the subject have? This is a legal question, but the platform must have
+  an admin-mediated path to honour a valid legal claim.
+- **Jurisdiction:** Age of majority varies by jurisdiction. The platform must either take a
+  conservative stance (lowest applicable age) or make this a deployment configuration.
+- **OCAP intersection:** If the subject is a First Nations member, community data sovereignty
+  interests (held by the nation, not the individual) may coexist with the individual's newly
+  acquired personal data rights. These do not automatically resolve in the same direction.
+
+This flow shares the same stewardship transfer mechanism as ordinary ownership handoffs but has
+unique trigger and identity-establishment steps. It should be designed before Usher handles
+any paediatric dataset.
+
 **[MEDIUM] Clinical submission service to Usher relationship is not designed.**
 The category management section of `permissions-model.md` describes cohort-level category
 assignment defaults applied at submission time, but does not specify how the submission service
@@ -185,6 +219,32 @@ creation is an optional post-MVP path sharing the same code foundation. Neither 
 detail. This must be resolved before the Lyric integration work begins.
 
 ## Integration and operations
+
+**[MEDIUM] Audit log noise from vulnerability scanners and automated probes needs a tagging mechanism.**
+Automated vulnerability scanners and pentesting tools will hammer Usher's auth endpoints with
+probing requests, flooding the audit log with failed-auth events that are not genuine incidents.
+Without a mitigation, real anomalies are buried in scanner noise, defeating the monitoring
+purpose of the log.
+
+The correct approach is tag-and-route, not suppression. Suppressing scanner traffic entirely
+undermines OWASP A09 and creates an exploitable blind spot: an attacker added to the ignorelist
+hides all their activity. The design should:
+
+- Maintain a configurable source list (IP ranges, API key prefixes, user agent patterns) marking
+  known scanner or pentesting traffic.
+- Tag matching requests in the log record (e.g. `source_type: "scanner"`) rather than dropping
+  them.
+- Route tagged events to a separate log stream or lower severity tier so they do not trigger
+  real-time alerts.
+- Treat the source list itself as a policy change: additions and removals must be logged as
+  auditable events and require admin authorization.
+
+This was identified from a real incident: a WordPress application's firewall began generating
+high-volume automated probes that spammed its security monitoring with false positives. Building
+log-noise management in from the start avoids retrofitting it later.
+
+Must be decided before the audit logging implementation begins: the tagging field and routing
+logic affect the event schema and the log aggregation pipeline configuration.
 
 **[HIGH] GA4GH Passport revocation before Visa expiry has no mechanism.**
 When a DAC withdraws approval, the corresponding `ControlledAccessGrants` Visa stops being

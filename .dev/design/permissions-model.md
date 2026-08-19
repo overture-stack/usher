@@ -138,15 +138,76 @@ database schema design item in the roadmap.
 users                  (id, idp_subject, email, display_name)
 user_groups            (id, name, description)
 user_group_members     (user_id, group_id)
-resources              (id, name, description)
+resources              (id, name, description, created_by, created_at, updated_at)
 roles                  (id, name)
 data_categories        (id, name, description)
 resource_categories    (resource_id, data_category_id)
 memberships            (user_id, resource_id, role_id)
 group_memberships      (group_id, resource_id, role_id)
-category_grants        (user_id, data_category_id, resource_id, granted_by, granted_at, expires_at)
+category_grants        (user_id, data_category_id, resource_id, granted_by, granted_at, expires_at, status)
 group_category_grants  (group_id, data_category_id, resource_id, granted_by, granted_at, expires_at)
+pending_grants         (id, email, data_category_id, resource_id, granted_by, granted_at, expires_at)
 ```
+
+**User identifier discipline.** `users.id` is the Keycloak subject (`sub` claim from the OIDC
+token). It is the only user identifier used in `memberships`, `category_grants`, audit records,
+and all API surfaces. `users.email` is stored for display purposes only and is never used as a
+lookup key. The one exception is `pending_grants`, which is keyed by email address for grants
+sent to users who have not yet registered.
+
+**`category_grants.status`** tracks the acceptance state: `awaiting_acceptance` or `active`. A
+grant created while auto-accept is enabled is written directly as `active`. When auto-accept is
+off (the default), the grant is written as `awaiting_acceptance` and does not appear in grants
+tokens until the grantee explicitly accepts. See the pending grant state machine below.
+
+**`pending_grants`** stores invitations sent to email addresses that do not yet correspond to a
+registered user. When the user registers and their Keycloak account is created, the IdP
+registration event triggers a lookup of `pending_grants` by email; matching rows are migrated to
+`category_grants` with status `awaiting_acceptance` under the user's Keycloak ID. The original
+`pending_grants` row is deleted after migration.
+
+---
+
+## Pending grant state machine
+
+A category grant passes through the following states before becoming active. The state applies to
+grants for individual users; group grants do not have an acceptance step (groups are managed by
+admins, not self-selected by individual users).
+
+```
+[admin creates grant for unregistered email]
+  -> pending_grants (keyed by email)
+     |
+     | [user registers; IdP event triggers migration]
+     v
+  awaiting_acceptance (category_grants, status = awaiting_acceptance)
+     |
+     | [grantee confirms acceptance via portal flow]
+     v
+  active (category_grants, status = active)
+     |
+     | [admin revokes, or expires_at fires]
+     v
+  [removed / revocation propagates]
+```
+
+When auto-accept is enabled:
+
+```
+[admin creates grant for registered user]
+  -> active (category_grants, status = active; no awaiting_acceptance step)
+```
+
+**What each state means for grants token issuance:**
+
+- `pending` (in `pending_grants`): never appears in any grants token. The user has no grants
+  token entry for this resource/category until they register.
+- `awaiting_acceptance`: never appears in a grants token. The user sees no content change; they
+  can view the pending invitation through the portal but have no access to the categorized data.
+- `active`: included in the grants token at the next token exchange. The plugin enforces access.
+
+**State transitions are audited.** Each transition (creation, acceptance, migration from pending,
+revocation) produces an audit log entry.
 
 ---
 
@@ -252,7 +313,7 @@ exclusion set `[indigenous_data]`. User B sees only non-indigenous records in `R
 
 The token examples above use the canonical `grants` map structure. For the full token schema,
 standard JWT claims, and anonymous token form, see
-[security-workflow.md — Token structure](security-workflow.md#token-structure).
+[security-workflow.md: Token structure](security-workflow.md#token-structure).
 
 ### Composition across categories
 
@@ -599,11 +660,20 @@ acceptable depends on the deployment's precision requirements. A background job 
 embargo grants and explicitly firing the revocation channel is the clean fix; it is not yet
 designed.
 
-**Default visibility.** The iMS requirement is: data is public by default unless the submitter
-sets an embargo. This inverts Usher's deny-by-default principle for uncategorized data (an
-uncategorized resource is visible to all members). The resolution: "public" and "private" are both
-explicit category choices at submission time, not Usher's global default. The submission service
-(Lyric) assigns the appropriate category at ingest; Usher enforces it.
+**Default visibility.** The framing "data is public by default unless the submitter sets an
+embargo" describes the current iMS production dataset for existing submissions only; it is not
+the intended permanent model. The intended model: access level (who can read, under what conditions)
+is defined per submission, at submission time or afterwards by an authorized administrator or owner.
+Future submissions will carry explicit access restrictions, not just an embargo toggle on
+otherwise-public data.
+
+In Usher's model this is consistent with deny-by-default: a newly created resource has no grants
+until the submission service (Lyric) creates the appropriate membership and category grants at
+ingest. "Open access," "embargoed," and "restricted" are all explicit access-level choices set
+at submission time, not a global default. Usher enforces whatever the submission service assigns.
+
+Enforcement must exist at both the submission layer (Lyric) and the retrieval layer (Arranger);
+gating only one leaks through the other. See [plugin-integration.md](plugin-integration.md).
 
 ---
 
@@ -624,9 +694,16 @@ but not cohort B, and a record belongs to both:
 - **AND semantics:** the user does not see the record (membership in all cohorts it belongs to is
   required). Aligns with deny-by-default; more conservative.
 
+**iMS context (does not close the general question).** In iMS, each submitted sample receives a
+unique identifier and a distinct `study_id` value. A record in iMS belongs to exactly one study;
+cohort overlap is impossible under the current data model. The OR/AND question is therefore moot
+for iMS implementations: since records do not overlap across resources, neither semantic produces a
+different result. The question remains open for generic deployments where records can satisfy the
+membership predicate of more than one resource simultaneously.
+
 For iMS private data sharing (where `private` is the primary access gate), OR semantics may be
 acceptable if categories are the real enforcement mechanism. The question needs a deliberate answer
-before implementation.
+before the first deployment where cohort overlap is structurally possible.
 
 ### Multi-category intersection access
 
@@ -666,7 +743,7 @@ complicates OCAP governance (a steward's authority is resource-scoped, not platf
 ### Attribute naming
 
 The top-level map name (`grants`) and the per-resource fields (`role`, `categories`) are settled;
-see [security-workflow.md — Token structure](security-workflow.md#token-structure) for the
+see [security-workflow.md: Token structure](security-workflow.md#token-structure) for the
 canonical schema and worked examples. The remaining open question is field-level restriction
 representation: attribute names for field restrictions (if included in the token at all) are not
 yet decided. See [plugin-integration.md](plugin-integration.md).
@@ -686,6 +763,50 @@ The grant model extends to write operations: a grant governing write access woul
 plugin in Lyric to enforce which records or fields a user is permitted to submit or modify. The
 data model shape is clear; the Lyric plugin design is not. Deferred until Lyric integration is in
 scope.
+
+### Write vs read access
+
+Does write access confer read access? In the submission flow, write access is currently gated by
+organizational affiliation: the submitter's `context.scope` entries determine which organizations
+they may submit on behalf of. When a resource is created at submission time, the open question is
+whether that submission event automatically creates read grants for the submitter, creates
+restricted read access (membership only, no category grants), or creates no read access at all.
+
+Three options with meaningfully different implications, particularly for consent-constrained data:
+
+1. **Submitter reads own submissions.** Submission creates a membership and full category grants
+   for the submitter on the resource. Write access automatically grants read access. Simple for
+   the common case; problematic when data is submitted on behalf of a community or patient where
+   the submitter may not hold data access consent -- a community liaison submitting on behalf of
+   an Indigenous community does not automatically have consent to read individual members' records.
+
+2. **Organizational membership grants read access.** All submitters in an organization can read
+   records submitted by anyone in that organization. The organizational boundary is the read
+   access unit. Wider automatic read surface area; may be appropriate for institutional cohorts
+   but not for mixed or individual-consent data.
+
+3. **No automatic read access.** Write access and read access are independently governed.
+   Submission creates a resource registration and a provenance record, but does not create any
+   Usher grants. Read access requires an explicit grant through the standard category grant flow.
+   Most restrictive; most aligned with OCAP and consent-constrained scenarios; adds friction for
+   the common case where submitters need to verify their submitted data.
+
+This decision affects: the Lyric service account model (what Usher operations does the service
+account perform at submission time?); the entity schema (does submission create `membership` and
+`category_grants` rows, or only a resource registration?); and whether the submitter's Keycloak
+`sub` is available at submission time to bind those grants to a specific user.
+
+**Note on identifier availability.** Current submission tokens carry `context.user.email` but not
+`context.user.sub`. If option 1 or 2 requires creating grants bound to a specific user at
+submission time, the Keycloak `sub` must be present in the token the submission service forwards.
+This is a token schema change that must be coordinated with the IdP migration.
+
+**Current state (iMS submission service).** Read authorization is not implemented: GET requests
+bypass auth middleware entirely, `allowedReadOrganizations` is hardcoded empty, and read
+controllers have no per-organization check. This is a confirmed implementation gap, not a
+deliberate design choice. References:
+[submission-service tech-debt](https://github.com/imicroseq/submission-service/blob/a7b6439aa420801939ab6190c75ff6de1ad6d8f9/.dev/tech-debt.md#L27-L29);
+[ego-integration-current-state.md](https://github.com/imicroseq/submission-service/blob/main/.dev/docs/auth/ego-integration-current-state.md).
 
 ### Data stewardship scoping
 
