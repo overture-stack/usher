@@ -24,7 +24,7 @@ For each category: how it applies to Usher, which design choices address it, and
 
 ---
 
-### A01 — Broken Access Control
+### A01: Broken Access Control
 
 **Why this is Usher's primary concern.** Usher exists to prevent broken access control. Every
 architectural decision in this system is, directly or indirectly, a response to A01.
@@ -53,25 +53,25 @@ architectural decision in this system is, directly or indirectly, a response to 
   Denied category names are absent from the token entirely; no information is leaked if the token
   were ever readable. See [permissions-model.md](permissions-model.md).
 
-**PHR-specific insider threat note:** Stewards hold meaningful privilege: the ability to approve
-and revoke category grants for their assigned category. A compromised or rogue steward can
+**PHR-specific insider threat note:** Custodians hold meaningful privilege: the ability to approve
+and revoke category grants for their assigned category. A compromised or rogue custodian can
 silently escalate access for colluders or suppress access for legitimate users without triggering
 a technical access control failure. In a health data context this is not a hypothetical; insider
 threats and account compromise are among the most common causes of health data breaches.
 
 | Design choice                                                                                                                          | Addresses                                                               |
 | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Steward scope is category-bounded: a steward can only act on grants for their assigned category within their authorized resources      | Limits blast radius of a compromised or rogue steward                   |
-| A steward cannot issue a grant to themselves                                                                                           | Prevents direct privilege escalation via the steward role               |
-| All steward actions are logged with actor identity, target, resource, category, and timestamp (see [audit-events.md](audit-events.md)) | Makes rogue steward actions detectable and forensically reconstructable |
-| System admin can revoke any steward role regardless of deployment config                                                               | Enables rapid response to a compromised or rogue steward                |
-| Bulk grant operations above a configurable threshold are alertable                                                                     | Primary detection signal for a rogue steward acting at scale            |
+| Custodian scope is category-bounded: a custodian can only act on grants for their assigned category within their authorized resources      | Limits blast radius of a compromised or rogue custodian                   |
+| A custodian cannot issue a grant to themselves                                                                                           | Prevents direct privilege escalation via the custodian role               |
+| All custodian actions are logged with actor identity, target, resource, category, and timestamp (see [audit-events.md](audit-events.md)) | Makes rogue custodian actions detectable and forensically reconstructable |
+| System admin can revoke any custodian role regardless of deployment config                                                               | Enables rapid response to a compromised or rogue custodian                |
+| Bulk grant operations above a configurable threshold are alertable                                                                     | Primary detection signal for a rogue custodian acting at scale            |
 
-**Gap:** Self-grant prevention (a steward cannot add themselves as a grantee for their own category) is not yet specified in [permissions-model.md](permissions-model.md).
+**Gap:** Self-grant prevention (a custodian cannot add themselves as a grantee for their own category) is not yet specified in [permissions-model.md](permissions-model.md).
 
 ---
 
-### A02 — Security Misconfiguration
+### A02: Security Misconfiguration
 
 Usher has several configuration points that, if set incorrectly, degrade security. Defaults must
 be safe; misconfiguration must fail loudly, not silently.
@@ -95,7 +95,7 @@ be safe; misconfiguration must fail loudly, not silently.
 
 ---
 
-### A03 — Software Supply Chain Failures
+### A03: Software Supply Chain Failures
 
 Usher depends on JWT/JWE libraries and an IdP client. These are part of the attack surface.
 
@@ -110,7 +110,7 @@ should be established before the first release.
 
 ---
 
-### A04 — Cryptographic Failures
+### A04: Cryptographic Failures
 
 Grants tokens carry authorization policy for personal health data. Cryptographic strength is
 non-negotiable.
@@ -135,7 +135,7 @@ non-negotiable.
 
 ---
 
-### A05 — Injection
+### A05: Injection
 
 Usher constructs queries against its own database and against IdP APIs. Plugins translate
 grants payloads into app-native queries (SQON, SQL, etc.).
@@ -154,7 +154,7 @@ parameterized application of grants payload data. See [plugin-integration.md](pl
 
 ---
 
-### A06 — Insecure Design
+### A06: Insecure Design
 
 This document, and the design folder as a whole, is the primary mitigation for insecure design:
 documenting intent and threat model before writing code surfaces blind spots while they are cheap
@@ -174,7 +174,7 @@ tested against the question: "what does an adversary gain if this decision is wr
 
 ---
 
-### A07 — Authentication Failures
+### A07: Authentication Failures
 
 Usher delegates authentication to the IdP but must validate what it receives strictly.
 
@@ -195,7 +195,7 @@ Usher delegates authentication to the IdP but must validate what it receives str
 
 ---
 
-### A08 — Software or Data Integrity Failures
+### A08: Software or Data Integrity Failures
 
 Usher's authorization decisions depend on the integrity of its policy store and the grants
 tokens it issues.
@@ -215,7 +215,7 @@ tokens it issues.
 
 ---
 
-### A09 — Security Logging and Alerting Failures
+### A09: Security Logging and Alerting Failures
 
 In a PHR context, the audit log is not optional. It is a legal and ethical requirement.
 
@@ -224,10 +224,10 @@ In a PHR context, the audit log is not optional. It is a legal and ethical requi
 | Every authorization decision (allowed or denied) should be logged: user identity, resource, data categories in scope, timestamp, decision | Provides the audit trail required for health data governance and breach investigation |
 | Every revocation event logged: who triggered it, scope, timestamp                                                                         | Enables forensic reconstruction of access control changes                             |
 | Revocation-uncertain mode transitions must be logged and alertable                                                                        | Makes attempted revocation channel suppression observable                             |
-| All stewardship assignment and removal events logged: actor, target, resource, category, timestamp                                        | Enables detection of unauthorized stewardship changes                                 |
+| All custodianship assignment and removal events logged: actor, target, resource, category, timestamp                                        | Enables detection of unauthorized custodianship changes                                 |
 | All ownership transfer events logged: actor, from-owner, to-owner, resource, timestamp                                                    | Enables forensic reconstruction of the ownership chain                                |
 | Admin overrides of config-disabled operations logged: actor, operation, timestamp                                                         | Makes admin power use auditable; prevents silent override                             |
-| Bulk grant operations above a configurable threshold logged and alertable                                                                 | Primary detection signal for a rogue steward acting at scale                          |
+| Bulk grant operations above a configurable threshold logged and alertable                                                                 | Primary detection signal for a rogue custodian acting at scale                          |
 | Logs must never contain the grants token payload, health record identifiers, or raw bearer tokens                                         | Prevents the audit log from becoming a secondary sensitive data exposure              |
 | Structured log format (JSON)                                                                                                              | Parseable by log aggregators; prerequisite for effective monitoring and alerting      |
 
@@ -239,13 +239,13 @@ The full catalogue of auditable events, required fields per event, and severity 
 - Audit log storage, retention policy, and queryability are not yet designed. Health data contexts
   may require specific minimum retention periods. See [management-ui.md](management-ui.md).
 - Alerting thresholds (e.g. repeated access denials for the same user, bulk grant operations by a
-  single steward, unusual revocation frequency) are not yet defined.
-- Self-grant prevention (a steward cannot approve a grant for themselves) is not yet specified;
+  single custodian, unusual revocation frequency) are not yet defined.
+- Self-grant prevention (a custodian cannot approve a grant for themselves) is not yet specified;
   without it, audit logging is the only control against direct privilege escalation.
 
 ---
 
-### A10 — Mishandling of Exceptional Conditions
+### A10: Mishandling of Exceptional Conditions
 
 | Design choice                                                                                             | Addresses                                                                                             |
 | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -268,13 +268,13 @@ The full catalogue of auditable events, required fields per event, and severity 
 
 | Category                        | Status                                                                                 |
 | ------------------------------- | -------------------------------------------------------------------------------------- |
-| A01 — Broken Access Control     | Core design addresses key vectors; field-level and plugin enforcement not yet designed |
-| A02 — Security Misconfiguration | Principles established; IdP validation and key distribution details not yet designed   |
-| A03 — Supply Chain Failures     | Principles noted; dependency policy not yet established                                |
-| A04 — Cryptographic Failures    | JWE approach specified; algorithm selection and key rotation not yet designed          |
-| A05 — Injection                 | Usher-side: to be enforced at implementation; plugin-side: open design gap             |
-| A06 — Insecure Design           | Addressed by the existence of this threat model and the design-first approach          |
-| A07 — Authentication Failures   | Delegation to IdP is specified; IdP-unavailable behaviour not yet designed             |
-| A08 — Data Integrity Failures   | Token tamper-evidence specified; DB integrity controls not yet designed                |
-| A09 — Logging and Alerting      | Requirements stated; storage, retention, and alerting not yet designed                 |
-| A10 — Exceptional Conditions    | Fail-secure specified; DB-unavailable and API error format not yet designed            |
+| A01: Broken Access Control     | Core design addresses key vectors; field-level and plugin enforcement not yet designed |
+| A02: Security Misconfiguration | Principles established; IdP validation and key distribution details not yet designed   |
+| A03: Supply Chain Failures     | Principles noted; dependency policy not yet established                                |
+| A04: Cryptographic Failures    | JWE approach specified; algorithm selection and key rotation not yet designed          |
+| A05: Injection                 | Usher-side: to be enforced at implementation; plugin-side: open design gap             |
+| A06: Insecure Design           | Addressed by the existence of this threat model and the design-first approach          |
+| A07: Authentication Failures   | Delegation to IdP is specified; IdP-unavailable behaviour not yet designed             |
+| A08: Data Integrity Failures   | Token tamper-evidence specified; DB integrity controls not yet designed                |
+| A09: Logging and Alerting      | Requirements stated; storage, retention, and alerting not yet designed                 |
+| A10: Exceptional Conditions    | Fail-secure specified; DB-unavailable and API error format not yet designed            |

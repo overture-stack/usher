@@ -115,11 +115,14 @@ is a common security error.
 
 **Signed vs encrypted.** The Keycloak-issued tokens described above are signed ([JWS](concepts.md#jws-json-web-signature-signed-jwt)): anyone with
 the public key can read the payload, and the signature proves the token was issued by Keycloak and
-has not been modified. Usher's [grants tokens](concepts.md#grants-tokens) are encrypted ([JWE](concepts.md#jwe-json-web-encryption-encrypted-jwt)): only the intended recipient
-(the enforcement plugin) can read the payload. This distinction matters because users forward their
-access token with every request; if it were encrypted, they could not use it as a bearer credential.
-The grants token is different: it contains the user's grants, which they should not be able to
-read. See [concepts.md](concepts.md#jwts-signed-jws-vs-encrypted-jwe) for the full treatment.
+has not been modified. Usher's [grants tokens](concepts.md#grants-tokens) are encrypted ([JWE](concepts.md#jwe-json-web-encryption-encrypted-jwt)): only the intended
+recipient can read the payload.
+
+Why the two differ comes down to who carries them. A user forwards their access token with every
+request, so it has to stay readable to be usable as a bearer credential. A grants token is never
+carried by a user. It goes from Usher to the service holding the data, which is the only party that
+needs to read it, so encrypting it costs nothing and buys per-application key separation. See
+[concepts.md](concepts.md#jwts-signed-jws-vs-encrypted-jwe) for the full treatment.
 
 > **Authoritative reference:** [jwt.io](https://jwt.io/) (interactive debugger and introduction)
 > and [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519).
@@ -148,7 +151,7 @@ is what Usher handles.
 Access control systems consistently separate the same three responsibilities. These roles appear
 in the Usher design and are worth knowing before reading the design documents:
 
-- **[PDP](concepts.md#pdp-policy-decision-point) (Policy Decision Point):** the service that answers "what can this user see?" Given a
+- **[PDP](concepts.md#pdp-policy-decision-point) (Policy Decision Point):** the service that answers "what can this user see or do?" Given a
   validated identity, it consults the policy store and returns a decision or set of constraints.
   Usher is the PDP.
 - **[PEP](concepts.md#pep-policy-enforcement-point) (Policy Enforcement Point):** the component that enforces the decision. It intercepts data

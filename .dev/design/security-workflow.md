@@ -8,13 +8,13 @@ used here. See [security-threat-model.md](security-threat-model.md) for the full
 10:2025 mapping.
 
 **Primary OWASP categories addressed here:**
-- **A01 — Broken Access Control:** server-side enforcement, short-lived tokens, emergency
+- **A01 Broken Access Control:** server-side enforcement, short-lived tokens, emergency
   revocation, fail-secure on revocation channel disruption.
-- **A04 — Cryptographic Failures:** JWE (encrypted, not just signed), TLS on all channels,
+- **A04 Cryptographic Failures:** JWE (encrypted, not just signed), TLS on all channels,
   no sensitive claims in logs.
-- **A07 — Authentication Failures:** strict IdP token validation (`aud`, `iss`, `exp`, scope),
+- **A07 Authentication Failures:** strict IdP token validation (`aud`, `iss`, `exp`, scope),
   delegation to established IdP infrastructure.
-- **A10 — Exceptional Conditions:** fail-secure failure mode; 503 (unavailable) on uncertain
+- **A10 Exceptional Conditions:** fail-secure failure mode; 503 (unavailable) on uncertain
   revocation state, not 200 or 401.
 
 ---
@@ -53,8 +53,8 @@ User --IdP JWT--> App (with usher-bridge + plugin / PEP)
                 "exp": 1718611500,
                 "generatedAt": 1718611200,
                 "grants": {
-                  "COHORT_A": { "role": "member", "categories": ["indigenous"] },
-                  "COHORT_B": { "role": "owner",  "categories": [] }
+                  "COHORT_A": [{"open":["view"]}, {"indigenous":["view"]}],
+                  "COHORT_B": [{"open":["view","download"]}]
                 }
               }
                         |
@@ -91,10 +91,15 @@ caused per-request auth service crashes in prior deployments.
 JWT libraries. No custom token infrastructure is needed, and any security engineer can audit the
 implementation against a published standard.
 
-**The decryption key** is a shared secret provisioned to each bridge instance at deploy time. It
-is not the user's key; users never have it. The key distribution mechanism (how the bridge
-receives and rotates this key securely) is a deployment concern not yet designed; see
-[plugin-integration.md](plugin-integration.md).
+**The decryption key is per-application, and there is no shared secret.** Both candidate key-wrap
+algorithms are asymmetric: the controller holds each application's public key and wraps the content
+encryption key to it, so only that application's bridge instances can unwrap it. Onboarding an
+application is a public-key registration rather than a secret distribution, and no bridge can
+decrypt another application's token. This is what makes the `aud` claim a cryptographic boundary
+rather than a claim-level assertion. Users never hold any of these keys.
+
+Which of the two algorithms is used, and how private keys are provisioned and rotated, remain open;
+see [decisions.md](decisions.md) and [plugin-integration.md](plugin-integration.md).
 
 ---
 
@@ -158,17 +163,23 @@ within it.
 
 ### Tiers
 
-**1. Open grants (always computed, for all users including anonymous)**
+**1. Baseline grants, from the anonymous role (computed for every caller, authenticated or not)**
 
-Any resource marked as open data contributes a grant entry for that resource. No IdP token is
-required. An unauthenticated request produces a grants token containing only open-tier grants.
+A deployment defines an **anonymous role** whose grants are the floor for every principal. Resources
+marked as open data contribute grant entries according to it, and no IdP token is required, so an
+unauthenticated request produces a token carrying exactly the anonymous role's grants.
+
+**A deployment may set the anonymous role to grant nothing**, in which case unauthenticated callers
+receive an empty grant set and even open data requires registration. Whether open means publicly
+readable or registration-gated therefore becomes a deployment decision rather than a property of
+this design. Every authenticated caller's grants are this baseline together with their own, since
+the baseline is a floor rather than an alternative.
 
 **2. Registered grants (computed if an authenticated IdP token is present)**
 
 For authenticated users, the controller resolves their membership records and adds grants for
-every resource where the user holds a membership with a `registered` or higher tier role.
-`categories: []` in the token means member access with no category grants — the user sees
-uncategorized records only.
+every resource where the user holds a membership with a `registered` or higher tier role, which
+resolves to grants on those resources' open categories.
 
 **3. Controlled grants (computed for authenticated users with explicit category grants)**
 
@@ -183,7 +194,7 @@ omitted.
   whether the user is anonymous, a basic member, or a full-access researcher. The plugin
   translates the `grants` map into its query format; tiers are invisible to it.
 - **Universal audit log.** Because even anonymous access triggers a token exchange, every data
-  access — open or controlled — appears in Usher's audit log with the token's `generatedAt`
+  access, open or controlled, appears in Usher's audit log with the token's `generatedAt`
   timestamp and computed grants. Open data access is not invisible.
 - **Consistent fail-secure.** The bridge's revocation channel and fail-secure mode apply to all
   tokens, including anonymous ones. A revocation of open access (resource taken offline,
@@ -191,24 +202,45 @@ omitted.
 
 ### Token structure
 
-The `grants` object in the token payload is a map keyed by resource ID. Each entry carries:
+The `grants` object in the token payload is a map keyed by resource ID. Each entry is a **list of
+category grants**, each naming one category and the capabilities held on it:
 
 ```json
-"RESOURCE_ID": {
-  "role":       "member | owner | public",
-  "categories": ["category-a", "category-b"]
-}
+"RESOURCE_ID": [ { "open":       ["view", "download"] },
+                 { "controlled": ["view"] } ]
 ```
 
-A resource absent from the map means the user has no access to it at all. `categories: []`
-means the user has role-level access to uncategorized records only. The plugin derives what to
-filter out by subtracting this list from the full set of sensitive categories in its own config.
+**The entries are independent grants, not conditions on one another.** Holding two means holding
+both, so the holder reaches what either admits plus their overlap, and holding more never reaches
+less. The list corresponds to rows in the grant store: one entry, one act of granting.
 
-`role` values are `member`, `owner`, and `public`. The `public` value is **synthetic**: it is
-assigned by the controller at issuance time for open-tier grants in anonymous tokens and is never
-stored as a membership record in the policy database. A plugin receiving `"role": "public"` should
-treat it as equivalent to the minimum read capability — no management actions, no categorized data
-beyond what `categories` explicitly grants.
+**Every capability is category-scoped, including on unrestricted data.** A resource's open portion
+is a category like any other, named in a grant like any other. There is no separate resource-level
+capability list, and no baseline sitting outside the category system, because a baseline is what the
+superseded subtractive model needed and additive rendering does not. Every record a caller reaches is
+reached through a grant that names why.
+
+This is also what makes tier differences expressible: an anonymous caller may hold
+`{ "open": ["view"] }` where a registered one holds `{ "open": ["view", "download"] }`, on the same
+resource and the same category.
+
+**A resource absent from the map is unreachable, and there is no empty-list case.** Any access to a
+resource means holding at least one grant on it, so an empty list would mean the same thing as
+absence. One state to enforce rather than two that had to be told apart. The consequence accepted
+deliberately is that **categories are not optional**: a resource carrying none is ungrantable,
+because a grant has nothing to name.
+
+The plugin builds its filter additively: a positive clause naming the resources whose configured
+categories the entries cover. A resource carrying a category no entry names contributes no clause and
+is therefore invisible.
+
+**No role name travels in the token.** A role is how access is authored, not how it is enforced: the
+controller resolves a role to the capabilities it confers at issuance, so a plugin tests capability
+membership and never has to learn what a deployment means by `member`. Ownership is absent for a
+second reason, being a management capability that Usher's own API enforces rather than any plugin.
+
+The capability vocabulary is not settled beyond `view` and `download`, which are what the portal
+distinguishes. Completing it is the permission-assignment work in the RABAC alignment note.
 
 **Anonymous token example** (no IdP bearer token; only open resources present):
 ```json
@@ -220,7 +252,7 @@ beyond what `categories` explicitly grants.
   "exp": 1718611500,
   "generatedAt": 1718611200,
   "grants": {
-    "OPEN_COHORT": { "role": "public", "categories": [] }
+    "OPEN_COHORT": [ { "open": ["view"] } ]
   }
 }
 ```
@@ -238,8 +270,8 @@ still validates the `iss` claim. Only `sub` is null; no other standard claims ar
   "exp": 1718611500,
   "generatedAt": 1718611200,
   "grants": {
-    "COHORT_A": { "role": "member", "categories": ["indigenous"] },
-    "COHORT_B": { "role": "owner",  "categories": [] }
+    "COHORT_A": [ { "open": ["view", "download"] }, { "indigenous": ["view"] } ],
+    "COHORT_B": [ { "open": ["view", "download"] } ]
   }
 }
 ```

@@ -1,7 +1,7 @@
 # Usher: Design Index
 
 Usher is a standalone authorization service for the Overture platform. It answers "what is this
-user allowed to see?" and returns structured grants that each Overture application enforces.
+user allowed to see or do?" and returns structured grants that each Overture application enforces.
 It is not an authentication service; that job belongs to the identity provider (Keycloak, Azure
 Entra, etc.).
 
@@ -51,7 +51,13 @@ responsibilities belong to usher-bridge vs the plugin), then
 | [decisions.md](decisions.md) | Tools reviewed before building; architectural decisions with rationale | reference |
 | [plugin-integration.md](plugin-integration.md) | Per-app plugin design, bridge library (`usher-bridge`) | not started |
 | [management-ui.md](management-ui.md) | Access management UI (PAP layer) | not started |
+| [audit-events.md](audit-events.md) | Policy-plane event catalogue, common fields, severity mapping | specced |
 | [to-discuss.md](to-discuss.md) | Design gaps, inconsistencies, and security properties requiring resolution before implementation | review |
+
+**This table is kept complete by a count, not by a read.** A document added to this directory is
+reachable while someone links it and unreachable the moment nobody does, and no sweep starting from
+this table can find what the table omits. `audit-events.md` sat here unlisted for weeks while being
+normative for the audit requirements. Compare the directory listing against the rows.
 
 **Security standard:** OWASP Top 10:2025. Usher may handle personal health information; the
 threat model and design are calibrated accordingly. See
@@ -69,7 +75,7 @@ with explicit rationale for each design decision.
 data category grants), grant composition semantics, the cohort overlap model, OCAP compliance
 considerations, the iMS private data sharing use cases, and GA4GH Passport integration. Not yet
 designed: role capability definitions, the field-level restriction implementation choice, user
-groups detail, data stewardship scoping, and write permissions for Lyric. See
+groups detail, custodianship scoping, and write permissions for Lyric. See
 [permissions-model.md](permissions-model.md).
 
 **Not yet started:** How app plugins are built and configured, how the decryption key is distributed
@@ -89,7 +95,7 @@ cross-application implications and should not be resolved by a single developer 
 |---|---|---|
 | Overlapping cohort access semantics: if a record belongs to cohorts A and B and a user is a member of A only, do they see it? (OR vs AND) | [permissions-model.md](permissions-model.md) | Core grants resolution |
 | Multi-category intersection: does holding `controlled` and `indigenous` grants separately auto-grant access to records tagged with both? | [permissions-model.md](permissions-model.md) | OCAP compliance posture; data model |
-| Data stewardship scoping: how is a `category_steward` capability stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; OCAP deployments |
+| Custodianship scoping: how is a `category_custodian` capability stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; OCAP deployments |
 | User groups design: Keycloak sync or PAP-only? Grant composition across overlapping groups? Revocation when a user leaves a group? | [permissions-model.md](permissions-model.md) | Core data model; management UI |
 | JWE algorithm selection: AES-256-GCM for content; RSA-OAEP or ECDH-ES for key wrap? | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |
 | Role capability definitions: what actions does each role permit beyond resource access? | [permissions-model.md](permissions-model.md) | Constraint resolution; management UI |
@@ -98,13 +104,22 @@ cross-application implications and should not be resolved by a single developer 
 | "List all users" capability: scoped-to-resource direction agreed; global directory requires deliberate PHI decision | [admin-model.md](admin-model.md) | Admin API design |
 | Break-glass emergency access: deployment runbook procedure when all admins are unavailable | [admin-model.md](admin-model.md) | Deployment runbook |
 
-## Why we are building Usher rather than adopting an existing tool
+## What Usher builds, and what it can adopt
 
-See [decisions.md](decisions.md) for the full evaluation, including what each reviewed tool
-contributed to the design. In summary: Cerbos (closest match architecturally) produces binary
-allow/deny decisions and has no management UI; OPA is a general-purpose policy engine whose
-evaluation model does not fit a grant-data-lookup use case, though its partial evaluation concept
-directly influenced the grants token design; Cerbos Hub is commercial SaaS. The combination of
-structured grants output, a built-in management UI, IdP abstraction, and per-app plugin
-integration makes the scope specific enough that these tools would be adapters rather than
-foundations.
+See [decisions.md](decisions.md) for the full evaluation of each tool reviewed.
+
+**Usher is a grant administration and delivery layer, not a policy engine.** What it owns is the
+grant lifecycle (records with an origin, an expiry and an audit trail), an interface a non-engineer
+can administer them through, delegated custodianship for community-governed categories, a push
+revocation channel that fails secure, and per-application plugins that apply a decision in the
+application's own query language.
+
+**The evaluation step inside it is a candidate for an existing engine.** Producing a filter
+describing what a principal may reach is something Cerbos does from its query planner and the
+Zanzibar-derived systems answer as a resource lookup, so this is the one layer where adopting rather
+than building is a live question. The counter-argument is the one recorded against OPA: where the
+policy is the grant record, an engine that evaluates conditions over attributes has little to
+evaluate, and the work becomes feeding grant data in so it can be read back out.
+
+**No engine displaces Keycloak.** A policy decision point holds no accounts and performs no
+authentication, so Keycloak remains the identity provider under every option considered here.

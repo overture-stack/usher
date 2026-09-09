@@ -26,7 +26,7 @@ the computation itself.
 **PEP (Policy Enforcement Point)**
 The component that intercepts requests and enforces the access decision at the point of data
 access. In Overture, each application has its own PEP implemented as a plugin. The PEP does not
-decide — it enforces what the PDP computed. See [plugin-integration.md](plugin-integration.md).
+decide: it enforces what the PDP computed. See [plugin-integration.md](plugin-integration.md).
 
 **PEP plugin**
 An app-specific library built on `usher-bridge` that translates the grants payload into the
@@ -45,7 +45,7 @@ when it is not.
 ## Tokens and claims
 
 **Audience**
-The target service for which a grants token is issued — for example, a specific Arranger
+The target service for which a grants token is issued, for example a specific Arranger
 instance. A token is scoped to one audience; Usher includes only the resources managed by that
 audience in the token, keeping the token focused and the plugin's job simple. Modelled on the
 `aud` claim in OAuth 2.0 Token Exchange (RFC 8693).
@@ -82,8 +82,9 @@ from Usher's exchange endpoint.
 ## Policy model entities
 
 **Catalogue** _(Arranger-specific, used in design examples)_
-A single Arranger index configuration, backed by one ES/OS index. One catalogue maps to one Usher
-resource in the plugin config.
+A single Arranger index configuration, backed by one ES/OS index. One catalogue holds records
+belonging to many Usher resources. The plugin config names the field whose value identifies which
+resource a record belongs to, per catalogue.
 
 **Auto-accept**
 A configurable Usher flag that makes category grants active immediately on creation, skipping the
@@ -169,10 +170,12 @@ categories they can access.
 
 ## Admin roles
 
-**Steward**
+**Custodian**
 A user with grant-management rights over one or more data categories across all resources, without
 holding full admin rights. Required for OCAP-compliant deployments where community-level
 data sovereignty must be delegated to community representatives rather than held by platform staff.
+Called a custodian rather than a steward because the business requirements already use
+"Data Steward" for the resource owner.
 See [permissions-model.md](permissions-model.md).
 
 **Owner**
@@ -213,7 +216,7 @@ suspending all user sessions.
 **Open access**
 A data tier in which records require no authentication. The controller issues an anonymous grants
 token (no IdP bearer required); bridge and plugin handle it identically to an authenticated token.
-See [security-workflow.md — Grant computation pipeline](security-workflow.md#grant-computation-pipeline).
+See [security-workflow.md § Grant computation pipeline](security-workflow.md#grant-computation-pipeline).
 
 **Revocation**
 The invalidation of a user's access, recorded as a `revoked_at` timestamp in Usher's database.

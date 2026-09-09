@@ -15,7 +15,7 @@ mapping.
 
 ## Overview
 
-The permissions model introduced three privileged roles: Admin, Steward, and Owner. This document specifies them fully. It covers:
+The permissions model introduced three privileged roles: Admin, Custodian, and Owner. This document specifies them fully. It covers:
 
 - Role taxonomy and what each role can and cannot do
 - How Usher identifies and validates admin status (OIDC-first; no Usher-managed admin
@@ -35,8 +35,8 @@ The permissions model introduced three privileged roles: Admin, Steward, and Own
 
 | Role            | Scope                              | Primary capability                                           | Holds data access                        |
 | --------------- | ---------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
-| Admin           | Platform-wide                      | Manages all grants, all resources                            | No; must self-grant explicitly           |
-| Steward         | One or more data categories        | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
+| Admin           | Platform-wide, policy plane        | Manages roles, resources and system configuration            | None standing; may self-grant explicitly |
+| Custodian       | One or more data categories        | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
 | Owner           | Their designated resource(s)       | Manages grants within their resource; sets visibility policy | Yes; holds member access                 |
 | Submitter       | Their submitted resource           | Data provenance; member access to own data                   | Yes; member access only                  |
 | Service account | Explicitly enumerated capabilities | Performs system operations only                              | No                                       |
@@ -47,10 +47,10 @@ Ownership is an optional, per-resource designation: some submitters are also own
 others are not. An Owner need not be the submitter. See permissions-model.md "Submitters and
 owners" for the full model and the open question on assignment timing.
 
-A user may hold more than one role independently. An Owner can also be a steward
+A user may hold more than one role independently. An Owner can also be a custodian
 for an unrelated category; those roles are independent and neither implies the other.
 
-Admins and stewards are privileged actors whose operations touch the policy
+Admins and custodians are privileged actors whose operations touch the policy
 store. Neither role grants data access automatically: that requires a separate, explicit, logged
 grant through the same permissions system that governs all users.
 

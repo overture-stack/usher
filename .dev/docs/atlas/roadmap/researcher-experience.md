@@ -4,7 +4,7 @@ Three UX decisions must be made before researcher-facing documentation can be wr
 
 ## Access request workflow
 
-When a researcher needs access to categorized data, how do they initiate the request? Options: a self-service form in the management UI reviewed by a Steward or Admin; an external DAC integration via REMS or GA4GH Passport; or an out-of-band process (institutional or email). The in-product request flow is not yet designed. Prerequisite to the researcher journey documentation, and related to the DACO-style approval workflows in Future scope (DACO is about ethics-review-gated access specifically; this covers the general grant request path).
+When a researcher needs access to categorized data, how do they initiate the request? Options: a self-service form in the management UI reviewed by a Custodian or Admin; an external DAC integration via REMS or GA4GH Passport; or an out-of-band process (institutional or email). The in-product request flow is not yet designed. Prerequisite to the researcher journey documentation, and related to the DACO-style approval workflows in Future scope (DACO is about ethics-review-gated access specifically; this covers the general grant request path).
 
 ## Denied access user experience
 

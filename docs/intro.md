@@ -32,7 +32,7 @@ Several patterns have emerged for solving selective data access at platform scal
 
 ### Separating the decision from the enforcement
 
-A central service holds the access policy and answers "what can this user see?" on request. Each application, or a [plugin](concepts.md#pep-policy-enforcement-point) within it, enforces that answer at the point of data access. The [decision service](concepts.md#pdp-policy-decision-point) makes no data queries; the application makes no policy decisions.
+A central service holds the access policy and answers "what can this user see or do?" on request. Each application, or a [plugin](concepts.md#pep-policy-enforcement-point) within it, enforces that answer at the point of data access. The [decision service](concepts.md#pdp-policy-decision-point) makes no data queries; the application makes no policy decisions.
 
 This separation keeps policy consistent across applications and auditable in one place. Applications can be updated independently of the policy service, and adding a new application to the platform does not require re-implementing the policy logic.
 
@@ -46,7 +46,7 @@ This is easier to audit and reason about: the full set of a user's access rights
 
 The decision service needs to deliver its answer to the application in a form the application can verify but the end user cannot tamper with or read. A short-lived [encrypted token](concepts.md#jwe-json-web-encryption-encrypted-jwt) is a common approach: issued by the decision service, decrypted locally by the application, and opaque to the user making the request.
 
-Opacity matters. If a user can read the constraints applied to their session, they can probe for what they are not permitted to see and potentially craft queries to bypass enforcement.
+Opacity matters, though not for the reason it might seem. The token never reaches a browser. It travels from Usher to the service holding the data, and is decrypted there. Encryption buys two things: each application gets its own key, so a token issued for the wrong one fails to decrypt instead of being quietly honoured; and grant contents stay out of logs, error reports and traces.
 
 The token is cached for a short window so most requests do not require a round-trip to the decision service.
 
@@ -62,17 +62,19 @@ If the revocation channel is disrupted, the safe response is to stop serving dat
 
 Usher is Overture's [authorization](concepts.md#authentication-vs-authorization) service. It implements the decision/enforcement separation, explicit grant model, encrypted token delivery, and revocation channel described above.
 
-**Resources and categories** are Usher's units of access control. A resource is a named grouping of data (a cohort, a study, an index, or any other logical unit defined by the deployment). A category is a named access dimension, also defined by the deployment. What categories mean, and how they map to actual records or fields, is configuration that lives in the application's enforcement plugin. Usher is not aware of the underlying data or its schema.
+**Resources and categories** are Usher's units of access control. A resource is a named grouping of data (a cohort, a study, an index, or any other logical unit defined by the deployment). A category is a named access dimension, also defined by the deployment. What a category means is configuration held by the application's enforcement plugin. In v1 a category attaches to a resource rather than to individual records, so a resource is visible or it is not. Usher never sees the underlying data or its schema.
 
 **Grants** are explicit records: this user holds access to this category within this resource. Usher enforces deny-by-default. No grant means no access, always.
 
-**[The grants token](concepts.md#grants-tokens)** is Usher's encrypted answer to the question "what can this user see?" It contains the categories the user holds grants for within each resource the requesting application manages. The application's plugin decrypts it locally and applies it as a filter on every query before the query reaches the data layer. Users cannot read the token's contents.
+**[The grants token](concepts.md#grants-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It contains the categories the user holds grants for within each resource the requesting application manages. A shared library called the bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The plugin then applies that decision before any query reaches the data layer. The token never reaches the user.
 
-**The revocation channel** is a push notification stream (SSE or WebSocket) backed by a poll endpoint. Active plugins subscribe; Usher emits on any grant change. If the channel is silent for longer than a configurable grace period, the plugin suspends access and returns 503 until connectivity is restored.
+**The revocation channel** keeps a live connection open so Usher can announce a grant change immediately, with regular polling as a fallback if that connection drops. Each bridge subscribes to it.
+
+If the channel goes quiet for longer than a configurable grace period, the bridge stops serving data and reports itself unavailable until the connection returns. That is deliberate: an attacker who silences the channel gains nothing, because silence denies access rather than preserving it.
 
 **Usher does not touch the underlying data.** It does not write to the data store, run migrations, or modify records. Access policy is applied at query time by the plugin. A deployment can adopt Usher without touching the data it protects, and removing it leaves no data artefacts behind.
 
-**Community data governance.** For deployments where a specific community holds data sovereignty rights over their contributed data, Usher's **Steward** role enables a community representative to govern grants for their data categories independently of platform administrators. See [Concepts](concepts.md#privileged-roles) for the Steward and Admin roles.
+**Community data governance.** For deployments where a specific community holds data sovereignty rights over their contributed data, Usher's **Custodian** role enables a community representative to govern grants for their data categories independently of platform administrators. See [Concepts](concepts.md#privileged-roles) for the Custodian and Admin roles.
 
 ---
 
@@ -82,8 +84,8 @@ Usher is Overture's [authorization](concepts.md#authentication-vs-authorization)
 Start with [IAM Primer](iam-primer.md): it covers the background (OAuth 2.0, OIDC, JWTs,
 PDP/PEP/PAP) before Usher-specific vocabulary.
 
-**Evaluating Usher for your deployment** (PI, data manager, governance lead)
-- [Concepts](concepts.md): the data access tier model, how grants work, what the Steward and
+**Evaluating Usher for your deployment** (principal investigator, data manager, governance lead)
+- [Concepts](concepts.md): the data access tier model, how grants work, what the Custodian and
   Admin roles enable, and data sovereignty support
 - [Why Usher](why-usher.md): how Usher relates to adjacent tools and what it specifically adds
 
@@ -99,6 +101,6 @@ PDP/PEP/PAP) before Usher-specific vocabulary.
 - [Security model](https://github.com/overture-stack/usher/blob/main/.dev/design/security-threat-model.md): OWASP Top 10 mapping and security design decisions
 - [Glossary](https://github.com/overture-stack/usher/blob/main/.dev/design/glossary.md): quick-reference definitions
 
-**Any of the above may become a Steward or Admin.** Stewards govern data category access for a
+**Any of the above may become a Custodian or Admin.** Custodians govern data category access for a
 specific community or data type; Admins manage the platform authorization model. Both are covered
 in [Concepts](concepts.md) and the [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md).

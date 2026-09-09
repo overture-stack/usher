@@ -30,7 +30,10 @@ not in the PostgreSQL section of `architecture.md`. Is it a column on `users`? A
 performance mechanism; its correctness depends on this field being updated by exactly the right
 set of operations.
 
-**[HIGH] Multiple roles per resource, single `role` field in the token.**
+**[RESOLVED] Multiple roles per resource, single `role` field in the token.**
+The token carries no `role` field. Roles are resolved to capabilities at issuance, so a union of
+roles becomes a union of capabilities computed before the token is written and there is nothing to
+collapse. Original finding:
 `permissions-model.md` explicitly supports multiple simultaneous roles per user per resource, with
 effective permissions as the union of all role capabilities. The token structure has a single scalar
 `role` field per resource entry. No rule is specified for collapsing multiple roles into one value
@@ -38,7 +41,12 @@ at issuance time. A plugin receiving a collapsed value that does not represent t
 capability set will apply incorrect filters. Either the token schema needs to support an array, or
 the collapsing rule needs to be defined and its safety argued.
 
-**[HIGH] Anonymous token cache key is undefined.**
+**[MEDIUM] Anonymous token cache key is undefined.**
+Downgraded: the anonymous role answers the shape of it. Every anonymous caller receives exactly that
+role's grants, so they are all receiving the same token and one shared token per deployment is
+correct rather than one of several options. What stays open is narrower: the invalidation key, which
+wants a version or generation on the anonymous role, since a change to it is a policy change with no
+`sub` to attach to. Original finding:
 The bridge caches grants tokens per user, identified by `sub`. Anonymous tokens have `"sub": null`.
 Multiple anonymous users share the same bridge. What is the cache key? One shared token for all
 anonymous sessions? One per request? One per session cookie? Each option has different security
@@ -65,16 +73,174 @@ consequence of self-grant use.
 When a `category_grant` expires, the `revoked_at` mechanism fires. But push events and poll
 responses are only received by bridges that are currently active. If a user has no active session
 at expiry time, no bridge picks up the event. When the user later becomes active, the bridge
-performs a fresh token exchange and the controller correctly excludes the expired grant — so the
+performs a fresh token exchange and the controller correctly excludes the expired grant, so the
 grant is not honoured on the next new session. However, the gap to document: whether a cached
 token (still within its TTL, issued before expiry) that is presented after the expiry fires would
 be correctly rejected by the bridge before the bridge has learned of the expiry.
 
 ---
 
+## Token contract
+
+**[RESOLVED] If roles resolve at issuance, the token's `role` field should not exist.**
+Applied. A resource maps to a plain list of category grants, `role` and any detached capability
+list are gone, open content is a category, and there is no empty-list case. An anonymous role
+defines the baseline and may grant nothing. Recorded in [decisions.md](decisions.md) and applied in
+[security-workflow.md](security-workflow.md). Original analysis:
+Roles in the source model do two jobs: they are a compact way to assign many permissions at once,
+and they are the first stage of a two-stage check evaluated when access is attempted. This design
+moves the second job to issuance time so that plugins hold no policy. That leaves roles doing only
+the first job, which is an authoring convenience, and an authoring convenience has no reason to
+travel in an enforcement payload.
+
+Where roles then live, none of which is the token:
+
+| Place | Job |
+|---|---|
+| The management interface | Granting by role rather than by enumerating permissions |
+| The grant store | Which role was assigned, for provenance and for recomputing when a role's definition changes |
+| Usher's own API authorization | Whether a caller may perform a grant operation at all |
+
+**Ownership drops out of the token for a second and independent reason.** An owner's powers are
+management operations: granting, revoking, setting visibility. Those are performed against Usher's
+own API, which checks them directly. A plugin never enforces them, so the enforcement payload never
+needs to say who is an owner. This is the same conclusion an earlier sketch reached the wrong way
+round, by inventing a `manage` flag in the token before asking what would consume it.
+
+**A detached `permissions` property is also wrong, and for a reason that runs deeper than shape.**
+It exists only to cover a resource's unrestricted content, which presumes that unrestricted content
+is a baseline sitting outside the category system. That presumption is the last trace of the
+subtractive model this design replaced, and it is the reason the token has been hard to reason
+about.
+
+    Subtractive, superseded:  the resource's full category set is the baseline. The token says
+                              which categories are held; the plugin subtracts the rest and excludes
+                              them. An empty list leaves the unrestricted remainder visible.
+
+    Additive, current:        nothing is a baseline. The token says which grants are held; the
+                              plugin emits one positive clause per grant. An empty list is no
+                              grants, so it reaches nothing.
+
+The same field means opposite things under the two, and four sections of `permissions-model.md`
+still describe the subtractive one. Anyone reading both carries the contradiction.
+
+**Making open content its own category removes the baseline entirely.** If the unrestricted portion
+is a category like any other, there is no remainder for subtraction to leave behind, and every
+reachable record is reachable because of a grant that names it. That also expresses tier
+differences that the current shape cannot: anonymous callers holding `open: [view]` while registered
+ones hold `open: [view, download]`, which is a real distinction between the tiers with nowhere to
+live today.
+
+    "STUDY_A": [ { "open":       ["view", "download"] },
+                 { "controlled": ["view"] } ]
+
+**And it retires `categories: []`**, which was flagged in review as not sitting right and whose gloss
+has been corrected twice. Under this shape it cannot occur: any access to a resource means holding
+at least one grant on it, and holding none is the same as absence from the map. One state instead of
+two that had to be told apart.
+
+**Consequence to accept deliberately: categories stop being optional.** A resource carrying no
+categories becomes ungrantable, because there is nothing to name in a grant. Every resource must
+carry at least one, which for ordinary data is the open one.
+
+**Vocabulary.** `view` rather than `read`, matching what the portal flows actually distinguish,
+viewing metadata against downloading files. The full set still needs settling as a set, which is the
+permission-assignment work in the RABAC alignment note.
+
+**Applied**, with the anonymous role as the mechanism that carries the baseline once the detached
+capability list is gone.
+
+## Plugin contract
+
+**[RESOLVED] The bridge is said both to render predicates and to hold no schema knowledge.**
+The bridge builds the predicate and the plugin supplies the field name for the catalogue being
+queried, which is a parameter rather than stored schema knowledge. SQON is the wire format, so
+adopters whose enforcement is not SQON-shaped translate. Original finding:
+`decisions.md` has the bridge rendering a resolved grant set as a union of positive predicates, and
+also states that a leaf operator's field name is structurally required. `architecture.md` assigns any
+knowledge of the client application's data schema, field names included, to the plugin and
+explicitly excludes it from the bridge. A component with no field names cannot emit a predicate that
+requires one.
+
+The per-catalogue resource key sharpens this from a wording problem into a contract question. One
+bridge serves an application, an application serves several catalogues, and the resource-key field
+differs between them, so the field cannot be resolved once at bridge startup. Either the bridge
+emits resource names and the plugin turns them into predicates, or the plugin supplies the field
+name per query and the bridge composes with it. The second preserves both statements, since being
+told a field name for one query is not holding schema knowledge, but it is a real interface decision
+and neither document makes it.
+
+**Recommendation: the plugin supplies the field name, the bridge builds the predicate.**
+
+The deciding reason is where fail-open defects concentrate. Every enforcement defect this design has
+recorded is a predicate-construction defect: denial expressed as a negation instead of
+`matchNothing`, an empty `in` read as no constraint, a containment expression double-negating into
+the wrong quantifier on a flat field, and a filter composing disjunctively on the aggregation path.
+Not one of them is a compilation defect. If the bridge emits resource names and each plugin builds
+its own predicate, that entire class of defect is reimplemented once per plugin, and drift between
+applications is the problem the shared bridge exists to prevent.
+
+Four supporting reasons:
+
+- **It does not breach the constraint it appears to.** Being told a field name for one query is not
+  holding schema knowledge. The bridge is never provisioned with a deployment's schema and never has
+  to be kept in sync with one, which is what that exclusion protects.
+- **It trusts the plugin with strictly less.** The plugin is the enforcement point and must be
+  trusted either way, but supplying one field name is a smaller surface than constructing the whole
+  predicate. A wrong field name is also checkable at startup, alongside the mapping-shape check
+  already required.
+- **The conformance corpus tests one implementation instead of one per plugin.** Predicate semantics
+  are exactly what a corpus is for, and they stay in a single place to test.
+- **Per-catalogue output is already required.** Catalogue-level denial means the answer differs by
+  catalogue regardless, so the bridge must produce per-catalogue results either way. Given that, it
+  costs nothing for those results to be predicates: the interface takes a map of catalogue to field
+  name and returns a map of catalogue to enforcement.
+
+The cost is one additional input on the bridge interface, and a plugin obligation to supply it
+correctly.
+
+**Scope: this governs the narrowing arm only.** The enforcement result is already a union of deny,
+narrow and allow, and only narrow carries a predicate. Named future plugins do not all narrow:
+
+| Adopter | Operation | Predicate? |
+|---|---|---|
+| Arranger | Filter a search | Yes, in the query language natively |
+| SONG | Filter a metadata listing | In principle, if the predicate stays backend-neutral |
+| Score | Authorize one object fetch by identifier | No. Deny or allow only |
+| Lectern | Schema and dictionary service, no record filtering | No |
+
+A service whose operation is fetching one object by identifier never narrows, so no predicate is
+built under either option and the question does not arise. What such a plugin needs instead is a
+membership query in Usher's own vocabulary, "does this principal hold resource R", with the plugin
+resolving its identifier to a resource first. That is a third interface shape and the plugin contract
+should carry it deliberately rather than treating every adopter as a filtering one.
+
+**What would change this, restated.** Not a backend that cannot narrow, but a backend that narrows in
+a way the shared query language cannot express *neutrally*. The MVP predicate is a single positive
+containment on a field, which is neutral: it compiles as readily to a relational filter as to a
+search-engine one. So the recommendation holds today for every adopter that narrows.
+
+**The post-MVP predicate is not neutral, and this is worth recording on its own.** Record-level
+narrowing is expressed as `not` of `not-in`, whose correctness depends on the field being mapped
+`nested`, and on a flat field it silently degrades to an existential match in the permissive
+direction. That is a search-engine mapping concept, not a property of the query language. The same
+expression carried to a plugin over a different store would mean something different, and it would
+differ permissively.
+
+Two consequences. Record-level narrowing as currently specified is **specific to the search adopter
+rather than a platform capability**, which no document says. And this is an argument *for* central
+construction rather than against it: where the meaning of a predicate depends on backend properties,
+that reasoning belongs in one component that can vary or refuse on a declared capability, not
+replicated across plugins whose authors each decide independently what the expression means.
+
+Must be settled before the plugin contract is written, which has not started.
+
 ## Security model
 
-**[CRITICAL] Symmetric key framing is incompatible with the stated algorithm candidates.**
+**[RESOLVED] Symmetric key framing is incompatible with the stated algorithm candidates.**
+Keys are per-application and asymmetric; the controller holds each application's public key and
+never a shared secret. Recorded in [decisions.md](decisions.md) and corrected in
+[security-workflow.md](security-workflow.md). Algorithm selection remains open. Original finding:
 `security-workflow.md` calls the JWE decryption key "a shared secret provisioned to each bridge
 instance at deploy time." `security-threat-model.md` lists RSA-OAEP or ECDH-ES as algorithm
 candidates for key wrap. Both are asymmetric: there is no shared secret. With RSA-OAEP, the
@@ -84,7 +250,9 @@ controller receives, not the other way around. The algorithm selection (listed a
 the threat model) will determine the key management architecture. The current framing assumes a
 symmetric answer and is misleading for either asymmetric candidate.
 
-**[HIGH] Audience isolation may be a naming convention, not a cryptographic guarantee.**
+**[RESOLVED] Audience isolation may be a naming convention, not a cryptographic guarantee.**
+Per-application keys make `aud` a cryptographic boundary rather than a claim-level assertion.
+Original finding:
 If all bridge instances share a single decryption key, any bridge can decrypt tokens intended for
 any other bridge. The `aud` claim check would then be a claim-level assertion rather than a
 cryptographic boundary: a compromised bridge can read another service's grants tokens. True
@@ -136,39 +304,54 @@ scripts are permitted to do with the audit table.
 
 ## Permissions and roles
 
-**[INFO] Overlapping cohort semantics are moot for iMS but remain open for generic deployments.**
-In iMS, each submitted sample receives a unique identifier and a distinct `study_id` value. A
-record in iMS belongs to exactly one resource; cohort overlap is structurally impossible under
-the current data model. Neither OR nor AND semantics produces a different result for iMS. The
-question remains open for generic Usher deployments where records can satisfy membership
-predicates of more than one resource simultaneously. Do not close this item until a non-iMS
-deployment requires a concrete decision.
+**[INFO] Overlapping cohort semantics are moot where records cannot overlap, and open otherwise.**
+A deployment whose data model gives each record exactly one resource makes overlap structurally
+impossible, so neither OR nor AND semantics produces a different result there. That holds for the
+first integration; the per-deployment confirmation is recorded on that side. The question stays
+open for deployments where a record can satisfy the membership predicates of more than one resource
+at once. Do not close this item until such a deployment requires a concrete decision.
 
-**[MEDIUM] Steward scope: one category vs. one or more — inconsistent across documents.**
-`permissions-model.md` role table says "Steward: one category across all resources."
+**[MEDIUM] Custodian scope: one category vs. one or more, inconsistent across documents.**
+`permissions-model.md` role table says "Custodian: one category across all resources."
 `admin-model.md` role table and `concepts.md` both say "one or more data categories."
-The cardinality of stewardship scope affects the data model (is `category_steward` a single
+The cardinality of custodianship scope affects the data model (is `category_custodian` a single
 foreign key or a join table?), the management UI, and how OCAP delegation is expressed. This is
 not phrasing variation; it is an unresolved design choice presented as resolved in different ways
 in different documents.
 
-**[MEDIUM] `admin-model.md` header claims to fully specify Steward; the body does not.**
-The document overview states: "This document specifies them fully." The Steward role has one row
+**A second axis, surfaced by the rename pass: resource scope.** The same role is described both as
+spanning every resource and as bounded to a subset. `permissions-model.md` and `admin-model.md` say
+"across all resources"; `security-threat-model.md` says a custodian "can only act on grants for
+their assigned category within their authorized resources"; `audit-events.md` records the role as
+assigned "for a category within a resource". The two readings differ in blast radius: authority that
+follows a category wherever it appears, against that category granted on named resources. This
+question and the cardinality one above together decide whether `category_custodian` is one column,
+one join table, or two.
+
+**[MEDIUM] `admin-model.md` header claims to fully specify Custodian; the body does not.**
+The document overview states: "This document specifies them fully." The Custodian role has one row
 in the role taxonomy table and no capability list (no "Can/Cannot" section equivalent to the
-Admin section). Steward is the role with the most governance sensitivity — OCAP compliance
-depends on it — and it is the least specified. The header claim should be removed or qualified,
-and the Steward capability specification should be treated as a named gap.
+Admin section). Custodian is the role with the most governance sensitivity, and OCAP compliance
+depends on it, yet it is the least specified. The header claim should be removed or qualified,
+and the Custodian capability specification should be treated as a named gap.
 
 ---
 
-## Ownership and stewardship
+## Ownership and custodianship
 
 **[HIGH] Self-grant prevention is not specified in the permissions model.**
-The threat model (A01, insider threat note) states that a steward cannot issue a grant to
+**Still open, and the grant-gating decision makes it sharper rather than answering it.** An
+administrator may self-grant, with the custodians of the data's categories as the final gate. An
+administrator who may appoint custodians can appoint themselves and then satisfy that gate, so the
+rule below and the gating decision have to be reconciled: either appointment is constrained, or
+approval must reject an approver who is also the grantee, or both. The audit event on appointment is
+the minimum and is not by itself a control.
+
+The threat model (A01, insider threat note) states that a custodian cannot issue a grant to
 themselves. This rule is not specified in `permissions-model.md` or `admin-model.md`. Without an
-explicit check at the PAP layer, a steward could approve their own category access, bypassing the
+explicit check at the PAP layer, a custodian could approve their own category access, bypassing the
 intended governance separation. The check must be specified before the grant approval endpoint is
-implemented: the approving steward's identity must be compared against the grantee identity, and
+implemented: the approving custodian's identity must be compared against the grantee identity, and
 self-approval must be rejected. The audit log alone (detecting after the fact) is not a sufficient
 control.
 
@@ -181,10 +364,10 @@ and lifting the embargo should not restore a resource that is still ownerless. W
 a single `visibility` state field with typed reasons, or are separate flags, needs a deliberate
 decision before the data model is finalised.
 
-**[MEDIUM] Guardian-to-subject stewardship transfer on age of majority is not designed.**
-When data is submitted for a minor subject, the legal guardian holds stewardship over that
+**[MEDIUM] Guardian-to-subject ownership transfer on age of majority is not designed.**
+When data is submitted for a minor subject, the legal guardian holds ownership over that
 resource. When the subject reaches the age of majority, their right to govern their own data
-supersedes the guardian's authority. No flow exists for transferring stewardship in this case.
+supersedes the guardian's authority. No flow exists for transferring ownership in this case.
 
 Several design questions are open:
 
@@ -203,7 +386,7 @@ Several design questions are open:
   interests (held by the nation, not the individual) may coexist with the individual's newly
   acquired personal data rights. These do not automatically resolve in the same direction.
 
-This flow shares the same stewardship transfer mechanism as ordinary ownership handoffs but has
+This flow shares the same ownership transfer mechanism as ordinary ownership handoffs but has
 unique trigger and identity-establishment steps. It should be designed before Usher handles
 any paediatric dataset.
 
@@ -246,7 +429,10 @@ log-noise management in from the start avoids retrofitting it later.
 Must be decided before the audit logging implementation begins: the tagging field and routing
 logic affect the event schema and the log aggregation pipeline configuration.
 
-**[HIGH] GA4GH Passport revocation before Visa expiry has no mechanism.**
+**[POST-V1] GA4GH Passport revocation before Visa expiry has no mechanism.**
+GA4GH Passport integration is not required for iMS v1, which the business requirements state
+directly, so this is not a launch dependency. Kept because it is a real gap in that design and the
+severity was misleading in a blocker sweep. Original finding:
 When a DAC withdraws approval, the corresponding `ControlledAccessGrants` Visa stops being
 issued on re-authentication. The existing `category_grant` record in Usher's policy database
 persists until `expires_at`. There is no described mechanism for Usher to detect externally-revoked
@@ -265,11 +451,12 @@ and revoke each one. The most critical emergency operation has no direct API pat
 `POST /admin/users/{id}/revoke` endpoint that sets `revoked_at` regardless of resource membership
 should be considered as a v1 requirement.
 
-**[MEDIUM] Trusted-issuers governance for GA4GH Passports is not described.**
+**[POST-V1] Trusted-issuers governance for GA4GH Passports is not described.**
+Same scope as the Visa revocation item above. Original finding:
 Adding a new Visa Issuer (a new collaborating DAC) requires updating Keycloak's
 trusted-issuers list. A malicious or compromised issuer could grant controlled access to all
-data on the platform. The governance workflow for this operation — who approves it, what audit
-record it creates, whether it requires two-admin sign-off — is not described anywhere. For a
+data on the platform. The governance workflow for this operation (who approves it, what audit
+record it creates, whether it requires two-admin sign-off) is not described anywhere. For a
 platform managing PHI, this is a high-impact administrative action and should be treated with the
 same care as a global admin grant.
 
@@ -278,12 +465,18 @@ same care as a global admin grant.
 investigation requires answering: during admin X's self-grant window, what records did they
 query? Grant events are in the controller's audit log. Data access events (if logged at all) are
 in the PEP plugin's log (Arranger, Lyric). Correlating these across systems requires a shared
-identifier — a self-grant ID, or a correlation token — that links the grant audit record to
+identifier (a self-grant ID, or a correlation token) that links the grant audit record to
 downstream data access records. Neither the identifier nor the correlation mechanism is described.
 
-**[MEDIUM] Bridge audience identifier provisioning is not described.**
+**[RESOLVED] Bridge audience identifier provisioning is not described.**
+Per-application asymmetric keys settle both halves. Provisioning happens at registration, since
+onboarding an application is a public-key registration rather than a secret distribution. And two
+independently deployed instances cannot share an audience identifier, because sharing one would mean
+sharing a key and audience separation is cryptographic rather than a string comparison. What follows
+is a naming requirement rather than an open question: an audience identifier is per deployed
+instance. Original finding:
 Every bridge instance must know which `aud` value to request from the controller and to verify in
-the returned token. Where does a bridge learn its own audience identifier — deploy-time config?
+the returned token. Where does a bridge learn its own audience identifier: deploy-time config?
 A registration handshake with the controller? If two independently deployed Arranger instances
 both use `aud: "arranger"`, they share tokens and revocation events. If audience identifiers are
 deployment-specific, the naming convention and provisioning model should be documented as part of

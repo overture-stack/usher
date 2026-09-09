@@ -20,7 +20,8 @@ does and which tools are responsible for it.
 This layer validates identity: checking that a request comes from who it claims to come from,
 issuing and validating tokens, and managing sessions. Keycloak handles this in the Overture
 platform. Usher is not an authentication service and does not replace or duplicate this layer.
-Usher receives the identity token that Keycloak issues and trusts its contents.
+Usher receives the identity token that Keycloak issues. It verifies the signature against
+Keycloak's published keys before reading anything from it.
 
 **Coarse authorization: what groups or roles does this user hold?**
 
@@ -61,7 +62,8 @@ application as a grants token the plugin applies to every query.
 
 **OPA (Open Policy Agent)**
 
-OPA is a general-purpose policy engine. Policies are written in Rego and evaluated against input
+OPA is a general-purpose policy engine. Policies are written in Rego (a declarative query and
+policy language) and evaluated against input
 data. OPA is used widely for Kubernetes admission control and API gateway authorization, and its
 partial evaluation feature can produce residual expressions rather than just allow/deny decisions.
 That concept directly influenced Usher's grants token design: the token is a pre-computed,
@@ -90,9 +92,10 @@ the design, see [decisions.md](https://github.com/overture-stack/usher/blob/main
 
 **Zanzibar-style relationship stores (SpiceDB, AuthZed, others)**
 
-Google Zanzibar and its open-source derivatives model access as a graph of relationships: user A
-is a member of group B, which has viewer access to document C. This model is powerful for
-social-graph-style permissions and scales to very large relationship sets.
+Google Zanzibar is Google's internal authorization system, described in a 2019 research paper.
+It and its open-source derivatives model access as a graph of relationships: user A is a member
+of group B, which has viewer access to document C. This model is powerful for social-graph-style
+permissions and scales to very large relationship sets.
 
 It is a different model from Usher's. Usher's grants are explicit, tabular (user holds category X
 in resource Y), and resolved into a grants token that the plugin applies as a query predicate.
@@ -123,11 +126,19 @@ platform scale.
 
 ## What Usher specifically adds
 
-Across the tools above, Usher's specific contribution is the combination of:
+Usher is in design and not yet built, so the list below describes intended behaviour rather than
+shipped features. Across the tools above, its specific contribution is the combination of:
 
-- **Structured grants output.** The grants token tells the application not just whether the
-  user has access, but what they have access to, expressed as a filter the plugin applies to every
-  query.
+One capability is deliberately absent from this list. Producing a filter describing what a principal
+may reach, rather than a yes or no for one request, is something several policy engines already do:
+Cerbos returns exactly that from its query planner, and the Zanzibar-derived systems answer it as a
+resource lookup. Usher's evaluation step is a candidate for one of those engines rather than a
+reason to prefer Usher over them.
+
+- **Grant lifecycle as data.** Access is a set of grant records, each with an origin, an expiring
+  validity and an audit trail, administered through an interface rather than deployed as policy
+  files. This is what a governance reviewer reads and what a custodian changes, and it is the half of
+  the problem a policy engine does not address.
 - **Built-in grant management.** A management interface for non-technical administrators to assign
   and revoke access, audit the current state, and respond to governance reviews without touching
   application code or configuration files.

@@ -26,9 +26,8 @@ usher/
     design/          (design documents; see design/README.md for the index)
     roadmap.md       (planned work)
     tech-debt.md     (known issues)
-    sessions.md      (session log)
-  .github/
-    copilot-instructions.md
+    sessions/        (session log, one file per contributor per day)
+    docs/            (phase and traceability documents, and the atlas)
   AGENTS.md          (instructions for Codex and general AI agents)
   CLAUDE.md          (instructions for Claude)
   DEVELOPMENT.md     (this file)
@@ -40,20 +39,25 @@ The `.dev/` directory is the shared working memory for this project across sessi
 contributors, human and AI.
 
 - **`roadmap.md`**: planned features and architectural work. Items are open unless marked
-  `[in progress]`. Completed items are removed; `sessions.md` is the historical record.
+  `[in progress]`. Completed items are removed; `sessions/` is the historical record.
 - **`tech-debt.md`**: issues logged scope-adjacently. `standalone: yes` entries can be picked
   up without broader context.
-- **`sessions.md`**: brief log of what was done each session: code written, design decisions
-  made, tech-debt entries added. No conversational activity.
+- **`sessions/`**: one file per contributor per day, named `YYYY-MM-DDTHHMMSS.md`, logging what
+  was done: design decisions made, documents changed, tech-debt entries added. No conversational
+  activity. ISO names sort chronologically, so no index is needed.
+- **`docs/`**: documents that outlive a session. The phase-1 blocker set and implementation gate,
+  requirement and user-flow traceability, and the atlas of longer-form roadmap detail.
 - **`design/`**: design documents covering security workflow, permissions model, plugin
   integration, and the management UI. Start at `design/README.md`.
 
 ## AI tooling
 
-This project uses Claude, Codex, and Copilot as development partners. Each has an instruction
-file at the repo root (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`). These files
-define conventions, session checklists, and security triggers. Do not modify them without explicit
-agreement from the lead developer.
+This project uses Claude and Codex as development partners, with `CLAUDE.md` and `AGENTS.md` at
+the repo root. `AGENTS.md` carries the substance and `CLAUDE.md` defers to it, so conventions,
+session checklists and security triggers are stated once. Agents that read neither by default are
+pointed at `AGENTS.md` rather than given a third copy to drift from, which is why the earlier
+Copilot-specific file is gone. Do not modify either without explicit agreement from the lead
+developer.
 
 ## Security
 

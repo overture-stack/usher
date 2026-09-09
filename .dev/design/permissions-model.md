@@ -31,6 +31,15 @@ The access semantics of overlapping cohorts are an open design question; see Ope
 
 Usher combines role-based and attribute-based access control rather than relying on either alone.
 
+**This pattern has a name in the literature: RABAC, role-centric attribute-based access control**
+([Jin, Sandhu and Krishnan, MMM-ACNS 2012](https://www.profsandhu.com/confrnc/misconf/mmm-acns12-rabac-paper.pdf)).
+RABAC extends RBAC with a permission filtering policy and evaluates access in two stages: first the
+role check, deciding whether the user holds a role carrying the permission at all, then the
+attribute check, deciding whether user, object and session attributes permit exercising it on this
+particular object. Access requires both to pass. Usher's category machinery is the second stage and
+is well developed; the first stage, the assignment of permissions to roles, is not yet defined. See
+[RABAC alignment](../docs/atlas/roadmap/rabac-alignment.md) for the gap and the planned correction.
+
 **Roles** capture coarse-grained capability: what kind of actions a user can perform (`owner`,
 `member`). A role is a label for a class of behaviours.
 
@@ -77,6 +86,10 @@ held.** The grants computation engine must consult all of a user's memberships i
 not just the first or highest-priority one.
 
 ### Data categories
+
+> **Note:** categories remain independent, overlapping axes as described here; that
+> is unchanged. What changed is how a grant set is rendered into a query filter. See the
+> superseded notice under "The visibility rule" below.
 
 A data category is a named access dimension. Categories are defined at the platform level and
 assigned to resources. Examples: `indigenous_data`, `controlled_access`, `restricted_clinical`.
@@ -209,11 +222,71 @@ When auto-accept is enabled:
 **State transitions are audited.** Each transition (creation, acceptance, migration from pending,
 revocation) produces an audit log entry.
 
+**Claiming a pending grant from an existing account.** The migration above fires on registration
+keyed to the invited address, which leaves a gap: an invitee who already holds an account under a
+different address never triggers that event, so the pending row waits indefinitely with nothing to
+resolve it.
+
+An invitation link closes that gap, under one constraint that is the whole design: **the link binds
+identity and never creates or activates a grant.** Its only function is to answer which account
+belongs to an already-approved invitee, moving the row from `pending_grants` to `category_grants`
+under that account's Keycloak subject. The approval that produced the grant is unchanged, and the
+acceptance step that activates it still applies. An invitee may either sign in with an existing
+account or register a new one; both routes end at the same identity binding.
+
+The link is single-use and short-lived, and the binding-not-granting rule is what makes those
+sufficient rather than merely advisable. If a link could activate access, the invited mailbox would
+become the authorization boundary, and a forwarded message or a compromised mailbox would transfer
+access to controlled data: a materially weaker gate than the Controlled tier requires everywhere
+else. Binding identity leaks nothing, because an account that binds to a grant it was never
+approved for still holds no approval.
+
+Group grants have no acceptance step, so this path applies only to grants issued to an individual
+address.
+
 ---
 
 ## How access is resolved
 
 ### The visibility rule
+
+> **POST-MVP.** This section, the worked example, "Composition across categories,"
+> and "Category-to-field mapping" all describe **record-level** enforcement: categories map to
+> per-record field predicates, and records within one resource are individually tagged. That is
+> deferred past MVP.
+>
+> MVP enforces at **resource level**: a record is visible if the principal holds every category
+> carried by the resource the record belongs to, so the emitted filter is one positive clause on
+> the resource key and no category field appears in the index. See
+> [decisions.md](decisions.md), "Resource-level enforcement for MVP; record-level narrowing
+> deferred."
+>
+> This document was ambiguous between the two readings and contains both. Line 218 below reads
+> resource-level ("for every data category associated with the resource that the record belongs
+> to"); the exclusion mechanism and the worked example read record-level. The MVP decision
+> resolves it toward the first.
+>
+> Two constraints to carry into the rework, both established by executing the SQON compiler rather
+> than reading it. Subset containment is expressible in a single clause as `not` of `not-in`, not
+> via `some-not-in` as its name suggests. And it works only where the field is mapped `nested`; on
+> a flat field it degrades to an existential match, silently, in the permissive direction. Usher
+> cannot require a mapping shape from deployments whose data models it does not know, so
+> record-level narrowing is available only where a deployment supplies conforming data, verified at
+> plugin startup.
+>
+> One consequence to carry into the rework: membership must render to a positive predicate of its
+> own, since additive rendering has no implicit baseline for untagged records. The failure-direction
+> table that motivates additive rendering lives in [decisions.md](decisions.md) and is not repeated
+> here.
+>
+> The existence-denial invariant stated below is unaffected by either model, since both filter
+> before any result is computed.
+>
+> **The visibility outcomes described below do change**, under the resource-level shift rather than
+> the additive one. Under resource-level enforcement, a principal lacking any single category carried by a
+> resource sees nothing in that resource, rather than a filtered subset of its records. The worked
+> example below is affected: its `RESOURCE_X` member holding no category grants sees nothing there,
+> not the untagged remainder.
 
 A record is visible to a user if, for every data category associated with the resource that the
 record belongs to, the user holds a grant for that category (directly or via a group).
@@ -234,6 +307,114 @@ Excluded records do not appear in counts, aggregations, or result sets; their ex
 disclosed. This is a hard invariant: existence revelation is an information disclosure vulnerability
 (OWASP A01), and a discoverable-but-inaccessible mode will not be introduced.
 
+**What the invariant requires of a denial response.** A denial says the thing does not exist **or**
+the requester lacks access, without indicating which. Distinct responses turn the endpoint into a
+lookup service: someone enumerating identifiers learns the deployment's holdings without reading a
+record.
+
+**This is oracle denial rather than deterrence, and the difference decides the implementation.**
+Deterrence would be satisfied by the wording alone. Denying an oracle means every channel that
+distinguishes the two cases has to be closed.
+
+**Under the default shape below, most of that closes itself, and the table is a deviation
+checklist rather than a to-do list.** Where denial is a filter matching nothing, body and timing
+converge structurally, so the only row still requiring attention is side effects. Read the table as
+what must be re-verified by hand the moment a response shape is chosen that does not converge on its
+own:
+
+| Channel | How it leaks |
+| ------- | ------------ |
+| Response time | A denial that performed a grant lookup is slower than one that short-circuited on a missing resource |
+| Body shape | Same status, differing structure or fields |
+| Side effects | One path emits an audit event or moves a rate-limit counter; the other does not |
+| Downstream behaviour | Differing cache headers, retry semantics, or `Vary` |
+
+Timing is the one that usually survives review, because a denial is not thought of as having a body
+worth measuring.
+
+**Calibrate ambiguity to what the requester already knows.** Opacity is owed to a requester who does
+not already know the thing exists. Where they demonstrably do, because they hold a lapsed grant, a
+pending grant, or a membership without the category needed, the response can say exactly what
+happened. Nothing leaks, since they were told it exists when the relationship was created, and an
+attacker reaches that state only if someone granted them the relationship.
+
+Without this calibration the invariant is paid for by legitimate users: a lapsed grant is a normal
+and frequent state in a model with expiry and an acceptance flow, and hiding it behind a
+does-not-exist wall generates support load and teaches people the system is broken.
+
+**Ambiguous outward, precise inward.** The denial reason recorded in the audit trail distinguishes
+the cases even though the response does not. That is what the reason field on the deny result is
+for, and it is how an operator debugging a service account resolves what a status code deliberately
+will not tell them.
+
+**Consequently the response shape is a choice among indistinguishable shapes**, not an open one. A
+plugin picks which shape suits its service; it does not get to pick whether the two cases are
+distinguishable.
+
+**An empty result set is the shape that achieves this for free, and should be the default.** Where a
+denial is expressed as a filter matching nothing, a denied resource and a nonexistent one traverse
+the same code doing the same work, so the body is identical without effort and the timing converges
+without design. A distinct status code achieves the same only if both cases are deliberately routed
+to the identical response, which is a property that has to be built and then kept.
+
+**It also has a cost, and the cost is what a richer response is for.** An empty result cannot
+distinguish "you may see this and it holds nothing" from "you may not see this". A researcher whose
+study is legitimately empty cannot tell that their access is working. That collapse is the same
+invariant-paid-for-by-legitimate-users problem described above, arriving through the response shape
+rather than the wording.
+
+**So the two are not alternatives; they are the two halves of the calibration.** An empty result for
+a requester with no relationship to the resource, where ambiguity is owed and is free. A specific
+response for a requester who demonstrably knows the resource exists, where ambiguity buys nothing
+and costs support load.
+
+The practical consequence for an adopter: a seam that can only return a filter can only ever produce
+the first half. Widening it is worth doing for the second half, and not for the ability to return a
+particular status code. A widening motivated by the status code alone will produce two
+distinguishable denials and reintroduce the oracle the empty result had closed by construction.
+
+**A deployment can defeat all of this through its resource mapping alone, with the enforcement path
+entirely correct.** The denial response protects resource existence. If resource identity is
+already enumerable through an unauthenticated surface, that protection is decorative: no timing
+analysis or status-code inference is needed, because a public endpoint answers the question
+directly.
+
+The general rule is about the resource key's **value space**, not about any one surface: **where a
+resource's existence is confidential, the values identifying resources must not be enumerable
+without authentication.** A resource key mapped one-to-one onto something a deployment publishes by
+design is the clearest way to break this, and it is a legal configuration today, since one resource
+per type is a permitted special case of many-per-type. Other routes exist: values appearing in
+public facet listings, in a published schema, or in URLs.
+
+**The condition matters, because this is not universal.** Many platforms publish their study
+registry, and where resource existence is already public there is nothing to protect and nothing is
+lost. It bites where existence is meant to be confidential, and this model has such a case built in:
+an embargoed resource is precisely one whose existence should not be discoverable before release.
+
+**Enforcing this needs two different mechanisms, because enumerability is only half statically
+knowable.** A startup check covers only half of it: a check can read configuration, and
+configuration does not say whether a surface applies the filter it should.
+
+**Structurally public, so a startup check.** Where the resource key is one-to-one with something the
+deployment publishes by design, the values are public whatever the enforcement path does. That is
+readable from configuration before any request arrives, and it should fail startup rather than warn,
+because no request-time behaviour repairs it.
+
+**Behaviourally leaky, so a conformance case per surface.** Any surface that can return resource
+values, a facet or aggregation, a suggestion or type-ahead, a published schema, is supposed to apply
+the filter and might not. Whether it does is a property of the code, not of the configuration, so a
+startup check cannot see it and enforcement tests on the record path do not cover it.
+
+**The failure mode this guards is a surface exempting itself from a correct filter.** An adopter
+found exactly that: an aggregation wrapper that discarded the access filter along with the search
+query and returned whole-index counts, while the record path was entirely correct. It was found by
+running a query and comparing counts, not by reading code, and it stood undetected for some time.
+
+So the conformance corpus needs a case per value-returning surface, comparing what an under-
+privileged principal sees against what a fully-privileged one sees, rather than only asserting that
+records are correctly filtered. A deployment can pass every record-path test while publishing its
+resource values through a documented feature working exactly as designed.
+
 ### Worked example
 
 **Setup:**
@@ -245,9 +426,9 @@ Resources and their category assignments:
 
 Users and their grants:
 
-- User A: `membership(RESOURCE_X, member)`, no category grants
-- User B: `membership(RESOURCE_X, member)`, `category_grant(indigenous_data, RESOURCE_X)`;
-  `membership(RESOURCE_Y, member)`, `category_grant(open_access, RESOURCE_Y)`
+- User A: membership in `RESOURCE_X`, granted its open category only
+- User B: membership in `RESOURCE_X` granted both its categories; membership in `RESOURCE_Y`
+  granted its open category only
 
 Plugin config (Arranger-side; maps category names to Elasticsearch field predicates):
 
@@ -266,22 +447,18 @@ open_access     → { fieldName: "isRestricted", value: false }
 	"exp": 1720000300,
 	"generatedAt": 1720000000,
 	"grants": {
-		"RESOURCE_X": {
-			"role": "member",
-			"categories": []
-		}
+		"RESOURCE_X": [ { "open_access": ["view"] } ]
 	}
 }
 ```
 
-`RESOURCE_Y` is absent: User A has no membership there. The plugin denies all queries for that
-resource.
+`RESOURCE_Y` is absent, so User A reaches nothing in it.
 
-For `RESOURCE_X`: the plugin config lists `[indigenous_data]` as the full category set. The token
-has `categories: []`. Exclusion set: `[indigenous_data]`. The plugin applies
-`isIndigenous=true → exclude` as a filter on every query. User A sees only records where
-`isIndigenous=false`. Their queries never reveal that indigenous records exist: absent from results,
-counts, and aggregations.
+For `RESOURCE_X`, one grant is held and it names `open_access`, so one positive clause is emitted:
+`isRestricted = false`. Records carrying `indigenous_data` match no clause and are therefore never
+selected. Nothing is subtracted and no exclusion is computed: the records User A does not reach are
+the ones no grant of theirs names. Their queries never reveal that indigenous records exist, since
+those records are absent from results, counts and aggregations rather than filtered out of them.
 
 **Grants token for User B:**
 
@@ -293,23 +470,24 @@ counts, and aggregations.
 	"exp": 1720000300,
 	"generatedAt": 1720000000,
 	"grants": {
-		"RESOURCE_X": {
-			"role": "member",
-			"categories": ["indigenous_data"]
-		},
-		"RESOURCE_Y": {
-			"role": "member",
-			"categories": ["open_access"]
-		}
+		"RESOURCE_X": [ { "open_access": ["view"] }, { "indigenous_data": ["view"] } ],
+		"RESOURCE_Y": [ { "open_access": ["view"] } ]
 	}
 }
 ```
 
-For `RESOURCE_X`: full set `[indigenous_data]` minus token `["indigenous_data"]` = no exclusions.
-User B sees all records.
+For `RESOURCE_X`, two grants are held, so two positive clauses are emitted and composed with `or`:
+`isRestricted = false` or `isIndigenous = true`. User B reaches both portions and their overlap,
+which is what holding both grants means.
 
-For `RESOURCE_Y`: full set `[open_access, indigenous_data]` minus token `["open_access"]` =
-exclusion set `[indigenous_data]`. User B sees only non-indigenous records in `RESOURCE_Y`.
+For `RESOURCE_Y`, one grant is held, so one clause is emitted: `isRestricted = false`. The
+indigenous records in `RESOURCE_Y` are unreachable, for the same reason as User A's in `RESOURCE_X`
+and by the same mechanism.
+
+**The contrast worth holding on to.** Neither user's unreachable data is excluded by a clause. It is
+unreachable because no clause selects it, which is what additive rendering means and is the whole of
+the rule. There is no full category set to subtract from, and a grant list is never read as an
+exemption from a default.
 
 The token examples above use the canonical `grants` map structure. For the full token schema,
 standard JWT claims, and anonymous token form, see
@@ -425,20 +603,30 @@ grant access to others, change visibility policy, or share records.
 **Owner (resource-level):** a designated role on a specific resource that grants management
 rights: granting and revoking access for other users, setting visibility policy (private,
 embargoed, public), and transferring ownership. An Owner holds data access as a member of
-the resource and has stewardship rights scoped to that resource only.
+the resource and has management rights scoped to that resource only.
 
 Ownership is optional and per-resource. An Owner need not be the submitter: a Principal
 Investigator may be designated as owner for data submitted by a lab technician on their team.
-An Admin can always act as owner on behalf of the resource through the standard
-grant management flow.
+An Admin holds no standing data access and may grant it to themselves explicitly, which needs no
+approval in MVP and will need it once community custodianship exists. Granting access to *others*
+belongs to the data-plane roles. See the admin-plane decision in [decisions.md](decisions.md).
 
-The three management roles:
+The three management roles, ordered by widening scope rather than by seniority, since a reader
+meets the narrowest first and central control is not the model's starting point:
 
-| Role           | Scope                             | Data access                    |
-| -------------- | --------------------------------- | ------------------------------ |
-| Admin          | All resources; all grants         | No; must self-grant explicitly |
-| Steward (OCAP) | One category across all resources | No (unless separately granted) |
-| Owner          | Their designated resource(s) only | Yes; holds member access       |
+| Role             | Scope                             | Data access                    |
+| ---------------- | --------------------------------- | ------------------------------ |
+| Owner            | Their designated resource(s) only | Yes; holds member access       |
+| Custodian (OCAP) | One category across all resources | No (unless separately granted) |
+| Admin            | All resources; the policy plane   | None standing; self-grant only |
+
+**Naming.** The OCAP role is a **Custodian** rather than a Steward, because the requirements
+document already uses "Data Steward" for the resource owner, and before this rename the second
+sense ran through the ownership cascade below as a synonym for owner. The two readings contradicted
+each other on scope (one category platform-wide against one resource) and on data access (none
+against member access), so a reader meeting the cascade first concluded the OCAP role was a
+co-owner of a resource, which is its inverse. Cascade usages now say owner or management rights,
+and `Custodian` means only what the table above defines.
 
 **Ownership assignment at submission time (resolved).** Lyric can create a cohort and designate
 the submitter as its owner at submission time, if the submitter holds owner-level
@@ -462,11 +650,13 @@ cascade, applied in order:
 2. **Manual assignment:** the submitter can designate a different owner at submission time, or
    transfer ownership afterward.
 3. **Cohort-level config:** a cohort can specify a fixed owner entity (e.g. an institutional
-   account). Whether submitters in that cohort automatically receive stewardship is a separate
+   account). Whether submitters in that cohort automatically receive ownership is a separate
    per-cohort flag.
-4. **Last-steward promotion (safety net):** if all stewards for a resource except one are removed,
-   the remaining steward is automatically promoted to owner. This is a data-integrity backstop, not
-   a routine path.
+4. **Last-holder promotion (safety net):** if all but one of the users holding management rights on
+   a resource are removed, the remaining one is automatically promoted to owner. This is a
+   data-integrity backstop, not a routine path. **Superseded by the move to ownership as a non-empty
+   set**, where the invariant blocks removal of the last holder and leaves no case for this to
+   repair; see the ownership item in [../roadmap.md](../roadmap.md).
 
 `submitter` is immutable audit data on the resource record. It records who uploaded the data and
 never changes regardless of ownership transfers. `owner` is a role that can move.
@@ -479,17 +669,17 @@ their grants, but the resource does not appear in results until the invariant is
 suppression is distinct from embargo or category restrictions; it is a system-level state flag, not
 a change to any user's grants.
 
-**Transfer-before-removal prerequisite.** Removing stewardship from the current owner requires
+**Transfer-before-removal prerequisite.** Removing the owner role from its current holder requires
 transferring ownership to another entity first. This ordering is enforced by the system: ownership
-transfer must complete before stewardship removal is permitted. There is never a window where a
-resource has no owner during a normal stewardship change.
+transfer must complete before the removal is permitted. There is never a window where a resource
+has no owner during a normal ownership change.
 
 **Atomicity.** An operation is atomic when it either completes entirely or does not happen at all;
-no intermediate state is observable or persisted. In the last-steward promotion case, removing the
-departing steward and promoting the remaining one execute in a single database transaction. If
+no intermediate state is observable or persisted. In the last-holder promotion case, removing the
+departing holder and promoting the remaining one execute in a single database transaction. If
 anything fails mid-operation, the whole transaction rolls back: the resource always has an owner.
 The transfer-before-removal ordering makes strict atomicity a safety net; in the normal flow,
-ownership is always settled before stewardship changes.
+ownership is always settled before ownership changes.
 
 **Config flag.** Whether ownership can be transferred without the current owner's consent
 ("ownership stealing") is configurable. The default is that only the current owner can initiate a
@@ -498,7 +688,7 @@ transfer. The config hierarchy:
 - Usher-wide default: ownership transfer requires owner consent
 - Per-cohort override: can tighten or loosen relative to the Usher-wide default
 
-When transfer-without-consent is disabled, removing stewardship from the owner becomes impossible
+When transfer-without-consent is disabled, removing the owner role becomes impossible
 for non-admins because the prerequisite (ownership transfer) cannot be triggered. The ownership
 config is cohort-level with Usher-wide defaults.
 
@@ -563,19 +753,19 @@ token expiry.
 grant was internal or externally originated. This is the baseline for a sovereignty audit: who
 approved what, when, and on whose authority.
 
-### Data stewardship: the additional OCAP requirement
+### Custodianship: the additional OCAP requirement
 
 The generic admin model (platform-level administrators who can manage all grants) is insufficient
-for OCAP. Indigenous data stewards, community members or designated representatives with authority
+for OCAP. Custodians of Indigenous data, community members or designated representatives with authority
 over their community's data, must be able to manage grants for their data category without holding
 platform-wide admin rights.
 
-In Usher's terms: a user can hold a `category_steward` capability scoped to one or more data
+In Usher's terms: a user can hold a `category_custodian` capability scoped to one or more data
 categories. Within those categories, they can grant and revoke access as if they were an Admin,
-but only for the data categories they steward. They cannot see or modify grants for other
+but only for the data categories they hold custody of. They cannot see or modify grants for other
 categories, and they cannot modify resource structure or role assignments.
 
-This capability dimension is not yet in the data model. Its design (how stewardship scope is
+This capability dimension is not yet in the data model. Its design (how custodianship scope is
 stored; the capability check in the PAP layer) is an open question and a prerequisite for
 OCAP-compliant deployments. See Open questions.
 
@@ -604,7 +794,7 @@ layer can override the one above:
    is shown the category the cohort will receive based on the platform or cohort default. Submitters
    with owner-level permissions may override the assignment at this point. Submitters without
    owner-level see the assignment but cannot change it.
-4. **Post-submission steward changes.** An Owner or steward can adjust a cohort's
+4. **Post-submission owner changes.** An Owner can adjust a cohort's
    category assignment after submission. This updates `resource_categories` in Usher's policy
    tables. The underlying submitted records are unchanged; Usher enforces category policies by
    filtering at the PEP layer, not by modifying records.
@@ -622,7 +812,7 @@ needed from the user's side: the filter takes effect automatically. However:
 
 - Affected users must be notified. Silent tightening is unacceptable: a user who received records
   in one query and no longer receives them in the next should understand why.
-- Owners or stewards who want to pre-grant affected users before the change takes effect can do
+- Owners who want to pre-grant affected users before the change takes effect can do
   so via the standard grant flow before updating `resource_categories`.
 - The tightening event must produce a structured audit log entry: which category was added, which
   resource, by whom, and when. The set of affected users must be derivable from this entry combined
@@ -694,25 +884,27 @@ but not cohort B, and a record belongs to both:
 - **AND semantics:** the user does not see the record (membership in all cohorts it belongs to is
   required). Aligns with deny-by-default; more conservative.
 
-**iMS context (does not close the general question).** In iMS, each submitted sample receives a
-unique identifier and a distinct `study_id` value. A record in iMS belongs to exactly one study;
-cohort overlap is impossible under the current data model. The OR/AND question is therefore moot
-for iMS implementations: since records do not overlap across resources, neither semantic produces a
-different result. The question remains open for generic deployments where records can satisfy the
-membership predicate of more than one resource simultaneously.
+**Where records cannot overlap, the question is moot but not closed.** A deployment whose data
+model gives each record exactly one resource makes overlap structurally impossible, and neither
+semantic then produces a different result. That is the case for the first integration, recorded on
+that side. It does not answer the general question, which stays open for deployments where a record
+can satisfy the membership predicate of more than one resource at once.
 
-For iMS private data sharing (where `private` is the primary access gate), OR semantics may be
-acceptable if categories are the real enforcement mechanism. The question needs a deliberate answer
-before the first deployment where cohort overlap is structurally possible.
+Where private data sharing is the primary access gate, OR semantics may be acceptable if categories
+are the real enforcement mechanism. The question needs a deliberate answer before the first
+deployment where overlap is structurally possible, and confirming that a given deployment's records
+cannot overlap is part of onboarding it rather than something to assume.
 
 ### Multi-category intersection access
 
-**Resolved for MVP.** Per-resource scoping dissolves the primary concern: a `controlled` grant for
-COHORT_A and an `indigenous` grant for COHORT_A are distinct entity records, each approved by the
-relevant governance body for that specific resource. Holding both within the same resource means
-both bodies have approved access to their respective category within that resource. A record tagged
-with both categories requires both grants to be present, which is the AND-all-categories
-visibility rule already in the model. No special intersection grant is needed.
+**Resolved for MVP, re-checked against the resource-level decision.** Per-resource
+scoping dissolves the primary concern: a `controlled` grant for COHORT_A and an `indigenous` grant
+for COHORT_A are distinct entity records, each approved by the relevant governance body for that
+specific resource. Holding both within the same resource means both bodies have approved access to
+their respective category within that resource. No special intersection grant is needed.
+
+Categories attach to resources rather than to individual records, so a resource carrying both
+categories requires both grants and the question does not reach record level at all.
 
 The OCAP concern (was each governance body's approval intended to cover the intersection?) is
 addressed by the per-resource scoping: each approval is scoped to the resource, not to a category
@@ -725,8 +917,6 @@ optionally carry a SQON filter expression that further narrows the records it co
 category. This is a data model extension (an optional `sqon` field on `category_grants`); it
 requires SQON evaluation capability in the bridge and is deferred to post-MVP.
 
-### Category grant scope
-
 ### Role capabilities
 
 What specific actions does each role permit beyond "can access resources they are a member of"?
@@ -738,7 +928,8 @@ rules need to be specified before implementation.
 **Resolved.** Category grants are always resource-specific. A grant for `indigenous_data` in
 COHORT_A is a distinct entity from a grant for `indigenous_data` in COHORT_B. This is simpler and
 more auditable; a broader scope grant would require careful design to avoid unintended access and
-complicates OCAP governance (a steward's authority is resource-scoped, not platform-wide).
+complicates OCAP governance (a custodian's authority spans resources, but each grant they issue
+names one).
 
 ### Attribute naming
 
@@ -777,7 +968,7 @@ Three options with meaningfully different implications, particularly for consent
 1. **Submitter reads own submissions.** Submission creates a membership and full category grants
    for the submitter on the resource. Write access automatically grants read access. Simple for
    the common case; problematic when data is submitted on behalf of a community or patient where
-   the submitter may not hold data access consent -- a community liaison submitting on behalf of
+   the submitter may not hold data access consent: a community liaison submitting on behalf of
    an Indigenous community does not automatically have consent to read individual members' records.
 
 2. **Organizational membership grants read access.** All submitters in an organization can read
@@ -790,6 +981,47 @@ Three options with meaningfully different implications, particularly for consent
    Usher grants. Read access requires an explicit grant through the standard category grant flow.
    Most restrictive; most aligned with OCAP and consent-constrained scenarios; adds friction for
    the common case where submitters need to verify their submitted data.
+
+**The requirement is now stated, and it has two independent axes.** A submitter should reach the
+data they submitted, plus whatever they hold grants for, and should not reach what other submitters
+contributed by default.
+
+| Axis | Requirement | Mechanism |
+| ---- | ----------- | --------- |
+| Provenance | A submitter reaches what they submitted, not what others submitted | **Not expressible under resource-level enforcement** |
+| Consent | A submitter may not be entitled to read the sensitive content of what they submitted | Category grants, which MVP has |
+
+These do not substitute for each other, and conflating them is the trap. Provenance scoping does
+not address the consent case at all: the community liaison submitted those records, so scoping
+access to what they submitted hands them precisely the records in question. Only a withheld
+category grant withholds those. Equally, withholding categories does not deliver provenance
+scoping, since every submitter then sees the same uncategorized slice of the whole resource.
+
+**Provenance scoping requires structure the model does not have.** Resources are a flat list with
+no parent relationship, so there is no way to express membership of a submission that belongs to a
+study. Delivering it needs either a two-level resource relationship or record-level enforcement.
+
+Three MVP paths, none yet chosen:
+
+1. **Each submission becomes its own resource.** Delivers both axes without record-level
+   enforcement: the submitter holds membership on their submission-resource, and categories still
+   gate the sensitive content within it. Costs the two-level structure, makes study-wide reader
+   inheritance a real derivation rather than a free consequence of resource-level visibility, and
+   grows the resource count with every submission.
+2. **Membership on the study with no category grants.** Cheapest, and safe on the consent axis, but
+   it delivers the opposite of the stated intent on the provenance axis: every submitter sees every
+   other submitter's uncategorized data.
+3. **No automatic read in MVP.** Read comes only from explicit grants. Violates nothing, delivers
+   no convenience, and forecloses nothing. Provenance scoping then arrives with record-level
+   enforcement.
+
+**Where inheritance is expressed matters more than which path is chosen.** Any rule of the form
+"existing readers of a study reach new submissions in it" must be evaluated when the request is
+made, never written as grants copied onto the new submission at submission time. Copied grants
+outlive the access that produced them, so revoking someone's study access leaves them reading every
+submission made while they held it, silently. Copied grants are also already written when finer
+granularity arrives later, making a narrowing into a data migration. A derivation can simply be
+narrowed.
 
 This decision affects: the Lyric service account model (what Usher operations does the service
 account perform at submission time?); the entity schema (does submission create `membership` and
@@ -808,9 +1040,9 @@ deliberate design choice. References:
 [submission-service tech-debt](https://github.com/imicroseq/submission-service/blob/a7b6439aa420801939ab6190c75ff6de1ad6d8f9/.dev/tech-debt.md#L27-L29);
 [ego-integration-current-state.md](https://github.com/imicroseq/submission-service/blob/main/.dev/docs/auth/ego-integration-current-state.md).
 
-### Data stewardship scoping
+### Custodianship scoping
 
-A user with `category_steward` capability can manage grants for specific data categories without
-platform-wide admin rights. The data model for stewardship scope (which categories a steward
+A user with `category_custodian` capability can manage grants for specific data categories without
+platform-wide admin rights. The data model for custodianship scope (which categories a custodian
 governs) and the capability check in the PAP layer are not yet designed. This is a prerequisite
 for OCAP-compliant deployments and should be designed before the management UI work begins.

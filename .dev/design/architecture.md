@@ -128,7 +128,7 @@ restored.
 - Presenting the user's IdP bearer token to the controller's token exchange endpoint
 - Receiving and locally caching the JWE grants token per user
 - Decrypting grants tokens and exposing the decoded payload as a typed `GrantsPayload`
-  object to the plugin — plugins never see the raw JWE or the decryption key
+  object to the plugin: plugins never see the raw JWE or the decryption key
 - Validating the grants token on every request within the TTL window (no network call to the
   controller in the common case)
 - Maintaining the revocation channel: SSE or WebSocket push subscription with reconnection
@@ -140,10 +140,20 @@ restored.
 
 **Does not own:**
 
-- Translating the grants payload into application-native query formats → **plugin**
+- Compiling a filter into a backend query dialect (Elasticsearch DSL, SQL) → **plugin**
 - Access decisions (grant existence, category membership) → **controller**; the bridge only
   confirms the token is valid, current, and not revoked
-- Any knowledge of the client app's data schema or query language → **plugin**
+- Any knowledge of the client app's data schema: field names, index or table layout, or what a
+  category means in terms of records → **plugin**
+
+**On query languages specifically.** The bridge may know SQON; what must stay out of it is the
+backend. SQON is a shared Overture language
+rather than one adopter's dialect: Arranger owns the module (`@overture-stack/sqon`), and Lyric
+consumes SQON as well, so a SQON-shaped filter is portable across the read path and the
+submission path without translation. What must stay out of the bridge is the *backend*, since
+Arranger compiles SQON to Elasticsearch DSL and Lyric compiles it to SQL. Rendering a resolved
+grant set into SQON is generic and may live in the bridge; compiling SQON into a backend query
+is adopter-specific and belongs in the plugin.
 
 ---
 

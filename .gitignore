@@ -133,3 +133,7 @@ lyric.code-workspace
 
 # MacOS metadata
 .DS_Store
+
+# Claude Code: user-specific settings (project settings.json is committed)
+.claude/settings.local.json
+.claude/memory/
