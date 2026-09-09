@@ -16,8 +16,8 @@ as a whole. Narrowing within a resource, by rows or by fields, comes later.
 Usher controls who can see data. It does not modify the underlying records to enforce that
 control.
 
-This is a hard design boundary. Access policies are computed against the data, then expressed as
-constraints returned to the requesting application. That includes content-based rules such as
+This is a hard design boundary. Access policies are computed against the data, then expressed as a filter returned to the
+requesting application. That includes content-based rules such as
 "access if fieldA equals X". The data itself is never modified as a side effect of a policy
 decision. There are no permission-driven data migrations and no field redactions written back to
 the source. No synthetic columns are added to support access logic.
@@ -96,8 +96,10 @@ Using the venue/concert analogy (fitting given the service name):
 
 ### PDP: Policy Decision Point
 
-The PDP receives a question: "can this person access this?" It returns a decision: "yes, with
-these constraints" or "no".
+The PDP receives a question: "can this person access this?" It returns one of three answers: no,
+yes without restriction, or yes narrowed by a filter. Keeping the middle and the last apart is
+deliberate: an unrestricted yes and a yes that happens to exclude nothing look identical in a query
+and mean opposite things.
 
 Analogy: the usher checking your ticket. They don't make the rules; they apply them. They tell you
 which section you're allowed into and what you're not allowed to bring in.
@@ -210,7 +212,7 @@ The difference matters if you are planning a deployment:
 | A record satisfying two cohort predicates at once, such as `disease_type == "rare"` and `age_at_diagnosis < 18` | | Post-v1 |
 | Narrowing within a resource, by rows or by fields | | Post-v1 |
 
-That constraint also settles a question this document previously left open. If a record could
+Records not overlapping in v1 also settles a question this document previously left open. If a record could
 belong to two cohorts and a user held only one of them, should they see it? There was a real choice
 there between requiring all of a record's cohorts and requiring any one of them. In v1 the case
 cannot arise, so the choice is deferred rather than made. It returns when overlapping cohorts do.
@@ -656,9 +658,54 @@ SONG's API.
 A standard authorization decision is binary: allowed or denied. A **grants token** extends this. It
 carries structured data describing the specific conditions under which access is allowed.
 
-A binary decision says "alice is allowed to query the dataset". A grants token says something more
-specific. It says "alice holds member access to resources A and B; within resource A she holds a
-category grant for `indigenous_data`; within resource B she holds no category grants".
+A binary decision says "this user may query the dataset". A grants token says something more
+specific: which datasets, which classes of data within them, and what may be done with each.
+
+Here is one, for a researcher who reaches two studies:
+
+```
+{
+  "sub":         "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+  "iss":         "https://usher.example.org",
+  "aud":         "arranger-prod",
+  "iat":         1718611200,
+  "exp":         1718611500,
+  "generatedAt": 1718611200,
+
+  "grants": {
+    "HEART_STUDY": [ { "open": ["view", "download"] },
+                     { "controlled": ["view"] } ],
+
+    "LUNG_COHORT": [ { "open": ["view"] } ]
+  }
+}
+```
+
+Read out: in `HEART_STUDY` this user may view and download the open records, and may view the
+controlled ones without downloading them. In `LUNG_COHORT` they may view the open records and
+nothing else. Every other resource on the platform is absent, and absence means no access rather
+than a denial recorded somewhere.
+
+Three things about the shape are worth naming, because each is a decision rather than a detail.
+
+**A resource's unrestricted portion is a category like any other.** `open` is named in a grant the
+same way `controlled` is. Nothing is reachable because a grant declined to exclude it, so there is
+no baseline sitting outside the category system for a reader to infer.
+
+**Capabilities attach to a category, not to the resource.** That is what lets this user download open
+records while only viewing controlled ones. Two independent grants, and holding both reaches what
+either covers.
+
+**No role appears, and neither does ownership.** A role is how access is granted rather than how it
+is enforced: the controller resolves a role to capabilities before writing the token, so a plugin
+tests capabilities and never has to learn what a deployment means by "member". Ownership is a power
+over how access is managed, exercised against Usher itself, so nothing that enforces a query has
+any use for it.
+
+There is also no empty list. Holding no grant on a resource means the same as the resource being
+absent, so the token has one state to enforce rather than two that had to be told apart. For the
+authoritative field-by-field schema, see
+[security-workflow.md](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md).
 
 The app plugin (PEP) reads the grants payload and applies it to the outgoing query, before the query
 reaches the data layer. The payload is enforced server-side, not client-side. The client never

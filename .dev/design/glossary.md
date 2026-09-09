@@ -93,9 +93,10 @@ from the grantee. Enable for deployments where explicit acceptance is not operat
 appropriate (machine-to-machine sharing, internal pipelines). See [permissions-model.md](permissions-model.md).
 
 **Category grant**
-An explicit, logged record allowing a specific user to access records or fields tagged with a
-specific data category within a specific resource. Grants are additive; lacking a grant for a
-category means that category's content is excluded from the user's view. See
+An explicit, logged record allowing a specific user to reach a specific data category within a
+specific resource, with the capabilities the grant confers. Grants are additive: each renders a
+positive predicate, and content no grant selects is simply never reached rather than excluded by a
+rule. Under MVP a category is carried by a whole resource; per-record categories are post-MVP. See
 [permissions-model.md](permissions-model.md).
 
 **Cohort** _(data science sense: applied to data, not people)_
@@ -127,13 +128,11 @@ A named access dimension that applies to a subset of records or fields within a 
 Examples: `indigenous_data`, `controlled_access`. Categories are defined at the platform level;
 access requires an explicit category grant. See [permissions-model.md](permissions-model.md).
 
-**`categories`** _(per-resource field in grants token)_
-The include-list of data categories the user holds grants for within a specific resource. Only
-granted categories appear; denied categories are absent entirely, revealing nothing about what
-the user cannot access. The PEP plugin derives what to filter by subtracting this list from the
-full category set in its own config, then translates each absent category into a native filter
-expression. Empty list = member access with no category grants (uncategorized records only).
-Resource absent from the token entirely = no access to that resource.
+**A resource's grant list** _(the value against each resource in a grants token)_
+A list of grants held on that resource, each naming one category and the capabilities held on it,
+such as `{ "controlled": ["view"] }`. Only held grants appear, so a category the user lacks is
+absent rather than named, revealing nothing about what exists. The list never appears empty: holding
+no grant on a resource means what the resource being absent already means, which is no access.
 
 **Membership**
 A user's association with a resource, carrying a role. Membership alone does not grant access to
@@ -162,9 +161,11 @@ use project, dataset, or program. Those names are deployment vocabulary; Usher's
 uses "resource" throughout. See "Deployment vocabulary" in [concepts.md](../../docs/concepts.md).
 
 **Role**
-A coarse-grained capability label attached to a membership (for example `member`, `owner`).
-Describes what kind of actions a user can perform within a resource, independent of which data
-categories they can access.
+A label attached to a membership (for example `member`, `owner`) standing for the capabilities it
+confers. A role is how access is authored rather than how it is enforced: the controller resolves it
+to capabilities before writing a grants token, so no role name reaches a plugin. Capabilities are
+held per category rather than across a resource, which is what lets one grant permit downloading
+while another permits only viewing.
 
 ---
 
@@ -241,14 +242,15 @@ resources and memberships; see [architecture.md](architecture.md).
 
 **Server-side filter** _(Arranger-specific)_
 A SQON filter injected into every Arranger query by the plugin before the query reaches the search
-engine. The primary mechanism for record-level access enforcement in Arranger; derived by
-subtracting the token's `categories` include-list from the plugin's full category config, then
-translating each absent category into a SQON expression.
+engine. This is where enforcement happens in Arranger. The filter is built additively: each grant the
+token carries renders one positive predicate, and those compose with `or`, so a record no predicate
+selects is simply never returned. Nothing is subtracted and no exclusion is computed. Under MVP the
+whole filter is a single clause naming the resources the principal may reach.
 
 **SQON (Structured Query Object Notation)** _(Arranger-specific)_
-Arranger's filter expression format. The `usher-arranger` plugin derives the exclusion set from
-the `categories` include-list in the grants payload and translates it into SQON server-side
-filters applied to every query.
+Arranger's filter expression format, and the wire format the bridge emits. The bridge builds the
+predicate and `usher-arranger` compiles it into the query Arranger runs, supplying the field name for
+the catalogue being queried, since which field names a resource differs between catalogues.
 
 **Token exchange**
 The call a PEP plugin makes to Usher presenting an IdP bearer token and receiving a scoped

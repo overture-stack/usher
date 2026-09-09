@@ -42,7 +42,7 @@ capability set will apply incorrect filters. Either the token schema needs to su
 the collapsing rule needs to be defined and its safety argued.
 
 **[MEDIUM] Anonymous token cache key is undefined.**
-Downgraded: the anonymous role answers the shape of it. Every anonymous caller receives exactly that
+Downgraded: the anonymous role answers most of it. Every anonymous caller receives exactly that
 role's grants, so they are all receiving the same token and one shared token per deployment is
 correct rather than one of several options. What stays open is narrower: the invalidation key, which
 wants a version or generation on the anonymous role, since a change to it is a policy change with no
@@ -79,6 +79,28 @@ token (still within its TTL, issued before expiry) that is presented after the e
 be correctly rejected by the bridge before the bridge has learned of the expiry.
 
 ---
+
+## Admin access paths
+
+**[HIGH] The plugin-level admin bypass skips the gate the grant-gating decision says nothing skips.**
+`admin-model.md` documents a bypass in which a plugin detects the platform-admin role in the IdP
+token and applies no filter at all. It creates no grant record, is logged only by the plugin, is
+disableable per deployment, and the document already recommends disabling it for health-data
+deployments.
+
+The grant-gating decision in `decisions.md` states that a grant passes two stages and that there is
+no administrative path that skips the second, only a broader entitlement to enter it. The bypass is
+exactly such a path: no grant, no custodian approval, no category evaluated.
+
+Both were written deliberately and the bypass predates the custodian decision, so this is a
+reconciliation rather than an error in either. The question is narrow and not an engineering one:
+**where a category carries a custodian, may a deployment enable a bypass that reaches that
+category's data without the custodian's approval?** For community-governed data the answer looks
+like no, which would make the bypass conditional on the categories a resource carries rather than a
+single deployment-wide switch.
+
+Until it is answered, `decisions.md` overstates. Recorded there as an exception to be resolved
+rather than silently left standing.
 
 ## Token contract
 
@@ -135,7 +157,8 @@ live today.
                  { "controlled": ["view"] } ]
 
 **And it retires `categories: []`**, which was flagged in review as not sitting right and whose gloss
-has been corrected twice. Under this shape it cannot occur: any access to a resource means holding
+has been corrected twice. With open content as a category it cannot occur: any access to a
+resource means holding
 at least one grant on it, and holding none is the same as absence from the map. One state instead of
 two that had to be told apart.
 
@@ -362,7 +385,7 @@ grants. They are distinct governance reasons for the same technical effect. The 
 must not conflate them: a resource in the orphan-hidden state should not be treated as embargoed,
 and lifting the embargo should not restore a resource that is still ownerless. Whether these share
 a single `visibility` state field with typed reasons, or are separate flags, needs a deliberate
-decision before the data model is finalised.
+decision before the data model is finalized.
 
 **[MEDIUM] Guardian-to-subject ownership transfer on age of majority is not designed.**
 When data is submitted for a minor subject, the legal guardian holds ownership over that
@@ -484,7 +507,7 @@ the bridge deployment requirements.
 
 **[LOW] Valkey failure mode is not described.**
 `architecture.md` documents Valkey's two roles (shared cache and revocation pub/sub backbone)
-but does not describe failure behavior. If Valkey is unavailable: controller instances cannot
+but does not describe failure behaviour. If Valkey is unavailable: controller instances cannot
 coordinate push revocation events; the fast-path cache is inaccessible (falls back to full
 policy recompute). Is the system in a degraded-but-safe mode (poll-only revocation, slower
 propagation, higher controller load)? Or does Valkey unavailability trigger fail-secure across

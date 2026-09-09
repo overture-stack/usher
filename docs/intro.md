@@ -66,7 +66,7 @@ Usher is Overture's [authorization](concepts.md#authentication-vs-authorization)
 
 **Grants** are explicit records: this user holds access to this category within this resource. Usher enforces deny-by-default. No grant means no access, always.
 
-**[The grants token](concepts.md#grants-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It contains the categories the user holds grants for within each resource the requesting application manages. A shared library called the bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The plugin then applies that decision before any query reaches the data layer. The token never reaches the user.
+**[The grants token](concepts.md#grants-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It carries, for each resource the requesting application manages, the grants the user holds there: which category each names and what they may do with it. A shared library called the bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The plugin then applies that decision before any query reaches the data layer. The token never reaches the user.
 
 **The revocation channel** keeps a live connection open so Usher can announce a grant change immediately, with regular polling as a fallback if that connection drops. Each bridge subscribes to it.
 

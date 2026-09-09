@@ -88,8 +88,9 @@ be safe; misconfiguration must fail loudly, not silently.
 
 - How Usher validates IdP tokens (OIDC discovery, key rotation, accepted `aud` values) is not yet
   designed. A permissive or unconfigured IdP validation is a critical misconfiguration risk.
-- The JWE decryption key distribution mechanism is not yet designed. A default or empty key would
-  be a severe misconfiguration. See [plugin-integration.md](plugin-integration.md).
+- Key provisioning is settled in outline, since an application registers a public key rather than
+  receiving a secret, but rotation is not. A default or empty key would still be a severe
+  misconfiguration. See [plugin-integration.md](plugin-integration.md).
 - Startup validation: Usher should refuse to start rather than run with insecure defaults
   (missing key, missing IdP config, etc.).
 
@@ -127,7 +128,7 @@ non-negotiable.
 
 - JWE algorithm selection is not yet decided. The document describes JWE conceptually; the
   specific algorithms must be chosen and documented before implementation.
-- Key rotation: how the JWE decryption key is rotated without downtime is not yet designed.
+- Key rotation: how an application's key pair is rotated without downtime is not yet designed.
   Health data contexts may require frequent key rotation. See
   [plugin-integration.md](plugin-integration.md).
 - Database encryption at rest: not yet specified. Health data stored in Usher's policy store

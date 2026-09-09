@@ -20,7 +20,8 @@ literals, with prebuilt adapters compiling that AST into ORM queries.
 **What it contributed.** The standalone PDP service pattern, rather than an embedded library, is
 the right architecture for an authorization service shared across applications, and its REST API is
 a reference for Usher's decision API: a clear request schema (principal, resource, action) and a
-structured, auditable response. Its query plan is the shape Usher's enforcement path uses.
+structured, auditable response. Its query plan returns the same three-way result Usher's
+enforcement path returns.
 `Enforcement` is the same three-way discriminated union and SQON is the same condition AST.
 
 **Three requirements an evaluation would test it against.**
@@ -520,7 +521,7 @@ Every read of a shared artifact is answered by the record and the subject. The d
 is not, because it turns on what the artifact was derived from, and that is a governance question
 about a body of data.
 
-The case that produced this rule is a saved cohort. Such a record can carry the materialised
+The case that produced this rule is a saved cohort. Such a record can carry the materialized
 identifier list and the query that selected it, and reading the record is not resolving it, so
 neither passes through data enforcement. Sharing one therefore discloses which subjects share a
 clinical or genomic property, and what property, to someone who cannot retrieve a single one of
@@ -765,23 +766,24 @@ That friction is the point.
 
 **The invariant this rests on, stated so it is not rediscovered.** Denial is represented in the
 result's kind and never inside the SQON. The moment a deny is expressed as a SQON value, it
-inherits every empty-combination hazard above, because the discrimination that made it safe has
-been pushed back down into the structure that cannot carry it. The `in`-with-empty-values encoding
+inherits every empty-combination hazard above. What made deny safe was deciding it outside SQON.
+Putting it back inside returns it to a language with no way to say it. The `in`-with-empty-values
+encoding
 is a fail-closed way to say "match nothing" where a filter is unavoidable; it is not a licence to
 represent the deny arm as a filter.
 
 **The underlying reason is that SQON is a general query language pressed into service as an
 authorization artifact.** A language built for narrowing has no natural "match nothing" element,
 because narrowing from nothing is not a query anyone writes. That absence is the root of the
-hazard, and it is why the discrimination has to live above the language rather than within it.
+hazard, and it is why deny has to be decided outside SQON rather than expressed within it.
 
 **Independently corroborated by an unrelated implementation.** Cerbos's `PlanResources`, built for
 the same job of turning a policy into a residual filter, returns exactly this three-way
 discrimination: `KIND_ALWAYS_ALLOWED`, `KIND_ALWAYS_DENIED`, and `KIND_CONDITIONAL` carrying an
 AST. Its documented rationale is the one recorded here, a discriminated union at the type level so
-that callers must handle each case distinctly. Two designs reaching the same shape from different
-starting points is the strongest available evidence that the shape is a property of the problem
-rather than a preference.
+that callers must handle each case distinctly. Two designs reaching the same three-way split from
+different starting points is the strongest available evidence that the problem forces it rather
+than that anyone preferred it.
 
 ---
 
@@ -803,38 +805,37 @@ enforcement: there is no backstop at the network layer.
 
 ### Token lifetime never bounds how long an operation may take
 
-**The precedent this exists to avoid is in the system being replaced.** EGO's access token lifetime
-is three hours because submitters run large uploads that outlive a short token and fail partway. The
-fix worked and cost a three-hour revocation window for every principal and every operation, not
-just for uploads.
+**The precedent is in the system being replaced.** EGO's access tokens last three hours. The reason
+is that submitters run large uploads, which outlive a short token and fail partway. Lengthening the
+token stopped the failures. It also handed every principal and every operation a three-hour
+revocation window, not just uploads.
 
-**What went wrong is a scope error, not a duration error.** A credential authorizing everything a
-principal may do, platform-wide and for reads as well as writes, was lengthened so that one
-long-running write would survive. Scope and duration trade against each other: a credential may
-reasonably be broad *or* long-lived, and a broad long-lived one is the worst of the four
-combinations. The narrow, long-lived authorization that one upload actually needed was never the
-thing extended.
+**The error was scope, not duration.** What got lengthened authorized everything a principal may do,
+platform-wide, for reads as well as writes. It was lengthened so that one long write would survive.
+Scope and duration trade against each other: a credential may be broad, or long-lived, but broad and
+long-lived is the worst of the four. Nobody extended the narrow, long-lived permission that upload
+actually needed.
 
-**So this design does not permit the same trade.** The grants-token lifetime is a bound on credential
-exposure and is never adjusted to accommodate the duration of any operation. Where an operation
-cannot complete inside it, the operation is what changes.
+**This design does not permit lengthening a credential to fit an operation.** The grants-token lifetime bounds credential exposure. It
+is never adjusted for how long an operation takes. Where an operation cannot finish inside it, the
+operation changes.
 
-**Usher's structure removes most of the exposure by accident of shape, and the residue matters.** The
-grants token is fetched by the bridge and cached there; a principal never holds one. Its expiry
-therefore does not abort a principal's work, because the bridge re-exchanges transparently and the
-controller re-evaluates current policy when it does, which is the property the whole revocation
-design rests on. What remains is the principal's own identity token, held by the client for the
-duration of an operation, and any step of an upload that requires a valid one can still fail
-partway. The problem moves; it does not vanish.
+**Most of the exposure is absent here by accident of shape.** A principal never holds a grants
+token; the bridge fetches it and caches it. So its expiry aborts nothing. The bridge re-exchanges,
+and the controller re-evaluates current policy when it does. Re-evaluating on every exchange is
+what the whole revocation design rests on.
 
-**What that requires, stated as a constraint on the work rather than as its design.** A long-running
-operation is authorized as an operation, with a scope naming what it may touch, and it is revocable
-in its own right so a withdrawal reaches work in flight instead of waiting for a credential to
-lapse. That is strictly better than what it replaces rather than merely different: today an upload
-in progress cannot be stopped short of the token's three hours.
+**One exposure does remain.** A principal's own identity token sits in a client for the duration of an
+operation. Any upload step needing a valid one can still fail partway. The problem moves; it does
+not vanish.
+
+**What that requires, as a constraint rather than a design.** A long-running operation is authorized
+as an operation, with a scope naming what it may touch. It is revocable in its own right, so a
+withdrawal reaches work in flight rather than waiting for a credential to lapse. That is better than
+parity: today an upload in progress cannot be stopped short of three hours.
 
 **Upload is a third enforcement surface, and duration is what distinguishes it.** Searching is
-instantaneous and downloading is short; only submission runs long enough for a credential to expire
+instantaneous. Downloading is short. Only submission runs long enough for a credential to expire
 underneath it. See the long-running operation item in [../roadmap.md](../roadmap.md).
 
 ---
@@ -1090,8 +1091,8 @@ anyway.
 
 **Why accept it.** The alternative distributes predicate *construction* instead of predicate
 *translation*, and construction is where every fail-open defect in this design has been found while
-translation has produced none. Moving a mechanical cost outward to keep a semantic one central is
-the trade being made deliberately.
+translation has produced none. Translating a predicate is mechanical; constructing one is not.
+Pushing the mechanical work outward to keep construction central is the deliberate trade.
 
 ---
 
@@ -1114,40 +1115,44 @@ compensating control. See the grant-gating decision below for what that costs an
 
 ### Granting is one function, and the data's restrictions are the last gate
 
-An administrator may grant permissions, to themselves or to anyone else, and permissions here means
-more than reading data: assigning a role, making someone an owner, conferring a capability. What an
+An administrator may grant permissions, to themselves or to anyone else. Permissions here means more
+than reading data: assigning a role, making someone an owner, conferring a capability. What an
 administrator cannot do is bypass what the data itself requires.
 
-**So a grant passes through two stages, and who initiated it changes only the first.** Authority to
-issue the grant comes first, and an administrator has it broadly. The restrictions the data carries
-come second, and where a category requires a custodian's approval that approval is the final gate,
-applied identically whether the grant was initiated by an administrator, an owner or a custodian.
-This is the grant-authority-as-one-function property stated from the outside: there is no separate
-administrative path that skips the gate, only a broader entitlement to enter it.
+**A grant passes two stages, and who started it changes only the first.** Authority to issue comes
+first, and an administrator holds it broadly. What the data requires comes second. Where a category
+requires a custodian's approval, that approval is the final gate. It applies identically whether an
+administrator, an owner or a custodian started the request. There is no administrative path that skips the
+gate, only a broader entitlement to enter it, **with one exception that predates this decision and
+is not yet reconciled**: the plugin-level admin bypass in `admin-model.md` applies no filter at all
+and creates no grant. It is off by default for health-data deployments. Whether it may remain
+enabled where a category carries a custodian is recorded as an open item in
+[to-discuss.md](to-discuss.md).
 
-**A category may have no custodian assigned, and then there is no gate.** The earlier form of this
-decision made a non-empty custodian set an invariant, which was stricter than intended. The chosen
-control is a warning rather than a refusal: where a dataset carries a category with nobody assigned
-to approve for it, the system must have already warned that dataset's owners, so an unguarded
-category is a known state rather than a discovered one.
+**A category may have no custodian assigned, and then there is no gate.** An earlier form of this
+decision made a non-empty custodian set an invariant. That was stricter than intended. The control
+chosen is a warning rather than a refusal. Where a dataset carries a category with nobody assigned
+to approve for it, the system must have warned that dataset's owners. An unguarded category is
+therefore a known state rather than a discovered one.
 
-**This is the one place the design accepts a permissive failure, and it is worth naming as such.**
-Everywhere else uncertainty withholds. Here an unassigned custodian lets an administrator reach
-community-governed data, with the warning as the compensating control and the owners carrying the
-responsibility to act on it. Two things follow for the implementation: the warning has to be
-delivered and recorded rather than merely displayed, since a control that depends on someone reading
-it needs evidence that it was sent, and the resulting access needs an audit event distinguishable
-from an approved one, because "reached without approval because none was configured" is a different
-fact from "approved".
+**This is the one place the design accepts a permissive failure.** Everywhere else uncertainty
+withholds. Here an unassigned custodian lets an administrator reach community-governed data. The
+warning is the compensating control, and the owners carry the responsibility to act on it.
+
+Two things follow for the implementation. The warning must be delivered and recorded rather than
+displayed, because a control that depends on someone reading it needs evidence it was sent. And the
+access it permits needs its own audit event: reached without approval because none was configured is
+a different fact from approved.
 
 **Open: whether appointing a custodian needs a second party.** An administrator who may appoint
-custodians can appoint themselves and then approve their own grant, so the control's strength rests
-on appointment being harder than approval. Appointment must at minimum produce its own audit event.
+custodians can appoint themselves, then approve their own grant. The control's strength therefore
+rests on appointment being harder than approval. Appointment must at minimum produce its own audit
+event.
 
 **On the portal flows.** Flow 5.6 says an administrator has no sharing controls. That is compatible
-with this if it describes the portal's own interface rather than the capability: the portal's
-sharing journey belongs to the data-plane roles, while the administrative capability exists at
-Usher's API. Worth confirming with the author rather than assuming.
+with this if it describes the portal's interface rather than the capability. The portal's sharing
+journey belongs to the data-plane roles; the administrative capability lives at Usher's API. Worth
+confirming with the author.
 
 ### One account, several addresses, and only verified ones bind
 

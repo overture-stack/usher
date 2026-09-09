@@ -35,7 +35,8 @@ entities"), then [permissions-model.md](permissions-model.md).
 responsibilities belong to usher-bridge vs the plugin), then
 [security-workflow.md](security-workflow.md) (what the plugin must do and when), then
 [permissions-model.md](permissions-model.md) (what the grants payload contains), then
-[plugin-integration.md](plugin-integration.md) (the API contract, not yet designed).
+[plugin-integration.md](plugin-integration.md) (the API contract, designed in intent and not yet
+specified as request and response shapes).
 
 ## Document coverage
 
@@ -49,7 +50,7 @@ responsibilities belong to usher-bridge vs the plugin), then
 | [permissions-model.md](permissions-model.md) | Hybrid role + attribute model, data categories, cohort semantics, OCAP, private data sharing | in progress |
 | [admin-model.md](admin-model.md) | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity | in progress |
 | [decisions.md](decisions.md) | Tools reviewed before building; architectural decisions with rationale | reference |
-| [plugin-integration.md](plugin-integration.md) | Per-app plugin design, bridge library (`usher-bridge`) | not started |
+| [plugin-integration.md](plugin-integration.md) | Per-app plugin design, bridge library (`usher-bridge`) | designed; not yet a spec |
 | [management-ui.md](management-ui.md) | Access management UI (PAP layer) | not started |
 | [audit-events.md](audit-events.md) | Policy-plane event catalogue, common fields, severity mapping | specced |
 | [to-discuss.md](to-discuss.md) | Design gaps, inconsistencies, and security properties requiring resolution before implementation | review |
@@ -78,8 +79,8 @@ designed: role capability definitions, the field-level restriction implementatio
 groups detail, custodianship scoping, and write permissions for Lyric. See
 [permissions-model.md](permissions-model.md).
 
-**Not yet started:** How app plugins are built and configured, how the decryption key is distributed
-to the bridge at client app deploy time, the API contract (specific endpoints, request/response shapes, error
+**Not yet started:** How app plugins are built and configured, how an application's key pair is
+rotated, the API contract (specific endpoints, request/response shapes, error
 codes), the SQL schema in detail, deployment architecture, multi-tenancy, rate limiting on the
 Usher API itself, and the management UI design are all open. Stubs with known requirements and
 open questions are in [plugin-integration.md](plugin-integration.md) and
@@ -93,8 +94,8 @@ cross-application implications and should not be resolved by a single developer 
 
 | Question | Documented in | Blocks |
 |---|---|---|
-| Overlapping cohort access semantics: if a record belongs to cohorts A and B and a user is a member of A only, do they see it? (OR vs AND) | [permissions-model.md](permissions-model.md) | Core grants resolution |
-| Multi-category intersection: does holding `controlled` and `indigenous` grants separately auto-grant access to records tagged with both? | [permissions-model.md](permissions-model.md) | OCAP compliance posture; data model |
+| Overlapping cohort access semantics: if a record belongs to cohorts A and B and a user is a member of A only, do they see it? (OR vs AND) | [to-discuss.md](to-discuss.md) | Nothing at present: unreachable where a record cannot belong to two resources, which holds for the first deployment |
+
 | Custodianship scoping: how is a `category_custodian` capability stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; OCAP deployments |
 | User groups design: Keycloak sync or PAP-only? Grant composition across overlapping groups? Revocation when a user leaves a group? | [permissions-model.md](permissions-model.md) | Core data model; management UI |
 | JWE algorithm selection: AES-256-GCM for content; RSA-OAEP or ECDH-ES for key wrap? | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |

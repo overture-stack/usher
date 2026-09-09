@@ -44,11 +44,12 @@ for the access-decision logging requirements consuming apps must implement.
 | `identity.revoke`             | User identity flagged as compromised; all active grants revoked                            | Admin              | User                       | `admin_id`, `revoked_user_id`, `scope`                                        | `critical` |
 | `resource.register`           | Study or cohort registered                                                                 | Admin or submitter | Resource                   | `actor_id`, `resource_id`, `field_name`, `field_value`, `initial_owner_id`    | `info`     |
 | `ownership.transfer`          | Resource ownership transferred                                                             | Owner or admin     | Resource                   | `actor_id`, `from_owner_id`, `to_owner_id`, `resource_id`                     | `info`     |
-| `ownership.auto_promote`      | Last remaining holder automatically promoted to owner                                     | System             | Resource                   | `resource_id`, `new_owner_id`, `trigger_event_type`                           | `warning`  |
+| `ownership.auto_promote`      | Superseded: the non-empty-owner invariant removes the case. Last remaining holder promoted                                     | System             | Resource                   | `resource_id`, `new_owner_id`, `trigger_event_type`                           | `warning`  |
 | `resource.orphaned`           | Resource has no owner; admin notified                                                      | System             | Resource                   | `resource_id`, `last_owner_id`, `trigger_event_type`                          | `critical` |
 | `resource.visibility.change`  | Resource hidden or restored due to ownership state                                         | System or admin    | Resource                   | `actor_id`, `resource_id`, `from_state`, `to_state`, `reason`                 | `warning`  |
 | `custodianship.assign`          | Custodian role assigned to a user for a category within a resource                           | Owner or admin     | User + category + resource | `actor_id`, `custodian_id`, `resource_id`, `category`                           | `info`     |
 | `custodianship.remove`          | Custodian role removed from a user                                                           | Owner or admin     | User + category + resource | `actor_id`, `custodian_id`, `resource_id`, `category`                           | `info`     |
+| `grant.unguarded`             | A grant took effect without custodian approval because the category had none assigned |
 | `admin.override`              | Admin performed an action that bypasses a deployment config restriction                    | Admin              | Varies                     | `admin_id`, `operation`, `config_bypassed`, `resource_id`                     | `critical` |
 | `revocation.mode.change`      | Revocation channel mode changed (normal / uncertain / suspended)                           | System             | All active sessions        | `from_mode`, `to_mode`, `reason`                                              | `critical` |
 
@@ -60,3 +61,9 @@ for the access-decision logging requirements consuming apps must implement.
   minimum retention. See [security-threat-model.md](security-threat-model.md) § A09.
 - Alerting SLAs per severity level: not yet defined.
 - Bulk grant operation threshold: configurable; default value not yet decided.
+- `grant.unguarded` needs its required fields settling. The grant-gating decision requires that
+  access reached without approval be distinguishable from approved access, since a category with no
+  assigned custodian leaves no gate; see [decisions.md](decisions.md). The warning to that dataset's
+  owners is a separate delivery record and is not this event.
+- Ownership events still read as transfer between single holders. Ownership is a non-empty set, so
+  adding and removing a holder are the primary operations and transfer is a compound of the two.

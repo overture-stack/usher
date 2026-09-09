@@ -22,8 +22,13 @@ as "studies"; "memberships" appear as "study enrolments").
 - **Role management:** define the roles available for assignment (e.g. owner, member).
 - **Data category management:** define data categories and assign them to resources.
 - **Membership management:** assign users to resources with a role; view and revoke memberships.
-- **Category grant management:** grant or revoke user access to specific data categories within a
-  resource (exposed as a checklist within the membership editor).
+- **Category grant management:** grant or revoke access to specific data categories within a
+  resource. Not a checklist: a grant carries the capabilities held on that category, so the control
+  is per-category and multi-valued rather than a single box.
+- **Custodian appointment:** assign and remove the custodians who approve access to a data
+  category. This is the control standing between an administrator and community-governed data, so
+  its own constraints are a governance question rather than a UI one; see the appointment item in
+  [decisions.md](decisions.md).
 - **Revocation controls:** trigger emergency revocation for a user, all users of a resource, or
   platform-wide (global revocation requires explicit confirmation).
 - **Audit log:** record of all access decisions, permission changes, and revocation events. Scope,

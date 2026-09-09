@@ -58,7 +58,7 @@ changes to caching clients.
 
 Usher is designed to work with Keycloak, not replace it. Keycloak authenticates the user and
 establishes coarse membership; Usher resolves the fine-grained grant set and delivers it to the
-application as a grants token the plugin applies to every query.
+application as a [grants token](concepts.md#grants-tokens) the plugin applies to every query.
 
 **OPA (Open Policy Agent)**
 

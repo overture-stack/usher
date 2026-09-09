@@ -44,7 +44,7 @@ User --IdP JWT--> App (with usher-bridge + plugin / PEP)
                         |
                         v
               Encrypted grants token (JWE)
-              [ payload, readable only by the bridge (via the decryption key): ]
+              [ payload, readable only by that application's bridge (its private key): ]
               {
                 "sub": "user-id",           // null for anonymous access
                 "iss": "https://usher.example.org",
@@ -391,7 +391,7 @@ connection itself is the liveness signal. A dropped connection that cannot be re
 within the grace period is sufficient to trigger revocation-uncertain mode; no separate
 heartbeat is needed.
 
-**Startup behavior.** At bridge startup, no cached tokens exist and the revocation channel is
+**Startup behaviour.** At bridge startup, no cached tokens exist and the revocation channel is
 not yet established. The bridge must not serve requests until the revocation channel is confirmed
 active: doing so would create a window with no revocation coverage. In practice this means the
 bridge enters a brief initializing state on startup, queuing or rejecting requests until the
@@ -424,7 +424,7 @@ connectivity is not in the hot path.
 
 ### Decryption key distribution
 
-How does the bridge receive and rotate the JWE decryption key securely? Options include:
+How does a bridge receive and rotate its application's private key securely? Options include:
 provisioned as an environment variable at deploy time, fetched from a secrets manager (Vault, AWS
 Secrets Manager) at startup, or issued by the controller itself via a key-exchange endpoint that
 requires mutual authentication. Key rotation strategy (how often, how the bridge picks up a new

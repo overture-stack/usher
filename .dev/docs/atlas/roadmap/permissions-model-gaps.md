@@ -3,7 +3,7 @@
 Seven open items before the permissions model is complete and the core service can be implemented. See `.dev/design/permissions-model.md`.
 
 - **Role capability definitions.** What specific actions does each role permit beyond resource access?
-- **Field-level restriction implementation approach.** Options A-D analysed; recommendation: start with A, extend to C. Formal choice not yet committed.
+- **Field-level restriction implementation approach.** Options A-D analyzed; recommendation: start with A, extend to C. Formal choice not yet committed.
 - **Overlapping cohort access semantics.** If a record belongs to cohorts A and B and the user is a member of A only, do they see it? (OR vs AND; see `permissions-model.md` open questions)
 - **User groups design.** Keycloak sync or PAP-only? Composition when groups overlap? Revocation when a user is removed from a group? Entities are placeholders; design not yet done.
 - **Custodianship scoping.** `category_custodian` capability data model: OCAP prerequisite; must be designed before management UI work begins. See `permissions-model.md` OCAP section.

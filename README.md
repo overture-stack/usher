@@ -1,12 +1,12 @@
 # Usher
 
-Usher is an authorization service for the Overture platform. It answers "what is this user allowed to see?", and returns structured constraints that each Overture application enforces
-at their own query layer, without a per-request call back to Usher.
+Usher is an authorization service for the Overture platform. It answers "what is this user allowed to see or do?", and returns structured grants that each
+Overture application enforces at its own query layer, without a per-request call back to Usher.
 
 Usher is not an authentication service. Authentication is delegated to the configured identity
 provider (Keycloak, Azure Entra ID, or any OIDC-compatible provider).
 
-</br>
+<br/>
 
 <!-- > <img align="left" src="ov-logo.png" height="50"/> -->
 
@@ -29,7 +29,7 @@ principles), see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 The Overture platform includes the following components:
 
-</br>
+<br/>
 
 | Software                                                | Description                                                                               |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |

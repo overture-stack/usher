@@ -41,8 +41,11 @@ The permissions model introduced three privileged roles: Admin, Custodian, and O
 | Submitter       | Their submitted resource           | Data provenance; member access to own data                   | Yes; member access only                  |
 | Service account | Explicitly enumerated capabilities | Performs system operations only                              | No                                       |
 
-**Submitter vs. owner:** submission establishes data provenance and gives the submitter
-member access to their own resource. It does not automatically confer management rights.
+**Submitter vs. owner:** submission establishes data provenance. It does not automatically confer
+management rights, and **whether it confers read access to the submitted data is an open scope
+decision**, not a settled property: see the write-versus-read blocker in
+[../docs/phase-1.md](../docs/phase-1.md), whose recommendation is that submission and read be
+governed independently. Earlier text here asserted member access as though decided.
 Ownership is an optional, per-resource designation: some submitters are also owners;
 others are not. An Owner need not be the submitter. See permissions-model.md "Submitters and
 owners" for the full model and the open question on assignment timing.
@@ -109,12 +112,14 @@ This migration must be planned and coordinated before any EGO infrastructure is 
 - View full audit log
 - Register and manage service accounts in Usher (which capabilities a service account holds)
 - Self-grant data access to a specific resource (see the Self-grant section)
-- Query data applications without SQON filters when the PEP plugin is configured to detect and
-  honour the platform admin role (see plugin-level bypass below)
+- Query data applications without a filter, but only where a deployment has enabled the plugin-level
+  bypass, which is off by default for health-data deployments. This is the one route that is not a
+  grant, and the section below states what it costs
 
 ### Cannot
 
-- Read, download, or query record data without an explicit self-grant
+- Read, download, or query record data without either an explicit self-grant or an enabled plugin
+  bypass. Absent both, an admin reaches no records
 - Delete or modify audit log entries
 - Bypass the grants token path to access data; the separation of admin capability from data
   access is a hard design requirement, not a policy convention
@@ -160,7 +165,7 @@ Usher has no bootstrap logic of its own. The identity provider handles this enti
    `usher-platform-admin` (the exact name is configurable in the Usher adapter config).
 3. The Keycloak admin assigns that role to the user who will be the first Usher admin.
 4. When that user authenticates, their OIDC token carries the `usher-platform-admin` claim.
-   Usher reads the claim, recognises admin status, and the management API and UI become
+   Usher reads the claim, recognizes admin status, and the management API and UI become
    available. No Usher-side initialisation is required.
 
 Usher has no `BOOTSTRAP_ADMIN_EMAIL` configuration, no `platform_admins` table, and no startup

@@ -29,7 +29,7 @@ here. Given this model, implementation velocity is high once the spec is locked:
 
 ### 1. Maestro/indexing question (highest risk; longest lead time)
 
-**Status: SUPERSEDED for MVP.** Resource-level enforcement removes the premise, since there is no
+**Status:** SUPERSEDED for MVP. Resource-level enforcement removes the premise, since there is no
 per-submission access level on the document: the filter names the resource a record belongs to.
 Both of the first deployment's catalogues have since been read directly and neither carries an
 access-level field at all, which settles the question rather than answering it. The nesting-depth
@@ -125,7 +125,8 @@ two is where the safety-relevant change lives.
   fail-secure.** The earlier finding held that Lyric rejects an empty `and`/`or` with
   `BadRequest`, so a user holding no grants produces a rejected query rather than an
   open-access one. That protection is a property of the `sqon-builder` plus drizzle path and
-  does not survive the move. In `@overture-stack/sqon`, an empty and-combination is a valid,
+  does not survive the change of library. In `@overture-stack/sqon`, an empty and-combination is a
+valid,
   intentional, first-class value:
 
     `SqonCombinationSchema` declares `content: zod.array(SqonSchema)` with no `.min(1)`, while
@@ -196,8 +197,9 @@ identifier. Enumerating splits one resource in two, and a grant on either silent
 other's records. That fails closed, so it presents as missing data rather than as a disclosure,
 which makes it harder to notice.
 
-**Status:** RESOLVED. The `dynamic: false` and SQON-operator constraints recorded above remain
-accurate and become relevant again for post-MVP record-level narrowing.
+The `dynamic: false` and SQON-operator constraints recorded above remain accurate and become
+relevant again for post-MVP record-level narrowing. They were marked resolved separately before this
+blocker was superseded as a whole; the status above covers both.
 
 ---
 
@@ -332,15 +334,17 @@ Enough of the permissions model is settled to design the schema for: `resources`
 gaps mostly affect edge cases (field-level restrictions, user groups, multi-tenancy) that can be
 v2 stubs in the schema.
 
-**Action:** schema design session after blockers 3 and 5 are resolved.
+**Action:** schema design session once blockers 3 and 8 are answered.
 
-**Status:** blocked on 3 and 5.
+**Status:** OPEN, blocked on 3 for the payload the schema must persist, on 8 for a field the schema
+has to carry, and on 5 for whether submission creates a read grant. Blocker 5 needs only a decision
+rather than design work, and the recommendation there is already written.
 
 ---
 
 ### 7. EGO token TTL
 
-**Status: RESOLVED.** Read from the deployment's own EGO Helm values rather than asked for, and
+**Status:** RESOLVED. Read from the deployment's own EGO Helm values rather than asked for, and
 consistent across the iMS production and development environments and the Overture demo
 environment:
 
@@ -395,6 +399,8 @@ primary correctness risk, on a system holding health records.
 
 **These were absent from this list**, which is worth noting because this document is where a reader
 looks for what blocks the gate.
+
+**Status:** OPEN. No external dependency; needs a design decision and then a schema change.
 
 ---
 
@@ -464,7 +470,7 @@ with the relevant owners before the Sep 15 design lock.
   Arranger `sets` durability
 
 **Prove each assertion is load-bearing by inverting what it tests.** An assertion that passes tells
-you nothing about whether it would fail. Invert the thing under test, a permitted clause into a
+you nothing about whether it would fail. Invert what is under test, a permitted clause into a
 denying one or a negation into an affirmation, and confirm the assertion goes red. Anything still
 green is measuring something other than what it claims.
 
@@ -479,8 +485,7 @@ behaviour. Asserting current behaviour pins the defect. Waiting leaves the fix w
 verify against and a roadmap entry as the only record, which will not notice the day the defect
 closes.
 
-**But first check whether the correct behaviour can already be asserted, because the assumption that
-it cannot is usually the thing that has not been checked.** An adopter deferred a case believing it
+**But first check whether the correct behaviour can already be asserted, because the assumption that it cannot is usually what nobody has checked.** An adopter deferred a case believing it
 was blocked on a scheduled design decision, then found the defect lived on a different code path
 from the one the fixture exercised. Two ordinary passing tests were possible all along, and they pin
 the correct path so that a change importing the defective behaviour fails loudly.
@@ -510,7 +515,7 @@ Worked both ways, since the boundary is not where it first appears:
 | Which layer produced an outcome | Partly: some wrong reasons are pairable, "which layer" is not | Corpus for the pairable half only |
 | Did a query rewrite rather than scan | No: results are identical by construction | Profile or explain, never the corpus |
 
-The last row is the shape to watch. A property that leaves results identical **by definition** can
+The last row is the one to watch. A property that leaves results identical **by definition** can
 never be reached by comparing them, however many cases are added, and a corpus asked to hold it goes
 green while measuring nothing.
 

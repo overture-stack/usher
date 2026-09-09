@@ -157,10 +157,38 @@ data_categories        (id, name, description)
 resource_categories    (resource_id, data_category_id)
 memberships            (user_id, resource_id, role_id)
 group_memberships      (group_id, resource_id, role_id)
-category_grants        (user_id, data_category_id, resource_id, granted_by, granted_at, expires_at, status)
-group_category_grants  (group_id, data_category_id, resource_id, granted_by, granted_at, expires_at)
-pending_grants         (id, email, data_category_id, resource_id, granted_by, granted_at, expires_at)
+category_grants        (user_id, data_category_id, resource_id, capabilities, granted_by,
+                        granted_at, expires_at, status)
+group_category_grants  (group_id, data_category_id, resource_id, capabilities, granted_by,
+                        granted_at, expires_at)
+pending_grants         (id, email, data_category_id, resource_id, capabilities, granted_by,
+                        granted_at, expires_at)
 ```
+
+**`capabilities` is the grant's second dimension, and the store is where the token's pairs come
+from.** A grants token pairs each category with what the holder may do with it, so a grant records
+both the category and the capabilities conferred on it. Whether that is an array column or a join
+table is a physical-schema question rather than a logical one; the dimension itself is not
+optional, because without it the token has nothing to render.
+
+**Three entities are deliberately absent rather than overlooked.** Naming them here is worth more
+than their omission reading as oversight:
+
+- `revocations`. The propagation mechanism is designed in
+  [security-workflow.md](security-workflow.md); what is unsettled is whether a revocation is a
+  single timestamp or a history, which decides the reinstatement semantics.
+- `audit_log`. Its events and common fields are catalogued in
+  [audit-events.md](audit-events.md), and the open question is retention against erasure rather
+  than shape.
+- **A per-principal last-policy-change timestamp**, which the fast path compares a token's
+  `generatedAt` against. It has no home in this model, and naming exactly which writes update it is
+  a launch blocker rather than a detail. See the blocker list in
+  [../docs/phase-1.md](../docs/phase-1.md).
+
+**Every resource carries at least one category, so `resource_categories` is never empty for a
+live resource.** A resource's unrestricted portion is a category like any other, which is what
+removes the need for a baseline outside the category system. The consequence is that a resource
+with no categories is ungrantable, since a grant would have nothing to name.
 
 **User identifier discipline.** `users.id` is the Keycloak subject (`sub` claim from the OIDC
 token). It is the only user identifier used in `memberships`, `category_grants`, audit records,
@@ -174,10 +202,57 @@ off (the default), the grant is written as `awaiting_acceptance` and does not ap
 tokens until the grantee explicitly accepts. See the pending grant state machine below.
 
 **`pending_grants`** stores invitations sent to email addresses that do not yet correspond to a
-registered user. When the user registers and their Keycloak account is created, the IdP
-registration event triggers a lookup of `pending_grants` by email; matching rows are migrated to
-`category_grants` with status `awaiting_acceptance` under the user's Keycloak ID. The original
-`pending_grants` row is deleted after migration.
+registered user. The invited address is a placeholder held only until the grant can attach to a
+Keycloak subject, and it is discarded once one exists.
+
+The invitation link is what performs that attachment, and it binds the grant to **whichever account
+the recipient confirms with**. Three paths reach the same place:
+
+1. The recipient registers using the invited address. Registration triggers a lookup by that
+   address.
+2. The recipient registers using a different address. The link, not the address, carries the
+   binding, so the grant still attaches to the account they created.
+3. The recipient already has an account, under the invited address or another one. Confirmation
+   happens after they log in.
+
+Matching rows are migrated to `category_grants` with status `awaiting_acceptance` under the
+account's Keycloak subject, and the `pending_grants` row is deleted after migration. Since an
+account may hold more than one verified address, a lookup by address matches any of them, and only
+a verified address may bind a grant: otherwise claiming an address would be enough to collect
+grants intended for whoever holds it.
+
+### What these entities render into
+
+The tables above are the store; a grants token is what a query of them produces for one principal
+and one application. Showing both is the point of putting the example here, since neither the store
+nor the token alone shows how a row becomes something a plugin can enforce.
+
+Two `category_grants` rows on `HEART_STUDY` and one on `LUNG_COHORT`, held by the same user, render
+as:
+
+```json
+"grants": {
+  "HEART_STUDY": [ { "open": ["view", "download"] },
+                   { "controlled": ["view"] } ],
+
+  "LUNG_COHORT": [ { "open": ["view"] } ]
+}
+```
+
+Four properties of the mapping, each of which the store has to support and does:
+
+- **One row, one entry.** A grant is a row, and the list preserves that rather than flattening
+  several rows into one aggregate.
+- **`capabilities` comes straight across.** This is what the column exists for; without it the
+  entries could name a category and nothing else.
+- **`role_id` does not appear.** A role resolves to capabilities before the token is written, so
+  `memberships` feeds the entries without being represented in them.
+- **A resource with no grants is absent, not empty.** There is no row to render, and absence already
+  means no access, so nothing needs to say so.
+
+Standard JWT claims and the anonymous form are in
+[security-workflow.md](security-workflow.md#token-structure), which is authoritative for the wire
+format. This section is authoritative only for how the entities above produce it.
 
 ---
 
@@ -250,65 +325,38 @@ address.
 
 ### The visibility rule
 
-> **POST-MVP.** This section, the worked example, "Composition across categories,"
-> and "Category-to-field mapping" all describe **record-level** enforcement: categories map to
-> per-record field predicates, and records within one resource are individually tagged. That is
-> deferred past MVP.
->
-> MVP enforces at **resource level**: a record is visible if the principal holds every category
-> carried by the resource the record belongs to, so the emitted filter is one positive clause on
-> the resource key and no category field appears in the index. See
-> [decisions.md](decisions.md), "Resource-level enforcement for MVP; record-level narrowing
-> deferred."
->
-> This document was ambiguous between the two readings and contains both. Line 218 below reads
-> resource-level ("for every data category associated with the resource that the record belongs
-> to"); the exclusion mechanism and the worked example read record-level. The MVP decision
-> resolves it toward the first.
->
-> Two constraints to carry into the rework, both established by executing the SQON compiler rather
-> than reading it. Subset containment is expressible in a single clause as `not` of `not-in`, not
-> via `some-not-in` as its name suggests. And it works only where the field is mapped `nested`; on
-> a flat field it degrades to an existential match, silently, in the permissive direction. Usher
-> cannot require a mapping shape from deployments whose data models it does not know, so
-> record-level narrowing is available only where a deployment supplies conforming data, verified at
-> plugin startup.
->
-> One consequence to carry into the rework: membership must render to a positive predicate of its
-> own, since additive rendering has no implicit baseline for untagged records. The failure-direction
-> table that motivates additive rendering lives in [decisions.md](decisions.md) and is not repeated
-> here.
->
-> The existence-denial invariant stated below is unaffected by either model, since both filter
-> before any result is computed.
->
-> **The visibility outcomes described below do change**, under the resource-level shift rather than
-> the additive one. Under resource-level enforcement, a principal lacking any single category carried by a
-> resource sees nothing in that resource, rather than a filtered subset of its records. The worked
-> example below is affected: its `RESOURCE_X` member holding no category grants sees nothing there,
-> not the untagged remainder.
+A record is visible to a user when the user holds a grant for every data category the record's
+resource carries. Stated the other way round, a record is hidden when the resource carries any
+category the user does not hold.
 
-A record is visible to a user if, for every data category associated with the resource that the
-record belongs to, the user holds a grant for that category (directly or via a group).
+> **Scope: this section describes record-level enforcement, which is post-MVP.** It assumes
+> categories map to per-record predicates and that records within one resource are individually
+> tagged. MVP enforces at resource level instead, so a principal lacking any single category the
+> resource carries sees nothing in that resource rather than a filtered subset of its records. The
+> same applies to the worked example below, to "Composition across categories" and to
+> "Category-to-field mapping". See "Resource-level enforcement for MVP" in
+> [decisions.md](decisions.md), which also records the two constraints that govern this work when
+> it is picked up.
 
-Stated the other way: a record is excluded if the user lacks a grant for any category the record
-is tagged with.
+The existence-denial invariant below holds under either model, since both filter before any result
+is computed.
 
-The grants token expresses this as `categories`: the include-list of data categories the user
-holds grants for within a resource. Denied category names are absent from the token entirely rather
-than named explicitly; this is consistent with how OAuth scopes, UMA RPT permissions, and GA4GH
-Passport Visas express positive grants, and with the principle of least information. The enforcement
-plugin computes what to exclude by subtracting the token's `categories` from the full category set
-configured for that resource. Each absent category produces an exclusion filter using that
-category's field mapping. Exclusion conditions are applied as a conjunction: a record is hidden if
-it is tagged with any category not present in the user's token.
+The grants token carries only what the user holds: a list of grants per resource, each naming one
+category and the capabilities held on it. A category the user does not hold is simply not named,
+which follows the same positive-grant convention as OAuth scopes, UMA permissions and GA4GH Visas,
+and discloses nothing about what exists.
+
+**Nothing is subtracted.** Each grant renders a positive predicate and those compose with `or`, so a
+record the user cannot reach is one that no predicate selects. There is no full category set to
+subtract from and no exclusion filter, because a grant list is never read as an exemption from a
+default. An earlier version of this document described the opposite, computing exclusions from a
+resource's configured category set, and the two readings give the same answer only sometimes.
 
 Excluded records do not appear in counts, aggregations, or result sets; their existence is not
 disclosed. This is a hard invariant: existence revelation is an information disclosure vulnerability
 (OWASP A01), and a discoverable-but-inaccessible mode will not be introduced.
 
-**What the invariant requires of a denial response.** A denial says the thing does not exist **or**
-the requester lacks access, without indicating which. Distinct responses turn the endpoint into a
+**What the invariant requires of a denial response.** A denial says the resource does not exist **or** the requester lacks access, without indicating which. Distinct responses turn the endpoint into a
 lookup service: someone enumerating identifiers learns the deployment's holdings without reading a
 record.
 
@@ -332,8 +380,7 @@ own:
 Timing is the one that usually survives review, because a denial is not thought of as having a body
 worth measuring.
 
-**Calibrate ambiguity to what the requester already knows.** Opacity is owed to a requester who does
-not already know the thing exists. Where they demonstrably do, because they hold a lapsed grant, a
+**Calibrate ambiguity to what the requester already knows.** Opacity is owed to a requester who does not already know the resource exists. Where they demonstrably do, because they hold a lapsed grant, a
 pending grant, or a membership without the category needed, the response can say exactly what
 happened. Nothing leaks, since they were told it exists when the relationship was created, and an
 attacker reaches that state only if someone granted them the relationship.
@@ -351,7 +398,7 @@ will not tell them.
 plugin picks which shape suits its service; it does not get to pick whether the two cases are
 distinguishable.
 
-**An empty result set is the shape that achieves this for free, and should be the default.** Where a
+**An empty result set achieves this for free, and should be the default.** Where a
 denial is expressed as a filter matching nothing, a denied resource and a nonexistent one traverse
 the same code doing the same work, so the body is identical without effort and the timing converges
 without design. A distinct status code achieves the same only if both cases are deliberately routed
@@ -516,6 +563,11 @@ requires it. See the resolved question in Open questions.
 
 ## Category-to-field mapping
 
+> **Scope: post-MVP, for the same reason as the visibility rule.** Mapping a category to a field
+> predicate is what record-level enforcement needs. Under MVP no category field appears in a query
+> at all: a category decides whether a resource is in the permitted list, and the emitted filter
+> names the resource. See "Resource-level enforcement for MVP" in [decisions.md](decisions.md).
+
 Data categories in Usher's model are named abstractions. Usher has no knowledge of what fields in
 any data schema correspond to a category: it works with category names only. The mapping from
 category name to field predicate is deployment configuration that lives in the enforcement plugin:
@@ -536,8 +588,12 @@ config.
 
 ## Field-level restrictions
 
+> **Scope: out of MVP, and further out than record-level narrowing.** Controlling fields within a
+> record presumes control over records first, so this follows the record-level work rather than
+> running beside it. The options below are recorded for when it is picked up.
+
 Field-level restrictions control which fields within a record a user can see, independent of
-whether they can see the record itself. The implementation approach is not yet chosen.
+whether they can see the record itself. Which approach to take is open.
 
 **A. Resource-level restrictions.** Restrictions are uniform across all users with access to a
 resource. All members of resource X cannot see `clinical_notes`, regardless of role. Simple;

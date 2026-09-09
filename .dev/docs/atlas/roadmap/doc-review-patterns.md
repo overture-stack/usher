@@ -11,6 +11,57 @@ class below needs a reader deciding whether a sentence can be understood, which 
 That makes them a different kind of rule rather than more of the same, and it is the reason the
 existing conventions passed a document that a first reader found nineteen problems in.
 
+## Two ways a review's own findings go wrong
+
+Both came out of reviewing this corpus rather than reviewing a document, and both are about the
+reviewer.
+
+**A correct result produced by an inherited constraint is indistinguishable from a correct method.**
+The legibility pass correctly left `AGENTS.md` and `CLAUDE.md` alone, because this project's density
+table had already exempted them as agent-facing and condensed on purpose. Nothing in the method
+distinguished audience; without that table both files would have been swept and a human-facing rule
+applied to deliberately terse ones. A clean outcome reads as evidence the method worked, and the
+moment the constraint is absent is the moment nobody is checking. Stated by the agentics owner in
+the exchange that produced it, from this instance.
+
+**A relayed measurement loses its caveats, and a number is the worst case.** A count of defects in a
+peer's corpus was repeated here as established fact and an argument built on it, before either side
+had checked what the measurement was scoped to. It turned out to be scoped to agent-facing files and
+the instances were not defects. A number invites this specifically because it looks like a fact
+rather than a claim: the sentence carrying it is first-hand while its provenance is not. Both sides
+own a half, and the count's author owns the earlier one.
+
+## Ranking back-reference candidates rather than listing them
+
+A bare list of matches gives a reviewer no order to work in. The usable proxy is **how far a match
+sits from the start of its paragraph**, since a placeholder near the start has almost nothing
+preceding it to refer to.
+
+What the proxy is honestly: a ranking. A match eighty words in can still have no plausible referent,
+and one five words in may legitimately point at the paragraph above, so depth does not decide
+anything. It orders the queue, which is what a candidate-raiser needs. Measured against the agentics
+corpus the distribution spread rather than clustered, six matches within ten words of a paragraph
+start against twelve beyond eighty, which is the condition for an ordering being worth printing at
+all.
+
+## Re-running this check
+
+No check script exists in this repository, so the passes described here were ad-hoc. Whoever repeats
+one needs four things, each of which was got wrong once already:
+
+1. **One extraction, shared.** Two checks over one corpus must consume the same paragraph list, or a
+   difference between their outputs is indistinguishable from a difference in what they looked at.
+2. **Three states for a block marker**, not two. A bullet ends the preceding paragraph *and* starts
+   one of its own that gets measured. Welding bullets onto neighbouring prose inflates the count;
+   discarding them undercounts it, and only inflation invites scrutiny.
+3. **Paragraphs before sentences.** Splitting sentences per line returns nothing on hard-wrapped
+   prose.
+4. **Fenced and indented code both stripped.** A regex covering only fences admitted an indented
+   block here and produced a phantom eighty-five-word sentence.
+
+And when a count moves, open an item rather than trusting the total. An aggregate is a single number
+with no structure to contradict it, so a wrong one looks exactly like a right one.
+
 ## How to read the review itself
 
 Two rules about receiving this feedback, which are separate from the defect classes and matter more,
@@ -54,6 +105,33 @@ instances of the same envelope-opening figure standing, including "openable by t
 four variations of "fails to open", all introduced by the same instinct and none caught by the fix
 that targeted its headline. Reported by the developer as jargon two edits later. A vocabulary
 correction is a sweep over the figure, not a substitution at the reported site.
+
+## Which readers a class costs, and why the ratio was structural
+
+Every class here reduces one of two costs, and which one decides whether it applies to a document
+written for people or to one written for an agent.
+
+**Effort is a human cost.** A person scans, so resolving a placeholder noun means scrolling back. An
+agent reading linearly is already holding the referent and pays nothing.
+
+**Ambiguity costs every reader.** A term never introduced, a demonstrative with two candidates, a
+claim whose content is missing: none of those resolve on a second pass by anyone.
+
+So the resolvability and fidelity failures below are universal, while ordering by rank and a
+governing qualification presented as an interruption are human-scoped. This project's own density
+table had already exempted `AGENTS.md` and `CLAUDE.md` as agent-facing and condensed on purpose,
+which is the same judgement reached without the reason stated.
+
+**This explains the abstract-back-reference ratio, which had only been an empirical figure.** Of 56
+instances found in the design corpus, sixteen were defects and twenty-nine were not, and the split
+was made by judgement rather than by rule. The two costs name the rule: a back-reference whose
+referent sits one clause away costs effort and only to a scanning reader, while one whose referent
+is absent or plural is ambiguity and costs everyone. The twenty-nine were the first kind and the
+sixteen were the second.
+
+That is worth more than the precision figure it replaces. A ratio told us to build a check that
+raises candidates rather than condemns matches; the distinction tells us what separates a candidate
+from a defect, which is what a reviewer needs at the moment of judging one.
 
 ## The two axes
 

@@ -28,7 +28,7 @@ adds item 4.
 **JWE decryption is the bridge's responsibility, not the plugin's.** The bridge holds the
 decryption key (provisioned at client app deploy time), decrypts grants tokens, and
 exposes the result to the plugin as a typed `GrantsPayload` object. Plugins never see the raw
-JWE or the decryption key. This keeps the plugin interface simple: receive a payload, translate
+JWE or any key. This keeps the plugin interface simple: receive a payload, translate
 it to a query filter, done.
 
 **User IDs (not email addresses) are the identifiers in all API interactions.** The bridge
@@ -71,7 +71,7 @@ with the authorization owner" stops a reader querying a sentence, and it stays s
 agreement is superseded. Worse, it can circulate: an owner may have agreed to a claim while working
 from the document's own premise, so the attribution certifies a conclusion against a source that
 inherited it. Record what was agreed and when, so a reader can tell whether the agreement predates
-the thing that changed.
+the change.
 
 **A finding can outlive the problem it describes.** An audit item flagged as the most consequential
 open question stays flagged after a replacement resolves it, and it then argues that a fixed thing
@@ -82,10 +82,11 @@ being open and get re-read. Closed ones carry authority and do not. When a model
 the document is confident about before auditing what it admits is unsettled.
 
 **A closed defect described as open is the mirror image of a stale resolution**, and both hide in
-sections that read as settled. A fix rarely updates the prose describing the thing it fixed,
+sections that read as settled. A fix rarely updates the prose describing what it fixed,
 especially when it closes something as a side effect of closing something else. The result is a
-severity claim in a section describing current behaviour, which is the shape most likely to be
-quoted as-is. Re-check what a document says is broken as often as what it says is settled.
+severity claim inside a section describing current behaviour, which is exactly the sentence
+someone quotes without checking it. Re-check what a document says is broken as often as what it
+says is settled.
 
 **A correction has a blast radius, and editing in place hides it.** Fixing a premise in the
 paragraph you are looking at feels complete there, and nothing prompts you to ask which downstream
@@ -197,12 +198,12 @@ the case where they differ, and a design that took the documented meaning to exp
 containment would have emitted an existential predicate where a universal one was required: the
 permissive direction. The idiom that is actually correct was documented nowhere.
 
-The general form is worth recognising, because it appeared twice on this path from different
+The general form is worth recognizing, because it appeared twice on this path from different
 directions: **a safety property attributed to the wrong layer.** Operator documentation attributed
 semantics to a name. Separately, a finding that a submission service "fails secure on empty query
 combinations" attributed that guarantee to the query language when it belonged to a particular
 library pairing, so it inverts silently on migration. Neither misattribution produces an error when
-the thing it depends on changes, which is why the check has to be execution and not reading.
+what it depends on changes, which is why the check has to be execution and not reading.
 
 **Enforcement must be installed at every layer that serves protected data.** A deployment where
 only one service layer has a Usher plugin enforcing grants is incompletely protected: the unguarded
@@ -229,7 +230,7 @@ is valid but contains no entry for the resource the plugin is protecting, the pl
 request before filter construction begins.
 
 The response shape is a choice **among indistinguishable shapes**, not an open one. An earlier
-version of this line said simply that the shape was the plugin's own choice, which was too loose:
+version of this line said the choice was the plugin's own, which was too loose:
 the plugin picks which shape suits its service, and does not get to pick whether "does not exist"
 and "you lack access" are distinguishable. A 403 confirms existence, which for a search endpoint is
 itself a disclosure.
@@ -261,12 +262,14 @@ yields 503, not an empty-access token.
 ## Known requirements
 
 The full responsibility split between bridge and plugin is in [architecture.md](architecture.md).
-The lists below summarise the requirements relevant to implementation, including specifics not
+The lists below summarize the requirements relevant to implementation, including specifics not
 captured in the component description.
 
 **Bridge (`usher-bridge`), shared by all plugins:**
 
-- Hold the JWE decryption key (provisioned at deploy time; key distribution mechanism TBD)
+- Hold its own application's JWE private key. The application generates the pair and registers the
+  public half with the controller, so onboarding is a public-key registration rather than a secret
+  distribution; rotation is the part still open
 - Exchange the user's IdP bearer token for a JWE grants token with the controller; for
   unauthenticated requests, perform the exchange with no bearer token to receive an
   anonymous grants token containing only open-tier grants
@@ -323,7 +326,7 @@ logs, with a shared `user_id` field suitable for cross-system correlation.
 
 ### Decryption key distribution
 
-The bridge holds the JWE decryption key; plugins do not. How is the key provisioned to the
+A bridge holds its own application's private key and plugins hold none. How is that key provisioned to the
 bridge at client app deploy time?
 
 Options:

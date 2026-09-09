@@ -54,8 +54,6 @@ Deployments that do not include SONG are fully supported; Usher has no dependenc
 
 ---
 
----
-
 ## Components
 
 ### Keycloak
@@ -96,7 +94,9 @@ connects client apps to it.
   resource the requesting plugin manages
 - Issuing JWE grants tokens: encrypted, short-lived, audience-scoped per application; see
   [security-workflow.md](security-workflow.md)
-- Holding the JWE encryption key (the corresponding decryption key lives in the bridge)
+- Holding each adopting application's JWE public key, and wrapping every token to the one
+  application it is issued for. The controller never holds a private key, so it cannot decrypt what
+  it issues
 - Writing `revoked_at` timestamps to the policy database on revocation
 - Publishing revocation events to Valkey pub/sub so all controller instances notify their
   connected bridge subscribers (see [Multi-instance propagation](security-workflow.md#multi-instance-propagation))
@@ -110,7 +110,7 @@ connects client apps to it.
 - User authentication → **Keycloak**
 - Querying the data layer or executing data queries → the **client app's** own data layer
 - Translating the grants payload into application-native query formats → **plugin**
-- Holding the JWE decryption key → **bridge** (provisioned at client app deploy time)
+- Holding any private key → each application's **bridge** holds its own
 
 ---
 
@@ -124,11 +124,11 @@ restored.
 
 **Owns:**
 
-- Holding the JWE decryption key (provisioned at client app deploy time)
+- Holding its own application's JWE private key, which no other application's bridge can use
 - Presenting the user's IdP bearer token to the controller's token exchange endpoint
 - Receiving and locally caching the JWE grants token per user
 - Decrypting grants tokens and exposing the decoded payload as a typed `GrantsPayload`
-  object to the plugin: plugins never see the raw JWE or the decryption key
+  object to the plugin: plugins never see the raw JWE or any key
 - Validating the grants token on every request within the TTL window (no network call to the
   controller in the common case)
 - Maintaining the revocation channel: SSE or WebSocket push subscription with reconnection
@@ -143,17 +143,21 @@ restored.
 - Compiling a filter into a backend query dialect (Elasticsearch DSL, SQL) → **plugin**
 - Access decisions (grant existence, category membership) → **controller**; the bridge only
   confirms the token is valid, current, and not revoked
-- Any knowledge of the client app's data schema: field names, index or table layout, or what a
-  category means in terms of records → **plugin**
+- Any stored knowledge of the client app's data schema: index or table layout, or what a category
+  means in terms of records → **plugin**. A field name reaches the bridge as a per-query parameter
+  supplied by the plugin, which is not the same as holding a schema: the bridge is told which field
+  names the resource for the catalogue being queried and forgets it
 
 **On query languages specifically.** The bridge may know SQON; what must stay out of it is the
 backend. SQON is a shared Overture language
 rather than one adopter's dialect: Arranger owns the module (`@overture-stack/sqon`), and Lyric
 consumes SQON as well, so a SQON-shaped filter is portable across the read path and the
 submission path without translation. What must stay out of the bridge is the *backend*, since
-Arranger compiles SQON to Elasticsearch DSL and Lyric compiles it to SQL. Rendering a resolved
-grant set into SQON is generic and may live in the bridge; compiling SQON into a backend query
-is adopter-specific and belongs in the plugin.
+Arranger compiles SQON to Elasticsearch DSL and Lyric compiles it to SQL. Rendering a resolved grant
+set into SQON is generic and lives in the bridge; compiling SQON into a backend query is
+adopter-specific and belongs in the plugin. That split is decided rather than open, and the reason
+is that every fail-open defect found so far has been in constructing a predicate and none in
+compiling one.
 
 ---
 
@@ -229,8 +233,13 @@ client apps enforce decisions derived from it, without managing that state thems
 
 1. **Shared grants-payload cache.** The `generatedAt` fast-path refresh (see
    [security-workflow.md](security-workflow.md#session-and-caching)) is most efficient when all
-   controller instances share a consistent view of the last-modified timestamp per user. Valkey
-   provides this shared cache, avoiding redundant full policy recomputes across instances.
+   controller instances share a consistent view of the last-modified timestamp per principal.
+   Valkey provides that shared view, avoiding redundant policy recomputes across instances.
+
+   **This names a cache, not an authority, and the difference is an open blocker.** Whether the
+   timestamp is authoritative in Valkey or cached here from PostgreSQL is unspecified, and so is
+   which writes update it. A cache that no write invalidates is the failure mode. See the
+   policy-timestamp blocker in [../docs/phase-1.md](../docs/phase-1.md).
 
 2. **Revocation pub/sub backbone.** When a revocation is processed by one controller instance,
    it publishes an event to a Valkey pub/sub channel. All other instances subscribe to this
@@ -252,8 +261,8 @@ distributes events; PostgreSQL is the source of truth.
 | Validate IdP token                                     |          | ✓          |        |        |
 | Resolve user grants                                    |          | ✓          |        |        |
 | Issue grants token (JWE)                               |          | ✓          |        |        |
-| Hold JWE encryption key                                |          | ✓          |        |        |
-| Hold JWE decryption key                                |          |            | ✓      |        |
+| Hold each application's JWE public key                 |          | ✓          |        |        |
+| Hold its own application's JWE private key             |          |            | ✓      |        |
 | Cache grants token                                     |          |            | ✓      |        |
 | Decrypt and expose `GrantsPayload`                     |          |            | ✓      |        |
 | Validate grants token locally                          |          |            | ✓      |        |
