@@ -1,0 +1,1148 @@
+{
+  "$schema": "./principals.schema.json",
+  "about": {
+    "purpose": "Conformance inputs: a principal and the PermissionsPayload an application is handed on their behalf. Never an expectation; what should be served lives in expectations.json.",
+    "payloadShape": "security-workflow.md, The payload as a type",
+    "derivedFrom": "token-calculation.md, The cases that force each branch",
+    "readFirst": "README.md in this directory, which records two deliberate divergences from the case table",
+    "temporalClaims": "iat and exp are a fixed reference instant of 2026-01-01T00:00:00Z. The corpus does not evaluate them; token issuance and verification are out of its scope."
+  },
+  "omitted": [
+    {
+      "case": "25",
+      "reason": "A grant pairing record.delete with a field category is refused at writing, so no token exists. Deletion takes the whole record, which makes the pairing meaningless. This belongs to Usher's own schema tests, where the constraint is field_category_id IS NOT NULL."
+    }
+  ],
+  "principals": [
+    {
+      "id": "case-01",
+      "case": "01",
+      "description": "Anonymous, baseline turned off. No grant reaches an anonymous principal, so the map is empty, which is distinct from the token being absent.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": null,
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {}
+      }
+    },
+    {
+      "id": "case-02",
+      "case": "02",
+      "description": "Anonymous, baseline on. Reaches the open records of every resource carrying open, and none of their controlled or community-governed ones.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": null,
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-03",
+      "case": "03",
+      "description": "Registered, in no group. Identical contents to case 02 with sub present. The pair exists so the corpus can answer whether a present sub changes anything an application does.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-04",
+      "case": "04",
+      "description": "In G1, which holds a grant on HEART_STUDY/controlled. She has no decision row for it, and no decision is not an acceptance.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-05",
+      "case": "05",
+      "description": "As case 04, accepted.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-06",
+      "case": "06",
+      "description": "As case 04, rejected. Indistinguishable from case 04, which is intended: absence is the only signal an application receives.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-07",
+      "case": "07",
+      "description": "In G1 and G2. G1 granted HEART_STUDY/controlled at curator, G2 granted HEART_STUDY/open at viewer, both accepted. Two grants on one resource at different roles, which a role held per resource cannot express.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "aggregate",
+                "read",
+                "export"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-08",
+      "case": "08",
+      "description": "In G1 and G2, both granted HEART_STUDY/controlled, both accepted. The union of two identical grants, which is why this matches case 05 exactly.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-09",
+      "case": "09",
+      "description": "In G1, granted REEF_ARCHIVE/controlled, accepted. Nothing for community-governed, so those records are not reached while the rest of the resource is.",
+      "notes": "VOID_INDEX is absent here as everywhere: a resource carrying no categories has no pair to keep.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-10",
+      "case": "10",
+      "description": "VOID_INDEX carries no categories at all. It is absent from the map, so no clause selects any of its records and it is reachable by nobody.",
+      "notes": "The assertion lives in expectations.json: every VOID_INDEX record is invisible to every principal in this file, including this one.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-11",
+      "case": "11",
+      "description": "The grant she accepted has expired. Excluded, read from the grant rather than from her decision row.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-12",
+      "case": "12",
+      "description": "The grant she accepted was revoked. Excluded, read from the grant rather than from her decision row.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-13",
+      "case": "13",
+      "description": "She rejected, then later accepted. The later decision stands and both rows are kept.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-14",
+      "case": "14",
+      "description": "She accepted at curator, then the grant's role was changed to viewer. Narrowing takes effect without re-asking.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-15",
+      "case": "15",
+      "description": "She accepted at viewer, then the grant's role was changed to curator. The added capabilities stay unaccepted, so this matches case 14 rather than case 05.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-16",
+      "case": "16",
+      "description": "She leaves G1 with her accepted row still present. HEART_STUDY keeps open from the baseline and loses controlled, because the grant no longer reaches her.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-17",
+      "case": "17",
+      "description": "Her grant names REEF_ARCHIVE/community-governed after that category was removed from the resource. Inert, nothing to keep.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-18",
+      "case": "18",
+      "description": "Her grant names a resource this audience does not serve. Excluded, because the token is per audience.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-19",
+      "case": "19",
+      "description": "HEART_STUDY carries no open category at all. Records no category describes are reachable by nobody, so the resource is absent rather than present and empty.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-20",
+      "case": "20",
+      "description": "Auto-accept is on for this instance. An accepted decision is recorded at creation without her acting, so this matches case 05.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-21",
+      "case": "21",
+      "description": "Accepted grant on controlled, against a record withheld until a date. The payload is case 05's, because nothing in it can express withholding, and that is the point of the case.",
+      "implementable": false,
+      "notes": "The only case distinguishing additive grants from a narrowed ceiling. Until a withholding layer exists, no test can catch an implementation that gets the direction wrong. expectations.json asserts no reach against the withheld record.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-22",
+      "case": "22",
+      "description": "A record carries controlled and community-governed, and she holds only controlled. Both are needed, and the payload cannot say so.",
+      "implementable": false,
+      "notes": "Waiting on the subset test the query layer cannot yet express. Until it lands a record carries one category.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            },
+            "controlled": {
+              "record": [
+                "aggregate",
+                "read",
+                "export",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-23",
+      "case": "23",
+      "description": "A record carries a category value the plugin has no mapping for. The principal is ordinary; the defect is that the record is served as open.",
+      "notes": "This is the failure the startup reconciliation check exists to prevent. The assertion lives in expectations.json and in records.json, not here.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-24",
+      "case": "24",
+      "description": "A column carries no field category while the category is partitioned, and she is granted basic. The unclassified column is served as the field residual.",
+      "notes": "Safe only while the reconciliation check covers field mappings and runs on an index mapping change rather than at boot alone.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ],
+              "field": {
+                "basic": [
+                  "read"
+                ]
+              }
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-24b",
+      "case": "24b",
+      "description": "Her grant names clinician and not basic. The residual is granted rather than assumed, exactly as open is on the row axis.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ],
+              "field": {
+                "clinician": [
+                  "aggregate",
+                  "read"
+                ]
+              }
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-24c",
+      "case": "24c",
+      "description": "The category is not partitioned by field at all. No field key is emitted and the record capabilities carry every column, which is the absence of a partition rather than the absence of a grant.",
+      "notes": "Pairs with case 24 as a discriminating pair: field absent against field present holding only the residual. Collapsing the two states would lose the signal a plugin uses to decide whether to prune columns.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-26",
+      "case": "26",
+      "description": "She holds record.read and revision.read on one category. The entity level is what keeps them apart, since a bare read could not say which.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ],
+              "revision": [
+                "read"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-27",
+      "case": "27",
+      "description": "She holds artifact.create on HEART_STUDY's open records.",
+      "notes": "An artifact drawn from two resources needs the capability under both. expectations.json should carry that pair, since the provenance rule is expressed in the token rather than beside it.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "HEART_STUDY": {
+            "open": {
+              "record": [
+                "read"
+              ],
+              "artifact": [
+                "create"
+              ]
+            }
+          },
+          "LUNG_COHORT": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "open": {
+              "record": [
+                "read"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
