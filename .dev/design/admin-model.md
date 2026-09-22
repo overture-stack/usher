@@ -41,13 +41,13 @@ Ordered by widening scope rather than by seniority, matching
 [permissions-model.md](permissions-model.md): a reader meets the narrowest first, and central control
 is not where this model starts.
 
-| Role            | Scope                              | Primary permission                                           | Holds data access                        |
-| --------------- | ---------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
-| Submitter       | Their submitted resource           | Data provenance                                              | Open scope decision; see below           |
-| Owner           | Their designated resource(s)       | Manages grants within their resource; sets visibility policy | None from ownership                      |
-| Custodian       | One or more categories             | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
-| Admin           | Platform-wide, the policy store    | Manages roles, resources and system configuration            | None standing; may self-grant explicitly |
-| Service account | Explicitly enumerated permissions  | Performs system operations only                              | No                                       |
+| Role            | Scope                             | Primary permission                                           | Holds data access                        |
+| --------------- | --------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
+| Submitter       | Their submitted resource          | Data provenance                                              | Open scope decision; see below           |
+| Owner           | Their designated resource(s)      | Manages grants within their resource; sets visibility policy | None from ownership                      |
+| Custodian       | One or more categories            | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
+| Admin           | Platform-wide, the policy store   | Manages roles, resources and system configuration            | None standing; may self-grant explicitly |
+| Service account | Explicitly enumerated permissions | Performs system operations only                              | No                                       |
 
 **Submitter vs. owner:** submission establishes data provenance. It does not automatically give
 management rights, and **whether it gives read access to the submitted data is an open scope
@@ -299,10 +299,10 @@ plugin layer rather than through an Usher token entry. The PEP plugin detects th
 
 This is distinct from the self-grant flow:
 
-| Mechanism        | How access is obtained                           | Appears in Usher token | Appears in audit log            |
-| ---------------- | ------------------------------------------------ | ----------------------- | ------------------------------- |
-| Self-grant       | Admin creates an explicit grant for themselves   | Yes (standard entry)    | Yes (`grant.selfCreation` event)  |
-| Plugin bypass    | Plugin detects admin role; skips SQON filter     | No                      | Yes (plugin access log entry)   |
+| Mechanism     | How access is obtained                         | Appears in Usher token | Appears in audit log             |
+| ------------- | ---------------------------------------------- | ---------------------- | -------------------------------- |
+| Self-grant    | Admin creates an explicit grant for themselves | Yes (standard entry)   | Yes (`grant.selfCreation` event) |
+| Plugin bypass | Plugin detects admin role; skips SQON filter   | No                     | Yes (plugin access log entry)    |
 
 The plugin bypass does not create any grant record in Usher's policy database; it is a plugin
 implementation decision. Plugins must log every bypass event as an access log entry (user ID,

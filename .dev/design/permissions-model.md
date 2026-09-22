@@ -164,14 +164,14 @@ the token is written.
 ### A grant's period, its revocation, and the answer to it
 
 A grant carries an **activity period** and a **revocation**. What its recipient answered is not on
-it: that is a row in `grant_decisions`. The period says *when*; the other two say *what someone did*.
+it: that is a row in `grant_decisions`. The period says _when_; the other two say _what someone did_.
 None is derivable from the others, and that is the point.
 
-| | |
-|---|---|
-| `granted_at` | when the grant was made. Always set |
-| `expires_at` | when it lapses. Absent unless an expiry was set. Expiry is read from it rather than stored as a state |
-| `revoked_at` | when someone revoked it. Absent otherwise |
+|                        |                                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| `granted_at`           | when the grant was made. Always set                                                                       |
+| `expires_at`           | when it lapses. Absent unless an expiry was set. Expiry is read from it rather than stored as a state     |
+| `revoked_at`           | when someone revoked it. Absent otherwise                                                                 |
 | the recipient's answer | a row in `grant_decisions`, appended. The current answer is the latest row for that person and that grant |
 
 **Why none of this is a calculation over the dates.** A grant nobody has answered and one that was
@@ -280,12 +280,12 @@ added later is a migration, while a wire format changed later is a negotiated pa
 coordinated deploy, so the token nests by entity from the start and the schema does not carry
 columns nothing uses yet.
 
-| Entity | Actions | What it is |
-|---|---|---|
-| `record` | `aggregate`, `read`, `export`, `create`, `update`, `delete` | one row of data in a resource, in its current state. Listed in order of increasing reach, which is the order the seeded roles add them in |
-| `field` | `read`, `update`, `export`, `aggregate` | one part of a record. No `create` or `delete`: a field exists per schema rather than per grant. The three read-shaped actions are separate for a reason given below |
-| `revision` | `read`, `export` | a prior state of a record, where the service keeps them. A submission service does; a search index does not |
-| `artifact` | `create`, `read`, `update`, `delete`, `export` | a collection of records someone assembled and kept, carrying provenance naming the resources it drew on. A saved set in Arranger is one |
+| Entity     | Actions                                                     | What it is                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record`   | `aggregate`, `read`, `export`, `create`, `update`, `delete` | one row of data in a resource, in its current state. Listed in order of increasing reach, which is the order the seeded roles add them in                           |
+| `field`    | `read`, `update`, `export`, `aggregate`                     | one part of a record. No `create` or `delete`: a field exists per schema rather than per grant. The three read-shaped actions are separate for a reason given below |
+| `revision` | `read`, `export`                                            | a prior state of a record, where the service keeps them. A submission service does; a search index does not                                                         |
+| `artifact` | `create`, `read`, `update`, `delete`, `export`              | a collection of records someone assembled and kept, carrying provenance naming the resources it drew on. A saved set in Arranger is one                             |
 
 **`export` rather than `download`, and it is not a copy control.** Bulk egress is a different act
 from reading one record on a screen, with a different risk profile, and it warrants its own event
@@ -384,7 +384,7 @@ the same overreach `export` already carries a warning about on the record axis.
 data is addressed by which records, which fields, and which versions, and the third is independent
 of the other two: permission to see prior states applies to whatever rows and columns a person
 already reaches. **The reason it is not a kind is concrete rather than aesthetic.** As a kind, a
-category with `{version}` would mean that seeing the history of a *controlled* record needs both the
+category with `{version}` would mean that seeing the history of a _controlled_ record needs both the
 `controlled` grant and the version grant, and the plugin would have to conjoin two categories over
 one piece of data. That is the subset test this design defers and the query layer cannot express. As
 an entity, `revision.read` is a capability, capabilities already attach per category, and
@@ -494,13 +494,13 @@ which asks for authority over every resource an artifact draws on rather than an
 A list of role names says nothing about who can do what. The matrix does, and it is the canonical
 view: a role is a row, a capability is a column, and the columns run in order of increasing reach.
 
-| Role | `aggregate` | `read` | `export` | `create` | `update` | `delete` |
-|---|---|---|---|---|---|---|
-| `surveyor` | ● | | | | | |
-| `viewer` | ● | ● | ● | | | |
-| `editor` | ● | ● | ● | ● | ● | |
-| `curator` | ● | ● | ● | ● | ● | ● |
-| `submitter` | | | | ● | ● | |
+| Role        | `aggregate` | `read` | `export` | `create` | `update` | `delete` |
+| ----------- | ----------- | ------ | -------- | -------- | -------- | -------- |
+| `surveyor`  | ●           |        |          |          |          |          |
+| `viewer`    | ●           | ●      | ●        |          |          |          |
+| `editor`    | ●           | ●      | ●        | ●        | ●        |          |
+| `curator`   | ●           | ●      | ●        | ●        | ●        | ●        |
+| `submitter` |             |        |          | ●        | ●        |          |
 
 **The containment is a staircase and it is not a hierarchy.** `surveyor`, `viewer`, `editor` and
 `curator` each add to the one before, which is what makes the table readable at a glance, and the
@@ -523,10 +523,10 @@ is enough to assemble an extract by hand.
 capability is held or not, with no progression to run along, so the table is a checklist rather than
 a staircase.
 
-| Role | `grant.*` | `invitation.create` | `resource.read` | `resource.update` | `resource.setVisibility` | `ownership.transfer` | `resource.register` | `category.create` | `role.define` | `group.*` |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `owner` | ● | ● | ● | ● | ● | ● | | | | |
-| `admin` | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Role    | `grant.*` | `invitation.create` | `resource.read` | `resource.update` | `resource.setVisibility` | `ownership.transfer` | `resource.register` | `category.create` | `role.define` | `group.*` |
+| ------- | --------- | ------------------- | --------------- | ----------------- | ------------------------ | -------------------- | ------------------- | ----------------- | ------------- | --------- |
+| `owner` | ●         | ●                   | ●               | ●                 | ●                        | ●                    |                     |                   |               |           |
+| `admin` | ●         | ●                   | ●               | ●                 | ●                        | ●                    | ●                   | ●                 | ●             | ●         |
 
 **An owner is an admin bounded to one resource**, which the two rows make visible: the difference is
 entirely the four platform-wide capabilities on the right, and nothing an owner holds is withheld
@@ -550,16 +550,16 @@ is the reason those columns sit in Usher rather than in each portal.
 
 ### Control plane
 
-| Entity | Actions |
-|---|---|
-| `resource` | `register`, `read`, `update`, `setVisibility` |
-| `category` | `create` |
-| `grant` | `create`, `read`, `extend`, `reduce`, `revoke` |
-| `group` | `create`, `read`, `update`, `addMember`, `removeMember` |
-| `role` | `define` |
-| `ownership` | `transfer` |
-| `invitation` | `create` |
-| `custodianship` | `assign`, `remove` |
+| Entity          | Actions                                                 |
+| --------------- | ------------------------------------------------------- |
+| `resource`      | `register`, `read`, `update`, `setVisibility`           |
+| `category`      | `create`                                                |
+| `grant`         | `create`, `read`, `extend`, `reduce`, `revoke`          |
+| `group`         | `create`, `read`, `update`, `addMember`, `removeMember` |
+| `role`          | `define`                                                |
+| `ownership`     | `transfer`                                              |
+| `invitation`    | `create`                                                |
+| `custodianship` | `assign`, `remove`                                      |
 
 **There is no separate `createSelf`, and self-targeting is a rule on the endpoint rather than a
 capability.** Writing a grant that names yourself is writing a grant, and the decision that granting
@@ -600,13 +600,13 @@ A relation gets an entity segment when it has its own identity and lifecycle. `g
 surrogate id, an expiry, a revocation, and a thing for those to act on. A plain link does not, and
 acting on one becomes an action on whichever entity it joins.
 
-| Relation | Segment | Why |
-|---|---|---|
-| `grants` | `grant.*` | own identity and lifecycle |
-| `group_users` | `group.addMember`, `group.removeMember` | a link; the authority is the group's |
-| `role_permissions` | `role.define` | a link; the authority is the platform's |
-| `grant_decisions` | none | a link; the authority is inherent |
-| `resource_categories` | **open** | a link, and which side holds the authority is not settled |
+| Relation              | Segment                                 | Why                                                       |
+| --------------------- | --------------------------------------- | --------------------------------------------------------- |
+| `grants`              | `grant.*`                               | own identity and lifecycle                                |
+| `group_users`         | `group.addMember`, `group.removeMember` | a link; the authority is the group's                      |
+| `role_permissions`    | `role.define`                           | a link; the authority is the platform's                   |
+| `grant_decisions`     | none                                    | a link; the authority is inherent                         |
+| `resource_categories` | **open**                                | a link, and which side holds the authority is not settled |
 
 **The open one is a governance question wearing a naming question's clothes.** `category.associate`
 says whoever governs the category decides which resources carry it. `resource.associateCategory`
@@ -666,7 +666,7 @@ token already uses, where a wildcard is valid in either position and means all o
 
 **`holder_type` plus `holder_id` is safe here, and it is worth saying why**, because a nullable
 discriminator was rejected earlier in this same schema. The difference is which way the mistake runs.
-A read that fails to expand a group holder to its members returns *less* access; a read that treats a
+A read that fails to expand a group holder to its members returns _less_ access; a read that treats a
 user row as a group matches nobody. Both fail closed. The rejected case was acceptance state, where
 forgetting to check it treats an unanswered grant as live, which fails open. Same shape, opposite
 consequence.
@@ -712,13 +712,13 @@ somebody and would leave `open` empty.
 **Each table answers one step of the token calculation**, which is the order to read them in and the
 reason each exists. The calculation is in [token-calculation.md](token-calculation.md).
 
-| Step | Question | Tables |
-|---|---|---|
-| 1 | Which grants reach this principal, directly or through a group they belong to? | `grants`, `group_users` |
-| 2 | What does each grant's role carry, expanded to capabilities? | `role_permissions`, `capabilities`, `entities` |
-| 3 | What did this principal last answer about each, and is the grant still live? | `grant_decisions`, `grants` |
-| 4 | What a kept grant confers now, and whether the resource still lists its category | `role_permissions`, `resource_categories` |
-| 5 | Assemble the token | nothing. It is computed and stored nowhere |
+| Step | Question                                                                         | Tables                                         |
+| ---- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| 1    | Which grants reach this principal, directly or through a group they belong to?   | `grants`, `group_users`                        |
+| 2    | What does each grant's role carry, expanded to capabilities?                     | `role_permissions`, `capabilities`, `entities` |
+| 3    | What did this principal last answer about each, and is the grant still live?     | `grant_decisions`, `grants`                    |
+| 4    | What a kept grant confers now, and whether the resource still lists its category | `role_permissions`, `resource_categories`      |
+| 5    | Assemble the token                                                               | nothing. It is computed and stored nowhere     |
 
 The step numbers are the calculation's own, so the two documents can be read against each other
 rather than each being taken on its own.
@@ -727,21 +727,21 @@ rather than each being taken on its own.
 this lists what joins them, so that a reader can check the schema against the model rather than infer
 one from the other.
 
-| Kind | Table | Read as a sentence |
-|---|---|---|
-| entity | `users` | a person or a client that can ask |
-| entity | `groups` | a named set of people, conferring nothing by itself |
-| entity | `resources` | a collection of records sharing an identifier |
-| entity | `categories` | a collection of data sharing properties, selecting records or fields depending on the grant |
-| entity | `entities` | what a capability acts on, and which plane it sits in |
-| entity | `capabilities` | what an API offers, as one entity paired with one action. A vocabulary, not policy |
-| entity | `roles` | a named bundle of permissions |
-| relation | `group_users` | this user is in this group |
-| relation | `role_permissions` | this role carries permission to use this capability |
-| relation | `resource_categories` | this resource offers this category |
-| associative entity | `grants` | this holder acts in this role, on this record category of this resource and optionally one field category within it, granted by someone, at a time, until a time, unless revoked |
-| event | `grant_decisions` | this user answered this grant, this way, with these capabilities in view, at this instant |
-| secondary entity | `invitations` | access offered to an address with no account yet, recording a promise rather than a state |
+| Kind               | Table                 | Read as a sentence                                                                                                                                                               |
+| ------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| entity             | `users`               | a person or a client that can ask                                                                                                                                                |
+| entity             | `groups`              | a named set of people, conferring nothing by itself                                                                                                                              |
+| entity             | `resources`           | a collection of records sharing an identifier                                                                                                                                    |
+| entity             | `categories`          | a collection of data sharing properties, selecting records or fields depending on the grant                                                                                      |
+| entity             | `entities`            | what a capability acts on, and which plane it sits in                                                                                                                            |
+| entity             | `capabilities`        | what an API offers, as one entity paired with one action. A vocabulary, not policy                                                                                               |
+| entity             | `roles`               | a named bundle of permissions                                                                                                                                                    |
+| relation           | `group_users`         | this user is in this group                                                                                                                                                       |
+| relation           | `role_permissions`    | this role carries permission to use this capability                                                                                                                              |
+| relation           | `resource_categories` | this resource offers this category                                                                                                                                               |
+| associative entity | `grants`              | this holder acts in this role, on this record category of this resource and optionally one field category within it, granted by someone, at a time, until a time, unless revoked |
+| event              | `grant_decisions`     | this user answered this grant, this way, with these capabilities in view, at this instant                                                                                        |
+| secondary entity   | `invitations`         | access offered to an address with no account yet, recording a promise rather than a state                                                                                        |
 
 **The four kinds are not stylistic.** A relation has no identity and no attributes: delete the row and
 nothing is lost but the association. An associative entity cannot exist without the things it joins
@@ -812,13 +812,13 @@ that carry them: a revision inherits its record's, and an artifact's reach comes
 third column would mean a third partitioned entity, which is a deliberate act rather than a quiet
 reinterpretation of an existing column.
 
-| Capability | Scoping records | Scoping fields |
-|---|---|---|
-| `record.read`, `record.export` | yes | not on this axis: reading fields is `field.read` |
-| `field.read`, `field.export`, `field.aggregate` | not applicable | yes, and `aggregate` is what stops a restricted column staying facetable |
-| `field.update` | not applicable | field-level write, coherent and unbuilt |
-| `record.delete` | yes | never: deletion takes the whole record |
-| any `artifact` capability | yes | never |
+| Capability                                      | Scoping records | Scoping fields                                                           |
+| ----------------------------------------------- | --------------- | ------------------------------------------------------------------------ |
+| `record.read`, `record.export`                  | yes             | not on this axis: reading fields is `field.read`                         |
+| `field.read`, `field.export`, `field.aggregate` | not applicable  | yes, and `aggregate` is what stops a restricted column staying facetable |
+| `field.update`                                  | not applicable  | field-level write, coherent and unbuilt                                  |
+| `record.delete`                                 | yes             | never: deletion takes the whole record                                   |
+| any `artifact` capability                       | yes             | never                                                                    |
 
 **What is given up by not having it**, stated so the trade is visible: a grant naming a category with
 no column mapping at all now fails closed silently, where a kind would have refused it at writing.
@@ -1085,12 +1085,12 @@ converge structurally, so the only row still requiring attention is side effects
 what must be re-verified by hand the moment a response shape is chosen that does not converge on its
 own:
 
-| Channel | How it leaks |
-| ------- | ------------ |
-| Response time | A denial that performed a grant lookup is slower than one that short-circuited on a missing resource |
-| Body shape | Same status, differing structure or fields |
-| Side effects | One path emits an audit event or moves a rate-limit counter; the other does not |
-| Downstream behaviour | Differing cache headers, retry behaviour, or `Vary` |
+| Channel              | How it leaks                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| Response time        | A denial that performed a grant lookup is slower than one that short-circuited on a missing resource |
+| Body shape           | Same status, differing structure or fields                                                           |
+| Side effects         | One path emits an audit event or moves a rate-limit counter; the other does not                      |
+| Downstream behaviour | Differing cache headers, retry behaviour, or `Vary`                                                  |
 
 Timing is the one that usually survives review, because a denial is not thought of as having a body
 worth measuring.
@@ -1273,14 +1273,14 @@ and `isIndigenous`:
 Every principal holds the baseline `open` grant, so it is present in every row below and the token is
 never empty.
 
-| User's grants | Categories in the token | Records reached |
-| --- | --- | --- |
-| open only | `open` | the residual: `isControlled=false AND isIndigenous=false` |
-| open, controlled | `open`, `controlled` | the residual, plus records carrying `controlled` |
-| open, indigenous | `open`, `indigenous` | the residual, plus records carrying `indigenous` |
-| open, both | `open`, `controlled`, `indigenous` | every record |
+| User's grants    | Categories in the token            | Records reached                                           |
+| ---------------- | ---------------------------------- | --------------------------------------------------------- |
+| open only        | `open`                             | the residual: `isControlled=false AND isIndigenous=false` |
+| open, controlled | `open`, `controlled`               | the residual, plus records carrying `controlled`          |
+| open, indigenous | `open`, `indigenous`               | the residual, plus records carrying `indigenous`          |
+| open, both       | `open`, `controlled`, `indigenous` | every record                                              |
 
-**The last two rows depend on a rule that is deferred.** A record carrying `controlled` *and*
+**The last two rows depend on a rule that is deferred.** A record carrying `controlled` _and_
 `indigenous` needs a grant for both, which is the subset test the query layer cannot yet express.
 Until it lands a record carries one category, so the case does not arise and each row is the
 union of what its clauses select. When it lands, holding `controlled` alone stops reaching the
@@ -1498,7 +1498,7 @@ and revocable on its own.
 Ownership is optional and per-resource. An Owner need not be the submitter: a Principal
 Investigator may be designated as owner for data submitted by a lab technician on their team.
 An Admin holds no standing data access and may grant it to themselves explicitly, which needs no
-approval in MVP and will need one once community custodianship exists. Granting access to *others*
+approval in MVP and will need one once community custodianship exists. Granting access to _others_
 is a control-plane act and belongs to these management roles, never to a data-plane role like
 `viewer` or `curator`. See the admin-authority decision in [decisions.md](decisions.md).
 
@@ -1569,7 +1569,7 @@ has no owner during a normal ownership change.
 no intermediate state is observable or persisted. In the last-owner promotion case, removing the
 departing owner and promoting the remaining one execute in a single database transaction. If
 anything fails mid-operation, the whole transaction rolls back: the resource always has an owner.
-*Disambiguation:* [atomic](glossary.md#atomic)
+_Disambiguation:_ [atomic](glossary.md#atomic)
 
 The transfer-before-removal ordering makes strict atomicity a safety net; in the normal flow,
 ownership is always settled before ownership changes.
@@ -1622,10 +1622,10 @@ Who may do what is an instance's decision rather than Usher's, and the arrangeme
 project. The machinery they are built from does not, and the common shape is two groups holding
 different roles in the same resource, split along the plane boundary.
 
-| Group | Role carries | Plane |
-|---|---|---|
-| the people who put data in | read and write permissions over records | data |
-| the people who decide who else may reach it | permissions to assign and revoke | control |
+| Group                                       | Role carries                            | Plane   |
+| ------------------------------------------- | --------------------------------------- | ------- |
+| the people who put data in                  | read and write permissions over records | data    |
+| the people who decide who else may reach it | permissions to assign and revoke        | control |
 
 **The split is what makes the arrangement safe rather than merely tidy.** Someone uploading data
 gains no say over who else reads it, which is the property a community governance requirement needs.
@@ -1936,10 +1936,10 @@ Three options with meaningfully different implications, particularly for consent
 data they submitted, plus whatever they hold grants for, and should not reach what other submitters
 contributed by default.
 
-| Axis | Requirement | Mechanism |
-| ---- | ----------- | --------- |
-| Provenance | A submitter reaches what they submitted, not what others submitted | **Not expressible: identity of the submitter is not a category** |
-| Consent | A submitter may not be entitled to read the sensitive content of what they submitted | Category grants, which MVP has |
+| Axis       | Requirement                                                                          | Mechanism                                                        |
+| ---------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Provenance | A submitter reaches what they submitted, not what others submitted                   | **Not expressible: identity of the submitter is not a category** |
+| Consent    | A submitter may not be entitled to read the sensitive content of what they submitted | Category grants, which MVP has                                   |
 
 These do not substitute for each other, and conflating them is the trap. Provenance scoping does
 not address the consent case at all: the community liaison submitted those records, so scoping

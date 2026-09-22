@@ -36,9 +36,9 @@ reach which study. All of its operations are absorbed by Usher:
 | Studies management service operation | Usher equivalent                                     |
 | ------------------------------------ | ---------------------------------------------------- |
 | Create study group in EGO            | `POST /admin/resources`                              |
-| Add user to study group              | `POST /admin/grants`                               |
-| Remove user from study group         | `DELETE /admin/grants/{id}`                        |
-| List users in a study                | `GET /admin/resources/{id}/grants`                 |
+| Add user to study group              | `POST /admin/grants`                                 |
+| Remove user from study group         | `DELETE /admin/grants/{id}`                          |
+| List users in a study                | `GET /admin/resources/{id}/grants`                   |
 | Create EGO policy for study          | Implicit: resource creation creates the access scope |
 
 The service is retired once Usher's resource management API is live and migrated data is verified.
@@ -201,9 +201,9 @@ integration target: `usher-arranger`, `usher-lyric`.
 - Intercepting incoming data requests before they reach the data layer
 - Calling `usher-bridge` to get the current `PermissionsPayload` for the requesting user
 - Translating that payload into the application's query filter format:
-    - `usher-arranger`: SQON filter object injected as a server-side filter in Arranger's GraphQL
-      layer
-    - `usher-lyric`: query conditions injected into Lyric's data access layer
+  - `usher-arranger`: SQON filter object injected as a server-side filter in Arranger's GraphQL
+    layer
+  - `usher-lyric`: query conditions injected into Lyric's data access layer
 - Returning 401 or 503 to the principal when `usher-bridge` signals an invalid or uncertain session
 
 **Does not own:**
@@ -267,17 +267,17 @@ applications enforce decisions derived from it, without managing that state them
    every controller instance the same view of it, so a refresh served by one instance does not
    recompute what another already has.
 
-    **Invalidation is by deletion, and only for this half.** Anything changing what a principal holds
-    deletes their entry, so absence means recompute and the entry cannot go subtly stale. A category
-    change does not delete it; the versions stored beside the payload are what catch that, compared
-    against the resources' current ones on refresh.
+   **Invalidation is by deletion, and only for this half.** Anything changing what a principal holds
+   deletes their entry, so absence means recompute and the entry cannot go subtly stale. A category
+   change does not delete it; the versions stored beside the payload are what catch that, compared
+   against the resources' current ones on refresh.
 
-    **What this is not.** There is no last-modified timestamp per principal. That was the first
-    design and it does not work, because the marker was per principal while the dangerous change is
-    per resource, and it is recorded as rejected in
-    [decisions.md](decisions.md). The open blocker that once sat here, over whether such a timestamp
-    was authoritative in Valkey or cached from PostgreSQL, closed with it: there is no timestamp to
-    place.
+   **What this is not.** There is no last-modified timestamp per principal. That was the first
+   design and it does not work, because the marker was per principal while the dangerous change is
+   per resource, and it is recorded as rejected in
+   [decisions.md](decisions.md). The open blocker that once sat here, over whether such a timestamp
+   was authoritative in Valkey or cached from PostgreSQL, closed with it: there is no timestamp to
+   place.
 
 2. **Revocation pub/sub backbone.** When a revocation is processed by one controller instance,
    it publishes an event to a Valkey pub/sub channel. All other instances subscribe to this
@@ -298,17 +298,17 @@ distributes events; PostgreSQL is the source of truth.
 | Issue IdP token                                        | ✓        |            |        |        |
 | Validate IdP token                                     |          | ✓          |        |        |
 | Resolve user grants                                    |          | ✓          |        |        |
-| Issue Usher token (JWE)                               |          | ✓          |        |        |
+| Issue Usher token (JWE)                                |          | ✓          |        |        |
 | Hold every application's JWE key                       |          | ✓          |        |        |
 | Hold its own application's JWE key                     |          |            | ✓      |        |
-| Cache Usher token                                     |          |            | ✓      |        |
-| Decrypt and expose `PermissionsPayload`                     |          |            | ✓      |        |
-| Validate Usher token locally                          |          |            | ✓      |        |
+| Cache Usher token                                      |          |            | ✓      |        |
+| Decrypt and expose `PermissionsPayload`                |          |            | ✓      |        |
+| Validate Usher token locally                           |          |            | ✓      |        |
 | Subscribe to revocation channel                        |          |            | ✓      |        |
 | Publish revocation events (cross-instance, via Valkey) |          | ✓          |        |        |
 | Dismiss revoked session                                |          |            | ✓      |        |
 | Raise on controller loss (fail-secure)                 |          |            | ✓      |        |
-| Translate permissions payload to query filters              |          |            |        | ✓      |
+| Translate permissions payload to query filters         |          |            |        | ✓      |
 | Intercept and filter data requests                     |          |            |        | ✓      |
 | Manage policy (grants, resource users, categories)     |          | ✓          |        |        |
 | Expose management API and future UI                    |          | ✓          |        |        |

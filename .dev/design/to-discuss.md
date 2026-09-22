@@ -10,7 +10,6 @@ closed.
 
 ---
 
-
 ## The reconciliation check is load-bearing and unspecified
 
 **[HIGH] Six separate failure modes name the same mitigation, and nothing describes it.** Each of
@@ -124,7 +123,7 @@ overwritten timestamp and no history to reconstruct, and a token issued between 
 grants that are each separately revoked.
 
 What stays open is narrower and belongs with the same unanswered question as everything else about
-stopping a principal outright: revoking a *person* rather than a grant has no settled storage, so
+stopping a principal outright: revoking a _person_ rather than a grant has no settled storage, so
 whether that is a sweep over their grants or a marker on `users` decides whether reinstatement is
 many writes or one. See blocker 6 in [../docs/phase-1.md](../docs/phase-1.md).
 
@@ -188,12 +187,12 @@ them open while citing the BCP for the one that was taken is the part that needs
 **[LOW] Four token-spec details have no stated answer.** None blocks implementation; each is a number
 or a rule someone will otherwise invent at the keyboard.
 
-| Question | Note |
-|---|---|
+| Question                       | Note                                                                                                                                                                                           |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | clock skew for `exp` and `iat` | skew is called "the ordinary JWT concern" and left there. Against a five minute TTL, a thirty second leeway is ten percent of the window, which is a tradeoff rather than a default to inherit |
-| `aud` as a string or an array | RFC 7519 §4.1.3 permits both. Pin the string form and reject arrays, since permitting both is how a validator gets written against one and fed the other |
-| `nbf` | expected to be no, unrecorded |
-| token size bound | wanted before a principal holding grants in hundreds of resources finds it first |
+| `aud` as a string or an array  | RFC 7519 §4.1.3 permits both. Pin the string form and reject arrays, since permitting both is how a validator gets written against one and fed the other                                       |
+| `nbf`                          | expected to be no, unrecorded                                                                                                                                                                  |
+| token size bound               | wanted before a principal holding grants in hundreds of resources finds it first                                                                                                               |
 
 **[RESOLVED] If roles resolve at issuance, the token's `role` field should not exist.**
 Applied. A resource maps to a plain list of category grants, `role` and any detached permission
@@ -208,11 +207,11 @@ travel in an enforcement payload.
 
 Where roles then live, none of which is the token:
 
-| Place | Job |
-|---|---|
-| The management interface | Granting by role rather than by enumerating permissions |
-| The grant store | Which role was assigned, for provenance and for recomputing when a role's definition changes |
-| Usher's own API authorization | Whether a principal may perform a grant operation at all |
+| Place                         | Job                                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| The management interface      | Granting by role rather than by enumerating permissions                                      |
+| The grant store               | Which role was assigned, for provenance and for recomputing when a role's definition changes |
+| Usher's own API authorization | Whether a principal may perform a grant operation at all                                     |
 
 **Ownership is absent from the token for a second and independent reason.** An owner's powers are
 management operations: granting, revoking, setting visibility. Those are performed against Usher's
@@ -320,12 +319,12 @@ correctly.
 **Scope: this governs the narrowing arm only.** The enforcement result is already a union of deny,
 narrow and allow, and only narrow carries a predicate. Named future plugins do not all narrow:
 
-| Application | Operation | Predicate? |
-|---|---|---|
-| Arranger | Filter a search | Yes, in the query language natively |
-| SONG | Filter a metadata listing | In principle, if the predicate stays backend-neutral |
-| Score | Authorize one object fetch by identifier | No. Deny or allow only |
-| Lectern | Schema and dictionary service, no record filtering | No |
+| Application | Operation                                          | Predicate?                                           |
+| ----------- | -------------------------------------------------- | ---------------------------------------------------- |
+| Arranger    | Filter a search                                    | Yes, in the query language natively                  |
+| SONG        | Filter a metadata listing                          | In principle, if the predicate stays backend-neutral |
+| Score       | Authorize one object fetch by identifier           | No. Deny or allow only                               |
+| Lectern     | Schema and dictionary service, no record filtering | No                                                   |
 
 A service whose operation is fetching one object by identifier never narrows, so no predicate is
 built under either option and the question does not arise. What such a plugin needs instead is a
@@ -334,7 +333,7 @@ the plugin resolving its identifier to that pair first. That is a third interfac
 should carry it deliberately rather than treating every application as a filtering one.
 
 **What would change this, restated.** Not a backend that cannot narrow, but a backend that narrows in
-a way the shared query language cannot express *neutrally*. The MVP predicate is a single positive
+a way the shared query language cannot express _neutrally_. The MVP predicate is a single positive
 containment on a field, which is neutral: it compiles as readily to a relational filter as to a
 search-engine one. So the recommendation holds today for every application that narrows.
 
@@ -346,7 +345,7 @@ expression carried to a plugin over a different store would mean something diffe
 differ permissively.
 
 Two consequences. Record-level narrowing as currently specified is **specific to the search application
-rather than a platform permission**, which no document says. And this is an argument *for* central
+rather than a platform permission**, which no document says. And this is an argument _for_ central
 construction rather than against it: where the meaning of a predicate depends on backend properties,
 that reasoning belongs in one component that can vary or refuse on a declared permission, not
 replicated across plugins whose authors each decide independently what the expression means.

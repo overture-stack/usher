@@ -182,11 +182,11 @@ data belongs to one study, and studies do not overlap. Cohorts are a different m
 things: they often describe the same real-world situation from different angles. A single genomics
 study produces all three at once:
 
-| Sense | "The PEDS-2024 cohort" refers to |
-|---|---|
-| Colloquial | The team of researchers who worked on that study |
-| Clinical or epidemiological | The 500 children enrolled and followed over time |
-| **Data science (this sense)** | **Records where `study_id == "PEDS-2024"`** |
+| Sense                         | "The PEDS-2024 cohort" refers to                 |
+| ----------------------------- | ------------------------------------------------ |
+| Colloquial                    | The team of researchers who worked on that study |
+| Clinical or epidemiological   | The 500 children enrolled and followed over time |
+| **Data science (this sense)** | **Records where `study_id == "PEDS-2024"`**      |
 
 The clinical and data science senses correspond closely: the enrolled children generated the
 records that now form the data science cohort. Usher uses "cohort" in the data science sense
@@ -209,13 +209,13 @@ instance says which field. Support for overlapping cohorts comes in a later rele
 
 The difference matters if you are planning an instance:
 
-| | Supported in the first release | Not yet |
-| --- | --- | --- |
-| One record, one resource, named by a field value | Yes | |
-| Records narrowed within a resource by the category they carry | Yes | |
-| A record satisfying two cohort predicates at once, such as `disease_type == "rare"` and `age_at_diagnosis < 18` | | Later |
-| A record carrying two categories at once, needing a grant for both | | Later |
-| Narrowing to individual fields | | Later |
+|                                                                                                                 | Supported in the first release | Not yet |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------- |
+| One record, one resource, named by a field value                                                                | Yes                            |         |
+| Records narrowed within a resource by the category they carry                                                   | Yes                            |         |
+| A record satisfying two cohort predicates at once, such as `disease_type == "rare"` and `age_at_diagnosis < 18` |                                | Later   |
+| A record carrying two categories at once, needing a grant for both                                              |                                | Later   |
+| Narrowing to individual fields                                                                                  |                                | Later   |
 
 One resource per record also settles a question that would otherwise be open. If a record could
 belong to two cohorts and a user held only one of them, should they see it? There was a real choice
@@ -241,11 +241,11 @@ Two things have to line up for a grant to reach anything, and they answer differ
 role sets the ceiling: the acts its holder could ever perform. The category decides which records
 those acts reach.
 
-| Grants held on a resource | What the principal reaches |
-|---|---|
-| None | Only what the baseline grants |
-| Some of its categories | The records carrying those categories, at each grant's role, and no others |
-| All of its categories | Every record in the resource |
+| Grants held on a resource | What the principal reaches                                                 |
+| ------------------------- | -------------------------------------------------------------------------- |
+| None                      | Only what the baseline grants                                              |
+| Some of its categories    | The records carrying those categories, at each grant's role, and no others |
+| All of its categories     | Every record in the resource                                               |
 
 A record carrying a category you hold no grant on stays out of reach whatever else you hold, and no
 grant reaches further than its own role permits.
@@ -290,11 +290,11 @@ release.
 
 Three relations carry this, and only two of them are about access:
 
-| Entity              | What it means                                              |
-|---------------------|------------------------------------------------------------|
-| `group_users`       | which users are in a group                                   |
-| `grants`            | who acts in which role, on which category of which resource  |
-| `grant_decisions`   | whether the recipient accepted, and what they were shown     |
+| Entity            | What it means                                               |
+| ----------------- | ----------------------------------------------------------- |
+| `group_users`     | which users are in a group                                  |
+| `grants`          | who acts in which role, on which category of which resource |
+| `grant_decisions` | whether the recipient accepted, and what they were shown    |
 
 A group confers nothing by belonging to it. What a group does is let one grant name a set of people
 instead of one, so the same set can be trusted as a curator in one place and a viewer in another.
@@ -365,11 +365,11 @@ In Usher terms: the records carrying that category are reached only by a grant n
 that resource. The resource's other records answer to their own categories, so the tier applies to
 the records rather than to the resource as a whole. This is deny-by-default at the tier level.
 
-| Tier       | Usher mechanism                                                                        |
-|------------|----------------------------------------------------------------------------------------|
-| Open       | Anonymous Usher token issued (no IdP bearer needed); open-tier grants only            |
+| Tier       | Usher mechanism                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| Open       | Anonymous Usher token issued (no IdP bearer needed); open-tier grants only                     |
 | Registered | Usher token issued on authentication; the open grant reaches a resource's unrestricted records |
-| Controlled | Reaching a categorized record requires a grant naming that category in the policy store |
+| Controlled | Reaching a categorized record requires a grant naming that category in the policy store        |
 
 The category and category grant concepts in the permissions model exist specifically to
 implement the Controlled tier. The Open and Registered tiers come out of that same model rather than
@@ -405,8 +405,8 @@ A Passport contains one or more **Visas**: individual signed claim assertions. T
 relevant to Overture:
 
 | Visa type                  | What it asserts                                                             |
-|----------------------------|-----------------------------------------------------------------------------|
-| `ControlledAccessGrants`   | Researcher is granted dataset X, access type Y, until date Z           |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `ControlledAccessGrants`   | Researcher is granted dataset X, access type Y, until date Z                |
 | `AcceptedTermsAndPolicies` | Researcher accepted data use agreement B                                    |
 | `AffiliationAndRole`       | Researcher is affiliated with institution A in role R                       |
 | `ResearcherStatus`         | Researcher holds bona fide researcher status, for example ELIXIR Researcher |
@@ -418,11 +418,11 @@ DAC grant for a specific dataset is the external origin of a category grant.
 
 Different parties in a Passport-enabled ecosystem play distinct roles:
 
-| Role                | What it does                                                              | Examples                               |
-|---------------------|---------------------------------------------------------------------------|----------------------------------------|
-| **Visa Issuer**     | Signs and issues individual Visa assertions after a grant event       | REMS, ELIXIR AAI, institutional DACs   |
-| **Passport Broker** | Aggregates Visas from multiple Issuers into a single Passport             | LifeScience Login, ELIXIR Login        |
-| **Clearinghouse**   | Validates incoming Passports and maps approved claims to access grants    | Usher, via Keycloak                    |
+| Role                | What it does                                                           | Examples                             |
+| ------------------- | ---------------------------------------------------------------------- | ------------------------------------ |
+| **Visa Issuer**     | Signs and issues individual Visa assertions after a grant event        | REMS, ELIXIR AAI, institutional DACs |
+| **Passport Broker** | Aggregates Visas from multiple Issuers into a single Passport          | LifeScience Login, ELIXIR Login      |
+| **Clearinghouse**   | Validates incoming Passports and maps approved claims to access grants | Usher, via Keycloak                  |
 
 The examples above are real services you may meet in this space. REMS is the Resource Entitlement
 Management System from CSC Finland, described further below. ELIXIR is Europe's life-science data
@@ -592,6 +592,7 @@ Legitimate users are affected by outages. But an attacker who blocks the authori
 gains nothing. They cannot keep a revoked session alive by disrupting the revocation mechanism.
 
 Analogy: a fire door.
+
 - Fail-secure: the door locks when power fails. People cannot exit freely, but unauthorized
   parties cannot enter. Prioritizes containment over egress.
 - Fail-open: the door opens when power fails. People can exit, but so can unauthorized parties.
@@ -620,14 +621,15 @@ things it protects.
 
 In practice, every instance will have its own name for what Usher calls a "resource":
 
-| Instance | What they call it | Usher model term |
-|---|---|---|
-| iMS (iMicroSeq) | study | resource |
-| OHCRN | project | resource |
-| A clinical trial registry | cohort | resource |
-| A biobank | collection | resource |
+| Instance                  | What they call it | Usher model term |
+| ------------------------- | ----------------- | ---------------- |
+| iMS (iMicroSeq)           | study             | resource         |
+| OHCRN                     | project           | resource         |
+| A clinical trial registry | cohort            | resource         |
+| A biobank                 | collection        | resource         |
 
 These domain-specific names appear in:
+
 - The management UI's labels (configured per instance)
 - The plugin's field mapping config, which names the field identifying which records belong to a
   given resource

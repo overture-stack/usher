@@ -107,10 +107,10 @@ divergence is a defect rather than a surprise.
 **Numbers are identities, not positions.** They are cited from `plugin-integration.md` and from
 several session records, so they stay fixed and the sections below stay in numeric order.
 
-| Do | # | Item | Waits on | Why it sits here |
-|---|---|---|---|---|
-| now | 6 | Database schema | nothing | Every decision that fed it has landed. The largest single piece of design work left, and it gates all core implementation |
-| after | 4 | Plugin API contract | 6 | Implementation rather than design: turning intent into typed shapes. Needed for Nov 15, not for the lock |
+| Do    | #   | Item                | Waits on | Why it sits here                                                                                                          |
+| ----- | --- | ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| now   | 6   | Database schema     | nothing  | Every decision that fed it has landed. The largest single piece of design work left, and it gates all core implementation |
+| after | 4   | Plugin API contract | 6        | Implementation rather than design: turning intent into typed shapes. Needed for Nov 15, not for the lock                  |
 
 **Five are closed and kept below for the reasoning rather than as work.** Item 1 is live as a finding
 rather than a task, since neither catalogue carries an access-level field. Item 2 resolved to Fastify.
@@ -232,16 +232,16 @@ two is where the safety-relevant change lives.
   `BadRequest`, so a user holding no grants produces a rejected query rather than an
   open-access one. That protection is a property of the `sqon-builder` plus drizzle path and
   does not survive the change of library. In `@overture-stack/sqon`, an empty and-combination is a
-valid,
+  valid,
   intentional, first-class value:
 
-    `SqonCombinationSchema` declares `content: zod.array(SqonSchema)` with no `.min(1)`, while
-    every leaf schema constrains its own content (`fieldName: min(1)`, `value: min(1)` or
-    `.length(2)`, `fieldNames: min(1)`). So `{ op: 'and', content: [] }` validates.
-    `SqonBuilder.empty()` produces exactly that value, and three tests assert it:
-    `modules/sqon/src/builder/index.test.ts:9`, `:482`, and `:514`. Reduction converges on it,
-    since removing the last remaining filter yields the empty combination and inner empties are
-    pruned into the parent.
+  `SqonCombinationSchema` declares `content: zod.array(SqonSchema)` with no `.min(1)`, while
+  every leaf schema constrains its own content (`fieldName: min(1)`, `value: min(1)` or
+  `.length(2)`, `fieldNames: min(1)`). So `{ op: 'and', content: [] }` validates.
+  `SqonBuilder.empty()` produces exactly that value, and three tests assert it:
+  `modules/sqon/src/builder/index.test.ts:9`, `:482`, and `:514`. Reduction converges on it,
+  since removing the last remaining filter yields the empty combination and inner empties are
+  pruned into the parent.
 
   This is correct behaviour for a search library, where "no filter" legitimately means
   "everything." It is exactly wrong as the encoding of "no grants" in an authorization context,
@@ -366,13 +366,13 @@ than computing exclusions by subtracting held categories from a locally configur
 The decision depends on failure direction: in a subtractive model, losing a term widens access; in
 an additive model, losing a term narrows it.
 
-| Failure | Subtractive | Additive |
-|---|---|---|
-| Category exists in Usher, unmapped in the plugin | No exclusion generated, records leak | Contributes no branch, denies |
-| Data carries a tag value not yet registered as a category | Nothing excludes it, visible | Matches no predicate, hidden |
-| A bug drops a clause from the composed filter | Access widens | Access narrows |
-| A field mapping points at the wrong field | Fails open | Fails open |
-| Principal holds zero grants | Denies | Denies |
+| Failure                                                   | Subtractive                          | Additive                      |
+| --------------------------------------------------------- | ------------------------------------ | ----------------------------- |
+| Category exists in Usher, unmapped in the plugin          | No exclusion generated, records leak | Contributes no branch, denies |
+| Data carries a tag value not yet registered as a category | Nothing excludes it, visible         | Matches no predicate, hidden  |
+| A bug drops a clause from the composed filter             | Access widens                        | Access narrows                |
+| A field mapping points at the wrong field                 | Fails open                           | Fails open                    |
+| Principal holds zero grants                               | Denies                               | Denies                        |
 
 Term loss is a demonstrated property of `@overture-stack/sqon` rather than a speculative risk
 (empty combinations validate as match-all, `reduce.ts` prunes empty inner combinations,
@@ -458,13 +458,13 @@ what a later change costs.
 and a coordinated deploy of every bridge.** So the two are future-proofed differently, and
 deliberately:
 
-| | First release | Arrives later, and how |
-|---|---|---|
-| Data-plane entities | `record` and `artifact` | `field` and `revision`, by migration |
-| `grants.field_category_id` | not created | added nullable, no backfill, since null is correct for every existing row |
-| `entities` and `capabilities` rows for `field`, `revision` | not inserted | data, not structure |
-| Token nesting by entity | **shipped**, though only `record` ever appears in it | nothing to add |
-| `record_category_id` as the column name | **shipped under that name** | nothing to rename |
+|                                                            | First release                                        | Arrives later, and how                                                    |
+| ---------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| Data-plane entities                                        | `record` and `artifact`                              | `field` and `revision`, by migration                                      |
+| `grants.field_category_id`                                 | not created                                          | added nullable, no backfill, since null is correct for every existing row |
+| `entities` and `capabilities` rows for `field`, `revision` | not inserted                                         | data, not structure                                                       |
+| Token nesting by entity                                    | **shipped**, though only `record` ever appears in it | nothing to add                                                            |
+| `record_category_id` as the column name                    | **shipped under that name**                          | nothing to rename                                                         |
 
 **The nesting ships even though the first release has one entity in it.** `{"open": {"record":
 ["read"]}}` gains nothing over `{"open": ["read"]}` while `record` is alone. Adding the level later
@@ -520,9 +520,9 @@ schema design session itself, now the largest single piece of design work left.
 consistent across the iMS production and development environments and the Overture demo
 environment:
 
-| EGO setting | Value |
-|---|---|
-| Access token lifetime | 3 hours |
+| EGO setting            | Value    |
+| ---------------------- | -------- |
+| Access token lifetime  | 3 hours  |
 | Refresh token lifetime | 12 hours |
 
 **Why it is three hours, which is the part that matters.** Submitters run large uploads that outlive
@@ -604,12 +604,12 @@ the fast-path decision in [decisions.md](../design/decisions.md).
 Implementation velocity is not the risk. The critical path runs through the Sep 15 design lock
 and two external dependencies outside this project's control:
 
-| Risk | Gate | Status |
-|---|---|---|
-| Design blockers 3, 4, 6 and 8 closed | Sep 15 design lock | In progress. Blockers 1, 2 and 5 are closed; 8 was added after a sweep found both CRITICAL findings absent from this list |
-| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the token the bridge presents | Unknown; DevOps and infra owned |
-| Portal migrated from EGO to Keycloak | Portal can present a token the controller accepts | Unknown timeline; integration team |
-| Resource field confirmed per catalogue | usher-arranger plugin config | Resolved for the first integration; recorded on that side |
+| Risk                                                                               | Gate                                                      | Status                                                                                                                    |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Design blockers 3, 4, 6 and 8 closed                                               | Sep 15 design lock                                        | In progress. Blockers 1, 2 and 5 are closed; 8 was added after a sweep found both CRITICAL findings absent from this list |
+| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the token the bridge presents | Unknown; DevOps and infra owned                                                                                           |
+| Portal migrated from EGO to Keycloak                                               | Portal can present a token the controller accepts         | Unknown timeline; integration team                                                                                        |
+| Resource field confirmed per catalogue                                             | usher-arranger plugin config                              | Resolved for the first integration; recorded on that side                                                                 |
 
 Two corrections to earlier versions of this table. Keycloak's own token exchange endpoint is not a
 dependency: the bridge calls the controller's exchange endpoint, and the controller validates the
@@ -633,14 +633,15 @@ because this section names that file Usher's to own; moving it into the location
 its own. Its README records two deliberate divergences from the case table.
 
 **Structure**, originating from the submission side:
-    .dev/usher-integration/
-      README.md                    what this is, how each side runs it, how to add a case
-      conformance/
-        principals.json            actors: principal id + permissions payload (Usher owns this file)
-        records.json               records with access level, org, submission id
-        expectations.json          (principal, record) -> visible, with a reason field
+.dev/usher-integration/
+README.md what this is, how each side runs it, how to add a case
+conformance/
+principals.json actors: principal id + permissions payload (Usher owns this file)
+records.json records with access level, org, submission id
+expectations.json (principal, record) -> visible, with a reason field
 
 **Design constraints agreed:**
+
 - Expectations in neutral terms ("principal P can see record R"), never ES query or SQL predicate
 - Zero-grant section, exhaustive: principals with no grants, empty grants, grants for org
   with no records, unrecognized principal: all `visible: false` against every record
@@ -688,12 +689,12 @@ needs one that observes production instead.
 
 Worked both ways, since the boundary is not where it first appears:
 
-| Question | Discriminating pair exists | Instrument |
-| -------- | -------------------------- | ---------- |
-| Does a denied principal see records | Yes: denied against permitted, same records | Corpus |
-| Does a facet leak values a principal may not see | Yes: under-privileged against fully-privileged, same endpoint | Corpus |
-| Which layer produced an outcome | Partly: some wrong reasons are pairable, "which layer" is not | Corpus for the pairable half only |
-| Did a query rewrite rather than scan | No: results are identical by design | Profile or explain, never the corpus |
+| Question                                         | Discriminating pair exists                                    | Instrument                           |
+| ------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------ |
+| Does a denied principal see records              | Yes: denied against permitted, same records                   | Corpus                               |
+| Does a facet leak values a principal may not see | Yes: under-privileged against fully-privileged, same endpoint | Corpus                               |
+| Which layer produced an outcome                  | Partly: some wrong reasons are pairable, "which layer" is not | Corpus for the pairable half only    |
+| Did a query rewrite rather than scan             | No: results are identical by design                           | Profile or explain, never the corpus |
 
 The last row is the one to watch. A property that leaves results identical **by definition** can
 never be reached by comparing them, however many cases are added, and a corpus asked to hold it goes
@@ -728,8 +729,8 @@ decision recording the mechanism already calls it a payload version.
 
 **The 29 cases and `expectations.json` are different layers, and conflating them is the mistake this
 section invites.** The cases in [token-calculation.md](../design/token-calculation.md) assert what the
-token *contains*, given grants, group membership, acceptance state and the baseline setting. The
-corpus asserts what an application *serves*, given a payload and a set of records. They chain rather
+token _contains_, given grants, group membership, acceptance state and the baseline setting. The
+corpus asserts what an application _serves_, given a payload and a set of records. They chain rather
 than overlap: a case's expected payload is a `principals.json` entry, and the corpus starts where the
 cases stop.
 

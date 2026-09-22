@@ -35,9 +35,9 @@ Three consequences follow, and the first two are why the shape is worth choosing
 build time.
 
 **Two guarantees, in two places, and only one of them is the package's.** A portal showing what
-someone holds must never disclose what exists and they lack. What the data *contains* is Usher's
+someone holds must never disclose what exists and they lack. What the data _contains_ is Usher's
 read to enforce: the endpoint returns what a principal holds and nothing else, so nothing downstream
-can render what they lack. What the rendering *implies* is the package's, and it can leak while every
+can render what they lack. What the rendering _implies_ is the package's, and it can leak while every
 value is correct. "Three of seven studies" discloses that seven exist. So does an affordance for
 something unreachable, or an empty state that distinguishes nothing-here from nothing-for-you. Those
 are choices, easy to get wrong independently in two codebases, and putting them in one place is the
@@ -76,6 +76,7 @@ Stage rather than preferences:
   discover: a host themed by a JS object emits those values as custom properties on a root element,
   and the package reads them without knowing which stack produced them. Small, and it belongs to the
   host because only the host knows its own theme.
+
 - **No data model or vocabulary is hardcoded in rendered output.** A host resolves its catalogues at
   runtime precisely so no model is baked in, and an instance calls resources studies and roles study
   enrolments. This is the domain-label question answered from the consumer side, and it is settled by

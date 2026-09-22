@@ -21,12 +21,12 @@ The flows also say **constraint token** where this design says **Usher token**.
 
 ## What the flows settle
 
-| Question | Was | Flows say |
-|---|---|---|
-| Does adding an owner need existing owners' consent? | Open (FR-22) | No. A Steward adds another by email with no consent step (4.5) |
-| May an owner remove a peer, or only themselves? | Open (FR-23) | Both. Peer removal is its own flow (4.6); self-removal is another (4.7) |
-| Where is the non-empty-owner invariant enforced? | Unstated | At both removal paths: self-removal (4.7) and admin removal of a submitter (5.3) |
-| Which component enforces download? | Open (FR-02, FR-15) | The file API, on every request, independently of the search path |
+| Question                                            | Was                 | Flows say                                                                        |
+| --------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
+| Does adding an owner need existing owners' consent? | Open (FR-22)        | No. A Steward adds another by email with no consent step (4.5)                   |
+| May an owner remove a peer, or only themselves?     | Open (FR-23)        | Both. Peer removal is its own flow (4.6); self-removal is another (4.7)          |
+| Where is the non-empty-owner invariant enforced?    | Unstated            | At both removal paths: self-removal (4.7) and admin removal of a submitter (5.3) |
+| Which component enforces download?                  | Open (FR-02, FR-15) | The file API, on every request, independently of the search path                 |
 
 **The invariant's wording is already drafted.** Flow 4.7 blocks the sole Steward from removing
 themselves and tells them to add another first. This is the non-empty-set rule arrived at
@@ -82,9 +82,9 @@ the requirements, the flows and this design, with no route left that quietly dep
 
 ### Admin authority points two ways
 
-| | Flows | This design |
-|---|---|---|
-| Can an admin share? | No. Sharing is exclusively the Steward's (5.6) | Yes. An Admin can act as owner through the standard grant flow |
+|                                        | Flows                                                                                 | This design                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Can an admin share?                    | No. Sharing is exclusively the Steward's (5.6)                                        | Yes. An Admin can act as owner through the standard grant flow |
 | How does an admin see restricted data? | A configured view-all permission; visibility is platform-level, not grant-based (5.5) | No standing access. Self-grant, explicit, time-limited, logged |
 
 **Resolved, and the persona name is the source of the confusion.** "Data Admin" in the flows means
@@ -161,10 +161,10 @@ the "Shared with Me" surface and the sharing interface are portal-ui's and arriv
 below that depends on one of them is not thereby blocking the first integration. See the Stage-first
 scoping in [phase-1.md](phase-1.md).
 
-| Persona | Deliverable under MVP as designed |
-|---|---|
-| Unauthenticated user (1.1 to 1.4) | Yes. Open tier, existence denial, and pending-grant activation on registration are all designed |
-| Data consumer (2.1 to 2.10) | Mostly. Depends on notification and on the "Shared with Me" API, neither designed |
-| Data submitter (3.1 to 3.4) | Yes for 3.1, 3.2 and 3.4. Flow 3.3 depends on the access-breadth disagreement above |
-| Data steward (4.1 to 4.10) | Option 1 of 4.1 yes; Option 2 is post-MVP. The rest are management-interface work, not started |
-| Data admin (5.1 to 5.6) | The admin authority question is answered above: 5.6 stands and 5.5 holds except for giving that persona all restricted data. What remains is management-interface work, which has not started |
+| Persona                           | Deliverable under MVP as designed                                                                                                                                                             |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unauthenticated user (1.1 to 1.4) | Yes. Open tier, existence denial, and pending-grant activation on registration are all designed                                                                                               |
+| Data consumer (2.1 to 2.10)       | Mostly. Depends on notification and on the "Shared with Me" API, neither designed                                                                                                             |
+| Data submitter (3.1 to 3.4)       | Yes for 3.1, 3.2 and 3.4. Flow 3.3 depends on the access-breadth disagreement above                                                                                                           |
+| Data steward (4.1 to 4.10)        | Option 1 of 4.1 yes; Option 2 is post-MVP. The rest are management-interface work, not started                                                                                                |
+| Data admin (5.1 to 5.6)           | The admin authority question is answered above: 5.6 stands and 5.5 holds except for giving that persona all restricted data. What remains is management-interface work, which has not started |

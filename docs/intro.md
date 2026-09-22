@@ -85,14 +85,17 @@ Start with [IAM Primer](iam-primer.md): it covers the background (OAuth 2.0, OID
 PDP/PEP/PAP) before Usher-specific vocabulary.
 
 **Evaluating Usher for your instance** (principal investigator, data manager, governance lead)
+
 - [Concepts](concepts.md): the data access tier model, how grants work, what the Custodian and
   Admin roles enable, and data sovereignty support
 - [Why Usher](why-usher.md): how Usher relates to adjacent tools and what it specifically adds
 
 **Working with data on an Usher-enabled platform** (researcher, analyst)
+
 - [Concepts](concepts.md): data access tiers, what a category grant means for what you can see
 
 **Building or integrating with Usher** (developer, integration engineer)
+
 - [Concepts](concepts.md): ABAC, PDP/PAP/PEP, Usher tokens, fail-secure, revocation
 - [Why Usher](why-usher.md): architectural context and tool comparisons
 - [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md): full document set with reading order by role

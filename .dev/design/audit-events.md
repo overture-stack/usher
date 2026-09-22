@@ -9,14 +9,14 @@ Every entry from every Overture service carries the same context attributes. The
 own, and their names are fixed by that specification, which restricts attribute names to lower-case
 letters and digits. That is why none of them carry an underscore.
 
-| Attribute     | Required | Description                                                              |
-| ------------- | -------- | ------------------------------------------------------------------------ |
-| `specversion` | yes      | The CloudEvents version this entry conforms to                           |
-| `id`          | yes      | Identifies this entry, unique per source                                 |
+| Attribute     | Required | Description                                                                            |
+| ------------- | -------- | -------------------------------------------------------------------------------------- |
+| `specversion` | yes      | The CloudEvents version this entry conforms to                                         |
+| `id`          | yes      | Identifies this entry, unique per source                                               |
 | `source`      | yes      | Which deployment emitted it, as a URI reference. One per deployment, never per replica |
-| `type`        | yes      | What happened, from the table below, carrying the `bio.overture.` prefix  |
-| `time`        | yes here | When it happened. RFC 3339, UTC with `Z`, seconds always present          |
-| `dataschema`  | optional | Names which definition of `data` applies, where one is published         |
+| `type`        | yes      | What happened, from the table below, carrying the `bio.overture.` prefix               |
+| `time`        | yes here | When it happened. RFC 3339, UTC with `Z`, seconds always present                       |
+| `dataschema`  | optional | Names which definition of `data` applies, where one is published                       |
 
 `source` is what makes a complete audit trail possible: a health data access event needs Usher's
 entry correlated with the consuming application's, and each says where it came from without anyone
@@ -43,12 +43,12 @@ and `dataschema` names the definition where one is published.
 
 These properties recur across entities:
 
-| Property    | Applies to | Description                                                            |
-| ----------- | ---------- | ----------------------------------------------------------------------- |
-| `actorId`  | all        | Who triggered it, as the identity provider's `sub`. `null` where `actorType` says there is nobody |
-| `sourceIp` | API-initiated events | Origin IP; omit for system-generated events                   |
-| `result`    | actions only | `succeeded`, `denied` (the actor lacked authority), or `failed`         |
-| `actorType` | all        | `human`, `serviceAccount`, `anonymous` or `system`. Not derivable from `actorId`, whose format is the same for the first two and absent for the last two, and alerting needs to tell them apart |
+| Property    | Applies to           | Description                                                                                                                                                                                     |
+| ----------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actorId`   | all                  | Who triggered it, as the identity provider's `sub`. `null` where `actorType` says there is nobody                                                                                               |
+| `sourceIp`  | API-initiated events | Origin IP; omit for system-generated events                                                                                                                                                     |
+| `result`    | actions only         | `succeeded`, `denied` (the actor lacked authority), or `failed`                                                                                                                                 |
+| `actorType` | all                  | `human`, `serviceAccount`, `anonymous` or `system`. Not derivable from `actorId`, whose format is the same for the first two and absent for the last two, and alerting needs to tell them apart |
 
 **`actorId` carries the identity provider's `sub`, which is what makes it correlate.** A correlation
 key has to be producible by every service that correlates on it, and `sub` is the only identifier
@@ -107,12 +107,12 @@ at release time.
 **A condition only Usher can see becomes an event of its own type**, and that is the whole of the
 in-process detection. Four exist:
 
-| Event | What it detects | Why it cannot be a downstream rule |
-|---|---|---|
-| `grant.rateExceeded` | one actor's grant operations crossing a threshold in a rolling window | the count is shared state across instances, so no single event stream carries it |
-| `grant.unguarded` | a grant taking effect with no custodian to approve it | requires knowing the category had no custodian at that moment |
-| `resource.orphaned` | a resource left with no owner | a state reached by a deletion elsewhere, not an action anyone performed |
-| `revocationChannel.modeChange` | the channel going quiet and the bridge raising | the absence of events, which no rule over present events can see |
+| Event                          | What it detects                                                       | Why it cannot be a downstream rule                                               |
+| ------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `grant.rateExceeded`           | one actor's grant operations crossing a threshold in a rolling window | the count is shared state across instances, so no single event stream carries it |
+| `grant.unguarded`              | a grant taking effect with no custodian to approve it                 | requires knowing the category had no custodian at that moment                    |
+| `resource.orphaned`            | a resource left with no owner                                         | a state reached by a deletion elsewhere, not an action anyone performed          |
+| `revocationChannel.modeChange` | the channel going quiet and the bridge raising                        | the absence of events, which no rule over present events can see                 |
 
 **The last one is the general case worth stating: silence.** Every other condition is a pattern in
 what arrived, and a downstream rule can find it. A channel that stops carries no event to match, so
@@ -212,10 +212,10 @@ for the access-decision logging requirements consuming apps must implement.
 asymmetry is structural rather than an omission, and it is worth stating because it otherwise reads
 as a gap in the table below and invites someone to close it by inventing `record.readSucceeded`.
 
-| | Who may perform it | Who records that it happened |
-|---|---|---|
-| A control-plane capability, such as `grant.create` | someone acting against Usher's own API | **Usher**, as an event in this document |
-| A data-plane capability, such as `record.read` | someone acting against an ushered application | **that application**, in its own log |
+|                                                    | Who may perform it                            | Who records that it happened            |
+| -------------------------------------------------- | --------------------------------------------- | --------------------------------------- |
+| A control-plane capability, such as `grant.create` | someone acting against Usher's own API        | **Usher**, as an event in this document |
+| A data-plane capability, such as `record.read`     | someone acting against an ushered application | **that application**, in its own log    |
 
 Usher never observes a read, so it cannot record one. What it records is the decision, at the token
 exchange, and the token exchange is the only Usher event a data-plane capability produces. The
@@ -236,28 +236,28 @@ produces events Usher has no way to emit.
 `bio.overture.grant.creation`. The prefix is omitted here because it is invariant and repeating it
 thirty times obscures the part that differs.
 
-| Event type                   | Description                                                                                | Actor              | Affected entity            | Additional required fields                                                                                                    | Severity         |
-| ---------------------------- | ------------------------------------------------------------------------------------------ | ------------------ | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `token.exchange`        | Usher token issued to a user, or refused                                                  | User               | Usher token               | `userId`, `result`; on success `tokenTtl` and `grantCount` (the number of grants, never their values); on refusal `reason` | follows `result` |
-| `invitation.creation`        | Access invitation sent to an address with no account yet                                   | Custodian or admin | Email address + category + resource | `actorId`, `email`, `resourceId`, `category`, `invitationId`, `expiresAt`                                                   | `info`           |
-| `invitation.claim`           | An account confirmed an invitation; the grants it promised were created                    | User               | Principal + the grants created | `actorId`, `invitationId`, `email`, `grantIds`                                                                          | `info`           |
-| `invitation.lapse`           | An invitation expired unclaimed, so the grants it promised were never created              | System             | Email address + category + resource | `invitationId`, `email`, `resourceId`, `category`                                                                   | `info`           |
-| `grant.creation`             | Category grant created for a user                                                          | Custodian          | User + category + resource | `custodianId`, `granteeId`, `resourceId`, `category`, `grantId`                                                           | `info`           |
-| `grant.selfCreation`         | An admin created a grant for themselves, through the endpoint that requires a TTL          | Admin              | The admin + category + resource | `actorId`, `resourceId`, `category`, `grantId`, `expiresAt`                                                          | `warning`        |
-| `grant.extension`            | A grant's end moved later                                                                  | Custodian or owner | Category grant             | `userId`, `resourceId`, `categoryId`, `endBefore`, `endAfter`                                                                  | `info`           |
-| `grant.reduction`            | A grant's end moved earlier, and remains in the future                                     | Custodian or owner | Category grant             | `userId`, `resourceId`, `categoryId`, `endBefore`, `endAfter`                                                                  | `warning`        |
-| `grant.revocation`           | Category grant revoked                                                                     | Custodian or admin | User + category + resource | `actorId`, `granteeId`, `resourceId`, `category`, `grantId`, `reason`                                                     | `info`           |
-| `grant.rateExceeded`          | Grant operations by a single actor exceed the configured threshold within a rolling window | Custodian or admin | Multiple                   | `actorId`, `operationCount`, `windowSeconds`                                                                               | `warning`        |
-| `identity.revocation`        | User identity flagged as compromised; all active grants revoked                            | Admin              | User                       | `adminId`, `revokedUserId`, `scope`                                                                                        | `critical`       |
-| `resource.registration`      | Study or cohort registered                                                                 | Admin or submitter | Resource                   | `actorId`, `resourceId`, `fieldName`, `fieldValue`, `initialOwnerId`                                                    | `info`           |
-| `ownership.transfer`         | Resource ownership transferred                                                             | Owner or admin     | Resource                   | `actorId`, `fromOwnerId`, `toOwnerId`, `resourceId`                                                                     | `info`           |
-| `resource.orphaned`          | Resource has no owner; admin notified                                                      | System             | Resource                   | `resourceId`, `lastOwnerId`, `triggerEventType`                                                                          | `critical`       |
-| `resource.visibilityChange` | Resource hidden or restored due to ownership state                                         | System or admin    | Resource                   | `actorId`, `resourceId`, `fromState`, `toState`, `reason`                                                                 | `warning`        |
-| `custodianship.assignment`   | Custodian role assigned to a user for a category within a resource                         | Owner or admin     | User + category + resource | `actorId`, `custodianId`, `resourceId`, `category`                                                                         | `info`           |
-| `custodianship.removal`      | Custodian role removed from a user                                                         | Owner or admin     | User + category + resource | `actorId`, `custodianId`, `resourceId`, `category`                                                                         | `info`           |
-| `grant.unguarded`            | A grant took effect without a custodian's decision because the category had none assigned  |                    |                            |                                                                                                                               |                  |
-| `admin.override`             | Admin performed an action that bypasses an instance config restriction                    | Admin              | Varies                     | `adminId`, `operation`, `configBypassed`, `resourceId`                                                                     | `critical`       |
-| `revocationChannel.modeChange`     | Bridge moved between normal and revocation-uncertain: whether it can currently confirm its cached authorizations are still valid | System             | All active sessions        | `fromMode`, `toMode`, `reason`                                                                                              | `critical`       |
+| Event type                     | Description                                                                                                                      | Actor              | Affected entity                     | Additional required fields                                                                                                 | Severity         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `token.exchange`               | Usher token issued to a user, or refused                                                                                         | User               | Usher token                         | `userId`, `result`; on success `tokenTtl` and `grantCount` (the number of grants, never their values); on refusal `reason` | follows `result` |
+| `invitation.creation`          | Access invitation sent to an address with no account yet                                                                         | Custodian or admin | Email address + category + resource | `actorId`, `email`, `resourceId`, `category`, `invitationId`, `expiresAt`                                                  | `info`           |
+| `invitation.claim`             | An account confirmed an invitation; the grants it promised were created                                                          | User               | Principal + the grants created      | `actorId`, `invitationId`, `email`, `grantIds`                                                                             | `info`           |
+| `invitation.lapse`             | An invitation expired unclaimed, so the grants it promised were never created                                                    | System             | Email address + category + resource | `invitationId`, `email`, `resourceId`, `category`                                                                          | `info`           |
+| `grant.creation`               | Category grant created for a user                                                                                                | Custodian          | User + category + resource          | `custodianId`, `granteeId`, `resourceId`, `category`, `grantId`                                                            | `info`           |
+| `grant.selfCreation`           | An admin created a grant for themselves, through the endpoint that requires a TTL                                                | Admin              | The admin + category + resource     | `actorId`, `resourceId`, `category`, `grantId`, `expiresAt`                                                                | `warning`        |
+| `grant.extension`              | A grant's end moved later                                                                                                        | Custodian or owner | Category grant                      | `userId`, `resourceId`, `categoryId`, `endBefore`, `endAfter`                                                              | `info`           |
+| `grant.reduction`              | A grant's end moved earlier, and remains in the future                                                                           | Custodian or owner | Category grant                      | `userId`, `resourceId`, `categoryId`, `endBefore`, `endAfter`                                                              | `warning`        |
+| `grant.revocation`             | Category grant revoked                                                                                                           | Custodian or admin | User + category + resource          | `actorId`, `granteeId`, `resourceId`, `category`, `grantId`, `reason`                                                      | `info`           |
+| `grant.rateExceeded`           | Grant operations by a single actor exceed the configured threshold within a rolling window                                       | Custodian or admin | Multiple                            | `actorId`, `operationCount`, `windowSeconds`                                                                               | `warning`        |
+| `identity.revocation`          | User identity flagged as compromised; all active grants revoked                                                                  | Admin              | User                                | `adminId`, `revokedUserId`, `scope`                                                                                        | `critical`       |
+| `resource.registration`        | Study or cohort registered                                                                                                       | Admin or submitter | Resource                            | `actorId`, `resourceId`, `fieldName`, `fieldValue`, `initialOwnerId`                                                       | `info`           |
+| `ownership.transfer`           | Resource ownership transferred                                                                                                   | Owner or admin     | Resource                            | `actorId`, `fromOwnerId`, `toOwnerId`, `resourceId`                                                                        | `info`           |
+| `resource.orphaned`            | Resource has no owner; admin notified                                                                                            | System             | Resource                            | `resourceId`, `lastOwnerId`, `triggerEventType`                                                                            | `critical`       |
+| `resource.visibilityChange`    | Resource hidden or restored due to ownership state                                                                               | System or admin    | Resource                            | `actorId`, `resourceId`, `fromState`, `toState`, `reason`                                                                  | `warning`        |
+| `custodianship.assignment`     | Custodian role assigned to a user for a category within a resource                                                               | Owner or admin     | User + category + resource          | `actorId`, `custodianId`, `resourceId`, `category`                                                                         | `info`           |
+| `custodianship.removal`        | Custodian role removed from a user                                                                                               | Owner or admin     | User + category + resource          | `actorId`, `custodianId`, `resourceId`, `category`                                                                         | `info`           |
+| `grant.unguarded`              | A grant took effect without a custodian's decision because the category had none assigned                                        |                    |                                     |                                                                                                                            |                  |
+| `admin.override`               | Admin performed an action that bypasses an instance config restriction                                                           | Admin              | Varies                              | `adminId`, `operation`, `configBypassed`, `resourceId`                                                                     | `critical`       |
+| `revocationChannel.modeChange` | Bridge moved between normal and revocation-uncertain: whether it can currently confirm its cached authorizations are still valid | System             | All active sessions                 | `fromMode`, `toMode`, `reason`                                                                                             | `critical`       |
 
 **An invitation ends two ways and they are different facts.** A claim says somebody took the access
 offered; a lapse says nobody did. Collapsing them loses the second, which is the only record that an

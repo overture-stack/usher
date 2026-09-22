@@ -20,13 +20,13 @@ task whose specification was never written down.
 Written in advance deliberately. Grading after reading tends to produce criteria the result already
 meets.
 
-| Criterion | What counts as passing |
-|---|---|
+| Criterion           | What counts as passing                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Verifiable accuracy | Counts, quotes and `file:line` references match the files. An invented path, quote or count is disqualifying rather than a deduction, because it makes everything else unusable |
-| Scope fidelity | It answered the question asked rather than an adjacent, easier one |
-| Stated gaps | Where it could not determine something, it said so. Both prompts asked for this explicitly, so silence on a gap is a failure against an instruction rather than an oversight |
-| Judgement | The sense classification is defensible and the recommendation follows from the evidence rather than from the prompt's framing |
-| Net cost | Time to write the prompt, plus time to verify the answer, against time to do it directly. Delegation is not free and this is the criterion most likely to be flattered |
+| Scope fidelity      | It answered the question asked rather than an adjacent, easier one                                                                                                              |
+| Stated gaps         | Where it could not determine something, it said so. Both prompts asked for this explicitly, so silence on a gap is a failure against an instruction rather than an oversight    |
+| Judgement           | The sense classification is defensible and the recommendation follows from the evidence rather than from the prompt's framing                                                   |
+| Net cost            | Time to write the prompt, plus time to verify the answer, against time to do it directly. Delegation is not free and this is the criterion most likely to be flattered          |
 
 **What would make this a bad idea**, recorded now so it is not explained away later: verification
 costing as much as doing the work; a confident answer that spot-checking shows to be wrong, since
@@ -51,13 +51,13 @@ without knowing the right answer.
 
 #### Result 1: `payload` and `plane`. Graded against the criteria above.
 
-| Criterion | Verdict |
-|---|---|
+| Criterion           | Verdict                                                                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Verifiable accuracy | **Pass.** Four load-bearing claims spot-checked and all four held: which files are untracked, a contradiction quoted from two specific lines, a section heading, and a one-occurrence compound. No invented path, quote or count. Its totals reconcile exactly against the scope it stated |
-| Scope fidelity | **Pass.** It answered the specific question put to it and reported that the documents do not settle it, with evidence of the contradiction, rather than resolving it for them |
-| Stated gaps | **Pass, and best here.** It flagged unprompted that five files fall outside the scope it was given, said plainly it could not tell whether one compound is a synonym or a third division, and said it could not reproduce the existing counts rather than explaining the difference away |
-| Judgement | **Pass.** Its verdict is better reasoned than the one it replaced. It separated the generic JWT sense, which belongs to an external standard and must not be renamed, from the genuine collision |
-| Net cost | **Favourable.** A few minutes to write the prompt, two commands to verify. It found three defects that a hand survey had missed and one error in the hand survey's method |
+| Scope fidelity      | **Pass.** It answered the specific question put to it and reported that the documents do not settle it, with evidence of the contradiction, rather than resolving it for them                                                                                                              |
+| Stated gaps         | **Pass, and best here.** It flagged unprompted that five files fall outside the scope it was given, said plainly it could not tell whether one compound is a synonym or a third division, and said it could not reproduce the existing counts rather than explaining the difference away   |
+| Judgement           | **Pass.** Its verdict is better reasoned than the one it replaced. It separated the generic JWT sense, which belongs to an external standard and must not be renamed, from the genuine collision                                                                                           |
+| Net cost            | **Favourable.** A few minutes to write the prompt, two commands to verify. It found three defects that a hand survey had missed and one error in the hand survey's method                                                                                                                  |
 
 **Four corrections it produced, listed because they are the return on the exercise rather than
 decoration.**
@@ -89,7 +89,6 @@ agent as wrong; the command was case-sensitive, which is the defect this corpus 
 removing from its checker. A verification step that carries the bug it is verifying against is worse
 than no verification, because it converts a correct answer into a recorded error.
 
-
 #### Result 2: `corpus` and `scope`, including the planted test
 
 **It passed the planted test decisively.** Asked to check a claim this corpus makes about itself,
@@ -99,13 +98,13 @@ later already records the claim as stale while the original row still states it.
 self-contradiction was introduced in this session and neither reading it nor running the prose
 checker had surfaced it.
 
-| Criterion | Verdict |
-|---|---|
-| Verifiable accuracy | **Pass.** Four claims checked against the files, all four exact |
-| Scope fidelity | **Pass, and beyond.** The planted test was answered as a test rather than as a lookup |
-| Stated gaps | **Pass.** It said which counts it could not reproduce, and said plainly that it had classified one word's uses exhaustively and the other's only in kind, so the sense list is complete while the per-sense totals are absent |
-| Judgement | **Pass.** It distinguished an overload from a general word correctly applied, and found that the corpus already warns about this exact word in a passage nobody had connected to it |
-| Net cost | **Favourable**, on the same terms as the first |
+| Criterion           | Verdict                                                                                                                                                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verifiable accuracy | **Pass.** Four claims checked against the files, all four exact                                                                                                                                                               |
+| Scope fidelity      | **Pass, and beyond.** The planted test was answered as a test rather than as a lookup                                                                                                                                         |
+| Stated gaps         | **Pass.** It said which counts it could not reproduce, and said plainly that it had classified one word's uses exhaustively and the other's only in kind, so the sense list is complete while the per-sense totals are absent |
+| Judgement           | **Pass.** It distinguished an overload from a general word correctly applied, and found that the corpus already warns about this exact word in a passage nobody had connected to it                                           |
+| Net cost            | **Favourable**, on the same terms as the first                                                                                                                                                                                |
 
 **The finding that pays for the exercise on its own.** Twelve of the `scope` occurrences are
 `scope="col"` in an HTML table, which is an accessibility attribute and not the English word. Every
@@ -175,13 +174,13 @@ All three returned ten ranked findings with quotes, line numbers and replacement
 
 **Found by all three, and every one verified true against the file:**
 
-| Finding | Ranks | Verified |
-|---|---|---|
-| A sovereignty promise the document has already voided. One line states that platform administrators cannot override a community representative; another, 137 lines earlier, says an instance can switch on a setting letting an administrator query data with no grant | 1, 1, 1 | Yes |
-| The permissive-failure admission has no actor, no size and no way to check it, and its euphemism undoes the fail-secure argument built over three sections | 3, 4, 9 | Yes |
-| Eleven unexplained product names in the second paragraph, before the problem has been stated | 8, 3, 6 | Yes |
-| A glossary entry describing the document's own vocabulary backwards. It claims the prose says approval and the token says grant; the body has 3 of the first and 63 of the second | 4, 10, low | Yes, by count |
-| The document describes its own earlier section wrongly, naming two roles that section does not name | low, low, 5 | Yes |
+| Finding                                                                                                                                                                                                                                                                | Ranks       | Verified      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------- |
+| A sovereignty promise the document has already voided. One line states that platform administrators cannot override a community representative; another, 137 lines earlier, says an instance can switch on a setting letting an administrator query data with no grant | 1, 1, 1     | Yes           |
+| The permissive-failure admission has no actor, no size and no way to check it, and its euphemism undoes the fail-secure argument built over three sections                                                                                                             | 3, 4, 9     | Yes           |
+| Eleven unexplained product names in the second paragraph, before the problem has been stated                                                                                                                                                                           | 8, 3, 6     | Yes           |
+| A glossary entry describing the document's own vocabulary backwards. It claims the prose says approval and the token says grant; the body has 3 of the first and 63 of the second                                                                                      | 4, 10, low  | Yes, by count |
+| The document describes its own earlier section wrongly, naming two roles that section does not name                                                                                                                                                                    | low, low, 5 | Yes           |
 
 **Found by two of three**, and also verified: the word `portion` used for exactly the thing a sentence six lines earlier says a category is not, which both ranked second.
 
@@ -218,11 +217,9 @@ one model agree on what is salient, and a defect that is consequential without b
 exactly the one that survives a vote.
 
 **Verification failed twice, and the agents did not.** A claim was nearly recorded as fabricated
-because the verifying command truncated the line at 210 characters and the quoted sentence sat at
-212. Earlier the same day another check missed because it was case-sensitive. Both times the agent
+because the verifying command truncated the line at 210 characters and the quoted sentence sat at 212. Earlier the same day another check missed because it was case-sensitive. Both times the agent
 was right and the check was wrong. Across five agent runs today the pattern is consistent: the
 reports have been accurate, and the weak link has been the person checking them.
-
 
 #### What was applied, and the finding the agents could not have reached
 
@@ -247,7 +244,6 @@ Several of the document's most convoluted passages are now readable because thre
 stake in the phrasing rewrote them, and a person who has been inside the wording cannot do that for
 the same passage twice. Surfacing convoluted phrasing, and supplying the plain version rather than a
 note asking for one, is the concrete thing this technique did well.
-
 
 #### The single rule behind every result above
 

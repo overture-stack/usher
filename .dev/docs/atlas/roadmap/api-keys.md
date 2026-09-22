@@ -47,12 +47,12 @@ EGO policy names, since a scope should be written in the vocabulary of whatever 
 **It is validated at exchange, by intersection, rather than at issue.** This is the part worth being
 deliberate about, because the obvious alternative costs more than it looks.
 
-| | Validate at issue | Intersect at exchange |
-|---|---|---|
-| Who calls whom | the plugin calls Usher when a key is minted | nobody new; Usher already calls the plugin |
-| Dependency | mutual, at two different moments | one direction |
-| A key claiming more than its holder has | rejected at creation | yields less, silently and safely |
-| Which subject the check runs against | an open question on the plugin side | does not arise |
+|                                         | Validate at issue                           | Intersect at exchange                      |
+| --------------------------------------- | ------------------------------------------- | ------------------------------------------ |
+| Who calls whom                          | the plugin calls Usher when a key is minted | nobody new; Usher already calls the plugin |
+| Dependency                              | mutual, at two different moments            | one direction                              |
+| A key claiming more than its holder has | rejected at creation                        | yields less, silently and safely           |
+| Which subject the check runs against    | an open question on the plugin side         | does not arise                             |
 
 Intersection cannot add, so a key can never widen its holder's access no matter what it claims. That
 makes the reduce-only property structural rather than dependent on issue-time validation being

@@ -52,7 +52,7 @@ one needs four things, each of which was got wrong once already:
 
 1. **One extraction, shared.** Two checks over one corpus must consume the same paragraph list, or a
    difference between their outputs is indistinguishable from a difference in what they looked at.
-2. **Three states for a block marker**, not two. A bullet ends the preceding paragraph *and* starts
+2. **Three states for a block marker**, not two. A bullet ends the preceding paragraph _and_ starts
    one of its own that gets measured. Welding bullets onto neighbouring prose inflates the count;
    discarding them undercounts it, and only inflation invites scrutiny.
 3. **Paragraphs before sentences.** Splitting sentences per line returns nothing on hard-wrapped
@@ -76,11 +76,11 @@ document is usually present in the design documents that preceded it.
 
 Confirmed by checking, after three comments had been treated as local:
 
-| Reported at one place | Actually recurred |
-|---|---|
-| Visibility standing in for the whole scope | Six times across five design and published documents |
-| Actors ordered by institutional rank | The three-management-roles table, ordered Admin, Custodian, Owner |
-| A term used before introduction | `categories` first appeared inside the token example, explained only in the table below it |
+| Reported at one place                      | Actually recurred                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Visibility standing in for the whole scope | Six times across five design and published documents                                       |
+| Actors ordered by institutional rank       | The three-management-roles table, ordered Admin, Custodian, Owner                          |
+| A term used before introduction            | `categories` first appeared inside the token example, explained only in the table below it |
 
 Two of those three were outside the artifact entirely, which is the half a local fix cannot reach.
 
@@ -247,7 +247,7 @@ only reading separates them.
 
 ### K. A qualifier carrying an argument before the argument is made
 
-"The second question deserves a single answer." The word doing the work is *single*, and nothing yet
+"The second question deserves a single answer." The word doing the work is _single_, and nothing yet
 established why one answer matters rather than several, so a reader either accepts it on trust or
 stops. Adjacent to class A but distinct: A is about a term used before it is defined, this is about a
 word doing argumentative work before its argument exists. The repair is to state the reason and let
@@ -267,7 +267,7 @@ claim exists nowhere in the corpus or in its history.
 correcting "an earlier note here" that the same uncommitted edit had replaced, where the committed
 text it displaced was correct; a traceability file correcting "an earlier reading" of virtual-cohort
 sharing, in the commit that created that file; and a decision correcting a record of owner permission
-no document ever carried, the documents recording owner *notification* instead, which is a
+no document ever carried, the documents recording owner _notification_ instead, which is a
 compensating control rather than a grant gate.
 
 **Unlike most classes here, the check is mechanical.** Grep for `was recorded as`, `was described
@@ -307,7 +307,7 @@ rather than a second local fix.
 ### F. Softened vocabulary where a precise term is clearer
 
 Plain language and vague language are not the same thing, and this is the class most likely to be
-introduced *by* an attempt at plainness. A metaphor chosen to avoid jargon ("sealed" for encrypted)
+introduced _by_ an attempt at plainness. A metaphor chosen to avoid jargon ("sealed" for encrypted)
 gains nothing when the audience can carry the real word, and costs a reader who now wonders whether
 something other than encryption is meant.
 
@@ -342,7 +342,7 @@ A glossary entry leads with the misreading it exists to prevent, and the reader 
 negation before reaching what the word means. Instances: `Deployment` opening "per deployment is the
 scope reached for by default, and it is often the wrong one"; `Catalogue` opening "a catalogue is not
 a governance boundary"; `Subject` and `Record` each carrying a parenthetical of the
-form *(reserved for X, never for Y)*; a borrowed-terms table whose Usher column began "**not** an
+form _(reserved for X, never for Y)_; a borrowed-terms table whose Usher column began "**not** an
 Usher group", "**not** an Usher role".
 
 **The negation is usually a true and useful fact wearing the wrong clothes.** A catalogue really is

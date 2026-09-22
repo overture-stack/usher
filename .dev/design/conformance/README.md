@@ -20,8 +20,8 @@ systems, and one file cannot hold both.
 
 Every entry traces to a numbered case in
 [token-calculation.md](../token-calculation.md#the-cases-that-force-each-branch), carried in its
-`case` field. Those cases assert what the controller *computes*; this file is the computed result,
-which is the input to what an application then *serves*. The two corpora chain at exactly this file.
+`case` field. Those cases assert what the controller _computes_; this file is the computed result,
+which is the input to what an application then _serves_. The two corpora chain at exactly this file.
 
 Cases that produce no payload are absent, with a `notes` entry saying why. Case 25 is the clear one:
 a grant pairing `record.delete` with a field category is refused at writing, so no token exists to
@@ -34,9 +34,9 @@ declares `curator carries create, read, update, delete` and `viewer carries read
 reduction that keeps the table readable. The seeded roles in
 [permissions-model.md](../permissions-model.md#the-seeded-roles-as-a-matrix) carry more:
 
-| Role | Case table | Seeded |
-|---|---|---|
-| `viewer` | `read` | `aggregate`, `read`, `export` |
+| Role      | Case table                           | Seeded                                                      |
+| --------- | ------------------------------------ | ----------------------------------------------------------- |
+| `viewer`  | `read`                               | `aggregate`, `read`, `export`                               |
 | `curator` | `create`, `read`, `update`, `delete` | `aggregate`, `read`, `export`, `create`, `update`, `delete` |
 
 A fixture claiming to hold real tokens has to hold the real role. The case table's reduction stays

@@ -31,13 +31,13 @@ provider (Keycloak, Microsoft Entra ID, or any OIDC-compatible provider).
 Operational documentation waits on implementation. What exists now explains the problem and the
 model:
 
-| Document | For |
-| --- | --- |
-| [Onboarding](docs/onboarding.md) | A plain-language orientation to the model and the reasoning behind it, written for readers who are not engineers. Rendered and published as a shared page; the file itself is the source |
-| [Data access control](docs/intro.md) | The problem and the patterns, before the design detail |
-| [Why Usher](docs/why-usher.md) | Why a separate service, rather than access logic inside each application |
-| [Concepts and vocabulary](docs/concepts.md) | ABAC terms, security primitives, and the permissions model entities |
-| [IAM primer](docs/iam-primer.md) | Login, tokens and access control basics, for readers meeting them for the first time |
+| Document                                    | For                                                                                                                                                                                      |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Onboarding](docs/onboarding.md)            | A plain-language orientation to the model and the reasoning behind it, written for readers who are not engineers. Rendered and published as a shared page; the file itself is the source |
+| [Data access control](docs/intro.md)        | The problem and the patterns, before the design detail                                                                                                                                   |
+| [Why Usher](docs/why-usher.md)              | Why a separate service, rather than access logic inside each application                                                                                                                 |
+| [Concepts and vocabulary](docs/concepts.md) | ABAC terms, security primitives, and the permissions model entities                                                                                                                      |
+| [IAM primer](docs/iam-primer.md)            | Login, tokens and access control basics, for readers meeting them for the first time                                                                                                     |
 
 For internal contributor documentation (project structure, working documents, AI tooling, security
 principles), see [DEVELOPMENT.md](DEVELOPMENT.md).

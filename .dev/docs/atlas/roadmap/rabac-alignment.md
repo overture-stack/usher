@@ -12,10 +12,10 @@ RABAC extends RBAC with a **permission filtering policy** and evaluates an acces
 It adds user, object and session attributes, and preserves RBAC's role hierarchies, user-role
 assignments and role-permission relationships rather than replacing them.
 
-| Stage | Question | Direction | Usher today |
-|---|---|---|---|
-| 1. Role check | Does this user hold a role carrying this permission at all? | confers the maximum | **Not implemented.** Roles carry no permission set |
-| 2. Permission filtering | Do the attributes permit exercising it on this particular object? | removes from it, never adds | **Implemented**, as category grants |
+| Stage                   | Question                                                          | Direction                   | Usher today                                        |
+| ----------------------- | ----------------------------------------------------------------- | --------------------------- | -------------------------------------------------- |
+| 1. Role check           | Does this user hold a role carrying this permission at all?       | confers the maximum         | **Not implemented.** Roles carry no permission set |
+| 2. Permission filtering | Do the attributes permit exercising it on this particular object? | removes from it, never adds | **Implemented**, as category grants                |
 
 Access requires both stages to pass. Usher built the second and skipped the first.
 
@@ -140,14 +140,14 @@ control plane: the controller checks a control-plane permission on an admin call
 checks a data-plane one before a query runs. The plugin is a control-plane component that happens to
 run inside an application, which is why enforcing there does not put policy there.
 
-| | control plane | data plane |
-|---|---|---|
-| roles | admin, custodian, owner | submitter, curator, viewer |
-| operates on | who may do what | the records |
-| permissions | `grant.create`, `grant.revoke`, `ownership.transfer` | `record.view`, `record.download`, `record.create` |
-| exercised against | Usher's own store | an application's records |
-| audience of the token carrying it | the management interface | one data application |
-| namespace | `grant.*`, `ownership.*` | `record.*` |
+|                                   | control plane                                        | data plane                                        |
+| --------------------------------- | ---------------------------------------------------- | ------------------------------------------------- |
+| roles                             | admin, custodian, owner                              | submitter, curator, viewer                        |
+| operates on                       | who may do what                                      | the records                                       |
+| permissions                       | `grant.create`, `grant.revoke`, `ownership.transfer` | `record.view`, `record.download`, `record.create` |
+| exercised against                 | Usher's own store                                    | an application's records                          |
+| audience of the token carrying it | the management interface                             | one data application                              |
+| namespace                         | `grant.*`, `ownership.*`                             | `record.*`                                        |
 
 **The role names in that first row are examples**, as capability names are. Which roles an instance
 defines is its governance decision, and `submitter` there is a name an instance might give a group
@@ -229,13 +229,13 @@ the vocabulary: defining a role is not assigning one.
 
 ## What this closes or reshapes
 
-| Item | Effect |
-|---|---|
-| Role permissions (open item) | Becomes concrete: define the capability vocabulary, then which permissions each role carries. It stops being an open-ended question about what roles mean |
-| The create/read/update/delete gap | Closed by the same work: these are stage one's permissions |
-| Single `role` field against a union of roles | Resolved. The contradiction exists only because roles are carried instead of permissions |
-| `public` synthetic role | Becomes a permission set, and stops needing a prose exception in the token schema |
-| Write versus read access | Informed but not settled. A submitter holds `create`; whether that implies read, and scoped to what, remains the separate decision |
+| Item                                         | Effect                                                                                                                                                    |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Role permissions (open item)                 | Becomes concrete: define the capability vocabulary, then which permissions each role carries. It stops being an open-ended question about what roles mean |
+| The create/read/update/delete gap            | Closed by the same work: these are stage one's permissions                                                                                                |
+| Single `role` field against a union of roles | Resolved. The contradiction exists only because roles are carried instead of permissions                                                                  |
+| `public` synthetic role                      | Becomes a permission set, and stops needing a prose exception in the token schema                                                                         |
+| Write versus read access                     | Informed but not settled. A submitter holds `create`; whether that implies read, and scoped to what, remains the separate decision                        |
 
 ## What it does not solve
 

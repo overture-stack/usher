@@ -197,12 +197,12 @@ reasons recorded for building rather than adopting. The fourth is the one that d
 Recorded because the reasons for building were written against a narrower field than currently
 exists, and any of these could displace part of this design.
 
-| Project | Relevant permission | Model |
-| ------- | ------------------- | ----- |
-| Cerbos | Query plan as a filter AST, with ORM adapters | Policy as code, attribute-based |
-| OpenFGA | `ListObjects` returns what a principal can reach | Relationship-based (Zanzibar) |
-| SpiceDB | `LookupResources`, plus a Watch API for cache invalidation | Relationship-based (Zanzibar) |
-| Permify | Built-in data filtering and lookup | Relationship-based (Zanzibar) |
+| Project | Relevant permission                                        | Model                           |
+| ------- | ---------------------------------------------------------- | ------------------------------- |
+| Cerbos  | Query plan as a filter AST, with ORM adapters              | Policy as code, attribute-based |
+| OpenFGA | `ListObjects` returns what a principal can reach           | Relationship-based (Zanzibar)   |
+| SpiceDB | `LookupResources`, plus a Watch API for cache invalidation | Relationship-based (Zanzibar)   |
+| Permify | Built-in data filtering and lookup                         | Relationship-based (Zanzibar)   |
 
 Two qualifications. Most of these implement relationship-based access control, which differs from
 role-plus-attribute in how policy is expressed rather than only in vocabulary. Oso's open-source
@@ -275,7 +275,7 @@ cached payload without recomputing. Either failing means a full recomputation.
 
 **The versions live with the payload, not in the token, and the difference is not cosmetic.** They
 were written into the token first, because the token was the thing the bridge sends back. But the
-question the fast path must answer is whether *the payload it is about to reissue* was computed under
+question the fast path must answer is whether _the payload it is about to reissue_ was computed under
 current categories, and a token is a different artifact that coincides with that payload only by
 circumstance. Comparing the token's versions answers a question about the token.
 
@@ -399,12 +399,12 @@ this**, since that is the condition the argument rests on rather than the conclu
 **The claim set converged on RFC 9068 without anyone aiming at it, and the gaps are the interesting
 part.** The JWT profile for OAuth access tokens requires seven claims. Five are already here.
 
-| RFC 9068 §2.2 | Here |
-|---|---|
-| `iss`, `exp`, `aud`, `iat` | present |
-| `sub` | present, `null` when anonymous |
-| `client_id` | absent |
-| `jti` | absent |
+| RFC 9068 §2.2              | Here                           |
+| -------------------------- | ------------------------------ |
+| `iss`, `exp`, `aud`, `iat` | present                        |
+| `sub`                      | present, `null` when anonymous |
+| `client_id`                | absent                         |
+| `jti`                      | absent                         |
 
 **`client_id` has no meaning here.** In OAuth it names the client a token was issued to, distinct from
 `aud`, the resource server that receives it. The bridge requests a token for the application it runs
@@ -552,14 +552,14 @@ a misreading worth heading off: it does not mean a principal reaches only where 
 apply at once. Holding more categories always reaches more data, never less. Worked at record
 granularity, for a principal holding both `controlled` and `indigenous`:
 
-| Record carries | Holding both | Holding `controlled` only |
-|---|---|---|
-| nothing | Visible | Visible |
-| `controlled` | Visible | Visible |
-| `indigenous` | Visible | Hidden |
-| `controlled` and `indigenous` | Visible | Hidden |
+| Record carries                | Holding both | Holding `controlled` only |
+| ----------------------------- | ------------ | ------------------------- |
+| nothing                       | Visible      | Visible                   |
+| `controlled`                  | Visible      | Visible                   |
+| `indigenous`                  | Visible      | Hidden                    |
+| `controlled` and `indigenous` | Visible      | Hidden                    |
 
-So holding both yields the union of the two segments *and* their overlap, which is the intuitive
+So holding both yields the union of the two segments _and_ their overlap, which is the intuitive
 reading. What holding only one does not yield is the overlap, because data requiring two grants
 is not reachable with one. The conjunction is inside a single record's requirements and never
 across a principal's grants.
@@ -605,10 +605,10 @@ plugin's configuration for the catalogue it serves.
 **Two dependencies the filter cannot verify about either field**, which is why both are preconditions
 an integration asserts rather than properties the model guarantees:
 
-| Dependency | Visible to |
-| ---------- | ---------- |
-| Whether the field is mapped `nested` (the compiler's `nestedFieldNames` argument) | Neither the query nor the SQON |
-| How many values the field actually holds | Neither the query nor the mapping |
+| Dependency                                                                        | Visible to                        |
+| --------------------------------------------------------------------------------- | --------------------------------- |
+| Whether the field is mapped `nested` (the compiler's `nestedFieldNames` argument) | Neither the query nor the SQON    |
+| How many values the field actually holds                                          | Neither the query nor the mapping |
 
 Both fields must be single-valued, and no running code checks it: the mapping cannot express
 cardinality, and the search layer's filter path carries no instrumentation that would notice a field
@@ -672,7 +672,7 @@ field before using it.
 >
 > **Additive rendering is expressible in one clause, but not via the operator its name suggests.**
 > A record is visible iff `categories(record)` is a subset of the held set, which is universally
-> quantified over the categories a principal does *not* hold. Enumerating that additively costs
+> quantified over the categories a principal does _not_ hold. Enumerating that additively costs
 > `2^|held|` branches. The single-clause form is `not` of `not-in`:
 >
 >     { op: 'not', content: [ { op: 'not-in', content: { fieldName: <field>, value: [...held] } } ] }
@@ -688,11 +688,11 @@ field before using it.
 > Worked, with a principal holding only `controlled` and a record carrying
 > `["controlled", "indigenous"]`, which should be invisible to them:
 >
-> | Step | Flat field | `nested` field |
-> |---|---|---|
-> | Inner `not-in` | Asks whether the *field* lacks `controlled`. It does not lack it, so no match | Asks, per element, whether *that element* is outside the held set. `indigenous` is, so it matches |
-> | Outer `not` | Nothing matched, so the record is admitted | An element matched, so the record is excluded |
-> | Result | Visible. Wrong, and permissively so | Invisible. Correct |
+> | Step           | Flat field                                                                    | `nested` field                                                                                    |
+> | -------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+> | Inner `not-in` | Asks whether the _field_ lacks `controlled`. It does not lack it, so no match | Asks, per element, whether _that element_ is outside the held set. `indigenous` is, so it matches |
+> | Outer `not`    | Nothing matched, so the record is admitted                                    | An element matched, so the record is excluded                                                     |
+> | Result         | Visible. Wrong, and permissively so                                           | Invisible. Correct                                                                                |
 >
 > The mechanism is per-element evaluation. A flat multi-valued field is one field with several
 > values, so a negation applies to the whole field and can only say "none of the record's values is
@@ -706,7 +706,7 @@ field before using it.
 > supplies data satisfying that precondition, verified at plugin startup rather than assumed.
 >
 > **The precondition is unmet on the first instance, and it is narrower than it first reads.**
-> What is missing is a per-record *category* field. Neither iMS catalogue carries one, and nothing
+> What is missing is a per-record _category_ field. Neither iMS catalogue carries one, and nothing
 > may be written into the data to create one, so the subset comparison above has no field to operate
 > on.
 >
@@ -729,13 +729,13 @@ This supersedes the subtractive visibility rule currently described in
 **Primary rationale: the direction the system fails when information is lost.** In a subtractive
 model, losing a term widens access. In an additive model, losing a term narrows it.
 
-| Failure | Subtractive | Additive |
-| ------- | ----------- | -------- |
-| Category exists in Usher, unmapped in the plugin | No exclusion is generated for it, records **leak** | Contributes no branch, **denies** |
-| Data arrives carrying a tag value not yet registered as a category | Nothing excludes it, **visible** | Matches no predicate, **hidden** |
-| A bug drops a clause from the composed filter | Access **widens** | Access **narrows** |
-| A field mapping points at the wrong field | Fails open | Fails open |
-| Principal holds zero grants | Denies | Denies |
+| Failure                                                            | Subtractive                                        | Additive                          |
+| ------------------------------------------------------------------ | -------------------------------------------------- | --------------------------------- |
+| Category exists in Usher, unmapped in the plugin                   | No exclusion is generated for it, records **leak** | Contributes no branch, **denies** |
+| Data arrives carrying a tag value not yet registered as a category | Nothing excludes it, **visible**                   | Matches no predicate, **hidden**  |
+| A bug drops a clause from the composed filter                      | Access **widens**                                  | Access **narrows**                |
+| A field mapping points at the wrong field                          | Fails open                                         | Fails open                        |
+| Principal holds zero grants                                        | Denies                                             | Denies                            |
 
 The unregistered tag value and the dropped clause are what decide it. The rest are ties, or fixable
 under either model.
@@ -872,7 +872,7 @@ Three things this gives that the share-time check does not:
   presentation problem rather than a disclosure one.
 
 **The encoding, and why it works on a flat field.** Subset containment normally needs a nested
-mapping. Passing the *complement*, the resources the reader lacks, converts a subset test into a
+mapping. Passing the _complement_, the resources the reader lacks, converts a subset test into a
 disjointness test, and disjointness is expressible against a flat keyword array. An artifact
 survives exactly when it requires none of what the reader lacks.
 
@@ -880,8 +880,8 @@ survives exactly when it requires none of what the reader lacks.
 concluded the token had to carry the complement, which would have reversed the least-information
 position on naming unheld resources. It does not, and the reason is worth keeping.
 
-The complement does not need the full registry. It needs the resources *this instance is
-configured for*, which the plugin already enumerates: config maps each resource to a catalogue, a
+The complement does not need the full registry. It needs the resources _this instance is
+configured for_, which the plugin already enumerates: config maps each resource to a catalogue, a
 field name, and a field value, because that mapping is how a record is attributed to a resource at
 all. So the left half comes from config at startup and the right half from the token, and neither
 requires Usher to name anything the principal lacks.
@@ -959,11 +959,11 @@ same records in the same run.
 
 The coverage boundary matters and is not uniform across instances:
 
-| Condition | Covered |
-| --------- | ------- |
-| Elasticsearch 7.17.28, flat fields | Yes |
-| OpenSearch | No |
-| Nested access fields | No |
+| Condition                          | Covered |
+| ---------------------------------- | ------- |
+| Elasticsearch 7.17.28, flat fields | Yes     |
+| OpenSearch                         | No      |
+| Nested access fields               | No      |
 
 The first integration runs Elasticsearch with a flat resource field, so it sits inside what was
 verified. Another instance runs OpenSearch, and its clinical index carries the access-relevant
@@ -1025,11 +1025,11 @@ value. The bridge returns a discriminated result to the plugin rather than a fil
 **How each arm reaches the application.** All three now have a concrete expression, and
 none of them is a hand-written literal:
 
-| Arm | What the plugin returns |
-| --- | --- |
-| `deny` | `matchNothing(fieldName)` from the query module |
-| `narrow` | The rendered filter |
-| `allow` | The application's exported allow-all sentinel, taken from its package root |
+| Arm      | What the plugin returns                                                    |
+| -------- | -------------------------------------------------------------------------- |
+| `deny`   | `matchNothing(fieldName)` from the query module                            |
+| `narrow` | The rendered filter                                                        |
+| `allow`  | The application's exported allow-all sentinel, taken from its package root |
 
 **The callback is total, and returning nothing is now an error rather than a permission.** The
 instance has made `null` or `undefined` throw instead of granting everything. So a plugin that falls
@@ -1403,20 +1403,20 @@ is SQON, the shared Overture query language, and the consequence is accepted rat
 
 How that cost falls:
 
-| Application | Translation |
-|---|---|
-| The search application | None. It consumes SQON natively |
-| A metadata service filtering a listing | Real but small for the MVP predicate, a positive containment on one field, which any store expresses |
+| Application                                    | Translation                                                                                                                       |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| The search application                         | None. It consumes SQON natively                                                                                                   |
+| A metadata service filtering a listing         | Real but small for the MVP predicate, a positive containment on one field, which any store expresses                              |
 | A file-transfer service authorizing one object | None, because it receives no predicate. It asks whether the principal holds a grant on the object's resource and category instead |
-| A schema service | None. It filters no records |
+| A schema service                               | None. It filters no records                                                                                                       |
 
 So the burden concentrates on applications that both narrow and do not already speak SQON, and for the
 MVP predicate that burden is a `WHERE ... IN (...)`. It grows only for predicates that are not
 backend-neutral, and the one such predicate identified so far is specific to the search application
 anyway.
 
-**Why accept it.** The alternative distributes predicate *construction* instead of predicate
-*translation*, and construction is where every fail-open defect in this design has been found while
+**Why accept it.** The alternative distributes predicate _construction_ instead of predicate
+_translation_, and construction is where every fail-open defect in this design has been found while
 translation has produced none. Translating a predicate is mechanical; constructing one is not.
 Pushing the mechanical work outward to keep construction central is the deliberate trade.
 
@@ -1426,7 +1426,7 @@ Pushing the mechanical work outward to keep construction central is the delibera
 
 Not by the resource's owner. The approving authority is the custodian of each category the data
 carries, which is what the trigger for needing grant implies: the requirement appears with
-community custodianship because it *is* community custodianship.
+community custodianship because it _is_ community custodianship.
 
 **This removes the exception rather than scheduling one.** The rule is uniform from the start: a
 self-grant requires the grant of the custodians of the categories on the data reached. MVP needs
@@ -1469,12 +1469,12 @@ warning is the compensating control, and the owners carry the responsibility to 
 its owner, and a category can lack a custodian. The shape is the same, a governance seat is empty,
 and the answers are not:
 
-| | resource with no owner | category with no custodian |
-|---|---|---|
-| prevented | yes: removing an owner requires transferring first | no |
-| if it happens anyway | the administrator is notified | the resource's owners are warned |
-| in the meantime | the administrator may hide the resource, and grants are untouched | grants proceed, ungated |
-| direction | closed, at the administrator's discretion | open |
+|                      | resource with no owner                                            | category with no custodian       |
+| -------------------- | ----------------------------------------------------------------- | -------------------------------- |
+| prevented            | yes: removing an owner requires transferring first                | no                               |
+| if it happens anyway | the administrator is notified                                     | the resource's owners are warned |
+| in the meantime      | the administrator may hide the resource, and grants are untouched | grants proceed, ungated          |
+| direction            | closed, at the administrator's discretion                         | open                             |
 
 **The remedies cannot be the same, and that is the real reason the invariant was rejected rather
 than mere strictness.** An owner is a platform role, so an administrator filling a vacant one is
@@ -1593,24 +1593,24 @@ explicitly in the threat model.
 Confirmed for the first instance and generalized: a catalogue's resource field is chosen from fields
 the data already carries, and which field plays that role is the instance's designation rather
 than a property Usher recognizes. The environmental catalogue's shape is taken as given for MVP
-purposes; if it changes, MVP is unaffected, because what matters is only that *some* existing field
+purposes; if it changes, MVP is unaffected, because what matters is only that _some_ existing field
 carries the instance's collection and that the plugin is configured with its name.
 
 ---
 
 ### The admin role governs who may reach what, and reaches data only by granting it to themselves
 
-"Admin" is short for **system administrator**. The authorities that administer access *to data* are
+"Admin" is short for **system administrator**. The authorities that administer access _to data_ are
 the Owner and the Custodian, and calling those data administrators is the clearer reading of the
 role set: one administers the system, the others administer access.
 
 A system administrator sees everything Usher holds and none of the data it governs:
 
-| Sees | Does not see |
-|---|---|
-| Users and the grants they hold | The records inside a resource |
+| Sees                                            | Does not see                                  |
+| ----------------------------------------------- | --------------------------------------------- |
+| Users and the grants they hold                  | The records inside a resource                 |
 | Resource metadata: what a study is, who owns it | Anything a normal user would need a grant for |
-| Audit logs | |
+| Audit logs                                      |                                               |
 
 Open data is the one exception, and it is not really an exception: a system administrator reads it
 because everyone does, not because of the role.
@@ -1813,10 +1813,10 @@ sweep, and no new channel.
 
 **Which gives one rule covering both ways access narrows.**
 
-| Narrowing | Known when the token is issued? | Mechanism |
-|---|---|---|
-| revocation | no | the push channel, because nothing in the token could have anticipated it |
-| expiry | yes | `exp`, because the token is issued already knowing when to die |
+| Narrowing  | Known when the token is issued? | Mechanism                                                                |
+| ---------- | ------------------------------- | ------------------------------------------------------------------------ |
+| revocation | no                              | the push channel, because nothing in the token could have anticipated it |
+| expiry     | yes                             | `exp`, because the token is issued already knowing when to die           |
 
 **What it costs.** One extra token exchange per expiry per principal: the shortened token is exchanged
 at the deadline, and its replacement carries a full TTL again because the lapsed grant is gone. A
@@ -1885,13 +1885,13 @@ the DCAT 3 recommendation and confirmed against the raw document, because a summ
 same page rendered "representations" as "serializations or formats", which would have been quoted
 here as normative text.
 
-| Class | Definition |
-|---|---|
-| `dcat:Resource` | Resource published or curated by a single agent |
-| `dcat:Dataset` | A collection of data, published or curated by a single agent, and available for access or download in one or more representations |
-| `dcat:Distribution` | A specific representation of a dataset |
-| `dcat:DataService` | a collection of operations accessible through an interface (API) that provide access to one or more datasets or data processing functions |
-| `dcat:Catalog` | A curated collection of metadata about resources. Sub-class of `dcat:Dataset` |
+| Class               | Definition                                                                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `dcat:Resource`     | Resource published or curated by a single agent                                                                                           |
+| `dcat:Dataset`      | A collection of data, published or curated by a single agent, and available for access or download in one or more representations         |
+| `dcat:Distribution` | A specific representation of a dataset                                                                                                    |
+| `dcat:DataService`  | a collection of operations accessible through an interface (API) that provide access to one or more datasets or data processing functions |
+| `dcat:Catalog`      | A curated collection of metadata about resources. Sub-class of `dcat:Dataset`                                                             |
 
 The American spelling of `dcat:Catalog` is theirs and is part of the identifier. It is not a Canadian
 spelling defect and must survive any bulk pass over this file.
@@ -1902,7 +1902,7 @@ DataService. That choice needs no defence it did not already have.
 
 **The hierarchy is what makes the mapping work, and reading the definitions without it misleads.**
 `dcat:Catalog` is a sub-class of `dcat:Dataset`, which is a sub-class of `dcat:Resource`. So "this is
-metadata about data" and "this is a body of data" are not competing answers: in DCAT a catalog *is* a
+metadata about data" and "this is a body of data" are not competing answers: in DCAT a catalog _is_ a
 dataset, and calling something a catalog says more about it rather than something else.
 
 **Which is why Arranger's word survives contact with the standard.** What an Arranger catalogue
@@ -1915,11 +1915,11 @@ exact, and the sub-class relation absorbs it, since whatever is not Catalog is s
 
 **The reading this produces:**
 
-| Thing | DCAT class |
-|---|---|
-| Arranger, Lyric, Score, Song: the API a principal queries | `dcat:DataService` |
-| one Arranger catalogue | `dcat:Catalog`, and so also a `dcat:Dataset` |
-| the body of records a catalogue indexes | `dcat:Dataset` |
+| Thing                                                     | DCAT class                                   |
+| --------------------------------------------------------- | -------------------------------------------- |
+| Arranger, Lyric, Score, Song: the API a principal queries | `dcat:DataService`                           |
+| one Arranger catalogue                                    | `dcat:Catalog`, and so also a `dcat:Dataset` |
+| the body of records a catalogue indexes                   | `dcat:Dataset`                               |
 
 The service and the catalogue are different things. They were competing for one slot only because
 they had not been told apart, and separating them is what resolves the mapping.
@@ -1944,7 +1944,7 @@ word is worth less than an outside reference arriving at the same shape from the
 **What DCAT cannot do, recorded before anyone cites it for more than it says.** `dcat:Dataset` spans
 granularities by design: a study is a collection of data published by a single agent, and so is a
 catalogue, and both are Datasets. So the standard legitimizes `dataset` as a word for a body of data
-and settles nothing about *which* body. Arranger's published glossary uses it at catalogue
+and settles nothing about _which_ body. Arranger's published glossary uses it at catalogue
 granularity and Usher's onboarding document uses it at resource granularity, and DCAT makes both true
 at once. Anything deciding between them has to come from this model rather than from the standard.
 
@@ -2050,12 +2050,12 @@ rather than for that particular word.
 Not every ushered service offers all four, and one that serves no writes offers none of the last
 three, which is the same rule that already governs a service offering `download` it cannot perform.
 
-| Group or role | Carries |
-|---|---|
-| viewer | `read` |
-| submitter | `create`, `read`, `update` |
-| owner | all four, alongside the authority to manage who else holds them |
-| system administrator | none by default |
+| Group or role        | Carries                                                         |
+| -------------------- | --------------------------------------------------------------- |
+| viewer               | `read`                                                          |
+| submitter            | `create`, `read`, `update`                                      |
+| owner                | all four, alongside the authority to manage who else holds them |
+| system administrator | none by default                                                 |
 
 **Separating `create` from `update` achieves something the provenance work could not.** A submitter
 holding `create` without `update` can add records and cannot alter anyone else's. That is the
@@ -2155,10 +2155,10 @@ sentence needs narrowing at that point rather than now.
 
 **Three renames, each from a defect rather than a preference.**
 
-| Was | Is | Why |
-|---|---|---|
-| `user_groups` | `groups` | Every other entity table is a plain plural. The qualifier disambiguated nothing, and it made `user_groups` and `group_users` the same two words reversed, one an entity and one a relation |
-| `resource_groups` | dropped | Groups hold nothing in the first release, so the group half of the role assignment has no row. It returns with groups |
+| Was               | Is                             | Why                                                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `user_groups`     | `groups`                       | Every other entity table is a plain plural. The qualifier disambiguated nothing, and it made `user_groups` and `group_users` the same two words reversed, one an entity and one a relation                                                             |
+| `resource_groups` | dropped                        | Groups hold nothing in the first release, so the group half of the role assignment has no row. It returns with groups                                                                                                                                  |
 | `category_grants` | `grants` and `grant_decisions` | One name covered two things. What was granted, by whom, until when, and what revocation acts on, is a grant. What one person answered about it is a decision, append-only, and naming it "grants" claimed the row was the thing it is a decision about |
 
 **Where a site says `category_grants`, the sentence says which is meant.** A site mentioning
@@ -2262,17 +2262,17 @@ otherwise a good decision resting on a rule with an unmarked exception.
 **The rule holds where a capability permits.** `record.delete` in the vocabulary and no delete path
 in the service means there is nothing to reach. Absence of the path is the enforcement.
 
-**It inverts where a capability's *absence* restricts a path the service already serves.** The
+**It inverts where a capability's _absence_ restricts a path the service already serves.** The
 service is answering already; the capability exists to narrow that answer; a plugin that does not
 check it narrows nothing. Holding the capability is not what opens the door, so not checking it does
 not close one.
 
-| Capability | Absent and unimplemented | Direction |
-|---|---|---|
-| `record.delete` | no delete path exists | closed |
-| `record.aggregate`, held without it but with `read` | counts are served anyway | open, and mild: a count over records the principal may already read |
-| `record.aggregate`, held without `read` | the discovery tier is simply not served | closed |
-| `field.read` on a restricted column | every column is served | **open, and severe** |
+| Capability                                          | Absent and unimplemented                | Direction                                                           |
+| --------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------- |
+| `record.delete`                                     | no delete path exists                   | closed                                                              |
+| `record.aggregate`, held without it but with `read` | counts are served anyway                | open, and mild: a count over records the principal may already read |
+| `record.aggregate`, held without `read`             | the discovery tier is simply not served | closed                                                              |
+| `field.read` on a restricted column                 | every column is served                  | **open, and severe**                                                |
 
 **The severe row is why field restriction carries the weight it does.** A field capability exists
 only to withhold, so a service that has not implemented it withholds nothing, and the grant reads as
@@ -2294,16 +2294,16 @@ mistake into a silent widening on the one category every principal holds.
 
 Recorded as a test rather than as history, because it predicts where the next one is.
 
-| What was collapsed | How it showed up |
-|---|---|
-| Scope into the role | A role held per resource, separate from the grant that scoped it |
-| Records into the resource | A category gating a whole resource instead of selecting records within it |
-| Two planes into a ladder | `curator` retired by resolving it to "an owner or a viewer" |
-| Meaning into the name | A `kind` on the category, asserting in Usher what only a plugin decides |
-| Scope into the role, again | Field restriction as a role-by-column matrix |
-| The plugin's knowledge into Usher | A `field_categories` table holding field names Usher never learns |
-| The entity out of the capability | Bare actions in the token, unreadable once two entities share one |
-| Two things into one borrowed word | `set` meaning both a saved set and whatever else a reader brought |
+| What was collapsed                | How it showed up                                                          |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| Scope into the role               | A role held per resource, separate from the grant that scoped it          |
+| Records into the resource         | A category gating a whole resource instead of selecting records within it |
+| Two planes into a ladder          | `curator` retired by resolving it to "an owner or a viewer"               |
+| Meaning into the name             | A `kind` on the category, asserting in Usher what only a plugin decides   |
+| Scope into the role, again        | Field restriction as a role-by-column matrix                              |
+| The plugin's knowledge into Usher | A `field_categories` table holding field names Usher never learns         |
+| The entity out of the capability  | Bare actions in the token, unreadable once two entities share one         |
+| Two things into one borrowed word | `set` meaning both a saved set and whatever else a reader brought         |
 
 **The test.** Does this put two independent questions in one slot? Each row above reads as a
 simplification at the time and as a conflation afterwards, and the tell is always the same: one field

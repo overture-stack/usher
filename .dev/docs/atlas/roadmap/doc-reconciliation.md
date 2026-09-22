@@ -45,7 +45,7 @@ the files rather than from memory of having fixed them.
 | What a doc says                                                            | Where                                                          | Why it is wrong                                                                                                              |
 | -------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | ~~The plugin builds the query filter~~ **CLOSED**                          | `decisions.md`, `architecture.md` (4 sites)                    | The bridge builds it. Both files also say the other thing elsewhere, so they contradict themselves                           |
-| The plugin receives a `PermissionsPayload`                                      | `plugin-integration.md` (4), `architecture.md` (3)             | It receives the three-way answer. Handing it a payload is what makes plugins build their own filters                         |
+| The plugin receives a `PermissionsPayload`                                 | `plugin-integration.md` (4), `architecture.md` (3)             | It receives the three-way answer. Handing it a payload is what makes plugins build their own filters                         |
 | The plugin subtracts held categories from its own config to get exclusions | `glossary.md` (3 entries), `security-workflow.md` (2 passages) | This is the fail-open path. No grants means nothing to subtract, which means no filter, which means everything               |
 | ~~Single-valued because the data model guarantees it~~ **CLOSED**          | `decisions.md`                                                 | `permissions-model.md` says records can belong to several cohorts. It is a precondition to check at startup, not a guarantee |
 | ~~Deny the request with 401 or 403~~ **CLOSED**                            | `plugin-integration.md`                                        | `decisions.md` says a 403 confirms the resource exists. The plugin picks the response shape                                  |
@@ -64,13 +64,13 @@ server-side, because the user never holds the token now.
 Two places still give the old reason. Three are closed, all three in the published docs, which
 were the urgent half.
 
-| File                   | Still says                                                                        |
-| ---------------------- | --------------------------------------------------------------------------------- |
-| ~~`docs/intro.md`~~ **CLOSED**   | Rewritten on audience-separation grounds                                |
-| ~~`docs/concepts.md`~~ **CLOSED**| Rewritten, with the retired premise named as retired                    |
-| ~~`docs/iam-primer.md`~~ **CLOSED** | Contrast rebuilt on who carries the token                            |
-| `security-workflow.md` | The original argument in full                                                     |
-| `glossary.md`          | "while preventing the end user from reading their own grants"                     |
+| File                                | Still says                                                    |
+| ----------------------------------- | ------------------------------------------------------------- |
+| ~~`docs/intro.md`~~ **CLOSED**      | Rewritten on audience-separation grounds                      |
+| ~~`docs/concepts.md`~~ **CLOSED**   | Rewritten, with the retired premise named as retired          |
+| ~~`docs/iam-primer.md`~~ **CLOSED** | Contrast rebuilt on who carries the token                     |
+| `security-workflow.md`              | The original argument in full                                 |
+| `glossary.md`                       | "while preventing the end user from reading their own grants" |
 
 `docs/concepts.md` also says audience checking works by reading a claim in the token. Under
 per-application keys, a token for the wrong audience simply fails to decrypt. The claim check is a
@@ -162,7 +162,7 @@ and service-account events that `admin-model.md` promises.
 | Blocker 1's heading claims highest risk              | `phase-1.md`                              | It is resolved, and its premise was wrong. Collapse the 130 lines above the conclusion                                 |
 | The plugin is called middleware                      | `roadmap.md`, `technology-stack.md`       | It is a callback factory. Arranger retracted "middleware" after reading the router code, in a decision we took part in |
 | The plugin runs in the search server                 | `phase-1.md`                              | It runs in `graphql-router`                                                                                            |
-| Two different Usher token TTL defaults              | `docs/concepts.md`, `phase-1.md`          | Pick one; derive the other                                                                                             |
+| Two different Usher token TTL defaults               | `docs/concepts.md`, `phase-1.md`          | Pick one; derive the other                                                                                             |
 | HTTP framework listed as open                        | `atlas/index.md`, `roadmap.md`            | Fastify, decided                                                                                                       |
 | Logging library listed as unconfirmed                | `technology-stack.md`                     | Pino, and the same file says so                                                                                        |
 | Two of seven permissions gaps still gate MVP         | `roadmap.md`, `permissions-model-gaps.md` | Field-level restrictions are out of scope. Overlapping cohorts cannot occur                                            |
@@ -215,7 +215,7 @@ Rewrite in this order. Human-facing first, weighted by how many people read the 
 | `.dev/docs/phase-1.md`                           | 48            | Holds the design lock and the Nov 15 requirements                                 |
 | `.dev/design/permissions-model.md`               | 63            | The model everything else refers back to                                          |
 | `.dev/design/plugin-integration.md`              | 44            | The contract an implementer works from                                            |
-| `.dev/design/admin-model.md`                     | 41            | Also the largest cluster of instance detail to relocate                         |
+| `.dev/design/admin-model.md`                     | 41            | Also the largest cluster of instance detail to relocate                           |
 | `.dev/design/to-discuss.md`                      | 37            | Its whole purpose is being scannable                                              |
 | `.dev/design/security-workflow.md`               | 34            | Also carries the superseded JWE rationale                                         |
 | `docs/intro.md`, `why-usher.md`, `iam-primer.md` | 14, 17, 13    | Low counts, but these are the entry points                                        |

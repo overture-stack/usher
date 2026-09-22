@@ -96,7 +96,7 @@ claim is phrased in the vocabulary of the conclusion it drew, not of the premise
 correction to what a resource is survives four paragraphs later as an assumption about what a
 container is.
 
-So after correcting a premise, list what it licensed and search for *those* claims. The check that
+So after correcting a premise, list what it licensed and search for _those_ claims. The check that
 you have: name a sentence elsewhere that changed as a result. If a premise correction changes
 nothing else in the document, either the premise was inert or you have not looked.
 
@@ -113,7 +113,7 @@ the hand-written encodings written before it, and a document holding three ways 
 ---
 
 **The resolution sequence is normative, even though the translation is not.** How a plugin renders
-a filter into its service's query language is its own business. The steps by which it decides *what*
+a filter into its service's query language is its own business. The steps by which it decides _what_
 to render are not, because that is where the model lives, and a plugin that gets them wrong is
 wrong regardless of how well it translates.
 
@@ -124,7 +124,7 @@ Per protected type, per request:
    marking a record as carrying it.
 2. **From the token:** the `(resource, category)` pairs this principal holds.
 3. **Intersect.** The visible set is the pairs whose resource is configured for this type.
-4. **Empty intersection denies** this type. Not the absence of an entry: absence of an *overlap*.
+4. **Empty intersection denies** this type. Not the absence of an entry: absence of an _overlap_.
 5. **Otherwise narrow**, with one clause per visible pair, composed with `or`. Each clause is a
    conjunction of two field tests, the resource's and the category's.
 6. **For a derived artifact, add the ceiling clause**, excluding any artifact whose recorded
@@ -269,10 +269,10 @@ each must be checked rather than assumed:
 worth stating because the obvious reading, that positive clauses are the safe ones, holds for one and
 inverts for the other.
 
-| Failure | Positive `in` | Negated `must_not` over the complement |
-|---|---|---|
+| Failure                           | Positive `in`                                              | Negated `must_not` over the complement     |
+| --------------------------------- | ---------------------------------------------------------- | ------------------------------------------ |
 | The field name is wrong or absent | matches nothing, **fails closed**, noticed within the hour | matches everything, **fails open**, silent |
-| The field gains a second value | matches more, **fails open** | excludes the record, **fails closed** |
+| The field gains a second value    | matches more, **fails open**                               | excludes the record, **fails closed**      |
 
 `terms` is existential over a multi-valued field, so a record whose resource field holds
 `[HEART_STUDY, REEF_ARCHIVE]` satisfies `in(resource, [HEART_STUDY])`. That is what makes the second
@@ -299,6 +299,7 @@ close it, and they are different tests with opposite assertions: index a documen
 field holds `[A, B]` and filter on `A`, then assert it **does** come back, which confirms how the
 clause behaves; and assert on the same fixture that it does **not**, which states the access
 requirement and fails today. Collapsing them produces a failing test that reads as a closed boundary.
+
 - **The term is not overloaded elsewhere in the instance.** A single word can name several
   unrelated concepts across services in one platform: a submission scope, an entity attribute, and a
   connector-level constant. Conflating two yields a filter that is syntactically valid and
@@ -422,10 +423,10 @@ layer and are that application's audit responsibility.
 
 Each plugin must emit structured log entries for:
 
-| Event            | Required fields                                                                  |
-| ---------------- | -------------------------------------------------------------------------------- |
-| Access permitted | `user_id`, `resource_id`, `categories_in_scope`, `filter_applied`, `timestamp`  |
-| Access denied    | `user_id`, `resource_id`, `reason`, `timestamp`                                  |
+| Event            | Required fields                                                                |
+| ---------------- | ------------------------------------------------------------------------------ |
+| Access permitted | `user_id`, `resource_id`, `categories_in_scope`, `filter_applied`, `timestamp` |
+| Access denied    | `user_id`, `resource_id`, `reason`, `timestamp`                                |
 
 `filter_applied` is a boolean that must be `true` whenever the plugin ran, even when full access
 means no filter was injected. Without it, a fully-entitled user's request may be indistinguishable
@@ -481,11 +482,11 @@ what closes that, and it is why this is not merely a convenience that saves tran
 
 **A category appears for one of three reasons, and only the third is urgent.**
 
-| Why a category appears | Risk while the plugin does not know it |
-|---|---|
-| segmentation planned ahead of an upload | none; no records carry it yet |
-| data is being or has just been uploaded | records arrive under a category the plugin cannot select |
-| data already present is being further segmented | **records currently served as open are no longer open** |
+| Why a category appears                          | Risk while the plugin does not know it                   |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| segmentation planned ahead of an upload         | none; no records carry it yet                            |
+| data is being or has just been uploaded         | records arrive under a category the plugin cannot select |
+| data already present is being further segmented | **records currently served as open are no longer open**  |
 
 The third is a tightening, which makes it the same shape as revocation: it has to reach the plugin
 promptly or the plugin keeps serving as open what has just stopped being open. The first two are
@@ -503,9 +504,9 @@ matching records are served to everyone until the plugin catches up.
 
 **Which makes the two mismatches different faults, not one.**
 
-| Mismatch | What it means | Response |
-|---|---|---|
-| the controller knows categories the plugin does not | the plugin cannot select records it is supposed to exclude | refuse: this is the leak |
+| Mismatch                                                  | What it means                                               | Response                 |
+| --------------------------------------------------------- | ----------------------------------------------------------- | ------------------------ |
+| the controller knows categories the plugin does not       | the plugin cannot select records it is supposed to exclude  | refuse: this is the leak |
 | the plugin maps categories the controller does not define | predicates nobody grants against, hiding records needlessly | warn: nothing is exposed |
 
 **The check belongs in the controller, and it withholds resources rather than blocking an
@@ -716,7 +717,6 @@ change, no coordination owner is needed, and there is no window for the plugin t
 They return only if an instance chooses to filter on a prescriptive field, which this design
 excludes.
 
-
 When the enforcement plugin filters on a field in a search index that encodes the access level
 (for example, a field marking whether a document belongs to an open or restricted resource),
 a change to that access level in Usher does not automatically propagate to the index. The
@@ -730,6 +730,7 @@ the now-withdrawn grant, does not exclude it. The size of the window is the inde
 pipeline's reindex latency.
 
 Open questions:
+
 - Does an access-level change in Usher need to trigger a synchronous reindex or an explicit
   invalidation, rather than relying on the normal indexing cadence?
 - Who owns this coordination: Usher (as the source of the change), Lyric (as the submission

@@ -23,17 +23,17 @@ means", which is precisely the conflation every tier-1 site below commits.
 
 Ranked. These are the ones doing damage.
 
-| Status | File | Quote to search for | Fault |
-|---|---|---|---|
-| closed | `docs/concepts.md` | "Does this user have the 'owner' role in cohort A" | The published document's **first** walkthrough of an access decision, composed from owner plus a grant. Rewritten to ask what the grant's role permits |
-| closed | `permissions-model.md` | "cannot see `clinical_notes`; an `owner` can" | Stated outright that an owner reads more than a viewer. The option now contrasts two data-plane roles and says an owner reads nothing by holding the role |
-| closed | `permissions-model.md` | "The submitter holds a role in the resource (as Owner or Viewer)" | Offered a control-plane and a data-plane role as interchangeable, in the worked example a reader copies |
-| closed | `permissions-model.md`, `decisions.md` | "belongs to the data-plane roles" | A plane inversion: granting **is** the control plane. Both sites now say so |
-| closed | `docs/concepts.md` | "roles for coarse permission (owner vs viewer)" | Presented the two planes as two points on one scale. Now states that the roles are not a scale and names what each acts on |
-| closed | `admin-model.md` | "Data provenance; viewer access to own data" | Asserted as settled what the passage below it calls an open decision and a **rejected** move. The row now defers to that passage |
-| closed | `admin-model.md` | "`role.assign` (optional): assign the submitter as Owner or Viewer" | Same conflation, in a permission set that would have been built literally. Now `grant.create` |
-| closed | `admin-model.md` | "restricted to adding users at `viewer` level only" | "level" framed the planes as a ladder. Now a restriction on the plane: a service account may write data-plane grants and never a control-plane one |
-| closed | `terminology-usage.md` | "implied an owner was not one" | The recorded reason for a rename was itself the plane conflation. That rename is now recorded as reversed, with the two planes stated |
+| Status | File                                   | Quote to search for                                                 | Fault                                                                                                                                                     |
+| ------ | -------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| closed | `docs/concepts.md`                     | "Does this user have the 'owner' role in cohort A"                  | The published document's **first** walkthrough of an access decision, composed from owner plus a grant. Rewritten to ask what the grant's role permits    |
+| closed | `permissions-model.md`                 | "cannot see `clinical_notes`; an `owner` can"                       | Stated outright that an owner reads more than a viewer. The option now contrasts two data-plane roles and says an owner reads nothing by holding the role |
+| closed | `permissions-model.md`                 | "The submitter holds a role in the resource (as Owner or Viewer)"   | Offered a control-plane and a data-plane role as interchangeable, in the worked example a reader copies                                                   |
+| closed | `permissions-model.md`, `decisions.md` | "belongs to the data-plane roles"                                   | A plane inversion: granting **is** the control plane. Both sites now say so                                                                               |
+| closed | `docs/concepts.md`                     | "roles for coarse permission (owner vs viewer)"                     | Presented the two planes as two points on one scale. Now states that the roles are not a scale and names what each acts on                                |
+| closed | `admin-model.md`                       | "Data provenance; viewer access to own data"                        | Asserted as settled what the passage below it calls an open decision and a **rejected** move. The row now defers to that passage                          |
+| closed | `admin-model.md`                       | "`role.assign` (optional): assign the submitter as Owner or Viewer" | Same conflation, in a permission set that would have been built literally. Now `grant.create`                                                             |
+| closed | `admin-model.md`                       | "restricted to adding users at `viewer` level only"                 | "level" framed the planes as a ladder. Now a restriction on the plane: a service account may write data-plane grants and never a control-plane one        |
+| closed | `terminology-usage.md`                 | "implied an owner was not one"                                      | The recorded reason for a rename was itself the plane conflation. That rename is now recorded as reversed, with the two planes stated                     |
 
 ---
 
@@ -62,11 +62,11 @@ Two axes. The model's position is one category across every resource carrying it
 occupies three of the four corners. `to-discuss.md:344` says the two axes together decide whether
 `custodianship.hold` is one column, one join table, or two, so this has a build consequence.
 
-| Site | Says |
-|---|---|
-| `permissions-model.md:846`, `terminology-usage.md:88` | one category, all resources |
-| `admin-model.md:39`, `glossary.md:418`, `docs/concepts.md:302` | **one or more** categories |
-| `security-threat-model.md:64`, `audit-events.md:130` | within **authorized resources** only |
+| Site                                                           | Says                                 |
+| -------------------------------------------------------------- | ------------------------------------ |
+| `permissions-model.md:846`, `terminology-usage.md:88`          | one category, all resources          |
+| `admin-model.md:39`, `glossary.md:418`, `docs/concepts.md:302` | **one or more** categories           |
+| `security-threat-model.md:64`, `audit-events.md:130`           | within **authorized resources** only |
 
 `audit-events.md:130` is the sharpest: it carries `resourceId` in the required fields, so
 resource-scoped custodianship is encoded in an audit schema rather than only in prose. It also names

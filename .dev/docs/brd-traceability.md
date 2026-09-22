@@ -12,58 +12,58 @@ Status values: **met** means the design answers it; **partial** means answered w
 
 ## Public data access
 
-| ID | Status | What answers it |
-|---|---|---|
-| FR-01 | met | Open tier. Anonymous requests receive a token carrying open-tier grants, so unauthenticated browsing is governed by the same machinery as everything else |
-| FR-02 | partial | Open tier covers the read path. Download is a second enforcement path, and the flows name its owner: the file API validates on every request. Designing it is outstanding; deciding who owns it is not |
-| FR-03 | met | Deny by default plus the existence-denial invariant |
+| ID    | Status                    | What answers it                                                                                                                                                                                                                                                                                                                      |
+| ----- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-01 | met                       | Open tier. Anonymous requests receive a token carrying open-tier grants, so unauthenticated browsing is governed by the same machinery as everything else                                                                                                                                                                            |
+| FR-02 | partial                   | Open tier covers the read path. Download is a second enforcement path, and the flows name its owner: the file API validates on every request. Designing it is outstanding; deciding who owns it is not                                                                                                                               |
+| FR-03 | met                       | Deny by default plus the existence-denial invariant                                                                                                                                                                                                                                                                                  |
 | FR-04 | met, pending verification | Requires restricted data absent from aggregation counts. The disjunctive-composition defect needed an authorization field at depth two or greater; the settled filter is one positive clause on a flat depth-one field, so the condition is absent. Confirming it in practice is the conformance case per endpoint that returns data |
 
 ## Sharing controlled datasets
 
-| ID | Status | What answers it |
-|---|---|---|
-| FR-05 | met | Categories assigned to a resource at submission; the submission flow creates the resource |
-| FR-06 | met | `invitations` keyed by email address |
-| FR-07 | met | Invitation and acceptance flow, plus the invitation link that binds an existing account under a different address |
-| FR-09 | partial | The flows put notification on the critical path in four places, so it is specified rather than absent. No mechanism is designed yet |
+| ID    | Status  | What answers it                                                                                                                                                                                                                            |
+| ----- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-05 | met     | Categories assigned to a resource at submission; the submission flow creates the resource                                                                                                                                                  |
+| FR-06 | met     | `invitations` keyed by email address                                                                                                                                                                                                       |
+| FR-07 | met     | Invitation and acceptance flow, plus the invitation link that binds an existing account under a different address                                                                                                                          |
+| FR-09 | partial | The flows put notification on the critical path in four places, so it is specified rather than absent. No mechanism is designed yet                                                                                                        |
 | FR-10 | partial | The data exists in `grants` with `granted_by`, and the acceptance timestamp in `grant_decisions`. The flows specify the presentation: sharer, share time, and acceptance timestamp on a "Shared with Me" page. Interface work, not started |
-| FR-11 | met | Revocation on the grant, push channel with poll fallback. How a whole principal is stopped is open; see blocker 6 |
-| FR-12 | met | Grants bind to a Keycloak subject and give no delegation permission, so a consumer has nothing to forward |
+| FR-11 | met     | Revocation on the grant, push channel with poll fallback. How a whole principal is stopped is open; see blocker 6                                                                                                                          |
+| FR-12 | met     | Grants bind to a Keycloak subject and give no delegation permission, so a consumer has nothing to forward                                                                                                                                  |
 
 ## Consumer access
 
-| ID | Status | What answers it |
-|---|---|---|
+| ID    | Status  | What answers it                                                                                                                                  |
+| ----- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | FR-13 | partial | Requires showing who shared each dataset. `granted_by` records it, and the flows specify what the page shows; the API exposing it does not exist |
-| FR-14 | met | Enforcement at query time through the plugin |
-| FR-15 | partial | Same download path as FR-02, now with a named owner |
-| FR-16 | met | Open tier |
-| FR-17 | met | Deny by default |
-| FR-18 | partial | Revocation propagates; removal from a portal page is portal work |
-| FR-19 | partial | Marked nice-to-have in both documents. Same missing mechanism as FR-09, which the flows now specify |
+| FR-14 | met     | Enforcement at query time through the plugin                                                                                                     |
+| FR-15 | partial | Same download path as FR-02, now with a named owner                                                                                              |
+| FR-16 | met     | Open tier                                                                                                                                        |
+| FR-17 | met     | Deny by default                                                                                                                                  |
+| FR-18 | partial | Revocation propagates; removal from a portal page is portal work                                                                                 |
+| FR-19 | partial | Marked nice-to-have in both documents. Same missing mechanism as FR-09, which the flows now specify                                              |
 
 ## Steward management
 
-| ID | Status | What answers it |
-|---|---|---|
-| FR-20 | met | Ownership cascade: the submitter becomes owner by default |
+| ID    | Status  | What answers it                                                                                                                                                                        |
+| ----- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-20 | met     | Ownership cascade: the submitter becomes owner by default                                                                                                                              |
 | FR-21 | decided | Requires multiple owners with equal authority. The single-owner rule moves to a non-empty set; see the ownership item in `.dev/roadmap.md`. Design work outstanding, conflict resolved |
-| FR-22 | met | Adding an owner rather than transferring, which the set model supports. The flows settle the open sub-decision: no consent from existing owners is required |
-| FR-23 | met | Removal is bounded by the non-empty-set invariant. The flows settle the open sub-decision: both peer removal and self-removal are supported, and the invariant is enforced at each |
-| FR-24 | met | The no-owner invariant is the same rule stated from the other side |
-| FR-25 | partial | Revocation is prompt within a bounded window rather than instantaneous. Whether "immediate" admits the propagation window needs confirming with the BA |
+| FR-22 | met     | Adding an owner rather than transferring, which the set model supports. The flows settle the open sub-decision: no consent from existing owners is required                            |
+| FR-23 | met     | Removal is bounded by the non-empty-set invariant. The flows settle the open sub-decision: both peer removal and self-removal are supported, and the invariant is enforced at each     |
+| FR-24 | met     | The no-owner invariant is the same rule stated from the other side                                                                                                                     |
+| FR-25 | partial | Revocation is prompt within a bounded window rather than instantaneous. Whether "immediate" admits the propagation window needs confirming with the BA                                 |
 
 ## Non-functional
 
-| ID | Status | What answers it |
-|---|---|---|
-| NFR-01 | partial | Enforcement prevents data reaching the portal; the portal not exposing it is portal work |
-| NFR-02 | met | Revocation applies to owners as to anyone else |
+| ID     | Status                    | What answers it                                                                                                            |
+| ------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| NFR-01 | partial                   | Enforcement prevents data reaching the portal; the portal not exposing it is portal work                                   |
+| NFR-02 | met                       | Revocation applies to owners as to anyone else                                                                             |
 | NFR-04 | met, pending verification | Same reasoning as FR-04. Level 1 hiding being non-negotiable is why the verification case is required rather than optional |
-| NFR-05 | met | Anonymous tokens are cached and the open path adds one positive clause |
-| NFR-06 | met | Audit events for grant and revocation, dual channel |
-| NFR-07 | met | EGO is replaced rather than integrated |
+| NFR-05 | met                       | Anonymous tokens are cached and the open path adds one positive clause                                                     |
+| NFR-06 | met                       | Audit events for grant and revocation, dual channel                                                                        |
+| NFR-07 | met                       | EGO is replaced rather than integrated                                                                                     |
 
 ## Resolved: FR-21 and ownership
 

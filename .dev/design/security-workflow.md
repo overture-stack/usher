@@ -8,6 +8,7 @@ used here. See [security-threat-model.md](security-threat-model.md) for the full
 10:2025 mapping.
 
 **Primary OWASP categories addressed here:**
+
 - **A01 Broken Access Control:** server-side enforcement, short-lived tokens, emergency
   revocation, fail-secure on revocation channel disruption.
 - **A04 Cryptographic Failures:** JWE (encrypted, not just signed), TLS on all channels,
@@ -151,7 +152,7 @@ entirely the controller's own business, so the bridge has one operation rather t
 get the second one wrong.
 
 Inside the controller, the refresh looks for the principal's cached payload and compares the category
-versions recorded *with that payload* against the resources' current ones:
+versions recorded _with that payload_ against the resources' current ones:
 
 - **Cache present and versions match**: reissue from the cached payload with a fresh TTL, bounded by
   the earliest grant expiry cached alongside it, with no policy query at all.
@@ -349,6 +350,7 @@ now ships; enforcement on the export path is unbuilt, so it is declared unenforc
 withheld. See the export decision in [decisions.md](decisions.md).
 
 **Anonymous token example** (no IdP bearer token; only open resources present):
+
 ```json
 {
   "payloadVersion": 1,
@@ -368,6 +370,7 @@ withheld. See the export decision in [decisions.md](decisions.md).
 still validates the `iss` claim. Only `sub` is null; no other standard claims are omitted.
 
 **Authenticated token example** (grants in two cohorts, one of them on a restricted category):
+
 ```json
 {
   "payloadVersion": 1,
@@ -534,12 +537,12 @@ On the controller's side, a grant carries its own `revoked_at`, and the principa
 deleted by anything that changes what they hold, so a recomputation cannot serve the revoked grant
 again. See the fast-path decision in [decisions.md](decisions.md).
 
-> **Open, and it belongs to the schema session.** Revoking a principal *entirely*, rather than one
+> **Open, and it belongs to the schema session.** Revoking a principal _entirely_, rather than one
 > grant, has no settled storage. Setting `revoked_at` on every grant they hold expresses it with no
 > new column and leaves nothing to say that the person, rather than each grant, was stopped. A column
 > on `users` says it directly and reintroduces a per-principal marker, which was rejected for the
 > fast path and may still be right here, since emergency revocation is exactly the case where the
-> dangerous change *is* per principal. No such column is in the entity schema, so nothing may be
+> dangerous change _is_ per principal. No such column is in the entity schema, so nothing may be
 > written against one until this is decided. See blocker 6 in [phase-1.md](../docs/phase-1.md).
 
 ### Propagation: push + poll
@@ -647,6 +650,7 @@ returned successfully). If this timestamp exceeds a configurable grace period (d
 seconds) without a new successful check, the bridge enters **revocation-uncertain mode**.
 
 In revocation-uncertain mode:
+
 - Cached Usher tokens are **suspended**, not expired. A request needing any granted permission is
   rejected with a "service temporarily unavailable" response (HTTP 503), not a "session ended"
   response (HTTP 401).
@@ -699,6 +703,7 @@ for transient network conditions.
 ## Identity provider abstraction
 
 Usher validates incoming IdP tokens against a configured provider. The provider is pluggable:
+
 - Keycloak (current Overture standard)
 - Microsoft Entra ID (formerly Azure Active Directory)
 - Any OpenID Connect-compatible provider

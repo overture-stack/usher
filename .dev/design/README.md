@@ -40,23 +40,23 @@ specified as request and response shapes).
 
 ## Document coverage
 
-| Document | Topic | Status |
-|---|---|---|
-| [glossary.md](glossary.md) | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts | reference |
-| [architecture.md](architecture.md) | Component responsibilities (Keycloak, controller, bridge, plugin, infrastructure); stateless application principle | in progress |
-| [concepts.md](../../docs/concepts.md) | ABAC vocabulary, security primitives, permissions model entities | reference |
-| [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps | reference |
-| [security-workflow.md](security-workflow.md) | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure | specced |
-| [permissions-model.md](permissions-model.md) | Hybrid role + attribute model, categories, how overlapping cohorts behave, OCAP, private data sharing | in progress |
-| [token-calculation.md](token-calculation.md) | The calculation producing a token: the rule, the five steps, and the 29 cases that force each branch | specced |
-| [conformance/](conformance/) | `principals.json`, the cases expanded into real payload shape, with the validator that checks them | draft |
-| [admin-model.md](admin-model.md) | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity | in progress |
-| [decisions.md](decisions.md) | Tools reviewed before building; architectural decisions with rationale | reference |
-| [plugin-integration.md](plugin-integration.md) | Per-app plugin design, bridge library (`usher-bridge`) | designed; not yet a spec |
-| [management-ui.md](management-ui.md) | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on | in progress |
-| [profile-view.md](profile-view.md) | Where a person acts on their own access: permissions held, API tokens | not started |
-| [audit-events.md](audit-events.md) | Policy-plane events, common fields, severity mapping | specced |
-| [to-discuss.md](to-discuss.md) | Design gaps, inconsistencies, and security properties requiring resolution before implementation | review |
+| Document                                             | Topic                                                                                                              | Status                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| [glossary.md](glossary.md)                           | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts         | reference                |
+| [architecture.md](architecture.md)                   | Component responsibilities (Keycloak, controller, bridge, plugin, infrastructure); stateless application principle | in progress              |
+| [concepts.md](../../docs/concepts.md)                | ABAC vocabulary, security primitives, permissions model entities                                                   | reference                |
+| [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps                                                                 | reference                |
+| [security-workflow.md](security-workflow.md)         | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure                         | specced                  |
+| [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, OCAP, private data sharing              | in progress              |
+| [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the 29 cases that force each branch               | specced                  |
+| [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                 | draft                    |
+| [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity      | in progress              |
+| [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                             | reference                |
+| [plugin-integration.md](plugin-integration.md)       | Per-app plugin design, bridge library (`usher-bridge`)                                                             | designed; not yet a spec |
+| [management-ui.md](management-ui.md)                 | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on                            | in progress              |
+| [profile-view.md](profile-view.md)                   | Where a person acts on their own access: permissions held, API tokens                                              | not started              |
+| [audit-events.md](audit-events.md)                   | Policy-plane events, common fields, severity mapping                                                               | specced                  |
+| [to-discuss.md](to-discuss.md)                       | Design gaps, inconsistencies, and security properties requiring resolution before implementation                   | review                   |
 
 **This table is kept complete by a count, not by a read.** A document added to this directory is
 reachable while someone links it and unreachable the moment nobody does, and no sweep starting from
@@ -98,8 +98,8 @@ These questions are explicitly flagged as unresolved in the design documents. Th
 deliberate answer before the relevant implementation work can begin; most have OCAP, legal, or
 cross-application implications and should not be resolved by a single developer in isolation.
 
-| Question | Documented in | Blocks |
-|---|---|---|
+| Question                                                                                                                          | Documented in                  | Blocks                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | Overlapping cohort access: if a record belongs to cohorts A and B and a user holds a grant in A only, do they see it? (OR vs AND) | [to-discuss.md](to-discuss.md) | Nothing at present: unreachable where a record cannot belong to two resources, which holds for the first instance |
 
 | Custodianship scoping: how is a custodianship.hold permission stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; OCAP instances |

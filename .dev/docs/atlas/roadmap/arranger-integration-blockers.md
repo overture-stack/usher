@@ -22,7 +22,7 @@ the fix are plugin-side and already unblocked, but both change behaviour for exi
 instances, so they are held for an instance decision rather than for design.
 
 **This item is a cycle and should be recorded as one rather than left to resolve itself.** The
-integration lists it as a prerequisite *for* Usher, while its central fix depends *on* Usher. The
+integration lists it as a prerequisite _for_ Usher, while its central fix depends _on_ Usher. The
 order that breaks the cycle is Usher publishing the vocabulary first, since the plugin can gate
 and cap without it but cannot scope per principal without it.
 
@@ -89,10 +89,10 @@ The sharpest hazard found, and it is a defect in the ceiling mechanism rather th
 
 One unconfigured value, two opposite outcomes:
 
-| Where the value appears | Mechanism | Direction |
-|---|---|---|
-| In a record's resource field | Excluded by the positive `in` clause, which lists only configured resources | Fails **closed** |
-| In a derived artifact's provenance | Absent from the complement, which is computed as configured resources minus held resources, so the ceiling clause does not exclude the artifact | Fails **open** |
+| Where the value appears            | Mechanism                                                                                                                                       | Direction        |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| In a record's resource field       | Excluded by the positive `in` clause, which lists only configured resources                                                                     | Fails **closed** |
+| In a derived artifact's provenance | Absent from the complement, which is computed as configured resources minus held resources, so the ceiling clause does not exclude the artifact | Fails **open**   |
 
 The design already states that over-inclusion of the complement is harmless and under-inclusion is
 not. An unconfigured value is precisely under-inclusion, arriving through the config rather than
