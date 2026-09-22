@@ -18,7 +18,7 @@ Adapted from [softeng/agentics](https://github.com/oicr-softeng/agentics). This 
 - Verify purpose alignment before implementing: when a task names a goal, check whether the chosen approach achieves that goal directly, not just something adjacent to it; lead with that gap as an objection before writing anything
 - Another session's work is not yours to pick up, finish, or decide, unless the developer or that session explicitly asks. Report what you learned and stop: offering to take it on is already pressure, and acting on it duplicates effort, collides with edits you cannot see, and overrides an ownership the other session is actively exercising. Distinct and actively wanted: a peer's report that reveals a gap in your *own* scope is yours to act on immediately, that is your work, not theirs. Before relaying another session's open item as still open, verify it still is; their state moves without you, and a stale item presented as current is a claim you did not check
 - Acknowledging a correction is not making it. When the developer points out a defect, the response that counts is the corrected artifact, not agreement that they are right. Fix it in the same turn, or say plainly that you are not going to and why, so they can overrule you; "good catch" followed by no change is the failure mode, because it reads as handled and quietly is not. This applies most to small defects, which are the ones easiest to agree about and easiest to leave, and hardest for the developer to notice went unfixed. Confirmed directly: a dash-rule violation in a draft PR comment was pointed out, acknowledged, and left in place
-- A question is not a work order. "How expensive would it be", "what would it take", "is it possible" ask for a number, a shape, or a recommendation, and answering one is the whole deliverable. The asymmetry decides it: reading an actionable request as a question costs one round trip, while reading a question as a request costs unrequested work that may then need undoing. So when the surface form is a question, answer it, and where action seems implied say what you would do and stop there. English blurs this deliberately, since "can you X" is literally a capability question and conventionally a request; when the two readings lead to different work, ask rather than pick
+- A question is not a work order. "How expensive would it be", "what would it take", "is it possible" ask for a number, a shape, or a recommendation, and answering one is the whole deliverable. The asymmetry decides it: reading an actionable request as a question costs one round trip, while reading a question as a request costs unrequested work that may then need undoing. So when the surface form is a question, answer it, and where action seems implied say what you would do and stop there. English blurs this deliberately, since "can you X" is literally a permission question and conventionally a request; when the two readings lead to different work, ask rather than pick
 - Flag scope-adjacent issues verbally, then document them in `.dev/tech-debt.md`
 
 ## Critical constraints
@@ -29,12 +29,12 @@ Adapted from [softeng/agentics](https://github.com/oicr-softeng/agentics). This 
 - Name code, not people: attribute work in session files, tech-debt entries, docs, and any other persisted content to features, modules, and systems, not to individuals. Attribution belongs in git history, not in documents
 
 ## Project notes
-- Usher is a standalone ABAC authorization service for the Overture platform: answers "what is this user allowed to see?" and returns encrypted grants tokens (JWE) that per-app plugins enforce. Handles personal health information; currently in the design phase, no implementation has begun
-- Key concepts (PDP, PAP, PEP, JWE, fail-secure, grants tokens) are in `docs/concepts.md`; the OWASP Top 10:2025 threat model is in `.dev/design/security-threat-model.md`; the design index is at `.dev/design/README.md`
+- Usher is the standalone ABAC access control service for the Overture platform, and its access control plane: answers "what is this user allowed to see?" and returns encrypted Usher tokens (JWE) that per-app plugins enforce. Handles personal health information; currently in the design phase, no implementation has begun
+- Key concepts (PDP, PAP, PEP, JWE, fail-secure, Usher tokens) are in `docs/concepts.md`; the OWASP Top 10:2025 threat model is in `.dev/design/security-threat-model.md`; the design index is at `.dev/design/README.md`
 - **Design-first:** do not implement a component without a completed design in `.dev/design/`. Open design questions are tracked there
-- **Model-agnostic:** the service core uses generic terms (`resource`, `membership`, `category`); domain-specific labels (study, patient, cohort) belong in the management UI layer only
+- **Model-agnostic:** the service core uses generic terms (`resource`, `role`, `category`); domain-specific labels (study, patient, cohort) belong in the management UI layer only
 - **Fail-secure:** errors in the authorization path must result in denial, not permission. If the revocation channel is unavailable beyond the grace period, sessions are suspended (503), not permitted
-- **Deny by default:** data category access requires an explicit `category_grant`; membership alone does not grant access to categorized records or fields
+- **Deny by default:** data category access requires an explicit `category_grant`; a role alone does not grant access to categorized records or fields
 
 ## When to read what
 
@@ -75,7 +75,7 @@ Check these as you write or review code. Flag violations rather than silently sk
 
 - String-concatenated queries (SQL, ES DSL, SQON construction)
 - User-supplied field names forwarded to queries without allowlist validation
-- Credentials, tokens, or grants payloads in any log output
+- Credentials, tokens, or permissions payloads in any log output
 - HTTP (not HTTPS) for any non-localhost communication
 - Missing or unvalidated `aud`/`iss`/`exp`/scope claims on tokens
 - Default or empty JWE decryption key accepted at startup

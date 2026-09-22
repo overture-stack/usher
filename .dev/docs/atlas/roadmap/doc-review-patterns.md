@@ -1,8 +1,9 @@
 # Documentation review patterns
 
-Defect classes found by reading the onboarding artifact aloud against a non-technical audience.
-Two uses: a convention proposal for agentics, and a restructuring pass over this repository's own
-documents. Open and appended to as review continues.
+Defect classes found by reading the onboarding artifact aloud against a non-technical audience, and
+since extended by classes found the same way in other documents of this corpus. Two uses: a
+convention proposal for agentics, and a restructuring pass over this repository's own documents. Open
+and appended to as review continues.
 
 **Why these are worth recording rather than just fixing.** Density, affirmative framing and the dash
 rules had all been run over this same text, and none of them caught any of what follows. Those
@@ -143,7 +144,48 @@ definition, a referent, a content, an antecedent, a meaning. Classes A, B, C, E 
 **Fidelity.** The sentence is true but narrower or vaguer than the thing it describes. Classes D and
 F.
 
+**Letters run in the order classes were found, not by axis**, so each section's letters have gaps and
+a missing one is defined in another section rather than absent. D was reported twice before being
+recognized as a class, which is why it appears in the sequence before the axis that holds it.
+
 ## Resolvability failures
+
+### O. The model defined on the stand-in rather than on the term
+
+A document written for a lay audience substitutes a plain word for a model term, which is right. The
+defect is where it then puts the definitions. **Definitions belong on the word the system uses; the
+stand-in is a pronoun and can only be used once its referent exists.** A document that explains the
+mechanism in terms of the stand-in has built the reader's model on a word the system does not have,
+and a reader who later meets the real term has two concepts to reconcile where there is one.
+
+**The typography compounds it.** Where bold-on-first-use marks a term being defined, and the document
+uses that consistently for real terms, a stand-in in the same typography is indexed as a term by a
+reader who has correctly learned the convention. Being right about the convention is what makes them
+wrong about the word.
+
+**Found by a reader, and the crux was not the one first proposed.** `docs/onboarding.md` said
+"dataset" throughout where the model says `resource`, bolded it on first use beside `enforcement`,
+`instance` and `policy`, and disclosed the substitution only in the glossary at the end. A
+non-technical reader took `dataset` as a defined thing and needed a long conversation to resolve two
+terms into one. The first repair added the disclosure early, which was not enough: the next paragraph
+went on to define the whole mechanism on the stand-in, so the document contradicted its own
+disclosure within three sentences. The repair that worked was moving the definitions onto the term
+and letting the stand-in carry the casual references afterwards.
+
+**The check is two passes and both are cheap.** List every word the document bolds on first use and
+ask whether the model has that word; anything it does not is a stand-in. Then read only the passages
+that define, name a structure, or state a rule, and confirm each uses the term rather than the
+stand-in. The first pass finds the words, the second finds where they do damage.
+
+**A second failure rides along with this one, and it is the more expensive one.** Having taken the
+stand-in as a term, the same reader read categories as subdivisions a dataset owns, which is the
+natural reading of "a dataset lists the categories it carries". Categories are defined once for the
+instance and each resource declares which apply. The containment reading survives contact with
+everything except custodianship, which is only coherent because one category is one thing across
+every resource, so a reader holding it would have failed later and further from the cause. **A
+misreading that survives most of a document is worse than one that breaks immediately**, and where a
+stand-in has already blurred what a thing is, the relationships between things are the next place to
+check.
 
 ### A. A term arrives before it is introduced
 
@@ -176,11 +218,6 @@ often think". Those name no one and can be neither checked nor disagreed with.
 The test that works: if a sentence's job is to say something matters, it has to say what the thing
 is in the same breath.
 
-### D. Scope stated narrower than the system
-
-Covered under fidelity below; listed here because it was reported twice before being recognized as a
-class.
-
 ### E. A contrastive construction whose antecedent was never established
 
 "Even if none of that ever changed" asserts that change has been discussed. Where the preceding
@@ -193,6 +230,66 @@ antecedent as given.
 An empty list, a null, a missing entry. Where emptiness means something specific, the meaning belongs
 at the example, not only in prose further down. An empty collection reads as "all" to about as many
 readers as it reads as "none".
+
+### J. A negation the following positive makes redundant
+
+"Access is never granted over data directly. It is granted over a dataset." Once the second sentence
+lands, the first carried nothing: a reader learns the unit of access from the positive statement and
+the negation only delayed it. Reported by the developer, who tried rewriting it as a single sentence
+and found the result self-contradictory, which is the tell.
+
+**This is narrower than "opens with a negation", and the difference decides whether a check is
+useful.** A sweep for paragraph-opening negations across the corpus returned 29 matches and nearly
+all are load-bearing: "Usher is not an authentication service" and "Usher does not know the schema of
+the data it protects" are the content, not a delay before it. The test is whether the following
+positive statement makes the negation redundant, which no pattern expresses. Grep locates candidates;
+only reading separates them.
+
+### K. A qualifier carrying an argument before the argument is made
+
+"The second question deserves a single answer." The word doing the work is *single*, and nothing yet
+established why one answer matters rather than several, so a reader either accepts it on trust or
+stops. Adjacent to class A but distinct: A is about a term used before it is defined, this is about a
+word doing argumentative work before its argument exists. The repair is to state the reason and let
+the qualifier follow from it, not to soften the qualifier.
+
+Only one instance was found in either corpus, so this is recorded as a test rather than a sweep.
+
+### L. A correction whose referent is a conversation, not the document
+
+A sentence tells the reader that something "was recorded as" or "was described as" a claim, or that
+"an earlier note implied" one, and the document never made that claim. The referent is a turn in a
+conversation with the developer: the error was made there, corrected there, and the correction then
+written into a file as though the file had held it. No reader can resolve it, because the superseded
+claim exists nowhere in the corpus or in its history.
+
+**Three instances, all surfaced by the developer asking what one of them pointed at.** A roadmap line
+correcting "an earlier note here" that the same uncommitted edit had replaced, where the committed
+text it displaced was correct; a traceability file correcting "an earlier reading" of virtual-cohort
+sharing, in the commit that created that file; and a decision correcting a record of owner permission
+no document ever carried, the documents recording owner *notification* instead, which is a
+compensating control rather than a grant gate.
+
+**Unlike most classes here, the check is mechanical.** Grep for `was recorded as`, `was described
+as`, `an earlier note`, `earlier reading`, `previously stated`. For each hit, grep the corpus for the
+claim being corrected and run `git log -S` on it. A hit with no referent in either is a defect. Note
+that a file's own history often cannot supply one: two of the three instances sat in files whose
+creating commit already carried the correction.
+
+**Where the correction records a rejected alternative, reframe rather than delete.** Deleting loses
+something a decisions file exists to keep: what was considered and why it lost. The fix is to move
+the referent from the draft to the option. "An earlier version of this document computed exclusions
+from the configured category set" becomes "**Rejected: computing exclusions from the configured
+category set**", which carries the same information and points at something a reader can evaluate
+instead of at a version they never saw. Eight instances in this corpus took that repair.
+
+**The repair is to state the fact positively and delete the correction.** Where the superseded claim
+is worth recording, name where it lives, as FR-09 in `brd-traceability.md` does for notification. A
+correction only serves a reader who could have held the wrong belief, and a belief that existed only
+in a chat log has no such reader.
+
+The cause generalizes past documentation: a correction arrives in conversation, and the document is
+what gets edited in response, so the document is where the correction reads as belonging.
 
 ## Fidelity failures
 
@@ -211,7 +308,7 @@ rather than a second local fix.
 
 Plain language and vague language are not the same thing, and this is the class most likely to be
 introduced *by* an attempt at plainness. A metaphor chosen to avoid jargon ("sealed" for encrypted)
-buys nothing when the audience can carry the real word, and costs a reader who now wonders whether
+gains nothing when the audience can carry the real word, and costs a reader who now wonders whether
 something other than encryption is meant.
 
 Two related cases. A word with a common technical meaning elsewhere in the same document invites the
@@ -233,12 +330,58 @@ A paragraph that qualifies everything after it needs a connective to what preced
 ("Note:") makes it read as parenthetical when it is actually governing, which is the opposite of the
 intent.
 
+## Content addressed to the wrong reader
+
+Both classes here were found in the glossary, both were written by the agent maintaining it, and both
+share class L's mechanism: something arrives in conversation, and the document is what gets edited in
+response. L covers corrections. These cover rules.
+
+### M. A definition whose substance is what the term is not
+
+A glossary entry leads with the misreading it exists to prevent, and the reader has to get past a
+negation before reaching what the word means. Instances: `Deployment` opening "per deployment is the
+scope reached for by default, and it is often the wrong one"; `Catalogue` opening "a catalogue is not
+a governance boundary"; `Subject` and `Record` each carrying a parenthetical of the
+form *(reserved for X, never for Y)*; a borrowed-terms table whose Usher column began "**not** an
+Usher group", "**not** an Usher role".
+
+**The negation is usually a true and useful fact wearing the wrong clothes.** A catalogue really is
+not a governance boundary. Stated positively the same fact lands harder and reads as knowledge rather
+than as a scolding: one catalogue's records belong to many resources, so governance runs per
+resource. The repair is to find the positive fact the negation was standing in for, and where the
+negation carries no positive fact at all, it was a usage rule rather than a definition, which is
+class N.
+
+**The check is per entry, not per document.** Split each entry into sentences and look at the first
+one: a definition that has not said what the term denotes by the end of its opening sentence is a
+candidate. A whole-document ratio hides this, because a long entry with one positive sentence and
+three negative ones scores the same as three short clean entries.
+
+### N. A rule for the writer inside a reference for the reader
+
+A file whose job is to answer "what does this mean" accumulates entries answering "which word should
+I write here". They arrive one at a time, each next to the term it protects, each individually
+defensible, and the drift is invisible until someone looks up a term and gets a paragraph of writing
+guidance first. Instances in one glossary: an identifier-typography convention in the preamble,
+"reserve the word for this relation", "resist naming the role-level set separately", "before writing
+per deployment, check whether one of those three is meant", "say clause when the shape matters", and
+a retired-terms list.
+
+**The tell is the mood of the verb.** A definition is indicative and describes the system; a usage
+rule is imperative and directs the writer. Grep for imperatives at the start of a bolded lead:
+`reserve`, `resist`, `avoid`, `prefer`, `say`, `write`, `check whether`, `before writing`.
+
+**Why the agent writes these specifically.** Each rule was the residue of an error the agent had just
+made, and the term's own entry is where the fix reads as belonging. But the agent is not the
+document's reader. A rule about how to write belongs in the agent-facing working space, which in this
+repository is the atlas, and the reference keeps only what a person looking up a word came for.
+
 ## Recorded as unresolved rather than as a pattern
 
 **Lay word against domain word.** Whether a lay-facing document should say "dataset" or the
-deployment's own term ("cohort") is a live tension, not a defect. The generic word is consistent and
+instance's own term ("cohort") is a live tension, not a defect. The generic word is consistent and
 readable and carries less meaning; the domain word is precise and commits a general-audience document
-to one deployment's vocabulary. Currently resolved toward the lay word, with the glossary carrying
+to one instance's vocabulary. Currently resolved toward the lay word, with the glossary carrying
 the mapping.
 
 ## The information-delivery order this establishes

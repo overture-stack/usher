@@ -4,9 +4,9 @@
 
 **Language:** TypeScript (Overture ecosystem consistency).
 
-**Policy store:** PostgreSQL. Handles grants, memberships, categories, `revoked_at` timestamps, and the audit log; requires transactions and foreign-key integrity.
+**Policy store:** PostgreSQL. Handles grants, resource users, categories, `revoked_at` timestamps, and the audit log; requires transactions and foreign-key integrity.
 
-**Shared cache and revocation pub/sub:** Valkey (already deployed in the Overture environment; protocol-compatible with Redis). Two roles: caching computed grants payloads across Usher instances (the `generatedAt` fast-path), and pub/sub backbone for the push revocation channel (one instance processes a revocation; Valkey notifies SSE subscribers on all others). Valkey Streams provides durable in-process event passing for v1; see Kafka in Future scope for external consumer fan-out.
+**Shared cache and revocation pub/sub:** Valkey (already deployed in the Overture environment; protocol-compatible with Redis). Two roles: caching computed permissions payloads across Usher instances, which is what the fast-path refresh reads, and pub/sub backbone for the push revocation channel (one instance processes a revocation; Valkey notifies SSE subscribers on all others). Valkey Streams provides durable in-process event passing for v1; see Kafka in Future scope for external consumer fan-out.
 
 **Structured logging:** Pino (strongly preferred; to confirm with HTTP framework choice). Integrates natively with Fastify; outputs structured JSON by default; one of the fastest Node.js loggers, which matters on the auth hot path.
 
@@ -36,7 +36,7 @@ HTTP regardless of framework.
 **Fastify owns HTTP concerns exclusively: routing, request/response lifecycle, schema
 serialization, and SSE streams. It owns nothing else.**
 
-Application logic (grants computation, permissions resolution, revocation processing, audit
+Application logic (permissions computation, permissions resolution, revocation processing, audit
 event emission) lives in framework-independent modules. Data access (PostgreSQL pool, Valkey
 client) is managed independently and injected where needed; it is not registered as a Fastify
 plugin. Route handlers are thin: parse the validated request, call the relevant service function,

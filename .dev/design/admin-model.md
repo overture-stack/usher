@@ -4,7 +4,8 @@ _Status: in progress. OIDC-first admin identification, role taxonomy, bootstrap,
 flow, admin listing visibility, service accounts, and audit integrity are documented. Open
 design questions: self-grant step-up authentication, self-grant owner notification, "list all
 users" scope and PHI implications, break-glass emergency access, rogue admin peer-grant impact,
-and structured audit event schema._
+and the Custodian permission list. The audit event schema is no longer among them: it is specced
+in [audit-events.md](audit-events.md)._
 
 See [permissions-model.md](permissions-model.md) for the grant model that admins manage.
 See [concepts.md](../../docs/concepts.md) for PAP / PDP / PEP vocabulary.
@@ -15,7 +16,10 @@ mapping.
 
 ## Overview
 
-The permissions model introduced three privileged roles: Admin, Custodian, and Owner. This document specifies them fully. It covers:
+The permissions model introduced three privileged roles: Owner, Custodian and Admin. This document
+specifies Admin and Owner; **Custodian is the least specified of the three and is a named gap**,
+carrying one row in the taxonomy below and no permission list, which is worth stating plainly since
+it is the role with the most governance weight and the one OCAP delegation rests on. It covers:
 
 - Role taxonomy and what each role can and cannot do
 - How Usher identifies and validates admin status (OIDC-first; no Usher-managed admin
@@ -33,19 +37,24 @@ The permissions model introduced three privileged roles: Admin, Custodian, and O
 
 ## Role taxonomy
 
-| Role            | Scope                              | Primary capability                                           | Holds data access                        |
-| --------------- | ---------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
-| Admin           | Platform-wide, policy plane        | Manages roles, resources and system configuration            | None standing; may self-grant explicitly |
-| Custodian       | One or more data categories        | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
-| Owner           | Their designated resource(s)       | Manages grants within their resource; sets visibility policy | Yes; holds member access                 |
-| Submitter       | Their submitted resource           | Data provenance; member access to own data                   | Yes; member access only                  |
-| Service account | Explicitly enumerated capabilities | Performs system operations only                              | No                                       |
+Ordered by widening scope rather than by seniority, matching
+[permissions-model.md](permissions-model.md): a reader meets the narrowest first, and central control
+is not where this model starts.
 
-**Submitter vs. owner:** submission establishes data provenance. It does not automatically confer
-management rights, and **whether it confers read access to the submitted data is an open scope
+| Role            | Scope                              | Primary permission                                           | Holds data access                        |
+| --------------- | ---------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
+| Submitter       | Their submitted resource           | Data provenance                                              | Open scope decision; see below           |
+| Owner           | Their designated resource(s)       | Manages grants within their resource; sets visibility policy | None from ownership                      |
+| Custodian       | One or more categories             | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
+| Admin           | Platform-wide, the policy store    | Manages roles, resources and system configuration            | None standing; may self-grant explicitly |
+| Service account | Explicitly enumerated permissions  | Performs system operations only                              | No                                       |
+
+**Submitter vs. owner:** submission establishes data provenance. It does not automatically give
+management rights, and **whether it gives read access to the submitted data is an open scope
 decision**, not a settled property: see the write-versus-read blocker in
 [../docs/phase-1.md](../docs/phase-1.md), whose recommendation is that submission and read be
-governed independently. Earlier text here asserted member access as though decided.
+governed independently. **Rejected: read access as a property of submission**, which would settle by
+assertion a question the write-versus-read blocker exists to decide.
 Ownership is an optional, per-resource designation: some submitters are also owners;
 others are not. An Owner need not be the submitter. See permissions-model.md "Submitters and
 owners" for the full model and the open question on assignment timing.
@@ -53,7 +62,7 @@ owners" for the full model and the open question on assignment timing.
 A user may hold more than one role independently. An Owner can also be a custodian
 for an unrelated category; those roles are independent and neither implies the other.
 
-Admins and custodians are privileged actors whose operations touch the policy
+Admins and custodians are privileged actors whose operations change who may reach what
 store. Neither role grants data access automatically: that requires a separate, explicit, logged
 grant through the same permissions system that governs all users.
 
@@ -62,21 +71,21 @@ grant through the same permissions system that governs all users.
 ## EGO replacement scope
 
 Usher is a full replacement for EGO, not an integration partner. The migration path for
-EGO-based deployments (primarily iMS):
+EGO-based instances (primarily iMS):
 
 1. **Resource migration.** Enumerate EGO groups whose names match the `STUDY-<id>` convention.
    Create one Usher resource per group, mapping the study identifier to the resource's name and
    metadata.
-2. **Membership migration.** Map EGO group members to Usher memberships. EGO user UUIDs resolve
+2. **Resource user migration.** Map EGO group members to Usher `grants` rows. EGO user UUIDs resolve
    to Keycloak user IDs (both systems use Keycloak-issued UUIDs for the same user population).
 3. **Policy migration.** EGO policies (`STUDY-<id>` policies with `WRITE` permission for the
-   corresponding group) map to Usher category grants. The category in Usher is deployment-specific;
+   corresponding group) map to Usher category grants. The category in Usher is instance-specific;
    the studies management service's implicit "access to this study" becomes an explicit category
-   grant (for example, `registered` or `controlled_access` depending on deployment policy).
+   grant (for example, `registered` or `controlled_access` depending on instance policy).
 4. **Service retirement.** The studies management service (the orchestration layer over EGO) is
    retired. Its operations (creating a study group, adding a member, removing a member) become
    Usher admin API calls.
-5. **Host application migration.** The migration surface is any code that either calls EGO's
+5. **Host application migration.** What must migrate is any code that either calls EGO's
    authorization endpoints or builds request context from EGO-derived claims. Two categories:
 
    - **Services calling EGO endpoints directly.** Portals and gateway APIs that validate EGO
@@ -87,33 +96,33 @@ EGO-based deployments (primarily iMS):
      to the Keycloak signing key before the first Keycloak-issued token is accepted. A service
      still configured with EGO's public key will reject all Keycloak-issued tokens at the signature
      verification step, regardless of any other migration work.
-   - **Authorization callbacks reading EGO-populated context.** Search deployments may currently
+   - **Authorization callbacks reading EGO-populated context.** Search instances may currently
      express authorization by reading EGO claims that a host application placed into request
      context. That callback code lives in the host application's own repo, not in the data
-     service's repo, and would not appear in any audit of the data service itself. Identify and
+     service's repo, and would not appear in any audit of the ushered service itself. Identify and
      migrate these in the same pass.
 
-   Data services that embed a Usher plugin without performing any authentication themselves
-   (for example, a search-server deployment relying entirely on host-supplied context) are not
-   in this migration surface as shipped: there is no EGO call to repoint. What requires migration
+   Ushered services that perform no authentication themselves
+   (for example, a search-server instance relying entirely on host-supplied context) are not
+   in scope for that migration as shipped: there is no EGO call to repoint. What requires migration
    is the host code that constructs that context.
 
 This migration must be planned and coordinated before any EGO infrastructure is deprovisioned.
 
 ---
 
-## Admin: capabilities and constraints
+## Admin: permissions and constraints
 
 ### Can
 
-- Create, view, modify, and revoke memberships and category grants for any user on any resource
+- Add, view, modify, and remove users on any resource, and their category grants
 - Create and manage resources (name, description, category assignments)
 - Enumerate all resources (metadata only; see the Admin listing section)
 - View full audit log
-- Register and manage service accounts in Usher (which capabilities a service account holds)
+- Register and manage service accounts in Usher (which permissions a service account holds)
 - Self-grant data access to a specific resource (see the Self-grant section)
-- Query data applications without a filter, but only where a deployment has enabled the plugin-level
-  bypass, which is off by default for health-data deployments. This is the one route that is not a
+- Query data applications without a filter, but only where an instance has enabled the plugin-level
+  bypass, which is off by default for health-data instances. This is the one route that is not a
   grant, and the section below states what it costs
 
 ### Cannot
@@ -121,7 +130,7 @@ This migration must be planned and coordinated before any EGO infrastructure is 
 - Read, download, or query record data without either an explicit self-grant or an enabled plugin
   bypass. Absent both, an admin reaches no records
 - Delete or modify audit log entries
-- Bypass the grants token path to access data; the separation of admin capability from data
+- Bypass the Usher token path to access data; the separation of admin permission from data
   access is a hard design requirement, not a policy convention
 - Create or revoke other admins; that is an identity provider operation, outside
   Usher's scope (see the Bootstrap section)
@@ -138,11 +147,12 @@ The claim check is OIDC-provider-specific and configurable via the OIDC adapter:
 - **Generic OIDC adapter:** a configurable top-level claim (e.g. `usher_admin: true`), or a
   path in the token namespace, evaluated against a configured expected value.
 
-Usher never caches or persists admin status between requests. The token is validated
-and the claim is inspected on every admin API call. This is the fail-secure default: if the IdP
-revokes the admin role, the next token issued will not carry the claim, and that user's
-access to the admin API ends at the next token expiry. Keep token TTLs short (15 minutes or
-less; see the Non-obvious constraints section).
+Usher never caches or persists admin status between requests. The token is validated and the claim
+is inspected on every admin API call. This is the fail-secure default: if the IdP revokes the
+admin role, the next token issued will not carry the claim, and that user's access to the admin
+API ends at the next token expiry. Keep IdP token lifetimes short (15 minutes or less; see the
+Non-obvious constraints section), which is the identity provider's own setting rather than the
+Usher token's five-minute default.
 
 **Adversarial framing:** if an admin account is compromised, the attacker gains grant
 management power. But every action they take is logged, they do not gain silent unlogged data
@@ -156,9 +166,9 @@ Usher has no bootstrap logic of its own. The identity provider handles this enti
 
 **For Keycloak (the default):**
 
-1. At Keycloak deployment time, a Keycloak realm administrator is created via Keycloak's own
+1. At Keycloak instance time, a Keycloak realm administrator is created via Keycloak's own
    bootstrap mechanism (typically the `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` environment
-   variables, set before first launch). In Overture's deployment, a Terraform Keycloak operator
+   variables, set before first launch). In Overture's instance, a Terraform Keycloak operator
    currently under evaluation automates realm configuration at deploy time, reducing the need
    for manual Keycloak UI work.
 2. That Keycloak admin creates a realm for Usher and defines a realm role named
@@ -177,7 +187,7 @@ for assigning the admin signal to a user (a role, a group, a custom claim) is
 configured in the adapter. Usher reads the result from the token.
 
 **Security note:** the Keycloak realm administrator credential is infrastructure-tier: store it
-in a secrets manager, scope it tightly, and log its use at the deployment platform level.
+in a secrets manager, scope it tightly, and log its use at the instance platform level.
 Usher's audit log records application-layer policy changes; Keycloak's own audit logs record
 IdP-level admin operations. Both are needed for a complete audit trail (see the Non-obvious
 constraints section).
@@ -194,23 +204,29 @@ governs all users. The grant is logged, traceable, and requires a deliberate act
 
 1. Admin navigates to the resource in the management UI (or calls the admin API self-
    grant endpoint).
-2. They specify the resource, the data categories needed, and a TTL.
-3. Usher creates a standard `membership` plus `category_grant` record. The `granted_by` field
+2. They specify the resource, the categories needed, and a TTL.
+3. Usher creates a standard `grants` record. The `granted_by` field
    is set to the admin's own `user_id`, flagging this as a self-grant. The audit log entry
    carries `"self_grant": true`.
 4. The self-grant endpoint enforces the TTL requirement and the audit flag. The standard grant
-   endpoint rejects self-targeting by admins with an error directing them to the
-   self-grant endpoint. This is technical enforcement, not convention.
+   endpoint rejects self-targeting with an error directing the principal to the self-grant endpoint.
+   This is technical enforcement, not convention, and it applies to anyone holding `grant.create`
+   rather than to administrators alone: an owner writing themselves a grant on their own resource
+   takes the same path and the same TTL. There is no `grant.createSelf` capability, because the
+   authority to grant is one authority; what differs is the endpoint's rules. See the capability
+   vocabulary in [permissions-model.md](permissions-model.md).
 5. The resulting grant behaves identically to any other grant for PEP plugin purposes. The
-   grants token carries no admin flag; the plugin sees the same token structure
+   Usher token carries no admin flag; the plugin sees the same token structure
    regardless of whether the grantee is an admin.
 
 ### TTL requirement
 
 - Every self-grant must have an explicit TTL.
-- Maximum TTL is configurable per deployment (recommended default: 24 hours).
+- Maximum TTL is configurable per instance (recommended default: 24 hours).
 - Self-grants cannot be set to never expire.
-- When the TTL expires, the standard `revoked_at` revocation mechanism fires.
+- When the TTL passes, the self-grant is simply absent from the next token, and the token's `exp`
+  was set to end at that moment, so no cached token outlives it. No `revoked_at` is written. See
+  [decisions.md](decisions.md) § A grant's expiry is resolved before the token is written.
 
 ### Self-grant revocability
 
@@ -245,8 +261,8 @@ When an admin lists resources, they see:
 - Description
 - Created-by user ID (not record contents) and creation timestamp
 - Last modified timestamp
-- Which data categories are assigned to the resource (`resource_categories`)
-- Cohort membership: which cohorts this resource belongs to, if any
+- Which categories are assigned to the resource (`resource_categories`)
+- That a grant exists on each, and who holds it
 
 ### Not visible
 
@@ -262,14 +278,14 @@ admins. Rationale: categories are platform-level configuration, not user data. A
 managing `indigenous_data` grants cannot do their job without knowing which resources carry that
 category. The sensitive information is the records themselves, not the access control structure.
 
-This is a deliberate decision. It should be revisited if a specific deployment determines that
+This is a deliberate decision. It should be revisited if a specific instance determines that
 category assignments are themselves sensitive (for example, if knowing that a resource has a
 particular category implies something about the population it describes).
 
 **Operator guidance:** resource names and descriptions are visible to admins and are
-set by deployment operators. Names that embed sensitive information could constitute an
+set by instance operators. Names that embed sensitive information could constitute an
 information disclosure even without record access. Operators must follow naming conventions that
-use identifiers or non-sensitive labels. Usher cannot enforce this; it is a deployment policy
+use identifiers or non-sensitive labels. Usher cannot enforce this; it is an instance policy
 decision.
 
 ---
@@ -277,15 +293,15 @@ decision.
 ## Plugin-level bypass for platform admins
 
 An admin who needs to view data across all resources without a self-grant (for example, a portal
-admin reviewing the full dataset to respond to a governance inquiry) can be accommodated at the
-plugin layer rather than through a grants token entry. The PEP plugin detects the
+admin responding to a governance inquiry) can be accommodated at the
+plugin layer rather than through an Usher token entry. The PEP plugin detects the
 `usher-platform-admin` role in the IdP token and applies no SQON filter for that request.
 
 This is distinct from the self-grant flow:
 
-| Mechanism        | How access is obtained                           | Appears in grants token | Appears in audit log            |
+| Mechanism        | How access is obtained                           | Appears in Usher token | Appears in audit log            |
 | ---------------- | ------------------------------------------------ | ----------------------- | ------------------------------- |
-| Self-grant       | Admin creates an explicit grant for themselves   | Yes (standard entry)    | Yes (SELF_GRANT_CREATED event)  |
+| Self-grant       | Admin creates an explicit grant for themselves   | Yes (standard entry)    | Yes (`grant.selfCreation` event)  |
 | Plugin bypass    | Plugin detects admin role; skips SQON filter     | No                      | Yes (plugin access log entry)   |
 
 The plugin bypass does not create any grant record in Usher's policy database; it is a plugin
@@ -293,16 +309,16 @@ implementation decision. Plugins must log every bypass event as an access log en
 timestamp, resource scope, reason: `platform_admin_bypass`). This keeps the access visible in
 the cross-system audit trail even though no Usher grant event fires.
 
-**Deployment option.** The plugin bypass can be disabled per deployment. Deployments that require
+**Configuration option.** The plugin bypass can be disabled per instance. Instances that require
 all data access to be grant-based (including admin access) should disable the bypass and require
 admins to use the self-grant flow. This is the more restrictive posture and should be the default
-for PHI deployments.
+for PHI instances.
 
 ---
 
 ## Admin API
 
-The admin API is not served through the PEP plugin path. It is a separate surface, authenticated
+The admin API is not served through the PEP plugin path. It is a separate API, authenticated
 by Usher directly: the bearer token is validated and the OIDC admin claim is checked on
 every request.
 
@@ -312,32 +328,31 @@ GET    /admin/resources              list all resources (metadata only)
 GET    /admin/resources/{id}         single resource metadata and grant summary
 POST   /admin/resources              create a resource
 PATCH  /admin/resources/{id}         update resource metadata (name, description)
-GET    /admin/resources/{id}/members users who hold memberships on this resource
-POST   /admin/resources/{id}/members add a membership (user ID + role)
-DELETE /admin/resources/{id}/members/{userId}  remove a membership
+GET    /admin/resources/{id}/grants  every grant on this resource: holder, category, role, expiry
 
 # Grant management
 GET    /admin/audit                  audit log query interface
-POST   /admin/grants                 create a category grant (or resource membership)
+POST   /admin/grants                 create a grant (resource, category, holder, role, expiry)
 DELETE /admin/grants/{id}            revoke grant
 POST   /admin/grants/self            self-grant endpoint (enforces TTL; sets self_grant flag)
-PATCH  /admin/grants/{id}/accept     grantee acceptance endpoint (transitions awaiting_acceptance -> active)
+POST   /admin/grants/{id}/decisions  the recipient's own answer, appended (accept or decline)
 
 # Service accounts
 POST   /admin/service-accounts       register a service account
-PUT    /admin/service-accounts/{id}  update service account capabilities
+PUT    /admin/service-accounts/{id}  update service account permissions
 ```
 
-**Grant acceptance.** `PATCH /admin/grants/{id}/accept` is called by the grantee (not by an
-admin) to confirm acceptance of a category grant in `awaiting_acceptance` state. It transitions
-the grant to `active` and fires a grants token refresh for the user. The endpoint validates that
-the calling user is the grant's grantee. When auto-accept is enabled at the deployment level,
-this step is skipped and grants are written directly as `active`.
+**Grant acceptance.** `POST /admin/grants/{id}/decisions` is called by the recipient, never by an
+admin, and appends a row to `grant_decisions` carrying their answer and the capabilities they were
+shown. It fires an Usher token refresh for that user. The endpoint validates that the principal
+asking is the person the grant reaches. Nothing about the grant itself changes: a later answer is another row, and
+the current one is the latest. When auto-accept is enabled at the instance level, an accepting row is
+written at creation without the recipient acting.
 
-**Grants token for admins:** identical in structure to any other grants token.
+**Usher token for admins:** identical in structure to any other Usher token.
 It carries no admin flag. If an admin has not self-granted access to a
-resource, their grants token reflects that: they see no records in data applications, just
-like any other non-member user.
+resource, their Usher token reflects that: they see no records in data applications, just
+like any other non-viewer user.
 
 This cleanly separates two concerns: admin operations go through the admin API; data queries go
 through the PEP plugin path. The two paths have different authentication checks and different
@@ -345,8 +360,8 @@ response shapes.
 
 **User enumeration:** a global `GET /admin/users` endpoint is not implemented. In a health data
 context, knowing that a specific email address is registered may itself be sensitive. User
-lookup is scoped to resources: `GET /admin/resources/{id}/members` returns users who hold grants
-on a specific resource. A global directory is explicitly deferred and requires a deliberate
+lookup is scoped to resources: `GET /admin/resources/{id}/grants` returns the grants on a specific
+resource, and so the people who hold them. A global directory is explicitly deferred and requires a deliberate
 decision on PHI implications before design begins.
 
 ---
@@ -355,7 +370,7 @@ decision on PHI implications before design begins.
 
 Automated processes (Lyric at ingest, migration tooling, monitoring scripts) need to interact
 with Usher without being admins. A service account is a narrowly-scoped, non-human
-identity with an explicitly enumerated capability set.
+identity with an explicitly enumerated permission set.
 
 ### Authentication
 
@@ -364,15 +379,15 @@ user login involved). The Keycloak client for the service has a realm role ident
 Usher service account (for example, `usher-service-account`). Usher reads this from the token
 to distinguish service account requests from human user requests.
 
-### Capability model
+### Permission model
 
 Keycloak provides authentication and the coarse-grained signal that the token belongs to a
 service account. Usher maintains its own `service_accounts` table keyed on the `client_id` from
-the token, recording which specific capabilities that service account holds. Admins
+the token, recording which specific permissions that service account holds. Admins
 manage this table through the Usher management UI.
 
-Fine-grained capabilities (`CREATE_RESOURCE`, `ASSOCIATE_CATEGORY`, `CREATE_MEMBERSHIP`, and
-others) live in Usher's policy database, not in Keycloak's role or attribute system. This is
+Fine-grained permissions (`resource.create`, `category.associate` and `role.assign` are examples;
+the dictionary is settled at implementation) live in Usher's policy database, not in Keycloak's role or attribute system. This is
 consistent with the principle applied to user grants throughout the model: the OIDC provider
 handles identity, Usher handles fine-grained authorization.
 
@@ -380,29 +395,31 @@ handles identity, Usher handles fine-grained authorization.
 
 - Service accounts are distinct from admins and cannot self-grant data access.
 - They cannot create, modify, or revoke category grants for users directly.
-  **Note:** `CREATE_MEMBERSHIP` with an `owner` role is an indirect path to category grant
-  management: an Owner can grant and revoke category access for other users within their resource.
-  A compromised service account holding `CREATE_MEMBERSHIP` could assign a malicious actor as
-  Owner of any newly created resource. Scope this capability carefully; consider whether
-  service accounts should be restricted to creating `member`-level memberships only.
+  **Note:** writing a grant that names `owner` is an indirect path to grant management, because an
+  owner can grant and revoke access to other people within their resource. A compromised service
+  account holding `grant.create` could make a malicious actor the owner of any newly created
+  resource. Scope this permission carefully: the containable form is a service account that may
+  write only data-plane grants, never a control-plane one, which is a restriction on the plane
+  rather than on a level.
 - They cannot read or modify audit log entries.
 - All service account actions are logged with the `client_id` as the actor, distinguishable
   from human admin actions in the audit trail.
-- Admins can revoke all capabilities for a service account by removing or disabling
+- Admins can revoke all permissions for a service account by removing or disabling
   its entry in the `service_accounts` table. The next service account request will fail the
-  capability check.
+  permission check.
 
 ### Lyric use case
 
 Lyric needs to create a resource record in Usher when a new submission is ingested. Minimum
-capability set:
+permission set:
 
-- `CREATE_RESOURCE`: create a new resource record
-- `ASSOCIATE_CATEGORY`: tag a resource with one or more data categories at creation time
-- `CREATE_MEMBERSHIP` (optional): assign the submitter as Owner or Member
+- `resource.create`: create a new resource record
+- `category.associate`: tag a resource with one or more categories at creation time
+- `grant.create` (optional): write the submitter their grant on the new resource, at the role the
+  instance gives a submitter
 
-The Lyric service account holds exactly these capabilities and nothing else. It cannot read
-grants, modify memberships for arbitrary users, or access any data.
+The Lyric service account holds exactly these permissions and nothing else. It cannot read
+grants, write grants for arbitrary users, or access any data.
 
 **Resource ID protocol:** when Lyric creates a resource via the service account API, Usher
 returns the resource ID. Lyric stores that ID and uses it for all subsequent Usher interactions
@@ -411,7 +428,7 @@ for that submission.
 ### Credential management
 
 Service account credentials (the Keycloak client secret) are managed at the Keycloak client
-layer. Rotation interval and secret length are a deployment concern. Short-lived client
+layer. Rotation interval and secret length are an instance concern. Short-lived client
 credential tokens are preferred over long-lived API keys.
 
 ---
@@ -433,7 +450,7 @@ The controls below address each step.
 - The application database role has `INSERT` on the audit table and nothing else: no `UPDATE`,
   no `DELETE`.
 - The audit table has no triggers that can modify or delete rows.
-- The schema migration tooling must enforce this; the deployment health check should verify it
+- The schema migration tooling must enforce this; the instance health check should verify it
   on startup.
 
 ### Required out-of-band log
@@ -454,23 +471,16 @@ The controls below address each step.
 
 ### Structured audit event schema
 
-Every audit event emitted to stdout must include at minimum:
+The envelope, the event vocabulary, the required fields per event and the severity levels are in
+[audit-events.md](audit-events.md). Events follow CloudEvents, so the context attributes are its
+own: `time` rather than a `timestamp` field, `type` rather than an `event_type`, and event names of
+the form `[namespace.]entity.action`.
 
-| Field            | Type                         | Notes                                                                          |
-| ---------------- | ---------------------------- | ------------------------------------------------------------------------------ |
-| `timestamp`      | ISO 8601                     | UTC                                                                            |
-| `event_type`     | string                       | e.g. `GRANT_CREATED`, `GRANT_REVOKED`, `SELF_GRANT_CREATED`, `RESOURCE_LISTED` |
-| `actor_id`       | string                       | `user_id` for humans; `client_id` for service accounts                         |
-| `actor_type`     | `human` or `service_account` |                                                                                |
-| `resource_id`    | string or null               | null for platform-wide events                                                  |
-| `target_user_id` | string or null               | the user affected, if applicable                                               |
-| `action`         | string                       | verb + object, e.g. `create_category_grant`                                    |
-| `outcome`        | `success` or `failure`       |                                                                                |
-| `self_grant`     | boolean                      | true only for self-grant events                                                |
-| `categories`     | string[] or null             | data categories affected, if applicable                                        |
-
-Events must never include grants token payloads, health record identifiers, bearer tokens,
-or any field value that is itself controlled-access data.
+Two properties live there rather than here. `actorType` distinguishes a human from a service
+account. The self-grant case is its own event type, `grant.selfCreation`, rather than a boolean on an
+ordinary creation. Making it a type is what lets
+alerting route on it without parsing the payload, which is the reason CloudEvents puts routable
+facts in the envelope.
 
 ---
 
@@ -492,8 +502,8 @@ Usher's code works with a validated, normalized claim set. The monorepo will con
 `packages/oidc-keycloak` adapter and a `packages/oidc-generic` fallback.
 
 **OPA note:** Open Policy Agent was considered as a policy evaluation engine. It is not a v1
-dependency. Usher's ABAC model is structured (defined schema: memberships, category_grants,
-resource_categories), and grants computation is a mechanical derivation from that data
+dependency. Usher's ABAC model is structured (defined schema: `grants`, `grant_decisions`,
+resource_categories), and permissions computation is a mechanical derivation from that data
 rather than open-ended policy composition. OPA adds operational complexity without clear benefit
 at this scale. Revisit if the policy model grows to require arbitrary composition or distributed
 policy bundle updates across many enforcement points simultaneously.
@@ -522,16 +532,16 @@ self-grants are revocable only by their creator or by a super-admin tier (requir
 model complexity). A decision is needed before the admin API grant management endpoints are
 implemented.
 
-**"List all users" capability:** a global user directory endpoint is not implemented (see Admin
+**"List all users" permission:** a global user directory endpoint is not implemented (see Admin
 API section). If a specific use case arises that requires listing users beyond resource-scoped
-member lookup, it must be evaluated for PHI implications before design begins.
+user lookup, it must be evaluated for PHI implications before design begins.
 
 **Break-glass emergency access:** if all admins are unavailable (accounts locked, staff
 unavailable), recovery requires assigning the admin role in the identity provider.
-This is an IdP administration operation. The deployment runbook must document who is authorized
+This is an IdP administration operation. The instance runbook must document who is authorized
 to perform this operation and what audit trail is expected at the IdP layer.
 
-**Multi-tenancy admin scope (out of v1):** in a multi-tenant deployment, it is unclear whether
+**Multi-tenancy admin scope (out of v1):** in a multi-tenant instance, it is unclear whether
 an admin is scoped to a tenant or is truly platform-wide. Not designed; do not
 implement.
 
@@ -539,10 +549,10 @@ implement.
 
 ## Non-obvious constraints
 
-**Infrastructure access bypasses Usher:** a person with shell access to the deployment host or
+**Infrastructure access bypasses Usher:** a person with shell access to the instance host or
 Kubernetes cluster can access the database directly and bypass all of Usher's access controls.
 Usher's admin model governs application-layer access only. Network isolation, cluster RBAC, and
-database access controls are a separate layer. Document this boundary in the deployment
+database access controls are a separate layer. Document this boundary in the instance
 architecture document.
 
 **Keycloak admin operations are outside Usher's audit scope:** actions taken by Keycloak realm
@@ -551,11 +561,11 @@ logged by Keycloak's own audit system, not by Usher's audit log. The boundary mu
 documented so that security auditors understand that Usher's audit log is not a complete record
 of all privilege changes on the platform. Both logs are required for a complete audit trail.
 
-**Token TTL bounds the deprovisioning lag:** when an admin's role is revoked in the
-identity provider, any token they already hold remains valid until expiry. Deployments must
-configure short token TTLs (15 minutes or less) to bound this exposure window. Usher's fail-
-secure default means it always reads the claim from the current token; it never trusts a cached
-admin status.
+**Token TTL bounds the deprovisioning lag:** when an admin's role is revoked in the identity
+provider, any token they already hold remains valid until expiry. Instances must configure short
+IdP token lifetimes (15 minutes or less) to bound this exposure window. Usher's fail-secure
+default means it always reads the claim from the current token; it never trusts a cached admin
+status.
 
 **Category naming is an operator responsibility:** category assignments are visible to platform
 admins (deliberate decision; see Admin listing section). Category names that embed sensitive

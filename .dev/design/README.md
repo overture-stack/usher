@@ -1,9 +1,9 @@
 # Usher: Design Index
 
-Usher is a standalone authorization service for the Overture platform. It answers "what is this
-user allowed to see or do?" and returns structured grants that each Overture application enforces.
-It is not an authentication service; that job belongs to the identity provider (Keycloak, Azure
-Entra, etc.).
+Usher is the access control plane for the Overture platform: it holds the grants that say who may
+reach what and hands them to each application, which enforces them at its own query layer. See the
+[README](../../README.md) for what that framing rules in and out, including why Usher is not an
+authentication service. This file indexes the design and does not restate it.
 
 **New to Usher entirely?** Start with [docs/intro.md](../../docs/intro.md): a problem-first
 overview that introduces the patterns before the design detail.
@@ -34,7 +34,7 @@ entities"), then [permissions-model.md](permissions-model.md).
 **Planning a PEP plugin:** [architecture.md](architecture.md) (what each layer owns; which
 responsibilities belong to usher-bridge vs the plugin), then
 [security-workflow.md](security-workflow.md) (what the plugin must do and when), then
-[permissions-model.md](permissions-model.md) (what the grants payload contains), then
+[permissions-model.md](permissions-model.md) (what the permissions payload contains), then
 [plugin-integration.md](plugin-integration.md) (the API contract, designed in intent and not yet
 specified as request and response shapes).
 
@@ -43,22 +43,28 @@ specified as request and response shapes).
 | Document | Topic | Status |
 |---|---|---|
 | [glossary.md](glossary.md) | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts | reference |
-| [architecture.md](architecture.md) | Component responsibilities (Keycloak, controller, bridge, plugin, infrastructure); stateless client app principle | in progress |
+| [architecture.md](architecture.md) | Component responsibilities (Keycloak, controller, bridge, plugin, infrastructure); stateless application principle | in progress |
 | [concepts.md](../../docs/concepts.md) | ABAC vocabulary, security primitives, permissions model entities | reference |
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps | reference |
-| [security-workflow.md](security-workflow.md) | Token issuance, grants token lifecycle, revocation, multi-instance propagation, fail-secure | specced |
-| [permissions-model.md](permissions-model.md) | Hybrid role + attribute model, data categories, cohort semantics, OCAP, private data sharing | in progress |
+| [security-workflow.md](security-workflow.md) | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure | specced |
+| [permissions-model.md](permissions-model.md) | Hybrid role + attribute model, categories, how overlapping cohorts behave, OCAP, private data sharing | in progress |
+| [token-calculation.md](token-calculation.md) | The calculation producing a token: the rule, the five steps, and the 29 cases that force each branch | specced |
+| [conformance/](conformance/) | `principals.json`, the cases expanded into real payload shape, with the validator that checks them | draft |
 | [admin-model.md](admin-model.md) | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity | in progress |
 | [decisions.md](decisions.md) | Tools reviewed before building; architectural decisions with rationale | reference |
 | [plugin-integration.md](plugin-integration.md) | Per-app plugin design, bridge library (`usher-bridge`) | designed; not yet a spec |
-| [management-ui.md](management-ui.md) | Access management UI (PAP layer) | not started |
-| [audit-events.md](audit-events.md) | Policy-plane event catalogue, common fields, severity mapping | specced |
+| [management-ui.md](management-ui.md) | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on | in progress |
+| [profile-view.md](profile-view.md) | Where a person acts on their own access: permissions held, API tokens | not started |
+| [audit-events.md](audit-events.md) | Policy-plane events, common fields, severity mapping | specced |
 | [to-discuss.md](to-discuss.md) | Design gaps, inconsistencies, and security properties requiring resolution before implementation | review |
 
 **This table is kept complete by a count, not by a read.** A document added to this directory is
 reachable while someone links it and unreachable the moment nobody does, and no sweep starting from
 this table can find what the table omits. `audit-events.md` sat here unlisted for weeks while being
-normative for the audit requirements. Compare the directory listing against the rows.
+normative for the audit requirements. Compare the directory listing, subdirectories included,
+against the rows that point into this directory. A bare total is not the check: a row pointing
+outside, as the `concepts.md` row does, offsets a file with no row and the two agree while something
+is missing.
 
 **Security standard:** OWASP Top 10:2025. Usher may handle personal health information; the
 threat model and design are calibrated accordingly. See
@@ -67,21 +73,21 @@ threat model and design are calibrated accordingly. See
 ## What is and is not specced
 
 **Specced:** The security workflow is the most fully designed part of Usher. The mechanism for
-issuing grants tokens, how plugins validate them locally, how permission changes propagate
+issuing Usher tokens, how plugins validate them locally, how permission changes propagate
 within a bounded window, how emergency revocation works, and how the system behaves when the
 revocation channel is unavailable are all documented in [security-workflow.md](security-workflow.md)
 with explicit rationale for each design decision.
 
 **In progress:** The permissions model now covers the core structure (hybrid role + attribute model,
-data category grants), grant composition semantics, the cohort overlap model, OCAP compliance
+category grants), how grants compose, the cohort overlap model, OCAP compliance
 considerations, the iMS private data sharing use cases, and GA4GH Passport integration. Not yet
-designed: role capability definitions, the field-level restriction implementation choice, user
+designed: role permission definitions, the field-level restriction implementation choice, user
 groups detail, custodianship scoping, and write permissions for Lyric. See
 [permissions-model.md](permissions-model.md).
 
-**Not yet started:** How app plugins are built and configured, how an application's key pair is
+**Not yet started:** How app plugins are built and configured, how an application's key is
 rotated, the API contract (specific endpoints, request/response shapes, error
-codes), the SQL schema in detail, deployment architecture, multi-tenancy, rate limiting on the
+codes), the SQL schema in detail, instance architecture, multi-tenancy, rate limiting on the
 Usher API itself, and the management UI design are all open. Stubs with known requirements and
 open questions are in [plugin-integration.md](plugin-integration.md) and
 [management-ui.md](management-ui.md).
@@ -94,16 +100,16 @@ cross-application implications and should not be resolved by a single developer 
 
 | Question | Documented in | Blocks |
 |---|---|---|
-| Overlapping cohort access semantics: if a record belongs to cohorts A and B and a user is a member of A only, do they see it? (OR vs AND) | [to-discuss.md](to-discuss.md) | Nothing at present: unreachable where a record cannot belong to two resources, which holds for the first deployment |
+| Overlapping cohort access: if a record belongs to cohorts A and B and a user holds a grant in A only, do they see it? (OR vs AND) | [to-discuss.md](to-discuss.md) | Nothing at present: unreachable where a record cannot belong to two resources, which holds for the first instance |
 
-| Custodianship scoping: how is a `category_custodian` capability stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; OCAP deployments |
+| Custodianship scoping: how is a custodianship.hold permission stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; OCAP instances |
 | User groups design: Keycloak sync or PAP-only? Grant composition across overlapping groups? Revocation when a user leaves a group? | [permissions-model.md](permissions-model.md) | Core data model; management UI |
-| JWE algorithm selection: AES-256-GCM for content; RSA-OAEP or ECDH-ES for key wrap? | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |
-| Role capability definitions: what actions does each role permit beyond resource access? | [permissions-model.md](permissions-model.md) | Constraint resolution; management UI |
+| ~~JWE algorithm selection~~ settled: `dir` with A256GCM, per-application symmetric key | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |
+| Role permission definitions: what actions does each role permit beyond resource access? | [permissions-model.md](permissions-model.md) | Constraint resolution; management UI |
 | Self-grant peer revocability: can any admin revoke a peer's self-grant, or only the creator? | [admin-model.md](admin-model.md) | Admin API grant management endpoints |
 | Self-grant compensating controls: step-up auth and owner notification cannot both be deferred to v1+ | [admin-model.md](admin-model.md) | Self-grant UX; notification infrastructure |
-| "List all users" capability: scoped-to-resource direction agreed; global directory requires deliberate PHI decision | [admin-model.md](admin-model.md) | Admin API design |
-| Break-glass emergency access: deployment runbook procedure when all admins are unavailable | [admin-model.md](admin-model.md) | Deployment runbook |
+| "List all users" permission: scoped-to-resource direction agreed; global directory requires deliberate PHI decision | [admin-model.md](admin-model.md) | Admin API design |
+| Break-glass emergency access: runbook procedure when all admins are unavailable | [admin-model.md](admin-model.md) | Deployment runbook |
 
 ## What Usher builds, and what it can adopt
 

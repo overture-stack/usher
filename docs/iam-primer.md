@@ -42,6 +42,13 @@ The core participants in OAuth 2.0:
 - **Authorization server:** the service that authenticates the user and issues tokens (Keycloak).
 - **Resource server:** the service being accessed (a data API, Usher).
 
+**Two of those words mean something else in Usher's own model, and the collision is worth catching
+here rather than later.** OAuth's **resource** is the thing being called, a service or an endpoint,
+and its **resource owner** is the user. Usher's **resource** is a body of data, a cohort or study,
+and its **Owner** is whoever manages who may reach that body of data, which is rarely the user in
+question and is never the user by virtue of being one. Where this document says "resource server"
+it is speaking OAuth. Everywhere else in Usher's documents, "resource" is the data.
+
 The most common flow for web applications is the **authorization code flow**: the user is
 redirected to the authorization server, authenticates there, and the authorization server sends an
 authorization code back to the client. The client exchanges that code for tokens. The user's
@@ -86,11 +93,7 @@ confirm the token is genuine and has not expired.
 Both the ID token and the access token issued by Keycloak are JWTs. A JWT is a compact, URL-safe
 format for representing claims as a JSON object.
 
-A JWT has three parts, separated by dots:
-
-```
-header.payload.signature
-```
+A JWT has three parts, separated by dots: `header.payload.signature`.
 
 - **Header:** metadata about the token: the algorithm used to sign or encrypt it.
 - **Payload:** the claims: the actual data the token carries.
@@ -115,13 +118,13 @@ is a common security error.
 
 **Signed vs encrypted.** The Keycloak-issued tokens described above are signed ([JWS](concepts.md#jws-json-web-signature-signed-jwt)): anyone with
 the public key can read the payload, and the signature proves the token was issued by Keycloak and
-has not been modified. Usher's [grants tokens](concepts.md#grants-tokens) are encrypted ([JWE](concepts.md#jwe-json-web-encryption-encrypted-jwt)): only the intended
+has not been modified. Usher's [Usher tokens](concepts.md#usher-tokens) are encrypted ([JWE](concepts.md#jwe-json-web-encryption-encrypted-jwt)): only the intended
 recipient can read the payload.
 
 Why the two differ comes down to who carries them. A user forwards their access token with every
-request, so it has to stay readable to be usable as a bearer credential. A grants token is never
+request, so it has to stay readable to be usable as a bearer credential. An Usher token is never
 carried by a user. It goes from Usher to the service holding the data, which is the only party that
-needs to read it, so encrypting it costs nothing and buys per-application key separation. See
+needs to read it, so encrypting it costs nothing and gives per-application key separation. See
 [concepts.md](concepts.md#jwts-signed-jws-vs-encrypted-jwe) for the full treatment.
 
 > **Authoritative reference:** [jwt.io](https://jwt.io/) (interactive debugger and introduction)
@@ -161,7 +164,7 @@ in the Usher design and are worth knowing before reading the design documents:
   manage policy: who has access to what. Usher's management UI (planned) is the PAP.
 
 These roles are always present in an access control system; the question is which software plays
-each one. In a system without a dedicated authorization service, the application plays all three
+each one. In a system without a dedicated access control service, the application plays all three
 itself, which is how enforcement drift starts.
 
 See [concepts.md](concepts.md#the-four-abac-components) for more detail on these roles and the
@@ -182,5 +185,5 @@ fourth component, the [PIP](concepts.md#pip-policy-information-point).
   the authoritative reference for authentication assurance levels and credential management
 
 From here, [concepts.md](concepts.md) covers the authorization-specific vocabulary ([ABAC](concepts.md#rbac-vs-abac), the
-[permissions model](concepts.md#the-permissions-model-entities), grants tokens, [fail-secure](concepts.md#fail-secure-vs-fail-open), [revocation](concepts.md#revocation-the-self-contained-token-problem)) in the depth needed to follow the
+[permissions model](concepts.md#the-permissions-model-entities), Usher tokens, [fail-secure](concepts.md#fail-secure-vs-fail-open), [revocation](concepts.md#revocation-the-self-contained-token-problem)) in the depth needed to follow the
 design documents.

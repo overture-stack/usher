@@ -8,8 +8,8 @@
 > [Concepts](concepts.md) covers the data access tier model, roles, and grants more directly.
 
 Access control for a data platform is not a single problem. It is a stack of problems, each
-handled at a different layer. Understanding where Usher fits requires understanding what each layer
-does and which tools are responsible for it.
+handled at a different layer. Where Usher fits follows from what each layer does and which tool is
+responsible for it.
 
 ---
 
@@ -32,7 +32,7 @@ this layer (the identity token's claims) as one input to its own decisions.
 **Fine-grained data access: exactly what can this user see in this query?**
 
 This is the layer Keycloak's built-in authorization does not reach. A data platform serving
-multiple cohorts, each with their own access dimensions, needs more than group membership to answer
+multiple resources, each carrying its own categories, needs more than group membership to answer
 "which records can this user see right now?" The answer changes when grants change. It must be
 applied as a query filter, not just a gate at the endpoint. It must be consistent across every
 application that serves the data. And when access is revoked, the change must take effect promptly.
@@ -57,8 +57,8 @@ does not produce query filters, and does not have a revocation channel for propa
 changes to caching clients.
 
 Usher is designed to work with Keycloak, not replace it. Keycloak authenticates the user and
-establishes coarse membership; Usher resolves the fine-grained grant set and delivers it to the
-application as a [grants token](concepts.md#grants-tokens) the plugin applies to every query.
+establishes coarse group membership; Usher resolves the fine-grained grant set and delivers it to the
+application as a [Usher token](concepts.md#usher-tokens) the plugin applies to every query.
 
 **OPA (Open Policy Agent)**
 
@@ -66,8 +66,8 @@ OPA is a general-purpose policy engine. Policies are written in Rego (a declarat
 policy language) and evaluated against input
 data. OPA is used widely for Kubernetes admission control and API gateway authorization, and its
 partial evaluation feature can produce residual expressions rather than just allow/deny decisions.
-That concept directly influenced Usher's grants token design: the token is a pre-computed,
-encrypted residual that the plugin applies at the data layer.
+That concept directly influenced the Usher token's design: the token is a pre-computed, encrypted
+residual that the plugin applies at the data layer.
 
 OPA is a tool Usher could build upon, not a tool that makes Usher unnecessary. As a standalone
 engine it still requires the access management layer on top: a data model for resources, categories,
@@ -84,7 +84,7 @@ call to resolve authorization decisions. Cerbos's API design is a reference for 
 
 The gap: Cerbos decisions are binary (allow/deny). Usher's use case requires a structured output:
 not just "can this user see data?" but "which categories of data can they see, in which resources?"
-That structured answer is what the grants token delivers. It cannot come from Cerbos without
+That structured answer is what the Usher token delivers. It cannot come from Cerbos without
 significant application-side wrapping.
 
 For the full technical evaluation of OPA and Cerbos, including what each tool contributed to
@@ -92,30 +92,31 @@ the design, see [decisions.md](https://github.com/overture-stack/usher/blob/main
 
 **Zanzibar-style relationship stores (SpiceDB, AuthZed, others)**
 
-Google Zanzibar is Google's internal authorization system, described in a 2019 research paper.
-It and its open-source derivatives model access as a graph of relationships: user A is a member
-of group B, which has viewer access to document C. This model is powerful for social-graph-style
-permissions and scales to very large relationship sets.
+Zanzibar is Google's internal authorization system, described in a 2019 research paper. It and its
+open-source derivatives model access as a graph of relationships: user A is a member of group B,
+which has viewer access to document C. This model is powerful for social-graph-style permissions
+and scales to very large relationship sets.
 
-It is a different model from Usher's. Usher's grants are explicit, tabular (user holds category X
-in resource Y), and resolved into a grants token that the plugin applies as a query predicate.
-Zanzibar-style systems answer "does user A have access to object C?" rather than "what is the full
-set of things user A can see, expressed as a filter?" The grants token pattern is not native to
-these systems. Deploying a Zanzibar-style store also carries meaningful operational overhead that
-is hard to justify for platforms that do not need its relationship-graph capabilities.
+It is a different model from Usher's. Usher's grants are explicit and tabular, each naming a holder
+acting in a role on one category of one resource, and they resolve into an Usher token that the
+plugin applies as a query predicate. Zanzibar-style systems answer "does user A have access to
+object C?" rather than "what is the full set of things user A can see, expressed as a filter?" The
+Usher token pattern is not native to these systems. Deploying a Zanzibar-style store also carries
+operational overhead that is hard to justify for platforms with no need for its relationship-graph
+permissions.
 
 **Commercial SaaS authorization (Permit.io, Auth0 Fine-Grained Authorization, others)**
 
 Several commercial products provide authorization-as-a-service with management UIs, SDKs, and
-policy engines. They are not suitable for Overture deployments. Overture platform instances are
+policy engines. They are not suitable for Overture instances. Overture platform instances are
 self-hosted, often on-premises, and may handle personal health information subject to applicable
-privacy legislation. Sending authorization decisions or user identity data to an external SaaS
+privacy legislation. Sending access decisions or user identity data to an external SaaS
 service is not compatible with these requirements.
 
 **Building it per application**
 
 The most common approach on data platforms is to implement access control separately in each
-application. This is the default before a shared authorization service exists.
+application. This is the default before a shared access control service exists.
 
 The result is enforcement drift: each application's rules diverge over time. Audit trails are
 fragmented across application logs. Access changes must be propagated to every application
@@ -127,13 +128,15 @@ platform scale.
 ## What Usher specifically adds
 
 Usher is in design and not yet built, so the list below describes intended behaviour rather than
-shipped features. Across the tools above, its specific contribution is the combination of:
+shipped features.
 
-One capability is deliberately absent from this list. Producing a filter describing what a principal
-may reach, rather than a yes or no for one request, is something several policy engines already do:
+One capability is deliberately absent from it. Producing a filter describing what a principal may
+reach, rather than a yes or no for one request, is something several policy engines already do:
 Cerbos returns exactly that from its query planner, and the Zanzibar-derived systems answer it as a
 resource lookup. Usher's evaluation step is a candidate for one of those engines rather than a
 reason to prefer Usher over them.
+
+Across the tools above, its specific contribution is the combination of:
 
 - **Grant lifecycle as data.** Access is a set of grant records, each with an origin, an expiring
   validity and an audit trail, administered through an interface rather than deployed as policy
@@ -146,9 +149,9 @@ reason to prefer Usher over them.
   invalidated promptly rather than waiting for a token to expire.
 - **Fail-secure by design.** When the revocation channel is unavailable, applications suspend data
   access rather than continuing from a potentially stale cache.
-- **Data-agnostic deployment.** Usher does not know the schema or content of the data it protects.
+- **Data-agnostic.** Usher does not know the schema or content of the data it protects.
   It can be adopted without modifying the underlying data and removed without leaving data
-  artefacts.
+  artifacts.
 - **Self-hosted, open source.** Suitable for on-premises biomedical platforms where data
   residency and external service dependencies are constrained.
 
@@ -159,11 +162,13 @@ reason to prefer Usher over them.
 - **Not an authentication service.** Usher does not issue identity tokens or manage sessions.
   It requires an identity provider (Keycloak or compatible) to be in place.
 - **Not a data proxy.** Usher does not sit between the application and the data layer. It issues
-  grants tokens; enforcement happens inside the application plugin.
+  Usher tokens; enforcement happens inside the application plugin.
 - **Not a general-purpose policy engine.** Usher's policy model is specific: explicit grants over
   resources and categories. It is not designed for complex conditional policies or relationship
   graphs. Teams with those requirements may find OPA or a Zanzibar-style system a better fit,
   potentially with Usher's management and delivery layer on top.
 - **Not a compliance framework.** Usher provides the technical mechanism for access control. The
-  policies (who gets access, under what conditions, reviewed by whom) are a governance and
-  organizational concern that Usher implements but does not define.
+  policies (who gets access, under what conditions) are a governance and organizational concern that
+  Usher implements but does not define. Who reviews a request, and where that review happens, is the
+  part of this that is scoped to the first release rather than settled: a data access committee layer
+  sits close enough to access control that it may be built here later.

@@ -1,7 +1,15 @@
 # What the docs still say that is no longer true
 
+> **Superseded, and kept for its reasoning rather than its findings.** This was written against the
+> resource-level enforcement decision of 2026-08-21, which has since been reversed: a category now
+> selects records within a resource rather than gating the resource as a whole. Several findings
+> below therefore point at the wrong target, and its key-management section describes an asymmetric
+> model replaced by `dir` with A256GCM. Do not work from this list. The corpus-wide pass of
+> 2026-09-19 swept the same ground against the current model. What is still worth reading here is how
+> a contradiction was located, not what it concluded.
+
 Three decisions landed on 2026-08-21: resource-level enforcement, additive rendering, and zero
-entitlement as a distinct state. The docs have not caught up. This lists where they still say the
+grant as a distinct state. The docs have not caught up. This lists where they still say the
 old thing, worst first.
 
 One item is not a documentation fix. Everything after it is.
@@ -16,8 +24,8 @@ catalogues whose answers differ.
 
 Denial is expressed with the query module's `matchNothing(fieldName)` constructor. A filter must
 carry at least one leaf clause; an empty combination is not a restriction, and a negation is not a
-way to build one. The constructor is verified and already shipped in the module that owns those
-semantics.
+way to build one. The constructor is verified and already shipped in the module that owns that
+rule.
 
 Recorded in [decisions.md](../../../design/decisions.md). Verification is moving to a shared
 live-cluster test asserting that a denied principal sees nothing across every read path, rather than
@@ -31,25 +39,25 @@ Each row is a doc saying something we have decided against. Fixing any one of th
 leaves the others contradicting it, so treat rows 1 and 2 as single edits across all their sites.
 
 **Closures are recorded in place rather than deleted**, so this file stays evidence that the sweep
-happened rather than only a list of what is left. Four of the eight are now closed, verified against
+happened rather than only a list of what is left. Four of the eight items are now closed, verified against
 the files rather than from memory of having fixed them.
 
 | What a doc says                                                            | Where                                                          | Why it is wrong                                                                                                              |
 | -------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | ~~The plugin builds the query filter~~ **CLOSED**                          | `decisions.md`, `architecture.md` (4 sites)                    | The bridge builds it. Both files also say the other thing elsewhere, so they contradict themselves                           |
-| The plugin receives a `GrantsPayload`                                      | `plugin-integration.md` (4), `architecture.md` (3)             | It receives the three-way answer. Handing it a payload is what makes plugins build their own filters                         |
+| The plugin receives a `PermissionsPayload`                                      | `plugin-integration.md` (4), `architecture.md` (3)             | It receives the three-way answer. Handing it a payload is what makes plugins build their own filters                         |
 | The plugin subtracts held categories from its own config to get exclusions | `glossary.md` (3 entries), `security-workflow.md` (2 passages) | This is the fail-open path. No grants means nothing to subtract, which means no filter, which means everything               |
 | ~~Single-valued because the data model guarantees it~~ **CLOSED**          | `decisions.md`                                                 | `permissions-model.md` says records can belong to several cohorts. It is a precondition to check at startup, not a guarantee |
 | ~~Deny the request with 401 or 403~~ **CLOSED**                            | `plugin-integration.md`                                        | `decisions.md` says a 403 confirms the resource exists. The plugin picks the response shape                                  |
 | Admin bypass skips the filter                                              | `admin-model.md` (3 places)                                    | Skipping is the thing we prohibited. This is what `allow` is for                                                             |
 | ~~A catalogue maps to one resource~~ **CLOSED**                            | `glossary.md`                                                  | Then no field predicate would be needed. One catalogue holds many resources                                                  |
-| ~~The worked example's outcomes are unchanged~~ **CLOSED**                 | `permissions-model.md`                                         | They change. A member missing one of a resource's categories now sees nothing there, not a filtered subset                   |
+| ~~The worked example's outcomes are unchanged~~ **CLOSED**                 | `permissions-model.md`                                         | They change. A viewer missing one of a resource's categories now sees nothing there, not a filtered subset                   |
 
 ---
 
 ## The right decision, given for the wrong reason
 
-We keep encrypting the grants token. The reason changed. The old reason was that a user could read
+We keep encrypting the Usher token. The reason changed. The old reason was that a user could read
 a signed token and probe their own limits. That stopped being true when the bridge moved
 server-side, because the user never holds the token now.
 
@@ -76,7 +84,7 @@ second layer, not the mechanism.
 
 - Four passages in `docs/concepts.md` say categories mark subsets of records or fields inside a
   resource. For MVP they mark whole resources.
-- `docs/intro.md` says categories map to records or fields in plugin config. Only the resource key
+- `docs/intro.md` says categories map to records or fields in plugin config. Only the resource field
   is mapped.
 - `docs/concepts.md` presents overlapping cohorts as a live feature, with one record in two cohorts
   at once. MVP cannot express that.
@@ -126,9 +134,9 @@ things and this is one of them: the filter has to be composed at a boundary ever
 through, so no path can be added or changed without inheriting it. Composing it per path leaves the
 next path to be written unprotected by default.
 
-The adopter is tracking the specific work on their side and is building a shared test asserting a
+The application is tracking the specific work on their side and is building a shared test asserting a
 denied principal sees nothing across every read path. What is unresolved here is ownership: either
-this becomes a numbered blocker with a name against it, or it moves to the adopter's roadmap and we
+this becomes a numbered blocker with a name against it, or it moves to the application's roadmap and we
 cite it. Leaving it as an unowned requirement is worse than either.
 
 **The conformance corpus has no roadmap entry**, despite an approved location and a dependency that
@@ -154,14 +162,14 @@ and service-account events that `admin-model.md` promises.
 | Blocker 1's heading claims highest risk              | `phase-1.md`                              | It is resolved, and its premise was wrong. Collapse the 130 lines above the conclusion                                 |
 | The plugin is called middleware                      | `roadmap.md`, `technology-stack.md`       | It is a callback factory. Arranger retracted "middleware" after reading the router code, in a decision we took part in |
 | The plugin runs in the search server                 | `phase-1.md`                              | It runs in `graphql-router`                                                                                            |
-| Two different grants-token TTL defaults              | `docs/concepts.md`, `phase-1.md`          | Pick one; derive the other                                                                                             |
+| Two different Usher token TTL defaults              | `docs/concepts.md`, `phase-1.md`          | Pick one; derive the other                                                                                             |
 | HTTP framework listed as open                        | `atlas/index.md`, `roadmap.md`            | Fastify, decided                                                                                                       |
 | Logging library listed as unconfirmed                | `technology-stack.md`                     | Pino, and the same file says so                                                                                        |
 | Two of seven permissions gaps still gate MVP         | `roadmap.md`, `permissions-model-gaps.md` | Field-level restrictions are out of scope. Overlapping cohorts cannot occur                                            |
-| Two roadmap entries, one capability                  | `roadmap.md`                              | Record-level tagging and SQON-scoped grants are the same thing. One of them also sits under pre-implementation design  |
+| Two roadmap entries, one permission                  | `roadmap.md`                              | Record-level tagging and SQON-scoped grants are the same thing. One of them also sits under pre-implementation design  |
 
 **Duplicated, and it will drift.** The failure-direction table is in three files. The
-`not(not-in)` idiom is in two. The resource-key checks are in two. The
+`not(not-in)` idiom is in two. The resource-field checks are in two. The
 establish-by-execution rule is in three. The user-ID-not-email rule is in three. Pick one home each
 and link to it.
 
@@ -172,11 +180,11 @@ predates a larger audit. A "next step" that already happened.
 **Copyedit.** Two identical empty headings in `permissions-model.md`. Alphabetization broken in four
 of six `glossary.md` groups. Banned dash forms in several files, worst in
 `security-threat-model.md`, which has twenty em dashes and has not been read in weeks.
-`glossary.md` has no entry for `Enforcement`, for deny, narrow or allow, or for the resource key.
+`glossary.md` has no entry for `Enforcement`, for deny, narrow or allow, or for the resource field.
 
 **Published docs assume knowledge they were written to avoid assuming.** `docs/` uses SQON, bridge,
 controller, SSE, WebSocket, 503, PI, ELIXIR and GHGA without introducing any of them. REMS is
-expanded forty lines after first use. Database table names appear in conceptual prose. Capabilities
+expanded forty lines after first use. Database table names appear in conceptual prose. Permissions
 that do not exist yet are described in the present tense with no status line. Readers are routed
 into `.dev/design/`, which is written for agents.
 
@@ -187,7 +195,7 @@ into `.dev/design/`, which is written for agents.
 please
 
 The `audit-events.md` case is the worst of them. It makes a plugin's field name and field value
-required fields on a Usher audit event. Usher has no way to know either, so the event cannot be
+required fields on an Usher audit event. Usher has no way to know either, so the event cannot be
 emitted as specified.
 
 ---
@@ -207,7 +215,7 @@ Rewrite in this order. Human-facing first, weighted by how many people read the 
 | `.dev/docs/phase-1.md`                           | 48            | Holds the design lock and the Nov 15 requirements                                 |
 | `.dev/design/permissions-model.md`               | 63            | The model everything else refers back to                                          |
 | `.dev/design/plugin-integration.md`              | 44            | The contract an implementer works from                                            |
-| `.dev/design/admin-model.md`                     | 41            | Also the largest cluster of deployment detail to relocate                         |
+| `.dev/design/admin-model.md`                     | 41            | Also the largest cluster of instance detail to relocate                         |
 | `.dev/design/to-discuss.md`                      | 37            | Its whole purpose is being scannable                                              |
 | `.dev/design/security-workflow.md`               | 34            | Also carries the superseded JWE rationale                                         |
 | `docs/intro.md`, `why-usher.md`, `iam-primer.md` | 14, 17, 13    | Low counts, but these are the entry points                                        |

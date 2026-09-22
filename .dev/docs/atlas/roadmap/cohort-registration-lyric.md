@@ -8,8 +8,8 @@ Post-MVP: optional submission-time cohort creation shares the same code foundati
 
 ## Design items gating Lyric integration
 
-**Service account capability set for Lyric.** What Lyric can create or query on behalf of owner-level submitters. See `.dev/design/permissions-model.md` (Ownership assignment section) and `.dev/design/admin-model.md` (service account model).
+**Service account permission set for Lyric.** What Lyric can create or query on behalf of owner-level submitters. See `.dev/design/permissions-model.md` (Ownership assignment section) and `.dev/design/admin-model.md` (service account model).
 
 **Trust model for the Lyric service account.** How Lyric authenticates with Usher, what it can assert about the submitting user, and what it cannot override.
 
-**Self-grant prevention check.** Must be specified before the grant approval endpoint is built. See `.dev/design/to-discuss.md` (Ownership and custodianship section).
+**Self-grant prevention check.** Must be specified before the granting endpoint is built. See `.dev/design/to-discuss.md` (Ownership and custodianship section).

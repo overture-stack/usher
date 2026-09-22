@@ -5,33 +5,33 @@ Internal guide for contributors. For community contribution guidelines, see `CON
 
 ## What Usher is
 
-Usher is a standalone ABAC (Attribute-Based Access Control) authorization service for the
-Overture platform. It answers "what is this user allowed to see?" for any Overture application
-and returns encrypted grants tokens that per-app plugins enforce at the query layer.
+Usher is the access control plane for the Overture platform: it holds the grants that say who may
+reach what and hands them to each application, which enforces them at its own query layer. Decisions are ABAC
+(Attribute-Based Access Control), and the answer travels as an encrypted Usher token that a per-app
+plugin applies. The [README](README.md) has the full framing, including the two properties that
+separate it from a conventional access control service.
 
 Usher is not an authentication service. Authentication is delegated to the configured identity
-provider (Keycloak, Azure Entra ID, or any OIDC-compatible provider).
+provider (Keycloak, Microsoft Entra ID, or any OIDC-compatible provider).
 
 ## Current status
 
 **Design phase.** No implementation has begun. The design documents in `.dev/design/` are the
-primary working artefacts right now. See `.dev/design/README.md` for coverage status (what is
+primary working artifacts right now. See `.dev/design/README.md` for coverage status (what is
 specced, what is in progress, what has not yet been started).
 
 ## Repository structure
 
-```
-usher/
-  .dev/
-    design/          (design documents; see design/README.md for the index)
-    roadmap.md       (planned work)
-    tech-debt.md     (known issues)
-    sessions/        (session log, one file per contributor per day)
-    docs/            (phase and traceability documents, and the atlas)
-  AGENTS.md          (instructions for Codex and general AI agents)
-  CLAUDE.md          (instructions for Claude)
-  DEVELOPMENT.md     (this file)
-```
+    usher/
+      .dev/
+        design/          (design documents; see design/README.md for the index)
+        roadmap.md       (planned work)
+        tech-debt.md     (known issues)
+        sessions/        (session log, one file per contributor per day)
+        docs/            (phase and traceability documents, and the atlas)
+      AGENTS.md          (instructions for Codex and general AI agents)
+      CLAUDE.md          (instructions for Claude)
+      DEVELOPMENT.md     (this file)
 
 ## Working documents
 
@@ -68,5 +68,5 @@ design requirements, not afterthoughts.
 Key principles:
 
 - Fail-secure: errors in the authorization path must deny, not permit
-- Deny by default: data category access requires explicit grants
+- Deny by default: category access requires explicit grants
 - Fail-open is never acceptable in the authorization or revocation path

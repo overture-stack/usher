@@ -1,10 +1,19 @@
 # Usher
 
-Usher is an authorization service for the Overture platform. It answers "what is this user allowed to see or do?", and returns structured grants that each
-Overture application enforces at its own query layer, without a per-request call back to Usher.
+Usher is the access control plane for the Overture platform. It holds the grants that say what each
+person may see and do, hands them to each application, and gives the people who govern access one
+place to change them. It is
+closer to a keychain than a lock, with the keys handed to each application rather than to the person
+asking: enforcement happens inside the application at its own query layer, with no per-request call
+back to Usher.
+
+Two things separate it from a conventional access control service. It governs **who may grant**, not
+only who may read, so a category's custodian holds authority over that category across every dataset
+while holding no access to any of it. And it **fails closed**: an application that loses contact with
+Usher stops serving the affected data rather than coasting on its cache.
 
 Usher is not an authentication service. Authentication is delegated to the configured identity
-provider (Keycloak, Azure Entra ID, or any OIDC-compatible provider).
+provider (Keycloak, Microsoft Entra ID, or any OIDC-compatible provider).
 
 <br/>
 
@@ -19,8 +28,16 @@ provider (Keycloak, Azure Entra ID, or any OIDC-compatible provider).
 > **Status: design phase.** No implementation exists yet. All current work is design and planning.
 > See the [Design Index](.dev/design/README.md) for the corresponding documentation.
 
-No user-facing or operational documentation exists yet; the project has not reached the
-implementation phase.
+Operational documentation waits on implementation. What exists now explains the problem and the
+model:
+
+| Document | For |
+| --- | --- |
+| [Onboarding](docs/onboarding.md) | A plain-language orientation to the model and the reasoning behind it, written for readers who are not engineers. Rendered and published as a shared page; the file itself is the source |
+| [Data access control](docs/intro.md) | The problem and the patterns, before the design detail |
+| [Why Usher](docs/why-usher.md) | Why a separate service, rather than access logic inside each application |
+| [Concepts and vocabulary](docs/concepts.md) | ABAC terms, security primitives, and the permissions model entities |
+| [IAM primer](docs/iam-primer.md) | Login, tokens and access control basics, for readers meeting them for the first time |
 
 For internal contributor documentation (project structure, working documents, AI tooling, security
 principles), see [DEVELOPMENT.md](DEVELOPMENT.md).

@@ -13,11 +13,11 @@ places a requirement can stay vague.
 
 The flows use **Data Steward** for resource-scoped management authority: a Steward owns datasets,
 shares them, revokes access, and adds other Stewards. That is this design's **Owner**. It is not
-this design's **Custodian**, which holds one data category across resources and no data access of
+this design's **Custodian**, which holds one category across resources and no data access of
 its own. The two documents agree in meaning and differ in wording; see the terminology section of
 [brd-traceability.md](brd-traceability.md).
 
-The flows also say **constraint token** where this design says **grants token**.
+The flows also say **constraint token** where this design says **Usher token**.
 
 ## What the flows settle
 
@@ -32,16 +32,27 @@ The flows also say **constraint token** where this design says **grants token**.
 themselves and tells them to add another first. This is the non-empty-set rule arrived at
 independently from the requirements side, which is corroboration rather than coincidence.
 
-**Download is a second enforcement surface, not a variation of the first.** The cross-persona table
+**Download is a second enforcement path, and the first does not cover it.** The cross-persona table
 puts token validation on every file request and blocks direct URL access at the API layer. So the
-plugin covers search and something else covers files. That was recorded as an open question about
-ownership; it now has an answer, and the work is to design it rather than to decide who owns it.
+plugin covers search and something else covers files. Ownership of that is settled; the work is
+to design it rather than to decide who owns it.
 
-**Notification is core, not a nice-to-have.** It was recorded as absent from the design with nothing
-addressing it. The flows put email on the critical path in at least four places: sharing with an
-existing user, sharing with an unregistered address, declining an invitation, and registration
-invitation. Only revocation and steward-removal notices are marked nice-to-have. A design that omits
-notification does not deliver these flows.
+**Notification is core, not a nice-to-have.** The flows put email on the critical path in at least
+four places: sharing with an existing user, sharing with an unregistered address, declining an
+invitation, and registration invitation. Only revocation and steward-removal notices are marked
+nice-to-have. No mechanism is designed for any of it yet, tracked as FR-09 in
+[brd-traceability.md](brd-traceability.md), and a design that omits notification does not deliver
+these flows.
+
+**Revocation notices are misclassified, though the reclassification does not bite at MVP.** The
+flows mark them nice-to-have. Usher's refusal decision makes them the only thing that tells a
+researcher their access ended, because an application cannot distinguish a lapsed approval from a
+stranger and no exception to the existence-denying refusal is possible. See the refusal decision in
+[../design/decisions.md](../design/decisions.md). The notices are deliberately post-MVP, so for the
+first release the flows' classification and this design agree by accident: neither ships them. They
+diverge the moment either side builds notification, and the flows' own reasoning for
+nice-to-have does not survive that point, so it is worth settling with the author rather than
+discovering later.
 
 ## What the flows contradicted, and how each resolved
 
@@ -51,12 +62,12 @@ Flow 4.1 offers two sharing routes. The first shares by study and matches the MV
 exactly. The second lets a user build a virtual cohort on the Explore Data page and share that.
 
 A cohort built from Explore Data filters is a query. Sharing it is a grant scoped to a predicate
-rather than to a resource, which is the capability recorded here as SQON-scoped grants.
+rather than to a resource, which is the permission recorded here as SQON-scoped grants.
 
-**Correcting an earlier reading of this.** It was described as blocked by the same index shapes that
-block category-based record narrowing. It is not: a cohort assembled from portal facets is a
-predicate over descriptive fields the records already carry, so it needs no per-record category
-field and no `nested` mapping, and it would compile on both catalogues today.
+**It is not blocked by the index shapes that block category-based record narrowing.** A cohort
+assembled from portal facets is a predicate over descriptive fields the records already carry, so it
+needs no per-record category field and no `nested` mapping, and it would compile on both catalogues
+today.
 
 Its real difficulties are elsewhere and are about meaning rather than mechanism. **A shared cohort
 reintroduces the snapshot problem** that study-level sharing was chosen to avoid: a query is a
@@ -85,9 +96,9 @@ does not read the records inside a resource. Open data is the only thing they re
 as anyone does. Flow 5.5 as written gives that persona all restricted data, which is the one part of
 it that does not hold.
 
-A system administrator does hold a self-grant path to data, needing no approval in MVP and
+A system administrator does hold a self-grant path to data, needing no grant in MVP and
 requiring it once community custodianship exists. That is about reaching data, not distributing it,
-so flow 5.6 stands: sharing remains exclusively the data-plane roles'. See the admin-plane decision
+so flow 5.6 stands: sharing remains exclusively for the roles that administer access to data. See the admin-authority decision
 in [../design/decisions.md](../design/decisions.md).
 
 ### Submitter access is broader in the flows than intended here
@@ -97,7 +108,7 @@ explicitly including datasets other submitters contributed earlier. The intent r
 project is narrower: a submitter reaches what they submitted, plus whatever they are separately
 granted, and submitters do not see each other's data by default.
 
-**Resolved: this is deployment policy, not an Usher rule.** Submitters in iMS are also granted
+**Resolved: this is instance policy, not an Usher rule.** Submitters in iMS are also granted
 ownership, and that correlation is a project requirement rather than something Usher should encode.
 The flows are therefore correct about iMS and must not become correct about Usher: the cascade is a
 policy the submission flow supplies, with Usher providing the mechanism. See the ownership-policy
@@ -112,7 +123,7 @@ different address, because the grant is tied to the invited address.
 attach to a Keycloak subject, and the magic link performs that attachment against whichever account
 the recipient confirms with. Registering under a different address activates the grant rather than
 leaving it pending. This follows from the existing decision that Keycloak subjects are the primary
-identifier and email serves pending grants only, so the flows' rule is the one that changes.
+identifier and email serves access invitations only, so the flows' rule is the one that changes.
 
 Worth raising with the author, since a recipient who registers under a different address currently
 gets no access at all under the specified behaviour, which reads as a support burden rather than an
@@ -132,7 +143,7 @@ study, which is that project's label for its high-level cohorts, and "dataset" i
 several levels below it. The two are not interchangeable, so the flows' wording is imprecise rather
 than describing a second granularity.
 
-If per-dataset grants within a study are ever wanted, that is a narrower resource key rather than a
+If per-dataset grants within a study are ever wanted, that is a narrower resource field rather than a
 record-level feature: the filter stays a positive clause over fields the data already carries, and
 no mapping change or new classification field is involved. Cheap, and reachable without redesign.
 
@@ -144,10 +155,16 @@ rather than index data, so the portal needs it from an API rather than from a fa
 
 ## Status of the personas against this design
 
+**Read this against the flows, not against the near-term build.** The flows describe portal-ui and
+are the requirement; the first integration is Stage, and the two are different lists. Notification,
+the "Shared with Me" surface and the sharing interface are portal-ui's and arrive with iMS, so a row
+below that depends on one of them is not thereby blocking the first integration. See the Stage-first
+scoping in [phase-1.md](phase-1.md).
+
 | Persona | Deliverable under MVP as designed |
 |---|---|
 | Unauthenticated user (1.1 to 1.4) | Yes. Open tier, existence denial, and pending-grant activation on registration are all designed |
-| Data consumer (2.1 to 2.10) | Mostly. Depends on notification and on the "Shared with Me" API surface, neither designed |
+| Data consumer (2.1 to 2.10) | Mostly. Depends on notification and on the "Shared with Me" API, neither designed |
 | Data submitter (3.1 to 3.4) | Yes for 3.1, 3.2 and 3.4. Flow 3.3 depends on the access-breadth disagreement above |
 | Data steward (4.1 to 4.10) | Option 1 of 4.1 yes; Option 2 is post-MVP. The rest are management-interface work, not started |
-| Data admin (5.1 to 5.6) | Blocked on the admin authority contradiction, and the flows already note these await the EGO replacement |
+| Data admin (5.1 to 5.6) | The admin authority question is answered above: 5.6 stands and 5.5 holds except for giving that persona all restricted data. What remains is management-interface work, which has not started |

@@ -8,7 +8,7 @@ Three items must be resolved before the admin API is implemented. See `.dev/desi
 
 **Self-grant peer revocability.** Self-grants are standard grants; any platform admin can revoke any grant, including a peer's active self-grant. Decide whether to restrict self-grant revocation to the creator or leave it open to all platform admins.
 
-**Break-glass procedure.** If all platform admins are unavailable, recovery goes through the IdP (Keycloak). The deployment runbook must document who is authorized to perform IdP-level role assignment and what audit trail is expected from the IdP layer.
+**Break-glass procedure.** If all platform admins are unavailable, recovery goes through the IdP (Keycloak). The instance runbook must document who is authorized to perform IdP-level role assignment and what audit trail is expected from the IdP layer.
 
 ## Can trail v1
 

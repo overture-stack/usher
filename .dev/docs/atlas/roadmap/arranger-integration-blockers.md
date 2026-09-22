@@ -2,8 +2,8 @@
 
 Eleven items surfaced by preparing the first plugin integration. They are recorded here rather
 than in the integration's own repository because each one is a question about Usher's model, a
-decision only the developer can take, or an answer a deployment owes; none is waiting on plugin
-work. Per-deployment specifics belong in that integration's own repository, following the same
+decision only the developer can take, or an answer an instance owes; none is waiting on plugin
+work. Per-instance specifics belong in that integration's own repository, following the same
 split the migration item already uses.
 
 Grouped by what each is blocked on, because that is what decides who can move it.
@@ -12,40 +12,55 @@ Grouped by what each is blocked on, because that is what decides who can move it
 
 ### 1. Saved-set identity, and the vocabulary that expresses it
 
-The first adopter resolves saved sets with the requesting user's identity supplied as a query
-argument, so the client asserts who it is and any caller can name any user. Correcting it needs
+The first application resolves saved sets with the requesting user's identity supplied as a query
+argument, so the client asserts who it is and any principal can name any user. Correcting it needs
 an identity source the search service does not have, which is what Usher supplies.
 
 The tiered shape to express: own sets by default, an administrator able to list across users and
 filter by user id, and no reliance on a set identifier being unguessable. Two further parts of
 the fix are plugin-side and already unblocked, but both change behaviour for existing
-deployments, so they are held for a deployment decision rather than for design.
+instances, so they are held for an instance decision rather than for design.
 
 **This item is a cycle and should be recorded as one rather than left to resolve itself.** The
 integration lists it as a prerequisite *for* Usher, while its central fix depends *on* Usher. The
 order that breaks the cycle is Usher publishing the vocabulary first, since the plugin can gate
 and cap without it but cannot scope per principal without it.
 
-**A constraint that bounds what any of this buys.** A consumer that materializes a set into a
-durable artifact creates a new access boundary that inherits nothing from the one the set was
-resolved under. Per-principal scoping of sets therefore cannot deliver an end-to-end property on
-its own, and claiming it would be the stronger error. See the derived-artifact ceiling in
+**A constraint that bounds what any of this achieves.** Scoping sets per principal does not follow the
+records out of the search service. Walked through:
+
+1. A researcher assembles a saved set, which is a list of the records they picked.
+2. They ask for it, and the search service turns that list into actual records. This is the step
+   that checks what they are allowed to see, against the grants they hold at that moment.
+3. They export the result to a file.
+4. That file is now reachable by whoever can reach where it was put: a shared drive, an attachment,
+   a link. Nothing runs step 2 again.
+
+**Step 2 is a check on a request. A file is not a request.** The check works out what one named
+person may see, at the moment they ask. A file has neither of those: it has whoever opens it,
+whenever they open it. So enforcement did not get weaker at step 4. Enforcement of this kind does not
+reach step 4 at all, because what it needs to run is not there. A file is protected by where it is
+kept, which is a different mechanism, and no amount of correctness in step 2 improves it.
+
+So fixing set identity is worth doing and does not deliver an end-to-end property. Saying that it
+does would be worse than leaving it unfixed, because a protection believed to hold is one nobody
+checks. See the ceiling on records taken out of a resource, in
 `.dev/design/permissions-model.md`.
 
 ### 2. The audit event shape has to exist before enforcement does
 
-The event shape must be defined before any enforcement path emits, with the subject field present
+The event shape must be defined before any enforcement path emits, with the principal field present
 and null where there is no authenticated principal. Populating it afterwards is a schema
 migration rather than an addition, which is why this item's cost grows by waiting rather than
 staying flat.
 
-What a plugin cannot decide alone is the destination. Correlating an authorization decision across
-two systems requires the subject identifier to match whatever Usher aggregates on, so the
+What a plugin cannot decide alone is the destination. Correlating an access decision across
+two systems requires the principal identifier to match whatever Usher aggregates on, so the
 correlation key is part of the contract and not an implementation choice. Denial events and
 administrator-bypass events both need somewhere to land, and a bypass that produces no audit
 trail is not an acceptable production state.
 
-Event catalogue and common fields are in `.dev/design/audit-events.md`; what is missing there is
+The events and their common fields are in `.dev/design/audit-events.md`; what is missing there is
 the cross-system correlation key and the pre-enforcement ordering requirement.
 
 ### 3. Widening the enforcement seam
@@ -53,18 +68,24 @@ the cross-system correlation key and the pre-enforcement ordering requirement.
 Deny is already expressible, and an empty result set is structurally ambiguous between "no such
 resource" and "no access to it", which is the property to keep rather than the one to fix.
 
-What the current signature cannot carry is the difference between a requester with **no
-relationship** to a resource and one holding a **lapsed or insufficient** grant. Ambiguity buys
-nothing in the second case and costs support load, which is the calibration already recorded in
-`.dev/design/permissions-model.md`: ambiguous outward, precise inward. A status code is an
-implementation detail of the second case rather than the goal of it.
+What the current signature cannot carry, and should, is the difference between an empty result and a
+refusal for a principal who holds a live grant. That one is worth carrying and is detectable, since a
+live grant is in the token.
+
+The difference it must not try to carry is between a stranger and the holder of a lapsed grant. A
+grant that is not live puts nothing in the token, so those two arrive looking identical, and an
+earlier version of this item asked for a distinction no plugin can make. See "A refusal carries no
+exception, and expiry is announced rather than inferred" in `.dev/design/decisions.md`. A status code
+is an implementation detail of the first case rather than the goal of it.
 
 So the open question is whether the bridge-to-plugin result grows a reason the plugin may act on,
-and if so which reasons are safe to expose to a requester who may not hold the resource at all.
+and if so which reasons are safe to expose to a principal who may not hold the resource at all.
 
 ### 4. An unconfigured resource value fails closed on records and open on artifacts
 
-The sharpest live hazard, and it is a defect in the ceiling mechanism rather than in the plugin.
+**Resolved in the design.** The value is refused at the moment data is assembled rather than filtered at query time, because a filter cannot ask whether a value is absent from a list it was never given. See "The two permissive failures are closed" in `.dev/design/decisions.md`. The analysis below is kept because the asymmetry it describes is what makes the resolution necessary.
+
+The sharpest hazard found, and it is a defect in the ceiling mechanism rather than in the plugin.
 
 One unconfigured value, two opposite outcomes:
 
@@ -87,7 +108,7 @@ the mechanism cannot see a value the mechanism was never given.
 
 ### 5. Federation posture
 
-Whether a deployment holding grants should federate at all, given that a remote cannot be
+Whether an instance holding grants should federate at all, given that a remote cannot be
 compelled to enforce. Federation forwards the filter; a remote that ignores it applies nothing,
 and does so indistinguishably from one that applied it and matched everything. Still described
 rather than steered.
@@ -106,30 +127,30 @@ This is a plugin-side defect rather than Usher work, tracked here because an aut
 predicate composed as `should` where `must` was intended is an over-disclosure, which makes it a
 correctness dependency of the enforcement contract rather than someone else's bug.
 
-## Blocked on a deployment's answer
+## Blocked on an instance's answer
 
 ### 7. Authorization-field nesting depth
 
-**Not triggered by the first deployment**, whose resource keys are flat and at depth one in both
-catalogues. It stays a hard blocker for any deployment whose key is deeper, which is what the
+**Not triggered by the first instance**, whose resource fields are flat and at depth one in both
+catalogues. It stays a hard blocker for any instance whose key is deeper, which is what the
 startup check below exists to catch.
 
-A hard blocker rather than a sequencing item. If a deployment's authorization field sits at depth
+A hard blocker rather than a sequencing item. If an instance's authorization field sits at depth
 two or deeper, the plugin's filtered-aggregation path does not apply there and filtering falls
 back to a disjunctive path, which for an authorization predicate is OR where AND was intended.
-The adopter's own fixtures carry both shapes, so this is a live condition rather than a
+The application's own fixtures carry both shapes, so this is a live condition rather than a
 hypothetical one.
 
-Generalizable consequence, independent of any deployment: **the plugin must establish the
+Generalizable consequence, independent of any instance: **the plugin must establish the
 authorization field's mapping shape at startup and refuse to enforce where it cannot**, on the
 same reasoning as the `nested` mapping requirement for record-level narrowing. Usher cannot
-require a mapping shape, so a deployment that does not supply a conforming one is a deployment
+require a mapping shape, so an instance that does not supply a conforming one is an instance
 where this narrowing is unavailable, not one where it silently degrades.
 
 ### 8. IdP claim shape, and the version it depends on
 
 The claim shape reaching the plugin's request context depends on the identity provider version a
-deployment upgrades to, not the one it runs now. Where a deployment is several major versions
+instance upgrades to, not the one it runs now. Where an instance is several major versions
 behind its target, that upgrade is a prerequisite of the authorization work rather than a
 follow-up to it, because pinning a claim shape against the current version produces a contract
 that expires on upgrade.
@@ -138,7 +159,9 @@ that expires on upgrade.
 
 ### 9. Anonymous access and "no restriction configured" compile to the same value
 
-Two different states currently render identically, and the documented pattern for an
+**Resolved in the design.** Neither state may render to an absent filter; both render to an explicit positive `in`, which is the only fail-closed encoding available. See "The two permissive failures are closed" in `.dev/design/decisions.md`.
+
+Two different states rendered identically, and the documented pattern for an
 unauthenticated request returns no filter at all. No filter is not a restrictive default: it is
 the allow-everything case, which is the same empty-combination hazard already recorded in
 `.dev/design/decisions.md` arriving through a different door.
@@ -156,6 +179,6 @@ can be checked before serving traffic, not a preference about expressiveness.
 ### 11. Where a plugin learns that a principal is an administrator
 
 Whether administrator status comes from Usher's own role, from plugin-side configuration, or from
-the platform access model, and whether an administrator of the adopting application and an
+the platform access model, and whether an administrator of the ushered application and an
 administrator of Usher are the same principal at all. Bears directly on the bypass audit
 requirement in item 2, since a bypass cannot be logged as such until its source is defined.
