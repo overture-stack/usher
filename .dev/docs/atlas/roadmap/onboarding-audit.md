@@ -43,7 +43,7 @@ unclear. The sweep is to find every other place the same collapse happens.
 
 **`application`, 60 uses across 39 lines.** The rule is settled and recorded in
 [terminology-usage.md](terminology-usage.md) § Ushered is the word, and the noun after it varies
-plugin is an **ushered** application, and bare `application` may imply any other dependency a service
+adapter is an **ushered** application, and bare `application` may imply any other dependency a service
 happens to have, such as Elasticsearch, Postgres or Keycloak. 60 uses is too many for every one to be
 correct, and the ones that are wrong are wrong in the direction of overstating what Usher governs.
 

@@ -8,7 +8,7 @@ When a researcher needs access to categorized data, how do they initiate the req
 
 ## Denied access user experience
 
-When a viewer has no category grant for a given category, records tagged with that category are excluded from their results. The user-facing manifestation is a plugin design decision: an empty result set, a reduced count, an informative message, or no indication at all. Existence denial is a hard invariant (OWASP A01); revealing that records exist but are inaccessible violates it, but revealing nothing may confuse researchers who expect records they know exist.
+When a viewer has no category grant for a given category, records tagged with that category are excluded from their results. The user-facing manifestation is an adapter design decision: an empty result set, a reduced count, an informative message, or no indication at all. Existence denial is a hard invariant (OWASP A01); revealing that records exist but are inaccessible violates it, but revealing nothing may confuse researchers who expect records they know exist.
 
 ## Category grant expiry and renewal
 

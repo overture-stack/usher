@@ -10,8 +10,7 @@ below is written so that a schema can be checked against it.
 
 ## What is written today, and why it cannot be built from
 
-`security-workflow.md` § Tiers described three steps, and each carried a defect. They are recorded
-here because the same mistakes are the ones an implementation would make.
+`security-workflow.md` § Tiers described three steps, and each carried a defect. The same mistakes are the ones an implementation would make.
 
 **Tier 1, the baseline.** Correct in substance, wrong in name: it called instance configuration an
 "anonymous role", and a role cannot be held by a request carrying no `sub`. Corrected there.
@@ -127,7 +126,7 @@ that looks complete and answers only one path.
        carrying it are not reached; a field category not kept is not named either,
        and its columns are not shown.
 
-Step 5 decides what the token says, and the plugin decides what that reaches: one clause per named
+Step 5 decides what the token says, and the adapter decides what that reaches: one clause per named
 category, pairing the resource's field value with the category's, composed with `or`. So a resource
 of mixed sensitivity serves each principal the records their categories reach, rather than being
 present in full or absent in full.
@@ -141,8 +140,8 @@ category.
 
 Against this configuration:
 
-    curator  carries  create, read, update, delete
-    viewer   carries  read
+        curator  carries  create, view, update, delete
+    viewer   carries  view
 
     G1 "cardiology" and G2 "study readers" are named sets of people and nothing
     more. A role is named on each grant, never on the group.
@@ -162,31 +161,31 @@ outcome rather than a partial failure. The one part deferred is a record carryin
 at once, which needs a subset test the query layer cannot yet express; until then a record carries
 one category.
 
-**The baseline contributes `{open: [read]}` on all three resources**, since each holds records no
+**The baseline contributes `{open: [view]}` on all three resources**, since each holds records no
 concrete category covers. Rows below name only what a case adds to that or takes from it.
 
 **The notation is shorthand.** A token entry nests category, then entity, then actions, so
-`{open: [read]}` below is `{"open": {"record": ["read"]}}` in full. The entity level is elided
+`{open: [view]}` below is `{"open": {"record": ["view"]}}` in full. The entity level is elided
 wherever it is `record`, which is every row but the three field cases and case 26, and those name it
 because that is the point of them.
 
 | #   | Case                                                                                                             | Ana's token                                                                                                                                                                                       |
 | --- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Anonymous. Baseline turned off                                                                                   | `{}`                                                                                                                                                                                              |
-| 2   | Anonymous. Baseline on                                                                                           | `{open: [read]}` on all three. She reaches the open records of every study, and none of their controlled or community-governed ones                                                               |
+| 2   | Anonymous. Baseline on                                                                                           | `{open: [view]}` on all three. She reaches the open records of every study, and none of their controlled or community-governed ones                                                               |
 | 3   | Registered, in no group                                                                                          | Same contents as case 2, with `sub` present. **Open: whether that difference means anything downstream**                                                                                          |
 | 4   | In G1. G1 granted HEART_STUDY/controlled. She has not answered, so she has no decision row for it                | The baseline only. HEART_STUDY appears with `open` and without `controlled`, because no decision is not an acceptance                                                                             |
-| 5   | Same, and she accepted                                                                                           | `HEART_STUDY: {open: [read], controlled: [create, read, update, delete]}`                                                                                                                         |
+| 5   | Same, and she accepted                                                                                           | `HEART_STUDY: {open: [view], controlled: [create, view, update, delete]}`                                                                                                                         |
 | 6   | Same, and she rejected                                                                                           | The baseline only, as in case 4                                                                                                                                                                   |
-| 7   | In G1 and G2. G1 granted HEART_STUDY/controlled at curator, G2 granted HEART_STUDY/open at viewer. Both accepted | `HEART_STUDY: {controlled: [create, read, update, delete], open: [read]}`. Two grants on one resource, each at its own role, which is the case a role held per resource cannot express            |
-| 8   | In G1 and G2, both granted HEART_STUDY/controlled, both accepted                                                 | `controlled: [create, read, update, delete]`. Union of the two                                                                                                                                    |
-| 9   | In G1. G1 granted REEF_ARCHIVE/controlled, accepted. Nothing for community-governed                              | `REEF_ARCHIVE: {open: [read], controlled: [create, read, update, delete]}`. Its community-governed records are not reached, and the rest of the resource is                                       |
+| 7   | In G1 and G2. G1 granted HEART_STUDY/controlled at curator, G2 granted HEART_STUDY/open at viewer. Both accepted | `HEART_STUDY: {controlled: [create, view, update, delete], open: [view]}`. Two grants on one resource, each at its own role, which is the case a role held per resource cannot express            |
+| 8   | In G1 and G2, both granted HEART_STUDY/controlled, both accepted                                                 | `controlled: [create, view, update, delete]`. Union of the two                                                                                                                                    |
+| 9   | In G1. G1 granted REEF_ARCHIVE/controlled, accepted. Nothing for community-governed                              | `REEF_ARCHIVE: {open: [view], controlled: [create, view, update, delete]}`. Its community-governed records are not reached, and the rest of the resource is                                       |
 | 10  | A resource carries no categories at all, with the default off                                                    | Reachable by nobody. No category is named for it, so no clause selects any of its records                                                                                                         |
 | 11  | The grant she accepted has expired                                                                               | Excluded, read from the grant rather than from her row                                                                                                                                            |
 | 12  | The grant she accepted was revoked                                                                               | Excluded, read from the grant rather than from her row                                                                                                                                            |
 | 13  | She rejected, then later accepted                                                                                | The later decision stands. Both rows are kept                                                                                                                                                     |
-| 14  | She accepted at curator. The grant's role is then changed to viewer                                              | `controlled: [read]`. Narrowing needs no re-asking                                                                                                                                                |
-| 15  | She accepted at viewer. The grant's role is then changed to curator                                              | `controlled: [read]`. The added capabilities are unaccepted until accepted                                                                                                                        |
+| 14  | She accepted at curator. The grant's role is then changed to viewer                                              | `controlled: [view]`. Narrowing needs no re-asking                                                                                                                                                |
+| 15  | She accepted at viewer. The grant's role is then changed to curator                                              | `controlled: [view]`. The added capabilities are unaccepted until accepted                                                                                                                        |
 | 16  | She leaves G1, her accepted row still present                                                                    | HEART_STUDY keeps `open` from the baseline and loses `controlled`. The grant no longer reaches her, so the row confers nothing                                                                    |
 | 17  | Her grant names REEF_ARCHIVE/community-governed after that category was removed from it                          | Inert, nothing to keep. **Open: whether removing a category warns about this**                                                                                                                    |
 | 18  | Her grant names a resource this audience does not serve                                                          | Excluded. The token is per audience                                                                                                                                                               |
@@ -194,12 +193,12 @@ because that is the point of them.
 | 20  | `Auto-accept` is on for this instance                                                                            | An accepted decision is recorded at creation without her acting. Otherwise identical                                                                                                              |
 | 21  | Accepted grant on controlled, against a record withheld until a date                                             | **No reach.** Not implementable yet                                                                                                                                                               |
 | 22  | A record carries `controlled` and `community-governed`, and she holds only `controlled`                          | **No reach.** Both are needed. Not implementable yet: this is the subset test                                                                                                                     |
-| 23  | A record carries a category value the plugin has no mapping for                                                  | **Served as open**, which is the defect the startup reconciliation check exists to prevent                                                                                                        |
+| 23  | A record carries a category value the adapter has no mapping for                                                 | **Served as open**, which is the defect the startup reconciliation check exists to prevent                                                                                                        |
 | 24  | A column carries no field category, and the category is partitioned                                              | **Served as basic**, the field residual, and only to a principal granted `basic`. Safe while the reconciliation check covers field mappings and runs on an index mapping change, not only at boot |
 | 24b | Her grant names `clinician` and not `basic`                                                                      | The clinician columns and no others. The residual is granted rather than assumed, exactly as `open` is on the row axis                                                                            |
 | 24c | The category is not partitioned by field at all                                                                  | No `field` key is emitted, and the record capabilities carry every column. Absence of a partition, not absence of a grant                                                                         |
 | 25  | A grant names `record.delete` and carries a field category                                                       | **Refused at writing.** Deletion takes the whole record, so the pairing is meaningless, and `field_category_id IS NOT NULL` is what catches it                                                    |
-| 26  | She holds `record.read` and `revision.read` on one category                                                      | `{open: {record: [read], revision: [read]}}`. The entity level is what keeps these apart: a bare `read` could not say which, once two data-plane entities share the action                        |
+| 26  | She holds `record.view` and `revision.view` on one category                                                      | `{open: {record: [view], revision: [view]}}`. The entity level is what keeps these apart: a bare `view` could not say which, once two data-plane entities share the action                        |
 | 27  | She holds `artifact.create` on HEART_STUDY's open records                                                        | `{open: {artifact: [create]}}`. An artifact drawn from two resources needs the capability under both, which is the provenance rule expressed in the token rather than beside it                   |
 
 Case 3 is worth keeping: a registered principal in no group and an anonymous visitor produce the same

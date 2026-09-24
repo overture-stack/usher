@@ -22,7 +22,7 @@ used here. See [security-threat-model.md](security-threat-model.md) for the full
 
 ## Overview
 
-    User --IdP JWT--> App (with usher-bridge + plugin / PEP)
+    User --IdP JWT--> App (with the bridge + adapter / PEP)
                             |
                             | Bridge exchanges IdP JWT for Usher token (once per TTL window)
                             |
@@ -54,15 +54,15 @@ used here. See [security-threat-model.md](security-threat-model.md) for the full
                     "exp": 1718611500,
                     "generatedAt": 1718611200,
                     "permissions": {
-                      "COHORT_A": {"open":{"record":["read"]}, "indigenous":{"record":["read"]}},
-                      "COHORT_B": {"open":{"record":["read","update"]}}
+                      "COHORT_A": {"open":{"record":["view"]}, "indigenous":{"record":["view"]}},
+                      "COHORT_B": {"open":{"record":["view","update"]}}
                     }
                   }
                             |
                             v
                  Bridge caches token; validates locally on
                  every request within the TTL window.
-                 Plugin translates permissions payload into app-native format:
+                 Adapter translates permissions payload into app-native format:
                    - Arranger: SQON filter object
                    - Lyric: database WHERE clause
                    - Stage: API query parameters
@@ -99,7 +99,7 @@ operator, which is how every other secret on the platform already travels. Onboa
 is a secret written once and injected into two pods. Users never hold any of these keys.
 
 The algorithm is settled: `dir` with A256GCM. How keys are rotated remains open; see
-[decisions.md](decisions.md) and [plugin-integration.md](plugin-integration.md).
+[decisions.md](decisions.md) and [adapter-integration.md](adapter-integration.md).
 
 **The `typ` header is `usher+jwt`.** Explicit typing is BCP 225 (RFC 8725) §3.11, against cross-JWT
 confusion. The value is deliberately not `at+jwt`: this is not an OAuth access token, and claiming
@@ -119,14 +119,14 @@ that does may be added to the header.
 The one call every ushered service makes to the controller. Everything else in this document is
 either what feeds it, what caches it, or what invalidates it.
 
-**Who calls it.** The bridge, never the plugin and never a browser. The response is encrypted to the
+**Who calls it.** The bridge, never the adapter and never a browser. The response is encrypted to the
 calling application's key, so a service without that key receives something it cannot read.
 
 ### One exchange, step by step
 
 A researcher's first request of the day against a search service:
 
-1. The plugin intercepts the request and extracts the IdP bearer token, then asks the bridge for a
+1. The adapter intercepts the request and extracts the IdP bearer token, then asks the bridge for a
    `PermissionsPayload`.
 2. The bridge has no unexpired Usher token for this principal, so it calls the controller's exchange
    endpoint, sending the IdP token and its own audience identifier.
@@ -137,7 +137,7 @@ A researcher's first request of the day against a search service:
 5. The controller writes an Usher token: the permissions, an `aud` naming the calling instance, an
    `exp` no later than the earliest expiry among the grants it drew on, and a `generatedAt` stamp. It
    encrypts the token with the key held for that application.
-6. The bridge decrypts it with the same key, caches it for its TTL, and hands the plugin a typed
+6. The bridge decrypts it with the same key, caches it for its TTL, and hands the adapter a typed
    `PermissionsPayload`.
 7. Every later request inside the TTL window is answered from that cache, with no controller call.
 
@@ -282,8 +282,8 @@ that force each branch. Where this section and that document differ, that docume
 
 ### Why the additive model matters
 
-- **Uniform code path.** The bridge and plugin handle the same token structure regardless of
-  whether the user is anonymous, a basic viewer, or a full-access researcher. The plugin
+- **Uniform code path.** The bridge and adapter handle the same token structure regardless of
+  whether the user is anonymous, a basic viewer, or a full-access researcher. The adapter
   translates the `permissions` map into its query format; tiers are invisible to it.
 - **Universal audit log.** Because even anonymous access triggers a token exchange, every data
   access, open or controlled, appears in Usher's audit log with the token's `generatedAt`
@@ -298,13 +298,13 @@ The `permissions` object in the token payload is a map keyed by resource ID. Eac
 from category to the entities reached under it, and from each entity to the actions held**:
 
 ```json
-"RESOURCE_ID": { "open":       { "record": ["read", "update"] },
-                 "controlled": { "record": ["read"] } }
+"RESOURCE_ID": { "open":       { "record": ["view", "update"] },
+                 "controlled": { "record": ["view"] } }
 ```
 
-**The entity level is load-bearing rather than decorative.** A bare `["read"]` stops saying anything
-the moment more than one entity can be acted on, since `record.read` and `field.read` are different
-permissions with the same action. Nesting resolves it by structure, so a plugin that has never heard
+**The entity level is load-bearing rather than decorative.** A bare `["view"]` stops saying anything
+the moment more than one entity can be acted on, since `record.view` and `field.view` are different
+permissions with the same action. Nesting resolves it by structure, so an adapter that has never heard
 of an entity skips one key rather than failing to recognize a string.
 
 **`field` is the exception at the entity level**, mapping to its own categories before its actions,
@@ -326,7 +326,7 @@ superseded subtractive model needed and additive rendering does not. Every recor
 reached through a grant that names why.
 
 This is also what makes tier differences expressible: an anonymous principal may hold
-`{ "open": { "record": ["read"] } }` where a registered one holds `{ "open": { "record": ["read", "update"] } }`, on the same
+`{ "open": { "record": ["view"] } }` where a registered one holds `{ "open": { "record": ["view", "update"] } }`, on the same
 resource and the same category.
 
 **A resource absent from the map is unreachable, and there is no empty-list case.** Any access to a
@@ -334,18 +334,25 @@ resource means holding at least one grant on it, so an empty list would mean the
 deliberately is that **categories are not optional**: a resource carrying none is ungrantable,
 because a grant has nothing to name.
 
-The plugin builds its filter additively: a positive clause naming the resources whose configured
+The adapter builds its filter additively: a positive clause naming the resources whose configured
 categories the entries cover. A resource carrying a category no entry names contributes no clause and
 is therefore invisible.
 
 **No role name travels in the token.** A role is how access is authored, not how it is enforced: the
-controller resolves a role to the capabilities it carries at issuance, so a plugin tests whether a
-capability is present and never has to learn what an instance means by `viewer`. Ownership is absent
+controller resolves a role to the capabilities it carries at issuance, so an adapter tests whether a
+capability is present and never has to learn what an instance means by `viewer`. No capability
+group travels either: `read` is expanded into its members when a role is written, so an adapter never
+sees it. Ownership is absent
 for a second reason, being a control-plane permission that Usher's own API enforces rather than any
-plugin.
+adapter.
 
-The data-plane capability vocabulary on records is `aggregate`, `read`, `export`, `create`, `update`
-and `delete`, in order of increasing reach. `export` was once held back under the name `download` and
+**Nor does a catalogue.** The token names resources, and which of an application's catalogues hold a
+resource's records, and under which field, is the adapter's to map. Usher stays agnostic of how data
+is structured in the services it serves, so a token for an application with several catalogues is
+one set of resources rather than one per catalogue.
+
+The data-plane capability vocabulary on records is `count`, `view`, `export`, `create`, `update`
+and `delete`, in order of increasing reach, and the first three are the capability group `read`. `export` was once held back under the name `download` and
 now ships; enforcement on the export path is unbuilt, so it is declared unenforced rather than
 withheld. See the export decision in [decisions.md](decisions.md).
 
@@ -361,7 +368,7 @@ withheld. See the export decision in [decisions.md](decisions.md).
   "exp": 1718611500,
   "generatedAt": 1718611200,
   "permissions": {
-    "OPEN_COHORT": { "open": { "record": ["read"] } }
+    "OPEN_COHORT": { "open": { "record": ["view"] } }
   }
 }
 ```
@@ -381,19 +388,18 @@ still validates the `iss` claim. Only `sub` is null; no other standard claims ar
   "exp": 1718611500,
   "generatedAt": 1718611200,
   "permissions": {
-    "COHORT_A": { "open": { "record": ["read", "update"] },
-                  "indigenous": { "record": ["read"] } },
-    "COHORT_B": { "open": { "record": ["read", "update"] } }
+    "COHORT_A": { "open": { "record": ["view", "update"] },
+                  "indigenous": { "record": ["view"] } },
+    "COHORT_B": { "open": { "record": ["view", "update"] } }
   }
 }
 ```
 
 ### The payload as a type
 
-`PermissionsPayload` is the decrypted token: what the bridge hands a plugin, and the one artifact the
-controller, the bridge and the conformance corpus all have to agree on. It is written here rather
-than in a source tree because no package layout is decided yet; the file it eventually lands in is a
-layout question and blocks nothing.
+`PermissionsPayload` is the decrypted token: what the bridge hands an adapter, and the one artifact the
+controller, the bridge and the conformance corpus all have to agree on. It sits in this corpus rather than a source tree because no package layout is decided yet, and
+the file it eventually lands in is a layout question that blocks nothing.
 
 ```typescript
 /** A list with at least one element. An empty list would mean what absence already means. */
@@ -405,17 +411,20 @@ export type ResourceIdentifier = string;
 /** A category name, as the instance configures it. Opaque to the controller. */
 export type CategoryName = string;
 
-/** Actions on a record, in order of increasing reach. */
-export type RecordAction = 'aggregate' | 'read' | 'export' | 'create' | 'update' | 'delete';
+/**
+ * Actions on a record, in order of increasing reach. `read` is not among them: it is a capability
+ * group, expanded into `count`, `view` and `export` when a role is written.
+ */
+export type RecordAction = 'count' | 'view' | 'export' | 'create' | 'update' | 'delete';
 
 /** Actions on a field. No `create` or `delete`: a field exists per schema rather than per grant. */
-export type FieldAction = 'aggregate' | 'read' | 'export' | 'update';
+export type FieldAction = 'count' | 'view' | 'export' | 'update';
 
 /** Actions on a revision, in services that keep prior states of a record. */
-export type RevisionAction = 'read' | 'export';
+export type RevisionAction = 'view' | 'export';
 
 /** Actions on an artifact: a kept collection of records carrying provenance. */
-export type ArtifactAction = 'create' | 'read' | 'update' | 'delete' | 'export';
+export type ArtifactAction = 'create' | 'view' | 'update' | 'delete' | 'export';
 
 /**
  * The entities reached under one category, and the actions held on each. Every key is optional:
@@ -505,10 +514,10 @@ holds no invariant beyond what the type states.
 the rest, the standard claims follow in the order every example uses, and the content comes last.
 
 **Unknown keys are tolerated at the entity level and nowhere above it**, which looks like it
-contradicts the payload-version decision and does not. The test is what skipping a key does: a plugin
-that skips an entity it has never heard of serves nothing for that entity, which fails closed, and a
-plugin that skips an unknown member of the payload root may skip a restriction, which fails open. The
-same polarity argument that requires the controller to retain what a plugin declared applies here.
+contradicts the payload-version decision and does not. The test is what skipping a key does: an adapter
+that skips an entity it has never heard of serves nothing for that entity, which fails closed, and an
+adapter that skips an unknown member of the payload root may skip a restriction, which fails open. The
+same polarity argument that requires the controller to retain what an adapter declared applies here.
 
 **What the type refuses.** An empty action list, an action belonging to another entity, an action
 outside the vocabulary, a missing `payloadVersion`, and `sub` omitted rather than set to `null`. That
@@ -536,6 +545,12 @@ bridge to compare timestamps: an identifier is enough to invalidate.
 On the controller's side, a grant carries its own `revoked_at`, and the principal's cached payload is
 deleted by anything that changes what they hold, so a recomputation cannot serve the revoked grant
 again. See the fast-path decision in [decisions.md](decisions.md).
+
+**Naming the principal is what an anonymous visitor cannot be.** They hold a shared token with a null
+`sub`, so no notice reaches them and a resource leaving open access is closed only by that token
+expiring. A notice keyed on the resource instead is proposed and unadopted, with two costs to price
+first; see the anonymous-token item in [to-discuss.md](to-discuss.md). Recorded here because this
+section reads as covering every principal and covers every named one.
 
 > **Open, and it belongs to the schema session.** Revoking a principal _entirely_, rather than one
 > grant, has no settled storage. Setting `revoked_at` on every grant they hold expresses it with no
@@ -663,10 +678,10 @@ In revocation-uncertain mode:
 - The grace period absorbs brief, non-adversarial network interruptions. After the grace period,
   fail-secure applies regardless of cause.
 
-**Serving open during an outage needs no controller, and introduces no new exposure.** A plugin
+**Serving open during an outage needs no controller, and introduces no new exposure.** An adapter
 computes `open` by complement, locally, from its own configuration rather than from the token, so
 the open slice is available whether or not the controller is reachable. The known hazard of that
-computation, a category the plugin has no mapping for falling outside the set being subtracted and
+computation, a category the adapter has no mapping for falling outside the set being subtracted and
 its records being served as open, is present under normal operation too and is addressed by the
 startup check against Usher's category dictionary. An outage neither creates it nor widens it.
 
@@ -677,7 +692,7 @@ until it has, which is what the startup behaviour below already requires.
 
 **A reduced result must say so.** Serving a silently smaller set is worse than serving none, because
 a researcher reads missing rows as absent data rather than as withheld data, and acts on it. The
-plugin signals that the result is open-tier only, and the interface says so where the results appear.
+adapter signals that the result is open-tier only, and the interface says so where the results appear.
 
 **Liveness via push connection.** When using SSE or WebSocket for push events, the persistent
 connection itself is the liveness signal. A dropped connection that cannot be re-established
@@ -716,7 +731,7 @@ connectivity is not in the hot path.
 version and should not, since validation is against whatever the provider publishes. Integration work
 nonetheless has to assume something, and the assumption is a current release.
 
-This is worth stating because the first target environment contradicts it. iMS dev runs Keycloak
+The first target environment contradicts it. iMS dev runs Keycloak
 12.0.4, three majors below the Quarkus rewrite at 17, because its theme is a forked custom image that
 has held the version back rather than because anything chose 12. That is debt on the iMS side
 and the environment is expected to move. Nothing in Usher should accommodate 12, and an
@@ -731,7 +746,7 @@ integration built to work there would be building against an artifact that is go
 Receiving it is settled: the secrets operator delivers the same symmetric key to the controller and
 to that application's pod, which is how every other secret on the platform already travels. Rotation
 is not: how often, and how a bridge picks up a new key without dropping tokens still in flight. See
-[plugin-integration.md](plugin-integration.md).
+[adapter-integration.md](adapter-integration.md).
 
 ### Grace period configurability scope
 

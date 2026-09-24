@@ -34,7 +34,7 @@ independently from the requirements side, which is corroboration rather than coi
 
 **Download is a second enforcement path, and the first does not cover it.** The cross-persona table
 puts token validation on every file request and blocks direct URL access at the API layer. So the
-plugin covers search and something else covers files. Ownership of that is settled; the work is
+adapter covers search and something else covers files. Ownership of that is settled; the work is
 to design it rather than to decide who owns it.
 
 **Notification is core, not a nice-to-have.** The flows put email on the critical path in at least

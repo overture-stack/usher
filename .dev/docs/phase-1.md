@@ -1,27 +1,36 @@
 # Phase 1: Design blockers and implementation gate
 
-**Phase 1 window:** Aug 18 to Sep 15, closing at the design lock. An earlier version ended it Sep 1, two weeks before the lock the blockers feed.
+**Phase 1 began:** Aug 18.
 **Goal:** close the open questions that block implementation, and confirm the Nov 15 consumability date
 
 ---
 
 ## What "consumable by Nov 15" requires
 
+**Two milestones are in play and this document scopes the first.** Usher's own is phase 1, called
+the MVP internally and phase 1 wherever anyone outside this team will read it. iMicroSeq's is **the
+deliverable**, which phase 1 feeds into and which is larger: it adds submission, and at least a
+minimum management surface so data administrators can create resources and categories. Those land
+in phases after this one. Nothing below is scoped to the deliverable.
+
 Four pieces must be working together for the iMS UAC integration phase to start on time:
 
-1. iMS portal migrated from EGO to Keycloak (portal passes a Keycloak access token to Arranger; no usher code in the portal itself)
-2. `usher-arranger` plugin running in Arranger's search-server, with `usher-bridge` as an in-process library (Usher token cache, revocation polling, Usher API call)
-3. `usher-arranger` injecting per-resource SQON filters at query time, derived from the grants the bridge fetches from Usher
-4. Enforcement composed at a boundary every Arranger read path inherits, verified by a shared test asserting a denied principal sees nothing on each of them
+1. Keycloak issuing a token the controller can validate (no usher code in the portal itself)
+2. The Arranger adapter running in Arranger's search-server, with the bridge as an in-process library (Usher token cache, revocation polling, Usher API call)
+3. The Arranger adapter injecting per-resource SQON filters at query time, derived from the grants the bridge fetches from Usher
+4. Enforcement composed at a boundary every Arranger read path inherits (hits, aggregations, saved sets and download), verified by a shared test asserting a denied principal sees nothing on each of them
+
+**Migrating the portal off EGO is not among them.** Phase 1 runs on `overture-dev`, which has no
+EGO at all, so the move belongs to a later phase.
 
 Working backwards: two weeks of integration buffer means implementation must be functionally
 complete by Nov 1.
 
-**Resourcing:** Usher and its integration pieces (usher-bridge, usher-arranger) are implemented
+**Resourcing:** Usher and its integration pieces (the bridge, the Arranger adapter) are implemented
 by the developer and AI agents working from a complete spec and a thorough test suite. Code
 review support may be requested from the wider softeng team, but implementation ownership is
-here. Given this model, implementation velocity is high once the spec is locked: the
-**design lock at Sep 15** is the critical constraint, not implementation duration.
+here. Given this model, implementation velocity is high once the spec settles, so the open design
+work is the critical constraint rather than implementation duration.
 
 ---
 
@@ -49,14 +58,14 @@ Settled plan. The controller is built last and the consumer side first, against 
 
     0. Configure Keycloak, so that a person can sign in.
     1. A barebones controller with mocked grants. The Usher backend is faked.
-    2. The Arranger plugin and the bridge, built against it.
+    2. The Arranger adapter and the bridge, built against it.
     3. Compare results in the portal: signed in against anonymous, rows and counts.
     4. The profile surface and the rest of the Keycloak integration.
     5. The real controller, tying it together.
-    6. Management UI, and the submission bridge and plugin, in parallel.
+    6. Management UI, and the submission bridge and adapter, in parallel.
 
 **Step 2 is where the contract gets defined**, by the thing that consumes it rather than by
-specifying it in advance. How a filter is actually applied, what the plugin needs and when, and which
+specifying it in advance. How a filter is actually applied, what the adapter needs and when, and which
 blindspots the design has are all discovered by building the path instead of reviewing it. The real
 controller then has a proven contract to implement rather than a proposed one.
 
@@ -77,10 +86,10 @@ playground, so this is cheap.
 
 Four things this order asks of the mock, and each is a way it could quietly fail to prove anything.
 
-**Seed it from the case table rather than from what the plugin asks for.** `token-calculation.md`
+**Seed it from the case table rather than from what the adapter asks for.** `token-calculation.md`
 holds twenty-nine cases with expected outputs, and the count moves as the model does, so read it
-there rather than trusting a number written here. A mock grown to answer whatever the plugin needs lets
-the plugin define the contract by its own appetite, and every case nobody happened to exercise ships
+there rather than trusting a number written here. A mock grown to answer whatever the adapter needs lets
+the adapter define the contract by its own appetite, and every case nobody happened to exercise ships
 unproven. Driven the other way the mock is the specification, and step 5 becomes a matter of matching
 known answers.
 
@@ -104,13 +113,13 @@ divergence is a defect rather than a surprise.
 
 ## Blockers, in the order they can be worked
 
-**Numbers are identities, not positions.** They are cited from `plugin-integration.md` and from
+**Numbers are identities, not positions.** They are cited from `adapter-integration.md` and from
 several session records, so they stay fixed and the sections below stay in numeric order.
 
-| Do    | #   | Item                | Waits on | Why it sits here                                                                                                          |
-| ----- | --- | ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| now   | 6   | Database schema     | nothing  | Every decision that fed it has landed. The largest single piece of design work left, and it gates all core implementation |
-| after | 4   | Plugin API contract | 6        | Implementation rather than design: turning intent into typed shapes. Needed for Nov 15, not for the lock                  |
+| Do    | #   | Item                 | Waits on | Why it sits here                                                                                                          |
+| ----- | --- | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| now   | 6   | Database schema      | nothing  | Every decision that fed it has landed. The largest single piece of design work left, and it gates all core implementation |
+| after | 4   | Adapter API contract | 6        | Implementation rather than design: turning intent into typed shapes. Needed for Nov 15, not before implementation starts  |
 
 **Five are closed and kept below for the reasoning rather than as work.** Item 1 is live as a finding
 rather than a task, since neither catalogue carries an access-level field. Item 2 resolved to Fastify.
@@ -130,8 +139,7 @@ names a category field alongside the resource field, so the nesting-depth and
 per-submission-versus-per-record questions apply from the first release rather than after it.
 
 **Both of the first instance's catalogues have been read directly and neither carries an
-access-level field at all.** That is the answer rather than a deferral, and it has one consequence
-worth stating where it cannot be missed: with no field distinguishing categories, the category clause
+access-level field at all.** That is the answer rather than a deferral, and one consequence follows: with no field distinguishing categories, the category clause
 has nothing to test, and the emitted filter is the resource clause alone. Per-category
 enforcement is correct in the model and inert in this deployment until the data carries a marking for
 it to read.
@@ -143,12 +151,12 @@ silently does not, the resource clause matches existentially and the record is r
 detects the difference, which is why that property is recorded as a deployment precondition rather
 than a caveat.
 
-**What it gated:** the entire `usher-arranger` plugin design.
+**What it gated:** the entire the Arranger adapter design.
 
 Does the per-submission access level survive onto every indexed document, under what field name,
 at what nesting depth, and does it attach per submission or per record? If the access level is a
 property of a submission-shaped parent and the indexed unit is a child record, SQON filter
-injection on that field does not produce correct per-document access control. The plugin design
+injection on that field does not produce correct per-document access control. The adapter design
 is invalid in that case and needs a different approach.
 
 **Finding, from a direct read of Lyric's data model:** no access_level or visibility field exists
@@ -157,9 +165,9 @@ submission provenance is `organization`.
 
 **Revised framing:** `organization` is a submission-level concern (Lyric's own
 metadata about who submitted), not a property of the data being submitted. Access control for
-the usher-arranger plugin should operate on fields within the submitted data records themselves,
+the Arranger adapter should operate on fields within the submitted data records themselves,
 not on Lyric's submission metadata. The boundary between "submission" and "data being submitted"
-is the responsibility of a Lyric plugin for Usher, not the bridge.
+is the responsibility of a Lyric adapter for Usher, not the bridge.
 
 This reopens the blocker in a different form: what access-relevant fields exist within the
 indexed data records, and how does Usher's grant model map to SQON filters on those fields?
@@ -170,7 +178,7 @@ indexed data records, and how does Usher's grant model map to SQON filters on th
    builder (`@overture-stack/sqon-builder`, `convertSqonToQuery.ts`) exists and is used in two
    read-time places: `POST /category/:id/organization/:org/query` and an internal foreign-key
    existence check in `validationService.ts`. Nothing on the submit/validate/commit path. A
-   usher-lyric plugin would require a new hook on the submission path calling the existing
+   the Lyric adapter would require a new hook on the submission path calling the existing
    SQON-to-SQL machinery. That wiring is new integration work, but the machinery it calls
    already exists.
 
@@ -193,14 +201,14 @@ indexed data records, and how does Usher's grant model map to SQON filters on th
    SQON filter injection provides. Field exclusion and SQON filtering are complementary levers
    at different granularities, not substitutes for each other.
 
-**Design implication for `usher-arranger`:** the access-control axis field must be IN the
+**Design implication for the Arranger adapter:** the access-control axis field must be IN the
 mapping (so it is SQON-filterable), but being in the mapping does not gate access: the injected
 SQON filter is what does the gating. Without the filter a user sees all rows; with it, only the
 rows matching their grants. This means the field needs to be intentionally included in the
 mapping, and that decision is the instance team's to make consciously, not a bug-fix shape of
 change.
 
-**Design implication for `usher-lyric`:** submission-time gating is separate, not required for
+**Design implication for the Lyric adapter:** submission-time gating is separate, not required for
 Nov 15. The building blocks exist (SQON machinery), but wiring to the submission path is new
 work. Track as a post-Nov-15 item.
 
@@ -253,7 +261,7 @@ two is where the safety-relevant change lives.
   short-circuit to a denial, never to a filter that happens to be empty. This is a stronger
   requirement than the previous entry implied, because it now has to be built rather than
   inherited. It also strengthens the case for locating shared SQON handling in the bridge: the
-  guard gets written once for every application rather than once per plugin.
+  guard gets written once for every application rather than once per adapter.
 
   **Consequence for the conformance corpus:** the zero-grant section cannot merely assert
   `visible: false` for a principal with no grants. It needs a case whose failure mode is
@@ -262,7 +270,7 @@ two is where the safety-relevant change lives.
 
 - **SQL injection in Lyric's SQON handler is now an open PR.** Lyric PR 219 (open since
   2026-08-20) parameterizes `fieldName` and value through drizzle's SQL template instead of
-  splicing them into `sql.raw()`. Must land before any usher-lyric integration work. The PR
+  splicing them into `sql.raw()`. Must land before any the Lyric adapter integration work. The PR
   notes a second gap it deliberately leaves open: `fieldName` still has no allowlist against
   the dictionary's real field names. That is directly relevant to Usher, because a
   permission-derived filter supplies `fieldName` values into the same path; parameterization makes
@@ -283,12 +291,12 @@ access decision is made in Usher against that resource's categories. The nesting
 per-submission-versus-per-record sub-questions dissolve with it.
 
 What replaces the question is a per-integration one, and it lands outside this repository by design:
-each catalogue supplies a resource field name as plugin config, and Usher never learns it. A
-plugin must establish that the candidate field is single-valued, that its cardinality is verified
+each catalogue supplies a resource field name as adapter config, and Usher never learns it. An
+adapter must establish that the candidate field is single-valued, that its cardinality is verified
 against a declaration rather than inferred from an Elasticsearch mapping (which cannot express it),
 that its values were observed rather than read off a display label, and that the term is not
 overloaded elsewhere in that instance. Those four checks are recorded in
-[`plugin-integration.md`](../design/plugin-integration.md).
+[`adapter-integration.md`](../design/adapter-integration.md).
 
 For the first integration these are settled and documented on that side, in the integration
 repository's own `.dev/docs/usher-integration.md`: two catalogues fed by different submission
@@ -321,8 +329,8 @@ application logic is framework-independent and must be unit-testable without sta
 
 ### 3. Permissions payload schema and JWE algorithm
 
-**What it gates:** `usher-bridge`, `usher-arranger`, and any future plugin. The bridge decrypts
-the token; the plugin reads its fields. Neither can be implemented without a stable schema.
+**What it gates:** the bridge, the Arranger adapter, and any future adapter. The bridge decrypts
+the token; the adapter reads its fields. Neither can be implemented without a stable schema.
 
 Core shape is clear: resource grants (resource ID, categories), open-tier grants (anonymous
 access), `generatedAt` and `exp`. Open sub-questions:
@@ -348,9 +356,9 @@ rotation.
 filter injection is sufficient. The `fields.exclude` shape in nested grants is a post-MVP item;
 stub the field as absent or empty object in the v1 schema to leave the door open.
 
-**Design note (post-MVP, for reference):** field exclusion can be applied by the plugin after
+**Design note (post-MVP, for reference):** field exclusion can be applied by the adapter after
 the ES response arrives and before surfacing to the client, giving per-row field control in a
-single ES round trip. This would require a response transformer hook in the plugin API contract
+single ES round trip. This would require a response transformer hook in the adapter API contract
 in addition to the query modifier, which becomes a blocker 4 concern at that point.
 
 **RESOLVED, and simplified by the resource-level decision.** Under resource-level
@@ -360,7 +368,7 @@ the post-MVP record-level case, where the single-clause encoding is `not` of `no
 executing the compiler) and requires a `nested` mapping. Both recorded in
 [`decisions.md`](../design/decisions.md).
 
-The plugin
+The adapter
 renders a resolved grant set as a union of positive predicates, one branch per grant held, rather
 than computing exclusions by subtracting held categories from a locally configured category set.
 The decision depends on failure direction: in a subtractive model, losing a term widens access; in
@@ -368,7 +376,7 @@ an additive model, losing a term narrows it.
 
 | Failure                                                   | Subtractive                          | Additive                      |
 | --------------------------------------------------------- | ------------------------------------ | ----------------------------- |
-| Category exists in Usher, unmapped in the plugin          | No exclusion generated, records leak | Contributes no branch, denies |
+| Category exists in Usher, unmapped in the adapter         | No exclusion generated, records leak | Contributes no branch, denies |
 | Data carries a tag value not yet registered as a category | Nothing excludes it, visible         | Matches no predicate, hidden  |
 | A bug drops a clause from the composed filter             | Access widens                        | Access narrows                |
 | A field mapping points at the wrong field                 | Fails open                           | Fails open                    |
@@ -406,20 +414,20 @@ controller-side addition rather than a coordinated upgrade at both ends.
 
 ---
 
-### 4. Plugin API contract spec
+### 4. Adapter API contract spec
 
-**What it gates:** `usher-bridge` and all plugin implementations.
+**What it gates:** the bridge and all adapter implementations.
 
 Concrete HTTP shapes are still missing: token exchange request/response bodies, error codes,
 revocation poll endpoint (`GET /revocations?since=`), push subscription handshake. The design
-intent is in `plugin-integration.md`; it needs to become a spec with exact field names and types.
+intent is in `adapter-integration.md`; it needs to become a spec with exact field names and types.
 
 **Action:** one focused pass to turn the design doc into a typed API spec, once item 3 settles the
 payload it carries.
 
-**Status:** open, and not a design-lock item. This is implementation work: the design intent exists
-in `plugin-integration.md` and this transcribes it into exact field names and types. Needed for
-Nov 15, not for Sep 15.
+**Status:** open, and not a design blocker. This is implementation work: the design intent exists
+in `adapter-integration.md` and this transcribes it into exact field names and types. Needed for
+Nov 15, not before implementation starts.
 
 ---
 
@@ -467,7 +475,7 @@ deliberately:
 | `record_category_id` as the column name                    | **shipped under that name**                          | nothing to rename                                                         |
 
 **The nesting ships even though the first release has one entity in it.** `{"open": {"record":
-["read"]}}` gains nothing over `{"open": ["read"]}` while `record` is alone. Adding the level later
+["view"]}}` gains nothing over `{"open": ["view"]}` while `record` is alone. Adding the level later
 costs a payload version negotiated at the exchange and a bridge and controller rolled out in step,
 which is the mechanism built for changes nobody could foresee. Spending it on the first change that
 was foreseen would be the waste.
@@ -532,7 +540,7 @@ forecloses rather than inherits. See the lifetime-versus-duration decision in
 [../design/decisions.md](../design/decisions.md) and the long-running operation item in
 [../roadmap.md](../roadmap.md).
 
-**What it gated:** `usher-bridge` cache window sizing, and the migration baseline, since Usher's
+**What it gated:** the bridge's cache window sizing, and the migration baseline, since Usher's
 token lifetime should not exceed what it replaces without a reason.
 
 **The baseline is satisfied by a wide margin.** The designed Usher token lifetime is five minutes,
@@ -569,8 +577,7 @@ Both need the same answer: name the storage, then enumerate exactly which writes
 resource-category writes among them. Until then the primary performance mechanism is also the
 primary correctness risk, on a system holding health records.
 
-**These were absent from this list**, which is worth noting because this document is where a reader
-looks for what blocks the gate.
+**These were absent from this list**, which is where a reader looks for what blocks the gate.
 
 **Status:** CLOSED. There is no per-principal timestamp to place. The marker was per principal while
 the dangerous change is per resource, which is why its write list could not be enumerated. Replaced
@@ -585,15 +592,17 @@ the fast-path decision in [decisions.md](../design/decisions.md).
 
 - Admin model open questions (self-grant controls, break-glass): gates admin API, not enforcement
 - Per-catalogue access posture, including whether a given catalogue is open by configuration: gates
-  that catalogue's plugin config, not the core service. Recorded per instance on the integration
+  that catalogue's adapter config, not the core service. Recorded per instance on the integration
   side. Usher's side of it is the `Enforcement` `allow` arm, which is decided.
 - Researcher experience UX decisions: gates documentation, not implementation
 - System context diagram: nice to have before design review; not an implementation gate
 - **Reindex lag as a second revocation window: dissolved, not deferred.** Enforcement reads
   descriptive fields only, never a field encoding an access decision, so a grant change alters no
   indexed value and the index has nothing to be stale about. This returns only if an instance
-  chooses to filter on a prescriptive field, which the design excludes.
-- **`usher-lyric` submission-time gating.** SQON machinery exists in Lyric but is not wired to
+  chooses to filter on a prescriptive field, which the design excludes. **A grant changing is what
+  this dissolves**, and the record's own data changing is a second case it does not reach, open and
+  filed in [to-discuss.md](../design/to-discuss.md) § Adapter contract.
+- **the Lyric adapter submission-time gating.** SQON machinery exists in Lyric but is not wired to
   the submit/validate/commit path. Building the enforcement seam is new work with known building
   blocks; not required for Nov 15.
 
@@ -601,27 +610,21 @@ the fast-path decision in [decisions.md](../design/decisions.md).
 
 ## Nov 15 feasibility: open risks
 
-Implementation velocity is not the risk. The critical path runs through the Sep 15 design lock
-and two external dependencies outside this project's control:
+Implementation velocity is not the risk. The critical path runs through the open design blockers
+above and one external dependency outside this project's control:
 
-| Risk                                                                               | Gate                                                      | Status                                                                                                                    |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Design blockers 3, 4, 6 and 8 closed                                               | Sep 15 design lock                                        | In progress. Blockers 1, 2 and 5 are closed; 8 was added after a sweep found both CRITICAL findings absent from this list |
-| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the token the bridge presents | Unknown; DevOps and infra owned                                                                                           |
-| Portal migrated from EGO to Keycloak                                               | Portal can present a token the controller accepts         | Unknown timeline; integration team                                                                                        |
-| Resource field confirmed per catalogue                                             | usher-arranger plugin config                              | Resolved for the first integration; recorded on that side                                                                 |
+| Risk                                                                               | Gate                                                      | Status                                                                                       |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| The open design blockers resolved                                                  | Implementation start                                      | Carried per blocker in its own **Status** line above, so there is one copy of it to maintain |
+| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the token the bridge presents | Unknown; DevOps and infra owned                                                              |
+| Resource field confirmed per catalogue                                             | the Arranger adapter config                               | Resolved for the first integration; recorded on that side                                    |
 
-Two corrections to earlier versions of this table. Keycloak's own token exchange endpoint is not a
-dependency: the bridge calls the controller's exchange endpoint, and the controller validates the
-presented token against Keycloak's JWKS. And the bridge is not embedded in the portal; it is a
-library inside the ushered service, so the portal's only Usher-related work is the EGO to
-Keycloak migration.
+Keycloak's own token exchange endpoint is not a dependency: the bridge calls the controller's
+exchange endpoint, and the controller validates the presented token against Keycloak's JWKS. The
+bridge is a library inside the ushered service rather than inside the portal.
 
-If the Keycloak work and the portal migration land before Nov 1, the timeline holds. If either
-slips, the integration buffer shrinks or disappears. Worth raising both as explicit dependencies
-with the relevant owners before the Sep 15 design lock.
-
----
+If the Keycloak work lands before Nov 1, the timeline holds. If it slips, the integration buffer
+shrinks or disappears, so it is worth raising as an explicit dependency with its owners.
 
 ## Conformance corpus
 
@@ -701,14 +704,14 @@ never be reached by comparing them, however many cases are added, and a corpus a
 green while measuring nothing.
 
 **Three format constraints are pending a decision, requested from two repositories.** All three
-change the file format rather than the case list, so they have to be settled before anyone writes an
-adapter against it. The Arranger side is holding its adapter until they are.
+change the file format rather than the case list, so they have to be settled before anyone writes a test harness against it. The Arranger side is holding its harness until
+they are.
 
 1. **The outcome needs a third state beyond a visible boolean.** A legitimately zero-grant
    principal receiving an error must be distinguishable from one correctly seeing nothing. Both
    produce zero rows, and a boolean records them identically.
 2. **Expectations must cover aggregate results, not only records.** A record-only corpus passes a
-   system that leaks through facet counts, `min`/`max`, or `top_hits`. That is not hypothetical: it
+   system that leaks through bucket counts, `min`/`max`, or `top_hits`. That is not hypothetical: it
    is the worst finding an application's own audit produced.
 3. **Every negative expectation carries the mechanism responsible and the false-pass modes it must
    not be satisfied by**, with each "sees nothing" case paired to a positive control on the same
@@ -735,8 +738,8 @@ than overlap: a case's expected payload is a `principals.json` entry, and the co
 cases stop.
 
 Two consequences. **The cases populate `principals.json`, not `expectations.json`**, which also means
-expanding their shorthand into the real nested shape, since the table writes `{open: [read]}` where a
-payload carries `{"open": {"record": ["read"]}}`. And **the pre-token half stays here**: acceptance
+expanding their shorthand into the real nested shape, since the table writes `{open: [view]}` where a
+payload carries `{"open": {"record": ["view"]}}`. And **the pre-token half stays here**: acceptance
 versus rejection, group membership, baseline on or off, and a principal with no decision row are all
 resolved before a payload exists, so no cross-repo corpus can see them and they need Usher-side tests
 of their own.

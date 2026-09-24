@@ -89,9 +89,8 @@ modelling one, and the people it concerns should be in the room.
   capabilities and are now incomplete: `security-workflow.md:301`, `rabac-alignment.md:130`,
   `permissions-model.md:290`, `glossary.md:174`, `api-keys.md:114` (which reasons about the
   vocabulary as read-only, an argument that changes shape once write capabilities exist).
-- **Token examples**: closed. Every one rendered `["view", "download"]`, where `view` is the retired
-  name for `read` and `download` became `export`. All now draw from the six: `aggregate`, `read`,
-  `export`, `create`, `update`, `delete`.
+- **Token examples**: closed. Every one rendered `["view", "download"]`, and `download` became `export`.
+  All now draw from the six: `count`, `view`, `export`, `create`, `update`, `delete`.
 
 ---
 
@@ -101,7 +100,7 @@ Three sites describe a token carrying a role name. `decisions.md:1067` says "**N
 ownership travel in the token**", confirmed at `security-workflow.md:296`, `glossary.md:364` and
 `docs/concepts.md:700`.
 
-- `plugin-integration.md:42` and `:439`: "resource ID mapped to role and category"
+- `adapter-integration.md:42` and `:439`: "resource ID mapped to role and category"
 - `decisions.md:566`: "The Usher token already names the resources held and the role held in each"
 
 A sharing check built on the third would look for a field that is not there. A per-resource singular

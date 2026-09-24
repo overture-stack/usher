@@ -32,7 +32,7 @@ Several patterns have emerged for solving selective data access at platform scal
 
 ### Separating the decision from the enforcement
 
-A central service holds the access policy and answers "what can this user see or do?" on request. Each application, or a [plugin](concepts.md#pep-policy-enforcement-point) within it, enforces that answer at the point of data access. The [decision service](concepts.md#pdp-policy-decision-point) makes no data queries; the application makes no policy decisions.
+A central service holds the access policy and answers "what can this user see or do?" on request. Each application, or a [adapter](concepts.md#pep-policy-enforcement-point) within it, enforces that answer at the point of data access. The [decision service](concepts.md#pdp-policy-decision-point) makes no data queries; the application makes no policy decisions.
 
 This separation keeps policy consistent across applications and auditable in one place. Applications can be updated independently of the policy service, and adding a new application to the platform does not require re-implementing the policy logic.
 
@@ -62,17 +62,17 @@ If the revocation channel is disrupted, the safe response is to stop serving dat
 
 Usher is Overture's [authorization](concepts.md#authentication-vs-authorization) service. It implements the decision/enforcement separation, explicit grant model, encrypted token delivery, and revocation channel described above.
 
-**Resources and categories** are Usher's units of access control. A resource is a collection of records (a cohort, a study, an index, or any other logical unit defined by the instance). A category is a named level of sensitivity, also defined by the instance, and a resource lists the ones its records carry. What a category means in terms of actual records is configuration held by the application's enforcement plugin. A grant reaches the records carrying the category it names, so a resource holding a mix is served in part rather than whole. Usher never sees the underlying data or its schema.
+**Resources and categories** are Usher's units of access control. A resource is a collection of records (a cohort, a study, an index, or any other logical unit defined by the instance). A category is a named level of sensitivity, also defined by the instance, and a resource lists the ones its records carry. What a category means in terms of actual records is configuration held by the application's enforcement adapter. A grant reaches the records carrying the category it names, so a resource holding a mix is served in part rather than whole. Usher never sees the underlying data or its schema.
 
 **Grants** are explicit records: this holder acts in this role, on this category, within this resource. Usher enforces deny-by-default. No grant means no access, always.
 
-**[The Usher token](concepts.md#usher-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It carries, for each resource the user holds a grant in, the categories granted there and what they may do with each. A shared library called the bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The plugin then applies that decision before any query reaches the data layer. The token never reaches the user.
+**[The Usher token](concepts.md#usher-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It carries, for each resource the user holds a grant in, the categories granted there and what they may do with each. A shared library called the bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The adapter then applies that decision before any query reaches the data layer. The token never reaches the user.
 
 **The revocation channel** keeps a live connection open so Usher can announce a grant change immediately, with regular polling as a fallback if that connection drops. Each bridge subscribes to it.
 
 If the channel goes quiet for longer than a configurable grace period, the bridge stops serving data and reports itself unavailable until the connection returns. That is deliberate: an attacker who silences the channel gains nothing, because silence denies access rather than preserving it.
 
-**Usher does not touch the underlying data.** It does not write to the data store, run migrations, or modify records. Access policy is applied at query time by the plugin. An instance can adopt Usher without touching the data it protects, and removing it leaves no data artifacts behind.
+**Usher does not touch the underlying data.** It does not write to the data store, run migrations, or modify records. Access policy is applied at query time by the adapter. An instance can adopt Usher without touching the data it protects, and removing it leaves no data artifacts behind.
 
 **Community data governance.** For instances where a specific community holds data sovereignty rights over their contributed data, Usher's **Custodian** role lets a community representative govern grants for their categories independently of platform administrators. The role is in the design and not in the first release, because nothing appoints a custodian in it. See [Concepts](concepts.md#privileged-roles) for the Custodian and Admin roles.
 
@@ -99,7 +99,7 @@ PDP/PEP/PAP) before Usher-specific vocabulary.
 - [Concepts](concepts.md): ABAC, PDP/PAP/PEP, Usher tokens, fail-secure, revocation
 - [Why Usher](why-usher.md): architectural context and tool comparisons
 - [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md): full document set with reading order by role
-- [Plugin integration](https://github.com/overture-stack/usher/blob/main/.dev/design/plugin-integration.md): the API contract for building an enforcement plugin
+- [Adapter integration](https://github.com/overture-stack/usher/blob/main/.dev/design/adapter-integration.md): the API contract for building an enforcement adapter
 - [Permissions model](https://github.com/overture-stack/usher/blob/main/.dev/design/permissions-model.md): resources, categories, grants, and what each person may do with the data they reach
 - [Security model](https://github.com/overture-stack/usher/blob/main/.dev/design/security-threat-model.md): OWASP Top 10 mapping and security design decisions
 - [Glossary](https://github.com/overture-stack/usher/blob/main/.dev/design/glossary.md): quick-reference definitions

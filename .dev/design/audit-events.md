@@ -28,9 +28,9 @@ the `Z` designator, never a numeric offset**: RFC 3339 permits `+05:00`, so this
 A corpus carrying mixed offsets cannot be ordered without resolving every entry first, and
 cross-service ordering is the whole purpose of a correlated trail. Two records written minutes apart
 can appear a day apart when each writer picks its own frame, and neither value looks wrong on
-inspection. **Seconds always present**, which RFC 3339's `full-time` already requires, written down
-because truncating to minutes is an ordinary formatting convenience elsewhere and would collapse the
-ordering of everything inside one minute. Fractional seconds are permitted and not required.
+inspection. **Seconds always present**, which RFC 3339's `full-time` already requires. Truncating to minutes is
+an ordinary formatting convenience elsewhere and collapses the ordering of everything inside one
+minute. Fractional seconds are permitted and not required.
 
 ## The payload
 
@@ -57,11 +57,11 @@ because it holds the subject itself rather than a surrogate, recorded under user
 discipline in `permissions-model.md`. Had it been an internal surrogate instead, no other service
 could have produced it and `actorId` would correlate with nothing.
 
-That it holds by design rather than by coincidence is the part worth recording, because the two look
-identical right up until someone changes one of them.
+It holds by design rather than by coincidence, and the two look identical right up until someone
+changes one of them.
 
 **`actorId` is always derived from the token by whichever service emits the event, and is never
-taken from the request.** Stating it because a neighbouring field elsewhere on the platform is the
+taken from the request.** A neighbouring field elsewhere on the platform is the
 opposite: Arranger's `saveSet` mutation takes a `userId` argument supplied by the client and persists
 it as the set's owner. That field and this one are not two names for one thing. They have opposite
 trust properties, and the mistake a shared name would invite is reading a client-asserted value as an
@@ -80,13 +80,12 @@ access countable, which is what answers how much open access a deployment actual
 source may include more than one producer, so a source is the context an event happened in rather
 than the process that emitted it. Usher is planned as stateless replicas sharing one policy database.
 Giving each replica its own source would put one logical occurrence under two keys, and deduplication
-would not catch it. Which replica served a request is still worth recording; it belongs beside the
+would not catch it. Which replica served a request still belongs in the event; it belongs beside the
 other domain detail, where it does not enter the key.
 
 **`system` is not an afterthought value, and the first event on the platform is likely to be one.** A
 catalogue-load check runs on nothing a principal did, so the first structured event an ushered
-application emits carries `actorType: system` and no `actorId` at all. That is worth having rather
-than awkward: the envelope gets exercised from the beginning on the case with no actor, so absence
+application emits carries `actorType: system` and no `actorId` at all. The envelope is therefore exercised from the beginning on the case with no actor, so absence
 handling has to be right before anything carrying a real principal is ever emitted. The usual order
 is the reverse, a shape designed around the populated case with absence bolted on by whoever first
 hits it, which is how an empty string ends up where a null belongs.
@@ -114,7 +113,7 @@ in-process detection. Four exist:
 | `resource.orphaned`            | a resource left with no owner                                         | a state reached by a deletion elsewhere, not an action anyone performed          |
 | `revocationChannel.modeChange` | the channel going quiet and the bridge raising                        | the absence of events, which no rule over present events can see                 |
 
-**The last one is the general case worth stating: silence.** Every other condition is a pattern in
+**The last one is the general case: silence.** Every other condition is a pattern in
 what arrived, and a downstream rule can find it. A channel that stops carries no event to match, so
 something has to notice that nothing came, and only the component expecting it can.
 
@@ -174,9 +173,8 @@ only verb to noun.**
     ownership.transfer  produces    ownership.transfer
 
 Both vocabularies use the same `entity.action` shape, both are unbuilt, and they will be written at
-different times by different people. So the correspondence is stated rather than left to care: a
-reader holding one should be able to predict the other, and an event with no permission behind it, or
-a permission that emits nothing, is a gap in one of the two lists. See
+different times by different people. A reader holding one should be able to predict the other, and an event with no permission behind it,
+or a permission that emits nothing, is a gap in one of the two lists. See
 [rabac-alignment.md](../docs/atlas/roadmap/rabac-alignment.md) for the permission vocabularies.
 
 ## A note on vocabulary
@@ -199,23 +197,23 @@ see here), `warning` is anomalous and worth reviewing, `critical` demands immedi
 
 Usher logs **who holds what grants, and when that changes.** It has no
 visibility into whether a token was used, what query was run, or what records were returned.
-Enforcement happens at the plugin in each consuming application (Arranger, Stage, and so on), which
+Enforcement happens at the adapter in each consuming application (Arranger, Stage, and so on), which
 applies a decision the controller already made, and logging what it applied is that application's
 responsibility.
 
 A complete audit trail for a health data access event requires correlating two log sources:
 Usher (permission in place) and the consuming app (permission exercised). Neither alone is
-sufficient for full forensic reconstruction. See [plugin-integration.md](plugin-integration.md)
+sufficient for full forensic reconstruction. See [adapter-integration.md](adapter-integration.md)
 for the access-decision logging requirements consuming apps must implement.
 
 **Every control-plane capability pairs with an event here, and no data-plane capability does.** That
-asymmetry is structural rather than an omission, and it is worth stating because it otherwise reads
-as a gap in the table below and invites someone to close it by inventing `record.readSucceeded`.
+asymmetry is structural rather than an omission. Read as a gap it invites someone to close it by
+inventing `record.readSucceeded`.
 
 |                                                    | Who may perform it                            | Who records that it happened            |
 | -------------------------------------------------- | --------------------------------------------- | --------------------------------------- |
 | A control-plane capability, such as `grant.create` | someone acting against Usher's own API        | **Usher**, as an event in this document |
-| A data-plane capability, such as `record.read`     | someone acting against an ushered application | **that application**, in its own log    |
+| A data-plane capability, such as `record.view`     | someone acting against an ushered application | **that application**, in its own log    |
 
 Usher never observes a read, so it cannot record one. What it records is the decision, at the token
 exchange, and the token exchange is the only Usher event a data-plane capability produces. The
@@ -223,7 +221,7 @@ application records the exercise, and the two correlate through `actorId`, which
 provider's `sub` and therefore producible by both.
 
 **Two consequences follow.** An ushered application that logs nothing leaves half the trail missing
-and Usher cannot detect that, which is why the requirement sits in the plugin contract rather than
+and Usher cannot detect that, which is why the requirement sits in the adapter contract rather than
 here. And the verb-to-noun pairing below is a control-plane rule: applying it to the data plane
 produces events Usher has no way to emit.
 
@@ -298,8 +296,7 @@ legitimate.
   flowing, and it does not gate the permissions model.
 - **A shared entity vocabulary is owed, and only the flat type form owes it.** Two services meaning
   different things by one entity produces two occurrences under one name, and a consumer joins them.
-  There is no registry and no owner. The failure is silent, which is why it is recorded as owed
-  rather than left to discipline.
+  There is no registry and no owner. The failure is silent.
 - `grantRateThreshold` configures when `grant.rateExceeded` fires, as an `operationCount` over
   a `windowSeconds`. The name is settled; both default values are not. Where the count is kept is a
   scaling question rather than a detail: see multi-instance propagation in
@@ -322,7 +319,5 @@ legitimate.
   this vacancy against a resource left without an owner and explains why the two resolve in opposite
   directions. The warning to that resource's owners is a separate delivery record and is not this
   event either way.
-- The auto-promotion event is removed rather than renamed: the non-empty-owner invariant removes
-  the case it recorded, so nothing will ever emit it.
 - Ownership events still read as transfer between single owners. Ownership is a non-empty set, so
   adding and removing an owner are the primary operations and transfer is a compound of the two.

@@ -139,12 +139,12 @@ The PEP (door + staff) is what physically stops you from entering.
 
 In Usher: two pieces working together inside the application that serves the data.
 
-The **bridge** (`@overture-stack/usher-bridge`) is a shared library. It obtains the Usher token
+The **bridge** (`@overture-stack/usher-express-bridge`) is a shared library. It obtains the Usher token
 from Usher, decrypts it, and works out one of three answers: deny the request, narrow it with a
 filter, or allow it unrestricted.
 
-The **plugin** (`@overture-stack/usher-arranger`, and one per application after it) takes that
-answer and acts on it. When the answer is "narrow", the plugin translates the filter into whatever
+The **adapter** (`@overture-stack/arranger-usher-adapter`, and one per application after it) takes that
+answer and acts on it. When the answer is "narrow", the adapter translates the filter into whatever
 query language its own data store speaks.
 
 Neither runs in the browser. Both live in the service that holds the data.
@@ -435,7 +435,7 @@ to the identity layer, which validates each Visa's signature against the issuer'
 endpoint, checks the issuer against a configured trusted-issuers list, verifies expiry, and maps
 validated claims to token attributes. Usher reads those attributes and maps them to
 `grants` in its policy store. Which component performs that validation for a given
-instance is an integration choice rather than a settled part of this design. The per-app PEP plugins see only
+instance is an integration choice rather than a settled part of this design. The per-app PEP adapters see only
 the Usher token. They do not know whether a grant came from an internal admin action or an
 external Passport Visa.
 
@@ -450,7 +450,7 @@ external Passport Visa.
            maps ControlledAccessGrants claims to Keycloak token attributes
       -> Usher reads Keycloak attributes, maps to grants
       -> Usher issues JWE Usher token
-      -> PEP plugin enforces it as normal (unchanged)
+      -> PEP adapter enforces it as normal (unchanged)
 
 ### Visa expiry and revocation
 
@@ -573,7 +573,7 @@ closed to them. The two markers above each sit next to the write that changes th
 writes has to be remembered.
 
 A per-token blocklist (approach 2) is more precise. But it requires the issuer to track every token
-ID ever issued, and plugins to check the blocklist on each request. That reintroduces the
+ID ever issued, and adapters to check the blocklist on each request. That reintroduces the
 per-request network call, at much greater cost than either marker.
 
 ---
@@ -631,7 +631,7 @@ In practice, every instance will have its own name for what Usher calls a "resou
 These domain-specific names appear in:
 
 - The management UI's labels (configured per instance)
-- The plugin's field mapping config, which names the field identifying which records belong to a
+- The adapter's field mapping config, which names the field identifying which records belong to a
   given resource
 - User-facing documentation for that instance
 
@@ -640,10 +640,10 @@ Usher always uses "resource". Domain terms are a presentation layer concern.
 
 **A worked example.** Suppose an instance calls its resources "studies". A study is the set of
 records sharing a value in some field. A researcher is "in" a study if they hold a grant in the
-corresponding Usher resource. If that instance's search plugin is configured with
+corresponding Usher resource. If that instance's search adapter is configured with
 `fieldName: "study_id"`, then a resource named `PEDS-2024` corresponds to records where
 `study_id == "PEDS-2024"`. Usher never learns the field name. That mapping lives entirely in the
-plugin config.
+adapter config.
 
 The field name is chosen per catalogue, meaning per body of data with its own store and schema,
 not once per instance. A single
@@ -701,10 +701,10 @@ Here is one, for a researcher who reaches two studies:
   "generatedAt": 1718611200,
 
   "permissions": {
-    "HEART_STUDY": { "open":       { "record": ["read", "update"] },
-                     "controlled": { "record": ["read"] } },
+    "HEART_STUDY": { "open":       { "record": ["view", "update"] },
+                     "controlled": { "record": ["view"] } },
 
-    "LUNG_COHORT": { "open":       { "record": ["read"] } }
+    "LUNG_COHORT": { "open":       { "record": ["view"] } }
   }
 }
 ```
@@ -715,10 +715,10 @@ nothing else. Every other resource on the platform is absent, and absence means 
 than a denial recorded somewhere.
 
 `payloadVersion` is the one member not about this user at all. It names the schema the rest of the
-token is written in, agreed between Usher and the plugin when the token was issued, so that a future
-version can add something an older plugin would have to be told about rather than allowed to skip.
+token is written in, agreed between Usher and the adapter when the token was issued, so that a future
+version can add something an older adapter would have to be told about rather than allowed to skip.
 
-Three things about the shape are worth naming, because each is a decision rather than a detail.
+Three things about the shape are decisions rather than details.
 
 **A resource's unrestricted portion is a category like any other.** `open` is named in a grant the
 same way `controlled` is. Nothing is reachable because a grant declined to exclude it, so there is
@@ -730,21 +730,21 @@ either covers.
 
 **Role and ownership both resolve before the token is written, which is why neither appears in it.**
 A role is how access is granted rather than how it is enforced: the controller resolves a role to
-permissions first, so a plugin tests permissions and never has to learn what an instance means by
+permissions first, so an adapter tests permissions and never has to learn what an instance means by
 "viewer". Ownership is a power over how access is managed, exercised against Usher itself, so
 anything enforcing a query has its answer already.
 
 There is also no empty list. Holding no grant on a resource means the same as the resource being
 absent, so the token has one state to enforce rather than two that had to be told apart. For the
-authoritative schema, written as the `PermissionsPayload` type the plugin receives, see
+authoritative schema, written as the `PermissionsPayload` type the adapter receives, see
 [security-workflow.md: The payload as a type](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md#the-payload-as-a-type).
 
-The app plugin (PEP) reads the permissions payload and applies it to the outgoing query, before the query
+The app adapter (PEP) reads the permissions payload and applies it to the outgoing query, before the query
 reaches the data layer. The payload is enforced server-side, not client-side. The client never
 receives data it was not supposed to see. It cannot bypass the payload by modifying the query.
 
-Usher tokens are the core mechanism by which Usher delegates enforcement to per-app plugins,
-without requiring those plugins to understand the full policy model. The plugin does not need to
+Usher tokens are the core mechanism by which Usher delegates enforcement to per-app adapters,
+without requiring those adapters to understand the full policy model. The adapter does not need to
 know why a user is excluded from certain data. It only needs to translate the permissions payload into
 its app's native query format.
 

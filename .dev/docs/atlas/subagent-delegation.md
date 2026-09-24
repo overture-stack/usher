@@ -113,13 +113,13 @@ what someone who knew what the word meant did not think to exclude.
 
 **A second one, cheaper but sharper.** The corpus already carries a warning that this specific word
 names unrelated concepts across services, and that conflating two of them yields a filter that is
-syntactically valid and semantically wrong. That sentence sat in a plugin document while the word
+syntactically valid and semantically wrong. That sentence sat in an adapter document while the word
 went unexamined in the terminology rules. Nobody had connected them, and connecting them is the kind
 of link a fresh reader makes because both passages are equally new to it.
 
 ### Interim findings on delegation itself
 
-Two results, both passing, so this is early. What has shown up twice is worth recording now.
+Two results, both passing, so this is early. What has shown up twice is below.
 
 **The reliable value is not the answer, it is the assumption the agent cannot make.** Both agents
 produced a scope caveat unprompted, and both caveats exposed a defect: one that file enumeration

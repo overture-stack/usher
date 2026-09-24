@@ -27,7 +27,7 @@ SSE backpressure, connection cleanup on abrupt disconnect, and graceful shutdown
 Node are less documented. For a service that must maintain persistent SSE revocation streams,
 this was the deciding gap.
 
-Note: PEP plugins (`usher-arranger`, `usher-lyric`) are middleware for their respective target
+Note: PEP adapters (the Arranger adapter, the Lyric adapter) are middleware for their respective target
 applications and are unaffected by this choice; they communicate with the Usher controller over
 HTTP regardless of framework.
 

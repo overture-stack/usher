@@ -142,7 +142,7 @@ events, which gives the word up to `list`. One was the capability vocabulary, wh
 and keeps its own word. The remaining two are both bodies of data but not the same unit, since one
 `catalogueId` can compose a second queryable type backed by an unrelated index, so the bare word
 keeps Usher's unit and Arranger's is qualified. That split was already implied by the glossary and
-contradicted in `plugin-integration.md`, which asserted in one place that Usher has no such concept
+contradicted in `adapter-integration.md`, which asserted in one place that Usher has no such concept
 and in another that a body of data is its own. The verb belongs here rather than under the
 part-of-speech rule above: `catalogued` meant listed, which is not the noun's meaning in a second
 grammatical role but a third sense.
@@ -262,12 +262,12 @@ the first rule is holding in place, and plainness has no business touching it.
 
 **Four classes, and only one of them is snake_case.**
 
-| Class                                                                                                                | Convention              | Why                                                                                                                                                                  |
-| -------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JSON and wire names: an Usher token's `generatedAt`, plugin config's `fieldName`, an audit event's `data` properties | camelCase               | nothing forces otherwise, so the more readable form wins                                                                                                             |
-| A multi-word segment inside a dotted name: `grant.rateExceeded`                                                      | camelCase               | forced: `_` is barred inside a dotted name, since metrics systems fold `.` into `_` and two names then collide                                                       |
-| PostgreSQL tables and columns: `grant_decisions`, `revoked_at`                                                       | snake_case              | correctness, not taste. Postgres folds unquoted identifiers to lowercase, so `resourceUsers` becomes `resourceusers` unless every reference is double-quoted forever |
-| CloudEvents context attributes: `specversion`, `dataschema`                                                          | lowercase, no separator | the spec restricts them to lowercase alphanumerics                                                                                                                   |
+| Class                                                                                                                 | Convention              | Why                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JSON and wire names: an Usher token's `generatedAt`, adapter config's `fieldName`, an audit event's `data` properties | camelCase               | nothing forces otherwise, so the more readable form wins                                                                                                             |
+| A multi-word segment inside a dotted name: `grant.rateExceeded`                                                       | camelCase               | forced: `_` is barred inside a dotted name, since metrics systems fold `.` into `_` and two names then collide                                                       |
+| PostgreSQL tables and columns: `grant_decisions`, `revoked_at`                                                        | snake_case              | correctness, not taste. Postgres folds unquoted identifiers to lowercase, so `resourceUsers` becomes `resourceusers` unless every reference is double-quoted forever |
+| CloudEvents context attributes: `specversion`, `dataschema`                                                           | lowercase, no separator | the spec restricts them to lowercase alphanumerics                                                                                                                   |
 
 **Values are open**, and they are not obviously a database question: a category name travels as a JSON
 key inside an Usher token, so `indigenous_data` sits on the wire beside `generatedAt`, while a state
@@ -288,10 +288,10 @@ them is a question about the thing being described, not about which is the appro
 
 `client` is not available for either, being reserved for a machine principal. `adopter` is retired.
 
-**The qualifier is not decoration, and dropping it changes what the sentence denotes.** A platform runs applications that Usher does not govern: Elasticsearch, Postgres and Keycloak are all applications by any ordinary reading, and none of them carries a plugin. So a bare `application` names a set that includes them, and every claim made about what an application does, holds in configuration, or enforces is then false of most of that set. **Carrying a plugin is what makes one ushered**, and it is the property every such claim actually depends on. Where a sentence is about the thing that enforces, `ushered` is load-bearing and its absence is a defect rather than brevity.
+**The qualifier is not decoration, and dropping it changes what the sentence denotes.** A platform runs applications that Usher does not govern: Elasticsearch, Postgres and Keycloak are all applications by any ordinary reading, and none of them carries an adapter. So a bare `application` names a set that includes them, and every claim made about what an application does, holds in configuration, or enforces is then false of most of that set. **Carrying an adapter is what makes one ushered**, and it is the property every such claim actually depends on. Where a sentence is about the thing that enforces, `ushered` is load-bearing and its absence is a defect rather than brevity.
 
 **And where a sentence needs a role rather than the thing, the role extends the term rather than
-replacing it.** An ushered service acting as the requester in a token exchange or as a plugin's
+replacing it.** An ushered service acting as the requester in a token exchange or as an adapter's
 target is still an ushered service; `requesting application` and `target service` describe what it is
 doing in that sentence. They stop being descriptions and become synonyms the moment one of them
 appears where the thing itself is being named.
@@ -307,12 +307,12 @@ in front of.
 
 **It also draws the plane boundary for free.** Usher is a service and is not a data service, so the
 term separates the two sides without a sentence explaining the separation. The controller, bridge and
-plugin are not data services either.
+adapter are not data services either.
 
 **Use it where the precision earns its place, not everywhere.** Most sentences do not turn on which
 kind of thing is meant, and a sweep would trade a readable word for a longer one in every passage
 that never needed it, which is the plain-word rule below applied to a term of art that does have a
-definition. Reach for it at the plane boundary, in the plugin contract, and wherever a reader could
+definition. Reach for it at the plane boundary, in the adapter contract, and wherever a reader could
 otherwise think Usher were one of them.
 
 ## Field against field name, and how to tell which
@@ -328,8 +328,8 @@ that record holds there.
 | configuring, matching, identifying, passing, storing                | **field name** | a name is what identifies the same field across every record, which is why configuration holds names |
 | cardinality, depth, values, or which thing in the data plays a role | **field**      | those are properties of the field, not of its name                                                   |
 
-So a plugin's configuration holds a resource **field name**; the resource **field** is what must be
-single-valued. `usher-arranger` maps to fieldNames and fieldValues, and Usher never learns either
+So an adapter's configuration holds a resource **field name**; the resource **field** is what must be
+single-valued. The Arranger adapter maps to fieldNames and fieldValues, and Usher never learns either
 field name.
 
 **Only two identifiers are legitimate: `fieldName` and `fieldValue`.** An identifier ending in
@@ -370,12 +370,12 @@ name them, then say what happened.
 
 **Four subjects, narrowing.** Picking the wrong one asserts something the design does not say.
 
-| Subject                                            | When                                     | Example                                                                      |
-| -------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
-| **Usher**                                          | the software behaves this way everywhere | Usher never learns the field name                                            |
-| **the controller**, **the bridge**, **the plugin** | the component matters                    | the controller defines it, the bridge receives it, the plugin enforces it    |
-| **an instance**                                    | the point is that installs differ        | roles are defined per instance's configuration, not by Usher itself          |
-| **a controller instance**                          | the point is a running process           | a controller instance going down takes its bridges' push connections with it |
+| Subject                                             | When                                     | Example                                                                      |
+| --------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| **Usher**                                           | the software behaves this way everywhere | Usher never learns the field name                                            |
+| **the controller**, **the bridge**, **the adapter** | the component matters                    | the controller defines it, the bridge receives it, the adapter enforces it   |
+| **an instance**                                     | the point is that installs differ        | roles are defined per instance's configuration, not by Usher itself          |
+| **a controller instance**                           | the point is a running process           | a controller instance going down takes its bridges' push connections with it |
 
 **The third line is the one that goes wrong.** Writing "Usher defines its own roles" says the
 software ships them, which is the opposite of what the sentence means. Where a per-install choice is
@@ -389,8 +389,8 @@ values.
 
 ## Naming Usher and its parts
 
-**Usher** is the whole: controller, bridge and plugin. **The controller** is the deployed service,
-and the only one of the three that a network address reaches, since the bridge and the plugin are
+**Usher** is the whole: controller, bridge and adapter. **The controller** is the deployed service,
+and the only one of the three that a network address reaches, since the bridge and the adapter are
 libraries running inside an ushered service's own process. So a bare "the service" resolves to the
 controller where a process is meant and to Usher where the thing Overture offers is meant, which is
 why it should not stand alone in a sentence that could be either. Name the controller when a
@@ -475,6 +475,8 @@ pass, not a second concept.
 | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | requester                                                                                           | principal                                                                         | reads as neutral but adds nothing principal does not carry                                                                                                                                             |
 | caller                                                                                              | principal                                                                         | suggests a machine, which is the assumption the vocabulary exists to avoid                                                                                                                             |
+| plugin, for the application-side enforcement component                                              | adapter                                                                           | an Usher plugin reads as something that extends Usher itself, which nothing does yet                                                                                                                   |
+| adapter, for the identity-provider side                                                             | connector                                                                         | adapter now names the application side, so one word would face both ways                                                                                                                               |
 | approve, approval (as the act)                                                                      | grant                                                                             | a second noun for one act made a rare separation look structural                                                                                                                                       |
 | member (as a role name)                                                                             | a viewer, the base role carrying read access and no authority over other people's | named belonging rather than an act, so calling the base role `member` implied an owner was not one. `reader` was rejected: this corpus uses "a reader" forty times for whoever is reading the document |
 | membership, memberships                                                                             | a principal or group holding a role in a resource                                 | named a relation without saying what it entails; `group_users` and `resource_categories` name both sides, and a role is what the row carries                                                           |
@@ -524,14 +526,14 @@ from `git ls-files`, which emits repo-relative paths with no prefix, so its `gre
 does what it says. Verified rather than assumed, because the two paths disagreeing was the whole
 defect.
 
-| Term     | Uses                                                                        | Entry | What is wrong                                                                                                                                                                                                                                                                                                                                                                                                                           | Order |
-| -------- | --------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| artifact | 51                                                                          | none  | two live senses, and one is security-relevant: a derived artifact is what enforcement fails open on, while the onboarding artifact is a published document                                                                                                                                                                                                                                                                              | 2     |
-| ceiling  | 32 across 9 files                                                           | none  | the central term of the two-stage structure, load-bearing on the token calculation, and defined nowhere. It reaches published `docs/concepts.md`. Added to this list because a reader asked what "the ceiling clause" meant and nothing in the corpus answers. A second sense is already present: `roadmap.md:376` has a `bridge-per-instance ceiling`, a numeric capacity limit rather than a permission maximum                       | 3     |
-| payload  | 122                                                                         | none  | **two unrelated referents**: an Usher token's claim set, and the CloudEvents `data` object of an audit event, which share no field, lifecycle or consumer. Separately, the corpus contradicts itself on whether a permissions payload is the token or a field inside it, and `enforcement payload` is a third label related to neither in writing                                                                                       | 1     |
-| corpus   | 40                                                                          | none  | two unrelated referents: 24 uses are a set of executable conformance cases living in another repository, 15 are these documents. Bare `the corpus` appears 14 times and resolves only from context, and only 7 of those 24 carry the qualifier `conformance`. Neither sense is data, so the word is also unavailable for the data sense it reads as                                                                                     | 4     |
-| plane    | 87                                                                          | none  | one meaning and no defect, but a settled concept carrying no definition, which the term-of-art rule forbids. Its definition sits in an `architecture.md` disambiguation note while the word reaches `README.md` and the onboarding document. One stray compound, `policy-plane`, appears once and is never defined                                                                                                                      | 5     |
-| scope    | 211 in prose, plus 12 that are an HTML table attribute rather than the word | none  | at least eight senses: the boundary of the work, a section's applicability, the breadth a grant reaches, OAuth's token string, two different named data fields, the region a field name resolves in, the extent of a revocation, and the verb. `plugin-integration.md` already warns that this word names unrelated concepts across services and that conflating two yields a filter that is syntactically valid and semantically wrong | 6     |
+| Term     | Uses                                                                        | Entry | What is wrong                                                                                                                                                                                                                                                                                                                                                                                                                            | Order |
+| -------- | --------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| artifact | 51                                                                          | none  | two live senses, and one is security-relevant: a derived artifact is what enforcement fails open on, while the onboarding artifact is a published document                                                                                                                                                                                                                                                                               | 2     |
+| ceiling  | 32 across 9 files                                                           | none  | the central term of the two-stage structure, load-bearing on the token calculation, and defined nowhere. It reaches published `docs/concepts.md`. Added to this list because a reader asked what "the ceiling clause" meant and nothing in the corpus answers. A second sense is already present: `roadmap.md:376` has a `bridge-per-instance ceiling`, a numeric capacity limit rather than a permission maximum                        | 3     |
+| payload  | 122                                                                         | none  | **two unrelated referents**: an Usher token's claim set, and the CloudEvents `data` object of an audit event, which share no field, lifecycle or consumer. Separately, the corpus contradicts itself on whether a permissions payload is the token or a field inside it, and `enforcement payload` is a third label related to neither in writing                                                                                        | 1     |
+| corpus   | 40                                                                          | none  | two unrelated referents: 24 uses are a set of executable conformance cases living in another repository, 15 are these documents. Bare `the corpus` appears 14 times and resolves only from context, and only 7 of those 24 carry the qualifier `conformance`. Neither sense is data, so the word is also unavailable for the data sense it reads as                                                                                      | 4     |
+| plane    | 87                                                                          | none  | one meaning and no defect, but a settled concept carrying no definition, which the term-of-art rule forbids. Its definition sits in an `architecture.md` disambiguation note while the word reaches `README.md` and the onboarding document. One stray compound, `policy-plane`, appears once and is never defined                                                                                                                       | 5     |
+| scope    | 211 in prose, plus 12 that are an HTML table attribute rather than the word | none  | at least eight senses: the boundary of the work, a section's applicability, the breadth a grant reaches, OAuth's token string, two different named data fields, the region a field name resolves in, the extent of a revocation, and the verb. `adapter-integration.md` already warns that this word names unrelated concepts across services and that conflating two yields a filter that is syntactically valid and semantically wrong | 6     |
 
 **`schema` was surveyed and cleared.** Seven compounds, entity, database, payload, token, event,
 config and JSON Schema, all carrying one meaning applied to different subjects. A general word

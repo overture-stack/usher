@@ -119,14 +119,14 @@ something inside one schema.
 covers.** A partitioning category carves up the record set, and `open` is what the partitioning ones
 leave; an overlay selects within that set, so a record can carry an overlay and still be open. The
 same holds one level down, where `basic` is what the partitioning field categories leave. Which one a
-category is lives in the plugin's mapping rather than here, for the reason nothing else about a
+category is lives in the adapter's mapping rather than here, for the reason nothing else about a
 category's meaning lives here: Usher can neither know nor verify what it selects. See the
 partitioning-against-overlay decision in [decisions.md](decisions.md), which also records why getting
 it wrong fails silently in one direction and loudly in the other.
 
 Categories are independent axes: holding a grant for one category does not imply holding a grant
 for another, even within the same resource. What a category name means in terms of actual records
-or fields is instance configuration that lives in the enforcement plugin, not in Usher.
+or fields is instance configuration that lives in the enforcement adapter, not in Usher.
 
 ### Category grants
 
@@ -280,12 +280,39 @@ added later is a migration, while a wire format changed later is a negotiated pa
 coordinated deploy, so the token nests by entity from the start and the schema does not carry
 columns nothing uses yet.
 
-| Entity     | Actions                                                     | What it is                                                                                                                                                          |
-| ---------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `record`   | `aggregate`, `read`, `export`, `create`, `update`, `delete` | one row of data in a resource, in its current state. Listed in order of increasing reach, which is the order the seeded roles add them in                           |
-| `field`    | `read`, `update`, `export`, `aggregate`                     | one part of a record. No `create` or `delete`: a field exists per schema rather than per grant. The three read-shaped actions are separate for a reason given below |
-| `revision` | `read`, `export`                                            | a prior state of a record, where the service keeps them. A submission service does; a search index does not                                                         |
-| `artifact` | `create`, `read`, `update`, `delete`, `export`              | a collection of records someone assembled and kept, carrying provenance naming the resources it drew on. A saved set in Arranger is one                             |
+| Entity     | Actions                                                 | What it is                                                                                                                                                        |
+| ---------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record`   | `count`, `view`, `export`, `create`, `update`, `delete` | one row of data in a resource, in its current state. Listed in order of increasing reach, which is the order the seeded roles add them in                         |
+| `field`    | `count`, `view`, `export`, `update`                     | one part of a record. No `create` or `delete`: a field exists per schema rather than per grant. The three members of `read` are separate for a reason given below |
+| `revision` | `view`, `export`                                        | a prior state of a record, where the service keeps them. A submission service does; a search index does not                                                       |
+| `artifact` | `create`, `view`, `update`, `delete`, `export`          | a collection of records someone assembled and kept, carrying provenance naming the resources it drew on. A saved set in Arranger is one                           |
+
+**`read` is a capability group rather than a capability.** It names an entity's read-shaped
+capabilities together: `count`, `view` and `export` on a record or a field, `view` and `export` on a
+revision or an artifact, and `view` alone on a control-plane entity. Someone writing a role may name
+`read` and get all of them, or name them one by one.
+
+**It separates the two meanings one word had.** `read` was both the R in create, read, update and
+delete and the act of seeing a record, which is why four acts in the prose met six capabilities in
+the matrix. As a group it is only the first, and `view` is only the second.
+
+**A group is expanded when a role is written, and nothing stores it.** Naming `read` writes its
+members into `role_permissions`, so no capability is named `read`, no token carries it and no adapter
+tests for it, the same as a role name. Expanded at issuance instead, a group that gained a member
+would widen every role naming it, on every grant at once, with no act anyone performed. Expanded at
+writing, a new member reaches a role only when someone adds it under `role.define`.
+
+**A capability group is not a group of principals.** A `group` in this model is a set of people a
+grant can name; a capability group is a set of capabilities a role can name. The two never meet,
+since a grant names a role and a role names capabilities.
+
+**Prior art.** Cedar has the same device as action groups: an action is classified as a member of a
+collection, and a policy naming the collection covers its members ([Cedar
+terminology](https://docs.cedarpolicy.com/overview/terminology.html)). AWS IAM keeps List apart from
+Read in its access levels ([IAM access
+levels](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_understand-policy-summary-access-level-summaries.html)),
+which is the distinction between `count` and `view`, and a group keeps it: the members stay
+separately grantable.
 
 **`export` rather than `download`, and it is not a copy control.** Bulk egress is a different act
 from reading one record on a screen, with a different risk profile, and it warrants its own event
@@ -293,10 +320,43 @@ and its own approval. It does not prevent anyone copying what they can already r
 says so elsewhere in as many words. `download` is the word a portal's button may use, which is what
 `display_name` is for.
 
-**`aggregate` is contributing to a count or a facet without being individually readable.** It is the
-discovery-versus-access split, and the seam is real: a plugin can apply one filter to hits and
-another to aggregations. It carries a re-identification risk on small cells, which needs a minimum
-cell size at the plugin rather than here.
+**`count` is contributing to a count without being individually viewable, and it counts only.** It
+is the discovery-versus-access split. It carries a re-identification risk on small cells, which
+needs a minimum cell size at the adapter rather than here. Serving it needs the enforcement seam to
+tell the aggregation path from the record path, which the first integration's does not yet, so until
+it does a grant of `count` without `view` is denied everywhere.
+
+**Aggregation is the operation rather than a capability, and what an aggregation returns decides the
+capability it needs.** So nothing named `aggregate` is ever granted, and a role meant for counts is
+refused the extremes of a sensitive numeric field rather than handed them.
+
+| What comes back                                             | Needs         |
+| ----------------------------------------------------------- | ------------- |
+| a number of records, or of distinct values                  | `count`       |
+| a number of records per boundary the principal supplied     | `count`       |
+| a value, such as a bucket's key                             | `view`        |
+| buckets placed where the data lies, as a histogram's are    | `view`        |
+| a statistic derived from values: `min`, `max`, `avg`, `sum` | `view`        |
+| records, as `top_hits` returns                              | `record.view` |
+
+**The line runs through the result, not between aggregations.** One aggregation can return both
+kinds: a bucket carries its key, a field value, beside its count, and one statistics object carries a count beside a
+minimum. So enforcement checks what a request selects, not which aggregation it names, which is
+recorded against the seam in [adapter-integration.md](adapter-integration.md).
+
+**The rule behind the table: a count is safe when the principal already knew the boundaries.**
+Ranges the principal supplied disclose only how many records fell in each. Buckets the engine chose disclose
+where the data lies, since the choice is the data. `avg` and `sum` sit with the values because over
+one record they are the value.
+
+**That holds for one response and not for a series.** Ranges one unit wide rebuild a histogram, so
+counting by a field's values, through ranges or through a filter, is a route to the values
+themselves. Whether a principal holding `count` may do it on a given field is the question below.
+
+**One consequence: a principal holding `count` alone sees totals and no facets**, since a
+facet lists its buckets and each bucket's key is a value. Whether an instance may declare a field so that a
+principal holding `count` may use it as a facet and count by its values is research, in
+[count-only principal](../docs/atlas/roadmap/count-only-principal.md).
 
 **`artifact.update` is designed against a mutability the first integration does not have, and that is
 deliberate.** The search application's saved sets are immutable: creation is the only write path, so
@@ -329,14 +389,14 @@ it controls only disclosure is false. When a submission surface offers both a bu
 single-record path and an instance wants to permit one, the same test admits a bulk-create
 capability. It waits on that surface existing rather than on a principle.
 
-**No `record.exists`.** A Beacon-style boolean is a count thresholded at zero, so `aggregate` covers
+**No `record.exists`.** A Beacon-style boolean is a count thresholded at zero, so `count` covers
 it. What separates a boolean from a count is how much each leaks, and that is a minimum cell size at
-the plugin rather than a second capability the plugin would enforce identically.
+the adapter rather than a second capability the adapter would enforce identically.
 
 **Three actions that look separate and are not.** Archiving, publishing and suppressing all set a
 value on a record that continues to exist, so each is `update`. Filing archive under `delete` would
 tell an auditor that someone can delete when they can only file, which overstates in the dangerous
-direction. Searching is `read`, and searching without reading is `aggregate`.
+direction. Searching is `view`, and searching without seeing is `count`.
 
 **Uploading and form entry are not separate capabilities.** They land at different services, so the
 audience already separates them: the token issued to one is not the token issued to the other. A
@@ -352,43 +412,48 @@ authorization moved to the read, which is what let the capability disappear.
 
 **`field` is an entity, and the argument that kept it out was wrong three times.** Each of `artifact`,
 `revision` and `field` was first rejected here on the grounds that holding its capability without
-`record.read` means nothing. That test is invalid: capabilities are independent of one another, and
+`record.view` means nothing. That test is invalid: capabilities are independent of one another, and
 roles are what prevent nonsense pairings. The valid test is whether the thing is separately
 addressable and carries actions the other entities do not, and a field passes both: you read its
 value and you never delete one, because deletion takes the record.
 
-**`field.aggregate` is the capability that closes the facet leak.** A column excluded from a result
-is still countable: excluding it from `_source` removes it from hits and leaves a terms aggregation
-over it untouched, and a search service builds facets from aggregations. With `field.aggregate`
-separate from `field.read`, a grant can say the column is readable and not facetable, which was
-previously something a plugin had to remember rather than something a grant could express.
+**A restricted column's facet closes through `view`, since each bucket's key is a value.** A column
+excluded from a result is still countable: excluding it from `_source` removes it from hits and
+leaves a terms aggregation over it untouched, and a search service builds facets from aggregations.
+Under the rule above, a column withheld at `field.view` has its bucket keys withheld too, with no
+second capability to remember. What `field.count` separate from `field.view` expresses is the two
+partial pairings: a column a principal sees and gets no bucket counts for, holding `view` without `count`, and
+one they may count records by without seeing its values, holding `count` without `view`.
 
-**Why a field's read-shaped actions are three and not one, and the reason is legibility rather than
-risk.** Folding `export` and `aggregate` into `field.read` would make partial implementation
+**Why a field's `read` is three capabilities and not one, and the reason is legibility rather than
+risk.** Folding `export` and `count` into `field.view` would make partial implementation
 unsayable. A service that prunes columns from records and not from exports, or not from facets, would
 hold grants that read as restrictions the export path never applies, and nothing in the vocabulary
 could state that. Separate, the same situation is a fact a deployment can declare and a reconciliation
 check can compare. **A capability whose absence restricts needs partial implementation to be legible,
 and the vocabulary is the only place that legibility can live.** That is a corollary of the
 unimplemented-capability rule rather than a second argument, and it is stronger than the
-bulk-against-single framing that first suggested the split.
+bulk-against-single framing that first suggested the split. The group keeps a role to one name
+without losing it: a role naming `read` gets all three, and a deployment still declares each.
 
-**The honest limit, so that a reviewer does not read more into it.** Granting `field.read` and
+**The honest limit, so that a reviewer does not read more into it.** Granting `field.view` and
 withholding `field.export` is not a confidentiality control. Anyone who can read a column through
 ordinary results can page through them and assemble the same extract by hand. What the split gives is
 rate and auditability: the slow route is visible, leaves a trail per request, and is bounded by the
 result window. That is worth having and it is a different claim from withholding the value, which is
-the same overreach `export` already carries a warning about on the record axis.
+the same overreach `export` already carries a warning about on the record axis. Withholding
+`field.count` from someone holding `field.view` has the same limit, since what they can see they can
+tally.
 
 **Time is the third axis a record has, and it is an entity rather than a third `kind`.** A record's
 data is addressed by which records, which fields, and which versions, and the third is independent
 of the other two: permission to see prior states applies to whatever rows and columns a person
 already reaches. **The reason it is not a kind is concrete rather than aesthetic.** As a kind, a
 category with `{version}` would mean that seeing the history of a _controlled_ record needs both the
-`controlled` grant and the version grant, and the plugin would have to conjoin two categories over
+`controlled` grant and the version grant, and the adapter would have to conjoin two categories over
 one piece of data. That is the subset test this design defers and the query layer cannot express. As
-an entity, `revision.read` is a capability, capabilities already attach per category, and
-`{controlled: [record.read, revision.read]}` says the same thing with no conjunction at all.
+an entity, `revision.view` is a capability, capabilities already attach per category, and
+`{controlled: [record.view, revision.view]}` says the same thing with no conjunction at all.
 
 **A revision carries no categories of its own**, inheriting whatever its record carries, so the
 version axis needs nothing in `categories` and nothing in `kind`.
@@ -399,7 +464,7 @@ and it is erasure, which this design has open and unresolved against an append-o
 the capability waits on that rather than being added here.
 
 **Whether the service has the axis at all is not Usher's problem.** A submission service keeps
-revisions and a search index does not, so a search token never carries `revision.*` and its plugin
+revisions and a search index does not, so a search token never carries `revision.*` and its adapter
 never tests for one. That is the ordinary unsupported-capability path: nothing opens, and the
 startup reconciliation reports the mismatch.
 
@@ -420,11 +485,11 @@ to the actions held. `field` is the exception at the third level, mapping to its
 first, because a field is the one entity a record category further partitions.
 
     "HEART_STUDY": {
-      "open":       { "record":   ["read"],
-                      "revision": ["read"],
-                      "field":    { "basic": ["read"], "clinician": ["read", "aggregate"] } },
-      "controlled": { "record":   ["read", "delete"],
-                      "field":    { "basic": ["read"] } }
+      "open":       { "record":   ["view"],
+                      "revision": ["view"],
+                      "field":    { "basic": ["view"], "clinician": ["view", "count"] } },
+      "controlled": { "record":   ["view", "delete"],
+                      "field":    { "basic": ["view"] } }
     }
 
 That says something no flatter shape could: clinician fields are readable in open records and not in
@@ -435,9 +500,9 @@ scopes compose instead of applying independently.
 which is the shape a map exists for. Nothing is lost: entries were already independent, and two
 grants on one category already union into one entry.
 
-**Bare action names stopped working the moment a second data-plane entity existed.** `["read"]` no
-longer says whether it is `record.read` or `field.read`. The entity level resolves it by structure
-rather than by parsing a prefix, so a plugin that has never heard of `revision` skips one key instead
+**Bare action names stopped working the moment a second data-plane entity existed.** `["view"]` no
+longer says whether it is `record.view` or `field.view`. The entity level resolves it by structure
+rather than by parsing a prefix, so an adapter that has never heard of `revision` skips one key instead
 of failing to recognize a string.
 
 **`field` appears only where a category is partitioned, and `basic` behaves exactly as `open` does.**
@@ -449,7 +514,7 @@ an exception: it is the absence of a partition rather than the absence of a gran
 configure no field categories, and nothing is being withheld when there is nothing to withhold by.
 
 **A present `field` key means only the field categories named inside it are reached**, and that is
-the same rule as the row axis one level down. `field: {"clinician": ["read"]}` reaches the clinician
+the same rule as the row axis one level down. `field: {"clinician": ["view"]}` reaches the clinician
 columns and not the basic ones, precisely as a grant naming `controlled` and not `open` reaches the
 controlled records and not the open ones. `basic` is the residual, it is granted rather than assumed,
 and leaving it out hides it. Showing the clinical values of a record while withholding its
@@ -457,7 +522,7 @@ identifying columns is that case, and it is a real one.
 
 **The two states are worth keeping apart.** `field` absent says no field partition exists here;
 `field: {"basic": [...]}` says one exists and this principal holds the residual of it. Collapsing
-them would lose the signal a plugin uses to decide whether to run the column-pruning path at all.
+them would lose the signal an adapter uses to decide whether to run the column-pruning path at all.
 
 **What changes when an instance configures field categories for the first time.** Existing grants
 name no field category, so the `field` key appears and every grant that does not name one reaches no
@@ -468,18 +533,18 @@ by the same owed audit event as any other change to what a resource's categories
 **One level is polymorphic, deliberately.** `record` and `revision` map to action arrays while
 `field` maps to a map. It reflects a real asymmetry rather than an inconsistency, since `field` is
 the only entity a record category subdivides, and the alternative is a reserved key like
-`"record": {"*": ["read"]}` that makes every other entity pay for it.
+`"record": {"*": ["view"]}` that makes every other entity pay for it.
 
 ### How a grant becomes an entry
 
 A grant names one resource, one record category, optionally one field category within it, and the
 role whose capabilities it confers. Two grants on one record category merge into one entry:
 
-    grant(HEART_STUDY, record=open, field=null,      viewer)       -> open.record = ["read"]
-    grant(HEART_STUDY, record=open, field=clinician, field-viewer) -> open.field.clinician = ["read"]
+    grant(HEART_STUDY, record=open, field=null,      viewer)       -> open.record = ["view"]
+    grant(HEART_STUDY, record=open, field=clinician, field-viewer) -> open.field.clinician = ["count", "view"]
 
 **The role stays free of scope, which is what keeps this from collapsing.** A field role is one whose
-capabilities happen to be `field.read` and `field.aggregate`; it does not name `clinician`. Both
+capabilities happen to be `field.count` and `field.view`; it does not name `clinician`. Both
 scopes come from the grant. Had the role carried the field category, scope would be back on the role,
 which is the collapse every other part of this model exists to avoid. `role_permissions` needs no
 change.
@@ -494,16 +559,17 @@ which asks for authority over every resource an artifact draws on rather than an
 A list of role names says nothing about who can do what. The matrix does, and it is the canonical
 view: a role is a row, a capability is a column, and the columns run in order of increasing reach.
 
-| Role        | `aggregate` | `read` | `export` | `create` | `update` | `delete` |
-| ----------- | ----------- | ------ | -------- | -------- | -------- | -------- |
-| `surveyor`  | ●           |        |          |          |          |          |
-| `viewer`    | ●           | ●      | ●        |          |          |          |
-| `editor`    | ●           | ●      | ●        | ●        | ●        |          |
-| `curator`   | ●           | ●      | ●        | ●        | ●        | ●        |
-| `submitter` |             |        |          | ●        | ●        |          |
+| Role        | `count` | `view` | `export` | `create` | `update` | `delete` |
+| ----------- | ------- | ------ | -------- | -------- | -------- | -------- |
+| `viewer`    | ●       | ●      | ●        |          |          |          |
+| `editor`    | ●       | ●      | ●        | ●        | ●        |          |
+| `curator`   | ●       | ●      | ●        | ●        | ●        | ●        |
+| `submitter` |         |        |          | ●        | ●        |          |
 
-**The containment is a staircase and it is not a hierarchy.** `surveyor`, `viewer`, `editor` and
-`curator` each add to the one before, which is what makes the table readable at a glance, and the
+The first three columns are `read`, and every seeded role holding any of them holds all three.
+
+**The containment is a staircase and it is not a hierarchy.** `viewer`, `editor` and `curator`
+each add to the one before, which is what makes the table readable at a glance, and the
 overlap is an artifact of how the sets were chosen rather than a structure anything walks. Nothing
 inherits: the model resolves by unioning capabilities, so holding `curator` confers curator's set,
 which happens to contain viewer's. Changing one role's set changes nothing about another's.
@@ -514,23 +580,29 @@ submitter who reads gets there by holding a second grant at `viewer` rather than
 widening. `update` is there because a submitter who cannot correct what they submitted is not a
 useful role; `delete` is not, because removing a record is a governance act rather than a correction.
 
-**`surveyor` is where the absence of a capability still means something.** It is the discovery tier:
-counts and facets without records, which is what `aggregate` separate from `read` exists to express.
-For every other seeded role the absence of `export` means nothing, since they all read, and reading
-is enough to assemble an extract by hand.
+**No seeded role holds `count` without `view`.** The combination is possible, since capabilities are
+granted independently, and serving it is research, in [count-only
+principal](../docs/atlas/roadmap/count-only-principal.md). For every seeded role that views records
+the absence of `export` would mean nothing, since viewing is enough to assemble an extract by hand.
+
+**`surveyor` names a later role and is not seeded now.** It is the one that views a bounded number
+of records and counts nothing, post-MVP, in [bounded
+surveyor](../docs/atlas/roadmap/bounded-surveyor.md). Seeding the name now under another meaning and
+redefining it later would widen every grant already naming it, since a grant confers whatever its
+role carries at issuance.
 
 **The control plane seeds two roles, and its matrix is sparse for a reason.** A control-plane
 capability is held or not, with no progression to run along, so the table is a checklist rather than
 a staircase.
 
-| Role    | `grant.*` | `invitation.create` | `resource.read` | `resource.update` | `resource.setVisibility` | `ownership.transfer` | `resource.register` | `category.create` | `role.define` | `group.*` |
+| Role    | `grant.*` | `invitation.create` | `resource.view` | `resource.update` | `resource.setVisibility` | `ownership.transfer` | `resource.register` | `category.create` | `role.define` | `group.*` |
 | ------- | --------- | ------------------- | --------------- | ----------------- | ------------------------ | -------------------- | ------------------- | ----------------- | ------------- | --------- |
 | `owner` | ●         | ●                   | ●               | ●                 | ●                        | ●                    |                     |                   |               |           |
 | `admin` | ●         | ●                   | ●               | ●                 | ●                        | ●                    | ●                   | ●                 | ●             | ●         |
 
 **An owner is an admin bounded to one resource**, which the two rows make visible: the difference is
 entirely the four platform-wide capabilities on the right, and nothing an owner holds is withheld
-from an admin. `grant.*` means all five of `create`, `read`, `extend`, `reduce` and `revoke`, which
+from an admin. `grant.*` means all five of `create`, `view`, `extend`, `reduce` and `revoke`, which
 is the set that makes someone able to administer access rather than merely see it.
 
 **Neither carries a data-plane capability**, which is the whole of the plane split expressed as
@@ -539,7 +611,7 @@ role, and that grant is visible like any other.
 
 **`custodian` is not seeded and is not defined.** The role is post-MVP, nothing appoints one in the
 first release, and `custodianship.assign` and `custodianship.remove` are therefore in no seeded role
-either. That is worth stating as a decision rather than an omission, because seeding the appointment
+either. That is a decision rather than an omission: seeding the appointment
 capability into `admin` is the act that would open the recorded self-appointment hole: an
 administrator who may appoint custodians can appoint themselves and then satisfy the gate their own
 grant needs. Leaving it unseeded closes that for now without pretending the hole is solved.
@@ -552,10 +624,10 @@ is the reason those columns sit in Usher rather than in each portal.
 
 | Entity          | Actions                                                 |
 | --------------- | ------------------------------------------------------- |
-| `resource`      | `register`, `read`, `update`, `setVisibility`           |
+| `resource`      | `register`, `view`, `update`, `setVisibility`           |
 | `category`      | `create`                                                |
-| `grant`         | `create`, `read`, `extend`, `reduce`, `revoke`          |
-| `group`         | `create`, `read`, `update`, `addMember`, `removeMember` |
+| `grant`         | `create`, `view`, `extend`, `reduce`, `revoke`          |
+| `group`         | `create`, `view`, `update`, `addMember`, `removeMember` |
 | `role`          | `define`                                                |
 | `ownership`     | `transfer`                                              |
 | `invitation`    | `create`                                                |
@@ -581,7 +653,7 @@ that nobody performed the act: `grant.denied` and `grant.rateExceeded` are detec
 `resource.orphaned` is a state, `invitation.lapse` is time passing, and `grant.unguarded` has no
 actor at all.
 
-**`grant.read` and `resource.read` have no matching event and are real anyway.** Seeing who else can
+**`grant.view` and `resource.view` have no matching event and are real anyway.** Seeing who else can
 reach a resource is a disclosure in its own right and is separable from being able to change it.
 Seeing that a resource exists and which categories it lists is what lets an owner manage a resource
 they hold no data grant on.
@@ -696,7 +768,7 @@ can be checked against them rather than breaking them silently.**
 
 **Embargo needs a deadline below the resource.** Its recorded requirements put it on segments rather
 than on a whole resource, with separate deadlines per segment, and the segment has to be computable
-by the enforcing plugin because no record says it is embargoed. Nothing here holds a date below
+by the enforcing adapter because no record says it is embargoed. Nothing here holds a date below
 `resources`, and `resource_categories` is the only thing that names a segment within one. Whatever
 the mechanism turns out to be, a resource-level flag is not it, and neither is a date on a grant,
 which is what the withdrawn design used and why it was withdrawn: a grant's expiry subtracts access
@@ -795,8 +867,8 @@ with instances free to add names Usher never shipped. A management interface off
 a service that cannot do it is offering a permission that will never be exercised.
 
 **There is no `kind` on a category, and the reason it was rejected is the reason it looked
-necessary.** What `clinician` selects, rows or columns, is decided entirely by the plugin's mapping.
-Two plugins could map the same name differently, and Usher can neither know nor verify either. A
+necessary.** What `clinician` selects, rows or columns, is decided entirely by the adapter's mapping.
+Two adapters could map the same name differently, and Usher can neither know nor verify either. A
 column here would be Usher asserting a fact it does not own, and an assertion that cannot be checked
 is worse than no assertion.
 
@@ -812,17 +884,17 @@ that carry them: a revision inherits its record's, and an artifact's reach comes
 third column would mean a third partitioned entity, which is a deliberate act rather than a quiet
 reinterpretation of an existing column.
 
-| Capability                                      | Scoping records | Scoping fields                                                           |
-| ----------------------------------------------- | --------------- | ------------------------------------------------------------------------ |
-| `record.read`, `record.export`                  | yes             | not on this axis: reading fields is `field.read`                         |
-| `field.read`, `field.export`, `field.aggregate` | not applicable  | yes, and `aggregate` is what stops a restricted column staying facetable |
-| `field.update`                                  | not applicable  | field-level write, coherent and unbuilt                                  |
-| `record.delete`                                 | yes             | never: deletion takes the whole record                                   |
-| any `artifact` capability                       | yes             | never                                                                    |
+| Capability                                  | Scoping records | Scoping fields                                                                              |
+| ------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------- |
+| `record.view`, `record.export`              | yes             | not on this axis: viewing fields is `field.view`                                            |
+| `field.count`, `field.view`, `field.export` | not applicable  | yes, and a bucket's key is a field value, so withholding a column withholds its bucket keys |
+| `field.update`                              | not applicable  | field-level write, coherent and unbuilt                                                     |
+| `record.delete`                             | yes             | never: deletion takes the whole record                                                      |
+| any `artifact` capability                   | yes             | never                                                                                       |
 
 **What is given up by not having it**, stated so the trade is visible: a grant naming a category with
 no column mapping at all now fails closed silently, where a kind would have refused it at writing.
-Catching that needs Usher to retain what each plugin declared at its last reconciliation, which is
+Catching that needs Usher to retain what each adapter declared at its last reconciliation, which is
 the same missing machinery several other findings land on.
 
 **It stays a table, and what settled it was the display name.** A capability carries text a person
@@ -831,8 +903,7 @@ half of this: an unknown capability name already fails closed in both directions
 integrity was never what protected access. What a table adds is somewhere for `display_name` and
 `description` to live.
 
-**`display_name` sits in Usher for one reason, and it is worth stating because the column otherwise
-looks misplaced.** How a capability is worded to a person reads like the consuming application's
+**`display_name` sits in Usher for one reason, and the column otherwise looks misplaced.** How a capability is worded to a person reads like the consuming application's
 concern. It is Usher's because the management interface ships from Usher as a package that portals
 mount, so the wording has to come from somewhere Usher owns, or every portal supplies its own and
 the same capability is called two things in two places. It is also where the per-instance vocabulary
@@ -917,17 +988,17 @@ grants intended for whoever holds it.
 
 The tables above are the store; an Usher token is what a query of them produces for one principal
 and one application. Showing both is the point of putting the example here, since neither the store
-nor the token alone shows how a row becomes something a plugin can enforce.
+nor the token alone shows how a row becomes something an adapter can enforce.
 
 Two `grants` rows on `HEART_STUDY` and one on `LUNG_COHORT`, held by the same user, render
 as:
 
 ```json
 "permissions": {
-  "HEART_STUDY": { "open":       { "record": ["read", "update"] },
-                   "controlled": { "record": ["read"] } },
+  "HEART_STUDY": { "open":       { "record": ["view", "update"] },
+                   "controlled": { "record": ["view"] } },
 
-  "LUNG_COHORT": { "open":       { "record": ["read"] } }
+  "LUNG_COHORT": { "open":       { "record": ["view"] } }
 }
 ```
 
@@ -990,7 +1061,7 @@ acting.
 - **A revoked grant**: never appears. Distinct from an expired one, which is read from `expires_at`
   rather than stored, because the dates cannot say which of the two ended it.
 - **A live, accepted grant**: included at the next token exchange, narrowed to what its role confers
-  now. The plugin enforces that.
+  now. The adapter enforces that.
 
 **Each of these acts is audited.** Creation, the recipient's answer, the binding of an invited
 identity, and revocation each produce an audit entry.
@@ -1056,18 +1127,18 @@ disclosed. This is a hard invariant: existence revelation is an information disc
 
 **Serving it needs the enforcement seam to know which surface is asking, which it does not today.**
 One filter answers records, aggregations and set materialization alike, so a grant of
-aggregate-without-read cannot be honoured selectively and resolves to denied everywhere. That is the
+count-without-view cannot be honoured selectively and resolves to denied everywhere. That is the
 safe direction and it is the second of two independent widenings the seam needs, the other being
 projection for field restriction. Neither implies the other and they are worth costing apart.
 
-**`record.aggregate` is the one way that mode can exist, and it is a grant rather than a default.**
+**`record.count` is the one way that mode can exist, and it is a grant rather than a default.**
 Read strictly, the invariant above and a capability that counts without reading contradict each
-other, so the boundary is worth stating exactly. **Excluded** means no grant of yours reaches it: such
-a record contributes to nothing, not a count, not a facet, not a row, and that is the part that never
-bends. A record a grant of yours reaches at `aggregate` and not at `read` is not excluded; it is
+other, so the boundary is exact. **Excluded** means no grant of yours reaches it: such
+a record contributes to nothing, not a count, not a bucket, not a row, and that is the part that never
+bends. A record a grant of yours reaches at `count` and not at `view` is not excluded; it is
 discoverable to you because an instance deliberately conferred that, which is the discovery tier
 every federated platform in this domain has. The default remains no grant and therefore nothing, and
-the reason this is a separate capability rather than a side effect of `read` is that a count over
+the reason this is a separate capability rather than a side effect of `view` is that a count over
 small cells re-identifies, so conferring it has to be a decision someone makes and an auditor can
 see.
 
@@ -1114,8 +1185,8 @@ are identical in the audit trail too. That is what the reason field on the deny 
 for, and it is how an operator debugging a service account resolves what a status code deliberately
 will not tell them.
 
-**Consequently the response shape is a choice among indistinguishable shapes**, not an open one. A
-plugin picks which shape suits its service; it does not get to pick whether the two cases are
+**Consequently the response shape is a choice among indistinguishable shapes**, not an open one. An
+adapter picks which shape suits its service; it does not get to pick whether the two cases are
 distinguishable.
 
 **An empty result set achieves this at no cost, and should be the default.** Where a
@@ -1151,7 +1222,7 @@ resource's existence is confidential, the values identifying resources must not 
 without authentication.** A resource field mapped one-to-one onto something an instance publishes by
 design is the clearest way to break this, and it is a legal configuration today, since one resource
 per type is a permitted special case of many-per-type. Other routes exist: values appearing in
-public facet listings, in a published schema, or in URLs.
+buckets in a public facet, in a published schema, or in URLs.
 
 **The condition matters, because this is not universal.** Many platforms publish their study
 registry, and where resource existence is already public there is nothing to protect and nothing is
@@ -1196,12 +1267,12 @@ Users and their grants:
 - User A: one grant, on `RESOURCE_X`'s `open` category
 - User B: grants on both of `RESOURCE_X`'s categories, and one on `RESOURCE_Y`'s `open` category
 
-Plugin config (Arranger-side; maps concrete category names to Elasticsearch field predicates):
+Adapter config (Arranger-side; maps concrete category names to Elasticsearch field predicates):
 
     indigenous_data → { fieldName: "isIndigenous", value: true }
 
 **Only concrete categories are mapped.** `open` has no field value of its own: it stands for whatever
-the concrete categories on that resource do not cover, so the plugin renders it as the negation of
+the concrete categories on that resource do not cover, so the adapter renders it as the negation of
 them rather than reading a predicate from configuration. Here that is `NOT(isIndigenous = true)`.
 Giving `open` its own predicate would make it concrete, and records matching neither it nor any other
 category would then be reachable by nobody, which is not what a residual means.
@@ -1217,7 +1288,7 @@ category would then be reachable by nobody, which is not what a residual means.
 	"exp": 1720000300,
 	"generatedAt": 1720000000,
 	"permissions": {
-		"RESOURCE_X": { "open": { "record": ["read"] } }
+		"RESOURCE_X": { "open": { "record": ["view"] } }
 	}
 }
 ```
@@ -1241,9 +1312,9 @@ those records are absent from results, counts and aggregations rather than filte
 	"exp": 1720000300,
 	"generatedAt": 1720000000,
 	"permissions": {
-		"RESOURCE_X": { "open": { "record": ["read"] },
-		                "indigenous_data": { "record": ["read"] } },
-		"RESOURCE_Y": { "open": { "record": ["read"] } }
+		"RESOURCE_X": { "open": { "record": ["view"] },
+		                "indigenous_data": { "record": ["view"] } },
+		"RESOURCE_Y": { "open": { "record": ["view"] } }
 	}
 }
 ```
@@ -1295,26 +1366,26 @@ requires it. See the resolved question in Open questions.
 ## Category-to-field mapping
 
 > **Scope: this is in the first release.** The enforcement clause pairs the resource's field value
-> with the category's, so a plugin that cannot map a category name to a field predicate cannot render
+> with the category's, so an adapter that cannot map a category name to a field predicate cannot render
 > a clause. `open` is the complement of the mapped concrete values, which is why an unmapped category
 > exposes records rather than hiding them, and why the reconciliation check in
-> [plugin-integration.md](plugin-integration.md) fails startup rather than warning. See "A category
+> [adapter-integration.md](adapter-integration.md) fails startup rather than warning. See "A category
 > selects records within a resource" in [decisions.md](decisions.md).
 
 Categories in Usher's model are named abstractions. Usher has no knowledge of what fields in
 any data schema correspond to a category: it works with category names only. The mapping from
-category name to field predicate is instance configuration that lives in the enforcement plugin:
+category name to field predicate is instance configuration that lives in the enforcement adapter:
 
     category: indigenous_data
       field:  isIndigenous
       value:  true
 
-A record belongs to a category if the configured field condition is true for that record. The plugin
+A record belongs to a category if the configured field condition is true for that record. The adapter
 holds this mapping and renders each category the token grants as a predicate paired with the
 resource's, composed with `or`. Nothing is subtracted, with `open` the single exception: being the
 residual it has no value to match, so its predicate excludes the configured concrete values instead.
 Two instances using the same Usher instance can map the same category name (`indigenous_data`) to
-entirely different field names in their respective schemas, because each plugin carries its own
+entirely different field names in their respective schemas, because each adapter carries its own
 config.
 
 ---
@@ -1343,9 +1414,9 @@ categories using the same model that governs record-level access. A user's categ
 determine which fields they can see. A user who holds the `indigenous_data` grant sees fields tagged
 `indigenous_data`; without it, those fields are absent.
 
-**The tagging lives in plugin configuration, not in Usher.** An earlier sketch put it in a
+**The tagging lives in adapter configuration, not in Usher.** An earlier sketch put it in a
 `field_categories(field_name, category_id)` table here, which would have contradicted the principle
-outright: Usher never learns a field name, and the resource field mapping already lives in plugin
+outright: Usher never learns a field name, and the resource field mapping already lives in adapter
 config for exactly that reason. Column tagging belongs beside it. That deletes a table rather than
 adding one.
 
@@ -1358,17 +1429,17 @@ model unified. Defer B and D until a concrete use case requires them.
 
 ### What option C still has to answer
 
-**The token carries it and the enforcement seam does not, which is the part worth knowing first.**
+**The token carries it and the enforcement seam does not, and that is the whole of it.**
 The payload needs no change: categories nest under a resource, a `field` key nests under a category,
 and the schema needs one nullable column. What does not carry it is the seam. An enforcement hook
 returns a predicate, and a predicate selects records; which fields of a returned record are visible
 is a projection, and the two are different things. **So field restriction is a contract change at
-the plugin boundary rather than a configuration change behind it**, and it is the first thing this
+the adapter boundary rather than a configuration change behind it**, and it is the first thing this
 design has asked for that the seam cannot express. Established against the first integration's own
 interface rather than inferred.
 
 **That relocates the work and raises its cost.** It is not a mapping added beside the resource field
-mapping; it is a second return channel from the bridge to the plugin, or a widened one, carrying what
+mapping; it is a second return channel from the bridge to the adapter, or a widened one, carrying what
 to project alongside what to select. Anything that assumed field restriction was configuration should
 be read again with that in mind.
 
@@ -1416,8 +1487,9 @@ axis a category is scoping without the category itself having to carry an opinio
 field from `_source` removes it from hits and does nothing to a terms aggregation over it. A search
 service builds facets from aggregations, so a restricted column stays facetable and its values stay
 enumerable, which for something like `hiv_status` is complete disclosure by another route. One
-capability, two places to enforce it, and the second is the one that gets forgotten. This is the
-field-level counterpart of the record-level `aggregate` capability and has to be settled with it.
+capability, `field.view`, and two places to enforce it, and the second is the one that gets forgotten:
+a bucket's key is a field value, so the aggregation path enforces the same capability the record path does
+rather than a second one.
 
 **Whether one category may tag both rows and columns is unstated.** If `clinical` tags records and
 columns alike, one grant does both jobs, and someone without it reaches non-clinical records and
@@ -1426,7 +1498,7 @@ clinical record may read its clinical columns. It needs saying either way, becau
 typing categories into row-categories and column-categories, is a schema change rather than a
 configuration one. **A management interface needs the distinction even if enforcement does not**: an
 owner granting a column-scoped category should be told that is what they are granting, and Usher
-cannot say so if only the plugin knows. That is the same argument that put `display_name` here.
+cannot say so if only the adapter knows. That is the same argument that put `display_name` here.
 
 **Name a column category for the data, never for the audience.** A category called `clinician` names
 who may see it, and one category per audience is role explosion wearing a category's clothes.
@@ -1662,7 +1734,7 @@ access to one does not imply access to the other.
 grant for that category, regardless of what other access they hold.
 
 **Rapid revocation.** The push+poll revocation channel and the fail-secure grace period mean that
-a revoked grant propagates to all enforcing plugins within a bounded window. If a community
+a revoked grant propagates to all enforcing adapters within a bounded window. If a community
 withdraws consent for a researcher's access, the revocation is effective promptly, not deferred to
 token expiry.
 
@@ -1781,8 +1853,8 @@ the token is written, which records expiry as a scheduled subtraction and nothin
    are ordinary grants, and the deadline belongs to the state.
 2. **It has to reach below the resource.** A resource can hold several embargoed segments at once,
    each with its own deadline, so a single release date on a resource does not express it.
-3. **The segment has to be identifiable by the enforcing plugin.** Nothing in a record says it is
-   embargoed, so the collection is a governance definition that the plugin must be configured to
+3. **The segment has to be identifiable by the enforcing adapter.** Nothing in a record says it is
+   embargoed, so the collection is a governance definition that the adapter must be configured to
    compute, the way it is configured to compute any other category.
 4. **Access within an embargoed segment varies by principal.** A submitter, an owner and a
    collaborator can hold different access to the same embargoed records, so the state cannot be a
@@ -1805,7 +1877,7 @@ ingest. "Open access," "embargoed," and "restricted" are all explicit access-lev
 at submission time, not a global default. Usher enforces whatever the submission service assigns.
 
 Enforcement must exist at both the submission layer (Lyric) and the retrieval layer (Arranger);
-gating only one leaks through the other. See [plugin-integration.md](plugin-integration.md).
+gating only one leaks through the other. See [adapter-integration.md](adapter-integration.md).
 
 ---
 
@@ -1863,7 +1935,7 @@ requires SQON evaluation permission in the bridge and is deferred to post-MVP.
 
 **Resolved.** A role carries a named set of permissions, and `role_permissions` records which.
 The permissions themselves divide by plane, which decides who enforces them: the controller checks
-a control-plane permission on an admin call, and a plugin checks a data-plane one before a query
+a control-plane permission on an admin call, and an adapter checks a data-plane one before a query
 runs. The vocabulary and the roles at each plane are in
 [../docs/atlas/roadmap/rabac-alignment.md](../docs/atlas/roadmap/rabac-alignment.md).
 
@@ -1884,7 +1956,7 @@ The top-level map name (`permissions`) and the per-resource fields (`role`, `cat
 see [security-workflow.md: Token structure](security-workflow.md#token-structure) for the
 canonical schema and worked examples. The remaining open question is field-level restriction
 representation: attribute names for field restrictions (if included in the token at all) are not
-yet decided. See [plugin-integration.md](plugin-integration.md).
+yet decided. See [adapter-integration.md](adapter-integration.md).
 
 ### User groups design
 
@@ -1901,8 +1973,8 @@ the grant-carries-the-role decision in [decisions.md](decisions.md).
 ### Write permissions (Lyric)
 
 The grant model extends to write operations: a grant governing write access would allow the PEP
-plugin in Lyric to enforce which records or fields a user is permitted to submit or modify. The
-data model shape is clear; the Lyric plugin design is not. Deferred until Lyric integration is in
+adapter in Lyric to enforce which records or fields a user is permitted to submit or modify. The
+data model shape is clear; the Lyric adapter design is not. Deferred until Lyric integration is in
 scope.
 
 ### Write vs read access

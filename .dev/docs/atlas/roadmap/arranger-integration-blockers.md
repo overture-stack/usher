@@ -1,8 +1,7 @@
 # Arranger integration: blocking items
 
-Eleven items surfaced by preparing the first plugin integration. They are recorded here rather
-than in the integration's own repository because each one is a question about Usher's model, a
-decision only the developer can take, or an answer an instance owes; none is waiting on plugin
+Eleven items surfaced by preparing the first adapter integration. They belong here rather than in the integration's own repository because each one is a question about Usher's model, a
+decision only the developer can take, or an answer an instance owes; none is waiting on adapter
 work. Per-instance specifics belong in that integration's own repository, following the same
 split the migration item already uses.
 
@@ -18,12 +17,12 @@ an identity source the search service does not have, which is what Usher supplie
 
 The tiered shape to express: own sets by default, an administrator able to list across users and
 filter by user id, and no reliance on a set identifier being unguessable. Two further parts of
-the fix are plugin-side and already unblocked, but both change behaviour for existing
+the fix are adapter-side and already unblocked, but both change behaviour for existing
 instances, so they are held for an instance decision rather than for design.
 
 **This item is a cycle and should be recorded as one rather than left to resolve itself.** The
 integration lists it as a prerequisite _for_ Usher, while its central fix depends _on_ Usher. The
-order that breaks the cycle is Usher publishing the vocabulary first, since the plugin can gate
+order that breaks the cycle is Usher publishing the vocabulary first, since the adapter can gate
 and cap without it but cannot scope per principal without it.
 
 **A constraint that bounds what any of this achieves.** Scoping sets per principal does not follow the
@@ -54,7 +53,7 @@ and null where there is no authenticated principal. Populating it afterwards is 
 migration rather than an addition, which is why this item's cost grows by waiting rather than
 staying flat.
 
-What a plugin cannot decide alone is the destination. Correlating an access decision across
+What an adapter cannot decide alone is the destination. Correlating an access decision across
 two systems requires the principal identifier to match whatever Usher aggregates on, so the
 correlation key is part of the contract and not an implementation choice. Denial events and
 administrator-bypass events both need somewhere to land, and a bypass that produces no audit
@@ -73,19 +72,19 @@ refusal for a principal who holds a live grant. That one is worth carrying and i
 live grant is in the token.
 
 The difference it must not try to carry is between a stranger and the holder of a lapsed grant. A
-grant that is not live puts nothing in the token, so those two arrive looking identical, and an
-earlier version of this item asked for a distinction no plugin can make. See "A refusal carries no
+grant that is not live puts nothing in the token, so those two arrive looking identical and no adapter can tell them
+apart. See "A refusal carries no
 exception, and expiry is announced rather than inferred" in `.dev/design/decisions.md`. A status code
 is an implementation detail of the first case rather than the goal of it.
 
-So the open question is whether the bridge-to-plugin result grows a reason the plugin may act on,
+So the open question is whether the bridge-to-adapter result grows a reason the adapter may act on,
 and if so which reasons are safe to expose to a principal who may not hold the resource at all.
 
 ### 4. An unconfigured resource value fails closed on records and open on artifacts
 
 **Resolved in the design.** The value is refused at the moment data is assembled rather than filtered at query time, because a filter cannot ask whether a value is absent from a list it was never given. See "The two permissive failures are closed" in `.dev/design/decisions.md`. The analysis below is kept because the asymmetry it describes is what makes the resolution necessary.
 
-The sharpest hazard found, and it is a defect in the ceiling mechanism rather than in the plugin.
+The sharpest hazard found, and it is a defect in the ceiling mechanism rather than in the adapter.
 
 One unconfigured value, two opposite outcomes:
 
@@ -100,7 +99,7 @@ through a computation error, which is why the stated rule did not catch it.
 
 **The reason this is dangerous beyond its severity:** an implementer who has verified that records
 carrying an unconfigured value are invisible has verified nothing about artifacts, and now has
-positive reason to believe the opposite of what is true. The plugin's fixture pins the ceiling
+positive reason to believe the opposite of what is true. The adapter's fixture pins the ceiling
 clause's polarity; the unmapped case needs a conformance case, since a unit test written against
 the mechanism cannot see a value the mechanism was never given.
 
@@ -123,7 +122,7 @@ Which mechanism owns filtering at aggregation depth two, and whether the composi
 as `should` or `must`. The record path is pinned as correct, with siblings composing as `must`,
 verified by execution. The defect is on the aggregation path.
 
-This is a plugin-side defect rather than Usher work, tracked here because an authorization
+This is an adapter-side defect rather than Usher work, tracked here because an authorization
 predicate composed as `should` where `must` was intended is an over-disclosure, which makes it a
 correctness dependency of the enforcement contract rather than someone else's bug.
 
@@ -136,12 +135,12 @@ catalogues. It stays a hard blocker for any instance whose key is deeper, which 
 startup check below exists to catch.
 
 A hard blocker rather than a sequencing item. If an instance's authorization field sits at depth
-two or deeper, the plugin's filtered-aggregation path does not apply there and filtering falls
+two or deeper, the adapter's filtered-aggregation path does not apply there and filtering falls
 back to a disjunctive path, which for an authorization predicate is OR where AND was intended.
 The application's own fixtures carry both shapes, so this is a live condition rather than a
 hypothetical one.
 
-Generalizable consequence, independent of any instance: **the plugin must establish the
+Generalizable consequence, independent of any instance: **the adapter must establish the
 authorization field's mapping shape at startup and refuse to enforce where it cannot**, on the
 same reasoning as the `nested` mapping requirement for record-level narrowing. Usher cannot
 require a mapping shape, so an instance that does not supply a conforming one is an instance
@@ -149,7 +148,7 @@ where this narrowing is unavailable, not one where it silently degrades.
 
 ### 8. IdP claim shape, and the version it depends on
 
-The claim shape reaching the plugin's request context depends on the identity provider version a
+The claim shape reaching the adapter's request context depends on the identity provider version a
 instance upgrades to, not the one it runs now. Where an instance is several major versions
 behind its target, that upgrade is a prerequisite of the authorization work rather than a
 follow-up to it, because pinning a claim shape against the current version produces a contract
@@ -176,9 +175,9 @@ field name plus a match value can be validated at startup against the live mappi
 query fragment cannot, because validating it means evaluating it. This is a decision about what
 can be checked before serving traffic, not a preference about expressiveness.
 
-### 11. Where a plugin learns that a principal is an administrator
+### 11. Where an adapter learns that a principal is an administrator
 
-Whether administrator status comes from Usher's own role, from plugin-side configuration, or from
+Whether administrator status comes from Usher's own role, from adapter-side configuration, or from
 the platform access model, and whether an administrator of the ushered application and an
 administrator of Usher are the same principal at all. Bears directly on the bypass audit
 requirement in item 2, since a bypass cannot be logged as such until its source is defined.

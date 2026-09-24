@@ -31,32 +31,32 @@ mapping and gap analysis), then [security-workflow.md](security-workflow.md) for
 **Reviewing the permissions model:** [concepts.md](../../docs/concepts.md) (especially "The permissions model
 entities"), then [permissions-model.md](permissions-model.md).
 
-**Planning a PEP plugin:** [architecture.md](architecture.md) (what each layer owns; which
-responsibilities belong to usher-bridge vs the plugin), then
-[security-workflow.md](security-workflow.md) (what the plugin must do and when), then
+**Planning a PEP adapter:** [architecture.md](architecture.md) (what each layer owns; which
+responsibilities belong to the bridge vs the adapter), then
+[security-workflow.md](security-workflow.md) (what the adapter must do and when), then
 [permissions-model.md](permissions-model.md) (what the permissions payload contains), then
-[plugin-integration.md](plugin-integration.md) (the API contract, designed in intent and not yet
+[adapter-integration.md](adapter-integration.md) (the API contract, designed in intent and not yet
 specified as request and response shapes).
 
 ## Document coverage
 
-| Document                                             | Topic                                                                                                              | Status                   |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------ |
-| [glossary.md](glossary.md)                           | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts         | reference                |
-| [architecture.md](architecture.md)                   | Component responsibilities (Keycloak, controller, bridge, plugin, infrastructure); stateless application principle | in progress              |
-| [concepts.md](../../docs/concepts.md)                | ABAC vocabulary, security primitives, permissions model entities                                                   | reference                |
-| [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps                                                                 | reference                |
-| [security-workflow.md](security-workflow.md)         | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure                         | specced                  |
-| [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, OCAP, private data sharing              | in progress              |
-| [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the 29 cases that force each branch               | specced                  |
-| [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                 | draft                    |
-| [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity      | in progress              |
-| [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                             | reference                |
-| [plugin-integration.md](plugin-integration.md)       | Per-app plugin design, bridge library (`usher-bridge`)                                                             | designed; not yet a spec |
-| [management-ui.md](management-ui.md)                 | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on                            | in progress              |
-| [profile-view.md](profile-view.md)                   | Where a person acts on their own access: permissions held, API tokens                                              | not started              |
-| [audit-events.md](audit-events.md)                   | Policy-plane events, common fields, severity mapping                                                               | specced                  |
-| [to-discuss.md](to-discuss.md)                       | Design gaps, inconsistencies, and security properties requiring resolution before implementation                   | review                   |
+| Document                                             | Topic                                                                                                               | Status                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| [glossary.md](glossary.md)                           | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts          | reference                |
+| [architecture.md](architecture.md)                   | Component responsibilities (Keycloak, controller, bridge, adapter, infrastructure); stateless application principle | in progress              |
+| [concepts.md](../../docs/concepts.md)                | ABAC vocabulary, security primitives, permissions model entities                                                    | reference                |
+| [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps                                                                  | reference                |
+| [security-workflow.md](security-workflow.md)         | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure                          | specced                  |
+| [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, OCAP, private data sharing               | in progress              |
+| [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the 29 cases that force each branch                | specced                  |
+| [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                  | draft                    |
+| [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity       | in progress              |
+| [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                              | reference                |
+| [adapter-integration.md](adapter-integration.md)     | Per-app adapter design, bridge library (the bridge)                                                                 | designed; not yet a spec |
+| [management-ui.md](management-ui.md)                 | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on                             | in progress              |
+| [profile-view.md](profile-view.md)                   | Where a person acts on their own access: permissions held, API tokens                                               | not started              |
+| [audit-events.md](audit-events.md)                   | Policy-plane events, common fields, severity mapping                                                                | specced                  |
+| [to-discuss.md](to-discuss.md)                       | Design gaps, inconsistencies, and security properties requiring resolution before implementation                    | review                   |
 
 **This table is kept complete by a count, not by a read.** A document added to this directory is
 reachable while someone links it and unreachable the moment nobody does, and no sweep starting from
@@ -73,7 +73,7 @@ threat model and design are calibrated accordingly. See
 ## What is and is not specced
 
 **Specced:** The security workflow is the most fully designed part of Usher. The mechanism for
-issuing Usher tokens, how plugins validate them locally, how permission changes propagate
+issuing Usher tokens, how adapters validate them locally, how permission changes propagate
 within a bounded window, how emergency revocation works, and how the system behaves when the
 revocation channel is unavailable are all documented in [security-workflow.md](security-workflow.md)
 with explicit rationale for each design decision.
@@ -85,11 +85,11 @@ designed: role permission definitions, the field-level restriction implementatio
 groups detail, custodianship scoping, and write permissions for Lyric. See
 [permissions-model.md](permissions-model.md).
 
-**Not yet started:** How app plugins are built and configured, how an application's key is
+**Not yet started:** How app adapters are built and configured, how an application's key is
 rotated, the API contract (specific endpoints, request/response shapes, error
 codes), the SQL schema in detail, instance architecture, multi-tenancy, rate limiting on the
 Usher API itself, and the management UI design are all open. Stubs with known requirements and
-open questions are in [plugin-integration.md](plugin-integration.md) and
+open questions are in [adapter-integration.md](adapter-integration.md) and
 [management-ui.md](management-ui.md).
 
 ## Decisions needed before implementation
@@ -118,7 +118,7 @@ See [decisions.md](decisions.md) for the full evaluation of each tool reviewed.
 **Usher is a grant administration and delivery layer, not a policy engine.** What it owns is the
 grant lifecycle (records with an origin, an expiry and an audit trail), an interface a non-engineer
 can administer them through, delegated custodianship for community-governed categories, a push
-revocation channel that fails secure, and per-application plugins that apply a decision in the
+revocation channel that fails secure, and per-application adapters that apply a decision in the
 application's own query language.
 
 **The evaluation step inside it is a candidate for an existing engine.** Producing a filter

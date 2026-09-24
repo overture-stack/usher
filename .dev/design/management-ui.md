@@ -28,7 +28,7 @@ at all. Checked against their code with the owner rather than inferred.
 
 So per-category granting is new design on both sides: no data in the first deployment carries a field
 that distinguishes categories, and no management surface anywhere grants one. That is a reason to
-label it rather than to drop it, and the risk worth naming is that the feature around it does have a
+label it rather than to drop it, and the risk is that the feature around it does have a
 working implementation, which makes it easy to assume this part does too.
 
 Three consequences follow, and the first two are why the shape is worth choosing now rather than at
@@ -42,6 +42,10 @@ value is correct. "Three of seven studies" discloses that seven exist. So does a
 something unreachable, or an empty state that distinguishes nothing-here from nothing-for-you. Those
 are choices, easy to get wrong independently in two codebases, and putting them in one place is the
 argument for a package.
+
+**The principle is not the package's alone, and only here does it have a home.** Search components, a
+portal's own pages and an API describing its own fields all render governed data and can all
+disclose the same way. None is covered yet; see the rendering item in [to-discuss.md](to-discuss.md).
 
 **The contract narrows.** What needed specifying was an open interface between Usher and any portal.
 What actually needs specifying is what the package asks Usher for, plus how a portal mounts it. The
@@ -164,7 +168,7 @@ rebuilt. Where that read comes from is therefore the whole of the work rather th
 - **Role management:** define the roles available for assignment (e.g. owner, viewer).
 - **Category management:** define categories and assign them to resources. The interface cannot tell
   an operator whether a category scopes records or fields, because Usher does not know: what a
-  category selects is the plugin's mapping. What it can show is how a category has been used in
+  category selects is the adapter's mapping. What it can show is how a category has been used in
   grants, which is the nearest honest answer and is read rather than asserted.
 - **Granting:** give a holder a role on one category of one resource, and revoke it. There is no
   separate step assigning someone a role first: the grant carries the role, so the control is a

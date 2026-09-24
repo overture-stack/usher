@@ -29,14 +29,14 @@ For each category: how it applies to Usher, which design choices address it, and
 **Why this is Usher's primary concern.** Usher exists to prevent broken access control. Every
 architectural decision in this system is, directly or indirectly, a response to A01.
 
-| Design choice                                                                           | Addresses                                                                   |
-| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Deny by default: reaching a record requires a grant naming the category it carries      | Prevents implicit allow                                                     |
-| Server-side enforcement (PEP plugins apply filters before queries reach the data layer) | Prevents client-side bypass                                                 |
-| JWE tokens are opaque to the token holder                                               | Prevents a user reading their own restrictions and crafting bypass queries  |
-| Emergency revocation by notice naming the principal                                     | Prevents continued access after authorization is withdrawn                  |
-| Fail-secure on revocation channel disruption                                            | Prevents an adversary from sustaining access by blocking revocation signals |
-| Usher tokens are short-lived (5-minute TTL)                                             | Limits exposure window of a stolen or leaked token                          |
+| Design choice                                                                            | Addresses                                                                   |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Deny by default: reaching a record requires a grant naming the category it carries       | Prevents implicit allow                                                     |
+| Server-side enforcement (PEP adapters apply filters before queries reach the data layer) | Prevents client-side bypass                                                 |
+| JWE tokens are opaque to the token holder                                                | Prevents a user reading their own restrictions and crafting bypass queries  |
+| Emergency revocation by notice naming the principal                                      | Prevents continued access after authorization is withdrawn                  |
+| Fail-secure on revocation channel disruption                                             | Prevents an adversary from sustaining access by blocking revocation signals |
+| Usher tokens are short-lived (5-minute TTL)                                              | Limits exposure window of a stolen or leaked token                          |
 
 **Gaps and open questions:**
 
@@ -46,10 +46,10 @@ architectural decision in this system is, directly or indirectly, a response to 
 - Field-level restriction enforcement is not yet designed. Records may be visible at the row level
   but sensitive fields within them are not yet protected. See
   [permissions-model.md](permissions-model.md).
-- Plugin integration is designed and not yet a spec: the enforcement seam, the category clause and
+- Adapter integration is designed and not yet a spec: the enforcement seam, the category clause and
   the failure directions are settled, while exact request and response shapes are not. A
-  misconfigured or missing plugin would still bypass all access control for that app.
-  See [plugin-integration.md](plugin-integration.md).
+  misconfigured or missing adapter would still bypass all access control for that app.
+  See [adapter-integration.md](adapter-integration.md).
 - **Decided:** Usher token uses an include-list (`categories`: what the user can access).
   Denied category names are absent from the token entirely; no information is leaked if the token
   were ever readable. See [permissions-model.md](permissions-model.md).
@@ -92,7 +92,7 @@ be safe; misconfiguration must fail loudly, not silently.
 - Key provisioning is settled: one symmetric key per controller-and-application pair, held in the
   secrets store and delivered to both pods by the secrets operator. Rotation is not settled, and a
   default or empty key would be a severe misconfiguration. See
-  [plugin-integration.md](plugin-integration.md).
+  [adapter-integration.md](adapter-integration.md).
 - Startup validation: Usher should refuse to start rather than run with insecure defaults
   (missing key, missing IdP config, etc.).
 - **Introspecting API keys needs Usher's first credential to Keycloak, and it is a powerful one.**
@@ -132,7 +132,7 @@ non-negotiable.
 | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | JWE (not JWS) for Usher tokens                                                                                   | Payload is encrypted; interception does not reveal the permissions payload |
 | JWE algorithm choices must be strong: A256GCM for content encryption, `dir` with a per-application symmetric key | Prevents cryptographic downgrade attacks                                   |
-| All communication between plugins, Usher, IdP, and database must use TLS                                         | Prevents interception of tokens and policy data in transit                 |
+| All communication between adapters, Usher, IdP, and database must use TLS                                        | Prevents interception of tokens and policy data in transit                 |
 | `generatedAt` and other claims are encrypted inside the JWE                                                      | Prevents an attacker from learning the structure of access restrictions    |
 | No credentials, tokens, or keys in log output at any level                                                       | Prevents credential exposure through log aggregation pipelines             |
 
@@ -141,7 +141,7 @@ non-negotiable.
 - Key rotation: how an application's key is rotated without dropping tokens still in flight is not
   yet designed. Health data contexts may require frequent rotation. It is the one part of the key
   design left open, the algorithm and the provisioning path both being settled. See
-  [plugin-integration.md](plugin-integration.md).
+  [adapter-integration.md](adapter-integration.md).
 - Database encryption at rest: not yet specified. Health data stored in Usher's policy store
   (user assignments, category grants) should be encrypted at rest.
 
@@ -149,20 +149,20 @@ non-negotiable.
 
 ### A05: Injection
 
-Usher constructs queries against its own database and against IdP APIs. Plugins translate
+Usher constructs queries against its own database and against IdP APIs. Adapters translate
 permissions payloads into app-native queries (SQON, SQL, etc.).
 
-| Design choice                                                                                                                                                    | Addresses                                                      |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| All Usher database queries must use parameterized statements or an ORM that handles parameter binding                                                            | Prevents SQL injection into Usher's policy store               |
-| Resource IDs, category names, and user identifiers from permissions payloads must be validated against an allowlist before plugins use them to construct queries | Prevents permissions payload injection into downstream queries |
-| Usher's API validates all input at the boundary (type, length, format)                                                                                           | Prevents malformed input from reaching internal logic          |
+| Design choice                                                                                                                                                     | Addresses                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| All Usher database queries must use parameterized statements or an ORM that handles parameter binding                                                             | Prevents SQL injection into Usher's policy store               |
+| Resource IDs, category names, and user identifiers from permissions payloads must be validated against an allowlist before adapters use them to construct queries | Prevents permissions payload injection into downstream queries |
+| Usher's API validates all input at the boundary (type, length, format)                                                                                            | Prevents malformed input from reaching internal logic          |
 
-**Gaps:** Plugin-side injection prevention is the most significant gap. Each PEP plugin
-translates permissions payload data into a native query format. If a plugin concatenates permissions payload values
+**Gaps:** Adapter-side injection prevention is the most significant gap. Each PEP adapter
+translates permissions payload data into a native query format. If an adapter concatenates permissions payload values
 into a query string rather than parameterizing them, it creates an injection path where a
-compromised Usher policy store could inject into an app's data layer. Plugin design must enforce
-parameterized application of permissions payload data. See [plugin-integration.md](plugin-integration.md).
+compromised Usher policy store could inject into an app's data layer. Adapter design must enforce
+parameterized application of permissions payload data. See [adapter-integration.md](adapter-integration.md).
 
 ---
 
@@ -172,13 +172,13 @@ This document, and the design folder as a whole, is the primary mitigation for i
 documenting intent and threat model before writing code surfaces blind spots while they are cheap
 to fix.
 
-| Design choice                                                                                          | Addresses                                                                                             |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Fail-secure on revocation channel disruption                                                           | Adversarial condition designed for explicitly: an adversary blocking revocation signals gains nothing |
-| Category grants are additive (deny by default)                                                         | The system does not need to know every denied category; it only grants what is explicitly authorized  |
-| JWE opacity: a token holder cannot read their own grants                                               | Prevents the authorization model itself from being used as an oracle for probing access boundaries    |
-| Grants enforcement is centralized in each app's plugin layer, not distributed across application logic | Single enforcement point reduces the risk of inconsistent or forgotten enforcement                    |
-| Horizontal scaling with no shared in-memory state                                                      | Usher instances do not trust each other's in-memory state; all state lives in the database            |
+| Design choice                                                                                           | Addresses                                                                                             |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Fail-secure on revocation channel disruption                                                            | Adversarial condition designed for explicitly: an adversary blocking revocation signals gains nothing |
+| Category grants are additive (deny by default)                                                          | The system does not need to know every denied category; it only grants what is explicitly authorized  |
+| JWE opacity: a token holder cannot read their own grants                                                | Prevents the authorization model itself from being used as an oracle for probing access boundaries    |
+| Grants enforcement is centralized in each app's adapter layer, not distributed across application logic | Single enforcement point reduces the risk of inconsistent or forgotten enforcement                    |
+| Horizontal scaling with no shared in-memory state                                                       | Usher instances do not trust each other's in-memory state; all state lives in the database            |
 
 **PHR-specific design note:** In health data contexts, "insecure design" includes designing for
 the average user rather than the adversarial one. Every design decision in Usher should be stress-
@@ -268,13 +268,13 @@ The full list of auditable events, required fields per event, and severity level
 | Fail-secure: if revocation status cannot be confirmed, sessions are suspended for granted access (not silently permitted) | Errors in the revocation channel result in safe failure, not continued unauthorized access            |
 | Revocation-uncertain mode returns 503 (unavailable), not 401 (unauthenticated) or 200 (permitted)                         | Error response does not reveal internal state; does not grant access; allows recovery without re-auth |
 | JWE decryption failure must reject the token cleanly, not partially process it                                            | A corrupt or tampered token is rejected at the boundary                                               |
-| Plugin errors during permissions payload application must fail the request, not apply a partial permissions payload       | A half-applied permissions payload could produce a result set that is more permissive than intended   |
+| Adapter errors during permissions payload application must fail the request, not apply a partial permissions payload      | A half-applied permissions payload could produce a result set that is more permissive than intended   |
 
 **Gaps:**
 
 - What Usher does when its own database is unavailable is not yet specified. Since Usher cannot
   compute grants without policy data, the only safe behaviour is to reject all grants
-  token exchanges and fail plugins into revocation-uncertain mode.
+  token exchanges and fail adapters into revocation-uncertain mode.
 - Error responses from Usher must not include internal state, stack traces, or policy details.
   This must be enforced at the API layer.
 
@@ -284,11 +284,11 @@ The full list of auditable events, required fields per event, and severity level
 
 | Category                       | Status                                                                                                                                                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A01: Broken Access Control     | Core design addresses key vectors; plugin enforcement designed and not yet a spec; field-level restriction not yet designed                                                                             |
+| A01: Broken Access Control     | Core design addresses key vectors; adapter enforcement designed and not yet a spec; field-level restriction not yet designed                                                                            |
 | A02: Security Misconfiguration | Principles established; key distribution settled, IdP validation details not yet designed                                                                                                               |
 | A03: Supply Chain Failures     | Principles noted; dependency policy not yet established                                                                                                                                                 |
 | A04: Cryptographic Failures    | JWE approach and algorithm specified (`dir` with A256GCM, symmetric per application); rotation not yet designed                                                                                         |
-| A05: Injection                 | Usher-side: to be enforced at implementation; plugin-side: open design gap                                                                                                                              |
+| A05: Injection                 | Usher-side: to be enforced at implementation; adapter-side: open design gap                                                                                                                             |
 | A06: Insecure Design           | Addressed by the existence of this threat model and the design-first approach                                                                                                                           |
 | A07: Authentication Failures   | Delegation to IdP is specified; IdP-unavailable behaviour not yet designed                                                                                                                              |
 | A08: Data Integrity Failures   | Token tamper-evidence specified; DB integrity controls not yet designed                                                                                                                                 |

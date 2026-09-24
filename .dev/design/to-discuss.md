@@ -16,8 +16,8 @@ closed.
 these is recorded as failing closed, and each is recorded as silent, with the startup reconciliation
 check as the thing that makes it loud:
 
-1. A category exists in Usher and the plugin has no mapping for it.
-2. A record carries a category value the plugin has no mapping for, which serves it as open.
+1. A category exists in Usher and the adapter has no mapping for it.
+2. A record carries a category value the adapter has no mapping for, which serves it as open.
 3. A capability in Usher's vocabulary that the service does not implement.
 4. A field category with no column mapping, which is the cost accepted for dropping a kind property.
 5. A column appearing in an index mapping with no category, which is safe only if the check runs on
@@ -25,27 +25,76 @@ check as the thing that makes it loud:
 6. A partitioning category configured as an overlay, which drops it from the complement `open` is
    rendered as, so every principal holding the open grant reaches the records it was meant to remove.
    Unlike the five above this is not a mismatch between two declarations: the token is correct, the
-   clause is well-formed, and the mistake exists only in the plugin's own configuration, so nothing
+   clause is well-formed, and the mistake exists only in the adapter's own configuration, so nothing
    downstream can notice it. The opposite error, an overlay marked partitioning, empties `open` and is
    impossible to miss.
 
 **Nothing in this corpus specifies the protocol.** Not what each side declares, not when it runs, not
-what either does with a mismatch, not whether the controller retains what a plugin declared.
+what either does with a mismatch, not whether the controller retains what an adapter declared.
 
 **Three of the four now have an answer from the enforcing side**, offered by the first integration
 and recorded here as the starting point rather than as the specification:
 
-- **What a plugin can declare**, which bounds everything else: the resource field configured per
+- **What an adapter can declare**, which bounds everything else: the resource field configured per
   queryable type, the category field once that exists, and from the live index mapping every field
   with its type and whether it is aggregatable. The first two come from configuration, the last two
   from the store itself.
 - **When it can run is fixed rather than chosen**: at catalogue load, after the mapping has been
   fetched and before any request is served. Earlier is impossible, since the mapping is a network
   call, and later means requests were already answered under an unreconciled configuration.
-- **Mismatch behaviour should not be one rule.** A category the plugin cannot map renders no clause,
+- **Mismatch behaviour should not be one rule.** A category the adapter cannot map renders no clause,
   so it cannot enforce and the catalogue fails closed. A cardinality or aggregatability divergence is
   a report, because declaration density across real deployments is unknown and a first run that stops
   working catalogues is its own outage.
+
+**It has to run per catalogue, because the category mapping is per catalogue.** A category means the
+same thing across an instance, and each catalogue's adapter decides how to recognize it in that
+catalogue's data, just as it decides which field names a resource. One study can sit in two
+catalogues under one `study_id`, with its clinical records `controlled` and its environmental ones
+`open`: the clinical adapter maps `controlled` to a value every clinical record already carries, and
+the environmental adapter declares that none of its records carry it.
+
+**That needs three states per category and catalogue, not two.**
+
+| State           | What the adapter declares              | What follows                                                                    |
+| --------------- | -------------------------------------- | ------------------------------------------------------------------------------- |
+| Mapped          | a field test that recognizes it here   | clauses render, and `open` excludes what the test matches                       |
+| Declared absent | no record in this catalogue carries it | `open` needs no exclusion for it, and resources carrying it stay reachable here |
+| Not mapped      | nothing                                | the resources carrying it are taken out of this catalogue, which fails closed   |
+
+**Without the middle state the example cannot work.** The environmental adapter, having nothing to
+map `controlled` to, falls into the third row and takes out the whole study, open records included.
+And the check cannot tell a deliberate absence from a forgotten mapping, so it either flags a
+correct configuration or accepts a mistake. The declaration has to be able to say "none here"
+explicitly, and the check has to ask once per catalogue rather than once per application.
+
+**The middle state is the only one that can be wrong in the dangerous direction.** Established with
+the enforcing side. A mapped test is checkable, and a missing mapping fails closed. A declared
+absence is a claim about data, and an indexing run can falsify it without anything noticing: a
+record carrying the category arrives, no clause tests for it, and since `open` excludes only mapped
+values, the record is served as open to everyone.
+
+**So a declared absence is the last resort.** Wherever the catalogue has a field that could carry
+the category, the category is mapped, even if the test matches nothing today: that costs nothing,
+and a record that later matches is withheld rather than served. Absence is declared only where no
+field in the catalogue could carry the category, so that falsifying it takes a mapping change, which is failure mode 5 and needs the check to run on
+a mapping change and not at boot alone. That turns a risk falsified by continuous, unattended
+indexing into one falsified at a discrete and attributable event, which can be checked rather than
+monitored.
+
+**The first integration has no mapping-change signal.** Established on the enforcing side: it reads
+the mapping at catalogue load, a change takes effect for queries at once because the search engine
+owns the mapping, and its own derived state stays as it was read at boot. So running the check on a
+mapping change needs a mechanism that does not exist there, and both failure mode 5 and a declared
+absence depend on it.
+
+**Where it is declared, it is verified.** The existence check in the rendering item answers whether
+any record carries the category, and it belongs with the sample the search layer already takes at
+catalogue load for cardinality. Unlike a cardinality divergence, a falsified absence is not a
+report: it is a live disclosure, which [adapter-integration.md](adapter-integration.md) already rules
+is an incident with an owner rather than a log line. It joins the preconditions the integration
+asserts and nothing else checks, beside cardinality, per-record category marking and identifier
+uniqueness across catalogues, and it is the only one a deployment adds deliberately.
 
 **Retention is required rather than preferable, and the argument is about clause polarity.** Without
 it, a grant naming a field or a capability the audience does not have is writable and surfaces at
@@ -55,7 +104,7 @@ and permits. `open` is rendered as exactly that negation. So non-retention does 
 it converts an authoring mistake into a silent widening on the one category every principal holds.
 See the unimplemented-capability decision in [decisions.md](decisions.md).
 
-**Why this is worth stating as its own item.** The check was cited once as a mitigation and then
+**Why this is its own item.** The check was cited once as a mitigation and then
 cited again each time a new silent failure was found, without anyone going back to ask whether the
 thing being relied on exists. It is now the single point of unexamined trust in the enforcement
 story, and every finding that lands on it makes it more load-bearing rather than more defined.
@@ -97,23 +146,51 @@ collapse. Original finding:
 `permissions-model.md` explicitly supports multiple simultaneous roles per user per resource, with
 effective permissions as the union of all role permissions. The token structure has a single scalar
 `role` field per resource entry. No rule is specified for collapsing multiple roles into one value
-at issuance time. A plugin receiving a collapsed value that does not represent the user's full
+at issuance time. An adapter receiving a collapsed value that does not represent the user's full
 permission set will apply incorrect filters. Either the token schema needs to support an array, or
 the collapsing rule needs to be defined and its safety argued.
 
-**[MEDIUM] Anonymous token cache key is undefined.**
-Downgraded: the baseline answers most of it. Every anonymous principal receives exactly that
-role's grants, so they are all receiving the same token and one shared token per application is
-correct rather than one of several options. Per application rather than per instance, because a
-Usher token is audience-scoped and wrapped to one application's key, so anonymous principals of the
-search service and of the submission service cannot share one. What stays open is narrower: the invalidation key, which
-wants a version or generation on the baseline, since a change to it is a policy change with no
-`sub` to attach to. Original finding:
+**[RESOLVED] Anonymous token cache key is undefined.**
+Answered in both halves. Every anonymous principal receives exactly the baseline's grants, so they
+all receive the same token, and one shared token per application is correct rather than one of
+several options. Per application rather than per instance, because a Usher token is audience-scoped
+and wrapped to one application's key, so anonymous principals of the search service and of the
+submission service cannot share one. Invalidating it needs no version or generation on the baseline:
+a notice telling each bridge to drop the entry it holds for principals with no `sub` evicts exactly
+one thing, and carries no payload, since a bridge that re-exchanges receives whatever is correct now.
+A resource-keyed notice was considered first and is worse on both counts, invalidating every token
+naming the resource and having to name it, which tells applications that do not serve it that it
+exists. Original finding:
 The bridge caches Usher tokens per user, identified by `sub`. Anonymous tokens have `"sub": null`.
 Multiple anonymous users share the same bridge. What is the cache key? One shared token for all
 anonymous sessions? One per request? One per session cookie? Each option has different security
 and performance characteristics. Revocation of open access (a resource taken offline) also needs
 a defined path for the anonymous case, since a notice naming the principal cannot name a null `sub`.
+
+**[HIGH] A category change reaches no application until its token expires.**
+Found while answering the anonymous case above, and it is not confined to it. The channel announces
+withdrawn grants, naming the principal. A category write announces nothing: it bumps the resource's
+version, which is compared only when a bridge comes back for a new token.
+
+1. The `resource_categories` write lands and the resource's category version bumps.
+2. Nothing is announced, because no grant was revoked.
+3. No cached payload is deleted, because nothing changed what any principal holds.
+4. Every bridge keeps serving from a token computed before the change.
+5. At the next refresh the version comparison fails, Usher recomputes, and the correct token is issued.
+
+**Step 4 is the exposure and it is the same length for every principal**, signed in or not. Adding a
+category to narrow `open`, or taking a resource out of open access entirely, both land here.
+
+**It contradicts a stated property.** [decisions.md](decisions.md) says losing access is immediate
+and gaining it waits, and the push channel exists because one TTL was judged too long for an
+emergency. Neither holds for a category change. That sentence is now qualified there rather than left
+standing.
+
+**Two ways to close it, and they are not equivalent.** Either a category write announces itself, in
+which case the question is what it names for a principal who has no `sub` (answered above: drop the
+anonymous entry, which needs no name), or TTL-bounded narrowing is accepted and the immediacy claim
+is dropped everywhere rather than qualified in one place. The first costs a fan-out or a
+resource-keyed notice; the second costs a guarantee.
 
 **[MEDIUM] `revoked_at` is a scalar; reinstatement and multiple revocations are undefined.**
 Downgraded, because most of the premise went with the per-user marker. `revoked_at` lives on the
@@ -146,9 +223,9 @@ is written.
 
 ## Admin access paths
 
-**[HIGH] The plugin-level admin bypass skips the gate the grant-gating decision says nothing skips.**
-`admin-model.md` documents a bypass in which a plugin detects the platform-admin role in the IdP
-token and applies no filter at all. It creates no grant record, is logged only by the plugin, is
+**[HIGH] The adapter-level admin bypass skips the gate the grant-gating decision says nothing skips.**
+`admin-model.md` documents a bypass in which an adapter detects the platform-admin role in the IdP
+token and applies no filter at all. It creates no grant record, is logged only by the adapter, is
 disableable per instance, and the document already recommends disabling it for health-data
 instances.
 
@@ -165,6 +242,12 @@ single instance-wide switch.
 
 Until it is answered, `decisions.md` overstates. Recorded there as an exception to be resolved
 rather than silently left standing.
+
+**A smaller question gates phase 1 and can be answered first: does the Arranger adapter implement the
+bypass at all?** The switch is per instance, and `admin-model.md` recommends off for health-data
+instances without making that the default, so an adapter that never implements it forecloses the
+question for the first integration without settling the custodian one above. That is a scope
+decision rather than a design defect, and it is the half that has a deadline.
 
 ## Token contract
 
@@ -201,7 +284,7 @@ defines the baseline and may grant nothing. Recorded in [decisions.md](decisions
 [security-workflow.md](security-workflow.md). Original analysis:
 Roles in the source model do two jobs: they are a compact way to assign many permissions at once,
 and they are the first stage of a two-stage check evaluated when access is attempted. This design
-moves the second job to issuance time so that plugins hold no policy. That leaves roles doing only
+moves the second job to issuance time so that adapters hold no policy. That leaves roles doing only
 the first job, which is an authoring convenience, and an authoring convenience has no reason to
 travel in an enforcement payload.
 
@@ -215,7 +298,7 @@ Where roles then live, none of which is the token:
 
 **Ownership is absent from the token for a second and independent reason.** An owner's powers are
 management operations: granting, revoking, setting visibility. Those are performed against Usher's
-own API, which checks them directly. A plugin never enforces them, so the enforcement payload never
+own API, which checks them directly. An adapter never enforces them, so the enforcement payload never
 needs to say who is an owner. This is the same conclusion an earlier sketch reached the wrong way
 round, by inventing a `manage` flag in the token before asking what would consume it.
 
@@ -226,11 +309,11 @@ subtractive model this design replaced, and it is the reason the token has been 
 about.
 
     Subtractive, superseded:  the resource's full category set is the baseline. The token says
-                              which categories are held; the plugin subtracts the rest and excludes
+                              which categories are held; the adapter subtracts the rest and excludes
                               them. An empty list leaves the unrestricted remainder visible.
 
     Additive, current:        nothing is a baseline. The token says which grants are held; the
-                              plugin emits one positive clause per grant. An empty list is no
+                              adapter emits one positive clause per grant. An empty list is no
                               grants, so it reaches nothing.
 
 The same field means opposite things under the two, and four sections of `permissions-model.md`
@@ -239,12 +322,12 @@ still describe the subtractive one. Anyone reading both carries the contradictio
 **Making open content its own category removes the baseline entirely.** If the unrestricted portion
 is a category like any other, there is no remainder for subtraction to leave behind, and every
 reachable record is reachable because of a grant that names it. That also expresses tier
-differences that the current shape cannot: anonymous principals holding `open: [read]` while registered
-ones hold `open: [read, update]`, which is a real distinction between the tiers with nowhere to
+differences that the current shape cannot: anonymous principals holding `open: [view]` while registered
+ones hold `open: [view, update]`, which is a real distinction between the tiers with nowhere to
 live today.
 
-    "STUDY_A": { "open":       { "record": ["read", "update"] },
-                 "controlled": { "record": ["read"] } }
+    "STUDY_A": { "open":       { "record": ["view", "update"] },
+                 "controlled": { "record": ["view"] } }
 
 **And it retires `categories: []`**, which was flagged in review as not sitting right and whose gloss
 has been corrected twice. With open content as a category it cannot occur: any access to a
@@ -256,45 +339,313 @@ two that had to be told apart.
 categories becomes ungrantable, because there is nothing to name in a grant. Every resource must
 carry at least one, which for ordinary data is the open one.
 
-**Vocabulary, and this half was later reversed.** The conclusion recorded here was `view` rather than
-`read`, on the reasoning that the portal flows distinguish viewing metadata from downloading files.
-The settled vocabulary is the opposite: the data-plane actions are `create`, `read`, `update`,
-`delete`, `export` and `aggregate`, `view` is retired in favour of `read`, and `download` became
-`export`, which ships and is seeded into the reading roles. What the flows distinguish is preserved
-by `read` against `export` rather
-than by naming the first one `view`.
+**Vocabulary, and this half stands.** The conclusion recorded here was `view` rather than `read`, on
+the reasoning that the portal flows distinguish viewing metadata from downloading files. `view`
+names seeing a record, and `read` is the capability group of `count`, `view` and `export`.
+`download` became `export`, which ships and is seeded into the reading roles, so what the flows
+distinguish is `view` against `export`.
 
 **Applied**, with the configured baseline as the mechanism once the detached
 permission list is gone.
 
-## Plugin contract
+## Adapter contract
+
+**[HIGH] The reindex-lag dissolution covers a grant changing, not the data changing, and consent
+withdrawal is the case that falls through.**
+
+**No live exposure in the first deployment, and that is where the argument has to start.** Neither of
+the first instance's catalogues carries an access-level field, so the category clause has nothing to
+test and per-category enforcement is inert. Record-level narrowing is post-MVP. Nothing below can
+happen today. It is filed because the requirement it names has no home in the model at all, which is
+a thing to settle before something is promised on it rather than after.
+
+**Two changes can make an indexed value and an access decision disagree, and only one is answered.**
+
+|                                | A grant changes in Usher        | The record's own data changes at the source |
+| ------------------------------ | ------------------------------- | ------------------------------------------- |
+| Does any indexed field change? | no                              | yes, after the indexing pipeline runs       |
+| What the filter tests          | a current value                 | a **stale** value                           |
+| Window                         | the revocation channel, seconds | the indexing pipeline, minutes to hours     |
+| Recorded?                      | yes: dissolved, not deferred    | **nowhere**                                 |
+
+The dissolution in [phase-1.md](../docs/phase-1.md) and the superseded freshness question in
+[adapter-integration.md](adapter-integration.md) both argue that enforcement reads descriptive fields
+only, so a _grant_ change alters no indexed value. Both are sound and neither reaches the second
+column. A descriptive field is exactly the thing that does change when the data changes, and the
+index holds the old value until it is reindexed.
+
+**Only the narrowing direction matters**, which halves the problem before anything is designed. A
+record becoming more restricted while the index still carries the wider value is matched by a clause
+that should no longer reach it, and nothing announces that. A record becoming less restricted is
+withheld until the index catches up, and someone complains. Silent one way, loud the other.
+
+**Consent withdrawal is the instance that makes this more than a data-correction concern**, and it
+has no representation anywhere in this corpus. Searched: every "withdrawn" here refers to a grant.
+The model offers it no home, and the reason is structural rather than an oversight:
+
+- **It cannot be an enforcement field.** A withdrawal marker states that a record may no longer be
+  reached, which is the definition of a prescriptive field in
+  [decisions.md](decisions.md), and enforcement reads descriptive fields only.
+- **It cannot be a grant.** Grants are per `(resource, category)`. One participant withdrawing is per
+  record, and no grant expresses that.
+- **Record-level narrowing, where it would live, is post-MVP** and further out than that in one
+  place.
+
+**So the question to settle is where consent withdrawal lives, not how to close the window.** If it
+belongs to the grant layer then the second column stops applying to it and what remains is ordinary
+data-correction staleness, which is a much weaker requirement. If it does not, the window is real and
+one of the mitigations below has to be chosen.
+
+**Four mitigations, if the window turns out to be real.** Recorded so the choice is visible rather
+than made at implementation time:
+
+| Approach                                                                                         | Cost                                                                                                          |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Verify on read: the index returns candidates, the returned page is rechecked against the source  | one lookup per page rather than per corpus, and the index stops being an authority                            |
+| Push affected record identifiers over the existing revocation channel as a short-lived exclusion | needs a signal that the indexer has caught up; the channel already carries push, poll and fail-secure         |
+| Fail closed when the index's last sync is older than a threshold                                 | an indexing outage becomes a search outage, which matches the posture already taken on the revocation channel |
+| Synchronous or priority reindex on a narrowing change                                            | couples submission latency to indexing, so a slow index blocks writes                                         |
+
+**[HIGH] Nothing governs what a surface renders, except in the management package.**
+
+**Almost none of this is live in phase 1, and the reason is where each layer's names come from.**
+Component configuration, the extended mapping and GraphQL introspection all name _fields_, and
+field-level restriction is designed but not built, so in phase 1 every principal reaching a record
+reaches all of its fields and a field name discloses nothing the model restricts. Resources are
+field _values_ rather than schema, and through the data paths they reach components already narrowed
+by the server-side filter, so an unreachable resource never appears there as a facet bucket, a row or
+a count. **But values also reach components through configuration, which no filter touches.** So
+what remains in phase 1 is **any surface that names resource values from configuration rather than
+from data**: a portal page listing resources from a source other than the filtered query, and
+Arranger's `displayValues`, the next item. Everything else here is a prerequisite for field-level
+restriction, and one part of it is large.
+
+**The principle already exists and is scoped too narrowly.** [management-ui.md](management-ui.md)
+states it: what a rendering implies "can leak while every value is correct", and "an affordance for
+something unreachable" discloses, as does "an empty state that distinguishes nothing-here from
+nothing-for-you". It governs the management package alone. Nothing applies it to search components,
+to a portal's own pages, or to an API describing its own fields.
+
+| Layer                     | Example                                     | Owner                | Designed |
+| ------------------------- | ------------------------------------------- | -------------------- | -------- |
+| Server query              | the aggregations query                      | the Arranger adapter | yes      |
+| Component                 | table, facets, downloads, charts, matchbox  | Arranger Components  | no       |
+| Page and fragment         | a clinical tab, an export section           | the portal           | no       |
+| The API describing itself | GraphQL introspection, the extended mapping | Arranger server      | no       |
+
+**The mechanism: the server shapes each component's configuration per principal.** It already
+decides what configuration it sends, and it holds the decrypted token, so the token never leaves it.
+A browser then receives a configuration, which says what to draw, rather than a capability set,
+which says what is withheld.
+
+**Omit rather than block, and this is the rule that matters.** Two modes look alike and are not:
+
+| What the principal holds on it                 | What the server sends                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| something                                      | exactly that; counts without rows is correct for a principal holding only `count`        |
+| nothing                                        | nothing: the resource is absent from the configuration, never present and marked blocked |
+| nothing, requested explicitly by a direct link | a refusal indistinguishable from the resource not existing                               |
+
+A blocked state is the affordance for the unreachable in the principle's own words: it tells the
+principal the thing exists and that they lack it. So it is never sent, and the only refusal that
+reaches a principal is the one they asked for directly, which must look like absence.
+
+**Components need a mapping, not a vocabulary of their own.** A table renders from `view`, a total
+from `count`, download from `export`, and a facet from both `count` and `view`, since each bucket's key is
+a field value and each bucket carries a count; whether a field can be declared so that its facet needs `count`
+alone is research, in [count-only principal](../docs/atlas/roadmap/count-only-principal.md). One capability vocabulary stays
+one. Gating a panel behind a release flag is not access control and does not belong to Usher.
+
+**A principal holding `count` alone gets a different page rather than a narrower one.** There are no
+records to list, so there is no table: a headline count, narrowed by whatever facets they may use.
+Choosing a bucket narrows the count, where for a principal who views records it narrows the table.
+
+**So a configuration has to be able to say a component is not rendered for this principal**, and the
+first integration's configuration has no way to say it, for the table or for any other component.
+Omitting is the rule above, and this is where omission needs a mechanism. A design for it is wanted
+within phase 1, for the case below.
+
+**A catalogue a principal reaches nothing in renders nothing.** Where a principal holds no grant
+reaching any record of a catalogue, no component renders for it, rather than every component
+rendering empty for each resource in it. That is live in phase 1 wherever a catalogue's records all
+carry categories a principal lacks, or where the default open grant is off, and the first
+integration serves several catalogues.
+
+**Knowing that a principal reaches nothing there has two halves, established on the enforcing
+side.** One is free and one takes a query, and they split along the two axes a grant names.
+
+**The resource half is already decided.** The adapter's configuration lists, per queryable type, the
+resources configured for it, and an empty intersection with the resources the token names already
+denies that type. So the association of resources with catalogues that Usher does not hold is held
+by the adapter, and the same decision needs a second reader: it denies the query today and would also
+omit the configuration. Configuration that lists a resource whose records are absent from the
+catalogue makes the intersection non-empty and the page render empty, which is a stale-configuration
+flaw and fails toward showing an empty page rather than hiding a populated one.
+
+**Under the default it never fires.** Every resource carrying `open` is reached by everyone through
+it, so the intersection is empty only where an instance removed `open` from a catalogue's resources
+or turned the default off. Intersecting per resource and category pair does not help: a principal
+holding `open` on a resource whose records in this catalogue are all `controlled` holds a pair and
+reaches nothing. So the existence check is load-bearing rather than a fallback.
+
+**The category half takes a query.** Whether any of a catalogue's records escape every category the
+principal lacks is a fact about what was indexed, so only an existence check under the principal's
+filter, never returned to them, answers it. That is the common path under the default, and it is
+cheap as a search: no documents returned, stopping at the first match.
+
+**Its cost is a data dependency configuration has never had.** Fetching configuration makes no call
+to the search engine today, so the check adds a failure mode that has to be specified: render
+nothing when the check cannot run, which fails closed and coincides with the outage an unreachable
+index already causes, since the search itself cannot run either. It also runs once per catalogue on
+every configuration fetch, and it inherits every property of the principal's filter, including the
+defects recorded against it.
+
+**Render nothing either way, and let the client tell the two apart.** "You reach nothing" is
+permanent and "the check could not run" is retryable, and the check runs before the search, so an
+index briefly unreachable for one and reachable for the other shows nothing to a principal who
+reaches plenty. The first integration already publishes whether its engine is reachable, on an
+unauthenticated readiness endpoint, so a configuration response can say which state it is in without
+a second query and without disclosing anything: reachability is a property of the deployment rather
+than of the principal.
+
+**The rule is per catalogue and the mechanism per type.** A catalogue exposes more than one
+queryable type, since saved sets are composed into every catalogue's schema beside its document
+type. The document type should be what decides whether components render, since they render its records,
+and that needs stating rather than assuming. A test asking whether every type in the catalogue is
+denied would answer no whenever saved sets are reachable, whatever the document type says.
+
+**What the first integration's configuration can express, established on the enforcing side.** Per
+field, yes: table columns carry `show` and extended fields carry `isActive`. Per component, nothing.
+The per-type `createState` switch looks like the answer and is not: it chooses between two GraphQL
+types when the schema is built, once per catalogue and shared by every principal, so making it vary
+per principal is the per-principal schema introspection already needs.
+
+**And omission renders as emptiness, which is the disclosure the rule forbids.** A component whose
+configuration is withheld falls back to an empty one, so a principal served no facet configuration
+gets an empty facet panel and one served no table configuration gets a table with no columns. An
+empty panel where one was expected says a panel was expected.
+
+**So withholding at the server is necessary and not sufficient.** The component library needs a
+contract for absence, distinct from emptiness, and a way to be told which page it is rendering. That
+is a change to a published package with consumers beyond this integration rather than to a response
+shape. A design that says only "omit the configuration" produces the disclosure it was written to
+prevent, and it looks correct from the server side.
+
+**Every gate a surface applies is presentation.** The server remains the enforcement boundary, and
+each rendering decision needs its enforced counterpart, since a configuration can be edited by
+whoever holds the browser.
+
+**Established by Arranger from the code, and it separates what shaping can close from what it cannot.**
+
+| Surface                                 | How it reaches a client                                                                                            | Closable by shaping per principal? |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| `downloads`, `extended`                 | returned unconditionally by one configuration resolver                                                             | yes                                |
+| `charts`, `facets`, `matchbox`, `table` | the same resolver, gated per type on a `createState` flag                                                          | yes                                |
+| the extended mapping                    | the same resolver, as the full field list with display names and types                                             | yes                                |
+| GraphQL introspection                   | **one schema per catalogue, built once at load and shared by every principal**, on unless a deployment disables it | **no**                             |
+
+**The hook for the first three already exists.** Configuration is fetched through GraphQL on the same
+endpoint and router as data, so it passes the point where the decrypted token sits. The resolver never
+declares the context parameter, but GraphQL passes context to every resolver regardless: the principal
+already arrives there and nothing reads it. So shaping is a signature change at the same moment the
+data paths build their filter, with no new lifecycle. The cost is one small function per surface,
+since each has its own shape, rather than one filter.
+
+**Introspection is the part that is large.** Making a schema's field list depend on the principal
+means building a schema per principal, and caching per principal, which is a different order of
+change from shaping a response. Disabling introspection narrows discovery without closing it: a client
+that already knows a field's name can query it and learn from the response shape whether it exists.
+So the flag is a mitigation, and closing it is the prerequisite field-level restriction actually waits on.
+
+**Omission has a cost to honest consumers, and the contract already answers it.** A narrowed field
+list is indistinguishable from a catalogue that genuinely lacks the fields, which is the point for the
+principal and a problem for any consumer that must know whether it is looking at the whole catalogue.
+Arranger's published introspection response carries `meta.authFiltered`, documented as "whether a
+server-side filter was active when the response was generated", currently hardcoded `false` and pinned
+by a test. Made dynamic it says a narrowing happened without saying what was narrowed, which is
+exactly the granularity omission needs, and nothing has to be added to the contract to say it.
+
+**A separate disclosure surface, deliberately not folded in.** The SQON viewer renders the query a
+principal holds, which ordinarily discloses only what they built. A SQON arriving from elsewhere, a
+shared link, a bookmark or a saved set, can name fields the recipient holds nothing on, and no
+configuration shaping reaches it, because the content is supplied rather than served.
+
+**It also bears on a contradiction between two documents.** They give different reasons the token is
+opaque:
+
+| Document                                     | Stated reason                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [security-workflow.md](security-workflow.md) | "even knowing the shape of the restriction may be information they should not have"  |
+| [intro.md](../../docs/intro.md)              | audience isolation, and keeping grant contents out of logs, error reports and traces |
+
+Under the first, telling a browser what its principal may do would violate the rule, and correct
+rendering would be impossible by design. Under the second it is fine. Omission satisfies both, since
+nothing about what is withheld is ever sent, so the rendering design does not have to wait on this.
+The contradiction still stands and wants one answer: the first reason is already strained, because
+the token never reaches the principal and the holder it guards against is the bridge.
+
+**Arranger's side separates into three seam changes**, costed rather than scheduled: projection,
+resolver identity, and metadata shaping. The third is independent of the other two and is what makes
+them meaningful, since an unfiltered field list undermines field-level enforcement however well the
+data paths prune.
+
+**[HIGH] A catalogue that labels its resource field publishes every resource to every principal.**
+
+**Empty by default, and the obvious configuration fills it.** `extendedFields[].displayValues` maps a
+field's raw values to display labels, per catalogue. A deployment whose resource field holds
+identifiers, and whose interface should show study names instead, fills it for exactly that field.
+
+**Once filled it reaches every principal without passing a query.** It travels inside the extended
+mapping the configuration resolver returns whole, and the components store it as received. Every key
+in it is a resource, and a map written to label a field's values names all of them. So anyone who
+loads the page receives the catalogue's resource list, including the resources they hold nothing on.
+
+**That is the disclosure the rendering principle names.** [management-ui.md](management-ui.md) rules
+that "three of seven studies" discloses that seven exist. A label map naming all seven discloses the
+same without the count.
+
+**The published REST introspection contract does not carry it.** Its field builder emits a field's
+display name, whether it is an array, its type and its unit, and nothing else. The exposure is the
+GraphQL configuration query and the components.
+
+**Independent of the three seam changes, and small.** It needs neither projection, resolver identity
+nor metadata shaping, so it should not wait on them. Either of two closes it:
+
+| Remedy                 | What it takes                                                         |
+| ---------------------- | --------------------------------------------------------------------- |
+| A deployment rule      | no resource values in `displayValues` on a field access control reads |
+| Shaping that one field | the resolver narrows the map to the resources the principal reaches   |
+
+The rule costs nothing and holds only where every deployment knows it. Shaping is one of the small
+per-surface functions the rendering item already anticipates, applied to a single field, and it is
+the remedy that does not depend on a deployment reading a note.
 
 **[RESOLVED] The bridge is said both to render predicates and to hold no schema knowledge.**
-The bridge builds the predicate and the plugin supplies the field name for the catalogue being
+The bridge builds the predicate and the adapter supplies the field name for the catalogue being
 queried, which is a parameter rather than stored schema knowledge. SQON is the wire format, so
 applications whose enforcement is not SQON-shaped translate. Original finding:
 `decisions.md` has the bridge rendering a resolved grant set as a union of positive predicates, and
 also states that a leaf operator's field name is structurally required. `architecture.md` assigns any
-knowledge of the application's data schema, field names included, to the plugin and
+knowledge of the application's data schema, field names included, to the adapter and
 explicitly excludes it from the bridge. A component with no field names cannot emit a predicate that
 requires one.
 
 The per-catalogue resource field name sharpens this from a wording problem into a contract question. One
 bridge serves an application, an application serves several catalogues, and the resource field name
 differs between them, so it cannot be resolved once at bridge startup. Either the bridge
-emits resource names and the plugin turns them into predicates, or the plugin supplies the field
+emits resource names and the adapter turns them into predicates, or the adapter supplies the field
 name per query and the bridge composes with it. The second preserves both statements, since being
 told a field name for one query is not holding schema knowledge, but it is a real interface decision
 and neither document makes it.
 
-**Recommendation: the plugin supplies the field name, the bridge builds the predicate.**
+**Recommendation: the adapter supplies the field name, the bridge builds the predicate.**
 
 The deciding reason is where fail-open defects concentrate. Every enforcement defect this design has
 recorded is a predicate-construction defect: denial expressed as a negation instead of
 `matchNothing`, an empty `in` read as no constraint, a containment expression double-negating into
 a test for any element rather than every element on a flat field, and a filter composing disjunctively on the aggregation path.
-Not one of them is a compilation defect. If the bridge emits resource names and each plugin builds
-its own predicate, that entire class of defect is reimplemented once per plugin, and drift between
+Not one of them is a compilation defect. If the bridge emits resource names and each adapter builds
+its own predicate, that entire class of defect is reimplemented once per adapter, and drift between
 applications is the problem the shared bridge exists to prevent.
 
 Four supporting reasons:
@@ -302,22 +653,22 @@ Four supporting reasons:
 - **It does not breach the constraint it appears to.** Being told a field name for one query is not
   holding schema knowledge. The bridge is never provisioned with an instance's schema and never has
   to be kept in sync with one, which is what that exclusion protects.
-- **It trusts the plugin with strictly less.** The plugin is the enforcement point and must be
+- **It trusts the adapter with strictly less.** The adapter is the enforcement point and must be
   trusted either way, but supplying one field name is a smaller surface than constructing the whole
   predicate. A wrong field name is also checkable at startup, alongside the mapping-shape check
   already required.
-- **The conformance corpus tests one implementation instead of one per plugin.** What a predicate means
+- **The conformance corpus tests one implementation instead of one per adapter.** What a predicate means
   are exactly what a corpus is for, and they stay in a single place to test.
 - **Per-catalogue output is already required.** Catalogue-level denial means the answer differs by
   catalogue regardless, so the bridge must produce per-catalogue results either way. Given that, it
   costs nothing for those results to be predicates: the interface takes a map of catalogue to field
   name and returns a map of catalogue to enforcement.
 
-The cost is one additional input on the bridge interface, and a plugin obligation to supply it
+The cost is one additional input on the bridge interface, and an adapter obligation to supply it
 correctly.
 
 **Scope: this governs the narrowing arm only.** The enforcement result is already a union of deny,
-narrow and allow, and only narrow carries a predicate. Named future plugins do not all narrow:
+narrow and allow, and only narrow carries a predicate. Named future adapters do not all narrow:
 
 | Application | Operation                                          | Predicate?                                           |
 | ----------- | -------------------------------------------------- | ---------------------------------------------------- |
@@ -327,9 +678,9 @@ narrow and allow, and only narrow carries a predicate. Named future plugins do n
 | Lectern     | Schema and dictionary service, no record filtering | No                                                   |
 
 A service whose operation is fetching one object by identifier never narrows, so no predicate is
-built under either option and the question does not arise. What such a plugin needs instead is a
+built under either option and the question does not arise. What such an adapter needs instead is a
 query in Usher's own vocabulary, "does this principal hold a grant on category C of resource R", with
-the plugin resolving its identifier to that pair first. That is a third interface shape and the plugin contract
+the adapter resolving its identifier to that pair first. That is a third interface shape and the adapter contract
 should carry it deliberately rather than treating every application as a filtering one.
 
 **What would change this, restated.** Not a backend that cannot narrow, but a backend that narrows in
@@ -337,20 +688,20 @@ a way the shared query language cannot express _neutrally_. The MVP predicate is
 containment on a field, which is neutral: it compiles as readily to a relational filter as to a
 search-engine one. So the recommendation holds today for every application that narrows.
 
-**The post-MVP predicate is not neutral, and this is worth recording on its own.** Record-level
+**The post-MVP predicate is not neutral.** Record-level
 narrowing is expressed as `not` of `not-in`, whose correctness depends on the field being mapped
 `nested`, and on a flat field it silently degrades to an existential match in the permissive
 direction. That is a search-engine mapping concept, not a property of the query language. The same
-expression carried to a plugin over a different store would mean something different, and it would
+expression carried to an adapter over a different store would mean something different, and it would
 differ permissively.
 
 Two consequences. Record-level narrowing as currently specified is **specific to the search application
 rather than a platform permission**, which no document says. And this is an argument _for_ central
 construction rather than against it: where the meaning of a predicate depends on backend properties,
 that reasoning belongs in one component that can vary or refuse on a declared permission, not
-replicated across plugins whose authors each decide independently what the expression means.
+replicated across adapters whose authors each decide independently what the expression means.
 
-Must be settled before the plugin contract is written, which has not started.
+Must be settled before the adapter contract is written, which has not started.
 
 ## Security model
 
@@ -590,6 +941,27 @@ and revoke each one. The most critical emergency operation has no direct API pat
 `POST /admin/users/{id}/revoke` endpoint that sets `revoked_at` regardless of which resources they hold grants in
 should be considered as a v1 requirement.
 
+**A mechanism is now proposed, and it is not an endpoint that iterates.** A status on the principal
+that grant validation reads, so that freezing someone is one write rather than a sweep across every
+grant they hold:
+
+| Status      | What grant validation does                                                                                      |
+| ----------- | --------------------------------------------------------------------------------------------------------------- |
+| `active`    | grants resolve normally                                                                                         |
+| `suspended` | grants resolve to nothing, and the grants themselves are untouched                                              |
+| `blocked`   | as suspended, and any attempt to grant this principal access warns the author and notifies someone for approval |
+
+**Why a status rather than a bulk revoke.** Setting `revoked_at` across every grant destroys what
+was held, so restoring access means reconstructing it from an audit trail. A status leaves the grants
+intact and gates them, which makes the operation reversible and makes "what did they hold while
+frozen" answerable. It also gives the emergency operation one row to write, which is what makes it
+fast enough to be an emergency operation.
+
+**What it still needs.** Who may set it, whether `blocked` differs from `suspended` by more than the
+warning, who receives the approval notice, and how it interacts with the cached payload, which must
+be deleted on any status change for the freeze to take effect inside one TTL rather than at the end
+of one.
+
 **[POST-V1] Trusted-issuers governance for GA4GH Passports is not described.**
 Same scope as the Visa revocation item above. Original finding:
 Adding a new Visa Issuer (a new collaborating DAC) requires updating Keycloak's
@@ -603,7 +975,7 @@ same care as a global admin grant.
 `admin-model.md` logs self-grant creation and revocation as discrete audit events. A PHI breach
 investigation requires answering: during admin X's self-grant window, what records did they
 query? Grant events are in the controller's audit log. Data access events (if logged at all) are
-in the PEP plugin's log (Arranger, Lyric). Correlating these across systems requires a shared
+in the PEP adapter's log (Arranger, Lyric). Correlating these across systems requires a shared
 identifier (a self-grant ID, or a correlation token) that links the grant audit record to
 downstream data access records. Neither the identifier nor the correlation mechanism is described.
 

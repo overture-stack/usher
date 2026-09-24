@@ -30,14 +30,14 @@ put here and the case belongs to Usher's own schema tests.
 ## Two places this diverges from the case table, deliberately
 
 **Roles expand against the seeded matrix, not the case table's local configuration.** That table
-declares `curator carries create, read, update, delete` and `viewer carries read`, which is a
+declares `curator carries create, view, update, delete` and `viewer carries view`, which is a
 reduction that keeps the table readable. The seeded roles in
 [permissions-model.md](../permissions-model.md#the-seeded-roles-as-a-matrix) carry more:
 
-| Role      | Case table                           | Seeded                                                      |
-| --------- | ------------------------------------ | ----------------------------------------------------------- |
-| `viewer`  | `read`                               | `aggregate`, `read`, `export`                               |
-| `curator` | `create`, `read`, `update`, `delete` | `aggregate`, `read`, `export`, `create`, `update`, `delete` |
+| Role      | Case table                           | Seeded                                                  |
+| --------- | ------------------------------------ | ------------------------------------------------------- |
+| `viewer`  | `view`                               | `count`, `view`, `export`                               |
+| `curator` | `create`, `view`, `update`, `delete` | `count`, `view`, `export`, `create`, `update`, `delete` |
 
 A fixture claiming to hold real tokens has to hold the real role. The case table's reduction stays
 correct for what it is teaching, and the two should not be reconciled by widening the table, which
@@ -50,8 +50,8 @@ validates `exp` against the wall clock is testing something this corpus does not
 
 ## The configuration these payloads were computed against
 
-    curator   aggregate, read, export, create, update, delete
-    viewer    aggregate, read, export
+        curator   count, view, export, create, update, delete
+    viewer    count, view, export
 
     G1 "cardiology" and G2 "study readers" are named sets of people. A role is
     named on each grant, never on the group.

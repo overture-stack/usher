@@ -8,7 +8,7 @@ Internal guide for contributors. For community contribution guidelines, see `CON
 Usher is the access control plane for the Overture platform: it holds the grants that say who may
 reach what and hands them to each application, which enforces them at its own query layer. Decisions are ABAC
 (Attribute-Based Access Control), and the answer travels as an encrypted Usher token that a per-app
-plugin applies. The [README](README.md) has the full framing, including the two properties that
+adapter applies. The [README](README.md) has the full framing, including the two properties that
 separate it from a conventional access control service.
 
 Usher is not an authentication service. Authentication is delegated to the configured identity
@@ -47,7 +47,7 @@ contributors, human and AI.
   activity. ISO names sort chronologically, so no index is needed.
 - **`docs/`**: documents that outlive a session. The phase-1 blocker set and implementation gate,
   requirement and user-flow traceability, and the atlas of longer-form roadmap detail.
-- **`design/`**: design documents covering security workflow, permissions model, plugin
+- **`design/`**: design documents covering security workflow, permissions model, adapter
   integration, and the management UI. Start at `design/README.md`.
 
 ## AI tooling

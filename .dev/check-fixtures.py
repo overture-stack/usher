@@ -13,17 +13,24 @@ Two rules here are not in the type and cannot be. Action lists are non-empty, wh
 through `NonEmpty` but only for literals. And no member may be named `categoryVersions`: the
 versions live with the cached payload, and a fixture carrying one would teach an adapter to expect
 a member the controller does not emit.
+
+A third is a rule of the vocabulary rather than of the type: `read` is a capability group, named
+where roles are written and expanded into its members there, so it never appears as an action.
 """
 
 import json
 import sys
 
 ENTITY_ACTIONS = {
-    "record": {"aggregate", "read", "export", "create", "update", "delete"},
-    "field": {"aggregate", "read", "export", "update"},
-    "revision": {"read", "export"},
-    "artifact": {"create", "read", "update", "delete", "export"},
+    "record": {"count", "view", "export", "create", "update", "delete"},
+    "field": {"count", "view", "export", "update"},
+    "revision": {"view", "export"},
+    "artifact": {"create", "view", "update", "delete", "export"},
 }
+
+# Named where roles are written and expanded into their members there, so a payload never carries
+# one. An adapter that tests for `read` tests for something the controller does not emit.
+CAPABILITY_GROUPS = {"read"}
 
 REQUIRED = ("payloadVersion", "sub", "iss", "aud", "iat", "exp", "generatedAt", "permissions")
 FORBIDDEN = ("categoryVersions",)
@@ -37,7 +44,9 @@ def check_actions(where, entity, actions, fail):
     if len(set(actions)) != len(actions):
         fail(f"{where}: {entity} repeats an action")
     for action in actions:
-        if action not in ENTITY_ACTIONS[entity]:
+        if action in CAPABILITY_GROUPS:
+            fail(f"{where}: {entity}.{action} is a capability group, expanded before issuance")
+        elif action not in ENTITY_ACTIONS[entity]:
             fail(f"{where}: {entity}.{action} is not in that entity's vocabulary")
 
 

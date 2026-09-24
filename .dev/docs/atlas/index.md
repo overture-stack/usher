@@ -10,14 +10,16 @@ on disk against entries here; a sweep starting from either list cannot find what
 ## Phase documents
 
 - [BRD traceability](../brd-traceability.md): each iMS UAC requirement mapped to what satisfies it, with no open conflicts, the aggregation requirement settled, and one withdrawn requirement
-- [Phase 1: design blockers and implementation gate](../phase-1.md): the blocker set, the design lock, the Nov 15 requirements, and the conformance corpus design
+- [Phase 1: design blockers and implementation gate](../phase-1.md): the blocker set, the Nov 15 requirements, and the conformance corpus design
 - [UAC user flows traceability](../uac-flows-traceability.md): what the portal flow specifications settle, what they contradict, and where they contradict themselves
 
 ## Roadmap detail
 
 - [Admin model: open questions](roadmap/admin-model-open-questions.md): three v1 blockers and lower-priority follow-ups for the admin API
-- [Arranger integration blockers](roadmap/arranger-integration-blockers.md): eleven items from the first plugin integration, grouped by what blocks each; two are fail-open defects
+- [Arranger integration blockers](roadmap/arranger-integration-blockers.md): eleven items from the first adapter integration, grouped by what blocks each; two are fail-open defects
+- [Bounded surveyor](roadmap/bounded-surveyor.md): post-MVP; a surveyor who views a bounded number of records and counts nothing, what serving it takes, and why granting it early serves a full viewer
 - [Cohort registration and Lyric integration](roadmap/cohort-registration-lyric.md): pre-registration approach and three design items gating Lyric integration
+- [Count-only principal](roadmap/count-only-principal.md): research; what a principal holding `count` without `view` gets, the routes any rule has to survive, and rules recommended and not adopted
 - [Design doc reconciliation](roadmap/doc-reconciliation.md): **superseded.** Written against the resource-level enforcement decision that has since been reversed; kept for how it located contradictions, not for what it found
 - [Documentation review patterns](roadmap/doc-review-patterns.md): the defect classes from reading the onboarding artifact with real readers, the two axes they sort under, and the information order to propagate
 - [Permissions model: open items](roadmap/permissions-model-gaps.md): seven open design items before the core service can be implemented

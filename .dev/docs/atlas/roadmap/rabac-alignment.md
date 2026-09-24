@@ -36,7 +36,7 @@ decision records.
 
 That is the whole finding. The category machinery is a well developed permission filtering policy.
 The role-to-permission assignment that the filter is supposed to be filtering was never defined, so
-the token carries a `role` label that nothing consumes, because no plugin has anything to consult
+the token carries a `role` label that nothing consumes, because no adapter has anything to consult
 it against.
 
 ## Three consequences, currently live
@@ -48,9 +48,9 @@ computation engine required to consult all of them rather than the highest-prior
 schema has a single `role` string. There is nowhere for a union to go, so whatever the engine
 computes is flattened to one of three values on the way out.
 
-**A role-to-permission table inside a plugin would put policy in the enforcement layer.** The
+**A role-to-permission table inside an adapter would put policy in the enforcement layer.** The
 architecture requires that applications make no policy decisions. Deciding which permissions the
-`viewer` role carries is a policy decision, so a plugin holding that mapping holds policy. In RABAC
+`viewer` role carries is a policy decision, so an adapter holding that mapping holds policy. In RABAC
 the role check is evaluated where the roles live, which here is the controller.
 
 **`public` is a permission set wearing a role's clothes.** The token schema documents it as
@@ -63,19 +63,19 @@ through the design.
 Carry the resolved permissions in the token rather than the role name that produced them. **Paired
 with the category they apply to, not as an independent list.**
 
-    "COHORT_A": { "open":       { "record": ["read", "update"] },
-                  "controlled": { "record": ["read"] } }
+    "COHORT_A": { "open":       { "record": ["view", "update"] },
+                  "controlled": { "record": ["view"] } }
 
 This follows from the architecture already in place rather than changing it. Usher is the decision
-point, so resolving which permissions a role carries belongs there. Plugins become mechanical,
+point, so resolving which permissions a role carries belongs there. Adapters become mechanical,
 testing whether the permission list contains the action. The union problem dissolves, because a
 union of roles becomes a union of permission sets computed before issuance. Role explosion stays
 solved, which is the point of adopting RABAC in the first place: a new permission adds a
 permission, never a role.
-And an instance can define its own roles without every plugin having to learn them.
+And an instance can define its own roles without every adapter having to learn them.
 
 **Usher ships the capability vocabulary as defaults, and an instance may add to it.** The
-controller and every plugin have to agree on what `download` means, which is what the shipped
+controller and every adapter have to agree on what `download` means, which is what the shipped
 defaults provide. That agreement does not require the list to be closed.
 
 **`edit` belongs in the shipped defaults.** An existing Overture consumer already draws the line,
@@ -89,17 +89,17 @@ settled when implementation starts, against real APIs, because what an API offer
 building against it rather than decided in prose.
 
 **Customization is safe because unknown names fail closed in both directions.** A permission in a
-token that a plugin has never heard of is consulted by nothing, so it grants nothing. A permission a
-plugin checks for and the token lacks fails the check, so it denies. Neither leaks, and the worst
+token that an adapter has never heard of is consulted by nothing, so it grants nothing. A permission an
+adapter checks for and the token lacks fails the check, so it denies. Neither leaks, and the worst
 outcome is access refused that should have been allowed, which someone complains about.
 
-**So customization is additive, and redefining a default is the one unsafe move.** Plugins check by
-name. An instance that keeps `download` and narrows what it means leaves every plugin performing what
+**So customization is additive, and redefining a default is the one unsafe move.** Adapters check by
+name. An instance that keeps `download` and narrows what it means leaves every adapter performing what
 it already understood downloading to be, with the names still matching and nothing able to detect the
 difference. Add names; never repurpose one.
 
 **This is where the pattern differs from categories, and the difference is smaller than it looks.**
-A category is meaningless to Usher and meaningful only through a plugin's configuration, so its
+A category is meaningless to Usher and meaningful only through an adapter's configuration, so its
 meaning is supplied per schema. A capability is meaningful to everyone and must mean the same thing
 everywhere it is understood, which is why the defaults ship together rather than being assembled per
 installation.
@@ -136,8 +136,8 @@ control-plane permission acts on what Usher holds; a data-plane one acts on reco
 holds. Roles live at each plane, and a principal holds roles at both independently.
 
 **The plane names what a permission targets, not where it is enforced.** Both are enforced in the
-control plane: the controller checks a control-plane permission on an admin call, and the plugin
-checks a data-plane one before a query runs. The plugin is a control-plane component that happens to
+control plane: the controller checks a control-plane permission on an admin call, and the adapter
+checks a data-plane one before a query runs. The adapter is a control-plane component that happens to
 run inside an application, which is why enforcing there does not put policy there.
 
 |                                   | control plane                                        | data plane                                        |
@@ -171,8 +171,8 @@ revoking possible at all; which categories it names is the filtering.
 
     aud: "search-service"
     grants: {
-      "STUDY_A": { "open":       {"record": ["read", "update"]},
-                   "controlled": {"record": ["read"]} }
+      "STUDY_A": { "open":       {"record": ["view", "update"]},
+                   "controlled": {"record": ["view"]} }
     }
 
     aud: "usher-admin-ui"
@@ -196,7 +196,7 @@ resource, so `*` stands in the resource position; ownership permissions are not 
 `*` stands in the category position. Enumerating instead would be both large and disclosive.
 
 **Permissions are namespaced `entity.action` and displayed as the action alone.** `grant.revoke` and
-`record.read` both read as "revoke" and "read" to a person, while remaining distinct strings, which is
+`record.view` both read as "revoke" and "view" to a person, while remaining distinct strings, which is
 what allows one shape to carry two vocabularies. It also matches how audit event types are written.
 
 **A permission and the event exercising it produce match**, sharing an entity segment and differing
@@ -245,10 +245,10 @@ reaches a decision. Usher's controller cannot: it names categories and deliberat
 they select, because it does not know an instance's fields. So the evaluation divides:
 
     the controller   which (resource, category) pairs does this principal hold?
-    the plugin       which records carry that category, in this schema?
+    the adapter       which records carry that category, in this schema?
 
 Neither half is the decision on its own. This sits close to the rule that a PEP enforces rather than
-decides, and the distinction that keeps it true is that the plugin has no say in who may reach what:
+decides, and the distinction that keeps it true is that the adapter has no say in who may reach what:
 it resolves what a category means locally, which is translation rather than policy.
 
 **It is what makes the model deployable here rather than a compromise on it.** Keeping the controller

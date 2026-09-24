@@ -56,7 +56,7 @@ Instances that do not include SONG are fully supported; Usher has no dependency 
 ## Which plane each component sits in
 
 **Usher is the access control plane; the applications are the data plane.** All three of Usher's own
-components sit in the control plane, the bridge and the plugin included, even though both run inside
+components sit in the control plane, the bridge and the adapter included, even though both run inside
 an application's own process: they carry and apply a decision rather than serve data. Keycloak sits
 there with them, governing identity rather than access, so the control plane is wider than Usher and
 Usher is the part of it that access control runs in. The data plane is the application's own
@@ -66,7 +66,7 @@ The components listed below are the whole instance rather than Usher alone. SONG
 service are among them and sit in the data plane, which is why the list and the plane split do not
 line up one to one.
 
-The plugin is the boundary between the two. It takes the control plane's decision and attaches it to
+The adapter is the boundary between the two. It takes the control plane's decision and attaches it to
 a query before the data plane runs, which is why enforcement happens inside the application while
 the decision never does.
 
@@ -94,7 +94,7 @@ of an application that runs queries, and the data plane is that layer plus the r
 - Data access decisions (which records or fields a user may see) → **controller**
 - Categories, cohorts, or the grant model → **controller** (policy store)
 - Usher token issuance → **controller**; Usher token validation and decryption → **bridge**
-- Any awareness of bridges or plugins: Keycloak is not aware they exist; the controller validates
+- Any awareness of bridges or adapters: Keycloak is not aware they exist; the controller validates
   IdP tokens against Keycloak on the bridge's behalf
 
 ---
@@ -119,7 +119,7 @@ application. Two components, two jobs, and our modular design depends on keeping
   provider)
 - Resolving the grants that reach a user, from the policy database
 - Computing the permissions payload: which categories the user holds grants for within each
-  resource the requesting plugin manages
+  resource the requesting adapter manages
 - Issuing JWE Usher tokens: encrypted, short-lived, audience-scoped per application; see
   [security-workflow.md](security-workflow.md)
 - Holding one symmetric JWE key per ushered application, and encrypting every token to the one
@@ -136,13 +136,13 @@ application. Two components, two jobs, and our modular design depends on keeping
 
 - User authentication → **Keycloak**
 - Querying the data layer or executing data queries → the **application's** own data layer
-- Translating the permissions payload into application-native query formats → **plugin**
+- Translating the permissions payload into application-native query formats → **adapter**
 - Holding an application's key alone: each application's **bridge** holds the same key, delivered to
   both by the secrets operator
 
 ---
 
-### Bridge (`usher-bridge`)
+### Bridge (`@overture-stack/usher-express-bridge`)
 
 **Role:** Shared authorization library embedded in applications. Connects the application to the
 controller: token exchange, Usher token caching, decryption, and revocation channel maintenance.
@@ -157,7 +157,7 @@ being served, until connectivity is restored.
 - Presenting the user's IdP bearer token to the controller's token exchange endpoint
 - Receiving and locally caching the JWE Usher token per user
 - Decrypting Usher tokens and exposing the decoded payload as a typed `PermissionsPayload`
-  object to the plugin: plugins never see the raw JWE or any key
+  object to the adapter: adapters never see the raw JWE or any key
 - Validating the Usher token on every request within the TTL window (no network call to the
   controller in the common case)
 - Maintaining the revocation channel: SSE or WebSocket push subscription with reconnection
@@ -169,12 +169,12 @@ being served, until connectivity is restored.
 
 **Does not own:**
 
-- Compiling a filter into a backend query dialect (Elasticsearch DSL, SQL) → **plugin**
+- Compiling a filter into a backend query dialect (Elasticsearch DSL, SQL) → **adapter**
 - Access decisions (grant existence, which categories the principal holds) → **controller**; the bridge only
   confirms the token is valid, current, and not revoked
 - Any stored knowledge of the application's data schema: index or table layout, or what a category
-  means in terms of records → **plugin**. A field name reaches the bridge as a per-query parameter
-  supplied by the plugin, which is not the same as holding a schema: the bridge is told which field
+  means in terms of records → **adapter**. A field name reaches the bridge as a per-query parameter
+  supplied by the adapter, which is not the same as holding a schema: the bridge is told which field
   names the resource for the catalogue being queried and forgets it
 
 **On query languages specifically.** The bridge may know SQON; what must stay out of it is the
@@ -184,27 +184,28 @@ consumes SQON as well, so a SQON-shaped filter is portable across the read path 
 submission path without translation. What must stay out of the bridge is the _backend_, since
 Arranger compiles SQON to Elasticsearch DSL and Lyric compiles it to SQL. Rendering a resolved grant
 set into SQON is generic and lives in the bridge; compiling SQON into a backend query is
-application-specific and belongs in the plugin. That split is decided rather than open, and the reason
+application-specific and belongs in the adapter. That split is decided rather than open, and the reason
 is that every fail-open defect found so far has been in constructing a predicate and none in
 compiling one.
 
 ---
 
-### App plugin
+### App adapter
 
-**Role:** Policy Enforcement Point (PEP). A thin adapter layer, built on `usher-bridge`, that
+**Role:** Policy Enforcement Point (PEP). A thin layer, built on the bridge, that
 translates Usher's permissions payload into the application's native query format. Named per
-integration target: `usher-arranger`, `usher-lyric`.
+integration target: the Arranger adapter first, published as `@overture-stack/arranger-usher-adapter`,
+and the Lyric adapter after it.
 
 **Owns:**
 
 - Intercepting incoming data requests before they reach the data layer
-- Calling `usher-bridge` to get the current `PermissionsPayload` for the requesting user
+- Calling the bridge to get the current `PermissionsPayload` for the requesting user
 - Translating that payload into the application's query filter format:
-  - `usher-arranger`: SQON filter object injected as a server-side filter in Arranger's GraphQL
+  - The Arranger adapter: SQON filter object injected as a server-side filter in Arranger's GraphQL
     layer
-  - `usher-lyric`: query conditions injected into Lyric's data access layer
-- Returning 401 or 503 to the principal when `usher-bridge` signals an invalid or uncertain session
+  - The Lyric adapter: query conditions injected into Lyric's data access layer
+- Returning 401 or 503 to the principal when the bridge signals an invalid or uncertain session
 
 **Does not own:**
 
@@ -217,21 +218,21 @@ integration target: `usher-arranger`, `usher-lyric`.
 
 ### Ushered service
 
-**Role:** The service that embeds `usher-bridge` and a plugin (Arranger, Lyric, or similar).
+**Role:** The service that embeds the bridge and an adapter (Arranger, Lyric, or similar).
 Not part of Usher itself; described here to complete the picture.
 
 The application is **stateless with respect to authorization**. It:
 
 - Receives requests from end users carrying an IdP bearer token
-- Delegates all auth decisions to `usher-bridge` and the plugin
+- Delegates all auth decisions to the bridge and the adapter
 - Has no awareness of the controller, Usher tokens, revocation state, or the grant model
 
-All authorization state lives in `usher-bridge` (per-user Usher token cache, revocation
+All authorization state lives in the bridge (per-user Usher token cache, revocation
 channel state) and the controller (policy database, revocation timestamps). The application
-carries no auth state itself. If it restarts, `usher-bridge` initializes fresh and obtains new
+carries no auth state itself. If it restarts, the bridge initializes fresh and obtains new
 Usher tokens on the first request from each user.
 
-This is the intended design: **the controller and `usher-bridge` together own the auth state;
+This is the intended design: **the controller and the bridge together own the auth state;
 applications enforce decisions derived from it, without managing that state themselves.**
 
 ---
@@ -292,23 +293,23 @@ distributes events; PostgreSQL is the source of truth.
 
 ## Responsibility at a glance
 
-| Responsibility                                         | Keycloak | Controller | Bridge | Plugin |
-| ------------------------------------------------------ | -------- | ---------- | ------ | ------ |
-| Authenticate user                                      | ✓        |            |        |        |
-| Issue IdP token                                        | ✓        |            |        |        |
-| Validate IdP token                                     |          | ✓          |        |        |
-| Resolve user grants                                    |          | ✓          |        |        |
-| Issue Usher token (JWE)                                |          | ✓          |        |        |
-| Hold every application's JWE key                       |          | ✓          |        |        |
-| Hold its own application's JWE key                     |          |            | ✓      |        |
-| Cache Usher token                                      |          |            | ✓      |        |
-| Decrypt and expose `PermissionsPayload`                |          |            | ✓      |        |
-| Validate Usher token locally                           |          |            | ✓      |        |
-| Subscribe to revocation channel                        |          |            | ✓      |        |
-| Publish revocation events (cross-instance, via Valkey) |          | ✓          |        |        |
-| Dismiss revoked session                                |          |            | ✓      |        |
-| Raise on controller loss (fail-secure)                 |          |            | ✓      |        |
-| Translate permissions payload to query filters         |          |            |        | ✓      |
-| Intercept and filter data requests                     |          |            |        | ✓      |
-| Manage policy (grants, resource users, categories)     |          | ✓          |        |        |
-| Expose management API and future UI                    |          | ✓          |        |        |
+| Responsibility                                         | Keycloak | Controller | Bridge | Adapter |
+| ------------------------------------------------------ | -------- | ---------- | ------ | ------- |
+| Authenticate user                                      | ✓        |            |        |         |
+| Issue IdP token                                        | ✓        |            |        |         |
+| Validate IdP token                                     |          | ✓          |        |         |
+| Resolve user grants                                    |          | ✓          |        |         |
+| Issue Usher token (JWE)                                |          | ✓          |        |         |
+| Hold every application's JWE key                       |          | ✓          |        |         |
+| Hold its own application's JWE key                     |          |            | ✓      |         |
+| Cache Usher token                                      |          |            | ✓      |         |
+| Decrypt and expose `PermissionsPayload`                |          |            | ✓      |         |
+| Validate Usher token locally                           |          |            | ✓      |         |
+| Subscribe to revocation channel                        |          |            | ✓      |         |
+| Publish revocation events (cross-instance, via Valkey) |          | ✓          |        |         |
+| Dismiss revoked session                                |          |            | ✓      |         |
+| Raise on controller loss (fail-secure)                 |          |            | ✓      |         |
+| Translate permissions payload to query filters         |          |            |        | ✓       |
+| Intercept and filter data requests                     |          |            |        | ✓       |
+| Manage policy (grants, resource users, categories)     |          | ✓          |        |         |
+| Expose management API and future UI                    |          | ✓          |        |         |

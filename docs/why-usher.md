@@ -58,7 +58,7 @@ changes to caching clients.
 
 Usher is designed to work with Keycloak, not replace it. Keycloak authenticates the user and
 establishes coarse group membership; Usher resolves the fine-grained grant set and delivers it to the
-application as a [Usher token](concepts.md#usher-tokens) the plugin applies to every query.
+application as a [Usher token](concepts.md#usher-tokens) the adapter applies to every query.
 
 **OPA (Open Policy Agent)**
 
@@ -67,13 +67,13 @@ policy language) and evaluated against input
 data. OPA is used widely for Kubernetes admission control and API gateway authorization, and its
 partial evaluation feature can produce residual expressions rather than just allow/deny decisions.
 That concept directly influenced the Usher token's design: the token is a pre-computed, encrypted
-residual that the plugin applies at the data layer.
+residual that the adapter applies at the data layer.
 
 OPA is a tool Usher could build upon, not a tool that makes Usher unnecessary. As a standalone
 engine it still requires the access management layer on top: a data model for resources, categories,
 and grants; a management interface for administrators; and a revocation channel for propagating
 access changes. OPA provides the evaluation engine; Usher provides the rest. Teams already running
-OPA can use it for query filter translation within their enforcement plugin; the plugin interface
+OPA can use it for query filter translation within their enforcement adapter; the adapter interface
 is designed to accommodate this.
 
 **Cerbos**
@@ -99,7 +99,7 @@ and scales to very large relationship sets.
 
 It is a different model from Usher's. Usher's grants are explicit and tabular, each naming a holder
 acting in a role on one category of one resource, and they resolve into an Usher token that the
-plugin applies as a query predicate. Zanzibar-style systems answer "does user A have access to
+adapter applies as a query predicate. Zanzibar-style systems answer "does user A have access to
 object C?" rather than "what is the full set of things user A can see, expressed as a filter?" The
 Usher token pattern is not native to these systems. Deploying a Zanzibar-style store also carries
 operational overhead that is hard to justify for platforms with no need for its relationship-graph
@@ -162,7 +162,7 @@ Across the tools above, its specific contribution is the combination of:
 - **Not an authentication service.** Usher does not issue identity tokens or manage sessions.
   It requires an identity provider (Keycloak or compatible) to be in place.
 - **Not a data proxy.** Usher does not sit between the application and the data layer. It issues
-  Usher tokens; enforcement happens inside the application plugin.
+  Usher tokens; enforcement happens inside the application adapter.
 - **Not a general-purpose policy engine.** Usher's policy model is specific: explicit grants over
   resources and categories. It is not designed for complex conditional policies or relationship
   graphs. Teams with those requirements may find OPA or a Zanzibar-style system a better fit,

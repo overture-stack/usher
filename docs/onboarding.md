@@ -13,7 +13,7 @@
 
 <p class="subtitle">Usher is Overture's access control plane. For every application on the platform, it keeps track of what each person may see and do, hands those grants to the applications, and also gives the people who govern access one place to change those grants. Its role is closer to a keychain than a lock: each application does its own unlocking, and Usher never touches the data it governs. This document is an orientation to that model, to the security properties it rests on, and to the reasoning behind each decision that shaped this design.</p>
 
-<p class="status"><b>Status:</b> the requirements are fully defined and implementation is nearly ready to begin. The security mechanism is designed in full, and the permissions model is set out in this document for review. Each ushered application's plugin contract will be settled with that application at integration time, and the administrative interface ships from Usher as a package each portal mounts, reimplementing what the iMS Studies Management service does today. The first integration is the Stage portal over Arranger's search, proven in a development environment, with what it teaches carried to iMS afterwards. The two halves of the environmental submission service follow, Lyric alongside SONG with Score, and then Muse and Singularity complete the iMS MVP on the clinical data side.</p>
+<p class="status"><b>Status:</b> the requirements are fully defined and implementation is nearly ready to begin. The security mechanism is designed in full, and the permissions model is set out in this document for review. Each ushered application's adapter contract will be settled with that application at integration time, and the administrative interface ships from Usher as a package each portal mounts, reimplementing what the iMS Studies Management service does today. The first integration is the Stage portal over Arranger's search, proven in a development environment, with what it teaches carried to iMS afterwards. The two halves of the environmental submission service follow, Lyric alongside SONG with Score, and then Muse and Singularity complete the iMS MVP on the clinical data side.</p>
 
 ## The problem
 
@@ -53,15 +53,13 @@ What exactly a grant covers within a dataset is the next layer of the mental mod
 
 ## Resources and categories
 
-Access is granted over a **resource**, and nobody reaches anything until a grant says so. That reverses the more familiar arrangement, in which data is readable until a restriction closes it, and the reversal is deliberate.
+**In Usher, access is granted over a resource, and this section uses that term while the rest of this document says "dataset".** The difference is deliberate. `resource` is the system's own word, chosen to be generic so that the model assumes nobody's vocabulary: one instance calls the same thing a study, another a cohort, another a project. "Dataset" is this document's everyday stand-in for it, used the same way and for the same reason as "person" above, and nothing in Usher is named dataset. Definitions belong on the word the system uses, so they are here; elsewhere, once you know what is meant, the friendlier word does the work.
 
-**This section says "resource" where the rest of this document says "dataset", and the difference is deliberate.** `resource` is the system's own word, chosen to be generic so that the model assumes nobody's vocabulary: one instance calls the same thing a study, another a cohort, another a project. "Dataset" is this document's everyday stand-in for it, used the same way and for the same reason as "person" above, and nothing in Usher is named dataset. Definitions belong on the word the system uses, so they are here; elsewhere, once you know what is meant, the friendlier word does the work.
-
-The reason is the direction each arrangement fails in. On a good day the two describe exactly the same access. When a rule goes missing from a system that starts open and closes things off, usually by someone's mistake, data that should have been hidden gets served and nothing announces it. When a grant goes missing here, someone is denied data they were entitled to, and complains. One failure is silent and the other is loud, which is why nothing is reachable by default.
+**Permission over a resource, rather than restriction on it, reverses what may be the more familiar arrangement**, in which data is readable until a rule closes it off. The reason is the way a control failure lands in each. On a good day the two describe exactly the same access. When a rule goes missing from a system that starts open and closes things off, usually by someone's mistake, data that should have been hidden gets served and nothing announces it. When a grant goes missing here, someone is denied data they were entitled to, and complains. One failure is silent and the other is loud, which is why nothing here is reachable until a grant says so.
 
 A second difference from that familiar approach is what a resource actually is. **It is a field and a value**, nothing more: an instance nominates a field its records already carry, a study identifier or a cohort identifier or anything else that marks records as belonging together, and every record holding one particular value in that field is one resource. Nobody draws a boundary; the data already has one and the instance points at it. In the first version one field identifies a resource, and grouping by more than one field at once, which is what allows a cohort assembled across studies, comes later.
 
-Furthermore, different resources don't require separate "physical" containers. To enforce access control, some systems attach access to a storage location (e.g. separate buckets or search indices), changing a record's permissions when it is moved and therefore two resources cannot overlap without duplicating data.
+Furthermore, different resources don't require separate "physical" containers. To enforce access control, some systems attach access to a storage location (e.g. separate S3 buckets or search indices), changing a record's permissions when it is moved and therefore two resources cannot overlap without duplicating data.
 
 **A category is also a field and a value, and that is the part worth slowing down for.** It is the same kind of thing as a resource, built the same way, and the only difference is which question it answers. A resource's field answers which records belong together. A category's field answers how sensitive they are. An instance nominates one of each:
 
@@ -140,18 +138,18 @@ Four kinds of participant hold or govern access. They run from the narrowest rea
 
 **One of these four is not in the first release.** Nothing appoints a custodian in it, so the role below is part of the model rather than something an organization can use yet. Everything else in this table is. What that means for the data a custodian would govern is set out under "What comes after the first release" at the end.
 
-**The first row of that table is a family rather than a single role.** Viewer is the one participant who reads data, and reading is not one thing: counting records is different from opening them, and opening them is different from changing them. So an instance grants one of several reading roles, and the difference between them is exactly which of those a person may do.
+**The first row of that table is a family rather than a single role.** Viewer is the one participant who reads data, and reading is three things rather than one: counting records, opening them, and taking a copy away. Changing them is a different kind of act again. So an instance grants one of several reading roles, and the difference between them is exactly which of those a person may do.
 
-Six things can be done with the records of a dataset. They are listed here from the least reach to the most, and each role is a point on that run.
+Six things can be done with the records of a dataset. They are listed here from the least reach to the most, and each role is a point on that run. The first three are what reading is made of, which is why they sit under one heading.
 
 <div class="scroller">
     <table>
       <caption>What each reading role may do</caption>
       <thead>
-        <tr><th scope="col">Role</th><th scope="col">Count</th><th scope="col">Read</th><th scope="col">Export</th><th scope="col">Create</th><th scope="col">Update</th><th scope="col">Delete</th></tr>
+        <tr><th scope="col" rowspan="2">Role</th><th scope="colgroup" colspan="3">Read</th><th scope="col" rowspan="2">Create</th><th scope="col" rowspan="2">Update</th><th scope="col" rowspan="2">Delete</th></tr>
+        <tr><th scope="col">Count</th><th scope="col">View</th><th scope="col">Export</th></tr>
       </thead>
       <tbody>
-        <tr><td><b>Surveyor</b></td><td class="o">&#9679;</td><td></td><td></td><td></td><td></td><td></td></tr>
         <tr><td><b>Viewer</b></td><td class="o">&#9679;</td><td class="o">&#9679;</td><td class="o">&#9679;</td><td></td><td></td><td></td></tr>
         <tr><td><b>Editor</b></td><td class="o">&#9679;</td><td class="o">&#9679;</td><td class="o">&#9679;</td><td class="o">&#9679;</td><td class="o">&#9679;</td><td></td></tr>
         <tr><td><b>Curator</b></td><td class="o">&#9679;</td><td class="o">&#9679;</td><td class="o">&#9679;</td><td class="o">&#9679;</td><td class="o">&#9679;</td><td class="o">&#9679;</td></tr>
@@ -160,9 +158,7 @@ Six things can be done with the records of a dataset. They are listed here from 
     </table>
   </div>
 
-**Counting without reading is a real thing to want, which is what the first row is for.** A researcher deciding whether a study is worth applying for needs to know how many records match their criteria, not what is in them. A surveyor gets the number and never a record, and it is a deliberate grant rather than something everyone has, because counts over very small groups can identify the people in them.
-
-**Exporting sits beside reading rather than above it, and the reason is honesty.** Taking a file away is a different act from reading a screen, worth its own record in the log and its own approval. It is not a way to stop someone keeping a copy: anyone who can read records can page through them and assemble the same file by hand. So every role that reads also exports, and the distinction earns its place by making the bulk route visible rather than by withholding anything.
+**Exporting sits beside viewing rather than above it, and the reason is honesty.** Taking a file away is a different act from reading a screen, worth its own record in the log and its own approval. It is not a way to stop someone keeping a copy: anyone who can view records can page through them and assemble the same file by hand. So every role that views also exports, and the distinction earns its place by making the bulk route visible rather than by withholding anything.
 
 **Submitter is the one row that is not a point on the run.** Someone contributing data may create records and correct them, and that gives them no ability to read what is already there. Reading their own submissions back is a separate grant, deliberately, so that contributing data and seeing data are decided independently.
 
@@ -207,10 +203,10 @@ Here is the Usher token for the researcher in the table above, issued to the sea
   <span class="k">"exp"</span>:         1718611500,              <span class="c">// when this token stops being honoured</span>
   <span class="k">"generatedAt"</span>: 1718611200,              <span class="c">// when the permissions were last computed</span>
   <span class="k">"permissions"</span>: <span class="c">{</span>                          <span class="c">// keyed by resource identifier</span>
-    <span class="k">"HEART_STUDY"</span>:  { "open": {"record": ["read"]}, "controlled": {"record": ["read"]} },
-    <span class="k">"LUNG_COHORT"</span>:  { "open": {"record": ["read", "update"]} },
-    <span class="k">"REEF_ARCHIVE"</span>: { "open": {"record": ["read"]}, "controlled": {"record": ["read"]} },
-    <span class="k">"BRAIN_ATLAS"</span>:  { "open": {"record": ["read"]} }
+    <span class="k">"HEART_STUDY"</span>:  { "open": {"record": ["view"]}, "controlled": {"record": ["view"]} },
+    <span class="k">"LUNG_COHORT"</span>:  { "open": {"record": ["view", "update"]} },
+    <span class="k">"REEF_ARCHIVE"</span>: { "open": {"record": ["view"]}, "controlled": {"record": ["view"]} },
+    <span class="k">"BRAIN_ATLAS"</span>:  { "open": {"record": ["view"]} }
   <span class="c">}</span>                       <span class="c">// each category, and what may be done there</span>
 <span class="c">}</span></pre>
 
@@ -339,7 +335,7 @@ Building this layer is a smaller undertaking than building an authorization syst
 
 The security mechanism is the most fully specified part of the design: how answers are issued, how applications verify them, how a permission change propagates, and how the system behaves when the change channel fails.
 
-The permissions model covers its core structure, and the one substantial piece of design still ahead of it is the database schema, which the rest of the implementation waits on. The application plugin contract exists as design intent rather than as a specification with exact shapes. The administrative interface is settled as far as its shape goes, a package each portal mounts rather than a screen Usher serves, and unsettled on what it is handed to display.
+The permissions model covers its core structure, and the one substantial piece of design still ahead of it is the database schema, which the rest of the implementation waits on. The application adapter contract exists as design intent rather than as a specification with exact shapes. The administrative interface is settled as far as its shape goes, a package each portal mounts rather than a screen Usher serves, and unsettled on what it is handed to display.
 
 Two design faults were found while preparing the first integration, and in both the system would have granted access it should have refused, which is the opposite of everything described above. Both are now resolved in the design, before any code was written against them. One was an unauthenticated request producing no filter at all, where producing no filter means no restriction rather than a strict one; it now produces an explicit list of what an anonymous visitor may reach, which is empty where the answer is nothing. The other concerned saved sets. A researcher can pick records and save them as a set to come back to, and that set remembers which datasets its records came from, so that access to the set can be checked against access to its sources. The check worked by listing the datasets that ushered application had been set up to recognize, then excluding the ones the person lacks. A record from a dataset the application had never been told about was on neither list, so it passed unchecked. Saving such a set is now refused outright, at the moment it is saved. That is the only point at which both the set's sources and the instance's full list are known, so it is the only point the check can be made.
 
@@ -392,12 +388,12 @@ None of this is needed to follow the document. It is here so the vocabulary is n
     <dd>One kind of approval a dataset's records can require, named by the instance that defines it, such as controlled or community-governed. Built the same way a resource is, from a field and a value, and the only difference is the question it answers: a resource's field says which records belong together, a category's says how sensitive they are. Reaching those particular records means holding an approval naming that category on that dataset; the dataset's other records answer to whichever category they carry instead. Which field and which value is configuration, not something Usher decides.</dd>
     <dt>Custodian</dt>
     <dd>Someone with authority over access to a particular kind of data, typically on behalf of the community that contributed it, and able to act without platform administrator rights. Called a custodian rather than a steward because the requirements this design answers to already use "data steward" for a dataset's owner, which is the Owner above rather than this role.</dd>
-    <dt>Plugin, or bridge</dt>
+    <dt>Adapter, or bridge</dt>
     <dd>The small component inside each application that fetches Usher's answer and applies it before a query runs. Where enforcement actually happens.</dd>
     <dt>Instance</dt>
     <dd>One running Usher and the applications it serves, holding its own datasets, its own categories and its own grants. Where this document says an instance decides something, it means a choice made once for that Usher and applying across the applications it serves.</dd>
     <dt>Ushered application</dt>
-    <dd>An application that carries one of those plugins, and so one whose access decisions come from Usher. Worth a word of its own because a platform runs plenty of applications that do not: the search index, the databases, and the sign-in system are all applications, and none of them asks Usher anything.</dd>
+    <dd>An application that carries one of those adapters, and so one whose access decisions come from Usher. Worth a word of its own because a platform runs plenty of applications that do not: the search index, the databases, and the sign-in system are all applications, and none of them asks Usher anything.</dd>
     <dt>Fail-secure</dt>
     <dd>The property that anything going wrong results in less access rather than more. The thread running through most of the decisions above.</dd>
     <dt>Revocation</dt>

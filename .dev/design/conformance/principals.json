@@ -45,21 +45,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -82,21 +82,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -119,21 +119,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -156,13 +156,13 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export",
                 "create",
                 "update",
@@ -173,14 +173,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -203,21 +203,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -240,15 +240,15 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export",
                 "create",
                 "update",
@@ -259,14 +259,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -289,13 +289,13 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export",
                 "create",
                 "update",
@@ -306,14 +306,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -337,27 +337,27 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export",
                 "create",
                 "update",
@@ -385,21 +385,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -422,21 +422,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -459,21 +459,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -496,13 +496,13 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export",
                 "create",
                 "update",
@@ -513,14 +513,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -543,13 +543,13 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export"
               ]
             }
@@ -557,14 +557,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -587,13 +587,13 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export"
               ]
             }
@@ -601,14 +601,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -631,21 +631,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -668,21 +668,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -705,21 +705,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -742,14 +742,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -772,13 +772,13 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export",
                 "create",
                 "update",
@@ -789,14 +789,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -821,13 +821,13 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export",
                 "create",
                 "update",
@@ -838,14 +838,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -870,27 +870,27 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             },
             "controlled": {
               "record": [
-                "aggregate",
-                "read",
+                "count",
+                "view",
                 "export",
                 "create",
                 "update",
@@ -904,7 +904,7 @@
     {
       "id": "case-23",
       "case": "23",
-      "description": "A record carries a category value the plugin has no mapping for. The principal is ordinary; the defect is that the record is served as open.",
+      "description": "A record carries a category value the adapter has no mapping for. The principal is ordinary; the defect is that the record is served as open.",
       "notes": "This is the failure the startup reconciliation check exists to prevent. The assertion lives in expectations.json and in records.json, not here.",
       "payload": {
         "payloadVersion": 1,
@@ -918,21 +918,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -956,11 +956,11 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ],
               "field": {
                 "basic": [
-                  "read"
+                  "view"
                 ]
               }
             }
@@ -968,14 +968,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -998,12 +998,12 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ],
               "field": {
                 "clinician": [
-                  "aggregate",
-                  "read"
+                  "count",
+                  "view"
                 ]
               }
             }
@@ -1011,14 +1011,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -1029,7 +1029,7 @@
       "id": "case-24c",
       "case": "24c",
       "description": "The category is not partitioned by field at all. No field key is emitted and the record capabilities carry every column, which is the absence of a partition rather than the absence of a grant.",
-      "notes": "Pairs with case 24 as a discriminating pair: field absent against field present holding only the residual. Collapsing the two states would lose the signal a plugin uses to decide whether to prune columns.",
+      "notes": "Pairs with case 24 as a discriminating pair: field absent against field present holding only the residual. Collapsing the two states would lose the signal an adapter uses to decide whether to prune columns.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -1042,21 +1042,21 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -1066,7 +1066,7 @@
     {
       "id": "case-26",
       "case": "26",
-      "description": "She holds record.read and revision.read on one category. The entity level is what keeps them apart, since a bare read could not say which.",
+      "description": "She holds record.view and revision.view on one category. The entity level is what keeps them apart, since a bare view could not say which.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -1079,24 +1079,24 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ],
               "revision": [
-                "read"
+                "view"
               ]
             }
           },
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }
@@ -1120,7 +1120,7 @@
           "HEART_STUDY": {
             "open": {
               "record": [
-                "read"
+                "view"
               ],
               "artifact": [
                 "create"
@@ -1130,14 +1130,14 @@
           "LUNG_COHORT": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "open": {
               "record": [
-                "read"
+                "view"
               ]
             }
           }

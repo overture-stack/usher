@@ -11,11 +11,11 @@ These must be completed or sufficiently resolved before the relevant implementat
 
 ### System context diagram
 
-Architectural diagram showing Usher's connections to Overture services and infrastructure (portal-ui, Keycloak, Lyric, Arranger, PEP plugins). Prerequisite for the portal-ui API contract and design review sessions. See `.dev/design/architecture.md`.
+Architectural diagram showing Usher's connections to Overture services and infrastructure (portal-ui, Keycloak, Lyric, Arranger, PEP adapters). Prerequisite for the portal-ui API contract and design review sessions. See `.dev/design/architecture.md`.
 
 ### Admin model: open questions
 
-Four items gate the admin API: self-grant compensating controls, self-grant peer revocability, the break-glass procedure, and where a plugin learns that a principal is an administrator (Usher's own role, plugin-side config, or the platform access model, and whether an administrator of an ushered application is the same principal as an administrator of Usher). The last one also gates the bypass audit requirement, since a bypass cannot be logged as such until its source is defined. Lower-priority follow-ups (step-up auth, audit schema, multi-tenancy) can trail v1. See [admin model open questions](docs/atlas/roadmap/admin-model-open-questions.md).
+Four items gate the admin API: self-grant compensating controls, self-grant peer revocability, the break-glass procedure, and where an adapter learns that a principal is an administrator (Usher's own role, adapter-side config, or the platform access model, and whether an administrator of an ushered application is the same principal as an administrator of Usher). The last one also gates the bypass audit requirement, since a bypass cannot be logged as such until its source is defined. Lower-priority follow-ups (step-up auth, audit schema, multi-tenancy) can trail v1. See [admin model open questions](docs/atlas/roadmap/admin-model-open-questions.md).
 
 **Self-grant is confirmed as a real path, and its approval requirement is scheduled to change.** It
 needs no approval in MVP and will need one once community custodianship is implemented. Build it as
@@ -144,7 +144,7 @@ three hours. That trade is closed by decision; what replaces it needs designing.
 Open, and none of it is settled: where re-authorization happens on the upload path, whether per part
 or per session; whether an upload session is a first-class object that can be revoked while in
 flight; how that composes with whatever short-lived delegation the transfer service issues for the
-bytes themselves; and which plugin owns it, since submission spans both halves of the environmental
+bytes themselves; and which adapter owns it, since submission spans both halves of the environmental
 service. Related to the download enforcement item above, which shares the file API and not
 the duration problem.
 
@@ -160,7 +160,7 @@ this was previously open; it now needs designing rather than deciding.
 authorization field at nesting depth two or greater; the settled filter is a single positive
 containment clause on a flat, depth-one field, so the triggering condition cannot arise. With one clause there is also no sibling composition, which makes the `should` versus
 `must` question moot rather than answered. Two conditions keep it that way, and both are already
-required elsewhere: the plugin establishes the field's mapping shape at startup and refuses to
+required elsewhere: the adapter establishes the field's mapping shape at startup and refuses to
 enforce where it cannot, and record-level narrowing stays post-MVP, since a per-record category
 field is exactly what would put an authorization field deep enough to trigger it.
 
@@ -203,9 +203,9 @@ absent, and dropped, and the constraint goes with it. Attached to the feature th
 it, it is waiting at the only moment anyone could reintroduce the problem. See the artifact entity in
 [design/permissions-model.md](design/permissions-model.md).
 
-### Enforcement gaps from the first plugin integration
+### Enforcement gaps from the first adapter integration
 
-Eleven items surfaced by preparing the first plugin integration, none of them waiting on plugin work. Two were fail-open defects and are now resolved in the design, recorded under "The two permissive failures are closed" in [decisions.md](design/decisions.md). They were: an unconfigured resource value fails closed on records but **open** on derived artifacts, because it is absent from the complement the ceiling clause is built from; and an unauthenticated request currently renders to no filter at all, which is the allow-everything case rather than a restrictive default. Also covers widening the enforcement seam to distinguish no-relationship from lapsed-grant, and the mapping-format and administrator-source decisions. See [Arranger integration blockers](docs/atlas/roadmap/arranger-integration-blockers.md).
+Eleven items surfaced by preparing the first adapter integration, none of them waiting on adapter work. Two were fail-open defects and are now resolved in the design, recorded under "The two permissive failures are closed" in [decisions.md](design/decisions.md). They were: an unconfigured resource value fails closed on records but **open** on derived artifacts, because it is absent from the complement the ceiling clause is built from; and an unauthenticated request currently renders to no filter at all, which is the allow-everything case rather than a restrictive default. Also covers widening the enforcement seam to distinguish no-relationship from lapsed-grant, and the mapping-format and administrator-source decisions. See [Arranger integration blockers](docs/atlas/roadmap/arranger-integration-blockers.md).
 
 ### Saved-set identity and its grants vocabulary
 
@@ -227,7 +227,7 @@ loses their view when the grant ends and nobody gains one, and
 the deadline sat on a principal's grant rather than on the embargo state. Withdrawn in place, with
 four requirements recorded where the mechanism was: embargo is a state rather than a grant, it
 reaches below the resource with several segments carrying separate deadlines, the segment must be
-computable by the enforcing plugin since no record says it is embargoed, and access within an
+computable by the enforcing adapter since no record says it is embargoed, and access within an
 embargoed segment differs by principal.
 
 **What this does not block.** Category grant expiry is settled and available: see
@@ -292,11 +292,11 @@ two differ in whether fields can be combined: a resource field is one existing s
 a key composed of two of them is not expressible, while a predicate carries as many clauses as it
 needs. Combining fields therefore belongs to the grant's predicate, never to the key.
 
-Narrowing within a resource, the same permission as SQON-scoped grants. Two constraints already established: subset containment is expressible in one clause as `not` of `not-in`, verified by executing the compiler rather than reading it, and it requires the field to be mapped `nested`, degrading silently to an existential match on a flat field. Usher cannot require a mapping shape, so this is available only where an instance supplies conforming data, verified at plugin startup. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
+Narrowing within a resource, the same permission as SQON-scoped grants. Two constraints already established: subset containment is expressible in one clause as `not` of `not-in`, verified by executing the compiler rather than reading it, and it requires the field to be mapped `nested`, degrading silently to an existential match on a flat field. Usher cannot require a mapping shape, so this is available only where an instance supplies conforming data, verified at adapter startup. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
 
 One design item to settle when this is picked up: the shape of the resource predicate. Additive rendering has no implicit baseline for records carrying no category, so a role must render to a positive predicate of its own rather than being the default that exclusions carve into. Not needed for MVP, where the resource-field clause covers it.
 
-The same startup-verification rule extends to mapping depth, not just mapping type: where an authorization field sits at depth two or deeper, a plugin's filtered-aggregation path does not apply and filtering falls back to a disjunctive one, which for an authorization predicate is OR where AND was intended. A plugin must establish the field's mapping shape at startup and refuse to enforce where it cannot, so a non-conforming instance is one where this narrowing is unavailable rather than one where it silently degrades.
+The same startup-verification rule extends to mapping depth, not just mapping type: where an authorization field sits at depth two or deeper, an adapter's filtered-aggregation path does not apply and filtering falls back to a disjunctive one, which for an authorization predicate is OR where AND was intended. An adapter must establish the field's mapping shape at startup and refuse to enforce where it cannot, so a non-conforming instance is one where this narrowing is unavailable rather than one where it silently degrades.
 
 ### Define resource derivation for migration
 
@@ -316,19 +316,25 @@ Three sequences are recorded in design documents and nowhere an operator reads, 
 
 - **Break-glass access.** If every platform administrator is unavailable, recovery is an IdP operation. Who is authorized to perform it, and what audit trail the IdP layer is expected to produce, is undocumented. See [admin-model.md](design/admin-model.md).
 - **Establishing a category.** Define the category, appoint whoever governs it, and only then accept data carrying it. The decision to treat a custodian vacancy as a governance failure rather than a system state depends on this sequence being followed. See [decisions.md](design/decisions.md) § Granting is one function.
-- **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the controller. The reverse order serves the affected records to everyone until the application catches up. See [plugin-integration.md](design/plugin-integration.md) § Category dictionary introspection.
+- **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the controller. The reverse order serves the affected records to everyone until the application catches up. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
 A design document that says an operator must do something, without a document the operator reads, has moved the responsibility rather than discharged it.
 
 ### Category dictionary introspection
 
-Plugin configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher. Nothing connects the two today, so every instance transcribes the dictionary into each plugin's configuration by hand and keeps it in step by remembering to. The proposal is an introspection endpoint on the controller returning the dictionary, reachable only by a bridge and encrypted to that application's key the way an Usher token is, so configuration is generated rather than copied.
+Adapter configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher. Nothing connects the two today, so every instance transcribes the dictionary into each adapter's configuration by hand and keeps it in step by remembering to. The proposal is an introspection endpoint on the controller returning the dictionary, reachable only by a bridge and encrypted to that application's key the way an Usher token is, so configuration is generated rather than copied.
 
-It carries names only, since what a category selects is defined per schema and Usher never learns it, so it does not weaken data-agnosticism. Beyond removing the duplication it lets a plugin check its configuration against the full list at startup and refuse to start on an unmapped category, moving a failure that currently presents as quietly missing data to instance time. It is also the compensating control for computing `open` as the complement of known categories: a category the plugin has no mapping for is not in the set being subtracted, so records carrying it are served as open rather than hidden. Post-MVP, arriving with record-level narrowing, since resource-level enforcement puts no category in the filter and needs no mapping. See [plugin-integration.md](design/plugin-integration.md) § Category dictionary introspection.
+It carries names only, since what a category selects is defined per schema and Usher never learns it, so it does not weaken data-agnosticism. Beyond removing the duplication it lets an adapter check its configuration against the full list at startup and refuse to start on an unmapped category, moving a failure that currently presents as quietly missing data to instance time. It is also the compensating control for computing `open` as the complement of known categories: a category the adapter has no mapping for is not in the set being subtracted, so records carrying it are served as open rather than hidden. Post-MVP, arriving with record-level narrowing, since resource-level enforcement puts no category in the filter and needs no mapping. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
-### Plugin integration design
+### Adapter integration design
 
-API contract, request/response shapes, and error codes for token exchange, revocation poll, and push subscription. Also: JWE key distribution and payload schema versioning. See `.dev/design/plugin-integration.md`.
+API contract, request/response shapes, and error codes for token exchange, revocation poll, and push subscription. Also: JWE key distribution and payload schema versioning. See `.dev/design/adapter-integration.md`.
+
+### How an adapter maps resources to an application's data
+
+Being worked out with the first integration, to be documented here so other adapters can follow it.
+Usher stays agnostic of how data is structured, so the mapping is the adapter's. One case it has to
+answer: a study whose records sit in two catalogues under different access.
 
 ### Database schema design
 
@@ -372,7 +378,7 @@ Three things to settle: whether submission-path creation becomes a request whose
 
 ### Just-in-time access, as a frame for what the admin self-grant already does
 
-The admin self-grant is zero standing privilege under another name: no standing access, a mandatory time limit, a logged event, recorded at `concepts.md`. The pattern is worth naming because the people who will audit this platform already know it, and because standing grants answer "who held access to this data, when, and why" badly.
+The admin self-grant is zero standing privilege under another name: no standing access, a mandatory time limit, a logged event, recorded at `concepts.md`. The pattern matters because the people who will audit this platform already know it, and because standing grants answer "who held access to this data, when, and why" badly.
 
 Three gaps against the full pattern, each real rather than terminological. A request approved by someone else, where ours is self-service; the approval requirement is already scheduled to change. Expiry mandatory on the sensitive path, where `expires_at` exists everywhere and is required only for the self-grant. And zero standing privilege as a stated principle, which holds for administrators and for nobody else, since a curator's grant stands until revoked.
 
@@ -416,7 +422,7 @@ Revocation notice naming the principal; push channel (SSE or WebSocket); poll en
 
 Structured JSON (Pino) for every access decision and revocation event. Dual-channel: policy database (queryable source of truth) and log stream (real-time alerting, SIEM). No token payloads, health record identifiers, or bearer tokens in output.
 
-Two parts of this are design prerequisites rather than implementation, and their cost grows by waiting: the event shape must exist before any enforcement path emits, with the principal field present and null where there is no authenticated principal, or populating it later becomes a schema migration; and the principal identifier is a cross-system correlation key rather than a local choice, so it must match whatever a plugin emits. Denial and administrator-bypass events both need a defined destination. See `.dev/design/audit-events.md`, which carries the catalogue but neither of these.
+Two parts of this are design prerequisites rather than implementation, and their cost grows by waiting: the event shape must exist before any enforcement path emits, with the principal field present and null where there is no authenticated principal, or populating it later becomes a schema migration; and the principal identifier is a cross-system correlation key rather than a local choice, so it must match whatever an adapter emits. Denial and administrator-bypass events both need a defined destination. See `.dev/design/audit-events.md`, which carries the catalogue but neither of these.
 
 ### Policy database
 
@@ -426,17 +432,17 @@ Schema implementation and migration tooling. Integrity controls: transactions, f
 
 ## Implementation: Integration
 
-### `@overture-stack/usher-bridge`
+### `@overture-stack/usher-express-bridge`
 
-Shared library embedded in all applications: token exchange, local validation, TTL caching, revocation channel (push + poll fallback), revocation-uncertain mode (503 after grace period).
+Shared library embedded in all applications: token exchange, local validation, TTL caching, revocation channel (push + poll fallback), revocation-uncertain mode (503 after grace period). Lives in `modules/express-bridge` in this repository, created when implementation begins, and is published from here for adapters to import.
 
-### `@overture-stack/usher-arranger`
+### `@overture-stack/arranger-usher-adapter`
 
-Express middleware for `arranger-graphql-router`. Translates permissions payload into server-side SQON filters. First integration target. Arranger-specific design in `arranger/.dev/docs/usher-plugin.md`.
+Express middleware for `arranger-graphql-router`. Translates permissions payload into server-side SQON filters. First integration target. Arranger-specific design in `arranger/.dev/docs/arranger-auth/usher-adapter.md`.
 
-### Additional per-app plugins
+### Additional per-app adapters
 
-`@overture-stack/usher-lyric` and others, each translating the permissions payload into the app's native query format.
+The Lyric adapter and others, each translating the permissions payload into the app's native query format.
 
 ---
 
@@ -477,7 +483,7 @@ rather than discovered in integration testing.
 
 ### Integration guide
 
-Consumer-facing companion to `plugin-integration.md` for plugin developers. Blocked on `plugin-integration.md` being completed.
+Consumer-facing companion to `adapter-integration.md` for adapter developers. Blocked on `adapter-integration.md` being completed.
 
 ### Administration guide
 
@@ -510,3 +516,24 @@ Optional `sqon` field on `grants` narrowing which records within a category a gr
 ### Security event streaming (Kafka)
 
 Upgrade path from Valkey Streams for durable, replayable event fan-out to external consumers (SIEM, compliance, alerting). Not needed for v1; no architectural changes required to add it later.
+
+### A surveyor who views a bounded number of records
+
+`view` without `count` or `export`, held per grant between a minimum and a maximum number of records
+per query, so a researcher sees what the data looks like without its size or its bulk and has a
+reason to request access. Post-MVP: the first integration cannot limit one category within a
+response, and a grant written before the limits are enforced serves a full viewer. See [bounded
+surveyor](docs/atlas/roadmap/bounded-surveyor.md).
+
+---
+
+## Research on ideas and possible scenarios
+
+Ideas worked through far enough to record what is known, and not identified as needed. Future scope,
+above, is work identified as needed at some point.
+
+### A principal who counts and does not view
+
+Theoretical: the model permits `count` without `view` and nothing yet needs it. What such a
+principal gets, what any rule for it has to survive, and a set of rules recommended and not adopted,
+in [count-only principal](docs/atlas/roadmap/count-only-principal.md).

@@ -36,7 +36,7 @@ Status values: **met** means the design answers it; **partial** means answered w
 | ID    | Status  | What answers it                                                                                                                                  |
 | ----- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | FR-13 | partial | Requires showing who shared each dataset. `granted_by` records it, and the flows specify what the page shows; the API exposing it does not exist |
-| FR-14 | met     | Enforcement at query time through the plugin                                                                                                     |
+| FR-14 | met     | Enforcement at query time through the adapter                                                                                                    |
 | FR-15 | partial | Same download path as FR-02, now with a named owner                                                                                              |
 | FR-16 | met     | Open tier                                                                                                                                        |
 | FR-17 | met     | Deny by default                                                                                                                                  |
@@ -103,7 +103,7 @@ positive containment clause on the field naming a resource, which is flat and at
 of the first instance's catalogues. A single clause also has no siblings, so the composition
 question does not arise rather than being answered favourably.
 
-**Two conditions hold it there, both already required.** The plugin establishes the field's mapping
+**Two conditions hold it there, both already required.** The adapter establishes the field's mapping
 shape at startup and refuses to enforce where it cannot. And record-level narrowing stays post-MVP:
 a per-record category field is precisely what would place an authorization field deep enough for the
 defect to return, which is worth knowing as a constraint on that future work rather than a

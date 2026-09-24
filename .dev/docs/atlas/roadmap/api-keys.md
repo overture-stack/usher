@@ -111,13 +111,13 @@ constraint is the suffix, which must be READ, WRITE or DENY.
 
 **That removes the collision worry and replaces it with a vocabulary one.** A dotted name survives,
 so the separator rule is not the problem. The problem is that READ and WRITE are EGO's access levels
-and Usher's capabilities are not: `record.read` and `record.export` are both readerly, and
-collapsing them onto READ loses exactly the axis that motivates narrowing, since read-without-export
-is the obvious thing to want from a download script's key.
+and Usher's capabilities are not: `record.view` and `record.export` both sit under the group
+`read`, and collapsing them onto READ loses exactly the axis that motivates narrowing, since
+view-without-export is the obvious thing to want from a download script's key.
 
 **The capability vocabulary has since been settled**, so the format no longer waits on it: the
-data-plane actions are `create`, `read`, `update`, `delete`, `export` and `aggregate`, written
-`entity.action`. What remains open is the narrowing itself rather than the words for it. Two
+data-plane actions are `count`, `view`, `export`, `create`, `update` and `delete`, written
+`entity.action`, with the first three grouped as `read`. What remains open is the narrowing itself rather than the words for it. Two
 shapes are available once that lands:
 
 - **Name carries resource and category, suffix carries a coarse level.** `STUDY_A.controlled.READ`
@@ -168,8 +168,7 @@ verification against the published JWKS, which needs no secret. A basic-auth cre
 introspect any key is a different class of thing, and it reintroduces the shared-secret shape that
 the JWE key design deliberately avoided by registering public halves.
 
-It follows the deployment's own secret handling rather than anything Usher invents, and it is worth
-naming in the threat model rather than appearing as a configuration line.
+It follows the deployment's own secret handling rather than anything Usher invents, and it belongs in the threat model rather than in a configuration line.
 
 ---
 

@@ -18,8 +18,7 @@ mapping.
 
 The permissions model introduced three privileged roles: Owner, Custodian and Admin. This document
 specifies Admin and Owner; **Custodian is the least specified of the three and is a named gap**,
-carrying one row in the taxonomy below and no permission list, which is worth stating plainly since
-it is the role with the most governance weight and the one OCAP delegation rests on. It covers:
+carrying one row in the taxonomy below and no permission list, and it is the role with the most governance weight and the one OCAP delegation rests on. It covers:
 
 - Role taxonomy and what each role can and cannot do
 - How Usher identifies and validates admin status (OIDC-first; no Usher-managed admin
@@ -29,7 +28,7 @@ it is the role with the most governance weight and the one OCAP delegation rests
 - What metadata admins can see when listing resources
 - Service accounts: how automated processes authenticate and what they are permitted to do
 - Audit log integrity controls
-- The OIDC adapter boundary: what Keycloak (or any OIDC provider) owns versus what Usher owns
+- The OIDC connector boundary: what Keycloak (or any OIDC provider) owns versus what Usher owns
 
 **Admin** is the term used throughout for the platform-wide authorization administrator role. The architecture shorthand **PAP admin** (Policy Administration Point) refers to the same role and may appear in technical contexts.
 
@@ -121,13 +120,13 @@ This migration must be planned and coordinated before any EGO infrastructure is 
 - View full audit log
 - Register and manage service accounts in Usher (which permissions a service account holds)
 - Self-grant data access to a specific resource (see the Self-grant section)
-- Query data applications without a filter, but only where an instance has enabled the plugin-level
+- Query data applications without a filter, but only where an instance has enabled the adapter-level
   bypass, which is off by default for health-data instances. This is the one route that is not a
   grant, and the section below states what it costs
 
 ### Cannot
 
-- Read, download, or query record data without either an explicit self-grant or an enabled plugin
+- Read, download, or query record data without either an explicit self-grant or an enabled adapter
   bypass. Absent both, an admin reaches no records
 - Delete or modify audit log entries
 - Bypass the Usher token path to access data; the separation of admin permission from data
@@ -140,11 +139,11 @@ This migration must be planned and coordinated before any EGO infrastructure is 
 Usher reads admin status from the validated OIDC token on every request to the admin API. No
 database lookup is required; the token claim is authoritative.
 
-The claim check is OIDC-provider-specific and configurable via the OIDC adapter:
+The claim check is OIDC-provider-specific and configurable via the OIDC connector:
 
-- **Keycloak (default adapter):** `realm_access.roles` contains the configured admin
+- **Keycloak (default connector):** `realm_access.roles` contains the configured admin
   role name (default: `usher-platform-admin`).
-- **Generic OIDC adapter:** a configurable top-level claim (e.g. `usher_admin: true`), or a
+- **Generic OIDC connector:** a configurable top-level claim (e.g. `usher_admin: true`), or a
   path in the token namespace, evaluated against a configured expected value.
 
 Usher never caches or persists admin status between requests. The token is validated and the claim
@@ -172,7 +171,7 @@ Usher has no bootstrap logic of its own. The identity provider handles this enti
    currently under evaluation automates realm configuration at deploy time, reducing the need
    for manual Keycloak UI work.
 2. That Keycloak admin creates a realm for Usher and defines a realm role named
-   `usher-platform-admin` (the exact name is configurable in the Usher adapter config).
+   `usher-platform-admin` (the exact name is configurable in the Usher connector config).
 3. The Keycloak admin assigns that role to the user who will be the first Usher admin.
 4. When that user authenticates, their OIDC token carries the `usher-platform-admin` claim.
    Usher reads the claim, recognizes admin status, and the management API and UI become
@@ -184,7 +183,7 @@ Usher application code has no role in that lifecycle.
 
 **For alternative OIDC providers:** the concept is identical. The provider-specific mechanism
 for assigning the admin signal to a user (a role, a group, a custom claim) is
-configured in the adapter. Usher reads the result from the token.
+configured in the connector. Usher reads the result from the token.
 
 **Security note:** the Keycloak realm administrator credential is infrastructure-tier: store it
 in a secrets manager, scope it tightly, and log its use at the instance platform level.
@@ -215,8 +214,8 @@ governs all users. The grant is logged, traceable, and requires a deliberate act
    takes the same path and the same TTL. There is no `grant.createSelf` capability, because the
    authority to grant is one authority; what differs is the endpoint's rules. See the capability
    vocabulary in [permissions-model.md](permissions-model.md).
-5. The resulting grant behaves identically to any other grant for PEP plugin purposes. The
-   Usher token carries no admin flag; the plugin sees the same token structure
+5. The resulting grant behaves identically to any other grant for PEP adapter purposes. The
+   Usher token carries no admin flag; the adapter sees the same token structure
    regardless of whether the grantee is an admin.
 
 ### TTL requirement
@@ -290,26 +289,26 @@ decision.
 
 ---
 
-## Plugin-level bypass for platform admins
+## Adapter-level bypass for platform admins
 
 An admin who needs to view data across all resources without a self-grant (for example, a portal
 admin responding to a governance inquiry) can be accommodated at the
-plugin layer rather than through an Usher token entry. The PEP plugin detects the
+adapter layer rather than through an Usher token entry. The PEP adapter detects the
 `usher-platform-admin` role in the IdP token and applies no SQON filter for that request.
 
 This is distinct from the self-grant flow:
 
-| Mechanism     | How access is obtained                         | Appears in Usher token | Appears in audit log             |
-| ------------- | ---------------------------------------------- | ---------------------- | -------------------------------- |
-| Self-grant    | Admin creates an explicit grant for themselves | Yes (standard entry)   | Yes (`grant.selfCreation` event) |
-| Plugin bypass | Plugin detects admin role; skips SQON filter   | No                     | Yes (plugin access log entry)    |
+| Mechanism      | How access is obtained                         | Appears in Usher token | Appears in audit log             |
+| -------------- | ---------------------------------------------- | ---------------------- | -------------------------------- |
+| Self-grant     | Admin creates an explicit grant for themselves | Yes (standard entry)   | Yes (`grant.selfCreation` event) |
+| Adapter bypass | Adapter detects admin role; skips SQON filter  | No                     | Yes (adapter access log entry)   |
 
-The plugin bypass does not create any grant record in Usher's policy database; it is a plugin
-implementation decision. Plugins must log every bypass event as an access log entry (user ID,
+The adapter bypass does not create any grant record in Usher's policy database; it is an adapter
+implementation decision. Adapters must log every bypass event as an access log entry (user ID,
 timestamp, resource scope, reason: `platform_admin_bypass`). This keeps the access visible in
 the cross-system audit trail even though no Usher grant event fires.
 
-**Configuration option.** The plugin bypass can be disabled per instance. Instances that require
+**Configuration option.** The adapter bypass can be disabled per instance. Instances that require
 all data access to be grant-based (including admin access) should disable the bypass and require
 admins to use the self-grant flow. This is the more restrictive posture and should be the default
 for PHI instances.
@@ -318,7 +317,7 @@ for PHI instances.
 
 ## Admin API
 
-The admin API is not served through the PEP plugin path. It is a separate API, authenticated
+The admin API is not served through the PEP adapter path. It is a separate API, authenticated
 by Usher directly: the bearer token is validated and the OIDC admin claim is checked on
 every request.
 
@@ -355,7 +354,7 @@ resource, their Usher token reflects that: they see no records in data applicati
 like any other non-viewer user.
 
 This cleanly separates two concerns: admin operations go through the admin API; data queries go
-through the PEP plugin path. The two paths have different authentication checks and different
+through the PEP adapter path. The two paths have different authentication checks and different
 response shapes.
 
 **User enumeration:** a global `GET /admin/users` endpoint is not implemented. In a health data
@@ -484,9 +483,9 @@ facts in the envelope.
 
 ---
 
-## OIDC adapter design
+## OIDC connector design
 
-Usher reads all admin state from the validated OIDC token. The adapter interface must expose:
+Usher reads all admin state from the validated OIDC token. The connector interface must expose:
 
 - **Token validation:** verify signature against the provider's JWKS, check expiry and issuer.
 - **Claim extraction:** pull `sub` (user subject), `email`, and the admin indicator.
@@ -497,9 +496,9 @@ Usher reads all admin state from the validated OIDC token. The adapter interface
   Keycloak: the presence of `azp` (authorized party) and the absence of a human-user `sub`
   indicate a service account token.
 
-The adapter is the only component that knows it is talking to a specific provider. The rest of
+The connector is the only component that knows it is talking to a specific provider. The rest of
 Usher's code works with a validated, normalized claim set. The monorepo will contain a
-`packages/oidc-keycloak` adapter and a `packages/oidc-generic` fallback.
+`packages/oidc-keycloak` connector and a `packages/oidc-generic` fallback.
 
 **OPA note:** Open Policy Agent was considered as a policy evaluation engine. It is not a v1
 dependency. Usher's ABAC model is structured (defined schema: `grants`, `grant_decisions`,

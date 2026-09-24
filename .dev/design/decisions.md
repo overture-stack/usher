@@ -29,7 +29,7 @@ enforcement path returns.
 1. **Enforcement against Elasticsearch through SQON.** Cerbos ships query-plan adapters targeting
    ORMs; the first application's backend is reached through SQON, so this requirement asks what a
    SQON adapter costs to write.
-2. **A revocation channel that pushes grant changes to plugins and suspends serving when the
+2. **A revocation channel that pushes grant changes to adapters and suspends serving when the
    channel goes quiet past a grace period.** Usher's fail-secure behaviour depends on this.
 3. **Delegated governance:** a custodian holding grant authority over one category
    platform-wide, fully audited, holding no other administrative rights. This is the OCAP
@@ -57,7 +57,7 @@ OPA as Usher's evaluation engine would have offered ecosystem familiarity as an 
 design. In partial evaluation, OPA accepts some known facts and some unknown ones, and produces a
 residual: an unevaluated expression that represents the remaining grants. Usher's grants
 token is the same idea in a different form: rather than returning a binary answer, Usher returns the
-full set of category grants for the requesting application. The plugin applies that set as a query
+full set of category grants for the requesting application. The adapter applies that set as a query
 filter, which is structurally a residual evaluation applied at the data layer.
 
 OPA also reinforced the value of externalizing authorization state as explicit, queryable data
@@ -91,7 +91,7 @@ GA4GH Passport item in `.dev/roadmap.md`.
 ### OPA at the enforcement layer
 
 Separate from its role as a decision engine, OPA was considered as a component within enforcement
-plugins: the per-application code that receives the Usher token and translates it into
+adapters: the per-application code that receives the Usher token and translates it into
 data-layer query filters.
 
 **What it offers.** The mapping from a category grant set to a concrete query filter (e.g.,
@@ -101,23 +101,23 @@ auditable policy logic OPA is designed for. Organizations already running OPA si
 potentially integrate Usher's enforcement by adding a policy bundle rather than embedding a new
 library.
 
-**What it contributed.** The sidecar instance model: the plugin does not need to be embedded in
+**What it contributed.** The sidecar instance model: the adapter does not need to be embedded in
 application code. It can run as a separate process that the application calls. This pattern,
-well-established in OPA instances, is a valid option for Usher plugins and the plugin interface
+well-established in OPA instances, is a valid option for Usher adapters and the adapter interface
 is designed to accommodate it.
 
 **Why not mandated.** OPA's primary model for keeping data current is bundle pulls: periodic
-fetches from a bundle server. Usher's revocation channel is a push model: the plugin must subscribe
+fetches from a bundle server. Usher's revocation channel is a push model: the adapter must subscribe
 to real-time grant change notifications and invalidate its cached token promptly. These two models
 do not align. OPA bundle pulls introduce a staleness window that conflicts with Usher's revocation
 guarantees. The time-critical parts of enforcement (revocation subscription, fail-secure on channel
-disruption) still require custom plugin code regardless of whether OPA is involved. OPA would
-cover only the filter translation slice of a plugin that still needs custom revocation handling.
+disruption) still require custom adapter code regardless of whether OPA is involved. OPA would
+cover only the filter translation slice of an adapter that still needs custom revocation handling.
 
-**Decision.** OPA is not required at the enforcement layer. The plugin SDK handles the generic
+**Decision.** OPA is not required at the enforcement layer. The adapter SDK handles the generic
 parts: JWE decryption, revocation channel subscription, TTL management, and fail-secure response.
-Teams with existing OPA investments can use OPA for query filter translation within their plugin
-implementation. The plugin interface is designed to accommodate this without requiring it.
+Teams with existing OPA investments can use OPA for query filter translation within their adapter
+implementation. The adapter interface is designed to accommodate this without requiring it.
 
 ---
 
@@ -225,11 +225,11 @@ decision service on every data access, or to cache a broad allow/deny that canno
 access. Neither fits a platform where a user may be permitted to see some records and not others.
 
 Usher returns a structured Usher token: the full set of category grants the user holds, scoped
-to the resources the requesting application manages. The application plugin applies this as a
-query-time filter. A single token fetch covers the session; the plugin uses it for every query
+to the resources the requesting application manages. The application adapter applies this as a
+query-time filter. A single token fetch covers the session; the adapter uses it for every query
 without a round-trip per request.
 
-**Tradeoffs accepted.** The plugin must implement query filter logic, not just a gate check. This
+**Tradeoffs accepted.** The adapter must implement query filter logic, not just a gate check. This
 is more work per integration. It is unavoidable: the filtering logic requires application-specific
 query language and schema knowledge that Usher cannot have.
 
@@ -287,7 +287,7 @@ expired token, one carrying versions that happen to match current, would otherwi
 computed under superseded categories for one more TTL. It is low severity, since forging a token
 needs the per-application key and a bridge holding that key can already mint payloads directly, but a
 freshness decision should not rest on an input the request supplies. **And the payload loses its only member
-no plugin reads**, which removes a key-set invariant that a validator would otherwise have to enforce
+no adapter reads**, which removes a key-set invariant that a validator would otherwise have to enforce
 against `permissions`.
 
 **A refresh is therefore the same call as the first exchange**, since the expired token had no other
@@ -303,6 +303,16 @@ hit must never extend a token past a grant that has since lapsed.
 at once, because both invalidate. A newly granted resource can lag by up to one TTL, because the
 token names what the principal already had and nothing about the new grant invalidates the old entry.
 Losing access is immediate and gaining it waits, which is the right direction for health data.
+
+**"At once" is true of this cache and not of what a person reaches, and the two come apart for a
+category change.** A revocation is pushed, so a bridge drops its token and the effect is immediate
+end to end. A category change is not: it bumps a version rather than deleting a cached payload, and
+that version is compared only when a bridge next refreshes, so every principal keeps reaching the
+old set for up to one TTL. The direction is still the safe one, since what lags is a narrowing that
+arrives late rather than a widening that arrives early, but the sentence above claims an immediacy
+the mechanism does not deliver. Whether a category change should push, and what it would name for an
+anonymous principal who has no `sub`, is open; see the anonymous-token item in
+[to-discuss.md](to-discuss.md).
 
 **This is the access-and-refresh-token shape rather than a new one**, and saying so is what stops it
 drifting into one. The Usher token is the access token, the exchange is the refresh, the IdP token is
@@ -365,8 +375,8 @@ Category versions did not: the fast-path decision above records where they went 
 
 **Unknown keys are tolerated at the entity level and nowhere above it.** That reads as an exception to
 the no-read-time-tolerance rule and is the same rule applied: what matters is the direction skipping a
-key fails in. A plugin that skips an entity it does not recognize serves nothing for that entity and
-fails closed; a plugin that skips an unrecognized member of the payload root may skip a restriction
+key fails in. An adapter that skips an entity it does not recognize serves nothing for that entity and
+fails closed; an adapter that skips an unrecognized member of the payload root may skip a restriction
 and fails open. Tolerance is safe exactly where ignorance narrows.
 
 ### The Usher token is not an OAuth access token, and three separate tests say so
@@ -379,11 +389,11 @@ Authorization Requests).** It is the right family for this problem and the wrong
 payload. RAR carries a flat array of objects, each with a required `type` plus optional `locations`,
 `actions`, `datatypes`, `identifier` and `privileges`. Resource maps onto `identifier`, category onto
 `datatypes`, and then it stops: `actions` is an array of strings, so the entity axis has nowhere to go
-but back inside the action string as `record.read`. That is precisely the collapse the entity level
+but back inside the action string as `record.view`. That is precisely the collapse the entity level
 was introduced to undo, recorded above. Field categories fare worse, since RAR is explicitly flat and
 prescribes "separate objects rather than nesting", and its cross-product reading of one object, all
-actions at all locations, cannot express `clinician` holding `read` and `aggregate` beside `basic`
-holding only `read`.
+actions at all locations, cannot express `clinician` holding `count` and `view` beside `basic`
+holding only `view`.
 
 **RAR's own members could have carried the map** as a type-specific field, since a RAR `type` governs
 what else its object may contain. That gives a registered claim name and a discriminator, at the cost
@@ -420,7 +430,7 @@ channel rather than on a token identifier. Absent by reason rather than by omiss
 `client_id`. An anonymous principal here is genuinely nobody.
 
 **`roles`, `groups` and `entitlements` (§2.2.3.1) look applicable and are not.** No role name travels
-in this token, because the controller resolves a role to capabilities at issuance so that a plugin
+in this token, because the controller resolves a role to capabilities at issuance so that an adapter
 never learns what an instance means by `viewer`. Carrying `roles` would undo that.
 
 ### `typ` is `usher+jwt`, and deliberately not `at+jwt`
@@ -537,7 +547,7 @@ reach, rather than being reachable in full or not at all.
     Bo holds controlled   reaches the controlled records
     Bo holds both         reaches both sets
 
-**The enforcement clause is two field tests, not one.** The plugin matches the resource's field value
+**The enforcement clause is two field tests, not one.** The adapter matches the resource's field value
 and the category's field value together, as a conjunction, and composes one such clause per grant with
 `or`. Both are single-valued exact matches, so a category costs no more to enforce than a resource
 does. `open` is the exception in shape rather than in principle: being the residual it has no value of
@@ -577,9 +587,9 @@ the any-category rule would leave the record reachable through whichever categor
 happens to hold.
 
 **The `open` complement is where an unrecognized category fails the other way**, and it is the reason
-the startup check in `plugin-integration.md` exists. A category value the plugin has no mapping for is
+the startup check in `adapter-integration.md` exists. A category value the adapter has no mapping for is
 absent from the set `open` subtracts, so records carrying it satisfy the complement and are served as
-open. An unmapped category does not hide its records, it exposes them. Checking the plugin's category
+open. An unmapped category does not hide its records, it exposes them. Checking the adapter's category
 configuration against Usher's dictionary at startup, and failing startup rather than warning, is what
 closes that.
 
@@ -600,7 +610,7 @@ Enforcement filters on two fields, and the emitted clause pairs them:
     )
 
 The second disjunct is `open`. Both fields must be single-valued, and each must be mapped in the
-plugin's configuration for the catalogue it serves.
+adapter's configuration for the catalogue it serves.
 
 **Two dependencies the filter cannot verify about either field**, which is why both are preconditions
 an integration asserts rather than properties the model guarantees:
@@ -612,7 +622,7 @@ an integration asserts rather than properties the model guarantees:
 
 Both fields must be single-valued, and no running code checks it: the mapping cannot express
 cardinality, and the search layer's filter path carries no instrumentation that would notice a field
-gaining a second value. See [plugin-integration.md](plugin-integration.md) for why this is
+gaining a second value. See [adapter-integration.md](adapter-integration.md) for why this is
 unverifiable today rather than merely unverified, and for the `nestedFieldNames` hazard, which lands
 on the permissive side for the negated `open` clause specifically.
 
@@ -620,19 +630,19 @@ A positive `in` clause on a single-valued field is an exact match whether the fi
 so neither dependency applies to the concrete-category clauses. They apply to the `open` clause,
 because it is the negated one.
 
-**The resource field name is plugin config, set per catalogue, and those fields are homologues across
+**The resource field name is adapter config, set per catalogue, and those fields are homologues across
 data types.** One slot, filled differently for each body of data an instance serves, which is the
 instance-vocabulary position stated further down applied at the enforcement layer. An application's
 own container may be coarser: Arranger can compose a second type into one `catalogueId`, backed by an
 unrelated index while inheriting that field, and the resulting filter names a field that index lacks.
-See [plugin-integration.md](plugin-integration.md), which records why that failure is silent. Usher
+See [adapter-integration.md](adapter-integration.md), which records why that failure is silent. Usher
 never learns any of these field names.
 
-Two properties generalize and are worth stating as expectations rather than as observations of any
+Two properties generalize, as expectations rather than as observations of any
 one instance:
 
 - **Catalogues within a single instance will disagree.** Different bodies of data arrive through
-  different submission services and expose different fields for the same role. A plugin that
+  different submission services and expose different fields for the same role. An adapter that
   assumes one field name per instance is wrong; the mapping is per catalogue. Confirmed in the
   first instance rather than anticipated: the clinical catalogue identifies resources by a study identifier, and
   the environmental catalogue has no such field at all, grouping instead on an organization code. A
@@ -656,7 +666,7 @@ are the same permission, narrowing within a resource.
 
 Instance-specific resource field names, catalogue topology, and the reasoning behind a given
 integration's choice of field belong in that integration's own repository, not here. See
-[plugin-integration.md](plugin-integration.md) for what a plugin must establish about a candidate
+[adapter-integration.md](adapter-integration.md) for what an adapter must establish about a candidate
 field before using it.
 
 ---
@@ -703,7 +713,7 @@ field before using it.
 > them fall in the held set, is equally a demand on how the data is shaped. Neither is reachable
 > without the instance modelling for it. Usher cannot require a mapping shape from instances whose
 > data models it does not know, so record-level narrowing is available only where an instance
-> supplies data satisfying that precondition, verified at plugin startup rather than assumed.
+> supplies data satisfying that precondition, verified at adapter startup rather than assumed.
 >
 > **The precondition is unmet on the first instance, and it is narrower than it first reads.**
 > What is missing is a per-record _category_ field. Neither iMS catalogue carries one, and nothing
@@ -720,7 +730,7 @@ field before using it.
 > them.
 
 The bridge renders a resolved grant set as a union of positive predicates, one branch per grant
-held, composed with `or`. The plugin compiles that into its own backend dialect. It does not compute exclusions by subtracting the held categories from
+held, composed with `or`. The adapter compiles that into its own backend dialect. It does not compute exclusions by subtracting the held categories from
 the full category set configured for a resource.
 
 This supersedes the subtractive visibility rule currently described in
@@ -731,7 +741,7 @@ model, losing a term widens access. In an additive model, losing a term narrows 
 
 | Failure                                                            | Subtractive                                        | Additive                          |
 | ------------------------------------------------------------------ | -------------------------------------------------- | --------------------------------- |
-| Category exists in Usher, unmapped in the plugin                   | No exclusion is generated for it, records **leak** | Contributes no branch, **denies** |
+| Category exists in Usher, unmapped in the adapter                  | No exclusion is generated for it, records **leak** | Contributes no branch, **denies** |
 | Data arrives carrying a tag value not yet registered as a category | Nothing excludes it, **visible**                   | Matches no predicate, **hidden**  |
 | A bug drops a clause from the composed filter                      | Access **widens**                                  | Access **narrows**                |
 | A field mapping points at the wrong field                          | Fails open                                         | Fails open                        |
@@ -754,7 +764,7 @@ uses `in` for effectively everything, which is the simplest and best-covered pat
 
 **Secondary rationale: it removes an inversion in the middle of the pipeline.** Permission computation
 is already additive across the three tiers (see the additive grant pipeline decision below). A
-subtractive plugin inverts that result into exclusions for no reason. Making the rendering additive
+subtractive adapter inverts that result into exclusions for no reason. Making the rendering additive
 means the pipeline runs one direction end to end.
 
 **Secondary rationale: audit answers become local.** Under additive rendering, "why can this
@@ -808,7 +818,7 @@ therefore as blocked until post-MVP, when it was never an authorization question
 
 **Authorization begins where identity stops being sufficient.**
 
-**Two consequences worth stating, because they are not obvious from the rule.**
+**Two consequences that are not obvious from the rule.**
 
 A self-scoping question must be answered from the authenticated principal and never from a parameter
 carrying an identifier. A parameter is a request; identity is a fact. The distinction is the whole
@@ -881,12 +891,12 @@ concluded the token had to carry the complement, which would have reversed the l
 position on naming unheld resources. It does not, and the reason is worth keeping.
 
 The complement does not need the full registry. It needs the resources _this instance is
-configured for_, which the plugin already enumerates: config maps each resource to a catalogue, a
+configured for_, which the adapter already enumerates: config maps each resource to a catalogue, a
 field name, and a field value, because that mapping is how a record is attributed to a resource at
 all. So the left half comes from config at startup and the right half from the token, and neither
 requires Usher to name anything the principal lacks.
 
-    complement = (resources this plugin is configured for) minus (resources the principal holds)
+    complement = (resources this adapter is configured for) minus (resources the principal holds)
 
 **Why computing the complement locally is enough, rather than merely convenient.** Including too much
 in it is harmless: a resource that never appears in any artifact excludes nothing. Leaving one out is
@@ -945,11 +955,11 @@ collapse.
 omission, which invites a well-meaning rewrite into a form that does not restrict anything. The
 constructor exists so the intent is visible in the call and survives that edit. It is verified for
 node shape, schema acceptance, round-trip survival, and composition inside a builder chain, and it
-lives in the module that owns the rule rather than in a plugin.
+lives in the module that owns the rule rather than in an adapter.
 
 **The field name is required and that is structural, not an inconvenience.** Every leaf operator
 takes one, so any field-free form is a combination, and a combination cannot carry the restriction
-per the rule above. For Usher the resource field name is always in plugin config, so the constructor
+per the rule above. For Usher the resource field name is always in adapter config, so the constructor
 always has one available.
 
 **Verified end to end on 2026-08-24, and what that verification does not cover.** A principal
@@ -1015,7 +1025,7 @@ appear as an inline literal, because `{ value: [] }` reads like an oversight, an
 of it is the one form that inverts.
 
 **Decision.** Holding no grants is represented as a distinct state that never becomes a SQON
-value. The bridge returns a discriminated result to the plugin rather than a filter:
+value. The bridge returns a discriminated result to the adapter rather than a filter:
 
     type Enforcement =
       | { kind: 'deny';   reason: 'no-grants' | 'unknown-resource' }
@@ -1025,16 +1035,16 @@ value. The bridge returns a discriminated result to the plugin rather than a fil
 **How each arm reaches the application.** All three now have a concrete expression, and
 none of them is a hand-written literal:
 
-| Arm      | What the plugin returns                                                    |
+| Arm      | What the adapter returns                                                   |
 | -------- | -------------------------------------------------------------------------- |
 | `deny`   | `matchNothing(fieldName)` from the query module                            |
 | `narrow` | The rendered filter                                                        |
 | `allow`  | The application's exported allow-all sentinel, taken from its package root |
 
 **The callback is total, and returning nothing is now an error rather than a permission.** The
-instance has made `null` or `undefined` throw instead of granting everything. So a plugin that falls
+instance has made `null` or `undefined` throw instead of granting everything. So an adapter that falls
 through a branch fails loudly. This removes the last path by which an omission read as consent, and
-it is why `allow` has to be a value the plugin asks for by name rather than something it expresses
+it is why `allow` has to be a value the adapter asks for by name rather than something it expresses
 by declining to answer.
 
 The `allow` arm exists because a catalogue can be open by configuration, and such a catalogue
@@ -1053,16 +1063,16 @@ A `revoked` reason was considered and dropped as unreachable: the bridge drops a
 token on a revocation event, so the next request re-fetches and receives a payload with no grants
 for that resource, which surfaces as `no-grants`.
 
-This adds no new rule. [plugin-integration.md](plugin-integration.md) already requires denial
+This adds no new rule. [adapter-integration.md](adapter-integration.md) already requires denial
 to be rejected before filter construction, on the grounds that "an empty exclusion set does not
 mean 'deny all'; it means 'exclude nothing from scope.'" What was missing was any mechanism
-making that unskippable: given a bare `SqonNode`, the natural plugin code has no branch to
+making that unskippable: given a bare `SqonNode`, the natural adapter code has no branch to
 forget, because it has no branch. The discriminated return makes the deny arm a compile-time
 obligation.
 
 `kind: 'deny'` asserts only "do not query the data layer." It carries no status code, since the
 existence-denial invariant means a search endpoint should likely return an empty result set
-rather than a 403 that confirms the resource exists; that realization stays the plugin's
+rather than a 403 that confirms the resource exists; that realization stays the adapter's
 decision. The `reason` field exists for the audit trail rather than control flow: access never
 held, access withdrawn, and misconfiguration are three different events, and collapsed into a
 bare denial the revocation case becomes uncountable.
@@ -1071,7 +1081,7 @@ The unavailable case is deliberately absent. The bridge must return 503 upstream
 translation callback is invoked, so this type describes only the branch where a payload
 resolved.
 
-**Tradeoffs accepted.** Plugin authors must handle two arms rather than composing one value.
+**Tradeoffs accepted.** Adapter authors must handle two arms rather than composing one value.
 That friction is the point.
 
 **The invariant this rests on, stated so it is not rediscovered.** Denial is represented in the
@@ -1097,18 +1107,18 @@ than that anyone preferred it.
 
 ---
 
-### Plugin enforcement over gateway/proxy enforcement
+### Adapter enforcement over gateway/proxy enforcement
 
 A gateway (API proxy, sidecar) can allow or block requests. It cannot reshape queries. Usher's
-enforcement model requires query shaping: the plugin must inject grant-based predicates into every
+enforcement model requires query shaping: the adapter must inject grant-based predicates into every
 data query before it reaches the data layer. A gateway operating at the HTTP level cannot do this
 for GraphQL, SQON, or other structured query formats without deep protocol awareness.
 
-Plugin enforcement runs inside the application and has access to the query structure before it is
-serialized and sent. The plugin shapes the query; the data layer receives a pre-filtered request.
+Adapter enforcement runs inside the application and has access to the query structure before it is
+serialized and sent. The adapter shapes the query; the data layer receives a pre-filtered request.
 
-**Tradeoffs accepted.** Every application that serves protected data must implement a plugin.
-Enforcement is distributed rather than centralized. An application that skips the plugin has no
+**Tradeoffs accepted.** Every application that serves protected data must implement an adapter.
+Enforcement is distributed rather than centralized. An application that skips the adapter has no
 enforcement: there is no backstop at the network layer.
 
 ---
@@ -1156,14 +1166,14 @@ A short token TTL limits the staleness window but requires frequent token refres
 round-trip latency. A long TTL reduces round-trips but widens the window where a revoked grant is
 still honoured.
 
-Usher uses a push revocation channel (SSE or WebSocket with poll fallback): plugins subscribe and
+Usher uses a push revocation channel (SSE or WebSocket with poll fallback): adapters subscribe and
 receive notification when grants change. Cached tokens are invalidated on notification rather than
 on expiry. The TTL is a backstop, not the primary revocation mechanism. This is about revocation
 specifically: a grant reaching a date it always carried is handled by the token's own `exp`, since
 nothing needs announcing when both sides knew the date at issuance.
 
-**Tradeoffs accepted.** Plugins must maintain a persistent connection to the revocation channel.
-If the channel is disrupted, the plugin cannot know whether its cached grants are still valid.
+**Tradeoffs accepted.** Adapters must maintain a persistent connection to the revocation channel.
+If the channel is disrupted, the adapter cannot know whether its cached grants are still valid.
 For the mechanism (push + poll, multi-instance propagation), see
 [security-workflow.md § Emergency access revocation](security-workflow.md#emergency-access-revocation).
 
@@ -1171,11 +1181,11 @@ For the mechanism (push + poll, multi-instance propagation), see
 
 ### Fail-secure when the revocation channel is unavailable
 
-If a revoked grant notification is never delivered, the plugin would continue honouring access that
+If a revoked grant notification is never delivered, the adapter would continue honouring access that
 has been withdrawn. An adversary who can silence the revocation channel would preserve stale access
 indefinitely with pure TTL fallback.
 
-When the revocation channel is unavailable beyond the configured grace period, the plugin returns
+When the revocation channel is unavailable beyond the configured grace period, the adapter returns
 503 (service unavailable) and suspends data access until connectivity is restored. An adversary who
 silences the channel gains no access; they only cause a service disruption.
 
@@ -1191,7 +1201,7 @@ design choice rather than an oversight. For the failure behaviour and grace peri
 Usher does not know the schema of the data it protects. It does not query the data store, run
 migrations, or write to any data table. It holds grants (user, resource, category) and issues
 Usher tokens. What those categories mean in terms of actual records or fields is
-application-specific configuration that lives in the plugin.
+application-specific configuration that lives in the adapter.
 
 This allows Usher to be adopted without modifying the data being protected, and removed without
 leaving data artifacts. It also keeps Usher generic across data formats (relational, document,
@@ -1218,7 +1228,7 @@ question to settle before any new category is promised rather than after.
 
 **Tradeoffs accepted.** Usher cannot validate that a category or resource name corresponds to
 anything real in the data layer. Misconfigured grants (referencing a nonexistent category) are
-silent. Validation is the responsibility of the management UI and the plugin configuration.
+silent. Validation is the responsibility of the management UI and the adapter configuration.
 
 ---
 
@@ -1353,8 +1363,8 @@ A resource's entry in the token is a list of grants, each naming one category an
 held on it. Each entry corresponds to one row in the grant store and one act of granting, and
 holding several means holding several grants.
 
-    "STUDY_A": { "open":       { "record": ["read", "update"] },
-                 "controlled": { "record": ["read"] } }
+    "STUDY_A": { "open":       { "record": ["view", "update"] },
+                 "controlled": { "record": ["view"] } }
 
 **Every permission is category-scoped, and open content is a category.** There is no separate
 resource-level permission list and no baseline outside the category system, because a baseline is
@@ -1364,7 +1374,7 @@ difference: an anonymous principal holding `view` on the open category where a r
 `view` and `download`, same resource, same category.
 
 **No role name and no ownership travel in the token.** A role is how access is authored; the
-controller resolves it to permissions at issuance, so no plugin learns what an instance means by
+controller resolves it to permissions at issuance, so no adapter learns what an instance means by
 `viewer`. Ownership is a management permission enforced by Usher's own API, so an enforcement
 payload has no use for it.
 
@@ -1395,7 +1405,7 @@ per-record category field, which is the precondition recorded above.
 
 ---
 
-### The bridge emits SQON; plugins translate it into their own enforcement
+### The bridge emits SQON; adapters translate it into their own enforcement
 
 The bridge builds the predicate, so the predicate needs a form every application can receive. That form
 is SQON, the shared Overture query language, and the consequence is accepted rather than avoided:
@@ -1421,6 +1431,27 @@ translation has produced none. Translating a predicate is mechanical; constructi
 Pushing the mechanical work outward to keep construction central is the deliberate trade.
 
 ---
+
+### The enforcement component is an adapter, and the bridge ships from Usher's repository
+
+**Adapter rather than plugin.** An Usher plugin reads as something that extends Usher itself. That
+is a real thing for Usher to have one day and not what is being built: the component extends an
+application, translating the permissions payload into that application's enforcement. The identity
+provider side, which the design had also called an adapter, is a connector, so each word faces one
+way.
+
+**The bridge's code lives in Usher's repository and is published from there**, and every adapter
+imports it. It belongs with the protocol it implements rather than with the first application to use
+it, and the conformance fixtures it has to satisfy sit beside it.
+
+| Component            | Package                                  | Where it lives                                   |
+| -------------------- | ---------------------------------------- | ------------------------------------------------ |
+| the bridge           | `@overture-stack/usher-express-bridge`   | `modules/express-bridge` in Usher's repository   |
+| the Arranger adapter | `@overture-stack/arranger-usher-adapter` | `modules/usher-adapter` in Arranger's repository |
+
+**Names in prose are the simple ones.** A package and its directory say more than the prose name,
+here that the first bridge serves Express applications and that the adapter belongs to both Arranger
+and Usher, and the documents call them the bridge and the Arranger adapter.
 
 ### Admin self-grant is granted by the custodians of the data being granted
 
@@ -1450,7 +1481,7 @@ first, and an administrator holds it broadly. What the data requires comes secon
 requires a custodian's grant, that grant is the final gate. It applies identically whether an
 administrator, an owner or a custodian started the request. There is no administrative path that skips the
 gate, only a broader grant to enter it, **with one exception that predates this decision and
-is not yet reconciled**: the plugin-level admin bypass in `admin-model.md` applies no filter at all
+is not yet reconciled**: the adapter-level admin bypass in `admin-model.md` applies no filter at all
 and creates no grant. It is off by default for health-data instances. Whether it may remain
 enabled where a category carries a custodian is recorded as an open item in
 [to-discuss.md](to-discuss.md).
@@ -1594,7 +1625,7 @@ Confirmed for the first instance and generalized: a catalogue's resource field i
 the data already carries, and which field plays that role is the instance's designation rather
 than a property Usher recognizes. The environmental catalogue's shape is taken as given for MVP
 purposes; if it changes, MVP is unaffected, because what matters is only that _some_ existing field
-carries the instance's collection and that the plugin is configured with its name.
+carries the instance's collection and that the adapter is configured with its name.
 
 ---
 
@@ -1680,7 +1711,7 @@ Usher resource IDs; they do not maintain their own resource registries.
 
 This scope is intentionally generic: Usher manages "resources," not "studies." What a resource
 represents (a study, a dataset, a project, a programme) is an instance concern expressed through
-the management UI's labelling and the plugin's field mapping config. The core model is the same
+the management UI's labelling and the adapter's field mapping config. The core model is the same
 regardless.
 
 **Tradeoffs accepted.** Usher must provide a resource management API in addition to its
@@ -1714,7 +1745,7 @@ Usher's model uses generic terms: resource, role, category grant. Domain-specifi
 UI labelling.
 
 An instance's own term for a resource ("study", "programme", or whatever its users say) appears in
-its portal UI and in its plugin configuration, where a field name identifies which records belong to
+its portal UI and in its adapter configuration, where a field name identifies which records belong to
 a resource. Neither the term nor the field name appears in Usher's entity schema or API responses.
 A single instance may use different terms and different fields for different bodies of data; the
 mapping is per catalogue, and it belongs in that integration's own record rather than here. Stating
@@ -1739,11 +1770,11 @@ application. To relax it, that application has to know the principal holds a lap
 grant that is not live puts nothing in the token, so absence is the only signal the application
 receives, and absence means both "your grant expired" and "you have never had any relationship
 with this resource". The two are indistinguishable at the point the refusal is written. This is not
-a gap in the plugin contract that a plugin could close by being more careful: no amount of diligence
+a gap in the adapter contract that an adapter could close by being more careful: no amount of diligence
 recovers information the token never carried.
 
-**Two plugin designs reached the same conclusion independently**, which is what surfaced it. The
-Arranger plugin types its deny arm as `reason: 'no-grants' | 'unknown-resource'` on the reasoning
+**Two adapter designs reached the same conclusion independently**, which is what surfaced it. The
+Arranger adapter types its deny arm as `reason: 'no-grants' | 'unknown-resource'` on the reasoning
 that one behaviour "is correct for a principal with no relationship to the resource and wrong for
 one who holds a lapsed or insufficient grant". Both documents concluded the lapsed case needs
 different treatment; neither could carry it.
@@ -1755,7 +1786,7 @@ into a model whose denial is absence, which is the same reasoning that removed t
 case: one state to enforce rather than two that have to be told apart. A consumer misreading the
 marker as a grant admits access, and that is the direction this design refuses to fail in.
 
-**Decided: neither the application nor its plugin does anything about a missing grant.** Gating
+**Decided: neither the application nor its adapter does anything about a missing grant.** Gating
 expiry and revocation is Usher's responsibility, so telling the affected person is too. The channel
 is the one already carrying the grant lifecycle, the same email path by which a grant is offered and
 accepted: your access to this category in this resource is about to expire, has expired, or has been
@@ -1766,7 +1797,7 @@ someone after they have hit a wall. A notice sent before expiry means they never
 removes the support burden the exception existed to prevent rather than softening it. Usher can also
 say what an application cannot: which grant, on which resource, and when.
 
-**The notices themselves are post-MVP, and the cost of that is worth stating rather than implying.**
+**The notices themselves are post-MVP, and this is what that costs.**
 MVP delivers the minimum functional requirement, which is that access actually ends when a grant
 lapses. Until the notices ship, a researcher whose approval expires gets a refusal that tells them
 nothing and no message either, so the support burden the rejected exception was meant to prevent is
@@ -1789,12 +1820,12 @@ designed yet.
 
 A category grant carries an expiry. The controller applies it when computing a permissions payload, so a
 grant past its date is absent from the next token. No per-grant expiry travels on the wire, the
-grants structure is unchanged, and a plugin never learns the concept exists: it sees a shorter list
+grants structure is unchanged, and an adapter never learns the concept exists: it sees a shorter list
 of categories than it saw before.
 
 **A token never outlives the first grant on it to expire.** Its `exp` is set to whichever comes
 sooner, the ordinary TTL or that grant's date, so a token holding a grant that lapses in ninety
-seconds is issued with ninety seconds to live. When it dies the plugin exchanges for a new one, as
+seconds is issued with ninety seconds to live. When it dies the adapter exchanges for a new one, as
 it already does at every `exp`, and the new token no longer names that grant.
 
 **This is the same resolution the token already performs for every other lifecycle state.** A pending
@@ -1808,7 +1839,7 @@ enforced rather than two that have to be told apart.
 **Nothing has to watch the clock, which is the point.** An expiry date is known when the token is
 issued, so the token can be made to stop being honoured at that moment instead of something noticing
 later and pushing a message. The clock is already being read on every request, by the `exp`
-validation every plugin performs, and that is the whole mechanism. No background job, no scheduled
+validation every adapter performs, and that is the whole mechanism. No background job, no scheduled
 sweep, and no new channel.
 
 **Which gives one rule covering both ways access narrows.**
@@ -1824,7 +1855,7 @@ principal with several grants expiring in sequence gets one short token per dead
 by the number of grants and is not a load consideration.
 
 **What it does not close.** The deadline is enforced against each side's own clock, so skew between
-the controller and a plugin shifts the moment by that skew. That is the ordinary JWT concern rather
+the controller and an adapter shifts the moment by that skew. That is the ordinary JWT concern rather
 than anything specific here, and it wants a stated tolerance during implementation rather than a
 mechanism.
 
@@ -1836,8 +1867,7 @@ one exchange, so there is nothing to trade against.
 
 **Expiring a grant narrows access and never widens it.** A principal or group loses permissions when
 a grant ends, so expiry cannot be the mechanism by which data becomes visible to anyone else. That
-constraint is what the embargo design in `permissions-model.md` violated, and it is recorded here
-because the mistake is easy to repeat: a date on a grant looks like a general-purpose scheduler and
+constraint is what the embargo design in `permissions-model.md` violated, and the mistake is easy to repeat: a date on a grant looks like a general-purpose scheduler and
 is only ever a scheduled subtraction.
 
 ---
@@ -1845,14 +1875,14 @@ is only ever a scheduled subtraction.
 ### Additive grant pipeline with anonymous Usher token for open data
 
 A common alternative for open data is to handle unauthenticated requests outside the
-authorization system: the plugin applies an exclusion filter for all sensitive categories, no
+authorization system: the adapter applies an exclusion filter for all sensitive categories, no
 token exchange occurs, and open access is unlogged. This creates two code paths (authenticated
 vs. anonymous) and leaves open access invisible to the audit trail.
 
 Usher issues an Usher token for every request, including unauthenticated ones. For anonymous
 users the controller computes only the open-data tier (no IdP token validation, no role
 lookup): the result is an Usher token containing only open-resource grants. The bridge and
-plugin handle this token identically to an authenticated one.
+adapter handle this token identically to an authenticated one.
 
 Permission computation is additive across three tiers, always in order:
 
@@ -1930,8 +1960,7 @@ catalogues may be configured over one index: `catalogueId` is the only identity 
 nothing compares those names across catalogues. Deleting a catalogue removes configuration and no
 data, since Arranger has no code path that deletes a data index; the one `indices.delete` on anything
 resembling one targets the deprecated project metadata index. And a catalogue is configuration rather
-than storage, which Arranger's published documents state directly. One limit is worth recording: the
-absence of the constraint is established from Arranger's code rather than from a deployed instance of
+than storage, which Arranger's published documents state directly. One limit: the absence of the constraint is established from Arranger's code rather than from a deployed instance of
 two catalogues sharing an index, so the claim is that nothing prevents it.
 
 **Arranger reached the same shape independently, which is the stronger half of the evidence.**
@@ -1971,7 +2000,7 @@ everyone, which is empty where none are, and a request against a resource carryi
 renders to an `in` naming that resource. Two states that previously produced the same absent filter
 now produce different value lists, and neither can produce match-all.
 
-The plugin returning nothing is therefore a defect rather than a shorthand. Where a plugin has no
+The adapter returning nothing is therefore a defect rather than a shorthand. Where an adapter has no
 filter to apply it has failed to compute one, and the correct behaviour is the 503 path rather than
 an unfiltered query.
 
@@ -2001,7 +2030,7 @@ refusal is where the conformance case belongs.
 ### `open` is the default category, and it is abstract where the others are concrete
 
 **Every other category is concrete: it is defined by a field value records carry.** A record is
-`controlled` because some field on it says so, and the plugin can therefore render it as a positive
+`controlled` because some field on it says so, and the adapter can therefore render it as a positive
 clause naming that value. `open` has no such value. It stands for whatever the concrete categories do
 not cover, which makes it abstract and complement-shaped, and it is the single default.
 
@@ -2046,6 +2075,10 @@ already holds, rather than invented here. `view` becomes `read` and `edit` is re
 creation and modification, and its single appearance in this corpus argued for a read and write split
 rather than for that particular word.
 
+**`view` came back, as one member of `read`.** Seeing a record is `view` again, and `read` is the
+capability group of the read-shaped capabilities; see the decision that follows this one. The four
+names above are still the four acts, and `read` among them now means the group.
+
 **They are granted independently, and no role is a rung above another.** A grant may carry any subset.
 Not every ushered service offers all four, and one that serves no writes offers none of the last
 three, which is the same rule that already governs a service offering `download` it cannot perform.
@@ -2065,25 +2098,65 @@ enforcement. It does not close the other half: such a submitter still reads ever
 resource they hold a grant on.
 
 **`download` became `export`, and it ships.** The earlier position held it back as an example of a
-capability an instance adds beyond the CRUD four, on the reasoning that how an instance tells a
-plugin what `download` means was not worked out. The rename settled half of that: `download` names a
+capability an instance adds beyond the CRUD four, on the reasoning that how an instance tells an
+adapter what `download` means was not worked out. The rename settled half of that: `download` names a
 transport and varies, while `export` names the act and does not. The rest is now a seeding decision
 rather than a vocabulary one, so `record` carries six actions and `export` is among them.
 
 **It is seeded into `viewer`, `editor` and `curator`**, which is more honest than withholding it. The
-split between reading and exporting was never a confidentiality boundary: anyone who can read a
+split between viewing and exporting was never a confidentiality boundary: anyone who can view a
 column through ordinary results can page through and assemble the same extract by hand. What the
 split gives is rate and auditability, and those are worth having without pretending they withhold the
-value. Roles that genuinely should not export are the ones that do not read at all, `surveyor` and
-`submitter`, and for them the absence means something.
+value. The role that genuinely should not export is the one that views no records, `submitter`, and
+for it the absence means something.
 
 **Seeding it that way also shrinks an exposure rather than creating one.** Enforcement on the export
-path is unbuilt, so a plugin serving exports ungated is the state of the world either way. With
+path is unbuilt, so an adapter serving exports ungated is the state of the world either way. With
 `export` held back, every `viewer` grant would have implied a restriction that nothing applied, which
-is the severe direction of the unimplemented-capability rule. Seeded, the only roles whose absence of
-`export` means anything are two that hold no read either, so there is almost nothing left to fail
+is the severe direction of the unimplemented-capability rule. Seeded, the only role whose absence of
+`export` means anything is one that views nothing either, so there is almost nothing left to fail
 open. It stays declared-unenforced until the export path is gated, which is a fact the reconciliation
 check can report rather than a silence.
+
+### `read` is a group of three, `count` counts only, and aggregation is not a capability
+
+**`read` became a capability group, and `view` came back to name seeing a record.** On a record or a
+field the group is `count`, `view` and `export`; on a revision or an artifact it is `view` and
+`export`; on a control-plane entity it is `view` alone. It is expanded when a role is written, so no
+token carries it and no adapter tests for it. The vocabulary is in
+[permissions-model.md](permissions-model.md#data-plane).
+
+**What it fixes is one word doing two jobs.** `read` was the R in create, read, update and delete
+and also the specific act of seeing a record, so "the two planes are the same four acts" held only
+at the coarse grain while the seeded matrix showed six capabilities. With the group both grains hold
+at once: `curator` carries four acts and six capabilities, and neither statement contradicts the
+other.
+
+**`aggregate` became `count`, and the name is made true by narrowing what it permits.** `aggregate`
+governed whether records or a field contributed to aggregations of any kind, and not every
+aggregation is a count: `min` and `max` return a field's extreme values and `top_hits` returns
+records. Renamed without narrowing, `count` would have granted the extremes of a sensitive numeric
+field to a role described as counting. So `count` permits counts only, and anything returning a
+value or a record needs `view`.
+
+| Option     | On records | On fields                          | Why not                                                    |
+| ---------- | ---------- | ---------------------------------- | ---------------------------------------------------------- |
+| A          | `count`    | `count`, meaning every aggregation | the name misleads, which is what the rename existed to fix |
+| B          | `count`    | `aggregate`, kept                  | one concept with two names across entities                 |
+| C, adopted | `count`    | `count`, meaning counts only       |                                                            |
+
+**Aggregation is the operation, and it consults whichever capability fits what each aggregation
+returns.** Making `aggregate` a group of `count` and `view` was rejected: a role meant for summary
+statistics would hold `view` and so see every record, the name promising less than it grants. As the
+operation, nothing named `aggregate` is ever granted, so nothing is granted by it by accident.
+
+**No seeded role holds `count` alone, and the name `surveyor` moves to a later role.** The discovery
+role expected to be needed first views a bounded number of records and counts nothing, and it is
+post-MVP. Seeding `surveyor` now as a count-only role and redefining it later would widen every
+grant naming it, since a grant confers what its role carries at issuance, so the name waits for the
+role it will mean.
+
+**One consequence follows.** A principal holding `count` alone sees totals and no facets, since a facet lists its buckets and each bucket's key is a value. What serving such a principal would take is research, in [count-only principal](../docs/atlas/roadmap/count-only-principal.md).
 
 ---
 
@@ -2093,7 +2166,7 @@ check can report rather than a silence.
 has marked controlled, and the set is the same whoever asks.
 
 **A principal-relative category selects different records for each asker.** `own` names the records
-whose submitter field holds the identity of whoever is asking. The plugin already maps a category to
+whose submitter field holds the identity of whoever is asking. The adapter already maps a category to
 a field, and it already holds the asking principal's identity, so it can render this without Usher
 learning the field name or any value in it. It fails closed in the ordinary way, since a record
 missing that field matches nothing.
@@ -2116,8 +2189,8 @@ the reason for it.
 categories do not cover, so a field category that classifies without partitioning leaves `basic`
 untouched and a column can be both basic and flagged.
 
-**It lives in plugin configuration and has no counterpart in Usher**, for the reason `kind` does not:
-what a category selects is the plugin's mapping, and Usher can neither know nor verify it. It differs
+**It lives in adapter configuration and has no counterpart in Usher**, for the reason `kind` does not:
+what a category selects is the adapter's mapping, and Usher can neither know nor verify it. It differs
 from `kind` in one way that matters. A grant's column says which axis a category scopes, so position
 encoded that one; nothing about a grant distinguishes a partitioning category from an overlay, since
 both sit in `record_category_id`. So this is one more field in the mapping that already says what
@@ -2127,7 +2200,7 @@ each category selects, and there is nowhere else it could go.
 partitioning and `open` empties: loud, immediate, and impossible to miss. Mark a partitioning
 category as an overlay and the complement no longer excludes it, so `open` now covers the records it was
 meant to remove, and every principal holding the open grant reaches controlled data. Nothing
-downstream can notice, because the clause is well-formed and the token is correct; only the plugin's
+downstream can notice, because the clause is well-formed and the token is correct; only the adapter's
 own configuration holds the mistake. **That makes it a sixth condition for the reconciliation check,
 and an unusual one: not a mismatch between two declarations, but a single declaration that is wrong.**
 
@@ -2145,7 +2218,7 @@ which makes it deferred rather than unbuildable.
 **One decision to revisit when `own` is built.** "A self-scoping predicate is not an access decision"
 says Usher is not involved in questions the record and the identity answer between them, and that
 routing them through Usher is a mistake. `own` routes one through Usher deliberately, with the work
-split: Usher decides whether someone may reach their own records here, and the plugin resolves which
+split: Usher decides whether someone may reach their own records here, and the adapter resolves which
 records are theirs. That split is compatible with the reasoning and not with the sentence, so the
 sentence needs narrowing at that point rather than now.
 
@@ -2255,24 +2328,25 @@ Incompleteness is not falsehood, and "not yet" is not "not".
 ### An unimplemented capability fails closed only where the action has no path
 
 The vocabulary is deliberately wider than any one service implements, on the reasoning that a
-capability a plugin does not understand is never tested and so nothing opens. That is true of most of
-them and false of a specific class, and the class is worth naming because the wide vocabulary is
+capability an adapter does not understand is never tested and so nothing opens. That is true of most of
+them and false of a specific class, and the class matters because the wide vocabulary is
 otherwise a good decision resting on a rule with an unmarked exception.
 
 **The rule holds where a capability permits.** `record.delete` in the vocabulary and no delete path
 in the service means there is nothing to reach. Absence of the path is the enforcement.
 
 **It inverts where a capability's _absence_ restricts a path the service already serves.** The
-service is answering already; the capability exists to narrow that answer; a plugin that does not
+service is answering already; the capability exists to narrow that answer; an adapter that does not
 check it narrows nothing. Holding the capability is not what opens the door, so not checking it does
 not close one.
 
-| Capability                                          | Absent and unimplemented                | Direction                                                           |
-| --------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------- |
-| `record.delete`                                     | no delete path exists                   | closed                                                              |
-| `record.aggregate`, held without it but with `read` | counts are served anyway                | open, and mild: a count over records the principal may already read |
-| `record.aggregate`, held without `read`             | the discovery tier is simply not served | closed                                                              |
-| `field.read` on a restricted column                 | every column is served                  | **open, and severe**                                                |
+| Capability                                                                       | Absent and unimplemented                                                                                                      | Direction                                                           |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `record.delete`                                                                  | no delete path exists                                                                                                         | closed                                                              |
+| `record.count`, held without it but with `view`                                  | counts are served anyway                                                                                                      | open, and mild: a count over records the principal may already view |
+| `record.count`, held without `view`                                              | the discovery tier is simply not served                                                                                       | closed                                                              |
+| `view`, on an aggregation returning values, for a principal holding only `count` | unreachable while the discovery tier is unserved; once served, an adapter checking `count` alone returns extremes and buckets | closed today, and **open** if the tier ships without the check      |
+| `field.view` on a restricted column                                              | every column is served                                                                                                        | **open, and severe**                                                |
 
 **The severe row is why field restriction carries the weight it does.** A field capability exists
 only to withhold, so a service that has not implemented it withholds nothing, and the grant reads as
@@ -2281,7 +2355,7 @@ means no partition rather than no columns, so the absence is honest rather than 
 and field restriction is a seam change rather than a configuration one, so a service cannot be
 half-way to having it.
 
-**And it is the strongest argument for the controller retaining what each plugin declared.** Without
+**And it is the strongest argument for the controller retaining what each adapter declared.** Without
 retention, a grant naming a capability its audience does not implement is writable, and the mistake
 surfaces at query time as an unenforced restriction rather than at authoring time as a refusal. The
 same holds one level down for a grant naming a field no catalogue has: the clause built from it
@@ -2294,21 +2368,22 @@ mistake into a silent widening on the one category every principal holds.
 
 Recorded as a test rather than as history, because it predicts where the next one is.
 
-| What was collapsed                | How it showed up                                                          |
-| --------------------------------- | ------------------------------------------------------------------------- |
-| Scope into the role               | A role held per resource, separate from the grant that scoped it          |
-| Records into the resource         | A category gating a whole resource instead of selecting records within it |
-| Two planes into a ladder          | `curator` retired by resolving it to "an owner or a viewer"               |
-| Meaning into the name             | A `kind` on the category, asserting in Usher what only a plugin decides   |
-| Scope into the role, again        | Field restriction as a role-by-column matrix                              |
-| The plugin's knowledge into Usher | A `field_categories` table holding field names Usher never learns         |
-| The entity out of the capability  | Bare actions in the token, unreadable once two entities share one         |
-| Two things into one borrowed word | `set` meaning both a saved set and whatever else a reader brought         |
+| What was collapsed                 | How it showed up                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| Scope into the role                | A role held per resource, separate from the grant that scoped it                         |
+| Records into the resource          | A category gating a whole resource instead of selecting records within it                |
+| Two planes into a ladder           | `curator` retired by resolving it to "an owner or a viewer"                              |
+| Meaning into the name              | A `kind` on the category, asserting in Usher what only an adapter decides                |
+| Scope into the role, again         | Field restriction as a role-by-column matrix                                             |
+| The adapter's knowledge into Usher | A `field_categories` table holding field names Usher never learns                        |
+| The entity out of the capability   | Bare actions in the token, unreadable once two entities share one                        |
+| Two things into one borrowed word  | `set` meaning both a saved set and whatever else a reader brought                        |
+| Two acts into one word             | `read` meaning both the R in CRUD and seeing a record, so four acts met six capabilities |
 
 **The test.** Does this put two independent questions in one slot? Each row above reads as a
 simplification at the time and as a conflation afterwards, and the tell is always the same: one field
 answering a question that belongs to something else. Roles answer what acts are possible; categories
-answer which data; plugins answer what a category means; entities answer what an action acts on.
+answer which data; adapters answer what a category means; entities answer what an action acts on.
 A design where any of those four answers another is the shape to look for.
 
 **It also explains why the corrections cluster.** Undoing one collapse tends to expose the next,
@@ -2353,8 +2428,12 @@ the empty cell is a statement rather than an omission.
 control-plane role: create, read, update and delete on **access** to one resource. Both carry the
 same four acts, and what separates them is the object, not the breadth.
 
-    curator   CRUD on the records a grant reaches
+        curator   CRUD on the records a grant reaches
     owner     CRUD on who may reach one resource
+
+**Exact at both grains, because `read` is a capability group.** On records it is `count`, `view` and
+`export`, so `curator` holds six capabilities under four acts; on access it is `view` alone. The
+asymmetry between the planes is real, and it lies in the members rather than in the acts.
 
 **No role is a point on a scale.** Viewer to curator to owner reads as a ladder and is not one: an
 owner reads nothing by being an owner, and a curator grants nothing by being a curator. Documents

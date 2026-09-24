@@ -42,16 +42,16 @@ leaves the others contradicting it, so treat rows 1 and 2 as single edits across
 happened rather than only a list of what is left. Four of the eight items are now closed, verified against
 the files rather than from memory of having fixed them.
 
-| What a doc says                                                            | Where                                                          | Why it is wrong                                                                                                              |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| ~~The plugin builds the query filter~~ **CLOSED**                          | `decisions.md`, `architecture.md` (4 sites)                    | The bridge builds it. Both files also say the other thing elsewhere, so they contradict themselves                           |
-| The plugin receives a `PermissionsPayload`                                 | `plugin-integration.md` (4), `architecture.md` (3)             | It receives the three-way answer. Handing it a payload is what makes plugins build their own filters                         |
-| The plugin subtracts held categories from its own config to get exclusions | `glossary.md` (3 entries), `security-workflow.md` (2 passages) | This is the fail-open path. No grants means nothing to subtract, which means no filter, which means everything               |
-| ~~Single-valued because the data model guarantees it~~ **CLOSED**          | `decisions.md`                                                 | `permissions-model.md` says records can belong to several cohorts. It is a precondition to check at startup, not a guarantee |
-| ~~Deny the request with 401 or 403~~ **CLOSED**                            | `plugin-integration.md`                                        | `decisions.md` says a 403 confirms the resource exists. The plugin picks the response shape                                  |
-| Admin bypass skips the filter                                              | `admin-model.md` (3 places)                                    | Skipping is the thing we prohibited. This is what `allow` is for                                                             |
-| ~~A catalogue maps to one resource~~ **CLOSED**                            | `glossary.md`                                                  | Then no field predicate would be needed. One catalogue holds many resources                                                  |
-| ~~The worked example's outcomes are unchanged~~ **CLOSED**                 | `permissions-model.md`                                         | They change. A viewer missing one of a resource's categories now sees nothing there, not a filtered subset                   |
+| What a doc says                                                             | Where                                                          | Why it is wrong                                                                                                              |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| ~~The adapter builds the query filter~~ **CLOSED**                          | `decisions.md`, `architecture.md` (4 sites)                    | The bridge builds it. Both files also say the other thing elsewhere, so they contradict themselves                           |
+| The adapter receives a `PermissionsPayload`                                 | `adapter-integration.md` (4), `architecture.md` (3)            | It receives the three-way answer. Handing it a payload is what makes adapters build their own filters                        |
+| The adapter subtracts held categories from its own config to get exclusions | `glossary.md` (3 entries), `security-workflow.md` (2 passages) | This is the fail-open path. No grants means nothing to subtract, which means no filter, which means everything               |
+| ~~Single-valued because the data model guarantees it~~ **CLOSED**           | `decisions.md`                                                 | `permissions-model.md` says records can belong to several cohorts. It is a precondition to check at startup, not a guarantee |
+| ~~Deny the request with 401 or 403~~ **CLOSED**                             | `adapter-integration.md`                                       | `decisions.md` says a 403 confirms the resource exists. The adapter picks the response shape                                 |
+| Admin bypass skips the filter                                               | `admin-model.md` (3 places)                                    | Skipping is the thing we prohibited. This is what `allow` is for                                                             |
+| ~~A catalogue maps to one resource~~ **CLOSED**                             | `glossary.md`                                                  | Then no field predicate would be needed. One catalogue holds many resources                                                  |
+| ~~The worked example's outcomes are unchanged~~ **CLOSED**                  | `permissions-model.md`                                         | They change. A viewer missing one of a resource's categories now sees nothing there, not a filtered subset                   |
 
 ---
 
@@ -84,7 +84,7 @@ second layer, not the mechanism.
 
 - Four passages in `docs/concepts.md` say categories mark subsets of records or fields inside a
   resource. For MVP they mark whole resources.
-- `docs/intro.md` says categories map to records or fields in plugin config. Only the resource field
+- `docs/intro.md` says categories map to records or fields in adapter config. Only the resource field
   is mapped.
 - `docs/concepts.md` presents overlapping cohorts as a live feature, with one record in two cohorts
   at once. MVP cannot express that.
@@ -103,7 +103,7 @@ If that is true, any bridge can decrypt any application's token and audience sep
 string comparison.
 
 Affected: `architecture.md`, `security-workflow.md`, `security-threat-model.md`,
-`plugin-integration.md`, `.dev/design/README.md`.
+`adapter-integration.md`, `.dev/design/README.md`.
 
 The same phrasing also contradicts the threat model, which prescribes asymmetric key wrap. Fixing
 it toward per-application asymmetric keys settles both. The controller then holds only public keys,
@@ -118,7 +118,7 @@ This is a find-and-replace over known phrases. The design question was already s
 Five items live only in documents that close, or in no document at all.
 
 **`phase-1.md` cannot be found.** It is untracked in git, absent from `atlas/index.md`, and linked
-from nowhere. It holds the design lock, the Nov 15 requirements, and the corpus design.
+from nowhere. It holds the Nov 15 requirements and the corpus design.
 
 **Three risks have no entry anywhere.** Not in `roadmap.md`, not in `tech-debt.md`, not in the
 atlas:
@@ -143,7 +143,7 @@ cite it. Leaving it as an unowned requirement is worse than either.
 is now unblocked.
 
 **The audit log cannot record what the enforcement layer decides.** No event exists for deny,
-narrow, or allow. The plugin-side table uses a `filter_applied` boolean, which cannot tell `allow`
+narrow, or allow. The adapter-side table uses a `filter_applied` boolean, which cannot tell `allow`
 from `narrow`. Telling those apart is the only reason `allow` exists.
 
 **Two audit schemas describe one log stream.** `admin-model.md` and `audit-events.md` disagree on
@@ -160,8 +160,8 @@ and service-account events that `admin-model.md` promises.
 | Blocker 6 is blocked on 3 and 5                      | `phase-1.md`                              | Only 5 remains                                                                                                         |
 | Blocker 7 asks for EGO's token TTL                   | `phase-1.md`                              | EGO is going away. Ask for the IdP's access token TTL                                                                  |
 | Blocker 1's heading claims highest risk              | `phase-1.md`                              | It is resolved, and its premise was wrong. Collapse the 130 lines above the conclusion                                 |
-| The plugin is called middleware                      | `roadmap.md`, `technology-stack.md`       | It is a callback factory. Arranger retracted "middleware" after reading the router code, in a decision we took part in |
-| The plugin runs in the search server                 | `phase-1.md`                              | It runs in `graphql-router`                                                                                            |
+| The adapter is called middleware                     | `roadmap.md`, `technology-stack.md`       | It is a callback factory. Arranger retracted "middleware" after reading the router code, in a decision we took part in |
+| The adapter runs in the search server                | `phase-1.md`                              | It runs in `graphql-router`                                                                                            |
 | Two different Usher token TTL defaults               | `docs/concepts.md`, `phase-1.md`          | Pick one; derive the other                                                                                             |
 | HTTP framework listed as open                        | `atlas/index.md`, `roadmap.md`            | Fastify, decided                                                                                                       |
 | Logging library listed as unconfirmed                | `technology-stack.md`                     | Pino, and the same file says so                                                                                        |
@@ -174,7 +174,7 @@ establish-by-execution rule is in three. The user-ID-not-email rule is in three.
 and link to it.
 
 **Broken references.** A cross-reference to a roadmap entry that does not exist. A wrong path to
-Arranger's plugin design doc. A line-number citation off by fifty lines. A bypass-path count that
+Arranger's adapter design doc. A line-number citation off by fifty lines. A bypass-path count that
 predates a larger audit. A "next step" that already happened.
 
 **Copyedit.** Two identical empty headings in `permissions-model.md`. Alphabetization broken in four
@@ -194,7 +194,7 @@ into `.dev/design/`, which is written for agents.
 
 please
 
-The `audit-events.md` case is the worst of them. It makes a plugin's field name and field value
+The `audit-events.md` case is the worst of them. It makes an adapter's field name and field value
 required fields on an Usher audit event. Usher has no way to know either, so the event cannot be
 emitted as specified.
 
@@ -212,9 +212,9 @@ Rewrite in this order. Human-facing first, weighted by how many people read the 
 | ------------------------------------------------ | ------------- | --------------------------------------------------------------------------------- |
 | `docs/concepts.md`                               | 58            | Published, written for readers without auth expertise, and the flagship explainer |
 | `.dev/design/decisions.md`                       | 75            | Highest count in the repository, and it is read to make decisions                 |
-| `.dev/docs/phase-1.md`                           | 48            | Holds the design lock and the Nov 15 requirements                                 |
+| `.dev/docs/phase-1.md`                           | 48            | Holds the Nov 15 requirements                                                     |
 | `.dev/design/permissions-model.md`               | 63            | The model everything else refers back to                                          |
-| `.dev/design/plugin-integration.md`              | 44            | The contract an implementer works from                                            |
+| `.dev/design/adapter-integration.md`             | 44            | The contract an implementer works from                                            |
 | `.dev/design/admin-model.md`                     | 41            | Also the largest cluster of instance detail to relocate                           |
 | `.dev/design/to-discuss.md`                      | 37            | Its whole purpose is being scannable                                              |
 | `.dev/design/security-workflow.md`               | 34            | Also carries the superseded JWE rationale                                         |

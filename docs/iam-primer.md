@@ -159,7 +159,7 @@ in the Usher design and are worth knowing before reading the design documents:
   Usher is the PDP.
 - **[PEP](concepts.md#pep-policy-enforcement-point) (Policy Enforcement Point):** the component that enforces the decision. It intercepts data
   requests, applies the constraints the PDP returned, and ensures the user only receives what they
-  are permitted to see. In Usher, each application's plugin is the PEP.
+  are permitted to see. In Usher, each application's adapter is the PEP.
 - **[PAP](concepts.md#pap-policy-administration-point) (Policy Administration Point):** the interface through which administrators define and
   manage policy: who has access to what. Usher's management UI (planned) is the PAP.
 

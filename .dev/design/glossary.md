@@ -74,20 +74,36 @@ the computation itself.
 
 **PEP (Policy Enforcement Point)**
 The component that intercepts requests and enforces the access decision at the point of data
-access. In Overture, each application has its own PEP implemented as a plugin. The PEP does not
-decide: it enforces what the PDP computed. See [plugin-integration.md](plugin-integration.md).
+access. In Overture, each application has its own PEP implemented as an adapter. The PEP does not
+decide: it enforces what the PDP computed. See [adapter-integration.md](adapter-integration.md).
 
-**PEP plugin**
-An app-specific library built on `usher-bridge` that translates the permissions payload into the
-app's native filter format. Examples: `usher-arranger` (permissions payload to SQON),
-`usher-lyric` (permissions payload to Lyric query conditions).
+**Adapter** _(PEP adapter)_
+An application-specific library built on the bridge that translates the permissions payload into the
+application's native filter format. The first is the Arranger adapter, published as
+`@overture-stack/arranger-usher-adapter`, which turns the payload into SQON; the Lyric adapter,
+turning it into Lyric query conditions, follows.
 
-**`usher-bridge`**
-The shared library that implements the Usher protocol in applications: token exchange with
-the controller, local caching, Usher token decryption and validation, revocation channel
-maintenance, and fail-secure session suspension. All PEP plugins build on top of it. Named for
-the drawbridge analogy: open when the controller connection is healthy, raised (returning 503)
-when it is not.
+**Disambiguation note:** Named adapter rather than plugin, because an Usher plugin would read as
+something that extends Usher itself, which nothing does yet. Unrelated to a **connector**, which
+faces an identity provider rather than an application. A package's name can say more than the prose
+name does: the Arranger adapter's package names both the application and Usher, and prose calls it
+the Arranger adapter.
+
+**Bridge**
+The shared library that implements the Usher protocol in applications: token exchange with the
+controller, local caching, Usher token decryption and validation, revocation channel maintenance,
+and fail-secure session suspension. Every adapter builds on it. Named for the drawbridge analogy:
+open when the controller connection is healthy, raised (returning 503) when it is not.
+
+Published as `@overture-stack/usher-express-bridge`, from `modules/express-bridge` in Usher's own
+repository, which is created when implementation begins. The package and its directory name Express
+because the first bridge serves Express applications; prose calls it the bridge.
+
+**Connector**
+The part of Usher that reads an identity provider's token and finds what it needs there, such as the
+platform-admin signal: the Keycloak connector by default, and a generic OIDC connector for other
+providers. See [admin-model.md](admin-model.md). Unrelated to an adapter, which faces an
+application.
 
 ---
 
@@ -96,12 +112,12 @@ when it is not.
 **Audience**
 The target service for which an Usher token is issued, for example a specific Arranger
 instance. A token is scoped to one audience; Usher includes only the resources managed by that
-audience in the token, keeping the token focused and the plugin's job simple. Modelled on the
+audience in the token, keeping the token focused and the adapter's job simple. Modelled on the
 `aud` claim in OAuth 2.0 Token Exchange (RFC 8693).
 
 **Usher token** _(permissions token)_
 A JWE-encrypted token issued by Usher carrying a principal's permissions for one service. Cached by
-the plugin for its TTL; decrypted and validated locally on each subsequent request without a
+the adapter for its TTL; decrypted and validated locally on each subsequent request without a
 round-trip to Usher. See [security-workflow.md](security-workflow.md).
 
 **`generatedAt`**
@@ -115,7 +131,7 @@ matching the resources' current ones.
 **`PermissionsPayload`**
 The decrypted contents of an Usher token, and the single definition the controller, the bridge and
 the conformance fixtures all consume. Written member by member in
-[security-workflow.md](security-workflow.md#the-payload-as-a-type). The bridge hands one to a plugin
+[security-workflow.md](security-workflow.md#the-payload-as-a-type). The bridge hands one to an adapter
 after decryption, so "the payload" and "the decrypted token" name the same object.
 
 **`payloadVersion`**
@@ -133,10 +149,10 @@ profile would be the confusion the parameter exists to prevent. See the RFC 9068
 
 **IdP token (bearer token)**
 A JWT issued by the IdP identifying the authenticated user. Short-lived. Passed by the client
-application to the PEP plugin, which presents it to Usher's token exchange endpoint.
+application to the PEP adapter, which presents it to Usher's token exchange endpoint.
 
 **JWE (JSON Web Encryption)**
-An encrypted JWT. Usher tokens use JWE so that the plugin can decrypt and validate them
+An encrypted JWT. Usher tokens use JWE so that the adapter can decrypt and validate them
 locally, while preventing the end user from reading their own grants. Contrast with JWS
 (signed but readable by anyone holding the token).
 
@@ -145,7 +161,7 @@ The container format for both IdP tokens (signed JWS) and permissions payloads (
 The two are structurally similar but serve different purposes and must not be confused.
 
 **TTL (time-to-live)**
-How long a cached Usher token is considered valid before the plugin must request a fresh one
+How long a cached Usher token is considered valid before the adapter must request a fresh one
 from Usher's exchange endpoint.
 
 ---
@@ -171,7 +187,7 @@ The entries below are alphabetical, because a glossary is looked up more often t
 
 **A resource's permission list** _(the value against each resource in an Usher token)_
 A list of the grants a principal holds on that resource, each naming one category and the
-permissions it carries, such as `{ "controlled": { "record": ["read"] } }`. Only grants the principal holds
+permissions it carries, such as `{ "controlled": { "record": ["view"] } }`. Only grants the principal holds
 appear, so a category they lack is absent rather than named, revealing nothing about what exists.
 The list never appears empty: holding no grant on a resource means what the resource being absent
 already means, which is no access.
@@ -192,10 +208,25 @@ the grant without answering it. Off by default; the default flow requires an exp
 person the grant reaches. Enable for instances where explicit acceptance is not operationally
 appropriate (machine-to-machine sharing, internal pipelines). See [permissions-model.md](permissions-model.md).
 
+**Bucket**
+One of a facet's values, as the facet lists it: `sex` is the facet, and `male` and `female` are its
+buckets.
+
+A bucket has a key, the field value naming it, and a count, the number of records holding that
+value. Showing the key needs `view` and the count needs `count`, so a
+bucket is not one permissioned unit: a principal holding `count` without `view` may have the number
+beside `male` and not the word. A facet over a numeric field lists
+ranges of values rather than single ones, and the same holds. See
+[permissions-model.md](permissions-model.md#data-plane).
+
+**Disambiguation note:** In a key-value reading the count is the bucket's value. This corpus calls
+it the count, because "value" already names what a field holds, and a bucket's key is that value.
+Unrelated to an object-storage bucket, such as an S3 bucket.
+
 **Capability**
 Possible action a service offers.
 
-Written `entity.action` and displayed as the action alone. `record.read` and `record.export` are
+Written `entity.action` and displayed as the action alone. `record.view` and `record.export` are
 things an ushered service can do with data; `grant.revoke` is something Usher's own admin API can do.
 A capability belongs to whichever service offers it, so Usher ships a vocabulary of them as defaults
 and an instance may add to it.
@@ -204,7 +235,25 @@ and an instance may add to it.
 `resource.create` is control plane, and both are "create". The baseline vocabulary and the reasoning
 behind each entry are in [permissions-model.md](permissions-model.md).
 
+**Capability group**
+A name for several capabilities of one entity together, used where roles are written. `read` is the
+one the vocabulary ships: `count`, `view` and `export` on a record or a field, `view` and `export`
+on a revision or an artifact, and `view` alone on a control-plane entity.
+
+Expanded into its members when a role is written, so no capability is named `read`, no token carries
+it and no adapter tests for it. See [permissions-model.md](permissions-model.md#data-plane).
+
+**Disambiguation note:** Unrelated to a **Group**, which is a set of people a grant can name. A
+capability group is a set of capabilities a role can name, and the two never meet.
+
+**Count**
+The number of records a query or one bucket matches, and what the `count` capability governs.
+
+A principal holding `count` without `view` receives counts and no records. What they may count by,
+and whether rounding applies, is research, in [count-only principal](../docs/atlas/roadmap/count-only-principal.md).
+
 **Entity**
+
 What a capability acts on: the first segment of its name.
 
 `record`, `field`, `revision` and `artifact` are data-plane entities, held by the ushered
@@ -236,7 +285,7 @@ which needs no reservation.
 
 One vocabulary, reached two ways. A **role** bundles permissions and is how access is authored; a
 **grant entry** names the ones held on one category and is how access is enforced. The controller
-resolves the first into the second at issuance, which is why no role name reaches a plugin.
+resolves the first into the second at issuance, which is why no role name reaches an adapter.
 
 **Which permissions each role carries is an open design item**, so the resolution above describes a
 mechanism with nothing behind it today: roles are currently names carrying no verbs, and a grant's
@@ -389,13 +438,21 @@ Its own entity on the data plane, because reaching an artifact is not reaching i
 read of one is checked against the reader's own grants, which is why handing someone an artifact
 confers nothing and no capability governs doing so. A saved set is the first kind of one.
 
+**Facet**
+A field offered as a filter in a search interface, listing its buckets so that choosing one narrows
+the result.
+
+The facet panel is the part of an interface that holds them. For a principal who views records,
+choosing a bucket narrows a table; for one holding only `count` it narrows a count, since there are
+no records to show.
+
 **Field**
 One part of a record, and an entity on the data plane in its own right.
 
-A category scopes fields the way another scopes records, so `field.read` reaches the columns a field
-category covers while `record.read` reaches whole records. It carries no `create` or `delete`, since
-a field exists per schema rather than per grant, and `field.aggregate` is separate from `field.read`
-because a column can be withheld from a result and still be countable through a facet. Post-MVP.
+A category scopes fields the way another scopes records, so `field.view` reaches the columns a field
+category covers while `record.view` reaches whole records. It carries no `create` or `delete`, since
+a field exists per schema rather than per grant, and `field.count` is separate from `field.view`
+because counting records by a column's values discloses less than showing them. Post-MVP.
 
 **Record**
 One row of data in a catalogue, which is what access is ultimately about. Records live in the
@@ -405,7 +462,7 @@ applications Usher serves; Usher's own store holds grants.
 A prior state of a record, where the service keeps them, and an entity on the data plane.
 
 A submission service has revisions and a search index does not, so a search token never carries
-`revision.*`. It carries `read` and `export` only: a revision is produced by updating a record rather
+`revision.*`. It carries `view` and `export` only: a revision is produced by updating a record rather
 than authored, and prior states are immutable. Deleting one is erasure, which meets the append-only
 audit trail and is unresolved. Post-MVP.
 
@@ -432,7 +489,7 @@ Where the holder is a group, the role is still the grant's, and every member of 
 the records that grant names, at that role.
 
 A role is how access is authored rather than how it is enforced, so the controller resolves it to the
-permissions it carries before writing an Usher token and no role name reaches a plugin.
+permissions it carries before writing an Usher token and no role name reaches an adapter.
 
 **A grant's permissions are held per category** rather than across a resource, which is what lets
 one grant permit changing records while another permits only reading them. A role's permissions work the other
@@ -533,7 +590,7 @@ midnight fall in one rolling hour, where two fixed hours would split them into s
 ## Integration concepts
 
 **Complement**
-The resources a principal lacks, from among those this instance is configured for. A plugin
+The resources a principal lacks, from among those this instance is configured for. An adapter
 computes it at startup, from its own configuration minus the resources the token names, and tests a
 derived artifact against it: an artifact survives exactly when it requires none of them. Local rather
 than platform-wide, which is what keeps Usher from having to name resources a principal does not
@@ -547,7 +604,7 @@ decryption failure, and a resource absent from the Usher token all produce denia
 **Field, field name, value**
 A **field** is the whole key-and-value unit a record carries. Its **field name** is the key, and its
 **value** is what that record holds there. A filter names a field by its field name and tests its
-value, which is why plugin configuration stores names: a name is what identifies the same field
+value, which is why adapter configuration stores names: a name is what identifies the same field
 across every record.
 
 **A variable is named for what it holds, and its type supports that name rather than supplying it.**
@@ -566,27 +623,27 @@ object. They come apart at the second grant: the filter becomes a union of claus
 its own predicate, and each clause is itself a conjunction of a resource test and a category test.
 
 **Grace period**
-The configurable window after the revocation channel goes silent before the plugin enters
+The configurable window after the revocation channel goes silent before the adapter enters
 revocation-uncertain mode. Exists to tolerate brief network interruptions without immediately
 suspending all user sessions.
 
 **Open access**
 A data tier in which records require no authentication. The controller issues an anonymous grants
-token (no IdP bearer required); bridge and plugin handle it identically to an authenticated token.
+token (no IdP bearer required); bridge and adapter handle it identically to an authenticated token.
 See [security-workflow.md § Permission computation pipeline](security-workflow.md#permission-computation-pipeline).
 
 **Revocation**
 The invalidation of a user's access, recorded as a `revoked_at` timestamp in Usher's database.
-Applies to all Usher tokens the plugin holds for that user regardless of their individual
+Applies to all Usher tokens the adapter holds for that user regardless of their individual
 TTLs. See [security-workflow.md](security-workflow.md).
 
 **Revocation channel**
-The mechanism by which Usher notifies plugins of revocations near-real-time. Two sub-channels:
+The mechanism by which Usher notifies adapters of revocations near-real-time. Two sub-channels:
 push (SSE or WebSocket subscription) and poll (`GET /revocations?since=<timestamp>` fallback).
-Plugins maintain both; the poll channel recovers from push channel interruptions.
+Adapters maintain both; the poll channel recovers from push channel interruptions.
 
 **Revocation-uncertain mode**
-The state a plugin enters when its revocation channel has been silent for longer than the grace
+The state an adapter enters when its revocation channel has been silent for longer than the grace
 period. Sessions are suspended and requests return 503 until the channel reconnects, except for the
 open tier, which needs no grant and so has nothing a revocation could withdraw. This is
 the fail-secure default: uncertainty about revocation status produces denial, not access.
@@ -598,7 +655,7 @@ studies management service that orchestrated EGO. Existing EGO group data migrat
 resources and who belonged to them; see [architecture.md](architecture.md).
 
 **Server-side filter** _(Arranger-specific)_
-A SQON filter injected into every Arranger query by the plugin before the query reaches the search
+A SQON filter injected into every Arranger query by the adapter before the query reaches the search
 engine. This is where enforcement happens in Arranger. The filter is built additively: each grant the
 token carries renders one positive predicate, and those compose with `or`, so a record no predicate
 selects is simply never returned. Nothing is subtracted and no exclusion is computed. Under MVP the
@@ -606,14 +663,14 @@ whole filter is a single clause naming the resources the principal may reach.
 
 **SQON (Structured Query Object Notation)** _(Arranger-specific)_
 Arranger's filter expression format, and the wire format the bridge emits. The bridge builds the
-predicate and `usher-arranger` compiles it into the query Arranger runs, supplying the field name for
+predicate and the Arranger adapter compiles it into the query Arranger runs, supplying the field name for
 the catalogue being queried, since which field names a resource differs between catalogues.
 
 **Token exchange**
-The call a PEP plugin makes to Usher presenting an IdP bearer token and receiving a scoped
+The call a PEP adapter makes to Usher presenting an IdP bearer token and receiving a scoped
 Usher token in return. The `audience` parameter identifies the calling service; Usher
 returns a token containing only the resources that service manages. Modelled on OAuth 2.0 Token
-Exchange (RFC 8693). See [plugin-integration.md](plugin-integration.md).
+Exchange (RFC 8693). See [adapter-integration.md](adapter-integration.md).
 
 ---
 
@@ -745,8 +802,8 @@ Keycloak keeps for itself, and Usher reads exactly one of them: the claim that m
 administrator.
 
 **Here:** a role is named on a `grants` row, `viewer` or `owner`, living in Usher's own store. The
-controller resolves it to permissions before writing an Usher token, so no role name ever reaches a
-plugin. The two are unrelated beyond sharing a word.
+controller resolves it to permissions before writing an Usher token, so no role name ever reaches an
+adapter. The two are unrelated beyond sharing a word.
 
 ### Subject
 
