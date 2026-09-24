@@ -22,6 +22,21 @@
 #
 # A file that documents a defect quotes it, so the files describing these
 # rules are excluded from the rules they describe.
+#
+# WHY A CHECK IS WORTH WRITING BEFORE THERE IS A REASON TO SUSPECT ANYTHING.
+# Every correction to this corpus during the exchange that produced the
+# self-speak pattern came from running something, and none from rereading,
+# including in files edited minutes earlier that contained the rule being
+# broken. The later ones came from a check refusing input rather than from
+# anyone forming a hypothesis, which is the weaker requirement and the point:
+# deliberate probing needs someone to suspect something first, and a check
+# refusing input needs nobody to suspect anything.
+#
+# Two defects here were found by the act of writing a test rather than by
+# anything the test then caught. The retired-terms pattern matched only
+# lowercase, so a retired term opening a sentence had passed every run since it
+# was written; its fixture case was the one that did not exist. A clean corpus
+# afterwards is luck rather than evidence that nothing was hiding.
 
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
@@ -30,8 +45,12 @@ FILES=()
 if [ $# -gt 0 ]; then
   FILES=("$@")
 else
-  # bash 3.2 on macOS has no mapfile
-  while IFS= read -r f; do FILES+=("$f"); done < <(
+  # bash 3.2 on macOS has no mapfile. A file renamed or deleted in the working
+  # tree stays tracked until the change is committed, so git still lists it and
+  # the first open() of it would crash a pattern block; only files that exist
+  # are checked. Files named on the command line are not filtered, so a typo
+  # there is loud rather than skipped.
+  while IFS= read -r f; do [ -f "$f" ] && FILES+=("$f"); done < <(
     { git ls-files '*.md'; git ls-files --others --exclude-standard '*.md'; } \
       | grep -v '^.dev/sessions/' | sort -u
   )
@@ -87,14 +106,67 @@ CHECKS = [
      # recorded" where the pattern expected "an earlier version of this file".
      # Matched instead on the shape: a self-reference near a reporting verb.
      r"[Ee]arlier (version|draft|form|note|text|wording|copy)s? (of (this|the) "
-     r"(file|document|section|design|model|note)|here|above|in this)"
+     r"(file|document|section|design|model|note|table|list|row|entry|paragraph|item|page|rule|clause|matrix)|here|above|in this)"
      r"|[Ee]arlier (version|draft|form|note|text|wording)s? \w{0,12} ?"
-     r"(said|had|asserted|used|called|recorded|described|stated|implied|proposed|computed)"
+     r"(said|had|asserted|used|called|recorded|described|stated|implied|proposed|computed"
+     r"|ended|listed|named|put|set|gave|required|included|excluded|omitted|placed|marked|scoped|treated)"
      r"|[Pp]reviously (recorded|stated|said|asserted|described|read|implied)"
      r"|was (recorded|described|stated) as|used to (say|read|be|assert)"
      r"|[Tt]his (document|file|section) previously",
      "reject the option, not the draft: 'Rejected: X' rather than 'this used to say X'",
      ()),
+    ("self-speak: the document explaining why it says a thing",
+     # Class L's sibling, split by tense: L is the document narrating its own
+     # past, this is the document justifying its own present. Both are the
+     # author's reasoning left in the text, which is why they read as thinking
+     # aloud rather than as a specification.
+     #
+     # The fact wrapped in the justification is almost always worth keeping, so
+     # the fix is to unwrap rather than delete: "written down because truncating
+     # collapses the ordering" becomes "truncating collapses the ordering".
+     #
+     # WHAT BOUNDS THIS CHECK IS THE ADDRESSEE, NOT A LIST OF EXCEPTIONS.
+     # A pattern over prose sees words and cannot see who a sentence is
+     # addressed to, or what its "here" points at. Every false positive found
+     # so far is that one property wearing a different face, so a new one is
+     # predicted rather than surprising:
+     #
+     #   "only worth having if the key has the same blast radius"
+     #       addressed to a property of the system
+     #   "if a consideration is worth stating, state it as a separate point"
+     #       addressed to a reader about their own future writing
+     #   "attribution belongs in git history"
+     #       addressed to whoever decides where content goes
+     #   "what lets `plane` live here rather than on each capability"
+     #       "here" is a column in the schema, not a place in this file
+     #
+     # Only the first is excluded by the pattern, because only it has a fixed
+     # word. The rest are a reading step the check cannot absorb, which is why
+     # this is candidate-raising and not a defect count.
+     #
+     # AND A HIT CAN BE A KEEPER. A self-referential clause survives when it
+     # constrains a future edit to the document and goes when it only explains
+     # the present one: "stated here rather than left to the checker's path
+     # list, since a boundary that exists only as a script scope is invisible
+     # to everyone reading the rule" loses its instruction if unwrapped.
+     # Measured from two directions: thirty hits here were all defects, while
+     # the placement subclass in the agentics corpus was four for four keepers.
+     # A corpus whose subject is where things go has placement clauses that are
+     # all real constraints.
+     #
+     # "worth having" is the one exclusion with a fixed word, and it earns it:
+     # four of its five uses here mean the property is worth having, so
+     # including it cost four false positives for one real hit.
+     r"\bworth (stating|recording|noting|naming|writing)\b"
+     r"|\bwritten down because\b"
+     r"|\b(is|are) (stated|recorded|written|noted|named|listed)( here)? (rather than|because)\b"
+     r"|\b(stating|recording|noting|saying) (it|this|that) because\b"
+     r"|\bthe part worth (recording|stating|knowing|noting)\b"
+     r"|\b(that|this) is why it is (recorded|stated|written|named|listed)\b"
+     r"|\brecorded here rather than\b"
+     r"|\bremoved rather than renamed\b",
+     "unwrap it: keep the fact, drop the account of why the document contains it",
+     ("terminology-usage", "doc-review-patterns")),
     ("compression template: <noun> semantics",
      r"[a-z] semantics\b",
      "almost always means 'the rule for X' or 'how X behaves'. Say which",
@@ -205,7 +277,12 @@ with open(os.environ["PATTERN_COUNT_FILE"], "w") as fh:
 if found:
     sys.exit(3)
 ENDPY
-[ $? -eq 3 ] && found=1
+# Any exit but 0 or 3 means the block crashed, and a crashed block ran none of
+# its patterns. Left unhandled, found stays 0 and the verdict prints a pass for
+# checks that never happened.
+rc=$?
+if [ "$rc" -eq 3 ]; then found=1
+elif [ "$rc" -ne 0 ]; then found=1; printf '\n== a pattern block exited %s, so its patterns did not run ==\n' "$rc"; fi
 
 # The exclusion anchors on the quoted example, not on a line number. It was
 # 'audit-events.md:5' and stopped matching the moment an edit above that line
@@ -224,7 +301,7 @@ report "mixed separators inside one identifier" \
 #
 # The pattern requires a prefix, so bare `field` passes. It stopped being
 # ambiguous when it became a defined entity in the capability vocabulary,
-# where `field.read` reads a field's value and nothing else it could mean.
+# where `field.view` shows a field's value and nothing else it could mean.
 # A term in heavy use is disambiguated by defining it or by banning it, and
 # this one is now defined; the ban would have forced a worse entity name.
 report "an identifier ending in field, naming neither key nor value" \
@@ -233,9 +310,19 @@ report "an identifier ending in field, naming neither key nor value" \
   'an object holding the pair' 'names neither the key nor the value'
 
 report "retired terms" \
-  '\b(requester|caller|adopter|resource key|data categor)' \
+  '\b([Rr]equester|[Cc]aller|[Aa]dopter|[Rr]esource key|[Dd]ata categor)' \
   "see terminology-usage.md for what each became" \
   'terminology-usage' 'AGENTS.md'
+
+# Capability names retired by making read a capability group. A capability id
+# spelled entity.read, or an action "read" or "aggregate" in a payload example
+# or a type, is the old vocabulary: seeing a record is view, counting is count,
+# and read travels nowhere. Bare `read` passes, since the group is a real name
+# where roles are written, and so does a quoted word in prose, which the array
+# and union context below excludes.
+report "retired capability names" \
+  '\b(record|field|revision|artifact|resource|grant|group)\.(read|aggregate)\b|(\[|, ?|\| |= )["'"'"'](read|aggregate)["'"'"']' \
+  "read is a capability group and aggregate is the operation; the actions are count and view"
 
 # Class M is about definitions, not argument leads, so only glossary entries
 # are checked, and only the first sentence of each entry body. "rather than"
@@ -256,12 +343,26 @@ if hits:
     print("\n== class M: a definition led by what it is not ==")
     print("\n".join(hits))
     print("   -> lead with what the term is; a collision note goes below it, labelled")
+    sys.exit(3)
 ENDPY
+# Class M printed its findings and never set found, so the verdict could read
+# "No matches." beneath them.
+rc=$?
+if [ "$rc" -eq 3 ]; then found=1
+elif [ "$rc" -ne 0 ]; then found=1; printf '\n== the class M block exited %s, so it did not run ==\n' "$rc"; fi
 
 echo
 if [ "$found" -eq 0 ]; then verdict="No matches."; else verdict="SOMETHING WAS FOUND: scroll up, the findings print above this."; fi
-patterns=$(( $(grep -c '^report "' "$0") + $(cat "$PATTERN_COUNT_FILE" 2>/dev/null || echo 0) ))
-echo "Checked ${#FILES[@]} files against $patterns patterns. $verdict A defect no pattern looks for is"
-echo "indistinguishable from its absence, so this says what was searched, not that"
-echo "the corpus is clean. Counts locate candidates and do not rank them."
+counted=$(cat "$PATTERN_COUNT_FILE" 2>/dev/null)
+patterns=$(( $(grep -c '^report "' "$0") + ${counted:-0} ))
+# The verdict is the LAST line, and that is load-bearing. The disclaimer used
+# to close the summary and its final clause was "the corpus is clean", so
+# anything reading only the last line, `tail -1` or a hook showing a status,
+# printed a pass while findings sat above it. That happened in the session
+# that had just written the truncation failure into this header as the day's
+# lesson. A verdict placed first protects the reader of the whole summary and
+# nobody else; placed last it protects the one who truncates.
+echo "A defect no pattern looks for is indistinguishable from its absence, so this"
+echo "says what was searched, not that nothing is wrong. Counts locate candidates."
+echo "Checked ${#FILES[@]} files against $patterns patterns. $verdict"
 exit "$found"

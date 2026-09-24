@@ -291,6 +291,112 @@ in a chat log has no such reader.
 The cause generalizes past documentation: a correction arrives in conversation, and the document is
 what gets edited in response, so the document is where the correction reads as belonging.
 
+### P. Self-speak: the document explaining why it says a thing
+
+A sentence carries a fact and an account of why the document contains it. "Seconds always present,
+**written down because** truncating to minutes is an ordinary formatting convenience elsewhere."
+"That asymmetry is structural, and **it is worth stating because** it otherwise reads as a gap."
+"**One limit is worth recording:** the absence of the constraint is established from Arranger's own
+documents." In each, the fact is sound and the wrapper is the author narrating their own decision to
+include it.
+
+**L's sibling, split by tense.** L is the document narrating its own past; this is the document
+justifying its own present. Both are the author's reasoning left in the text, which is why both read
+as thinking aloud rather than as specification.
+
+**Thirty instances across a 168,000-word corpus, all thirty real.** That ratio is unlike every other
+class here, and it does not generalize. Run against the agentics corpus the same pattern returned
+eight, of which four were clear, two were false positives of a shape this corpus never produced, and
+one falsified the claim below.
+
+**The boundary, supplied by the agentics owner from that run: a self-referential clause survives when
+it constrains a future edit to the document, and goes when it only explains the present one.** Their
+counterexample: "That exemption is stated here rather than left to the checker's path list, since a
+boundary that exists only as a script's scope is invisible to everyone reading the rule." Unwrapping
+yields "the changelog is exempt" and loses the instruction to a future maintainer not to move the
+rule into the checker. The wrapper is about the document and is also the content.
+
+**So the earlier claim here, that the move is never load-bearing, was wrong**, and it was the most
+dangerous thing this entry said: a sweep trusting it would have destroyed that sentence without
+anyone looking. Checked against this corpus afterwards, one of the thirty had the same shape and had
+been damaged by its unwrap, and a second survived only because a rewording happened to preserve it.
+Both were cross-file or cross-repository placement rules, which is where the shape concentrates.
+
+**The exclusions are not a list, they are one property.** Named by the agentics owner after the third
+arrived in a day: a pattern over prose cannot resolve the addressee, so a rule of this family needs
+the addressee stated as its boundary rather than discovered as an exception. Four faces measured so
+far, and the fourth is deictic rather than addressee-shaped, which widens the property slightly:
+
+| The sentence is about                  | Example                                                             |
+| -------------------------------------- | ------------------------------------------------------------------- |
+| a property of the system               | "only worth having if the key has the same blast radius"            |
+| a reader's own future writing          | "if a consideration is worth stating, state it as a separate point" |
+| where content should go                | "attribution belongs in git history"                                |
+| where something sits in the **system** | "what lets `plane` live here rather than on each capability"        |
+
+Only the first has a fixed word and can be excluded by pattern. The rest are a reading step, which is
+why this ships as candidate-raising and never as a defect count.
+
+**Two patterns exist for this class and they make opposite trades. Neither dominates.** One requires
+a deictic, `here` or `inline`. One requires a reporting verb from a list. Measured by running each
+face through both:
+
+| Face                               | Deictic-required                                             | Verb-list                                           |
+| ---------------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
+| A property of the system           | not reached                                                  | excluded by the `worth having` carve-out            |
+| A reader's own future writing      | excluded: it names a destination rather than pointing at one | **fires**                                           |
+| Where content should go            | excluded, same reason                                        | fires on "is recorded here", silent on "belongs in" |
+| Where something sits in the system | **fires**                                                    | not reached                                         |
+
+**Requiring a deictic excludes the two instruction faces and costs the system-deictic one**, because "here"
+is the same word whether it points at a file or at a table. A verb list makes the opposite trade. So
+a pattern for this class chooses which face it is blind to, and the choice should follow what the
+corpus contains rather than which pattern reads better.
+
+**Both published measurements are artifacts, of different things, and neither is a property of the
+class.** Thirty for thirty here is partly a pattern artifact, since this pattern cannot reach the
+system-deictic face at all, and partly a corpus artifact, since it does fire on the reader-instruction
+face and this corpus, being design documents, almost never instructs anyone about writing. Four for
+four in the agentics corpus is purely a corpus artifact: that pattern is fully exposed to the
+system-deictic face and fires on this corpus's `plane` sentence, and their corpus simply contains no
+sentence where a location word points at a schema. Deliberately not averaged, and now labelled by
+cause rather than only reported side by side.
+
+**Scope, stated rather than assumed.** Thirty for thirty here against four clear of eight there is
+wide enough that the two corpora differ in kind. Theirs is instruction prose about how to write,
+unusually dense in sentences legitimately about documents, which is plausibly the corpus where this
+class is hardest to pattern. That makes it a scope note on the finding rather than a refutation, and
+the divergence is recorded rather than averaged away.
+
+**So the repair is to unwrap rather than to delete, once the boundary above has been applied.** Removing the sentence loses the fact, which is the failure mode a sweep like this invites; unwrapping a clause that constrains a future edit loses the constraint, which is the failure mode the unwrap itself invites. "One limit is worth recording: X" becomes "One limit: X".
+"This is worth stating because the obvious reading holds for one and inverts for the other" becomes
+"The obvious reading holds for one and inverts for the other."
+
+**Mechanical, and the exclusion is the part worth copying.** The catching pattern is
+`worth (stating|recording|noting|naming|writing)`, `written down because`,
+`(is|are) (stated|recorded|written|noted|named|listed)( here)? (rather than|because)`, and a few
+fixed phrases. `worth having` must be left out: four of its five uses in this corpus mean _the
+property is worth having_, not that the document is worth saying it, so including the word cost four
+false positives for one real hit. That is the same ratio that got class B removed from the checker
+entirely, arriving inside a class that otherwise works perfectly.
+
+**Two traps in running the sweep, both hit here.** The corpus hard-wraps, so twelve of thirty
+replacement phrases spanned a line break and matched nothing until the search allowed `\s+` between
+words. And the count is not the problem: this class happens to have a one-to-one ratio, but reading
+every hit before editing is what established that rather than assumed it.
+
+**Why this one is worth a convention rather than a fix.** Register rules and density rules had been
+run over the same corpus and caught none of it, because nothing here is verbose, imprecise or
+wrongly pitched. Each sentence is well-formed and its wrapper is defensible in isolation. What is
+wrong is only visible as a habit across a corpus, and at that scale it is the dominant texture: a
+reader looking for the rule reads past the author's reasons for having written it, thirty times.
+
+**It also names why conventions alone do not fix this family.** The rules that survived a full day of
+this corpus were the ones a grep holds: no em dashes, Canadian spelling, retired terms. The rules
+that slipped repeatedly, including four times in one session immediately after correction, were the
+ones needing the author to reread as a stranger. Self-speak moved from the second group to the first
+the moment it was named as a move rather than as a matter of taste, which is the transferable part.
+
 ## Fidelity failures
 
 ### D. Scope stated narrower than the system
