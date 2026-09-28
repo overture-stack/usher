@@ -186,9 +186,8 @@ works through in order. Every other entry keeps its article.
 The entries below are alphabetical, because a glossary is looked up more often than it is read.
 
 **A resource's permission list** _(the value against each resource in an Usher token)_
-A list of the grants a principal holds on that resource, each naming one category and the
-permissions it carries, such as `{ "controlled": { "record": ["view"] } }`. Only grants the principal holds
-appear, so a category they lack is absent rather than named, revealing nothing about what exists.
+A list of the grants held by a principal on that resource, each naming one category and the
+permissions it carries, such as `{ "global.controlled": { "record": ["view"] } }`. Only grants held by the principal appear, so a category they lack is absent rather than named, revealing nothing about what exists.
 The list never appears empty: holding no grant on a resource means what the resource being absent
 already means, which is no access.
 
@@ -237,14 +236,14 @@ behind each entry are in [permissions-model.md](permissions-model.md).
 
 **Capability group**
 A name for several capabilities of one entity together, used where roles are written. `read` is the
-one the vocabulary ships: `count`, `view` and `export` on a record or a field, `view` and `export`
-on a revision or an artifact, and `view` alone on a control-plane entity.
+one the vocabulary ships: `count`, `view` and `export` on a record, a field or an artifact, `view` and
+`export` on a revision, and `view` alone on a control-plane entity.
 
 Expanded into its members when a role is written, so no capability is named `read`, no token carries
 it and no adapter tests for it. See [permissions-model.md](permissions-model.md#data-plane).
 
-**Disambiguation note:** Unrelated to a **Group**, which is a set of people a grant can name. A
-capability group is a set of capabilities a role can name, and the two never meet.
+**Disambiguation note:** Unrelated to a **Group**, which is a set of people named together by a grant. A
+capability group is a set of capabilities named together by a role, and the two never meet.
 
 **Count**
 The number of records a query or one bucket matches, and what the `count` capability governs.
@@ -314,7 +313,7 @@ field on a record rather than a container.
 
 **Category grant**
 An explicit, logged record allowing a specific user to reach a specific category within a
-specific resource, with the permissions the grant carries. Grants are additive: each renders a
+specific resource, with the permissions carried by the grant. Grants are additive: each renders a
 positive predicate, and content no grant selects is simply never reached rather than excluded by a
 rule. A category is carried by a record, so a grant reaches the records carrying it rather than the
 resource holding them. What is deferred is a record carrying more than one category at once. See
@@ -449,8 +448,7 @@ no records to show.
 **Field**
 One part of a record, and an entity on the data plane in its own right.
 
-A category scopes fields the way another scopes records, so `field.view` reaches the columns a field
-category covers while `record.view` reaches whole records. It carries no `create` or `delete`, since
+A category scopes fields the way another scopes records, so `field.view` reaches the columns covered by a field category while `record.view` reaches whole records. It carries no `create` or `delete`, since
 a field exists per schema rather than per grant, and `field.count` is separate from `field.view`
 because counting records by a column's values discloses less than showing them. Post-MVP.
 
@@ -558,11 +556,11 @@ same person may hold separately. Distinct from the submitter role, though a sing
 both.
 
 **Viewer**
-The base data-plane role: read on the records its grant reaches, and no authority over anyone else's
+The base data-plane role: read on the records reached by its grant, and no authority over anyone else's
 access. Every other data-plane role is defined against it.
 
 **Curator**
-The data-plane role carrying create, read, update and delete on the records its grant reaches.
+The data-plane role carrying create, read, update and delete on the records reached by its grant.
 
 _It sits beside Owner rather than under it, and the pairing is the clearest statement of the two
 planes._ Both carry the same four acts and they act on different objects: a curator creates, updates
@@ -591,7 +589,7 @@ midnight fall in one rolling hour, where two fixed hours would split them into s
 
 **Complement**
 The resources a principal lacks, from among those this instance is configured for. An adapter
-computes it at startup, from its own configuration minus the resources the token names, and tests a
+computes it at startup, from its own configuration minus the resources named in the token, and tests a
 derived artifact against it: an artifact survives exactly when it requires none of them. Local rather
 than platform-wide, which is what keeps Usher from having to name resources a principal does not
 hold. See [decisions.md](decisions.md) § A self-scoping predicate is not an access decision.
@@ -634,7 +632,7 @@ See [security-workflow.md § Permission computation pipeline](security-workflow.
 
 **Revocation**
 The invalidation of a user's access, recorded as a `revoked_at` timestamp in Usher's database.
-Applies to all Usher tokens the adapter holds for that user regardless of their individual
+Applies to all Usher tokens held by the adapter for that user regardless of their individual
 TTLs. See [security-workflow.md](security-workflow.md).
 
 **Revocation channel**
@@ -659,7 +657,7 @@ A SQON filter injected into every Arranger query by the adapter before the query
 engine. This is where enforcement happens in Arranger. The filter is built additively: each grant the
 token carries renders one positive predicate, and those compose with `or`, so a record no predicate
 selects is simply never returned. Nothing is subtracted and no exclusion is computed. Under MVP the
-whole filter is a single clause naming the resources the principal may reach.
+whole filter is a single clause naming the resources reachable by the principal.
 
 **SQON (Structured Query Object Notation)** _(Arranger-specific)_
 Arranger's filter expression format, and the wire format the bridge emits. The bridge builds the

@@ -163,9 +163,16 @@ being served, until connectivity is restored.
 - Maintaining the revocation channel: SSE or WebSocket push subscription with reconnection
   logic, and poll fallback on a 30-second interval
 - Immediately dropping the cached token for a user when a revocation event is received
+- Dropping every cached token that names a resource when a change to its categories is announced
+- Dropping a person's cached token when the identity provider's back-channel logout reaches the
+  application
 - Entering revocation-uncertain mode after the grace period (default: 60 seconds without a
   successful revocation check): suspending sessions and returning 503 until connectivity is
   restored
+
+**Its logic does not depend on the web framework.** Everything above lives in a core that knows
+nothing of Express, and the Express layer only wires it into middleware and routes, so a bridge for
+another framework is another thin layer over the same core.
 
 **Does not own:**
 

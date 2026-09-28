@@ -54,8 +54,8 @@ used here. See [security-threat-model.md](security-threat-model.md) for the full
                     "exp": 1718611500,
                     "generatedAt": 1718611200,
                     "permissions": {
-                      "COHORT_A": {"open":{"record":["view"]}, "indigenous":{"record":["view"]}},
-                      "COHORT_B": {"open":{"record":["view","update"]}}
+                      "COHORT_A": {"global.unmarked":{"record":["view"]}, "global.indigenous":{"record":["view"]}},
+                      "COHORT_B": {"global.unmarked":{"record":["view","update"]}}
                     }
                   }
                             |
@@ -252,15 +252,19 @@ within it.
 
 **1. Baseline grants, from instance configuration (computed for every principal, authenticated or not)**
 
-An instance configures a **baseline** whose grants are the floor for every principal. Resources
-marked as open data contribute grant entries according to it, and no IdP token is required, so an
-unauthenticated request produces a token carrying exactly the baseline's grants.
+An instance configures a **baseline** whose grants are the floor for every principal: the
+`unmarked` grant on each resource whose unmarked records are set to open. No IdP token is required,
+so an unauthenticated request produces a token carrying exactly the baseline's grants.
 
-**An instance may set the baseline to grant nothing**, in which case unauthenticated principals
-receive an empty grant set and even open data requires registration. Whether open means publicly
-readable or registration-gated therefore becomes an instance decision rather than a property of
-this design. Every authenticated principal's grants are this baseline together with their own, since
-the baseline is a floor rather than an alternative.
+**An instance may set the baseline to grant nothing**, in which case a resource set to open is
+reached by nobody through it, signed in or not. Registration gating is the registered setting below,
+not an empty baseline. Every authenticated principal's grants are this baseline together with their
+own, since the baseline is a floor rather than an alternative.
+
+**A second rule gives every signed-in principal the `unmarked` grant** on each resource whose
+unmarked records are set to registered, which is the Registered tier: data reachable by anyone signed in without an approval. Like
+the baseline it emits ordinary grants, and the controller evaluates it here rather than any bridge.
+See "Who holds a grant can follow a rule" in [decisions.md](decisions.md).
 
 **2. The principal's own grants (computed if an authenticated IdP token is present)**
 
@@ -298,8 +302,8 @@ The `permissions` object in the token payload is a map keyed by resource ID. Eac
 from category to the entities reached under it, and from each entity to the actions held**:
 
 ```json
-"RESOURCE_ID": { "open":       { "record": ["view", "update"] },
-                 "controlled": { "record": ["view"] } }
+"RESOURCE_ID": { "global.unmarked":       { "record": ["view", "update"] },
+                 "global.controlled": { "record": ["view"] } }
 ```
 
 **The entity level is load-bearing rather than decorative.** A bare `["view"]` stops saying anything
@@ -326,7 +330,7 @@ superseded subtractive model needed and additive rendering does not. Every recor
 reached through a grant that names why.
 
 This is also what makes tier differences expressible: an anonymous principal may hold
-`{ "open": { "record": ["view"] } }` where a registered one holds `{ "open": { "record": ["view", "update"] } }`, on the same
+`{ "global.unmarked": { "record": ["view"] } }` where a registered one holds `{ "global.unmarked": { "record": ["view", "update"] } }`, on the same
 resource and the same category.
 
 **A resource absent from the map is unreachable, and there is no empty-list case.** Any access to a
@@ -334,8 +338,7 @@ resource means holding at least one grant on it, so an empty list would mean the
 deliberately is that **categories are not optional**: a resource carrying none is ungrantable,
 because a grant has nothing to name.
 
-The adapter builds its filter additively: a positive clause naming the resources whose configured
-categories the entries cover. A resource carrying a category no entry names contributes no clause and
+The adapter builds its filter additively: a positive clause naming the resources whose configured categories are covered by the entries. A resource carrying a category no entry names contributes no clause and
 is therefore invisible.
 
 **No role name travels in the token.** A role is how access is authored, not how it is enforced: the
@@ -368,7 +371,7 @@ withheld. See the export decision in [decisions.md](decisions.md).
   "exp": 1718611500,
   "generatedAt": 1718611200,
   "permissions": {
-    "OPEN_COHORT": { "open": { "record": ["view"] } }
+    "OPEN_COHORT": { "global.unmarked": { "record": ["view"] } }
   }
 }
 ```
@@ -388,9 +391,9 @@ still validates the `iss` claim. Only `sub` is null; no other standard claims ar
   "exp": 1718611500,
   "generatedAt": 1718611200,
   "permissions": {
-    "COHORT_A": { "open": { "record": ["view", "update"] },
-                  "indigenous": { "record": ["view"] } },
-    "COHORT_B": { "open": { "record": ["view", "update"] } }
+    "COHORT_A": { "global.unmarked": { "record": ["view", "update"] },
+                  "global.indigenous": { "record": ["view"] } },
+    "COHORT_B": { "global.unmarked": { "record": ["view", "update"] } }
   }
 }
 ```
@@ -408,8 +411,15 @@ export type NonEmpty<Element> = [Element, ...Element[]];
 /** A resource identifier, as the instance names it. Opaque to the controller. */
 export type ResourceIdentifier = string;
 
-/** A category name, as the instance configures it. Opaque to the controller. */
-export type CategoryName = string;
+/**
+ * A category name, prefixed by its scope: `global` for a category the whole platform shares, so a
+ * name reads `global.controlled` rather than `controlled`, and `resource` for one that exists only
+ * in the resource it is listed under. The part after the prefix is the name as the instance
+ * configures it, opaque to the controller, and never contains the separator. A version 1 bridge
+ * enforces `global` only: a `resource` entry reaches nothing and is recorded as
+ * `category.unenforced`. A key outside both forms makes the payload malformed.
+ */
+export type CategoryName = `global.${string}` | `resource.${string}`;
 
 /**
  * Actions on a record, in order of increasing reach. `read` is not among them: it is a capability
@@ -424,7 +434,7 @@ export type FieldAction = 'count' | 'view' | 'export' | 'update';
 export type RevisionAction = 'view' | 'export';
 
 /** Actions on an artifact: a kept collection of records carrying provenance. */
-export type ArtifactAction = 'create' | 'view' | 'update' | 'delete' | 'export';
+export type ArtifactAction = 'count' | 'view' | 'export' | 'create' | 'update' | 'delete';
 
 /**
  * The entities reached under one category, and the actions held on each. Every key is optional:
@@ -451,7 +461,7 @@ export interface CategoryPermissions {
 export type ResourcePermissions = Record<CategoryName, CategoryPermissions>;
 
 /**
- * The decrypted contents of an Usher token: the standard claims, the permissions the principal holds
+ * The decrypted contents of an Usher token: the standard claims, the permissions held by the principal
  * for one audience, and the bookkeeping the controller needs to refresh it cheaply.
  */
 export interface PermissionsPayload {
@@ -546,11 +556,12 @@ On the controller's side, a grant carries its own `revoked_at`, and the principa
 deleted by anything that changes what they hold, so a recomputation cannot serve the revoked grant
 again. See the fast-path decision in [decisions.md](decisions.md).
 
-**Naming the principal is what an anonymous visitor cannot be.** They hold a shared token with a null
-`sub`, so no notice reaches them and a resource leaving open access is closed only by that token
-expiring. A notice keyed on the resource instead is proposed and unadopted, with two costs to price
-first; see the anonymous-token item in [to-discuss.md](to-discuss.md). Recorded here because this
-section reads as covering every principal and covers every named one.
+**An anonymous visitor cannot be named, and needs no name.** They hold a shared token with a null
+`sub`, so a notice naming a principal cannot reach them. A resource leaving open access is a
+category change, which is announced by resource to the applications that serve it, and their bridges
+drop every token naming it, the anonymous one included. A change to the baseline itself uses a
+notice telling each bridge to drop its entry for principals with no `sub`. See
+[decisions.md](decisions.md#a-category-change-is-announced-to-the-applications-that-serve-the-resource).
 
 > **Open, and it belongs to the schema session.** Revoking a principal _entirely_, rather than one
 > grant, has no settled storage. Setting `revoked_at` on every grant they hold expresses it with no

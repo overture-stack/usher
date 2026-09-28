@@ -223,6 +223,45 @@ CHECKS = [
      r"|(trivially|by construction)\b",
      "say the consequence plainly: follows from, depends on, gives, holds",
      ("terminology-usage",)),
+    # An object relative clause: the noun described is the object of the
+    # clause's verb, so the sentence runs object, subject, verb. "Records a
+    # category such as controlled marks stay for..." puts three words and an
+    # aside between "records" and the verb that says what happens to them, and
+    # with "that" dropped nothing signals a clause has started. Restoring the
+    # "that" helps and still reads backwards, which is why it matches too: the
+    # fix is subject first, "records marked by a category", not "records that a
+    # category marks". The head nouns are this model's, and several of them are
+    # verbs as well, which is how "Records a category" first parses.
+    ("object relative clause: the sentence runs object, subject, verb",
+     # The subject is a determiner and one or two words, the noun required.
+     # With the noun
+     # optional, "records the grant" matched with "grant" read as the verb, and
+     # several of this model's nouns are verbs too. "which records a category
+     # covers" is an indirect question, not a relative clause, and reads fine.
+     # An adverb before the verb is allowed, since "the descriptions a platform's
+     # data already carries" is the same shape. "how many values the field
+     # holds" is an indirect question as well.
+     r"(?<!which )(?<!many )\b(records|grants|categories|resources|datasets|fields|principals|permissions"
+     r"|roles|columns|capabilities|descriptions|values)"
+     r" (that )?(no|a|an|the|its|their|every|each|this|one|any) ([a-z][a-z'-]* ){1,2}"
+     r"((already|actually|still|also) )?"
+     r"(hold|holds|reach|reaches|name|names|cover|covers|mark|marks|carry|carries|select|selects"
+     r"|grant|grants|confer|confers|list|lists|serve|serves|require|requires)\b",
+     "put the noun's own verb next to it: 'records marked by a category', 'grants held by the user'",
+     ("terminology-usage", "doc-review-patterns")),
+    # The same shape with "nothing" or "nobody" as the subject, which the check
+    # above misses because it requires a determiner and a noun there: "the one
+    # category nothing marks". Singular heads count here, which they do not
+    # above. Other pronoun subjects ("the grants they hold") stay unmatched on
+    # purpose: they are short, idiomatic, and would flood the output.
+    ("object relative clause with nothing or nobody as its subject",
+     r"\b(records?|grants?|categor(y|ies)|resources?|datasets?|fields?|principals?|permissions?"
+     r"|roles?|columns?|capabilit(y|ies)|descriptions?|values?)"
+     r" (that )?(nothing|nobody) ((already|actually|still|also|never) )?"
+     r"(hold|holds|reach|reaches|name|names|cover|covers|mark|marks|carry|carries|select|selects"
+     r"|grant|grants|confer|confers|list|lists|serve|serves|require|requires)\b",
+     "put the noun's own verb next to it: 'records not marked by any category'",
+     ("terminology-usage", "doc-review-patterns")),
     # "Option 1 of 4.1" matches and is the known false positive.
     ("a count with no noun after it",
      r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|[0-9]+) of (the )?"

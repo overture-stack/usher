@@ -25,7 +25,7 @@ ENTITY_ACTIONS = {
     "record": {"count", "view", "export", "create", "update", "delete"},
     "field": {"count", "view", "export", "update"},
     "revision": {"view", "export"},
-    "artifact": {"create", "view", "update", "delete", "export"},
+    "artifact": {"count", "view", "export", "create", "update", "delete"},
 }
 
 # Named where roles are written and expanded into their members there, so a payload never carries

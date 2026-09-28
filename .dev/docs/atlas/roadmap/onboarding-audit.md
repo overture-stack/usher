@@ -39,7 +39,9 @@ in the same document. A reader who meets the ordinary sense first will carry it.
 produced "an 'instance' of what? the very opener is already needing context that isn't given", and
 the fix that paragraph needed was not a rewording but the recognition that a modular platform does
 not make system-wide decisions, so a sentence attributing one to "the platform" was wrong rather than
-unclear. The sweep is to find every other place the same collapse happens.
+unclear. **Swept 2026-09-25:** the document now says `platform` for one running Usher and the
+applications it serves, and its glossary entry says engineers call that an instance and that a
+platform deciding something means a choice made once for that Usher.
 
 **`application`, 60 uses across 39 lines.** The rule is settled and recorded in
 [terminology-usage.md](terminology-usage.md) § Ushered is the word, and the noun after it varies

@@ -111,86 +111,33 @@ story, and every finding that lands on it makes it more load-bearing rather than
 
 ## Token and grants model
 
-**[RESOLVED] Fast-path refresh does not account for `resource_categories` changes.**
-Resolved together with the entry below, because they were one defect: the marker was per principal
-while the change is per resource. There is no last-policy-change timestamp. The fast path compares a
-category version held on each resource and bumped by any `resource_categories` write, so the write
-that causes the change is the write that invalidates, with no set of affected principals to compute.
-See the fast-path decision in [decisions.md](decisions.md). Original finding:
-`security-workflow.md` describes comparing `generatedAt` against "the user's last policy change."
-If that means changes to the user's `grants` rows (the most natural
-reading), then tightening `resource_categories` (adding a new controlled category to a resource)
-does not invalidate any active cached tokens until their TTL expires. A user who should no longer
-see certain records after a category is added to their resource will continue to see them for up
-to one TTL window. For a system handling PHI this is a correctness gap in the access control
-guarantee. Resolution requires specifying exactly which operations update the "last policy change"
-timestamp and confirming that `resource_categories` writes are included.
+**[HIGH] A session is never defined, and several open items are its lifecycle.**
 
-**[RESOLVED] `generatedAt` is not in the entity schema.**
-There is no per-user timestamp to find a home for. State lives in two places instead, each next to
-what changes it: the computed payload in the shared cache, deleted by anything altering what a
-principal holds, and a category version on `resources`. Absence of a cache entry means recompute,
-which cannot go subtly stale the way a comparison can. See the fast-path decision in
-[decisions.md](decisions.md). Original finding:
-The fast-path check and the revocation comparison both depend on a per-user "last policy change"
-timestamp. Its storage location is not described: not in `permissions-model.md`'s entity schema,
-not in the PostgreSQL section of `architecture.md`. Is it a column on `users`? A separate
-`user_policy_versions` table? A Valkey key? What writes to it? The fast path is the primary
-performance mechanism; its correctness depends on this field being updated by exactly the right
-set of operations.
+**The word covers three things.** An identity provider's session, a cached Usher token, and an
+upload in flight all appear in the corpus as a session, and none is defined. The one Usher controls
+is the second: a session, in Usher's sense, is a cached Usher token in one bridge. It begins at the
+first exchange, is renewed at each refresh, and ends when the bridge drops it or it expires.
 
-**[RESOLVED] Multiple roles per resource, single `role` field in the token.**
-The token carries no `role` field. Roles are resolved to permissions at issuance, so a union of
-roles becomes a union of permissions computed before the token is written and there is nothing to
-collapse. Original finding:
-`permissions-model.md` explicitly supports multiple simultaneous roles per user per resource, with
-effective permissions as the union of all role permissions. The token structure has a single scalar
-`role` field per resource entry. No rule is specified for collapsing multiple roles into one value
-at issuance time. An adapter receiving a collapsed value that does not represent the user's full
-permission set will apply incorrect filters. Either the token schema needs to support an array, or
-the collapsing rule needs to be defined and its safety argued.
+**Each open item below is an event that ends or changes one**, and each has been recorded separately
+with its own fix:
 
-**[RESOLVED] Anonymous token cache key is undefined.**
-Answered in both halves. Every anonymous principal receives exactly the baseline's grants, so they
-all receive the same token, and one shared token per application is correct rather than one of
-several options. Per application rather than per instance, because a Usher token is audience-scoped
-and wrapped to one application's key, so anonymous principals of the search service and of the
-submission service cannot share one. Invalidating it needs no version or generation on the baseline:
-a notice telling each bridge to drop the entry it holds for principals with no `sub` evicts exactly
-one thing, and carries no payload, since a bridge that re-exchanges receives whatever is correct now.
-A resource-keyed notice was considered first and is worse on both counts, invalidating every token
-naming the resource and having to name it, which tells applications that do not serve it that it
-exists. Original finding:
-The bridge caches Usher tokens per user, identified by `sub`. Anonymous tokens have `"sub": null`.
-Multiple anonymous users share the same bridge. What is the cache key? One shared token for all
-anonymous sessions? One per request? One per session cookie? Each option has different security
-and performance characteristics. Revocation of open access (a resource taken offline) also needs
-a defined path for the anonymous case, since a notice naming the principal cannot name a null `sub`.
+| Event                          | What the bridges do                                                                                         | Status                      |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------- |
+| a grant is revoked             | the channel names the principal, and bridges drop that principal's token                                    | designed                    |
+| a resource's categories change | the channel names the resource to the applications serving it, and their bridges drop every token naming it | decided                     |
+| a person signs out             | the identity provider's back-channel logout reaches the application, which drops the person's token         | agreed, not yet specified   |
+| a person is suspended          | the channel names the person, and bridges drop their token                                                  | open: the emergency cut-off |
+| announcements arrive late      | a withdrawn grant keeps working while the grace clock resets                                                | open: the revocation delay  |
+| an upload is in flight         | a different kind of session, revocable or not                                                               | open, in its own item       |
 
-**[HIGH] A category change reaches no application until its token expires.**
-Found while answering the anonymous case above, and it is not confined to it. The channel announces
-withdrawn grants, naming the principal. A category write announces nothing: it bumps the resource's
-version, which is compared only when a bridge comes back for a new token.
+**Several copies of one application each hold their own cache**, so every announcement has to reach
+every copy. Subscribing each copy to the channel already does that, and it is the property any
+change to the channel must keep.
 
-1. The `resource_categories` write lands and the resource's category version bumps.
-2. Nothing is announced, because no grant was revoked.
-3. No cached payload is deleted, because nothing changed what any principal holds.
-4. Every bridge keeps serving from a token computed before the change.
-5. At the next refresh the version comparison fails, Usher recomputes, and the correct token is issued.
-
-**Step 4 is the exposure and it is the same length for every principal**, signed in or not. Adding a
-category to narrow `open`, or taking a resource out of open access entirely, both land here.
-
-**It contradicts a stated property.** [decisions.md](decisions.md) says losing access is immediate
-and gaining it waits, and the push channel exists because one TTL was judged too long for an
-emergency. Neither holds for a category change. That sentence is now qualified there rather than left
-standing.
-
-**Two ways to close it, and they are not equivalent.** Either a category write announces itself, in
-which case the question is what it names for a principal who has no `sub` (answered above: drop the
-anonymous entry, which needs no name), or TTL-bounded narrowing is accepted and the immediacy claim
-is dropped everywhere rather than qualified in one place. The first costs a fan-out or a
-resource-keyed notice; the second costs a guarantee.
+**What stays open beyond the rows is whether Usher also keeps a view of live sessions**, meaning who
+holds a token in which application. It would give an administrator that view, at the cost of Usher
+holding state the bridges already hold. The identity-provider features the rows rely on are listed
+under the connector design in [admin-model.md](admin-model.md).
 
 **[MEDIUM] `revoked_at` is a scalar; reinstatement and multiple revocations are undefined.**
 Downgraded, because most of the premise went with the per-user marker. `revoked_at` lives on the
@@ -203,21 +150,6 @@ What stays open is narrower and belongs with the same unanswered question as eve
 stopping a principal outright: revoking a _person_ rather than a grant has no settled storage, so
 whether that is a sweep over their grants or a marker on `users` decides whether reinstatement is
 many writes or one. See blocker 6 in [../docs/phase-1.md](../docs/phase-1.md).
-
-**[RESOLVED] Self-grant TTL expiry sets user-level `revoked_at`, disrupting the roles they hold.**
-The premise no longer holds: an expiring grant writes no `revoked_at` and fires nothing. The
-controller drops it when computing the next payload, so the admin's other roles are untouched
-and nothing per-user is invalidated. Neither remedy the item asked for is needed. See
-[decisions.md](decisions.md) § A grant's expiry is resolved before the token is written, and the
-corrected TTL requirement in [admin-model.md](admin-model.md).
-
-**[RESOLVED] Grant expiry for inactive users is not covered by the revocation propagation path.**
-It does not need to be. Expiry propagates nothing, so there is no event for an inactive bridge to
-miss. The cached token the item worried about cannot exist: a token is issued to expire with the first
-grant on it to lapse, so a token issued before the deadline is already invalid when
-presented after it, and the bridge rejects it on the `exp` check it performs anyway, without having
-learned anything. See [decisions.md](decisions.md) § A grant's expiry is resolved before the token
-is written.
 
 ---
 
@@ -237,7 +169,7 @@ Both were written deliberately and the bypass predates the custodian decision, s
 reconciliation rather than an error in either. The question is narrow and not an engineering one:
 **where a category carries a custodian, may an instance enable a bypass that reaches that
 category's data without the custodian's grant?** For community-governed data the answer looks
-like no, which would make the bypass conditional on the categories a resource carries rather than a
+like no, which would make the bypass conditional on the categories carried by a resource rather than a
 single instance-wide switch.
 
 Until it is answered, `decisions.md` overstates. Recorded there as an exception to be resolved
@@ -276,77 +208,6 @@ or a rule someone will otherwise invent at the keyboard.
 | `aud` as a string or an array  | RFC 7519 §4.1.3 permits both. Pin the string form and reject arrays, since permitting both is how a validator gets written against one and fed the other                                       |
 | `nbf`                          | expected to be no, unrecorded                                                                                                                                                                  |
 | token size bound               | wanted before a principal holding grants in hundreds of resources finds it first                                                                                                               |
-
-**[RESOLVED] If roles resolve at issuance, the token's `role` field should not exist.**
-Applied. A resource maps to a plain list of category grants, `role` and any detached permission
-list are gone, open content is a category, and there is no empty-list case. A baseline
-defines the baseline and may grant nothing. Recorded in [decisions.md](decisions.md) and applied in
-[security-workflow.md](security-workflow.md). Original analysis:
-Roles in the source model do two jobs: they are a compact way to assign many permissions at once,
-and they are the first stage of a two-stage check evaluated when access is attempted. This design
-moves the second job to issuance time so that adapters hold no policy. That leaves roles doing only
-the first job, which is an authoring convenience, and an authoring convenience has no reason to
-travel in an enforcement payload.
-
-Where roles then live, none of which is the token:
-
-| Place                         | Job                                                                                          |
-| ----------------------------- | -------------------------------------------------------------------------------------------- |
-| The management interface      | Granting by role rather than by enumerating permissions                                      |
-| The grant store               | Which role was assigned, for provenance and for recomputing when a role's definition changes |
-| Usher's own API authorization | Whether a principal may perform a grant operation at all                                     |
-
-**Ownership is absent from the token for a second and independent reason.** An owner's powers are
-management operations: granting, revoking, setting visibility. Those are performed against Usher's
-own API, which checks them directly. An adapter never enforces them, so the enforcement payload never
-needs to say who is an owner. This is the same conclusion an earlier sketch reached the wrong way
-round, by inventing a `manage` flag in the token before asking what would consume it.
-
-**A detached `permissions` property is also wrong, and for a reason that runs deeper than shape.**
-It exists only to cover a resource's unrestricted content, which presumes that unrestricted content
-is a baseline sitting outside the category system. That presumption is the last trace of the
-subtractive model this design replaced, and it is the reason the token has been hard to reason
-about.
-
-    Subtractive, superseded:  the resource's full category set is the baseline. The token says
-                              which categories are held; the adapter subtracts the rest and excludes
-                              them. An empty list leaves the unrestricted remainder visible.
-
-    Additive, current:        nothing is a baseline. The token says which grants are held; the
-                              adapter emits one positive clause per grant. An empty list is no
-                              grants, so it reaches nothing.
-
-The same field means opposite things under the two, and four sections of `permissions-model.md`
-still describe the subtractive one. Anyone reading both carries the contradiction.
-
-**Making open content its own category removes the baseline entirely.** If the unrestricted portion
-is a category like any other, there is no remainder for subtraction to leave behind, and every
-reachable record is reachable because of a grant that names it. That also expresses tier
-differences that the current shape cannot: anonymous principals holding `open: [view]` while registered
-ones hold `open: [view, update]`, which is a real distinction between the tiers with nowhere to
-live today.
-
-    "STUDY_A": { "open":       { "record": ["view", "update"] },
-                 "controlled": { "record": ["view"] } }
-
-**And it retires `categories: []`**, which was flagged in review as not sitting right and whose gloss
-has been corrected twice. With open content as a category it cannot occur: any access to a
-resource means holding
-at least one grant on it, and holding none is the same as absence from the map. One state instead of
-two that had to be told apart.
-
-**Consequence to accept deliberately: categories stop being optional.** A resource carrying no
-categories becomes ungrantable, because there is nothing to name in a grant. Every resource must
-carry at least one, which for ordinary data is the open one.
-
-**Vocabulary, and this half stands.** The conclusion recorded here was `view` rather than `read`, on
-the reasoning that the portal flows distinguish viewing metadata from downloading files. `view`
-names seeing a record, and `read` is the capability group of `count`, `view` and `export`.
-`download` became `export`, which ships and is seeded into the reading roles, so what the flows
-distinguish is `view` against `export`.
-
-**Applied**, with the configured baseline as the mechanism once the detached
-permission list is gone.
 
 ## Adapter contract
 
@@ -417,7 +278,7 @@ by the server-side filter, so an unreachable resource never appears there as a f
 a count. **But values also reach components through configuration, which no filter touches.** So
 what remains in phase 1 is **any surface that names resource values from configuration rather than
 from data**: a portal page listing resources from a source other than the filtered query, and
-Arranger's `displayValues`, the next item. Everything else here is a prerequisite for field-level
+display labels on a field that access control keys on, the next item. Everything else here is a prerequisite for field-level
 restriction, and one part of it is large.
 
 **The principle already exists and is scoped too narrowly.** [management-ui.md](management-ui.md)
@@ -475,7 +336,7 @@ integration serves several catalogues.
 side.** One is free and one takes a query, and they split along the two axes a grant names.
 
 **The resource half is already decided.** The adapter's configuration lists, per queryable type, the
-resources configured for it, and an empty intersection with the resources the token names already
+resources configured for it, and an empty intersection with the resources named in the token already
 denies that type. So the association of resources with catalogues that Usher does not hold is held
 by the adapter, and the same decision needs a second reader: it denies the query today and would also
 omit the configuration. Configuration that lists a resource whose records are absent from the
@@ -567,7 +428,7 @@ exactly the granularity omission needs, and nothing has to be added to the contr
 
 **A separate disclosure surface, deliberately not folded in.** The SQON viewer renders the query a
 principal holds, which ordinarily discloses only what they built. A SQON arriving from elsewhere, a
-shared link, a bookmark or a saved set, can name fields the recipient holds nothing on, and no
+shared link, a bookmark or a saved set, can name fields on which the recipient holds nothing, and no
 configuration shaping reaches it, because the content is supplied rather than served.
 
 **It also bears on a contradiction between two documents.** They give different reasons the token is
@@ -589,150 +450,30 @@ resolver identity, and metadata shaping. The third is independent of the other t
 them meaningful, since an unfiltered field list undermines field-level enforcement however well the
 data paths prune.
 
-**[HIGH] A catalogue that labels its resource field publishes every resource to every principal.**
+**[HIGH] Display labels on a field that access control keys on must be narrowed per principal.**
 
-**Empty by default, and the obvious configuration fills it.** `extendedFields[].displayValues` maps a
-field's raw values to display labels, per catalogue. A deployment whose resource field holds
-identifiers, and whose interface should show study names instead, fills it for exactly that field.
+**The requirement.** Configuration can map a field's raw values to display labels, as
+`extendedFields[].displayValues` does in the first integration. Where access control keys on that
+field, as it does on the resource field, configuration needs a per-request shaping hook that narrows the labels to the values reachable by the principal, since configuration reaches components without
+passing through a query filter. Until the hook exists, the operator rule is to leave such a field
+unlabelled.
 
-**Once filled it reaches every principal without passing a query.** It travels inside the extended
-mapping the configuration resolver returns whole, and the components store it as received. Every key
-in it is a resource, and a map written to label a field's values names all of them. So anyone who
-loads the page receives the catalogue's resource list, including the resources they hold nothing on.
-
-**That is the disclosure the rendering principle names.** [management-ui.md](management-ui.md) rules
-that "three of seven studies" discloses that seven exist. A label map naming all seven discloses the
-same without the count.
-
-**The published REST introspection contract does not carry it.** Its field builder emits a field's
-display name, whether it is an array, its type and its unit, and nothing else. The exposure is the
-GraphQL configuration query and the components.
+**It follows from the rendering principle.** [management-ui.md](management-ui.md) rules that "three
+of seven studies" discloses that seven exist, and a list naming every value of such a field would
+disclose the same without the count.
 
 **Independent of the three seam changes, and small.** It needs neither projection, resolver identity
-nor metadata shaping, so it should not wait on them. Either of two closes it:
+nor metadata shaping, so it does not wait on them.
 
-| Remedy                 | What it takes                                                         |
-| ---------------------- | --------------------------------------------------------------------- |
-| A deployment rule      | no resource values in `displayValues` on a field access control reads |
-| Shaping that one field | the resolver narrows the map to the resources the principal reaches   |
+| When                  | What holds                                                                 |
+| --------------------- | -------------------------------------------------------------------------- |
+| until the hook exists | operators leave a field that access control keys on without display labels |
+| once it exists        | configuration narrows the labels to the values reachable by the principal       |
 
-The rule costs nothing and holds only where every deployment knows it. Shaping is one of the small
-per-surface functions the rendering item already anticipates, applied to a single field, and it is
-the remedy that does not depend on a deployment reading a note.
-
-**[RESOLVED] The bridge is said both to render predicates and to hold no schema knowledge.**
-The bridge builds the predicate and the adapter supplies the field name for the catalogue being
-queried, which is a parameter rather than stored schema knowledge. SQON is the wire format, so
-applications whose enforcement is not SQON-shaped translate. Original finding:
-`decisions.md` has the bridge rendering a resolved grant set as a union of positive predicates, and
-also states that a leaf operator's field name is structurally required. `architecture.md` assigns any
-knowledge of the application's data schema, field names included, to the adapter and
-explicitly excludes it from the bridge. A component with no field names cannot emit a predicate that
-requires one.
-
-The per-catalogue resource field name sharpens this from a wording problem into a contract question. One
-bridge serves an application, an application serves several catalogues, and the resource field name
-differs between them, so it cannot be resolved once at bridge startup. Either the bridge
-emits resource names and the adapter turns them into predicates, or the adapter supplies the field
-name per query and the bridge composes with it. The second preserves both statements, since being
-told a field name for one query is not holding schema knowledge, but it is a real interface decision
-and neither document makes it.
-
-**Recommendation: the adapter supplies the field name, the bridge builds the predicate.**
-
-The deciding reason is where fail-open defects concentrate. Every enforcement defect this design has
-recorded is a predicate-construction defect: denial expressed as a negation instead of
-`matchNothing`, an empty `in` read as no constraint, a containment expression double-negating into
-a test for any element rather than every element on a flat field, and a filter composing disjunctively on the aggregation path.
-Not one of them is a compilation defect. If the bridge emits resource names and each adapter builds
-its own predicate, that entire class of defect is reimplemented once per adapter, and drift between
-applications is the problem the shared bridge exists to prevent.
-
-Four supporting reasons:
-
-- **It does not breach the constraint it appears to.** Being told a field name for one query is not
-  holding schema knowledge. The bridge is never provisioned with an instance's schema and never has
-  to be kept in sync with one, which is what that exclusion protects.
-- **It trusts the adapter with strictly less.** The adapter is the enforcement point and must be
-  trusted either way, but supplying one field name is a smaller surface than constructing the whole
-  predicate. A wrong field name is also checkable at startup, alongside the mapping-shape check
-  already required.
-- **The conformance corpus tests one implementation instead of one per adapter.** What a predicate means
-  are exactly what a corpus is for, and they stay in a single place to test.
-- **Per-catalogue output is already required.** Catalogue-level denial means the answer differs by
-  catalogue regardless, so the bridge must produce per-catalogue results either way. Given that, it
-  costs nothing for those results to be predicates: the interface takes a map of catalogue to field
-  name and returns a map of catalogue to enforcement.
-
-The cost is one additional input on the bridge interface, and an adapter obligation to supply it
-correctly.
-
-**Scope: this governs the narrowing arm only.** The enforcement result is already a union of deny,
-narrow and allow, and only narrow carries a predicate. Named future adapters do not all narrow:
-
-| Application | Operation                                          | Predicate?                                           |
-| ----------- | -------------------------------------------------- | ---------------------------------------------------- |
-| Arranger    | Filter a search                                    | Yes, in the query language natively                  |
-| SONG        | Filter a metadata listing                          | In principle, if the predicate stays backend-neutral |
-| Score       | Authorize one object fetch by identifier           | No. Deny or allow only                               |
-| Lectern     | Schema and dictionary service, no record filtering | No                                                   |
-
-A service whose operation is fetching one object by identifier never narrows, so no predicate is
-built under either option and the question does not arise. What such an adapter needs instead is a
-query in Usher's own vocabulary, "does this principal hold a grant on category C of resource R", with
-the adapter resolving its identifier to that pair first. That is a third interface shape and the adapter contract
-should carry it deliberately rather than treating every application as a filtering one.
-
-**What would change this, restated.** Not a backend that cannot narrow, but a backend that narrows in
-a way the shared query language cannot express _neutrally_. The MVP predicate is a single positive
-containment on a field, which is neutral: it compiles as readily to a relational filter as to a
-search-engine one. So the recommendation holds today for every application that narrows.
-
-**The post-MVP predicate is not neutral.** Record-level
-narrowing is expressed as `not` of `not-in`, whose correctness depends on the field being mapped
-`nested`, and on a flat field it silently degrades to an existential match in the permissive
-direction. That is a search-engine mapping concept, not a property of the query language. The same
-expression carried to an adapter over a different store would mean something different, and it would
-differ permissively.
-
-Two consequences. Record-level narrowing as currently specified is **specific to the search application
-rather than a platform permission**, which no document says. And this is an argument _for_ central
-construction rather than against it: where the meaning of a predicate depends on backend properties,
-that reasoning belongs in one component that can vary or refuse on a declared permission, not
-replicated across adapters whose authors each decide independently what the expression means.
-
-Must be settled before the adapter contract is written, which has not started.
+The first integration records the same requirement on its side, as a per-request shaping hook for
+configuration.
 
 ## Security model
-
-**[RESOLVED] Symmetric key framing is incompatible with the stated algorithm candidates.**
-Resolved twice, and the second answer reverses the first. Keys are per application, which is the part
-that was always load-bearing, and they are **symmetric** after all: `dir` with A256GCM, held in the
-secrets store and injected into both the controller and the application. The finding below was
-correct that the candidates listed at the time were both asymmetric and that the framing did not
-match them; it was wrong to conclude the framing had to change rather than the candidates. What
-settled it was the deployment: secrets already reach both sides through the same operator, so
-asymmetry solves a provisioning problem that does not exist here. See the JWE decision in
-[decisions.md](decisions.md). Original finding:
-`security-workflow.md` calls the JWE decryption key "a shared secret provisioned to each bridge
-instance at deploy time." `security-threat-model.md` lists RSA-OAEP or ECDH-ES as algorithm
-candidates for key wrap. Both are asymmetric: there is no shared secret. With RSA-OAEP, the
-bridge generates a key pair; the controller encrypts the CEK with the bridge's public key; only
-the bridge's private key can unwrap it. Provisioning is reversed: the bridge generates and the
-controller receives, not the other way around. The algorithm selection (listed as unresolved in
-the threat model) will determine the key management architecture. The current framing assumes a
-symmetric answer and is misleading for either asymmetric candidate.
-
-**[RESOLVED] Audience isolation may be a naming convention, not a cryptographic guarantee.**
-Per-application keys make `aud` a cryptographic boundary rather than a claim-level assertion.
-Original finding:
-If all bridges share a single decryption key, any bridge can decrypt tokens intended for
-any other bridge. The `aud` claim check would then be a claim-level assertion rather than a
-cryptographic boundary: a compromised bridge can read another service's Usher tokens. True
-cryptographic audience isolation requires distinct keys per audience (per bridge/app pairing),
-with the controller encrypting to the intended recipient's specific key. Whether the design
-intends one global key or per-audience keys should be stated explicitly, since the answer changes
-the operational complexity and the blast radius of a compromised bridge.
 
 **[HIGH] Adversarial delay within the grace period is distinct from adversarial blocking.**
 The fail-secure design responds to blocking of the revocation channel: if events stop arriving,
@@ -814,12 +555,11 @@ follows a category wherever it appears, against that category granted on named r
 question and the cardinality one above together decide whether custodianship.hold is one column,
 one join table, or two.
 
-**[RESOLVED, half of it] `admin-model.md` header claimed to fully specify Custodian; the body does
-not.** The claim is corrected: the overview now says the document specifies Admin and Owner and names
-Custodian as a gap. The gap itself stands, and is the substantive half: Custodian has one row in the
-role taxonomy and no permission list, while being the role with the most governance weight and the
-one OCAP delegation rests on. It cannot be closed independently of custodian scoping above, since
-what a custodian may do and what it reaches are the same question asked twice.
+**[MEDIUM] Custodian has one row in the role taxonomy and no permission list.**
+It is the role with the most governance weight and the one OCAP delegation rests on, and
+[admin-model.md](admin-model.md) names it as a gap rather than specifying it. It cannot be closed
+independently of custodian scoping above, since what a custodian may do and what it reaches are the
+same question asked twice.
 
 ---
 
@@ -875,21 +615,6 @@ Several design questions are open:
 This flow shares the same ownership transfer mechanism as ordinary ownership handoffs but has
 unique trigger and identity-establishment steps. It should be designed before Usher handles
 any paediatric data.
-
-**[RESOLVED BY SCOPE] Clinical submission service to Usher relationship is not designed.**
-Nothing creates a resource at submission time in the first release, so the trust and privilege
-question for the Lyric service account cannot arise yet. Pre-registration is what ships, and the
-detail below is the design for when submission-time creation is picked up. See blocker 5 in
-[../docs/phase-1.md](../docs/phase-1.md). Original finding:
-The category management section of `permissions-model.md` describes cohort-level category
-assignment defaults applied at submission time, but does not specify how the submission service
-(Lyric) communicates cohort existence and category assignments to Usher. Two approaches: (1)
-pre-registration, where an admin creates the resource in Usher before any data is submitted and
-submission is rejected for unregistered cohorts; (2) submission-time creation, where Lyric creates
-the Usher resource as part of the ingest flow. Both have different trust and privilege implications
-for the Lyric service account. The preferred approach for MVP is pre-registration; submission-time
-creation is an optional post-MVP path sharing the same code foundation. Neither is designed in
-detail. This must be resolved before the Lyric integration work begins.
 
 ## Integration and operations
 
@@ -978,20 +703,6 @@ query? Grant events are in the controller's audit log. Data access events (if lo
 in the PEP adapter's log (Arranger, Lyric). Correlating these across systems requires a shared
 identifier (a self-grant ID, or a correlation token) that links the grant audit record to
 downstream data access records. Neither the identifier nor the correlation mechanism is described.
-
-**[RESOLVED] Bridge audience identifier provisioning is not described.**
-Per-application keys settle both halves. Provisioning is one symmetric key per
-controller-and-application pair, written to the secrets store and delivered to both pods. And two
-independently deployed instances cannot share an audience identifier, because sharing one would mean
-sharing a key and audience separation is cryptographic rather than a string comparison. What follows
-is a naming requirement rather than an open question: an audience identifier is per deployed
-instance. Original finding:
-Every bridge must know which `aud` value to request from the controller and to verify in
-the returned token. Where does a bridge learn its own audience identifier: deploy-time config?
-A registration handshake with the controller? If two independently deployed Arranger instances
-both use `aud: "arranger"`, they share tokens and revocation events. If audience identifiers are
-instance-specific, the naming convention and provisioning model should be documented as part of
-the bridge requirements.
 
 **[LOW] Valkey failure mode is not described.**
 `architecture.md` documents Valkey's two roles (shared cache and revocation pub/sub backbone)

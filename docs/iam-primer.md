@@ -96,7 +96,7 @@ format for representing claims as a JSON object.
 A JWT has three parts, separated by dots: `header.payload.signature`.
 
 - **Header:** metadata about the token: the algorithm used to sign or encrypt it.
-- **Payload:** the claims: the actual data the token carries.
+- **Payload:** the claims: the actual data carried by the token.
 - **Signature (or encryption):** a cryptographic value that lets receivers verify the token has
   not been tampered with (signed) or that only authorized parties can read it (encrypted).
 

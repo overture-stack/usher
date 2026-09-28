@@ -11,13 +11,13 @@
 
 # Overture User Access Control
 
-<p class="subtitle">Usher is Overture's access control plane. For every application on the platform, it keeps track of what each person may see and do, hands those grants to the applications, and also gives the people who govern access one place to change those grants. Its role is closer to a keychain than a lock: each application does its own unlocking, and Usher never touches the data it governs. This document is an orientation to that model, to the security properties it rests on, and to the reasoning behind each decision that shaped this design.</p>
+<p class="subtitle">Usher is Overture's access control plane. For every application on the platform, it keeps track of what each person has been "granted" permission to see or do, hands those grants to the applications, and also gives the people who govern access one place to change those grants. Its role is closer to a keychain than a lock: each application does its own unlocking, and Usher never touches the data it governs. This document is an orientation to that model, to the security properties it rests on, and to the reasoning behind each decision that shaped this design.</p>
 
 <p class="status"><b>Status:</b> the requirements are fully defined and implementation is nearly ready to begin. The security mechanism is designed in full, and the permissions model is set out in this document for review. Each ushered application's adapter contract will be settled with that application at integration time, and the administrative interface ships from Usher as a package each portal mounts, reimplementing what the iMS Studies Management service does today. The first integration is the Stage portal over Arranger's search, proven in a development environment, with what it teaches carried to iMS afterwards. The two halves of the environmental submission service follow, Lyric alongside SONG with Score, and then Muse and Singularity complete the iMS MVP on the clinical data side.</p>
 
 ## The problem
 
-A platform's data is usually segmented by access level. Some of it is public. Some needs only a registered account. Some carries conditions set by the community that contributed it, or by an ethics review. A single record can sit under several conditions at once. A platform holding many datasets almost never applies one access rule to all of them.
+A platform's data is usually segmented by access level. Some of it is public. Some needs only a registered account. Some is subject to conditions set by the community that contributed it, or by an ethics review. A single record can sit under several conditions at once. A platform holding many datasets almost never applies one access rule to all of them.
 
 Working out which of those conditions apply for each record in a query is the base task on every single request. Four additional factors make this process harder.
 
@@ -31,7 +31,7 @@ Working out which of those conditions apply for each record in a query is the ba
 Two questions sit behind every request, and a different piece of software answers each.
 
 - **Who are you?** Keycloak is the open-source identity provider that answers this: it holds the accounts, the groups and the sign-in process, and Overture already integrates it.
-- **What may you see or do?** Usher computes the answer and delivers it to each application on request, without ever seeing a password or performing identity checks of its own. It keeps the grants in a separate database away from the accounts. Usher's design builds upon Keycloak's without depending on it specifically, and support for other authentication providers is planned after the initial release.
+- **What may you see or do?** Usher computes the answer and delivers it to each application on request, without ever seeing a password or verifying anyone's identity itself. It keeps the grants in a separate database away from the accounts. Usher's design builds upon Keycloak's without depending on it specifically, and support for other authentication providers is planned after the initial release.
 
 Everything after this section is about that second question, so the first one is worth setting aside now for the sake of clarity. Proving who someone is tells you nothing about what they should be allowed to see or do, and "who" is doing more work than it looks: **not every request comes from a person.** Automated submission workflows, data pipelines and other services request data too, and they are subject to exactly the same decisions on the same terms. Therefore, this document says "person" in most places because it reads more naturally, but the term applies to a service account as much as to a researcher.
 
@@ -41,46 +41,40 @@ Usher exists so that the second question is decided in one place rather than wor
 
 ## Three tiers of access
 
-Usher's mental model builds in layers, and the first is how a person comes to hold a grant at all. There are three routes, each asking more of them than the last: nothing for the first, a confirmed identity for the second, and a deliberate decision by an owner or custodian for the third. The grants are what reach the data; the tier is how someone gets them.
+Usher's mental model builds in layers, and the first is how a person comes to hold a grant at all. A grant is Usher's record that one person may do certain things with certain records: it names a dataset, one category of that dataset's records, the role held there, and when it expires. There are three routes, each asking more of them than the last.
 
 **Open.** No sign-in required. Publicly available data: summary counts, published datasets, anything carrying no privacy risk. Even when nobody has signed in, the ushered application still asks Usher what an anonymous visitor may reach, and Usher still answers and records that it answered. So open access is governed by the same machinery as everything else. Usher never sees the search itself or the data that comes back, so what is recorded is that an answer was given, not what anyone looked for.
 
 **Registered.** The person confirms their identity in the system, having accepted the platform's terms of access. This tier suits data where accountability matters but a full approval process would be disproportionate.
 
-**Controlled.** Being registered is no longer enough at this tier, and in larger instances an access committee may review researcher applications first. An **instance** here means one running Usher together with the applications it serves, holding its own datasets, its own categories, and its own record of who may reach them. Access is granted dataset by dataset, deliberately by either the dataset's owner or by the custodian who governs that data on the contributing community's behalf.
+**Controlled.** Being registered is no longer enough at this tier, and on larger platforms an access committee may review researcher applications first. Access is granted dataset by dataset, deliberately by either the dataset's owner or by the custodian who governs that data on the contributing community's behalf.
 
 What exactly a grant covers within a dataset is the next layer of the mental model, and the next section is also where the system's own word for a dataset arrives.
 
 ## Resources and categories
 
-**In Usher, access is granted over a resource, and this section uses that term while the rest of this document says "dataset".** The difference is deliberate. `resource` is the system's own word, chosen to be generic so that the model assumes nobody's vocabulary: one instance calls the same thing a study, another a cohort, another a project. "Dataset" is this document's everyday stand-in for it, used the same way and for the same reason as "person" above, and nothing in Usher is named dataset. Definitions belong on the word the system uses, so they are here; elsewhere, once you know what is meant, the friendlier word does the work.
+In Usher, access is granted over a resource, and this section uses that term while the rest of this document says "dataset". The difference is deliberate. "resource" is the system's own word, chosen to be generic so that the model assumes nobody's vocabulary: one platform calls the same thing a study, another a cohort, another a project. "Dataset" is this document's everyday stand-in for it, used the same way and for the same reason as "person" above, and nothing in Usher is named dataset. Definitions belong on the word the system uses, so they are here; elsewhere, once you know what is meant, the friendlier word does the work.
 
-**Permission over a resource, rather than restriction on it, reverses what may be the more familiar arrangement**, in which data is readable until a rule closes it off. The reason is the way a control failure lands in each. On a good day the two describe exactly the same access. When a rule goes missing from a system that starts open and closes things off, usually by someone's mistake, data that should have been hidden gets served and nothing announces it. When a grant goes missing here, someone is denied data they were entitled to, and complains. One failure is silent and the other is loud, which is why nothing here is reachable until a grant says so.
+**Permission over a resource, rather than restriction on it, inverts what may be the more familiar arrangement**, in which data is readable until a rule closes it off. The reason is the way a control failure lands in each. On a good day the two describe exactly the same access. When a rule goes missing from a system that starts open and closes things off, usually by someone's mistake, data that should have been hidden gets served and nothing announces it. When a grant goes missing here, someone is denied data they were entitled to, and complains. One failure is silent and the other is loud, which is why nothing here is reachable until a grant says so.
 
-A second difference from that familiar approach is what a resource actually is. **It is a field and a value**, nothing more: an instance nominates a field its records already carry, a study identifier or a cohort identifier or anything else that marks records as belonging together, and every record holding one particular value in that field is one resource. Nobody draws a boundary; the data already has one and the instance points at it. In the first version one field identifies a resource, and grouping by more than one field at once, which is what allows a cohort assembled across studies, comes later.
+A second difference from that familiar approach is what a resource actually represents: **a field and its value**, nothing more. Each platform nominates a field its records already carry, a study identifier or a cohort identifier or anything else that marks records as belonging together, and every record holding one particular value in that field is one resource. Nobody draws a boundary; the data already has one and the platform points at it. In the first version one field identifies a resource, and grouping by more than one field at once, which is what allows a cohort assembled across studies, comes later.
 
-Furthermore, different resources don't require separate "physical" containers. To enforce access control, some systems attach access to a storage location (e.g. separate S3 buckets or search indices), changing a record's permissions when it is moved and therefore two resources cannot overlap without duplicating data.
+Furthermore, different resources don't require separate "physical" containers. To enforce access control, some systems attach access to a storage location (e.g. separate S3 buckets or search indices), changing a record's permissions when it is moved and therefore two resources cannot overlap without duplicating data. Messy, and avoidable.
 
-**A category is also a field and a value, and that is the part worth slowing down for.** It is the same kind of thing as a resource, built the same way, and the only difference is which question it answers. A resource's field answers which records belong together. A category's field answers how sensitive they are. An instance nominates one of each:
+**A category is also a field and a value**, and since that can get confusing, it is worth slowing down for. The only actual difference from a resource is which question it answers. A resource's field answers which records belong together, and a category's field answers how sensitive they are. Each platform nominates one of each:
 
 <pre class="token">  <span class="c">the resource</span>  field: study_id        value: HEART_STUDY
   <span class="c">the category</span>  field: access_level    value: restricted</pre>
 
-Usher ships no fixed list of categories: an installation defines the ones its own data needs, so a study holding patient records might name one controlled, while one holding community-contributed data might name another community-governed. A resource then lists which of them its records carry, and listing one is what puts those records behind a grant, because they go to nobody without one naming that category.
+Usher ships no fixed list of categories: each platform defines the ones its own data needs, so a study holding patient records might name one "controlled", while one holding community-contributed data might name another "community-governed". A resource then lists which of them its records carry, and listing one is what puts those records behind a grant, because they go to nobody without one naming that category.
 
-**Categories are not subdivisions a resource owns, and this is the easiest thing here to get backwards.** They are defined once for the whole platform, and each resource declares which of them apply to its records. So `controlled` is one category that many resources list, not a separate compartment inside each. A resource is divided by them, which is why the containment reading is so natural, but it does not contain them.
+The tier names reappear here, and that is not mere coincidence: every resource has one more category, "unmarked", for the records not marked by any other category, and its unmarked records sit at one of the three tiers. At Open, everyone reaches them; at Registered, anyone signed in; at Controlled, only someone deliberately granted access to them. Records marked by a category such as "controlled" are reachable only by people holding a grant on that category, whichever tier the resource's unmarked records sit at.
 
-**The reason that distinction earns its keep** is the custodian described later on. A community representative governs one category wherever it appears, across every resource on the platform, and that is only coherent because the category is one thing. If `controlled` meant something of its own inside each study, there would be nothing platform-wide to govern and a grant naming it would mean something different in every resource.
+**A grant reaches a record only when the record matches both its resource and its category.** Take a grant naming HEART_STUDY and the category in the example above. It reaches a record whose "study_id" is HEART_STUDY and whose "access_level" is restricted. A restricted record from another study fails the first check, and an unrestricted HEART_STUDY record fails the second. That is the entire mechanism, and everything below follows from it.
 
-The tier names reappear here as category names, and that is the model rather than a coincidence: which tier a resource's records sit at is decided by which category each of them carries. A resource carrying nothing beyond open asks for no grant anyone lacks; one that also carries controlled keeps those particular records for whoever holds the deliberate grant the Controlled tier describes, and serves the rest as it did before.
+Pairing resource and category prevents two kinds of leak. Naming only the resource would carry everything in it regardless of sensitivity, so a single grant would hand over a community's contributed records along with the clinical ones. Naming only the category would reach across the whole platform, so a grant for controlled data in one study would hand over the controlled data in every other study, including those whose own grant was never sought.
 
-A grant always names a resource together with one of the categories that resource carries, and neither half works on its own.
-
-**Because both halves are a field and a value, a grant is two tests and a record has to pass both.** Is this record's `study_id` the one the grant names, and is its `access_level` the one the grant names. That is the entire mechanism, and everything below follows from it.
-
-Pairing them is what prevents two kinds of leak. Naming only the resource would carry everything in it whatever its sensitivity, so a single grant would hand over a community's contributed records along with the clinical ones. Naming only the category would reach across the whole platform, so a grant for controlled data in one study would hand over the controlled data in every other study, including those whose own grant was never sought.
-
-To illustrate this better, here are one researcher's grants across four of the resources on an imaginary platform. Grants are held per resource, so each row is its own list rather than a slice of one platform-wide set. The researcher holds the <b>controlled</b> grant for both the heart study and the reef archive, as well as the baseline <b>open</b> grant for all four resources, which is why that one appears in every row.
+To illustrate this better, here are one researcher's grants across four of the resources on an imaginary platform. Grants are held per resource, so each row is its own list rather than a slice of one platform-wide set. The researcher holds the <b>controlled</b> grant for both the heart study and the reef archive, as well as the <b>open</b> grant on the unmarked records of all four resources, which is why that one appears in every row.
 
 <div class="scroller">
     <table>
@@ -89,56 +83,52 @@ To illustrate this better, here are one researcher's grants across four of the r
         <tr><th scope="col">Resource</th><th scope="col">Categories it carries</th><th scope="col">Grants they hold</th><th scope="col">What they reach</th></tr>
       </thead>
       <tbody>
-        <tr><td><b>HEART_STUDY</b></td><td>open, controlled</td><td>open, controlled</td><td class="o">All of it</td></tr>
-        <tr><td><b>LUNG_COHORT</b></td><td>open</td><td>open</td><td class="o">All of it</td></tr>
-        <tr><td><b>REEF_ARCHIVE</b></td><td>open, controlled, community-governed</td><td>open, controlled</td><td>Its open and controlled records, and none of its community-governed ones</td></tr>
-        <tr><td><b>BRAIN_ATLAS</b></td><td>open, controlled</td><td>open</td><td>Its open records only</td></tr>
+        <tr><td><b>HEART_STUDY</b></td><td>unmarked, controlled</td><td>open, controlled</td><td class="o">All of it</td></tr>
+        <tr><td><b>LUNG_COHORT</b></td><td>unmarked</td><td>open</td><td class="o">All of it</td></tr>
+        <tr><td><b>REEF_ARCHIVE</b></td><td>unmarked, controlled, community-governed</td><td>open, controlled</td><td>Its unmarked and controlled records, and none of its community-governed ones</td></tr>
+        <tr><td><b>BRAIN_ATLAS</b></td><td>unmarked, controlled</td><td>open</td><td>Its unmarked records only</td></tr>
       </tbody>
     </table>
   </div>
 
 ### How categories behave
 
-The rule behind that last column is one line: a grant reaches the records in that resource carrying that category, and nothing else. The lung cohort holds only open records, so the open grant reaches all of it. The reef archive holds community-governed records this researcher has no grant for, so those stay out of reach while the rest does not.
+The rule behind that last column is one line: a grant reaches the records in that resource carrying that category, and nothing else. The lung cohort holds only unmarked records, so the open grant reaches all of it. The reef archive holds community-governed records this researcher has no grant for, so records in that category stay out of reach.
 
-**A category names a condition its records carry, and a grant reaches the records carrying it.** A resource holding both open and controlled records serves its open records to anyone and its controlled records only to someone granted controlled. The brain atlas shows the way a grant falls short instead, since a category held in one resource counts for nothing in another.
+**A category names a condition satisfied by its records, and a grant reaches the records matching it.** For instance, a resource holding both unmarked and controlled records at the Open tier serves its unmarked records to anyone and its controlled records only to someone granted "controlled". The brain atlas shows the way a grant falls short instead, since a category held in one resource counts for nothing in another.
 
-**Where a record carries two conditions at once, both grants are needed.** A record that is both controlled and community-governed is reachable only by someone holding both, because a restriction another restriction can bypass is not a restriction. That is what stops a controlled grant from quietly reaching community-governed data it was never meant to touch.
+**Where a record belongs to two categories, both grants are needed.** A record that is both "controlled" and "Indigenous" is reachable only by someone holding both grants. If either one were enough, a controlled grant alone would reach Indigenous data its custodian never approved. Records belonging to more than one category are still being designed and won't be in the first release; until then, a record belongs to one category at a time.
 
-That last part is designed and not yet built, and until it is a record carries one condition at a time. Nothing about it is visible in the first instance, which defines a single category.
+**The one category that works differently is "unmarked", and it includes all records not covered by any other category.** Every other category is defined by something the records carry: a field marking them controlled, or marking them contributed by a community. "unmarked" is defined by what is left over, which is why a resource with nothing else categorized is unmarked in full, and why no resource needs to list it.
 
-**Open is the default category, and it works differently from the others.** Every other category is defined by something the records carry: a field marking them controlled, or marking them contributed by a community. Open is defined by what is left over. It covers whatever the other categories on a resource do not, which is why a resource with nothing else categorized is open in full.
+**At the Open tier, everyone holds the open grant.** It is the one grant a person has without asking for it, signed in or not, and it reaches a resource's unmarked records. At the Registered tier, anyone signed in holds it instead. At the Controlled tier, nobody does until someone is deliberately granted access to them, which is how records not marked by any category stay reachable even when they are not open.
 
-**Everyone holds the open grant.** It is the one grant a person has without asking for it, signed in or not, so a resource carrying only open is reachable by anyone. Every resource carries at least one category, so every resource needs at least one grant.
-
-**An instance has two ways to change that, and both are available from the first release.** It can turn the default off everywhere, so that nothing is open unless open is added to a resource deliberately. Or it can leave the default on and remove open from individual resources, which says that this particular resource holds no open data.
-
-**What a new resource carries follows from those two.** With the default on, a resource is created carrying open, and a warning at submission time says so, so that nobody publishes openly by not choosing. With the default off, a resource is created closed and stays unreachable until someone defines its categories.
+**A new resource starts at the platform's default, and can be moved to another tier later.** Usher offers the option to make all unmarked records Open (or not), and when that's the case, submitters are shown a warning, so nobody publishes openly without being aware of it. Where the default is Controlled, a new resource's records are reachable by nobody until someone is granted that access.
 
 Grants are also what let two people differ on one resource: both may hold its open grant while one may only read those records and the other may change them as well.
 
 ## Who holds what
 
-Four kinds of participant hold or govern access. They run from the narrowest reach to the widest, which is also the order a reader is likely to meet them.
+Four kinds of participant hold or govern access. They run from the narrowest to the widest, which is also the order a reader is likely to meet them.
 
 <div class="scroller">
     <table>
       <caption>The four participants</caption>
       <thead>
-        <tr><th scope="col">Who</th><th scope="col">Reach</th><th scope="col">Own data access</th></tr>
+        <tr><th scope="col">Who</th><th scope="col">Applies to</th><th scope="col">Can they see the data?</th></tr>
       </thead>
       <tbody>
         <tr><td><b>Viewer</b></td><td>The categories of a dataset they have been granted</td><td>Yes, as far as their grants cover</td></tr>
-        <tr><td><b>Owner</b></td><td>One dataset, and may grant access to others within it</td><td>No, unless separately granted. Usually yes in practice, because an owner is usually also a viewer</td></tr>
-        <tr><td><b>Custodian</b></td><td>One category of sensitive data, across every dataset on the platform</td><td>No, unless separately granted</td></tr>
-        <tr><td><b>Administrator</b></td><td>The whole platform: creating datasets, assigning roles, emergency revocation</td><td>None. Reaching it takes a recorded self-grant, like anyone else</td></tr>
+        <tr><td><b>Owner</b></td><td>One dataset, and may grant and revoke access to others within it, apart from data a custodian governs</td><td>Usually yes in practice, because an owner is usually also a viewer</td></tr>
+        <tr><td><b>Custodian</b></td><td>One category of sensitive data, across every dataset on the platform, and may grant and revoke access to it, or allow a dataset's owner to</td><td>No, unless separately granted</td></tr>
+        <tr><td><b>Administrator</b></td><td>The whole platform: registering "resources", assigning roles, emergency revocation</td><td>No. Reaching it takes a recorded self-grant, like anyone else</td></tr>
       </tbody>
     </table>
   </div>
 
 **One of these four is not in the first release.** Nothing appoints a custodian in it, so the role below is part of the model rather than something an organization can use yet. Everything else in this table is. What that means for the data a custodian would govern is set out under "What comes after the first release" at the end.
 
-**The first row of that table is a family rather than a single role.** Viewer is the one participant who reads data, and reading is three things rather than one: counting records, opening them, and taking a copy away. Changing them is a different kind of act again. So an instance grants one of several reading roles, and the difference between them is exactly which of those a person may do.
+**The first row of that table is a family rather than a single role.** Viewer is the one participant who reads data, and reading is three things rather than one: counting records, opening them, and taking a copy away. Changing them is a different kind of act again. So a platform grants one of several reading roles, and the difference between them is exactly which of those a person may do.
 
 Six things can be done with the records of a dataset. They are listed here from the least reach to the most, and each role is a point on that run. The first three are what reading is made of, which is why they sit under one heading.
 
@@ -166,7 +156,9 @@ Six things can be done with the records of a dataset. They are listed here from 
 
 **There is no way around this in the first release, and that is a decision rather than an omission.** Nothing is reachable unless a dataset is published as open or someone has been granted it by name, and that applies to a platform administrator exactly as it applies to everyone else. An administrator who needs to see data grants it to themselves, and that grant is recorded, visible and revocable like any other. What a later release might add is set out under "What comes after the first release" at the end.
 
-**An owner's authority covers one dataset; a custodian's covers one category, across every dataset that carries it.** That is what allows a community to govern its own data across a platform it does not run: when a new dataset declares that category, it falls under the same custodian without anyone assigning it. That is the mechanism the community governance work at the end of this document rests on, and it is why the Controlled tier above puts the decision with a dataset's owner or a category's custodian rather than with a platform administrator.
+**An owner's authority covers one dataset; a custodian's covers one category, across every dataset that carries it.** A custodian can do this because the category is defined once for the whole platform, not inside each dataset: "controlled" in one study and "controlled" in another are the same category, under the same custodian. That is what allows a community to govern its own data across a platform it does not run: when a new dataset declares that category, it falls under the same custodian without anyone assigning it. That is the mechanism the community governance work at the end of this document rests on, and it is why the Controlled tier above puts the decision with a dataset's owner or a category's custodian rather than with a platform administrator.
+
+**Where the two meet, the custodian decides.** Access to data a custodian governs needs the custodian's approval, whoever asks for it, the dataset's own owner included. A custodian can instead allow one dataset's owner to manage access to that data within that dataset, and can withdraw the allowance at any time. It covers one dataset and never the category everywhere, so a new dataset that declares the category still answers to the custodian alone.
 
 **Authority that is wide enough to matter is worth watching, so the system counts how fast it is used.** That reach is the point of the role, and it is also what would make the role worth taking over. So Usher records how many grants one person issues within a set stretch of time, and flags it when that goes above a configured level. It counts within a period rather than totalling forever, so someone approving requests steadily over months never trips it, while someone issuing the same number in one afternoon does.
 
@@ -174,9 +166,9 @@ This flags and does not block. A custodian is entitled to issue every one of tho
 
 ## How a decision reaches the data
 
-Everything above is what gets decided: the tiers, the participants, and the datasets and categories a grant names. What follows is how a decision made from those reaches the data, and what it looks like on the way.
+Everything above is what gets decided: the tiers, the participants, and the datasets and categories named in a grant. What follows is how a decision made from those reaches the data, and what it looks like on the way.
 
-Two different things happen, in two different places, and the whole design rests on keeping them apart. Usher keeps every rule about what each person is allowed to see and do, and it is the only place those rules live. Together, those rules are the **policy**. Applying the policy to one particular request is **enforcement**, and that happens somewhere else entirely: inside each application, every time someone asks for something.
+Two different things happen, in two different places, and the whole design rests on keeping them apart. Usher keeps every rule about what each person is allowed to see or do, and it is the only place those rules live. Together, those rules are the **policy**. Applying the policy to one particular request is **enforcement**, and that happens somewhere else entirely: inside each application, every time someone asks for something.
 
 Usher decides and never touches data. The applications enforce and never decide. Everything below is how a decision gets from the first to the second.
 
@@ -190,7 +182,7 @@ Naming the application in the token is what makes that safe. A token presented t
     <li><b>Someone signs in</b><span>Keycloak verifies who they are and issues proof of identity. No access decision has been made yet.</span></li>
     <li><b>The application asks Usher what this person may see or do</b><span>Not one question per action, in the form "may they open this particular record?", but a single request covering every dataset that application manages, answered in full.</span></li>
     <li><b>Usher computes the answer and encrypts it</b><span>Usher reads the policy, works out every dataset and category this person holds a grant for, and encrypts the result so that only the application it names can decrypt it.</span></li>
-    <li><b>The application decrypts the Usher token and applies it</b><span>A small component inside the application turns the Usher token into a condition attached to the query, before that query runs.</span></li>
+    <li><b>The application decrypts the Usher token and applies it</b><span>A small component inside the application turns the Usher token into a filter attached to the query, before that query runs.</span></li>
     <li><b>The data layer returns only what was permitted</b><span>Nothing is filtered out after the fact. Data the person may not reach is never retrieved in the first place.</span></li>
   </ol>
 
@@ -198,21 +190,21 @@ Here is the Usher token for the researcher in the table above, issued to the sea
 
 <pre class="token"><span class="c">{</span>
   <span class="k">"sub"</span>:         "a4f1c8e2-...",          <span class="c">// the Keycloak account this token refers to</span>
-  <span class="k">"iss"</span>:         "usher.example.org",     <span class="c">// the Usher instance that issued this token</span>
+  <span class="k">"iss"</span>:         "usher.example.org",     <span class="c">// the Usher that issued this token</span>
   <span class="k">"aud"</span>:         "search-service",        <span class="c">// the one application this token is valid for</span>
   <span class="k">"exp"</span>:         1718611500,              <span class="c">// when this token stops being honoured</span>
   <span class="k">"generatedAt"</span>: 1718611200,              <span class="c">// when the permissions were last computed</span>
   <span class="k">"permissions"</span>: <span class="c">{</span>                          <span class="c">// keyed by resource identifier</span>
-    <span class="k">"HEART_STUDY"</span>:  { "open": {"record": ["view"]}, "controlled": {"record": ["view"]} },
-    <span class="k">"LUNG_COHORT"</span>:  { "open": {"record": ["view", "update"]} },
-    <span class="k">"REEF_ARCHIVE"</span>: { "open": {"record": ["view"]}, "controlled": {"record": ["view"]} },
-    <span class="k">"BRAIN_ATLAS"</span>:  { "open": {"record": ["view"]} }
+    <span class="k">"HEART_STUDY"</span>:  { "unmarked": {"record": ["view"]}, "controlled": {"record": ["view"]} },
+    <span class="k">"LUNG_COHORT"</span>:  { "unmarked": {"record": ["view", "update"]} },
+    <span class="k">"REEF_ARCHIVE"</span>: { "unmarked": {"record": ["view"]}, "controlled": {"record": ["view"]} },
+    <span class="k">"BRAIN_ATLAS"</span>:  { "unmarked": {"record": ["view"]} }
   <span class="c">}</span>                       <span class="c">// each category, and what may be done there</span>
 <span class="c">}</span></pre>
 
-The names in capitals are invented for these examples. They are dataset identifiers, not permission labels. They are the identity of a specific study or cohort as that instance registered it, which is why a grant covering one of them says nothing about the other.
+The names in capitals are invented for these examples. They are dataset identifiers, not permission labels. They are the identity of a specific study or cohort as that platform registered it, which is why a grant covering one of them says nothing about the other.
 
-What an instance may treat as a dataset is deliberately open, and the vocabulary section at the end covers it under <b>Resource</b>. Registering one is an administrative action, taken in the same interface a custodian uses to grant access, and its mechanics sit outside this document.
+What a platform may treat as a dataset is deliberately open, and the vocabulary section at the end covers it under <b>Resource</b>. Registering one is an administrative action, taken in the same interface a custodian uses to grant access, and its mechanics sit outside this document.
 
 <b>sub</b>, <b>iss</b>, <b>aud</b> and <b>exp</b> are standard JWT claims, defined by the same specification every OIDC system uses, so most of this object is not Usher's invention. <b>generatedAt</b> and <b>permissions</b> are, and are the two this document explains. A real token carries one more, naming which version of this format it is written in, so that a later version can add something an older application must be told about rather than allowed to ignore. Each part below earns its place:
 
@@ -224,14 +216,14 @@ What an instance may treat as a dataset is deliberately open, and the vocabulary
       </thead>
       <tbody>
         <tr><td><b>sub</b></td><td><b>(Subject)</b> The account the token refers to. Empty for an anonymous request, which still gets a token so that open access is logged like everything else.</td></tr>
-        <tr><td><b>iss</b></td><td><b>(Issuer)</b> Which Usher instance issued the token. Checked on arrival, so a token manufactured somewhere else is rejected rather than trusted.</td></tr>
+        <tr><td><b>iss</b></td><td><b>(Issuer)</b> Which Usher issued the token. Verified on arrival, so a token manufactured somewhere else is rejected rather than trusted.</td></tr>
         <tr><td><b>aud</b></td><td><b>(Audience)</b> The one application the token was made for. This is what makes a token delivered to the wrong application fail to decrypt instead of being quietly honoured.</td></tr>
         <tr><td><b>exp</b></td><td><b>(Expiration)</b> When the token stops being honoured. Short, so it cannot be replayed long after the permissions behind it changed. Applications do not wait for expiry to notice a change: renewal is built in, and a revocation is announced on a live channel rather than waiting for a token to lapse.</td></tr>
-        <tr><td><b>generatedAt</b></td><td>When the permissions were last computed. Lets an application reuse a cached token instead of asking again on every request. How long that window lasts is set by instance configuration and carried in <b>exp</b>, so an application reads the answer from the token rather than choosing its own interval.</td></tr>
+        <tr><td><b>generatedAt</b></td><td>When the permissions were last computed. Lets an application reuse a cached token instead of asking again on every request. How long that window lasts is set by the platform's configuration and carried in <b>exp</b>, so an application reads the answer from the token rather than choosing its own interval.</td></tr>
         <tr><td><b>permissions</b></td><td>The answer itself: one entry per dataset this person can reach in this application. Everything else in the token exists to make this part trustworthy.</td></tr>
         <tr><td colspan="2"><b>Inside each grant entry, one per dataset:</b></td></tr>
-        <tr><td><b>the dataset name</b></td><td>The instance's identifier for the dataset this entry is about, as described above. <b>HEART_STUDY</b> and <b>LUNG_COHORT</b> here.</td></tr>
-        <tr><td><b>the grants held</b></td><td>One entry per category of that dataset this person holds, each naming what they may do with the records carrying it. The word <b>record</b> sits between the category and the list because a grant can also cover parts of a record rather than whole ones, which a later release adds; until then every entry says <b>record</b> and the level is there so that adding the other one later changes nothing already built. A dataset appears here as soon as any one of its categories has been approved, so this list is what was cleared rather than everything the dataset holds: the records the application serves from it are the ones these categories cover, and the rest stay out of the answer. The open grant appears here alongside the rest, being a grant like any other. Grants are per dataset, so clearing a category in one study counts for nothing in another. Neither ownership nor a custodian's authority appears in this list: both are powers over how access is managed, exercised against Usher itself rather than against the data, so nothing that enforces a query has any use for them.</td></tr>
+        <tr><td><b>the dataset name</b></td><td>The platform's identifier for the dataset this entry is about, as described above. <b>HEART_STUDY</b> and <b>LUNG_COHORT</b> here.</td></tr>
+        <tr><td><b>the grants held</b></td><td>One entry per category of that dataset this person holds, each naming what they may do with the records carrying it. The word <b>record</b> sits between the category and the list because a grant can also cover parts of a record rather than whole ones, which a later release adds; until then every entry says <b>record</b> and the level is there so that adding the other one later changes nothing already built. A dataset appears here as soon as any one of its categories has been approved, so this list is what was cleared rather than everything the dataset holds: the records served from it are the ones covered by these categories, and the rest stay out of the answer. The open grant appears here as a grant on "unmarked", alongside the rest, being a grant like any other. Grants are per dataset, so clearing a category in one study counts for nothing in another. Neither ownership nor a custodian's authority appears in this list: both are powers over how access is managed, exercised against Usher itself rather than against the data, so nothing that enforces a query has any use for them.</td></tr>
       </tbody>
     </table>
   </div>
@@ -262,7 +254,7 @@ Adding rather than taking away is also a choice about how the filter is built: s
       </thead>
       <tbody>
         <tr><td>Data arrives carrying a label nobody has registered yet</td><td class="o bad">Visible to all</td><td class="o good">Hidden</td></tr>
-        <tr><td>A fault drops one condition from the filter</td><td class="o bad">Access widens</td><td class="o good">Access narrows</td></tr>
+        <tr><td>A fault drops one piece of the filter</td><td class="o bad">Access widens</td><td class="o good">Access narrows</td></tr>
         <tr><td>A category exists in policy but the application does not know it</td><td class="o bad">Records leak</td><td class="o good">Denied</td></tr>
         <tr><td>The person holds no grants at all</td><td class="o good">Denied</td><td class="o good">Denied</td></tr>
       </tbody>
@@ -281,7 +273,7 @@ This keeps the rules consistent as the platform grows. Adding an application doe
 
 No records are rewritten, no columns added, no migration run. The rules are applied at the moment of the query.
 
-Applying rules at query time is what separates adopting a policy system from undertaking a data migration. An instance can turn Usher on without altering the data it holds, and turning it off leaves nothing behind to clean up.
+Applying rules at query time is what separates adopting a policy system from undertaking a data migration. A platform can turn Usher on without altering the data it holds, and turning it off leaves nothing behind to clean up.
 
 ### The Usher token is encrypted, short-lived, and never reaches the person asking
 
@@ -303,11 +295,11 @@ Confirming that a named dataset exists but is off limits is itself a disclosure,
 
 ### How fine the control gets is decided by the data, not by Usher
 
-Access is decided from the descriptions an instance's data already carries, and nothing is ever written into that data to make a decision possible. That single principle decides how fine the control can be, and it decides it per instance rather than once for everyone.
+Access is decided from the descriptions already carried by a platform's data, and nothing is ever written into that data to make a decision possible. That single principle decides how fine the control can be, and it decides it per platform rather than once for everyone.
 
 Where the data already distinguishes what is being controlled, a grant reaches the records matching that description and leaves the rest. Where it does not, there is nothing to match on, so a dataset behaves as one undifferentiated thing and a grant reaches all of it or none. Neither case involves adding a sensitivity label to records that do not have one, which is the line this design does not cross: labelling data to make it governable would mean rewriting the data to suit the access system, and the access system is supposed to fit the data.
 
-So the honest answer to "how fine can this get" is: as fine as the descriptions already present allow, and no finer. An instance whose records carry nothing marking sensitivity gets whole-dataset grants, which is what the current requirements ask for.
+So the honest answer to "how fine can this get" is: as fine as the descriptions already present allow, and no finer. A platform whose records carry nothing marking sensitivity gets whole-dataset grants, which is what the current requirements ask for.
 
 ### A layer over Keycloak rather than a system built from scratch
 
@@ -315,7 +307,7 @@ Keycloak already runs on the platform and already holds the accounts, groups and
 
 So Usher is the layer above it. Keycloak establishes who someone is. Usher keeps the access policy in a database of its own, computes what a person may see or do, and delivers that answer to each application, which enforces it before any query runs. It then presents access management as a small number of comprehensible tasks, aimed at the people who make access decisions rather than at the people who run the identity system.
 
-**Keycloak does have an authorization feature of its own, and whether it could replace part of this is still being assessed.** It is already deployed, which makes it the candidate most likely to make some of this unnecessary, so three questions need answers rather than assumptions. Whether it can hand a data service a filter to apply, rather than only answering yes or no about one item at a time. Whether authorization could stay independent of the identity provider, which matters because the platform intends to support more than one. And whether a community representative could be given authority over their own data alone, fully audited, with no other administrative rights. That last is the requirement least likely to be met by an off-the-shelf feature, and it is the one the whole community-governance decision rests on.
+**Keycloak does have an authorization feature of its own, and it has been ruled out as a replacement.** It is already deployed, which made it the candidate most likely to make some of this unnecessary. It was set aside on independence: Overture intends to support more than one identity provider, so the rules about who may reach what cannot live inside one of them. Two questions about it were never investigated, and neither answer would have changed that: whether it can hand a data service a filter to apply, rather than only answering yes or no about one item at a time, and whether a community representative could be given authority over their own data alone, fully audited, with no other administrative rights. That second one is the requirement the whole community-governance decision rests on, and this design meets it with the custodian role rather than by relying on an off-the-shelf feature.
 
 Building this layer is a smaller undertaking than building an authorization system from nothing, because authentication, identity and the account model are not rebuilt. And someone responsible for a community's data, or a research administrator, can be given exactly the authority their role requires, without also being given administrative access to the platform's identity infrastructure.
 
@@ -325,7 +317,7 @@ Building this layer is a smaller undertaking than building an authorization syst
 
 **Not a place data lives.** It holds policy, not records, and cannot read the data it governs.
 
-**Not something that changes your data.** Enforcement works from the descriptions an instance's data already carries and writes nothing into it. Adopting Usher alters no records, and removing it leaves none behind.
+**Not something that changes your data.** Enforcement works from the descriptions already carried by a platform's data and writes nothing into it. Adopting Usher alters no records, and removing it leaves none behind.
 
 **Not an ethics or approval workflow, in the first release.** It records the outcome of a review and enforces it, while the review itself runs elsewhere. This is the one item on this list with a date rather than a principle behind it: running the review is close enough to governing access that it may well be built here later, and the others are things Usher is not by design.
 
@@ -337,7 +329,7 @@ The security mechanism is the most fully specified part of the design: how answe
 
 The permissions model covers its core structure, and the one substantial piece of design still ahead of it is the database schema, which the rest of the implementation waits on. The application adapter contract exists as design intent rather than as a specification with exact shapes. The administrative interface is settled as far as its shape goes, a package each portal mounts rather than a screen Usher serves, and unsettled on what it is handed to display.
 
-Two design faults were found while preparing the first integration, and in both the system would have granted access it should have refused, which is the opposite of everything described above. Both are now resolved in the design, before any code was written against them. One was an unauthenticated request producing no filter at all, where producing no filter means no restriction rather than a strict one; it now produces an explicit list of what an anonymous visitor may reach, which is empty where the answer is nothing. The other concerned saved sets. A researcher can pick records and save them as a set to come back to, and that set remembers which datasets its records came from, so that access to the set can be checked against access to its sources. The check worked by listing the datasets that ushered application had been set up to recognize, then excluding the ones the person lacks. A record from a dataset the application had never been told about was on neither list, so it passed unchecked. Saving such a set is now refused outright, at the moment it is saved. That is the only point at which both the set's sources and the instance's full list are known, so it is the only point the check can be made.
+Two design faults were found while preparing the first integration, and in both the system would have granted access it should have refused, which is the opposite of everything described above. Both are now resolved in the design, before any code was written against them. One was an unauthenticated request producing no filter at all, where producing no filter means no restriction rather than a strict one; it now produces an explicit list of what an anonymous visitor may reach, which is empty where the answer is nothing. The other concerned saved sets. A researcher can pick records and save them as a set to come back to, and that set remembers which datasets its records came from, so that access to the set can be checked against access to its sources. The check worked by listing the datasets that ushered application had been set up to recognize, then excluding the ones the person lacks. A record from a dataset the application had never been told about was on neither list, so it passed unchecked. Saving such a set is now refused outright, at the moment it is saved. That is the only point at which both the set's sources and the platform's full list are known, so it is the only point the check can be made.
 
 The honest summary is that the safety properties are settled and the parts people would actually touch are not. That order is deliberate: the decisions above are expensive to change once code depends on them, and an interface is not.
 
@@ -347,9 +339,11 @@ The honest summary is that the safety properties are settled and the parts peopl
 
 **Community governance of a community's own data.** The model carries a custodian role: authority over one category of data across every dataset that holds it, exercised without platform administrator rights, so that people who govern a body of data can decide who reaches it on a platform they do not run. The role is in the design and not in the first release, because nothing appoints a custodian in it. Until something does, a category that would be governed this way has no custodian to ask, and an administrator can reach that data by granting it to themselves. That grant is recorded, and it is approved by nobody outside the platform team.
 
-**The standard this should be studied against is OCAP, and that study has not happened.** Indigenous data governance in Canada is set out in the First Nations principles of Ownership, Control, Access and Possession, administered by the First Nations Information Governance Centre. Those principles concern who holds authority over data, not only who may read it, so a role in a permissions model is at most a mechanism for honouring them and never evidence of having done so. The order of work is deliberate: get the underlying capability right, then study what OCAP asks of it together with the communities concerned, rather than assert alignment from a design. Anyone reading this document to decide whether Usher meets an Indigenous data governance obligation should read it as describing a system that is not yet ready to be assessed against one.
+**The standard this should be studied against is OCAP (pending, not MVP).** Indigenous data governance in Canada is set out in the First Nations principles of Ownership, Control, Access and Possession, administered by the First Nations Information Governance Centre. Those principles concern who holds authority over data, not only who may read it, so a role in a permissions model is at most a mechanism for honouring them and never evidence of having done so. The order of work is deliberate: get the underlying capability right, then study what OCAP asks of it together with the communities concerned, rather than assert alignment from a design. Anyone reading this document to decide whether Usher meets an Indigenous data governance obligation should read it as describing a system that is not yet ready to be assessed against one.
 
-**A record answering to more than one condition at once.** A record that is both controlled and community-governed should need both grants, and today the underlying query layer cannot express that test. Until it can, a record answers to one condition at a time, and a dataset whose records need to be governed under two overlapping conditions has to separate them.
+**A record belonging to more than one category at once.** A record that is both controlled and community-governed should need both grants, and today the underlying query layer cannot express that check. Until it can, a record belongs to one category at a time, and a dataset whose records need to be governed under two overlapping categories has to separate them.
+
+**Categories local to one dataset.** Every category in the first release is defined for the whole platform, so a study wanting to divide its own records has to add a category to the list shared by every other study. A later release lets a dataset's owner create categories local to that dataset, which no other dataset sees. One of these can only narrow access, never widen it: a record carrying both a platform category and a local one needs both grants, since otherwise an owner could release community-governed records without their custodian's approval. So it waits on the item above, a record belonging to more than one category at once.
 
 **Holding data back for a period.** Every mechanism described above works by conferring reach, so the way to make something unreachable is to confer nothing. An embargo is the other shape: data a grant would otherwise reach, withheld until a date passes. It needs a design of its own because it is the one rule that takes access away rather than conferring it, and a rule of that kind has to fail closed, so that a system unable to determine whether an embargo has lifted withholds rather than serves. Nothing in the first release withholds this way.
 
@@ -371,35 +365,35 @@ None of this is needed to follow the document. It is here so the vocabulary is n
     <dt>Attribute-based access control, or ABAC</dt>
     <dd>Deciding access from facts about the person asking, the data, and the situation, rather than from a fixed job title. It is what allows one person to reach some datasets and not others without inventing a new role for every combination.</dd>
     <dt>Policy</dt>
-    <dd>Every rule about what each person is allowed to see and do. Usher keeps them all, in one place, and nothing else does.</dd>
+    <dd>Every rule about what each person is allowed to see or do. Usher keeps them all, in one place, and nothing else does.</dd>
     <dt>Enforcement</dt>
     <dd>Applying those rules to one particular request, before any data is fetched. It happens inside each application rather than in Usher, which is why Usher never touches the data it governs.</dd>
     <dt>Approval</dt>
     <dd>The decision that someone may reach something, made by a dataset's owner or by a category's custodian. Everything in this document follows from one, since nothing is reachable unless an approval says so.</dd>
     <dt>Grant</dt>
-    <dd>Usher's record of an approval: who, which dataset, which category, the role they hold there, and when it expires. The role is what says what they may do, because nothing records that apart from the grant naming it: this document mostly describes the effect rather than naming the role, though the two are one fact. The unit the whole policy is built from. This document says "grant" nearly everywhere, because that is the word on the tables and in the token. Where it says "approval", it means the human decision that a grant is the record of. They come apart only in federated instances, where a committee at another institution makes the decision and Usher records an outcome it did not decide.</dd>
+    <dd>Usher's record of an approval: who, which dataset, which category, the role they hold there, and when it expires. The role is what says what they may do, because nothing records that apart from the grant naming it: this document mostly describes the effect rather than naming the role, though the two are one fact. The unit the whole policy is built from. This document says "grant" nearly everywhere, because that is the word on the tables and in the token. Where it says "approval", it means the human decision that a grant is the record of. They come apart only on federated platforms, where a committee at another institution makes the decision and Usher records an outcome it did not decide.</dd>
     <dt>Permission</dt>
     <dd>One thing someone is allowed to do with one kind of data in one dataset, such as reading a record or changing it. A grant is made of these. A permission only counts while the grant carrying it is live, meaning accepted, unexpired and not revoked, so a grant can exist while the permission it would give does not. This document uses "approval" for the act that creates one.</dd>
     <dt>Record</dt>
     <dd>One row of data in a dataset, which is what access is ultimately about. Held deliberately apart from a grant, since Usher holds grants and never holds records: "record" throughout this document means data, never policy.</dd>
     <dt>Resource</dt>
-    <dd>Usher's neutral word for a dataset, and the word engineers on this project use. A field and a value: every record holding that value in that field is one resource. Deliberately generic, so the model does not assume anyone's vocabulary, since one instance calls it a study and another a cohort or a project.</dd>
+    <dd>Usher's neutral word for a dataset, and the word engineers on this project use. A field and a value: every record holding that value in that field is one resource. Deliberately generic, so the model does not assume anyone's vocabulary, since one platform calls it a study and another a cohort or a project.</dd>
     <dt>Category</dt>
-    <dd>One kind of approval a dataset's records can require, named by the instance that defines it, such as controlled or community-governed. Built the same way a resource is, from a field and a value, and the only difference is the question it answers: a resource's field says which records belong together, a category's says how sensitive they are. Reaching those particular records means holding an approval naming that category on that dataset; the dataset's other records answer to whichever category they carry instead. Which field and which value is configuration, not something Usher decides.</dd>
+    <dd>One kind of approval a dataset's records can require, named by the platform that defines it, such as controlled or community-governed. Every category in the first release is defined for the whole platform, and a later release adds categories local to one dataset. Built the same way a resource is, from a field and a value, and the only difference is the question it answers: a resource's field says which records belong together, a category's says how sensitive they are. Reaching those particular records means holding an approval naming that category on that dataset; the dataset's other records answer to whichever category they carry instead. Every dataset also has "unmarked", for the records not marked by any other category, and its tier decides who reaches them. Which field and which value is configuration, not something Usher decides.</dd>
     <dt>Custodian</dt>
-    <dd>Someone with authority over access to a particular kind of data, typically on behalf of the community that contributed it, and able to act without platform administrator rights. Called a custodian rather than a steward because the requirements this design answers to already use "data steward" for a dataset's owner, which is the Owner above rather than this role.</dd>
+    <dd>Someone with authority over access to a particular kind of data, typically on behalf of the community that contributed it, and able to act without platform administrator rights. A custodian can allow one dataset's owner to manage access to that data within that dataset. Called a custodian rather than a steward because the requirements this design answers to already use "data steward" for a dataset's owner, which is the Owner above rather than this role.</dd>
     <dt>Adapter, or bridge</dt>
     <dd>The small component inside each application that fetches Usher's answer and applies it before a query runs. Where enforcement actually happens.</dd>
-    <dt>Instance</dt>
-    <dd>One running Usher and the applications it serves, holding its own datasets, its own categories and its own grants. Where this document says an instance decides something, it means a choice made once for that Usher and applying across the applications it serves.</dd>
+    <dt>Platform</dt>
+    <dd>One running Usher and the applications it serves, holding its own datasets, its own categories and its own grants. Engineers call this an instance. Where this document says a platform decides something, it means a choice made once for that Usher and applying across the applications it serves. The software every such platform is built from is called Overture, never the platform.</dd>
     <dt>Ushered application</dt>
     <dd>An application that carries one of those adapters, and so one whose access decisions come from Usher. Worth a word of its own because a platform runs plenty of applications that do not: the search index, the databases, and the sign-in system are all applications, and none of them asks Usher anything.</dd>
     <dt>Fail-secure</dt>
     <dd>The property that anything going wrong results in less access rather than more. The thread running through most of the decisions above.</dd>
     <dt>Revocation</dt>
-    <dd>Withdrawing access already granted, and making that take effect promptly everywhere rather than whenever a cached answer happens to expire.</dd>
+    <dd>Withdrawing access already granted, and making that take effect promptly everywhere rather than whenever a cached answer happens to expire. A dataset's owner can revoke access within that dataset, a category's custodian within that category, and an administrator anywhere; where a custodian governs the data, the owner needs the custodian's allowance.</dd>
   </dl>
 
 <footer>
-    Usher is the user access control system for the Overture platform. Prepared as an orientation to the permissions and security model and the reasoning behind it.
+    Usher is the user access control system for Overture. Prepared as an orientation to the permissions and security model and the reasoning behind it.
   </footer>

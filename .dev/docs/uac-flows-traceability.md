@@ -65,7 +65,7 @@ A cohort built from Explore Data filters is a query. Sharing it is a grant scope
 rather than to a resource, which is the permission recorded here as SQON-scoped grants.
 
 **It is not blocked by the index shapes that block category-based record narrowing.** A cohort
-assembled from portal facets is a predicate over descriptive fields the records already carry, so it
+assembled from portal facets is a predicate over descriptive fields already carried by the records, so it
 needs no per-record category field and no `nested` mapping, and it would compile on both catalogues
 today.
 
@@ -144,13 +144,13 @@ several levels below it. The two are not interchangeable, so the flows' wording 
 than describing a second granularity.
 
 If per-dataset grants within a study are ever wanted, that is a narrower resource field rather than a
-record-level feature: the filter stays a positive clause over fields the data already carries, and
+record-level feature: the filter stays a positive clause over fields already carried by the data, and
 no mapping change or new classification field is involved. Cheap, and reachable without redesign.
 
 **The Public and Controlled filter has no field behind it.** Flow 2.5 adds an access-level filter to
 the Explore Data pages. Neither iMS catalogue carries a field that can drive it: the clinical index's
 access field holds the same value on every record, and the environmental catalogue has no equivalent.
-The filter is satisfiable from the resources a viewer holds grants for, which is Usher-side data
+The filter is satisfiable from the resources on which a viewer holds grants, which is Usher-side data
 rather than index data, so the portal needs it from an API rather than from a facet.
 
 ## Status of the personas against this design

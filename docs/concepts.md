@@ -701,10 +701,10 @@ Here is one, for a researcher who reaches two studies:
   "generatedAt": 1718611200,
 
   "permissions": {
-    "HEART_STUDY": { "open":       { "record": ["view", "update"] },
-                     "controlled": { "record": ["view"] } },
+    "HEART_STUDY": { "global.unmarked":       { "record": ["view", "update"] },
+                     "global.controlled": { "record": ["view"] } },
 
-    "LUNG_COHORT": { "open":       { "record": ["view"] } }
+    "LUNG_COHORT": { "global.unmarked":       { "record": ["view"] } }
   }
 }
 ```

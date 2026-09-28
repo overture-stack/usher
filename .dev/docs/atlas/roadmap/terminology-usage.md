@@ -67,6 +67,22 @@ word with one meaning in two grammatical roles. It belongs in the open list belo
 table of words that survived the test. Worth keeping as a lesson about the table itself: every other
 row here rests on a count, and this is the one that was checked.
 
+## A relative clause runs subject first
+
+**An object relative clause reverses the sentence.** In "records that a category marks", the noun
+being described is the object of the clause's verb, so the words run object, subject, verb. Dropping
+the "that" makes it a zero relative, or contact clause, which is worse, since nothing signals that a
+clause has started. Several of this model's nouns are also verbs, so "Records a category marks" first
+parses as a subject and its verb, and an aside between the two pushes the verb further away.
+
+**Restoring the "that" is not the fix.** Turn the clause round so the noun leads into its own verb:
+"records marked by a category", "grants held by the user", "resources reachable by the principal",
+"records not covered by any category". An indirect question is a different construction and reads
+fine: "which records a category covers", "how many values the field holds".
+
+`check-prose.sh` flags the construction over this model's head nouns and verbs, with or without the
+"that", and the corpus passed it clean when the check was added.
+
 ## A term of art is either defined or not used
 
 **Before writing a word that names a concept rather than describing one, check the glossary.** If it

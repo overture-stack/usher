@@ -37,7 +37,7 @@ minute. Fractional seconds are permitted and not required.
 Everything else lives in `data`, where the CloudEvents restriction on names does not apply and
 **property names are camelCase**, matching the Usher token's `generatedAt` rather than the policy
 store's columns: `data` is JSON on the wire, and nothing about it is a database identifier. **Each
-entity defines its own property names.** The `token` entity has `tokenTtl` and `grantCount`; the
+entity defines its own property names.** The `token` entity has `tokenTtl`, `grantCount` and `rules`; the
 `grant` entity has none of those. A reader who knows the entity knows what the payload can contain,
 and `dataschema` names the definition where one is published.
 
@@ -236,7 +236,7 @@ thirty times obscures the part that differs.
 
 | Event type                     | Description                                                                                                                      | Actor              | Affected entity                     | Additional required fields                                                                                                 | Severity         |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `token.exchange`               | Usher token issued to a user, or refused                                                                                         | User               | Usher token                         | `userId`, `result`; on success `tokenTtl` and `grantCount` (the number of grants, never their values); on refusal `reason` | follows `result` |
+| `token.exchange`               | Usher token issued to a user, or refused                                                                                         | User               | Usher token                         | `userId`, `result`; on success `tokenTtl`, `grantCount` (the number of grants, never their values) and `rules` (the names of the rules that conferred grants); on refusal `reason` | follows `result` |
 | `invitation.creation`          | Access invitation sent to an address with no account yet                                                                         | Custodian or admin | Email address + category + resource | `actorId`, `email`, `resourceId`, `category`, `invitationId`, `expiresAt`                                                  | `info`           |
 | `invitation.claim`             | An account confirmed an invitation; the grants it promised were created                                                          | User               | Principal + the grants created      | `actorId`, `invitationId`, `email`, `grantIds`                                                                             | `info`           |
 | `invitation.lapse`             | An invitation expired unclaimed, so the grants it promised were never created                                                    | System             | Email address + category + resource | `invitationId`, `email`, `resourceId`, `category`                                                                          | `info`           |
@@ -256,6 +256,7 @@ thirty times obscures the part that differs.
 | `grant.unguarded`              | A grant took effect without a custodian's decision because the category had none assigned                                        |                    |                                     |                                                                                                                            |                  |
 | `admin.override`               | Admin performed an action that bypasses an instance config restriction                                                           | Admin              | Varies                              | `adminId`, `operation`, `configBypassed`, `resourceId`                                                                     | `critical`       |
 | `revocationChannel.modeChange` | Bridge moved between normal and revocation-uncertain: whether it can currently confirm its cached authorizations are still valid | System             | All active sessions                 | `fromMode`, `toMode`, `reason`                                                                                             | `critical`       |
+| `category.unenforced` | Bridge received a grant on a category whose scope it does not enforce yet, `resource.` in version 1, so the grant reached nothing | System | Principal + category + resource | `userId`, `resourceId`, `category`, `payloadVersion`, `reason` (`notImplemented`) | `warning` |
 
 **An invitation ends two ways and they are different facts.** A claim says somebody took the access
 offered; a lapse says nobody did. Collapsing them loses the second, which is the only record that an

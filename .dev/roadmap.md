@@ -56,7 +56,7 @@ The order the artifact establishes, arrived at by a reader rather than an author
 
 `docs/concepts.md` deviates most: it opens with theory and reaches the access tiers sixth, asking a reader to hold abstractions before anything attaches to them. `docs/intro.md` is problem-first but never presents the tiers as the organizing idea. Both restructures wait until review of the artifact settles, since the order is still being tested.
 
-A second review round, run as three independent reading passes, is written up in [onboarding audit](docs/atlas/roadmap/onboarding-audit.md). Five line-level items remain, plus two whole-document single-word sweeps: `instance`, which carries the design's meaning and ordinary English's in the same text, and `application`, 60 uses where the settled word is `ushered application`.
+A second review round, run as three independent reading passes, is written up in [onboarding audit](docs/atlas/roadmap/onboarding-audit.md). Five line-level items remain, plus one whole-document single-word sweep: `application`, 60 uses where the settled word is `ushered application`. The `instance` sweep is done: the document says `platform`, and the glossary ties the two.
 
 **Acceptance is on hold rather than missing.** The glossary says a permission counts only while its grant is accepted, and nothing in the body introduces the idea, so a reader meets the word once in a definition. Closing it means a section on the recipient's answer being its own record, which is held until the reader-facing side of the model is worth another pass. The token's payload version is a deliberate omission on the same grounds: negotiation costs a non-technical reader more than the accuracy returns.
 
@@ -235,6 +235,11 @@ embargoed segment differs by principal.
 instance needing time-bounded access has it today. What expiry cannot do is release data, because
 it only ever subtracts.
 
+**An approach meeting all four requirements is recorded as research, and is not in the first
+release:** embargo as a local category with a deadline, which on open data needs no both-grants check
+but needs every bridge serving the study to enforce local categories before one is set. See
+[conditions beyond the data](docs/atlas/roadmap/conditions-beyond-the-data.md).
+
 ### The token calculation, and the schema that should follow it
 
 The calculation the controller performs to produce a token is stale in three ways and is the
@@ -271,8 +276,7 @@ and belongs to Arranger: whether an Arranger catalogue is a Dataset, a Distribut
 ### Record-level narrowing on a field an instance already supplies (post-MVP)
 
 Renamed from "record-level category tagging". "Tagging" named the mechanism as an act of writing
-labels onto records, which this design does not do: enforcement filters on fields the data already
-carries, and only on descriptive ones. See the descriptive-versus-prescriptive rule under "Usher is
+labels onto records, which this design does not do: enforcement filters on fields already carried by the data, and only on descriptive ones. See the descriptive-versus-prescriptive rule under "Usher is
 data-agnostic" in [decisions.md](design/decisions.md). The old name survives in several documents
 and should go with the terminology pass, which now has somewhere to record its rules: see
 [terminology usage rules](docs/atlas/roadmap/terminology-usage.md).
@@ -285,7 +289,7 @@ holds one value across every record and is unexercised; the environmental catalo
 equivalent. Since data is not modified to suit enforcement, this form stays unavailable there.
 
 **Narrowing within a resource by predicate is available now and is not this item.** A filter over
-descriptive fields the records already carry narrows at record granularity with positive clauses on
+descriptive fields already carried by the records narrows at record granularity with positive clauses on
 flat keywords, on both catalogues, with no mapping change. Granularity finer than a study can come
 from a narrower resource field or from a predicate-scoped grant, neither of which waits on this. The
 two differ in whether fields can be combined: a resource field is one existing single-valued field, so
@@ -394,6 +398,25 @@ The platform envelope is decided and applied to [audit-events.md](design/audit-e
 
 **One field set still needs reconciling before it is built.** Arranger's per-request event carries `catalogId`, `queryType`, `sqonSize`, `hitsReturned` and `durationMs`, with `userId` absent now and populated when auth lands. Those are `data` contents and nothing conflicts, but `userId` there is a client-supplied GraphQL argument on `saveSet` persisted as a set's owner, while `actorId` is server-derived from the token. Same-looking names, opposite trust properties, and the mistake a shared name invites is reading a client-asserted value as an audit identity.
 
+### Registered tier: a signed-in baseline
+
+In the first release, decided 2026-09-25: the onboarding document already promises the Registered
+tier, and it adds no new mechanism. Every resource has an implicit `unmarked` category covering the
+records that its other categories do not cover, and a setting says who reaches them: open, through the baseline;
+registered, through a rule giving every signed-in principal the `unmarked` grant; or by grant. The
+controller evaluates both rules at the exchange, so the bridge sees ordinary grants. See "Who holds a
+grant can follow a rule" and "Records not covered by any category are `unmarked`" in
+[decisions.md](design/decisions.md).
+
+Cases 28 to 35 in [token-calculation.md](design/token-calculation.md) and the conformance corpus
+cover it with and without a sign-in, against a configuration of their own. **One question is open
+before the rule is built:** whether an expired identity token is refused or served as anonymous
+(case 34).
+
+**Owed:** the prose across the rest of the design corpus still treats `open` as a category, notably
+`permissions-model.md`, `to-discuss.md`, `adapter-integration.md` and `docs/concepts.md`. The token
+keys, the decisions, the calculation and the corpus are already reconciled.
+
 ---
 
 ## Implementation: Core service
@@ -434,7 +457,7 @@ Schema implementation and migration tooling. Integrity controls: transactions, f
 
 ### `@overture-stack/usher-express-bridge`
 
-Shared library embedded in all applications: token exchange, local validation, TTL caching, revocation channel (push + poll fallback), revocation-uncertain mode (503 after grace period). Lives in `modules/express-bridge` in this repository, created when implementation begins, and is published from here for adapters to import.
+Shared library embedded in all applications: token exchange, local validation, TTL caching, revocation channel (push + poll fallback), revocation-uncertain mode (503 after grace period). Lives in `modules/express-bridge` in this repository, created when implementation begins, and is published from here for adapters to import. Its logic stays separate from the Express middleware and routing, so a bridge for another framework can reuse it.
 
 ### `@overture-stack/arranger-usher-adapter`
 
@@ -524,6 +547,15 @@ per query, so a researcher sees what the data looks like without its size or its
 reason to request access. Post-MVP: the first integration cannot limit one category within a
 response, and a grant written before the limits are enforced serves a full viewer. See [bounded
 surveyor](docs/atlas/roadmap/bounded-surveyor.md).
+
+### Categories local to one resource
+
+An owner creates a category that exists only in their resource, so a study divides its own records
+without growing the list every other study sees. The scope prefix on every category name ships in the
+first release, so this adds a scope without renaming anything. A local category only ever adds a
+restriction, so it waits on a record
+carrying more than one category, and where its mapping lives decides whether owners can create one
+themselves. See [local categories](docs/atlas/roadmap/local-categories.md).
 
 ---
 

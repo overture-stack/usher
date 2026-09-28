@@ -54,7 +54,7 @@ state it this way:
 | Behaviour                                                | Was                              | Is                                           |
 | -------------------------------------------------------- | -------------------------------- | -------------------------------------------- |
 | No grants means nothing reachable                        | asserted                         | the ceiling minus everything, which is empty |
-| A resource carrying no categories is reachable by nobody | asserted, case 10                | no pair to keep                              |
+| No grant on a resource means nobody reaches it          | asserted, case 10               | no pair to keep                              |
 | An empty category does not satisfy its own condition     | patched after shipping as a hole | nothing kept is nothing reached              |
 | A category can only ever restrict                        | asserted in reader prose         | every category is a condition that removes   |
 
@@ -92,8 +92,9 @@ Five consequences.
 5. **Acceptance is held per member, so a group grant does not skip it.** A grant to a group creates
    one row per affected member carrying that member's decision and the capabilities it confers.
    Ana accepting and Bo rejecting the same group grant is an ordinary outcome, and the grant itself
-   is unchanged by either. `open` is the exception and needs no acceptance: an anonymous request has
-   nobody to accept, and a registration-gated `open` is accepted with the platform's terms.
+   is unchanged by either. A grant a rule confers is the exception and needs no acceptance: an
+   anonymous request has nobody to accept, and a signed-in principal accepted the platform's terms
+   when registering. It has no decision row, so step 3 would otherwise drop it.
 
 ---
 
@@ -107,7 +108,10 @@ that looks complete and answers only one path.
        held by a group they belong to. Each names one (resource, category), the
        role its holder acts in there, and optionally one field category within
        that category.
-       Add the baseline's open grant on every resource carrying open.
+       Add the `unmarked` grant each rule confers: the baseline's on every
+       resource whose unmarked records are open, and, if the principal is
+       signed in, the signed-in rule's on every resource whose unmarked records
+       are registered.
 
     2. Expand each grant's role to capabilities. Their union is the ceiling.
 
@@ -128,7 +132,7 @@ that looks complete and answers only one path.
 
 Step 5 decides what the token says, and the adapter decides what that reaches: one clause per named
 category, pairing the resource's field value with the category's, composed with `or`. So a resource
-of mixed sensitivity serves each principal the records their categories reach, rather than being
+of mixed sensitivity serves each principal the records reached by their categories, rather than being
 present in full or absent in full.
 
 Where a record carries more than one category, every one of them must be held. That conjunction is
@@ -146,65 +150,70 @@ Against this configuration:
     G1 "cardiology" and G2 "study readers" are named sets of people and nothing
     more. A role is named on each grant, never on the group.
 
-    HEART_STUDY     carries  open, controlled
-    LUNG_COHORT     carries  open
-    REEF_ARCHIVE    carries  open, controlled, community-governed
+    HEART_STUDY     carries  controlled
+    LUNG_COHORT     carries  no concrete category
+    REEF_ARCHIVE    carries  controlled, community-governed
 
-    The baseline is on and grants open -> read.
+    Every resource's unmarked records are open unless a case says otherwise.
+    The baseline is on and grants unmarked -> read wherever the setting is open.
     Ana is the principal, and belongs to no group unless a case says so.
     The token's audience serves all three resources.
     A grant below is at curator unless the case says otherwise.
 
-**A category selects records within a resource.** Holding `open` in HEART_STUDY reaches its open
-records and not its controlled ones, so a token naming one category of a resource is an ordinary
+**A category selects records within a resource.** Holding `unmarked` in HEART_STUDY reaches its
+unmarked records and not its controlled ones, so a token naming one category of a resource is an ordinary
 outcome rather than a partial failure. The one part deferred is a record carrying several categories
 at once, which needs a subset test the query layer cannot yet express; until then a record carries
 one category.
 
-**The baseline contributes `{open: [view]}` on all three resources**, since each holds records no
-concrete category covers. Rows below name only what a case adds to that or takes from it.
+**The baseline contributes `{unmarked: [view]}` on all three resources**, since each holds records not covered by any concrete category. Rows below name only what a case adds to that or takes from it.
 
 **The notation is shorthand.** A token entry nests category, then entity, then actions, so
-`{open: [view]}` below is `{"open": {"record": ["view"]}}` in full. The entity level is elided
-wherever it is `record`, which is every row but the three field cases and case 26, and those name it
+`{unmarked: [view]}` below is `{"global.unmarked": {"record": ["view"]}}` in full. The scope prefix is elided
+throughout, since every category in these cases is global, and the entity level is elided wherever it
+is `record`, which is every row but the three field cases and case 26, and those name it
 because that is the point of them.
 
 | #   | Case                                                                                                             | Ana's token                                                                                                                                                                                       |
 | --- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Anonymous. Baseline turned off                                                                                   | `{}`                                                                                                                                                                                              |
-| 2   | Anonymous. Baseline on                                                                                           | `{open: [view]}` on all three. She reaches the open records of every study, and none of their controlled or community-governed ones                                                               |
-| 3   | Registered, in no group                                                                                          | Same contents as case 2, with `sub` present. **Open: whether that difference means anything downstream**                                                                                          |
-| 4   | In G1. G1 granted HEART_STUDY/controlled. She has not answered, so she has no decision row for it                | The baseline only. HEART_STUDY appears with `open` and without `controlled`, because no decision is not an acceptance                                                                             |
-| 5   | Same, and she accepted                                                                                           | `HEART_STUDY: {open: [view], controlled: [create, view, update, delete]}`                                                                                                                         |
+| 2   | Anonymous. Baseline on                                                                                           | `{unmarked: [view]}` on all three. She reaches the unmarked records of every study, and none of their controlled or community-governed ones                                                               |
+| 3   | Registered, in no group                                                                                          | Same contents as case 2, with `sub` present, because no resource here has its unmarked records set to registered; see the note below the table                                                                                          |
+| 4   | In G1. G1 granted HEART_STUDY/controlled. She has not answered, so she has no decision row for it                | The baseline only. HEART_STUDY appears with `unmarked` and without `controlled`, because no decision is not an acceptance                                                                             |
+| 5   | Same, and she accepted                                                                                           | `HEART_STUDY: {unmarked: [view], controlled: [create, view, update, delete]}`                                                                                                                         |
 | 6   | Same, and she rejected                                                                                           | The baseline only, as in case 4                                                                                                                                                                   |
-| 7   | In G1 and G2. G1 granted HEART_STUDY/controlled at curator, G2 granted HEART_STUDY/open at viewer. Both accepted | `HEART_STUDY: {controlled: [create, view, update, delete], open: [view]}`. Two grants on one resource, each at its own role, which is the case a role held per resource cannot express            |
+| 7   | In G1 and G2. G1 granted HEART_STUDY/controlled at curator, G2 granted HEART_STUDY/unmarked at viewer. Both accepted | `HEART_STUDY: {controlled: [create, view, update, delete], unmarked: [view]}`. Two grants on one resource, each at its own role, which is the case a role held per resource cannot express            |
 | 8   | In G1 and G2, both granted HEART_STUDY/controlled, both accepted                                                 | `controlled: [create, view, update, delete]`. Union of the two                                                                                                                                    |
-| 9   | In G1. G1 granted REEF_ARCHIVE/controlled, accepted. Nothing for community-governed                              | `REEF_ARCHIVE: {open: [view], controlled: [create, view, update, delete]}`. Its community-governed records are not reached, and the rest of the resource is                                       |
-| 10  | A resource carries no categories at all, with the default off                                                    | Reachable by nobody. No category is named for it, so no clause selects any of its records                                                                                                         |
+| 9   | In G1. G1 granted REEF_ARCHIVE/controlled, accepted. Nothing for community-governed                              | `REEF_ARCHIVE: {unmarked: [view], controlled: [create, view, update, delete]}`. Its community-governed records are not reached, and the rest of the resource is                                       |
+| 10  | A resource carries no concrete category, its unmarked records are by grant, and nobody is granted them                                                    | Reachable by nobody. All its records are unmarked, and no grant names `unmarked` on it                                                                                                         |
 | 11  | The grant she accepted has expired                                                                               | Excluded, read from the grant rather than from her row                                                                                                                                            |
 | 12  | The grant she accepted was revoked                                                                               | Excluded, read from the grant rather than from her row                                                                                                                                            |
 | 13  | She rejected, then later accepted                                                                                | The later decision stands. Both rows are kept                                                                                                                                                     |
 | 14  | She accepted at curator. The grant's role is then changed to viewer                                              | `controlled: [view]`. Narrowing needs no re-asking                                                                                                                                                |
 | 15  | She accepted at viewer. The grant's role is then changed to curator                                              | `controlled: [view]`. The added capabilities are unaccepted until accepted                                                                                                                        |
-| 16  | She leaves G1, her accepted row still present                                                                    | HEART_STUDY keeps `open` from the baseline and loses `controlled`. The grant no longer reaches her, so the row confers nothing                                                                    |
+| 16  | She leaves G1, her accepted row still present                                                                    | HEART_STUDY keeps `unmarked` from the baseline and loses `controlled`. The grant no longer reaches her, so the row confers nothing                                                                    |
 | 17  | Her grant names REEF_ARCHIVE/community-governed after that category was removed from it                          | Inert, nothing to keep. **Open: whether removing a category warns about this**                                                                                                                    |
 | 18  | Her grant names a resource this audience does not serve                                                          | Excluded. The token is per audience                                                                                                                                                               |
-| 19  | HEART_STUDY carries no `open` at all                                                                             | Records that no category describes are reachable by nobody                                                                                                                                        |
+| 19  | HEART_STUDY's unmarked records are by grant, and she holds no grant on them                                                                             | Its unmarked records are not reached, and nothing else changes. Without `unmarked`, no grant could have named them at all                                                                                                                                        |
+| 19b | Same, and she accepted a viewer grant on HEART_STUDY/unmarked | `HEART_STUDY: {unmarked: [view]}`. Records not covered by any category are reached through a grant like any other category's |
 | 20  | `Auto-accept` is on for this instance                                                                            | An accepted decision is recorded at creation without her acting. Otherwise identical                                                                                                              |
 | 21  | Accepted grant on controlled, against a record withheld until a date                                             | **No reach.** Not implementable yet                                                                                                                                                               |
 | 22  | A record carries `controlled` and `community-governed`, and she holds only `controlled`                          | **No reach.** Both are needed. Not implementable yet: this is the subset test                                                                                                                     |
-| 23  | A record carries a category value the adapter has no mapping for                                                 | **Served as open**, which is the defect the startup reconciliation check exists to prevent                                                                                                        |
+| 23  | A record carries a category value the adapter has no mapping for                                                 | **Served as unmarked**, so to whoever reaches the unmarked records, which is the defect the startup reconciliation check exists to prevent                                                                                                        |
 | 24  | A column carries no field category, and the category is partitioned                                              | **Served as basic**, the field residual, and only to a principal granted `basic`. Safe while the reconciliation check covers field mappings and runs on an index mapping change, not only at boot |
-| 24b | Her grant names `clinician` and not `basic`                                                                      | The clinician columns and no others. The residual is granted rather than assumed, exactly as `open` is on the row axis                                                                            |
+| 24b | Her grant names `clinician` and not `basic`                                                                      | The clinician columns and no others. The residual is granted rather than assumed, exactly as `unmarked` is on the row axis                                                                            |
 | 24c | The category is not partitioned by field at all                                                                  | No `field` key is emitted, and the record capabilities carry every column. Absence of a partition, not absence of a grant                                                                         |
 | 25  | A grant names `record.delete` and carries a field category                                                       | **Refused at writing.** Deletion takes the whole record, so the pairing is meaningless, and `field_category_id IS NOT NULL` is what catches it                                                    |
-| 26  | She holds `record.view` and `revision.view` on one category                                                      | `{open: {record: [view], revision: [view]}}`. The entity level is what keeps these apart: a bare `view` could not say which, once two data-plane entities share the action                        |
-| 27  | She holds `artifact.create` on HEART_STUDY's open records                                                        | `{open: {artifact: [create]}}`. An artifact drawn from two resources needs the capability under both, which is the provenance rule expressed in the token rather than beside it                   |
+| 26  | She holds `record.view` and `revision.view` on one category                                                      | `{unmarked: {record: [view], revision: [view]}}`. The entity level is what keeps these apart: a bare `view` could not say which, once two data-plane entities share the action                        |
+| 27  | She holds `artifact.create` on HEART_STUDY's unmarked records                                                        | `{unmarked: {artifact: [create]}}`. An artifact drawn from two resources needs the capability under both, which is the provenance rule expressed in the token rather than beside it                   |
 
 Case 3 is worth keeping: a registered principal in no group and an anonymous visitor produce the same
-contents, and the onboarding says an empty token is meaningfully distinct from an absent one. Whether
-the two differ from each other is unanswered, and it bears on whether a present `sub` changes anything
-downstream.
+contents here only because no resource in this configuration has its unmarked records set to
+registered. Where one does,
+the signed-in rule gives the registered principal its grant and the anonymous visitor nothing, which
+is the one difference a present `sub` makes on its own: see cases 28 to 34, against a configuration
+with such a resource, and "Who holds a grant can follow a rule" in
+[decisions.md](decisions.md).
 
 Cases 14, 15 and 16 are the ones a role change or a membership change reaches, and all three are safe
 without anyone remembering to re-run anything, because step 4 intersects what was accepted with what
@@ -220,6 +229,39 @@ whether the calculation is described as adding grants or as narrowing a ceiling,
 can currently catch an implementation that gets the direction wrong, and none can confirm one that
 gets it right. Writing it now pins the invariant ahead of the feature. It carries the same weight as
 the rest: a conformance case marked not yet implemented, not a note.
+
+### The signed-in rule, against its own configuration
+
+These cases run against a second configuration, so every case above keeps its answer:
+
+        viewer   carries  view
+
+    OPEN_ATLAS       carries  no concrete category; unmarked records open
+    MEMBERS_ARCHIVE  carries  no concrete category; unmarked records registered
+    SEALED_ARCHIVE   carries  no concrete category; unmarked records by grant
+    HEART_STUDY      carries  controlled; unmarked records open
+
+    The baseline is on unless a case turns it off, and grants unmarked -> read
+    wherever the setting is open. The signed-in rule grants unmarked -> read to
+    every signed-in principal wherever the setting is registered.
+    Ana is the principal, and the token's audience serves all four resources.
+
+Every grant a rule confers here is on `unmarked`, shortened as above. See "Who holds a grant can
+follow a rule" and "Records not covered by any category are `unmarked`" in [decisions.md](decisions.md).
+
+| #   | Case                                                                      | Ana's token                                                                                                                                                                                              |
+| --- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 28  | Anonymous. Baseline on                                                    | `{unmarked: [view]}` on OPEN_ATLAS and HEART_STUDY. MEMBERS_ARCHIVE and SEALED_ARCHIVE are absent: one needs a sign-in and the other a grant                                                         |
+| 29  | Anonymous. Baseline off                                                   | `{}`. Neither rule reaches her                                                                                                                                                                           |
+| 30  | Signed in, no grants. Baseline on                                         | Case 28, plus `MEMBERS_ARCHIVE: {unmarked: [view]}`. This is the one difference a present `sub` makes on its own                                                                                      |
+| 31  | Signed in, no grants. Baseline off                                        | `MEMBERS_ARCHIVE: {unmarked: [view]}` alone. An empty baseline reaches nobody on an open resource, signed in or not, because registration gating is the registered setting rather than an empty baseline |
+| 32  | Signed in. Accepted a viewer grant on HEART_STUDY/controlled. Baseline on | Case 30, with `HEART_STUDY: {unmarked: [view], controlled: [view]}`. The rule's grants and her own accumulate, and neither replaces the other                                                         |
+| 33  | Signed in, and her identity has been revoked                              | Refused. A revoked principal fails at the bridge before any query runs, so no rule reaches her: a grant a rule confers cannot outlive the identity it was conferred on                                  |
+| 34  | Carries an expired identity token                                         | **Open: refused at the exchange, or served as case 28.** Case 28 reaches less, never more, but it records a signed-in person as anonymous and hides the failed sign-in                                  |
+| 35  | Signed in. Accepted a viewer grant on SEALED_ARCHIVE/unmarked. Baseline on | Case 30, plus `SEALED_ARCHIVE: {unmarked: [view]}`. Records not covered by any category, on a resource that is not open, are reachable once someone is granted them                                             |
+
+A resource set to registered may carry a restricting category as well: the setting reaches its
+unmarked records, and its controlled records need their own grant, as case 32 shows for an open one.
 
 ---
 

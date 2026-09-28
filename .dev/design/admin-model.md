@@ -498,7 +498,26 @@ Usher reads all admin state from the validated OIDC token. The connector interfa
 
 The connector is the only component that knows it is talking to a specific provider. The rest of
 Usher's code works with a validated, normalized claim set. The monorepo will contain a
-`packages/oidc-keycloak` connector and a `packages/oidc-generic` fallback.
+`modules/oidc-keycloak` connector and a `modules/oidc-generic` fallback.
+
+### What the connector reuses from the identity provider
+
+Keycloak is the first provider. Each feature below is reached only through the connector, and each
+has an answer for a provider that lacks it that never widens access, so supporting another provider
+can cost features and never confidentiality.
+
+| Feature                           | Standard or provider-specific                                  | What Usher uses it for                                                     | Where a provider lacks it                                                  |
+| --------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| discovery and signing keys (JWKS) | OpenID Connect                                                 | validating the provider's tokens                                           | required of every provider                                                 |
+| back-channel logout               | OpenID Connect Back-Channel Logout                             | the application drops a signed-out person's Usher token                    | the token lives until it expires                                           |
+| token introspection               | RFC 7662                                                       | confirming at each exchange that the provider's session is still active    | expiry and back-channel logout carry it alone                              |
+| authentication strength (`acr`)   | OpenID Connect claim; Keycloak maps it to levels               | requiring a stronger sign-in for sensitive categories or for a self-grant  | whatever needed it is refused                                              |
+| a disabled account                | every provider; read through a failed renewal or introspection | an identity-level cut-off: exchanges fail, so no new Usher token is issued | Usher's own suspension, which is needed regardless                         |
+| client credentials                | OAuth 2.0                                                      | service accounts as principals                                             | required of every provider that serves machine principals                  |
+| terms acceptance at sign-in       | Keycloak required action                                       | the Registered tier's accepted terms of access                             | Usher or the portal records acceptance itself                              |
+| admin events                      | Keycloak, through an extension or by polling                   | learning of a disabled, deleted or regrouped account without asking        | introspection at exchange catches a disabled account; groups stay in Usher |
+| organizations                     | Keycloak, supported since version 26                           | institution membership feeding Usher groups                                | groups are managed in Usher                                                |
+| user lookup through the admin API | Keycloak                                                       | display names at the portal layer, and finding a person to grant access to | the provider's own directory interface                                     |
 
 **OPA note:** Open Policy Agent was considered as a policy evaluation engine. It is not a v1
 dependency. Usher's ABAC model is structured (defined schema: `grants`, `grant_decisions`,

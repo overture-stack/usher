@@ -10,12 +10,17 @@ Where a reviewed tool influenced the design, that contribution is noted.
 ### Cerbos
 
 Cerbos is a standalone PDP (Policy Decision Point) service. Applications send a request containing
-user context and a resource; policies are defined in YAML files.
+user context and a resource; policies are defined in YAML or JSON files.
 
 **Two response modes.** A check returns an allow/deny decision. `PlanResources` performs partial
 evaluation and returns a query plan: a discriminated result of `KIND_ALWAYS_ALLOWED`,
 `KIND_ALWAYS_DENIED` or `KIND_CONDITIONAL`, the last carrying an AST of operators, variables and
 literals, with prebuilt adapters compiling that AST into ORM queries.
+
+**It holds no grants.** Cerbos is stateless: the application passes the principal's and the
+resource's attributes on every request. Policies may be stored in a database and changed through its
+Admin API, but they are rules, not records of who was granted what, so the grants and who may change
+them would stay in Usher whichever engine evaluates them.
 
 **What it contributed.** The standalone PDP service pattern, rather than an embedded library, is
 the right architecture for an access control service shared across applications, and its REST API is
@@ -26,11 +31,15 @@ enforcement path returns.
 
 **Three requirements an evaluation would test it against.**
 
-1. **Enforcement against Elasticsearch through SQON.** Cerbos ships query-plan adapters targeting
-   ORMs; the first application's backend is reached through SQON, so this requirement asks what a
-   SQON adapter costs to write.
+1. **Enforcement against Elasticsearch through SQON.** Cerbos's query-plan adapters target ORMs in
+   TypeScript, Python, Go and Java, plus a Java adapter emitting Elasticsearch Query DSL that is built
+   from source, tested against Elasticsearch 8 and absent from the documentation. None targets SQON,
+   and the first application's backend is reached through SQON, so this requirement asks what a SQON
+   adapter costs to write.
 2. **A revocation channel that pushes grant changes to adapters and suspends serving when the
-   channel goes quiet past a grace period.** Usher's fail-secure behaviour depends on this.
+   channel goes quiet past a grace period.** Usher's fail-secure behaviour depends on this. The
+   open-source PDP reloads its own policies from disk or git and notifies no application of any
+   change.
 3. **Delegated governance:** a custodian holding grant authority over one category
    platform-wide, fully audited, holding no other administrative rights. This is the OCAP
    requirement and the least likely to be satisfied off the shelf.
@@ -39,7 +48,7 @@ A management UI ships in Cerbos Hub rather than the open-source product (see bel
 
 **Assessment status: not run.** The query-plan permission above satisfies the structured-output
 requirement. The three above are what remains to test, and they are read from Cerbos's
-documentation rather than from running it.
+documentation rather than from running it, checked on 2026-09-28 against v0.55.0.
 
 ---
 
@@ -74,6 +83,17 @@ exposing Rego policies as a customization surface; if the Rego is internal, that
 transfer. If it is exposed, it adds significant complexity to what is currently a clean, well-defined
 data model.
 
+**It now produces filters itself, which does not change the answer.** Since v1.9.0 (September
+2025), open-source OPA's Compile API turns a policy's residual into SQL for PostgreSQL, MySQL, SQL
+Server and SQLite, or into UCAST conditions, a feature previously confined to Enterprise OPA. It has
+no Elasticsearch target, and the objection above is about the grants being the policy, which no
+output format touches.
+
+**Its maintainers moved and its status did not.** OPA's original developers moved from Styra to
+Apple in August 2025. The project remains CNCF graduated, with maintainers from Apple, Google and
+Microsoft voting by organization; Enterprise OPA was contributed to it and then archived in June 2026,
+and releases continue (v1.21.0, September 2026).
+
 **Conditions for revisiting.** If a future requirement introduces conditional policy logic that
 cannot be expressed as grant records (e.g., "grant access only if the user has completed training
 Y, as asserted by institution X"), OPA becomes a much better fit as the evaluation engine for that
@@ -106,11 +126,13 @@ application code. It can run as a separate process that the application calls. T
 well-established in OPA instances, is a valid option for Usher adapters and the adapter interface
 is designed to accommodate it.
 
-**Why not mandated.** OPA's primary model for keeping data current is bundle pulls: periodic
-fetches from a bundle server. Usher's revocation channel is a push model: the adapter must subscribe
-to real-time grant change notifications and invalidate its cached token promptly. These two models
-do not align. OPA bundle pulls introduce a staleness window that conflicts with Usher's revocation
-guarantees. The time-critical parts of enforcement (revocation subscription, fail-secure on channel
+**Why not mandated.** OPA keeps its data current by pulling bundles from a bundle server, refined by
+long polling and by delta bundles carrying data only. Data can also be pushed into it through its
+REST API, but only by something outside it: open-source OPA has no streaming source of its own, and
+third-party projects such as OPAL fill that gap. Usher's revocation channel is a push model: the
+adapter must subscribe to real-time grant change notifications and invalidate its cached token
+promptly. These two models do not align. Pulling, however refined, leaves a staleness window that
+conflicts with Usher's revocation guarantees. The time-critical parts of enforcement (revocation subscription, fail-secure on channel
 disruption) still require custom adapter code regardless of whether OPA is involved. OPA would
 cover only the filter translation slice of an adapter that still needs custom revocation handling.
 
@@ -123,11 +145,16 @@ implementation. The adapter interface is designed to accommodate this without re
 
 ### Cerbos Hub
 
-Cerbos Hub is a commercial SaaS product that adds a management UI on top of the open-source Cerbos
-PDP. It is not self-hosted and not open-source.
+Cerbos Hub is a commercial product that adds a management UI and policy distribution on top of the
+open-source Cerbos PDP. It began as SaaS only; since 22 January 2026 it is also available on premises
+and air-gapped, at the enterprise tier. It is not open source.
 
-**Why not adopted.** Vendor dependency and SaaS hosting make it unsuitable for on-premises
-biomedical instances. Not evaluated technically.
+**Why not adopted.** Vendor dependency and commercial licensing make it unsuitable as a required
+component of an open, self-hosted platform. Not evaluated technically.
+
+**What its interface covers.** It authors and distributes policies, including a guided editor for
+role-based ones, and records nobody's grants: the half of the problem a custodian works in is absent
+from it as much as from the open-source PDP.
 
 **What it told us.** The existence of Cerbos Hub is informative: the Cerbos team built it because
 Cerbos without a UI has significant adoption friction. Authorization services need a management
@@ -171,12 +198,20 @@ release, and the admin surface lands inside the one console this design exists t
 of: the recorded reason for the layer is that administering access through Keycloak means handing
 someone the controls for the whole identity system.
 
-**What was never tested, and is now accepted as untested.** Whether Keycloak Authorization Services
-can emit a residual filter rather than answering per-resource questions; whether delegated
-non-administrative governance is expressible in it, meaning a custodian holding authority over one
-category platform-wide with no other rights. Both were open questions and neither was answered. The
-decision does not rest on them: it rests on provider independence, which no answer to either would
-have changed.
+**The two open questions are answered from its documentation, without running it,** checked on
+2026-09-28 against Keycloak 26.7.4.
+
+1. **A filter: no, though it can list.** A single request with `response_mode=permissions` returns
+   every permission a user holds, but as a list of resources registered in Keycloak rather than a
+   filter, so every protected object would first have to be registered there as a resource.
+2. **Delegated governance: no.** It has no way to hand someone part of one resource server's
+   policies. The realm roles for managing authorization cover every resource server in the realm,
+   and fine-grained admin permissions (version 2, supported since 26.2) grant management of a
+   client's authorization settings as a whole, so a custodian over one category has no counterpart.
+
+Neither changes the decision, which rests on provider independence. Authorization Services itself is
+supported and not deprecated, and the experimental AuthZEN endpoint added in 26.7 evaluates requests
+without searching resources.
 
 **This closes Keycloak only.** The build-versus-adopt re-evaluation has two steps left, and the
 Cerbos query planner is still a live candidate for the evaluation step inside a standalone Usher.
@@ -195,24 +230,146 @@ reasons recorded for building rather than adopting. The fourth is the one that d
 ### The wider landscape: "what can this principal access" is now a standard permission
 
 Recorded because the reasons for building were written against a narrower field than currently
-exists, and any of these could displace part of this design.
+exists, and any of these could displace part of this design. Checked against each project's
+documentation and releases on 2026-09-28; the sources are listed at the end of this section.
 
-| Project | Relevant permission                                        | Model                           |
-| ------- | ---------------------------------------------------------- | ------------------------------- |
-| Cerbos  | Query plan as a filter AST, with ORM adapters              | Policy as code, attribute-based |
-| OpenFGA | `ListObjects` returns what a principal can reach           | Relationship-based (Zanzibar)   |
-| SpiceDB | `LookupResources`, plus a Watch API for cache invalidation | Relationship-based (Zanzibar)   |
-| Permify | Built-in data filtering and lookup                         | Relationship-based (Zanzibar)   |
+| Project | What it offers here                                                                                     | Model                           | Status, September 2026                                                   |
+| ------- | ------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------ |
+| Cerbos  | Query plan as a filter AST, with ORM adapters and an unpublished Java one for Elasticsearch            | Policy as code, attribute-based | v0.55.0; Hub on premises at the enterprise tier                          |
+| OPA     | Compile API emitting SQL or UCAST filters, since v1.9.0                                                 | Policy as code (Rego)           | CNCF graduated; v1.21.0                                                  |
+| OpenFGA | `ListObjects` returns identifiers, 1000 per call unless streamed; `ReadChanges` is polled               | Relationship-based (Zanzibar)   | CNCF incubating since October 2025; Auth0 FGA is its hosted form         |
+| SpiceDB | `LookupResources`; a Watch API streaming relationship changes, replayable for about a day               | Relationship-based (Zanzibar)   | Apache-2.0, v1.56.2; search-index replication only in hosted Materialize |
+| Permify | Data filtering and lookup; a Watch API                                                                  | Relationship-based (Zanzibar)   | Acquired by FusionAuth in November 2025; AGPL-3.0, releases slowed       |
 
-Two qualifications. Most of these implement relationship-based access control, which differs from
+Three qualifications. Most of these implement relationship-based access control, which differs from
 role-plus-attribute in how policy is expressed rather than only in vocabulary. Oso's open-source
-library is deprecated with only its hosted product active, so it sits outside scope here.
+library has been deprecated since December 2023, and what remains active is commercial, hosted or
+since May 2025 a self-hosted beta, so it sits outside scope here. And SpiceDB's replay window is the
+datastore's garbage-collection window, typically 24 hours, so a subscriber away longer than that
+cannot catch up from the stream.
 
-**The case for building, stated against this landscape.** Four requirements carry it: delegated
-governance, IdP independence, push revocation with fail-secure suspension, and an enforcement path
-targeting Elasticsearch through SQON rather than an ORM. Structured grants output is supplied by
-several of the engines above, so it belongs among the requirements an evaluation tests rather than
-among the reasons to build. Restate this section once an evaluation has been run.
+**None of them emits a filter for a search engine.** They return lists of identifiers (OpenFGA,
+SpiceDB, Permify) or filters for SQL (OPA) and ORMs (Cerbos), with Cerbos's unpublished Java adapter
+the one exception, and nothing above emits SQON.
+
+**The relationship stores do not decide who may write a relationship.** OpenFGA checks no write
+against its model, so any credential allowed to write tuples can write any tuple, including a
+custodian granting themselves read access. The check belongs to whatever administers the store, which
+is the layer Usher is.
+
+**Two hosted services, for completeness.** Auth0 FGA runs only as Auth0's service, in the United
+States, the European Union and Australia or in a private cloud Auth0 operates, with no Canadian
+region. Permit.io hosts its control plane by default and offers it on premises at its enterprise
+tier.
+
+### Comparable platforms in biomedical data sharing
+
+Checked on 2026-09-28. These are reviewed to learn from rather than as candidates for adoption: each
+is either part of another platform or answers a different part of the problem.
+
+**Gen3.** Its authorization belongs to a platform occupying the same place as Overture, so adopting
+it would mean adopting that platform. What it does is still the nearest existing match to Usher's
+first release:
+
+- Arborist, its policy engine, grants roles over resource paths arranged as a tree. It answers a yes
+  or no for one request, and also returns a map of every resource a user can reach, with the actions
+  allowed on each.
+- Guppy, its search service over Elasticsearch, applies that map as a filter on a field every document
+  carries, which is the bridge's job here. Each index sits at one of three access levels: authorized
+  records only; aggregations over everything, subject to a minimum count; or everything.
+- Requestor, its access-request service, lets an approver act for one project's resource path without
+  administrator rights.
+- Fence, its authentication service, consumes GA4GH Passports issued by NIH RAS.
+
+**What to take from it.** Guppy's minimum count is the small-cell threshold the first integration
+does not apply ([count-only principal](../docs/atlas/roadmap/count-only-principal.md)), shipped as a
+per-index setting. Its limits against Usher's requirements are where this design differs: access
+stops at program and project, so there are no categories within a dataset; the filter is applied
+inside Guppy, one application; and an approver is scoped by resource path, so authority over one kind
+of data across every dataset would need a policy per project.
+
+**Apache Ranger.** Central policy administration, enforced by plugins inside each data engine.
+
+- Row-filter and column-masking policies exist for Hive, Trino, and Spark through Apache Kyuubi. Its
+  Elasticsearch plugin controls whole indices only.
+- A policy's delegated-admin flag and security zones let people manage the policies for a subset of
+  resources without full administrator rights, the nearest existing form of a custodian's authority.
+- Plugins pull policies on a schedule. Version 2.9.0 (August 2026) added a standalone decision
+  service. Apache-2.0.
+
+**CanDIG v2.** A Canadian federated genomics platform using OPA. A shared service works out which
+programs a user may access for a given path and method, and several services filter on that, with
+site administrator, program curator and team member as the roles. Access stops at program level.
+LGPL-3.0, v8.0.2 (September 2026). It is the working example of building this layer on a general
+policy engine.
+
+**Upstream of enforcement: REMS, DUOS and GA4GH Passports.**
+
+- REMS manages applications, approvals and licences, sends each entitlement to a configured endpoint,
+  and can issue signed GA4GH `ControlledAccessGrants` visas. Organization owners administer only their
+  own organization's items. MIT.
+- DUOS runs data access committee review against GA4GH DUO codes and records approvals, leaving access
+  to be provided elsewhere. It runs as a Broad Institute service.
+- A GA4GH Passport (v1.2) names the datasets or objects someone is approved for, never records.
+
+All three decide or assert who is approved, and none enforces anything when data is queried, so each
+is a possible source of grants for Usher rather than an alternative to it.
+
+**No system found filters records within a dataset consistently across several applications.** Guppy
+filters records inside one application, at project level; CanDIG and Terra's SAM share a user's
+authorized list across services at program or workspace level. That is a search coming up empty, not
+a proof.
+
+### The case for building, stated against this landscape
+
+Four requirements carry it, and the check above sharpens each:
+
+| Requirement                                       | What exists                                                                                                                   | What is left to Usher                                          |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Delegated governance                              | Relationship stores express a custodian's check but do not enforce it on writes; Ranger's zones and Gen3's Requestor bound an administrator by resource | Authority over one kind of data across datasets, enforced     |
+| Independence from the identity provider           | Every engine above already has it                                                                                             | Distinguishes Usher from Keycloak only                         |
+| Push revocation with fail-secure suspension       | SpiceDB's Watch pushes relationship changes; OpenFGA is polled; Ranger and OPA pull; none suspends when its channel goes quiet | The push to every application, and the suspension             |
+| Enforcement against Elasticsearch through SQON    | Only Cerbos's unpublished Java adapter targets Elasticsearch; nothing emits SQON                                               | The SQON path, as an adapter whichever engine evaluates        |
+
+Structured grants output is supplied by several of the engines above, so it belongs among the
+requirements an evaluation tests rather than among the reasons to build. Restate this section once an
+evaluation has been run.
+
+**Sources, checked 2026-09-28.**
+
+- Cerbos: <https://docs.cerbos.dev/cerbos/latest/api/index.html>,
+  <https://github.com/cerbos/query-plan-adapters>,
+  <https://www.cerbos.dev/blog/cerbos-hub-now-available-on-premise>
+- OPA: <https://github.com/open-policy-agent/opa/releases/tag/v1.9.0>,
+  <https://www.openpolicyagent.org/docs/management-bundles>,
+  <https://github.com/open-policy-agent/opa/blob/main/MAINTAINERS.md>,
+  <https://github.com/open-policy-agent/eopa>
+- Oso: <https://github.com/osohq/oso>, <https://www.osohq.com/post/oso-self-hosted-beta>
+- Keycloak: <https://www.keycloak.org/docs/latest/authorization_services/index.html>,
+  <https://www.keycloak.org/server/features>,
+  <https://www.keycloak.org/securing-apps/authzen-authorization>
+- OpenFGA: <https://openfga.dev/docs/getting-started/perform-list-objects>,
+  <https://openfga.dev/docs/interacting/read-tuple-changes>,
+  <https://openfga.dev/docs/getting-started/setup-openfga/access-control>,
+  <https://www.cncf.io/blog/2025/11/11/openfga-becomes-a-cncf-incubating-project/>
+- SpiceDB: <https://authzed.com/docs/spicedb/concepts/querying-data>,
+  <https://authzed.com/docs/spicedb/concepts/watch>,
+  <https://authzed.com/docs/authzed/concepts/authzed-materialize>
+- Permify: <https://fusionauth.io/blog/fusionauth-permify-pr>,
+  <https://github.com/Permify/permify/releases>
+- Auth0 FGA and Permit.io: <https://docs.fga.dev/getting-started>, <https://docs.fga.dev/private-cloud>,
+  <https://docs.permit.io/how-to/deploy/on-prem/installation/>
+- Gen3: <https://github.com/uc-cdis/arborist>, <https://github.com/uc-cdis/guppy/blob/master/README.md>,
+  <https://github.com/uc-cdis/guppy/blob/master/doc/queries.md>,
+  <https://github.com/uc-cdis/requestor/blob/master/docs/authorization.md>,
+  <https://github.com/uc-cdis/fence/blob/master/docs/additional_documentation/user.yaml_guide.md>
+- Apache Ranger:
+  <https://cwiki.apache.org/confluence/display/RANGER/Row-level+filtering+and+column-masking+using+Apache+Ranger+policies+in+Apache+Hive>,
+  <https://github.com/apache/ranger/blob/master/agents-common/src/main/resources/service-defs/ranger-servicedef-elasticsearch.json>,
+  <https://ranger.apache.org/blogs/policy_model.html>
+- CanDIG: <https://github.com/CanDIG/candigv2-authx>, <https://github.com/CanDIG/candig-opa>
+- REMS, DUOS and GA4GH Passports: <https://github.com/CSCfi/rems/blob/master/docs/ga4gh-visas.md>,
+  <https://duos.blog/help/faqs/>, <https://ga4gh.github.io/data-security/ga4gh-passport>
 
 ---
 
@@ -224,7 +381,7 @@ A binary response from the PDP (allowed/denied) requires every application to ca
 decision service on every data access, or to cache a broad allow/deny that cannot express partial
 access. Neither fits a platform where a user may be permitted to see some records and not others.
 
-Usher returns a structured Usher token: the full set of category grants the user holds, scoped
+Usher returns a structured Usher token: the full set of category grants held by the user, scoped
 to the resources the requesting application manages. The application adapter applies this as a
 query-time filter. A single token fetch covers the session; the adapter uses it for every query
 without a round-trip per request.
@@ -304,15 +461,12 @@ at once, because both invalidate. A newly granted resource can lag by up to one 
 token names what the principal already had and nothing about the new grant invalidates the old entry.
 Losing access is immediate and gaining it waits, which is the right direction for health data.
 
-**"At once" is true of this cache and not of what a person reaches, and the two come apart for a
-category change.** A revocation is pushed, so a bridge drops its token and the effect is immediate
-end to end. A category change is not: it bumps a version rather than deleting a cached payload, and
-that version is compared only when a bridge next refreshes, so every principal keeps reaching the
-old set for up to one TTL. The direction is still the safe one, since what lags is a narrowing that
-arrives late rather than a widening that arrives early, but the sentence above claims an immediacy
-the mechanism does not deliver. Whether a category change should push, and what it would name for an
-anonymous principal who has no `sub`, is open; see the anonymous-token item in
-[to-discuss.md](to-discuss.md).
+**"At once" holds end to end for a category change too, because it is announced like a revocation.**
+A revocation names the principal and a category change names the resource, and on either a bridge
+drops every cached token affected, signed in or not. The version bump stays, and it is what a bridge
+that missed the announcement meets at its next refresh, so a lost announcement costs at most one
+token lifetime rather than correctness. See
+[the decision on announcing a category change](#a-category-change-is-announced-to-the-applications-that-serve-the-resource).
 
 **This is the access-and-refresh-token shape rather than a new one**, and saying so is what stops it
 drifting into one. The Usher token is the access token, the exchange is the refresh, the IdP token is
@@ -378,6 +532,33 @@ the no-read-time-tolerance rule and is the same rule applied: what matters is th
 key fails in. An adapter that skips an entity it does not recognize serves nothing for that entity and
 fails closed; an adapter that skips an unrecognized member of the payload root may skip a restriction
 and fails open. Tolerance is safe exactly where ignorance narrows.
+
+### A category change is announced to the applications that serve the resource
+
+**Their bridges drop every cached token naming that resource**, signed in or not, and each affected
+principal's next request exchanges for a token computed under the new categories. No list of
+sessions is needed in Usher, since a bridge's token cache is the set of live tokens for its
+application.
+
+    1. An administrator adds `controlled` to some of a resource's records
+    2. The resource's category version bumps, and the change is announced
+    3. Every bridge of an application serving the resource drops the tokens naming it
+    4. Each affected principal's next request exchanges for a fresh token
+    5. Nobody who lost access keeps it past the announcement
+
+**Only the applications that serve the resource hear it.** A token names only the resources its
+audience manages, so an announcement reaching every bridge would tell applications about resources
+they do not serve, which audience separation exists to prevent. The controller already knows which
+audiences serve which resources, so the fan-out is filtered by audience rather than broadcast.
+
+**Gaining access waits, which is the safe direction.** Someone who gains access, because a resource
+opened or a category left it, holds no token naming it yet and gains it at the next refresh.
+
+**The version bump stays**, as what a bridge that missed the announcement meets at its next refresh,
+so a lost announcement costs at most one token lifetime rather than correctness.
+
+**Rejected: accepting a token lifetime of lag.** It would have kept the channel for withdrawn grants
+only and dropped the claim that losing access is immediate, trading a guarantee for a fan-out.
 
 ### The Usher token is not an OAuth access token, and three separate tests say so
 
@@ -460,12 +641,18 @@ unmoved by a reissue that resets it. That is exactly the relationship here.
 updated" describes the payload well, but it is a UserInfo claim about the end user's own profile
 record, and reusing a registered name to mean something else is what BCP 225 §3.12 warns against.
 
+### The token is encrypted with `dir` and A256GCM, under a key per application
+
 **The algorithm is `dir` with A256GCM, and the key is symmetric and per application.**
 
 **Per application is the part that is load-bearing.** One key shared by every bridge would let any
 bridge decrypt any other application's tokens, which makes the `aud` claim a string comparison rather
 than a boundary. Distinct keys per controller-and-application pair make audience isolation
 cryptographic: a compromised bridge cannot read another application's tokens at all.
+
+**An audience identifier is per deployed instance.** Two independently deployed instances of one
+application cannot share one, since sharing an identifier would mean sharing a key, and audience
+separation is cryptographic rather than a comparison of strings.
 
 **Symmetric, because the deployment already distributes secrets and asymmetry adds nothing here.**
 Keys live in Vault or OpenBao and reach both pods through the secrets operator, so there is no
@@ -538,19 +725,18 @@ the full mechanism, see
 ### A category selects records within a resource; only multi-category records are deferred
 
 A record is visible if the principal holds every category **that record** carries, for the resource
-it belongs to. A resource of mixed sensitivity serves each principal the records their categories
-reach, rather than being reachable in full or not at all.
+it belongs to. A resource of mixed sensitivity serves each principal the records reached by their categories, rather than being reachable in full or not at all.
 
-**What this means concretely**, for a resource carrying open and controlled records:
+**What this means concretely**, for a resource with unmarked and controlled records:
 
-    Ana holds open        reaches the open records, and nothing else in that resource
+    Ana holds unmarked    reaches the unmarked records, and nothing else in that resource
     Bo holds controlled   reaches the controlled records
     Bo holds both         reaches both sets
 
 **The enforcement clause is two field tests, not one.** The adapter matches the resource's field value
 and the category's field value together, as a conjunction, and composes one such clause per grant with
 `or`. Both are single-valued exact matches, so a category costs no more to enforce than a resource
-does. `open` is the exception in shape rather than in principle: being the residual it has no value of
+does. `unmarked` is the exception in shape rather than in principle: being the residual it has no value of
 its own, so its clause excludes every configured concrete value instead of matching one.
 
 **What is deferred is a record carrying more than one category at once**, which needs a subset test
@@ -586,10 +772,10 @@ category fails closed where a record carries it alongside a known one, contribut
 the any-category rule would leave the record reachable through whichever category the principal
 happens to hold.
 
-**The `open` complement is where an unrecognized category fails the other way**, and it is the reason
+**The `unmarked` complement is where an unrecognized category fails the other way**, and it is the reason
 the startup check in `adapter-integration.md` exists. A category value the adapter has no mapping for is
-absent from the set `open` subtracts, so records carrying it satisfy the complement and are served as
-open. An unmapped category does not hide its records, it exposes them. Checking the adapter's category
+absent from the set `unmarked` subtracts, so records carrying it satisfy the complement and are served as
+unmarked. An unmapped category does not hide its records, it exposes them. Checking the adapter's category
 configuration against Usher's dictionary at startup, and failing startup rather than warning, is what
 closes that.
 
@@ -609,7 +795,7 @@ Enforcement filters on two fields, and the emitted clause pairs them:
       and( in(<resource field>, [HEART_STUDY]), not-in(<category field>, [...every concrete value]) )
     )
 
-The second disjunct is `open`. Both fields must be single-valued, and each must be mapped in the
+The second disjunct is `unmarked`. Both fields must be single-valued, and each must be mapped in the
 adapter's configuration for the catalogue it serves.
 
 **Two dependencies the filter cannot verify about either field**, which is why both are preconditions
@@ -624,14 +810,14 @@ Both fields must be single-valued, and no running code checks it: the mapping ca
 cardinality, and the search layer's filter path carries no instrumentation that would notice a field
 gaining a second value. See [adapter-integration.md](adapter-integration.md) for why this is
 unverifiable today rather than merely unverified, and for the `nestedFieldNames` hazard, which lands
-on the permissive side for the negated `open` clause specifically.
+on the permissive side for the negated `unmarked` clause specifically.
 
 A positive `in` clause on a single-valued field is an exact match whether the field is flat or nested,
-so neither dependency applies to the concrete-category clauses. They apply to the `open` clause,
+so neither dependency applies to the concrete-category clauses. They apply to the `unmarked` clause,
 because it is the negated one.
 
 **The resource field name is adapter config, set per catalogue, and those fields are homologues across
-data types.** One slot, filled differently for each body of data an instance serves, which is the
+data types.** One slot, filled differently for each body of data served by an instance, which is the
 instance-vocabulary position stated further down applied at the enforcement layer. An application's
 own container may be coarser: Arranger can compose a second type into one `catalogueId`, backed by an
 unrelated index while inheriting that field, and the resulting filter names a field that index lacks.
@@ -668,6 +854,48 @@ Instance-specific resource field names, catalogue topology, and the reasoning be
 integration's choice of field belong in that integration's own repository, not here. See
 [adapter-integration.md](adapter-integration.md) for what an adapter must establish about a candidate
 field before using it.
+
+---
+
+### Category names carry their scope from the first release
+
+**Every category name is prefixed by its scope: `global.` for a category the whole platform shares,
+`resource.` for one that exists only in the resource it is listed under.** The first release creates
+global categories only, and still names them `global.controlled` rather than `controlled`, so the
+token, the adapter mappings, the audit log and the conformance corpus use from the start the names
+local categories will need. Adding the prefix later would change every token, every mapping and every
+recorded event at once. Local categories themselves are future scope; see [local
+categories](../docs/atlas/roadmap/local-categories.md).
+
+**The prefix names the kind of scope, never the resource.** Every place a category name appears, a
+grant, a token entry or an audit record, already names its resource, so `resource.pilot` needs no
+resource identifier inside it, and no resource identifier has to be kept free of the separator. A name
+itself cannot contain the separator. The schema holds the scope beside the name, a category row
+carrying the resource it belongs to or none for a global one, and the prefix follows from that rather
+than being stored twice.
+
+**Only an admin creates a global category.** The scope is what lets a resource's owner create
+categories of their own once local categories exist: `category.create` bounded to one resource, the
+way every other owner capability is bounded, and never reaching the global scope.
+
+**A version 1 bridge accepts `resource.` entries and enforces `global.` ones only.** A `resource.`
+entry is removed by the bridge before the payload reaches the adapter, so it reaches nothing, and is
+recorded as `category.unenforced` with the reason `notImplemented`, once per payload received rather than once per request (see
+[audit-events.md](audit-events.md)). Dropping it is safe, because a grant that reaches nothing only
+narrows what its holder sees, and recording it makes a local category arriving early visible rather
+than silent. It also gives the audit path an event the first release can exercise end to end. A bare
+name or an unknown prefix is different: it means the controller and the bridge disagree about the
+format, so the payload is treated as not received, which the application reports as unavailable
+rather than serving as an empty answer, and the rejection is logged.
+
+**Dropping covers a principal's grant and nothing else.** A local category also restricts the
+records carrying it, and a bridge that only drops `resource.` entries still serves those records to
+anyone holding their global category. So no resource may define a local category while an
+application serving it runs a bridge that does not enforce them; enforcing one takes an adapter that
+can render a record carrying more than one category.
+
+**Prose keeps the words people use.** Reader-facing documents say "platform" and name categories
+without the prefix, since the prefix is a key for software rather than vocabulary for readers.
 
 ---
 
@@ -721,7 +949,7 @@ field before using it.
 > on.
 >
 > **Narrowing within a resource by predicate is a different thing and is available now.** A filter
-> over descriptive fields the records already carry, a study paired with a data type for instance,
+> over descriptive fields already carried by the records, a study paired with a data type for instance,
 > narrows at record granularity using positive clauses on flat keywords. It needs no `nested`
 > mapping and no new field, and it works on both catalogues today.
 >
@@ -896,13 +1124,13 @@ field name, and a field value, because that mapping is how a record is attribute
 all. So the left half comes from config at startup and the right half from the token, and neither
 requires Usher to name anything the principal lacks.
 
-    complement = (resources this adapter is configured for) minus (resources the principal holds)
+    complement = (resources this adapter is configured for) minus (resources held by the principal)
 
 **Why computing the complement locally is enough, rather than merely convenient.** Including too much
 in it is harmless: a resource that never appears in any artifact excludes nothing. Leaving one out is
 not, because an artifact requiring a resource the reader lacks would then pass. So the only question
 is whether the local computation can leave one out, and it cannot, for one reason: **an artifact
-built here can only draw on resources this instance serves.**
+built here can only draw on resources served by this instance.**
 
 **That last property has one precondition, and it is the thing to guard: every resource value present
 in the data must be configured.** A record carrying an unconfigured value can still enter an
@@ -1207,8 +1435,7 @@ This allows Usher to be adopted without modifying the data being protected, and 
 leaving data artifacts. It also keeps Usher generic across data formats (relational, document,
 search index) without needing format-specific logic.
 
-**What this forecloses, and the rule it yields.** Enforcement filters on fields the data already
-carries, and Usher never causes a field to be written. That splits candidate filter fields in two:
+**What this forecloses, and the rule it yields.** Enforcement filters on fields already carried by the data, and Usher never causes a field to be written. That splits candidate filter fields in two:
 
 - **Descriptive fields** state what a record is: its study, its data type, its file type. The
   submission pipeline sets them for reasons unrelated to permissions, and they do not change when
@@ -1344,10 +1571,11 @@ retired for filling a token field with a value nobody held. `anonymous role` fil
 not synthetic in that sense, so the sentence below stands as written. It went wrong on the other
 axis: it called the configuration a role.
 
-**Its value is that it may grant nothing.** Where the baseline is empty, unauthenticated
-principals receive an empty grant set and even open data requires registration. So whether "open" means
-publicly readable or registration-gated becomes an instance decision rather than a property of this
-design, which previously assumed the first by computing open grants unconditionally.
+**It may grant nothing.** The baseline is the rule behind a resource's open setting: it gives every
+principal the `unmarked` grant on each resource whose unmarked records are open. Where it grants
+nothing, a resource set to open is reached by nobody through it, signed in or not. Registration gating
+is the registered setting and the signed-in rule, not an empty baseline, so an empty baseline no
+longer makes open data require registration. See "Records not covered by any category are `unmarked`" below.
 
 This also removes the synthetic `public` role. It existed to label open-tier grants in anonymous
 tokens, and described itself in prose as a minimum read permission because there was no field to put
@@ -1357,21 +1585,55 @@ already was.
 
 ---
 
+### Who holds a grant can follow a rule, and the controller evaluates it
+
+**Some grants are conferred by a rule rather than recorded one per holder.** The baseline is the
+first: it gives every principal the `unmarked` grant on each resource whose unmarked records are
+open. The second, in the first release, gives every signed-in principal the `unmarked` grant on each
+resource whose unmarked records are registered, which is what the Registered tier needs: data reachable by anyone signed in without an approval, beside data reachable by an anonymous visitor. Without it a signed-in principal holding no grants receives the
+same token as an anonymous one, and registration can gate open data only for a whole instance.
+
+**A rule decides who holds a grant, never which records a category covers.** Neither open nor
+registered is a category: both are settings of a resource's `unmarked` records, and the rule is what
+reaches them. A setting applies to a whole resource's unmarked records, since mixing tiers among
+them would need a field on each record holding an access decision, which is prescriptive. No record
+belongs to two categories through it, so the rule needs no both-grants check.
+
+**The controller evaluates rules at the exchange, and no bridge does.** The controller already
+verifies the identity provider's token and computes the grants there, so a rule hands the bridge an
+ordinary grant and the bridge needs no change. Evaluated in bridges, the same rule would live in
+every application and drift between them, which a single decision point exists to prevent.
+
+**A rule reads only what the identity provider verifies.** "Signed in" needs nothing but a valid
+token. A later rule over a person's attributes may read only claims the provider verifies or an
+administrator manages, never one the person can edit, since a rule over an editable attribute is
+access the person grants themselves. The connector declares which claims qualify.
+
+**A rule's result is recorded at each exchange.** A grant a rule confers has no grant row, so the
+exchange records which rules applied, or the audit trail cannot say who could reach what, and when. A
+change to a person's attributes is not a grant change and is not announced, so the token's lifetime
+bounds how long an old answer holds.
+
+Rules beyond these two, and conditions bounded in time such as embargo, are recorded as research in
+[conditions beyond the data](../docs/atlas/roadmap/conditions-beyond-the-data.md).
+
+---
+
 ### Category grants are a list of independent grants, and resource names are never manufactured
 
 A resource's entry in the token is a list of grants, each naming one category and the permissions
 held on it. Each entry corresponds to one row in the grant store and one act of granting, and
 holding several means holding several grants.
 
-    "STUDY_A": { "open":       { "record": ["view", "update"] },
-                 "controlled": { "record": ["view"] } }
+    "STUDY_A": { "global.unmarked":       { "record": ["view", "update"] },
+                 "global.controlled": { "record": ["view"] } }
 
-**Every permission is category-scoped, and open content is a category.** There is no separate
-resource-level permission list and no baseline outside the category system, because a baseline is
-what the superseded subtractive model required. A detached permission list would have reintroduced
-it, and was rejected for that reason rather than for shape. It also could not express a real tier
-difference: an anonymous principal holding `view` on the open category where a registered one holds
-`view` and `download`, same resource, same category.
+**Every permission is category-scoped, and open content is a category, `unmarked`.** There is no
+separate resource-level permission list and no baseline outside the category system, because a
+baseline is what the superseded subtractive model required. A detached permission list would have
+reintroduced it, and was rejected for that reason rather than for shape. It also could not express a
+real tier difference: an anonymous principal holding `view` on `unmarked` where a registered one
+holds `view` and `download`, same resource, same category.
 
 **No role name and no ownership travel in the token.** A role is how access is authored; the
 controller resolves it to permissions at issuance, so no adapter learns what an instance means by
@@ -1432,6 +1694,53 @@ Pushing the mechanical work outward to keep construction central is the delibera
 
 ---
 
+### The adapter supplies the field name, and the bridge builds the predicate
+
+**Being told a field name for one query is not holding schema knowledge.** One bridge serves an
+application, an application serves several catalogues, and the resource field name differs between
+them, so it cannot be resolved once at startup. The adapter passes the bridge a map of catalogue to
+field name and receives a map of catalogue to enforcement, since catalogue-level denial already
+makes the answer differ by catalogue. The bridge is never provisioned with an instance's schema and
+never kept in step with one, which is what excluding schema knowledge from it protects.
+
+**The deciding reason is where fail-open defects concentrate.** Every enforcement defect this design
+has recorded is a predicate-construction defect: denial expressed as a negation instead of
+`matchNothing`, an empty `in` read as no constraint, a containment expression double-negating into a
+test for any element rather than every element on a flat field, and a filter composing disjunctively
+on the aggregation path. None is a compilation defect. Had each adapter built its own predicate from
+resource names, that whole class would be reimplemented once per adapter, and drift between
+applications is what the shared bridge exists to prevent.
+
+**It trusts the adapter with strictly less**, since supplying one field name is a smaller surface
+than constructing a predicate, and a wrong field name is checkable at startup beside the
+mapping-shape check. **And the conformance corpus tests one implementation** rather than one per
+adapter. The cost is one input on the bridge interface, and an adapter obligation to supply it
+correctly.
+
+**This governs the narrowing arm only.** The enforcement result is a union of deny, narrow and
+allow, and only narrow carries a predicate:
+
+| Application | Operation                                          | Predicate?                                           |
+| ----------- | -------------------------------------------------- | ---------------------------------------------------- |
+| Arranger    | Filter a search                                    | Yes, in the query language natively                  |
+| SONG        | Filter a metadata listing                          | In principle, if the predicate stays backend-neutral |
+| Score       | Authorize one object fetch by identifier           | No. Deny or allow only                               |
+| Lectern     | Schema and dictionary service, no record filtering | No                                                   |
+
+**A service fetching one object by identifier needs a third interface shape**: a question in Usher's
+own vocabulary, whether this principal holds a grant on category C of resource R, with the adapter
+resolving its identifier to that pair first. The adapter contract carries it deliberately rather
+than treating every application as a filtering one.
+
+**The post-MVP predicate is not neutral.** The MVP predicate is a single positive containment on a
+field, which compiles as readily to a relational filter as to a search-engine one. Record-level
+narrowing is `not` of `not-in`, whose correctness depends on the field being mapped `nested`, and on
+a flat field it silently degrades to an existential match in the permissive direction. That is a
+search-engine mapping concept rather than a property of the query language, so record-level
+narrowing as specified belongs to the search application rather than to the platform. Where a
+predicate's meaning depends on the backend, that reasoning belongs in the one component that can
+vary or refuse on a declared capability.
+
 ### The enforcement component is an adapter, and the bridge ships from Usher's repository
 
 **Adapter rather than plugin.** An Usher plugin reads as something that extends Usher itself. That
@@ -1449,9 +1758,26 @@ it, and the conformance fixtures it has to satisfy sit beside it.
 | the bridge           | `@overture-stack/usher-express-bridge`   | `modules/express-bridge` in Usher's repository   |
 | the Arranger adapter | `@overture-stack/arranger-usher-adapter` | `modules/usher-adapter` in Arranger's repository |
 
+**The bridge's logic does not depend on Express.** Token exchange, caching, the revocation channel
+and dropping tokens live in a core that knows nothing of the web framework, and the Express layer
+only wires that core into middleware and routes. A bridge for another framework is then another thin
+layer over the same core rather than a rewrite, which is the rule the controller already follows
+with Fastify.
+
 **Names in prose are the simple ones.** A package and its directory say more than the prose name,
 here that the first bridge serves Express applications and that the adapter belongs to both Arranger
 and Usher, and the documents call them the bridge and the Arranger adapter.
+
+### Usher reuses the identity provider through the connector, and every reused feature has a fallback
+
+**Keycloak is the first identity provider, and what Usher takes from it goes through one
+component.** The connector is already the only part of Usher that knows which provider it is talking
+to. Each feature Usher reuses is listed there with whether it is a standard or Keycloak's own, and
+with what Usher does against a provider that lacks it.
+
+**No fallback widens access.** Where a provider lacks a feature, Usher either does the work itself
+or refuses what depended on it, so supporting another provider can cost features and never
+confidentiality. The list is in [admin-model.md](admin-model.md), under the connector design.
 
 ### Admin self-grant is granted by the custodians of the data being granted
 
@@ -1571,6 +1897,50 @@ journey is the resource owner's, exercised in the portal; the administrative per
 Usher's API. Both are control-plane acts, and the flow describes which surface offers them rather
 than who holds them. Worth confirming with the author.
 
+---
+
+### A custodian can allow an owner to act on their category, one dataset at a time
+
+**The gate stays the default.** Where a category has a custodian, the custodian's grant is the final
+gate for every request on it, the dataset owner's included, as the decision above sets out. An owner
+holds no authority over a custodian-governed category unless its custodian extends some.
+
+**A custodian can extend it, and only per dataset.** The custodian of a category may allow the owner
+of one dataset carrying it to manage that category's access in that dataset without a per-grant
+approval. The allowance names one dataset, never the category everywhere, so a new dataset declaring
+the category still falls under the custodian alone. The custodian can withdraw it at any time.
+
+**Why this and not the two alternatives.**
+
+| Alternative                                                      | What goes wrong                                                                                                                                                                  |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Custodians appointed per study, sharing the owner's full control | An owner releases community-governed records alone, so the custodian is the owner's delegate rather than the community's authority, and every new dataset needs a custodian appointed |
+| Custodians with exclusive authority and no way to share it       | Every grant on a community's data waits on one person, even where the community has agreed the study's own team may manage access                                              |
+
+The allowance keeps the community's authority as the default and lets the community hand part of it
+on, deliberately and one dataset at a time.
+
+**What it needs.** Extending and withdrawing an allowance are audited events, and every grant an
+owner issues on a custodian's category records the allowance it relied on, so a custodian reviewing
+their category sees who acted under which allowance.
+
+**Open, and all after MVP,** since nothing appoints a custodian in the first release:
+
+- Whether an allowance can cover revoking without granting. Revoking only narrows access, so a
+  revoke-only allowance fails safe.
+- Whether an owner may revoke without an allowance for a defined cause, such as a compromised
+  account. An administrator's emergency revocation already covers that case and is recorded, which
+  argues against a second route.
+- What happens to grants issued under an allowance once it is withdrawn.
+
+**This is a starting position for consultation, not a reading of any framework.** The First Nations
+principles of OCAP (Control and Access), the Inuit and Métis research and data governance frameworks,
+and CARE's authority to control all point towards a community deciding access to its collective
+information. The allowance is a mechanism for honouring that, to be tested with the communities
+concerned. It also assumes categories are cut per community, the question left open at the end of
+the decision above: a platform-wide custodian of one generic category would be one seat governing
+several communities' data.
+
 ### One account, several addresses, and only verified ones bind
 
 A principal's account has a single identity in the identity provider and may be reachable at more
@@ -1621,8 +1991,7 @@ explicitly in the threat model.
 
 ### An instance designates which of its existing fields identifies a resource
 
-Confirmed for the first instance and generalized: a catalogue's resource field is chosen from fields
-the data already carries, and which field plays that role is the instance's designation rather
+Confirmed for the first instance and generalized: a catalogue's resource field is chosen from fields already carried by the data, and which field plays that role is the instance's designation rather
 than a property Usher recognizes. The environmental catalogue's shape is taken as given for MVP
 purposes; if it changes, MVP is unaffected, because what matters is only that _some_ existing field
 carries the instance's collection and that the adapter is configured with its name.
@@ -1865,6 +2234,15 @@ legal boundary: an ethics approval lapsing is not a preference,
 and access recorded after it lapsed is a finding whatever its duration. Shortening the token costs
 one exchange, so there is nothing to trade against.
 
+**An expiring grant writes nothing and announces nothing.** It sets no `revoked_at` and fires no
+event: the controller leaves it out of the next payload it computes, so the person's other grants
+and roles are untouched and nothing per person is invalidated.
+
+**A person inactive past an expiry needs nothing either.** A token is issued to expire with the
+first grant on it to lapse, so one issued before the deadline is already invalid when presented
+after it, and the bridge rejects it on the `exp` check it makes anyway. There is no event for an
+inactive bridge to miss.
+
 **Expiring a grant narrows access and never widens it.** A principal or group loses permissions when
 a grant ends, so expiry cannot be the mechanism by which data becomes visible to anyone else. That
 constraint is what the embargo design in `permissions-model.md` violated, and the mistake is easy to repeat: a date on a grant looks like a general-purpose scheduler and
@@ -1892,6 +2270,17 @@ Permission computation is additive across three tiers, always in order:
 
 Standards consulted: GA4GH Data Access Framework (open/registered/controlled tier model),
 NIST SP 800-162 (ABAC), NIST SP 800-207 (Zero Trust).
+
+**Every anonymous principal receives the same token, one per application.** Each receives exactly
+the baseline's grants, and a token is wrapped to one application's key, so anonymous principals of
+the search service and of the submission service cannot share one. Dropping it needs no version on
+the baseline: a notice telling each bridge to drop the entry it holds for principals with no `sub`
+evicts exactly one thing and carries no payload, since a bridge that exchanges again receives
+whatever is correct now.
+
+**A category change is announced by resource instead**, and only to the applications that serve that
+resource, so no application learns of a resource it does not serve. See [the decision on announcing
+a category change](#a-category-change-is-announced-to-the-applications-that-serve-the-resource).
 
 **Tradeoffs accepted.** Every unauthenticated request triggers a token exchange call to the
 controller. For high-traffic open-access instances this is additional load compared to a
@@ -2027,41 +2416,42 @@ refusal is where the conformance case belongs.
 
 ---
 
-### `open` is the default category, and it is abstract where the others are concrete
+### Records not covered by any category are `unmarked`, and open is who reaches them
 
-**Every other category is concrete: it is defined by a field value records carry.** A record is
-`controlled` because some field on it says so, and the adapter can therefore render it as a positive
-clause naming that value. `open` has no such value. It stands for whatever the concrete categories do
-not cover, which makes it abstract and complement-shaped, and it is the single default.
+**Every resource has one implicit category, `global.unmarked`, covering the records not covered by its other categories.** Every other category is concrete: it is defined by a field value records carry,
+and the adapter renders it as a positive clause naming that value. `unmarked` has no value of its
+own. It is what is left once the concrete categories have selected theirs, so its clause is a
+complement, and no resource lists it because every resource has it.
 
-**They are the same kind of thing only in the configuration screen.** All of them appear in one list
-when an instance is set up, and a resource lists the ones it carries. Underneath, a concrete category
-selects records and `open` is what is left once the concrete ones have selected theirs. Documents
-that call `open` a category like any other are describing the configuration surface and not the
-mechanism, and a reader who takes it literally expects a field value that does not exist.
+**Open is not a category.** It names who reaches a resource's unmarked records. The earlier framing
+made `open` a category, so one word named both which records and who reaches them, and reading the
+baseline as evidence that `open` was an ordinary category conflated who holds a grant with what the
+grant selects. Separating the two is what "Who holds a grant can follow a rule" requires: `unmarked`
+is what a grant selects, and open is one answer to who holds it.
 
-**Why the earlier framing was wrong, recorded because it took three passes to catch.** The anonymous
-role decision says an instance defines a floor of grants every principal receives. That explains why
-everyone holds the `open` grant. It says nothing about what `open` denotes, and reading it as
-evidence that `open` is an ordinary category conflates who holds a grant with what the grant selects.
+**A resource's unmarked records are reached in one of three ways**, a setting on the resource:
 
-### Two ways to control the default, both in MVP
+| Setting    | Who reaches the unmarked records                        | Through            |
+| ---------- | ------------------------------------------------------- | ------------------ |
+| open       | everyone                                                | the baseline       |
+| registered | anyone signed in                                        | the signed-in rule |
+| by grant   | holders of a grant naming `unmarked` on that resource   | ordinary grants    |
 
-Configuring the baseline to grant nothing was previously offered as the way to close open
-access. That is customizing a rule to get an effect it was not written for. Two explicit controls
-replace it, and both are in the first release.
+**By grant is what makes the leftover reachable when it is not open.** Under the earlier framing,
+removing `open` from a resource left its uncategorized records covered by no category, so no grant
+could name them and not even an administrator's self-grant reached them. `unmarked` gives them a name
+a grant can carry, and an owner can grant it like any other category.
 
-**Global.** The default is that `open` covers anything not categorized, in any resource. An instance
-may turn that default off, which means nothing is open unless the `open` category is added to a
-resource deliberately.
+### Where the settings come from, both in MVP
 
-**Per resource, where the global default is on.** A resource may have `open` removed from it, which
-states that this resource carries no open data. The global default stays on for everything else.
+**Per resource.** Any resource takes any of the three settings, independently of the concrete
+categories it carries. A resource may be set to registered and still carry `controlled`: the
+registered setting reaches its unmarked records, and its controlled records need their own grant.
 
-**What a new resource carries at creation follows from the two.** Where the global default is on, a
-resource is created carrying the one `open` category, and a warning is shown at submission time so
-that nobody publishes openly by not choosing. Where the global default is off, a resource is created
-fully closed and stays unreachable until categories are defined for it.
+**Per instance.** The instance names the setting a new resource starts with. Where that default is
+open, a warning at submission time says so, so that nobody publishes openly by not choosing. Where it
+is by grant, a new resource's records are reached by nobody until someone is granted `unmarked` or a
+concrete category on it.
 
 **The submission-time warning is not yet designed**, and its wording matters more than most: it is
 the only thing standing between a default and an accidental publication.
@@ -2120,8 +2510,8 @@ check can report rather than a silence.
 
 ### `read` is a group of three, `count` counts only, and aggregation is not a capability
 
-**`read` became a capability group, and `view` came back to name seeing a record.** On a record or a
-field the group is `count`, `view` and `export`; on a revision or an artifact it is `view` and
+**`read` became a capability group, and `view` came back to name seeing a record.** On a record, a
+field or an artifact the group is `count`, `view` and `export`; on a revision it is `view` and
 `export`; on a control-plane entity it is `view` alone. It is expanded when a role is written, so no
 token carries it and no adapter tests for it. The vocabulary is in
 [permissions-model.md](permissions-model.md#data-plane).
@@ -2160,7 +2550,7 @@ role it will mean.
 
 ---
 
-### A category either partitions or overlays, and only the first decides what `open` covers
+### A category either partitions or overlays, and only the first decides what `unmarked` covers
 
 **A fixed category selects the same records for everyone.** `controlled` names records an instance
 has marked controlled, and the set is the same whoever asks.
@@ -2172,16 +2562,16 @@ learning the field name or any value in it. It fails closed in the ordinary way,
 missing that field matches nothing.
 
 **The axis that decides the residual is partitioning against overlay, and fixedness is not it.**
-A **partitioning** category carves up the record set, and `open` is what the partitioning categories
-leave. An **overlay** selects within that set and changes nothing about what `open` covers, so a
-record can carry an overlay and still be open. The test is one question: does this category take part
+A **partitioning** category carves up the record set, and `unmarked` is what the partitioning categories
+leave. An **overlay** selects within that set and changes nothing about what `unmarked` covers, so a
+record can carry an overlay and still be unmarked. The test is one question: does this category take part
 in the residual calculation?
 
 **Principal-relative implies overlay, and the converse does not hold**, which is why stating the rule
-as "only fixed categories decide what `open` covers" is true and incomplete. `own` must be an overlay
+as "only fixed categories decide what `unmarked` covers" is true and incomplete. `own` must be an overlay
 because every record has a submitter, so as a partitioning category it would empty the residual
-entirely. But a category can be perfectly fixed and still have no business narrowing `open`: a
-`high_quality` marker is the same for everyone, and partitioning on it would mean an open-only grant
+entirely. But a category can be perfectly fixed and still have no business narrowing `unmarked`: a
+`high_quality` marker is the same for everyone, and partitioning on it would mean an unmarked-only grant
 sees exactly the records that failed quality control. `own` is an instance of the rule rather than
 the reason for it.
 
@@ -2197,8 +2587,8 @@ both sit in `record_category_id`. So this is one more field in the mapping that 
 each category selects, and there is nowhere else it could go.
 
 **The failure directions are asymmetric, and the dangerous one is silent.** Mark an overlay as
-partitioning and `open` empties: loud, immediate, and impossible to miss. Mark a partitioning
-category as an overlay and the complement no longer excludes it, so `open` now covers the records it was
+partitioning and `unmarked` empties: loud, immediate, and impossible to miss. Mark a partitioning
+category as an overlay and the complement no longer excludes it, so `unmarked` now covers the records it was
 meant to remove, and every principal holding the open grant reaches controlled data. Nothing
 downstream can notice, because the clause is well-formed and the token is correct; only the adapter's
 own configuration holds the mistake. **That makes it a sixth condition for the reconciliation check,
@@ -2360,7 +2750,7 @@ retention, a grant naming a capability its audience does not implement is writab
 surfaces at query time as an unenforced restriction rather than at authoring time as a refusal. The
 same holds one level down for a grant naming a field no catalogue has: the clause built from it
 matches nothing, and whether that is safe depends on its polarity, since a positive clause matching
-nothing denies while a negated one matching nothing negates to match-all. The `open` category is
+nothing denies while a negated one matching nothing negates to match-all. The `unmarked` category is
 rendered as exactly that negation. So non-retention does not defer an error, it converts an authoring
 mistake into a silent widening on the one category every principal holds.
 
@@ -2428,7 +2818,7 @@ the empty cell is a statement rather than an omission.
 control-plane role: create, read, update and delete on **access** to one resource. Both carry the
 same four acts, and what separates them is the object, not the breadth.
 
-        curator   CRUD on the records a grant reaches
+        curator   CRUD on the records reached by a grant
     owner     CRUD on who may reach one resource
 
 **Exact at both grains, because `read` is a capability group.** On records it is `count`, `view` and
@@ -2490,6 +2880,32 @@ not expressible while a role is per resource rather than per grant:
 The same holds with a user in the holder column, which is the only kind the first release writes. A
 group is a plain named set either way: it supplies who the grant reaches and never what they may do,
 because the grant already says.
+
+### Roles resolve at issuance, so no role travels in the token
+
+**Once enforcement holds no policy, a role is an authoring convenience.** In the source model a role
+does two jobs: a compact way to assign many permissions, and the first stage of a check evaluated
+when access is attempted. This design moves the second job to issuance so that adapters hold no
+policy, which leaves roles only the first, and an authoring convenience has no reason to travel in
+an enforcement payload. Several roles on one resource become a union of capabilities computed before
+the token is written, so there is nothing to collapse into a single field.
+
+| Place                         | What a role does there                                                                       |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| The management interface      | granting by role rather than by enumerating capabilities                                     |
+| The grant store               | which role was assigned, for provenance and for recomputing when a role's definition changes |
+| Usher's own API authorization | whether a principal may perform a grant operation at all                                     |
+
+**Ownership is absent from the token for a second, independent reason.** An owner's powers are
+management operations, granting, revoking and setting visibility, performed against Usher's own API,
+which checks them directly. No adapter enforces them, so the enforcement payload never has to say
+who is an owner.
+
+**The same move retired the detached permission list and the empty list.** With open content a
+category like any other, a resource maps to the categories held on it, every reachable record is
+reached through a grant naming it, and holding nothing is absence from the map. The additive
+rendering and `unmarked` decisions carry the detail. Every resource has `unmarked`, so none is
+ungrantable: a resource carrying no concrete category holds all its records there.
 
 ### Acceptance is the recipient's decision and is recorded apart from the grant
 
@@ -2566,10 +2982,10 @@ Four consequences:
    more than they now hold. A widening leaves the added capability unaccepted until accepted.
    Narrowing is silent, widening asks.
 
-**`open` requires no acceptance, for two reasons that cover both configurations.** An anonymous
-request has nobody to accept, and where an instance gates open behind registration, accepting the
-platform's terms of access at registration is the acceptance. So acceptance attaches to grants and
-never to the baseline.
+**A grant a rule confers on `unmarked` requires no acceptance, for two reasons that cover both
+settings.** An anonymous request has nobody to accept, and for the registered setting, accepting the
+platform's terms of access at registration is the acceptance. So acceptance attaches to grants held
+one per holder, and never to what a rule confers.
 
 The `Auto-accept` flag is unaffected and remains the instance-level exception, for machine-to-machine
 sharing and internal pipelines where an acknowledgment has no one to come from.

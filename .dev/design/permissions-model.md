@@ -285,11 +285,11 @@ columns nothing uses yet.
 | `record`   | `count`, `view`, `export`, `create`, `update`, `delete` | one row of data in a resource, in its current state. Listed in order of increasing reach, which is the order the seeded roles add them in                         |
 | `field`    | `count`, `view`, `export`, `update`                     | one part of a record. No `create` or `delete`: a field exists per schema rather than per grant. The three members of `read` are separate for a reason given below |
 | `revision` | `view`, `export`                                        | a prior state of a record, where the service keeps them. A submission service does; a search index does not                                                       |
-| `artifact` | `create`, `view`, `update`, `delete`, `export`          | a collection of records someone assembled and kept, carrying provenance naming the resources it drew on. A saved set in Arranger is one                           |
+| `artifact` | `count`, `view`, `export`, `create`, `update`, `delete` | a collection of records someone assembled and kept, carrying provenance naming the resources it drew on. A saved set in Arranger is one                           |
 
 **`read` is a capability group rather than a capability.** It names an entity's read-shaped
-capabilities together: `count`, `view` and `export` on a record or a field, `view` and `export` on a
-revision or an artifact, and `view` alone on a control-plane entity. Someone writing a role may name
+capabilities together: `count`, `view` and `export` on a record, a field or an artifact, `view` and
+`export` on a revision, and `view` alone on a control-plane entity. Someone writing a role may name
 `read` and get all of them, or name them one by one.
 
 **It separates the two meanings one word had.** `read` was both the R in create, read, update and
@@ -302,8 +302,7 @@ tests for it, the same as a role name. Expanded at issuance instead, a group tha
 would widen every role naming it, on every grant at once, with no act anyone performed. Expanded at
 writing, a new member reaches a role only when someone adds it under `role.define`.
 
-**A capability group is not a group of principals.** A `group` in this model is a set of people a
-grant can name; a capability group is a set of capabilities a role can name. The two never meet,
+**A capability group is not a group of principals.** A `group` in this model is a set of people named together by a grant; a capability group is a set of capabilities named together by a role. The two never meet,
 since a grant names a role and a role names capabilities.
 
 **Prior art.** Cedar has the same device as action groups: an action is classified as a member of a
@@ -373,6 +372,11 @@ work that would introduce the second write path.
 **Recorded as a constraint on that work rather than as a live gap**, because a live gap gets checked,
 found absent, and dropped, and the constraint disappears with it. `artifact.update` exists in the
 vocabulary so that the obligation has somewhere to attach when the capability becomes reachable.
+
+**`artifact.count` counts artifacts without seeing them**, which is what `count` is on a record: how
+many sets a person can reach, or how many match a search, without opening one. Counting the records
+inside a set is `record.count` with the set as the filter, and a set's size is a property of the set,
+seen with `artifact.view`.
 
 **`artifact.export` is the artifact leaving, not its records.** Taking a set object away as JSON, or
 a collection of them, hands over record identifiers and the provenance naming the resources they came
@@ -447,8 +451,7 @@ tally.
 
 **Time is the third axis a record has, and it is an entity rather than a third `kind`.** A record's
 data is addressed by which records, which fields, and which versions, and the third is independent
-of the other two: permission to see prior states applies to whatever rows and columns a person
-already reaches. **The reason it is not a kind is concrete rather than aesthetic.** As a kind, a
+of the other two: permission to see prior states applies to the rows and columns already reachable by a person. **The reason it is not a kind is concrete rather than aesthetic.** As a kind, a
 category with `{version}` would mean that seeing the history of a _controlled_ record needs both the
 `controlled` grant and the version grant, and the adapter would have to conjoin two categories over
 one piece of data. That is the subset test this design defers and the query layer cannot express. As
@@ -485,11 +488,11 @@ to the actions held. `field` is the exception at the third level, mapping to its
 first, because a field is the one entity a record category further partitions.
 
     "HEART_STUDY": {
-      "open":       { "record":   ["view"],
+      "global.unmarked":       { "record":   ["view"],
                       "revision": ["view"],
-                      "field":    { "basic": ["view"], "clinician": ["view", "count"] } },
-      "controlled": { "record":   ["view", "delete"],
-                      "field":    { "basic": ["view"] } }
+                      "field":    { "global.basic": ["view"], "global.clinician": ["view", "count"] } },
+      "global.controlled": { "record":   ["view", "delete"],
+                      "field":    { "global.basic": ["view"] } }
     }
 
 That says something no flatter shape could: clinician fields are readable in open records and not in
@@ -514,14 +517,14 @@ an exception: it is the absence of a partition rather than the absence of a gran
 configure no field categories, and nothing is being withheld when there is nothing to withhold by.
 
 **A present `field` key means only the field categories named inside it are reached**, and that is
-the same rule as the row axis one level down. `field: {"clinician": ["view"]}` reaches the clinician
+the same rule as the row axis one level down. `field: {"global.clinician": ["view"]}` reaches the clinician
 columns and not the basic ones, precisely as a grant naming `controlled` and not `open` reaches the
 controlled records and not the open ones. `basic` is the residual, it is granted rather than assumed,
 and leaving it out hides it. Showing the clinical values of a record while withholding its
 identifying columns is that case, and it is a real one.
 
 **The two states are worth keeping apart.** `field` absent says no field partition exists here;
-`field: {"basic": [...]}` says one exists and this principal holds the residual of it. Collapsing
+`field: {"global.basic": [...]}` says one exists and this principal holds the residual of it. Collapsing
 them would lose the signal an adapter uses to decide whether to run the column-pruning path at all.
 
 **What changes when an instance configures field categories for the first time.** Existing grants
@@ -550,7 +553,7 @@ which is the collapse every other part of this model exists to avoid. `role_perm
 change.
 
 **Where artifact capabilities live.** Under the categories they draw from:
-`{"open": {"artifact": ["create"]}}` means artifacts may be assembled from open records, and one
+`{"global.unmarked": {"artifact": ["create"]}}` means artifacts may be assembled from open records, and one
 spanning two resources needs the capability under both. That is the provenance rule already recorded,
 which asks for authority over every resource an artifact draws on rather than any of them.
 
@@ -697,7 +700,7 @@ database schema design item in the roadmap.
     users                  (id, idp_subject, email, display_name)
     groups                 (id, name, description)
     resources              (id, name, description, created_by, created_at, updated_at)
-    categories             (id, name, description)
+    categories             (id, resource_id, name, description)
     entities               (id, name, plane, display_name, description)
     capabilities           (id, entity_id, action, display_name, description)
     roles                  (id, name, plane)
@@ -995,10 +998,10 @@ as:
 
 ```json
 "permissions": {
-  "HEART_STUDY": { "open":       { "record": ["view", "update"] },
-                   "controlled": { "record": ["view"] } },
+  "HEART_STUDY": { "global.unmarked":       { "record": ["view", "update"] },
+                   "global.controlled": { "record": ["view"] } },
 
-  "LUNG_COHORT": { "open":       { "record": ["view"] } }
+  "LUNG_COHORT": { "global.unmarked":       { "record": ["view"] } }
 }
 ```
 
@@ -1288,7 +1291,7 @@ category would then be reachable by nobody, which is not what a residual means.
 	"exp": 1720000300,
 	"generatedAt": 1720000000,
 	"permissions": {
-		"RESOURCE_X": { "open": { "record": ["view"] } }
+		"RESOURCE_X": { "global.unmarked": { "record": ["view"] } }
 	}
 }
 ```
@@ -1312,9 +1315,9 @@ those records are absent from results, counts and aggregations rather than filte
 	"exp": 1720000300,
 	"generatedAt": 1720000000,
 	"permissions": {
-		"RESOURCE_X": { "open": { "record": ["view"] },
-		                "indigenous_data": { "record": ["view"] } },
-		"RESOURCE_Y": { "open": { "record": ["view"] } }
+		"RESOURCE_X": { "global.unmarked": { "record": ["view"] },
+		                "global.indigenous_data": { "record": ["view"] } },
+		"RESOURCE_Y": { "global.unmarked": { "record": ["view"] } }
 	}
 }
 ```
@@ -1478,7 +1481,7 @@ nothing be open unless deliberately added. A dataset whose plain columns are the
 needs the same lever, so the column residual is `basic` rather than nameless.
 
 **`open` and `basic` stay two names rather than one name on two axes.** `categories.name` is unique
-across the instance, so reusing `open` for the field residual would need the axis in the key, and a
+within its scope, and both are global, so reusing `open` for the field residual would need the axis in the key, and a
 word whose meaning depends on which column of a grant it lands in is the ambiguity every other part
 of this vocabulary work removes. Two words, one unique name each, and the grant's column says which
 axis a category is scoping without the category itself having to carry an opinion.
@@ -1752,7 +1755,9 @@ platform-wide admin rights.
 In Usher's terms: a user can hold a custodianship.hold permission scoped to one or more data
 categories. Within those categories, they can grant and revoke access as if they were an Admin,
 but only for the categories they hold custody of. They cannot see or modify grants for other
-categories, and they cannot modify resource structure or role assignments.
+categories, and they cannot modify resource structure or role assignments. A custodian can allow the
+owner of one dataset to manage their category's access in that dataset; see "A custodian can allow an
+owner to act on their category, one dataset at a time" in [decisions.md](decisions.md).
 
 This permission dimension is not yet in the data model. Its design (how custodianship scope is
 stored; the permission check in the PAP layer) is an open question and a prerequisite for

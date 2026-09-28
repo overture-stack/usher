@@ -63,8 +63,8 @@ through the design.
 Carry the resolved permissions in the token rather than the role name that produced them. **Paired
 with the category they apply to, not as an independent list.**
 
-    "COHORT_A": { "open":       { "record": ["view", "update"] },
-                  "controlled": { "record": ["view"] } }
+    "COHORT_A": { "global.unmarked":       { "record": ["view", "update"] },
+                  "global.controlled": { "record": ["view"] } }
 
 This follows from the architecture already in place rather than changing it. Usher is the decision
 point, so resolving which permissions a role carries belongs there. Adapters become mechanical,
@@ -132,8 +132,7 @@ representations that can disagree.
 ## Roles at each plane, and one token shape for both
 
 Permissions divide by what they act on, which is the split the architecture already draws. A
-control-plane permission acts on what Usher holds; a data-plane one acts on records an application
-holds. Roles live at each plane, and a principal holds roles at both independently.
+control-plane permission acts on what Usher holds; a data-plane one acts on records held by an application. Roles live at each plane, and a principal holds roles at both independently.
 
 **The plane names what a permission targets, not where it is enforced.** Both are enforced in the
 control plane: the controller checks a control-plane permission on an admin call, and the adapter
@@ -171,14 +170,14 @@ revoking possible at all; which categories it names is the filtering.
 
     aud: "search-service"
     grants: {
-      "STUDY_A": { "open":       {"record": ["view", "update"]},
-                   "controlled": {"record": ["view"]} }
+      "STUDY_A": { "global.unmarked":       {"record": ["view", "update"]},
+                   "global.controlled": {"record": ["view"]} }
     }
 
     aud: "usher-admin-ui"
     grants: {
-      "*":       { "controlled": {"grant": ["create", "revoke"]} },
-      "STUDY_A": { "open":       {"grant": ["create"]},
+      "*":       { "global.controlled": {"grant": ["create", "revoke"]} },
+      "STUDY_A": { "global.unmarked":       {"grant": ["create"]},
                    "*":          {"ownership": ["transfer"]} }
     }
 
@@ -189,7 +188,7 @@ attempting actions and reading the failures.
 **Scoping built into the shape is what makes that safe.** A custodian of `controlled` receives a token
 naming `controlled` and nothing else, so they never learn which other categories exist. The
 alternative, sending the full picture with permissions marked on it, leaks by its shape. This is
-the same property the data token already has: it names only resources the principal can reach.
+the same property the data token already has: it names only resources reachable by the principal.
 
 **A wildcard is valid in either position and means all of them.** A custodian's authority spans every
 resource, so `*` stands in the resource position; ownership permissions are not per category, so

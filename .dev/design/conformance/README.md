@@ -50,19 +50,46 @@ validates `exp` against the wall clock is testing something this corpus does not
 
 ## The configuration these payloads were computed against
 
+The payloads name every category with its scope prefix, `global.`, as every version 1 payload does;
+the configuration below names them without it.
+
         curator   count, view, export, create, update, delete
     viewer    count, view, export
 
     G1 "cardiology" and G2 "study readers" are named sets of people. A role is
     named on each grant, never on the group.
 
-    HEART_STUDY    carries  open, controlled
-    LUNG_COHORT    carries  open
-    REEF_ARCHIVE   carries  open, controlled, community-governed
-    VOID_INDEX     carries  no categories
+    HEART_STUDY    carries  controlled
+    LUNG_COHORT    carries  no concrete category
+    REEF_ARCHIVE   carries  controlled, community-governed
+    VOID_INDEX     carries  no concrete category; unmarked records by grant
 
-    The baseline is on and grants open -> read, except where a case turns it off.
+    Every other resource's unmarked records are open.
+
+    The baseline is on and grants unmarked -> read wherever the setting is open,
+    except where a case turns it off.
     The audience serves all four resources, except where a case says otherwise.
+
+## The signed-in rule's configuration
+
+Cases 28 to 35 were computed against a second configuration, and each carries
+`"configuration": "signed-in rule"`, so an entry without that field belongs to the one above:
+
+    viewer    count, view, export
+
+    OPEN_ATLAS       carries  no concrete category; unmarked records open
+    MEMBERS_ARCHIVE  carries  no concrete category; unmarked records registered
+    SEALED_ARCHIVE   carries  no concrete category; unmarked records by grant
+    HEART_STUDY      carries  controlled; unmarked records open
+
+    The baseline is on unless a case turns it off, and grants unmarked -> read
+    wherever the setting is open. The signed-in rule grants unmarked -> read to
+    every signed-in principal wherever the setting is registered.
+    The audience serves all four resources.
+
+Two of its cases have no payload and are listed under `omitted`: 33 is a refusal, which belongs to
+the bridge's tests, and 34 is an open question in `token-calculation.md` whose answer decides what
+the payload would hold.
 
 ## Cases marked not yet implementable
 

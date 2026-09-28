@@ -11,6 +11,14 @@
     {
       "case": "25",
       "reason": "A grant pairing record.delete with a field category is refused at writing, so no token exists. Deletion takes the whole record, which makes the pairing meaningless. This belongs to Usher's own schema tests, where the constraint is field_category_id IS NOT NULL."
+    },
+    {
+      "case": "33",
+      "reason": "A revoked principal fails at the bridge before any query runs, so no token exists. The expectation is a refusal, which belongs to the bridge's tests rather than to a payload."
+    },
+    {
+      "case": "34",
+      "reason": "Open: whether an expired identity token is refused at the exchange or served as anonymous, as case 28. No payload can be written until it is decided."
     }
   ],
   "principals": [
@@ -32,7 +40,7 @@
     {
       "id": "case-02",
       "case": "02",
-      "description": "Anonymous, baseline on. Reaches the open records of every resource carrying open, and none of their controlled or community-governed ones.",
+      "description": "Anonymous, baseline on. Reaches the unmarked records of every resource whose unmarked records are open, and none of their controlled or community-governed ones.",
       "payload": {
         "payloadVersion": 1,
         "sub": null,
@@ -43,21 +51,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -80,21 +88,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -117,21 +125,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -154,12 +162,12 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -171,14 +179,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -201,21 +209,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -227,7 +235,7 @@
     {
       "id": "case-07",
       "case": "07",
-      "description": "In G1 and G2. G1 granted HEART_STUDY/controlled at curator, G2 granted HEART_STUDY/open at viewer, both accepted. Two grants on one resource at different roles, which a role held per resource cannot express.",
+      "description": "In G1 and G2. G1 granted HEART_STUDY/controlled at curator, G2 granted HEART_STUDY/unmarked at viewer, both accepted. Two grants on one resource at different roles, which a role held per resource cannot express.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -238,14 +246,14 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "count",
                 "view",
                 "export"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -257,14 +265,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -287,12 +295,12 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -304,14 +312,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -335,26 +343,26 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -371,7 +379,7 @@
     {
       "id": "case-10",
       "case": "10",
-      "description": "VOID_INDEX carries no categories at all. It is absent from the map, so no clause selects any of its records and it is reachable by nobody.",
+      "description": "VOID_INDEX carries no concrete category, its unmarked records are by grant, and nobody is granted them. It is absent from the map, so no clause selects any of its records and it is reachable by nobody.",
       "notes": "The assertion lives in expectations.json: every VOID_INDEX record is invisible to every principal in this file, including this one.",
       "payload": {
         "payloadVersion": 1,
@@ -383,21 +391,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -420,21 +428,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -457,21 +465,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -494,12 +502,12 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -511,14 +519,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -541,12 +549,12 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -555,14 +563,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -585,12 +593,12 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -599,14 +607,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -618,7 +626,7 @@
     {
       "id": "case-16",
       "case": "16",
-      "description": "She leaves G1 with her accepted row still present. HEART_STUDY keeps open from the baseline and loses controlled, because the grant no longer reaches her.",
+      "description": "She leaves G1 with her accepted row still present. HEART_STUDY keeps unmarked from the baseline and loses controlled, because the grant no longer reaches her.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -629,21 +637,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -666,21 +674,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -703,21 +711,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -729,7 +737,7 @@
     {
       "id": "case-19",
       "case": "19",
-      "description": "HEART_STUDY carries no open category at all. Records no category describes are reachable by nobody, so the resource is absent rather than present and empty.",
+      "description": "HEART_STUDY's unmarked records are set to by grant, and she holds no grant on them. The resource is absent rather than present and empty; without unmarked, no grant could have named those records at all.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -740,16 +748,55 @@
         "generatedAt": 1767225600,
         "permissions": {
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-19b",
+      "case": "19b",
+      "description": "As case 19, and she accepted a viewer grant on HEART_STUDY/unmarked. Records not covered by any category are reached through a grant like any other category's.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "LUNG_COHORT": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "REEF_ARCHIVE": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "HEART_STUDY": {
+            "global.unmarked": {
+              "record": [
+                "count",
+                "view",
+                "export"
               ]
             }
           }
@@ -770,12 +817,12 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -787,14 +834,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -819,12 +866,12 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -836,14 +883,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -868,26 +915,26 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             },
-            "controlled": {
+            "global.controlled": {
               "record": [
                 "count",
                 "view",
@@ -904,7 +951,7 @@
     {
       "id": "case-23",
       "case": "23",
-      "description": "A record carries a category value the adapter has no mapping for. The principal is ordinary; the defect is that the record is served as open.",
+      "description": "A record carries a category value the adapter has no mapping for. The principal is ordinary; the defect is that the record is served as unmarked, to whoever reaches the unmarked records.",
       "notes": "This is the failure the startup reconciliation check exists to prevent. The assertion lives in expectations.json and in records.json, not here.",
       "payload": {
         "payloadVersion": 1,
@@ -916,21 +963,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -954,26 +1001,26 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ],
               "field": {
-                "basic": [
+                "global.basic": [
                   "view"
                 ]
               }
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -985,7 +1032,7 @@
     {
       "id": "case-24b",
       "case": "24b",
-      "description": "Her grant names clinician and not basic. The residual is granted rather than assumed, exactly as open is on the row axis.",
+      "description": "Her grant names clinician and not basic. The residual is granted rather than assumed, exactly as unmarked is on the row axis.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -996,12 +1043,12 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ],
               "field": {
-                "clinician": [
+                "global.clinician": [
                   "count",
                   "view"
                 ]
@@ -1009,14 +1056,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -1040,21 +1087,21 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -1077,7 +1124,7 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ],
@@ -1087,14 +1134,14 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
@@ -1106,7 +1153,7 @@
     {
       "id": "case-27",
       "case": "27",
-      "description": "She holds artifact.create on HEART_STUDY's open records.",
+      "description": "She holds artifact.create on HEART_STUDY's unmarked records.",
       "notes": "An artifact drawn from two resources needs the capability under both. expectations.json should carry that pair, since the provenance rule is expressed in the token rather than beside it.",
       "payload": {
         "payloadVersion": 1,
@@ -1118,7 +1165,7 @@
         "generatedAt": 1767225600,
         "permissions": {
           "HEART_STUDY": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ],
@@ -1128,16 +1175,217 @@
             }
           },
           "LUNG_COHORT": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
               ]
             }
           },
           "REEF_ARCHIVE": {
-            "open": {
+            "global.unmarked": {
               "record": [
                 "view"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-28",
+      "case": "28",
+      "configuration": "signed-in rule",
+      "description": "Anonymous, baseline on, against the signed-in rule's configuration. Reaches the unmarked records of OPEN_ATLAS and HEART_STUDY; MEMBERS_ARCHIVE is absent because it needs a sign-in, and SEALED_ARCHIVE because it needs a grant.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": null,
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "OPEN_ATLAS": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "HEART_STUDY": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-29",
+      "case": "29",
+      "configuration": "signed-in rule",
+      "description": "Anonymous, baseline off. Neither the baseline nor the signed-in rule reaches an anonymous principal, so the map is empty, which is distinct from the token being absent.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": null,
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {}
+      }
+    },
+    {
+      "id": "case-30",
+      "case": "30",
+      "configuration": "signed-in rule",
+      "description": "Signed in, no grants, baseline on. Case 28 plus the unmarked grant the signed-in rule confers on MEMBERS_ARCHIVE: the one difference a present sub makes on its own.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "OPEN_ATLAS": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "MEMBERS_ARCHIVE": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "HEART_STUDY": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-31",
+      "case": "31",
+      "configuration": "signed-in rule",
+      "description": "Signed in, no grants, baseline off. The unmarked grant on MEMBERS_ARCHIVE alone: an empty baseline reaches nobody on an open resource, signed in or not, because registration gating is the registered setting rather than an empty baseline.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "MEMBERS_ARCHIVE": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-32",
+      "case": "32",
+      "configuration": "signed-in rule",
+      "description": "Signed in, accepted a viewer grant on HEART_STUDY/controlled, baseline on. The rule's grant and her own accumulate; neither replaces the other.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "OPEN_ATLAS": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "MEMBERS_ARCHIVE": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "HEART_STUDY": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            },
+            "global.controlled": {
+              "record": [
+                "count",
+                "view",
+                "export"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "case-35",
+      "case": "35",
+      "configuration": "signed-in rule",
+      "description": "Signed in, accepted a viewer grant on SEALED_ARCHIVE/unmarked, baseline on. Records not covered by any category, on a resource that is not open, are reachable once someone is granted them.",
+      "payload": {
+        "payloadVersion": 1,
+        "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+        "iss": "https://usher.example.org",
+        "aud": "arranger-prod",
+        "iat": 1767225600,
+        "exp": 1767225900,
+        "generatedAt": 1767225600,
+        "permissions": {
+          "OPEN_ATLAS": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "MEMBERS_ARCHIVE": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "HEART_STUDY": {
+            "global.unmarked": {
+              "record": [
+                "view"
+              ]
+            }
+          },
+          "SEALED_ARCHIVE": {
+            "global.unmarked": {
+              "record": [
+                "count",
+                "view",
+                "export"
               ]
             }
           }

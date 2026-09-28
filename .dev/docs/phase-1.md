@@ -111,6 +111,23 @@ approved location is below, it becomes what keeps the real controller honest aft
 cases run against the mock during steps 2 to 4 and against the real thing from step 5 on, and a
 divergence is a defect rather than a surprise.
 
+**One bridge case needs an input no controller of this release produces**, so the bridge's own tests
+build it rather than the mock issuing it: a version 1 payload carrying a `resource.` entry (see
+"Category names carry their scope from the first release" in
+[decisions.md](../design/decisions.md)).
+
+| Given                                                                                   | Then                                                                                                                         |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `global.unmarked` and `resource.pilot` on HEART_STUDY, then two requests inside the TTL     | the adapter receives `global.unmarked` alone, and exactly one `category.unenforced` is recorded, naming the principal, HEART_STUDY, `resource.pilot`, the payload version and `notImplemented` |
+| a bare `open` on HEART_STUDY                                                            | the payload is malformed: treated as not received, the application reports unavailable rather than an empty answer, and the rejection is logged |
+| an unknown prefix, `local.pilot`                                                        | the same as a bare name                                                                                                      |
+
+Inverting proves each assertion load-bearing: a bridge passing `resource.pilot` through fails the
+first row, one recording the event per request rather than per payload fails it too, and one
+dropping a bare name instead of rejecting the payload fails the second. The first row is also an
+audit event the first release can produce on demand, which gives the audit path something to test
+against before any real event depends on it.
+
 ## Blockers, in the order they can be worked
 
 **Numbers are identities, not positions.** They are cited from `adapter-integration.md` and from
@@ -474,8 +491,8 @@ deliberately:
 | Token nesting by entity                                    | **shipped**, though only `record` ever appears in it | nothing to add                                                            |
 | `record_category_id` as the column name                    | **shipped under that name**                          | nothing to rename                                                         |
 
-**The nesting ships even though the first release has one entity in it.** `{"open": {"record":
-["view"]}}` gains nothing over `{"open": ["view"]}` while `record` is alone. Adding the level later
+**The nesting ships even though the first release has one entity in it.** `{"global.unmarked": {"record":
+["view"]}}` gains nothing over `{"global.unmarked": ["view"]}` while `record` is alone. Adding the level later
 costs a payload version negotiated at the exchange and a bridge and controller rolled out in step,
 which is the mechanism built for changes nobody could foresee. Spending it on the first change that
 was foreseen would be the waste.
@@ -739,7 +756,7 @@ cases stop.
 
 Two consequences. **The cases populate `principals.json`, not `expectations.json`**, which also means
 expanding their shorthand into the real nested shape, since the table writes `{open: [view]}` where a
-payload carries `{"open": {"record": ["view"]}}`. And **the pre-token half stays here**: acceptance
+payload carries `{"global.unmarked": {"record": ["view"]}}`. And **the pre-token half stays here**: acceptance
 versus rejection, group membership, baseline on or off, and a principal with no decision row are all
 resolved before a payload exists, so no cross-repo corpus can see them and they need Usher-side tests
 of their own.

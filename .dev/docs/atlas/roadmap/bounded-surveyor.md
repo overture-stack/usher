@@ -44,7 +44,7 @@ rendering item in [to-discuss.md](../../../design/to-discuss.md).
 ## Why it is post-MVP
 
 **The first integration cannot limit one category within a response.** Every principal holds the
-open grant, so a limit on controlled records always shares a response with unlimited open ones.
+open grant, so a limit on controlled records always shares a response with unlimited unmarked ones.
 Arranger resolves one filter per request, which gives one set and one size, and limiting part of a
 response is the per-capability evaluation recorded as the third widening in
 [adapter-integration.md](../../../design/adapter-integration.md).
@@ -64,7 +64,7 @@ until its audience declares the limits, which is the reconciliation check in
 ## Open when it is picked up
 
 **Where the limits live.** A grant names one resource and one category, so limits set on the grant
-are per category and per person at once: a grant on open carries none, and one on controlled carries
+are per category and per person at once: a grant on `unmarked` carries none, and one on controlled carries
 the numbers. Different people can then hold different limits on the same category, which is the
 reason to put them on the grant rather than on the category.
 
