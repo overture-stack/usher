@@ -421,14 +421,18 @@ layer and are that application's audit responsibility.
 
 Each adapter must emit structured log entries for:
 
-| Event            | Required fields                                                                |
-| ---------------- | ------------------------------------------------------------------------------ |
-| Access permitted | `user_id`, `resource_id`, `categories_in_scope`, `filter_applied`, `timestamp` |
-| Access denied    | `user_id`, `resource_id`, `reason`, `timestamp`                                |
+| Event            | Required fields                                                          |
+| ---------------- | ------------------------------------------------------------------------ |
+| Access permitted | `userId`, `resourceId`, `categoriesInScope`, `enforcement`, `timestamp`  |
+| Access denied    | `userId`, `resourceId`, `reason`, `timestamp`                            |
 
-`filter_applied` is a boolean that must be `true` whenever the adapter ran, even when full access
-means no filter was injected. Without it, a fully-entitled user's request may be indistinguishable
-from one where enforcement did not run.
+`enforcement` is the arm the bridge returned, `narrow` or `allow`, recorded whenever the adapter ran.
+A boolean saying only whether a filter was applied cannot tell a catalogue open by configuration
+from a narrowed request, and a missing entry is what enforcement not running looks like. The names
+are camelCase, as the audit envelope's are. See the enforcement result in
+[decisions.md](decisions.md) § Holding no grants is a distinct state, never an empty filter.
+
+**Provisional.** This field set is revisited when adapter logging is implemented.
 
 These events must never contain the Usher token payload, raw bearer tokens, or health record
 identifiers.

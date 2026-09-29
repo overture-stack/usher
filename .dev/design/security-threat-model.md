@@ -175,7 +175,7 @@ to fix.
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Fail-secure on revocation channel disruption                                                            | Adversarial condition designed for explicitly: an adversary blocking revocation signals gains nothing |
 | Category grants are additive (deny by default)                                                          | The system does not need to know every denied category; it only grants what is explicitly authorized  |
-| JWE opacity: a token holder cannot read their own grants                                                | Prevents the authorization model itself from being used as an oracle for probing access boundaries    |
+| JWE encrypted to one application's key                                                                  | A token sent to the wrong application fails to decrypt, and grants stay unreadable in logs and dumps  |
 | Grants enforcement is centralized in each app's adapter layer, not distributed across application logic | Single enforcement point reduces the risk of inconsistent or forgotten enforcement                    |
 | Horizontal scaling with no shared in-memory state                                                       | Usher instances do not trust each other's in-memory state; all state lives in the database            |
 

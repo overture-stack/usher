@@ -172,20 +172,6 @@ endpoint that returns data, comparing what an under-privileged principal sees ag
 fully-privileged one, not only assertions that records are filtered. Specified in
 `design/permissions-model.md`; this is the entry it previously lacked.
 
-### Reconcile design docs after the resource-level decision
-
-**Closed by the pass of 2026-09-19, and its findings list is superseded.** That list was written
-against resource-level enforcement, which has since been reversed, so it points at the wrong target
-in several places; [doc reconciliation](docs/atlas/roadmap/doc-reconciliation.md) is marked as such
-and kept for how it located contradictions rather than for what it concluded. The later pass swept
-the same ground against the current model: the grant-carries-the-role change, the retired
-resource-membership relation, the superseded asymmetric key model, the grant lifecycle states, and
-the per-principal revocation timestamp.
-
-One item from it was never a documentation fix and stays open: the `deny` arm of the bridge's
-`Enforcement` result cannot be expressed at the first application's integration point, whose hook is
-a synchronous total function returning a query node. Needs a decision, not an edit.
-
 ### Artifact provenance must be checked on every write, once artifacts can be written twice
 
 **A precondition on the sets feature, not a live gap.** The search application's saved sets are
@@ -461,7 +447,7 @@ Shared library embedded in all applications: token exchange, local validation, T
 
 ### `@overture-stack/arranger-usher-adapter`
 
-Express middleware for `arranger-graphql-router`. Translates permissions payload into server-side SQON filters. First integration target. Arranger-specific design in `arranger/.dev/docs/arranger-auth/usher-adapter.md`.
+Adapter for `arranger-graphql-router`. Translates permissions payload into server-side SQON filters. First integration target. Arranger-specific design in `arranger/.dev/docs/arranger-auth/usher-adapter.md`.
 
 ### Additional per-app adapters
 

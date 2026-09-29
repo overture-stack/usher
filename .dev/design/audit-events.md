@@ -250,7 +250,7 @@ thirty times obscures the part that differs.
 | `grant.revocation`             | Category grant revoked                                                                                                           | Custodian or admin | User + category + resource          | `actorId`, `granteeId`, `resourceId`, `category`, `grantId`, `reason`                                                      | `info`           |
 | `grant.rateExceeded`           | Grant operations by a single actor exceed the configured threshold within a rolling window                                       | Custodian or admin | Multiple                            | `actorId`, `operationCount`, `windowSeconds`                                                                               | `warning`        |
 | `identity.revocation`          | User identity flagged as compromised; all active grants revoked                                                                  | Admin              | User                                | `adminId`, `revokedUserId`, `scope`                                                                                        | `critical`       |
-| `resource.registration`        | Study or cohort registered                                                                                                       | Admin or submitter | Resource                            | `actorId`, `resourceId`, `fieldName`, `fieldValue`, `initialOwnerId`                                                       | `info`           |
+| `resource.registration`        | Study or cohort registered                                                                                                       | Admin or submitter | Resource                            | `actorId`, `resourceId`, `initialOwnerId`                                                                                  | `info`           |
 | `ownership.transfer`           | Resource ownership transferred                                                                                                   | Owner or admin     | Resource                            | `actorId`, `fromOwnerId`, `toOwnerId`, `resourceId`                                                                        | `info`           |
 | `resource.orphaned`            | Resource has no owner; admin notified                                                                                            | System             | Resource                            | `resourceId`, `lastOwnerId`, `triggerEventType`                                                                            | `critical`       |
 | `resource.suppression`         | Resource hidden from results, its grants untouched                                                                               | Owner or admin     | Resource                            | `actorId`, `resourceId`, `reason`                                                                                          | `warning`        |
@@ -306,6 +306,10 @@ legitimate.
   a `windowSeconds`. The name is settled; both default values are not. Where the count is kept is a
   scaling question rather than a detail: see multi-instance propagation in
   [security-workflow.md](security-workflow.md#multi-instance-propagation).
+- **`resource.registration` carries no field name or value.** The resource field name is
+  per-catalogue adapter configuration, which Usher never holds, and the value is the resource's
+  identifier, already carried as `resourceId`. Provisional: revisited when the audit path is
+  implemented.
 - **The three custodianship entries are post-MVP**, arriving with community custodianship:
   `custodianship.assignment`, `custodianship.removal`, and `grant.unguarded`. Nothing emits them in
   the first release, because nothing assigns a custodian in it.

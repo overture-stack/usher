@@ -77,10 +77,11 @@ for the distinction.
 
 ### Design rationale
 
-**Why encrypted (not just signed):** A user who can read their own Usher token knows exactly
-which filters are applied to their queries. In sensitive data contexts, even knowing the shape of
-the restriction may be information they should not have. JWE prevents a token holder from reading
-the grants it encodes.
+**Why encrypted (not just signed):** The token never reaches a browser, so the reason is not the
+user. Encrypting to one application's key means a token computed for the wrong recipient fails to
+decrypt there rather than being quietly honoured, so the mistake is a visible error instead of a
+silent leak. And grant contents stay out of the logs, error reports, crash dumps and tracing spans
+that collect whatever passes through a service.
 
 **Why self-contained (not opaque):** An opaque token requires a network call to Usher to resolve
 its contents. Self-contained tokens are validated and decoded locally by the bridge using the

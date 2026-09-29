@@ -8,7 +8,7 @@
 
 **Shared cache and revocation pub/sub:** Valkey (already deployed in the Overture environment; protocol-compatible with Redis). Two roles: caching computed permissions payloads across Usher instances, which is what the fast-path refresh reads, and pub/sub backbone for the push revocation channel (one instance processes a revocation; Valkey notifies SSE subscribers on all others). Valkey Streams provides durable in-process event passing for v1; see Kafka in Future scope for external consumer fan-out.
 
-**Structured logging:** Pino (strongly preferred; to confirm with HTTP framework choice). Integrates natively with Fastify; outputs structured JSON by default; one of the fastest Node.js loggers, which matters on the auth hot path.
+**Structured logging:** Pino, decided with Fastify, which it integrates with natively; outputs structured JSON by default; one of the fastest Node.js loggers, which matters on the auth hot path.
 
 **Audit event channels:** dual-channel: stored in the policy database (queryable source of truth for governance reviews) and emitted as Pino structured log lines (forwarded to a log aggregator for real-time alerting and external system integration). Both channels are required; the database alone is insufficient for real-time security monitoring.
 

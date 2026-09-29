@@ -23,7 +23,6 @@ on disk against entries here; a sweep starting from either list cannot find what
 - [Conditions beyond the data](roadmap/conditions-beyond-the-data.md): research; which rules about the person to offer beyond signing in, and embargo as a local category with a deadline, what it meets and why it is not in the first release
 - [Count-only principal](roadmap/count-only-principal.md): research; what a principal holding `count` without `view` gets, the routes that test every rule, and rules recommended and not adopted
 - [DAC integration](roadmap/dac-integration.md): future scope, research; a data access committee API as an ushered application, the two flows it serves, resource types and why DCAT's word is type, and the service-assigned ownership threat
-- [Design doc reconciliation](roadmap/doc-reconciliation.md): **superseded.** Written against the resource-level enforcement decision that has since been reversed; kept for how it located contradictions, not for what it found
 - [Documentation review patterns](roadmap/doc-review-patterns.md): the defect classes from reading the onboarding artifact with real readers, the two axes they sort under, and the information order to propagate
 - [Local categories](roadmap/local-categories.md): future scope; categories created by an owner within one resource, the add-only rule, the scope prefix that ships first, and where a local category's mapping lives
 - [Permissions model: open items](roadmap/permissions-model-gaps.md): seven open design items before the core service can be implemented

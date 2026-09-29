@@ -151,9 +151,9 @@ A JWT issued by the IdP identifying the authenticated user. Short-lived. Passed 
 application to the PEP adapter, which presents it to Usher's token exchange endpoint.
 
 **JWE (JSON Web Encryption)**
-An encrypted JWT. Usher tokens use JWE so that the adapter can decrypt and validate them
-locally, while preventing the end user from reading their own grants. Contrast with JWS
-(signed but readable by anyone holding the token).
+An encrypted JWT. Usher tokens use JWE, encrypted to one application's key, so that only that
+application's bridge can decrypt them and their grants stay unreadable in logs and error reports.
+Contrast with JWS (signed but readable by anyone holding the token).
 
 **JWT (JSON Web Token)**
 The container format for both IdP tokens (signed JWS) and permissions payloads (encrypted JWE).
@@ -595,6 +595,12 @@ a derived artifact against it: an artifact survives exactly when it requires non
 rather than platform-wide, which is what spares Usher from naming the complement itself. See
 [decisions.md](decisions.md) § A self-scoping predicate is not an access decision.
 
+**Enforcement result** _(`deny`, `narrow` or `allow`)_
+What the bridge returns to the adapter for one catalogue: `deny` with a reason, `narrow` with the
+filter to apply, or `allow` for a catalogue open by configuration. Each arm has its own expression
+at the application and none is an absent filter, so an omission never reads as consent. See
+[decisions.md](decisions.md) § Holding no grants is a distinct state, never an empty filter.
+
 **Fail-secure**
 The design principle that uncertainty about authorization state defaults to denial of access rather
 than continuation of service. Applied at multiple points: revocation channel disruption, token
@@ -630,6 +636,12 @@ suspending all user sessions.
 A data tier in which records require no authentication. The controller issues an anonymous grants
 token (no IdP bearer required); bridge and adapter handle it identically to an authenticated token.
 See [security-workflow.md § Permission computation pipeline](security-workflow.md#permission-computation-pipeline).
+
+**Resource field**
+The field naming a record's resource, tested by every enforcement clause.
+Its field name is per-catalogue adapter configuration, which Usher never holds; its value is the
+resource's identifier. See [adapter-integration.md](adapter-integration.md) § Writing an adapter
+design document.
 
 **Revocation**
 The invalidation of a user's access, recorded as a `revoked_at` timestamp in Usher's database.
