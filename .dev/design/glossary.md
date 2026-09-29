@@ -3,8 +3,10 @@
 Quick reference for terms used across Usher's design documents and client integration guides.
 One or two sentences per entry. For deeper coverage, follow the links to the relevant document.
 
-Grouped by theme; alphabetized within each group. Code font marks a literal field, column or table;
-plain text marks the concept.
+Grouped by theme. Four groups follow a reading order rather than the alphabet: who is asking, the
+architecture roles, tokens and claims, and who governs access. The borrowed-terms table is grouped by
+the system each term comes from. The rest are alphabetical, because they are looked up more often
+than read. Code font marks a literal field, column or table; plain text marks the concept.
 
 Which term to reach for when writing, and which have been retired, is a separate question with a
 separate home: [terminology usage rules](../docs/atlas/roadmap/terminology-usage.md).
@@ -184,12 +186,6 @@ order. Every other entry keeps its article.
 
 The entries below are alphabetical, because a glossary is looked up more often than it is read.
 
-**A resource's permission list** _(the value against each resource in an Usher token)_
-A list of the grants held by a principal on that resource, each naming one category and the
-permissions it carries, such as `{ "global.controlled": { "record": ["view"] } }`. Only grants held by the principal appear, so a category they lack is absent rather than named, revealing nothing about what exists.
-The list never appears empty: holding no grant on a resource means what the resource being absent
-already means, which is no access.
-
 **Approval**
 A decision reached before a grant and outside Usher: an ethics approval, an access committee's
 determination, a review. Usher records the grant that follows one, with a clause saying where the
@@ -199,6 +195,20 @@ decision came from.
 recorded by any grant, because "grant" doing duty as both noun and verb reads badly in lay prose. The
 onboarding document states that substitution where it introduces the term, and names the federated
 case as where the two senses separate.
+
+**Artifact**
+Something assembled by a person from records and kept, carrying provenance that names the resources
+it drew on.
+
+Its own entity on the data plane, because reaching an artifact is not reaching its records: every
+read of one is checked against the reader's own grants, which is why handing someone an artifact
+confers nothing and no capability governs doing so. A saved set is the first kind of one.
+
+**Authorization**
+Holding permission, created by a grant and standing whether or not anyone acts on it.
+Distinct from access, which is reaching data at request time: an **access decision** resolves what a
+principal may reach on this request, and enforcement carries that out. Being authorized is the
+standing state; access is the result, and one does not follow from the other until a request is made.
 
 **Auto-accept**
 A configurable Usher flag that writes an accepting decision row at creation, so the recipient reaches
@@ -244,52 +254,6 @@ it and no adapter tests for it. See [permissions-model.md](permissions-model.md#
 **Disambiguation note:** Unrelated to a **Group**, which is a set of people named together by a grant. A
 capability group is a set of capabilities named together by a role, and the two never meet.
 
-**Count**
-The number of records matching a query or one bucket, and what the `count` capability governs.
-
-A principal holding `count` without `view` receives counts and no records. What they may count by,
-and whether rounding applies, is research, in [count-only principal](../docs/atlas/roadmap/count-only-principal.md).
-
-**Entity**
-
-What a capability acts on: the first segment of its name.
-
-`record`, `field`, `revision` and `artifact` are data-plane entities, held by the ushered
-application; the first release builds `record` and `artifact`, and the other two arrive by migration.
-`resource`,
-`category`, `grant`, `group`, `role`, `ownership`, `invitation` and `custodianship` are control-plane
-ones, held by Usher. Each sits wholly in one plane, which is what lets `plane` live here rather than
-on each capability.
-
-_Disambiguation:_ this is the entity of `entity.action`, and the schema's own tables are also called
-entities. The two coincide often and not always: `grant` is both, `record` is a capability entity and
-never a table, and `users` is a table with no capability entity of its own.
-
-**Permission**
-Capability allowed to a principal or a group.
-
-The limits are what make it a permission rather than the capability itself: who may use it, on which
-records, and until when. A capability is unbounded, since the service can simply do it; a permission
-is that same action bounded on every side. The permissions in one grant share their limits, which is
-why the store keeps the limits on the grant rather than repeating them per permission.
-
-This is what the policy is made of and what an Usher token carries, and a permission's capability
-belongs to the service that will be asked to act.
-
-A permission is in effect only while the grant carrying it is live: accepted where acceptance is
-required, unexpired, and not revoked. So a grant can exist while the permission it would give does
-not. "Uncertainty is not permission" uses the word in its ordinary English sense, being allowed,
-which needs no reservation.
-
-One vocabulary, reached two ways. A **role** bundles permissions and is how access is authored; a
-**grant entry** names the ones held on one category and is how access is enforced. The controller
-resolves the first into the second at issuance, which is why no role name reaches an adapter.
-
-**Which permissions each role carries is an open design item**, so the resolution above describes a
-mechanism with nothing behind it today: roles are currently names carrying no verbs, and so far
-permissions are recorded only in a grant's `permissions` column. See
-[RABAC alignment](../docs/atlas/roadmap/rabac-alignment.md).
-
 **Catalogue**
 One schema, and so the scope within which a field name resolves. A resource field name is configured per
 catalogue, since a field name is only meaningful inside one schema: a filter built for one catalogue
@@ -309,6 +273,22 @@ Where a document counts catalogues in an application's own configuration, it is 
 **Disambiguation note:** A catalogue's unit is the schema, and governance runs per resource. One
 catalogue's records belong to many resources, since a resource is a value in a field on a record
 rather than a container.
+
+**Category**
+Collection of records, defined by properties they carry.
+
+Usher names the categories for its own instance and holds nothing else about them: which properties define one, and so which records fall
+inside it, is settled per schema, because a property only means something inside one schema.
+Reaching a segment requires a grant naming that category in that resource. See
+[permissions-model.md](permissions-model.md).
+
+**A category name means the same thing across every resource**, which is what makes it grantable and
+governable: one custodian governs one category wherever it appears, and a grant on it would otherwise
+mean something different in each study. The properties placing a record in a segment are carried by
+the record, so a grant reaches the segment rather than the resource holding it. Where an instance's
+data carries nothing distinguishing one segment from another inside a resource, that resource has one
+segment and a grant reaches all of it, which is the same rule producing a coarser result rather than
+a different rule.
 
 **Category grant**
 An explicit, logged record allowing a specific user to reach a specific category within a
@@ -343,30 +323,25 @@ Usher manages data records, not people or teams. What those records represent is
 concern, outside the model. See [concepts.md](../../docs/concepts.md) for the extended discussion
 and access composition implications.
 
-**Category**
-Collection of records, defined by properties they carry.
+**Count**
+The number of records matching a query or one bucket, and what the `count` capability governs.
 
-Usher names the categories for its own instance and holds nothing else about them: which properties define one, and so which records fall
-inside it, is settled per schema, because a property only means something inside one schema.
-Reaching a segment requires a grant naming that category in that resource. See
-[permissions-model.md](permissions-model.md).
+A principal holding `count` without `view` receives counts and no records. What they may count by,
+and whether rounding applies, is research, in [count-only principal](../docs/atlas/roadmap/count-only-principal.md).
 
-**A category name means the same thing across every resource**, which is what makes it grantable and
-governable: one custodian governs one category wherever it appears, and a grant on it would otherwise
-mean something different in each study. The properties placing a record in a segment are carried by
-the record, so a grant reaches the segment rather than the resource holding it. Where an instance's
-data carries nothing distinguishing one segment from another inside a resource, that resource has one
-segment and a grant reaches all of it, which is the same rule producing a coarser result rather than
-a different rule.
+**Entity**
 
-**Instance**
-One configured Usher: its policy store, the categories defined in it, the resources registered in
-it, and the applications it serves. What differs between instances is configuration rather than
-code, such as which categories exist and what the baseline grants. Narrower units own
-configuration of their own: a resource field name belongs to a catalogue and an Usher token to an
-application.
+What a capability acts on: the first segment of its name.
 
-_Disambiguation:_ [instance](#instance-bare-and-qualified)
+`record`, `field`, `revision` and `artifact` are data-plane entities, held by the ushered
+application; the first release builds `record` and `artifact`, and the other two arrive by migration.
+`resource`, `category`, `grant`, `group`, `role`, `ownership`, `invitation` and `custodianship` are
+control-plane ones, held by Usher. Each sits wholly in one plane, so the plane is stated once per
+entity rather than on each capability.
+
+_Disambiguation:_ this is the entity of `entity.action`, and the schema's own tables are also called
+entities, in the sense of the next entry. The two coincide often and not always: `grant` is both, `record` is a capability entity and
+never a table, and `users` is a table with no capability entity of its own.
 
 **Entity, relationship, associative entity** _(how the schema is described)_
 An **entity** is a thing with its own identity: a user, a group, a resource, a category. A
@@ -377,6 +352,24 @@ is what a grant is: it cannot exist without the user, resource and category it c
 has a period, a state and a granter.
 
 _Disambiguation:_ [relation](#relation)
+
+**Facet**
+A field offered as a filter in a search interface, listing its buckets so that choosing one narrows
+the result.
+
+The facet panel is the part of an interface that holds them. For a principal who views records,
+choosing a bucket narrows a table; for one holding only `count` it narrows a count, since there are
+no records to show.
+
+**Field**
+One part of a record, and an entity on the data plane in its own right.
+
+A field category scopes fields as a record category scopes records, so `field.view` reaches the
+columns covered by that category while `record.view` reaches whole records. The entity carries no
+`create` or `delete`, since a field exists per schema rather than per grant, and `field.count` is
+separate from `field.view` because counting records by a column's values discloses less than
+showing them.
+Post-MVP.
 
 **Grant** _(the action, and the record it leaves)_
 Action of assigning permissions to a principal or a group.
@@ -404,6 +397,15 @@ provider. See [permissions-model.md](permissions-model.md) § User groups design
 
 _Disambiguation:_ [group](#group)
 
+**Instance**
+One configured Usher: its policy store, the categories defined in it, the resources registered in
+it, and the applications it serves. What differs between instances is configuration rather than
+code, such as which categories exist and what the baseline grants. Narrower units own
+configuration of their own: a resource field name belongs to a catalogue and an Usher token to an
+application.
+
+_Disambiguation:_ [instance](#instance-bare-and-qualified)
+
 **Invariant**
 A rule that must always be true, enforced by blocking whatever would make it false rather than by
 checking afterwards. "Every resource has at least one owner" is kept by refusing to remove the last
@@ -422,49 +424,34 @@ grants are created, or the invitation lapses unused. Where the person already ha
 invitation is needed and the grant is created directly, with a start date if it is not to begin
 immediately.
 
-**Authorization**
-Holding permission, created by a grant and standing whether or not anyone acts on it.
-Distinct from access, which is reaching data at request time: an **access decision** resolves what a
-principal may reach on this request, and enforcement carries that out. Being authorized is the
-standing state; access is the result, and one does not follow from the other until a request is made.
+**Permission**
+Capability allowed to a principal or a group.
 
-**Artifact**
-Something assembled by a person from records and kept, carrying provenance that names the resources
-it drew on.
+The limits are what make it a permission rather than the capability itself: who may use it, on which
+records, and until when. A capability is unbounded, since the service can simply do it; a permission
+is that same action bounded on every side. The permissions in one grant share their limits, which is
+why the store keeps the limits on the grant rather than repeating them per permission.
 
-Its own entity on the data plane, because reaching an artifact is not reaching its records: every
-read of one is checked against the reader's own grants, which is why handing someone an artifact
-confers nothing and no capability governs doing so. A saved set is the first kind of one.
+This is what the policy is made of and what an Usher token carries, and a permission's capability
+belongs to the service that will be asked to act.
 
-**Facet**
-A field offered as a filter in a search interface, listing its buckets so that choosing one narrows
-the result.
+A permission is in effect only while the grant carrying it is live: accepted where acceptance is
+required, unexpired, and not revoked. So a grant can exist while the permission it would give does
+not. "Uncertainty is not permission" uses the word in its ordinary English sense, being allowed,
+which needs no reservation.
 
-The facet panel is the part of an interface that holds them. For a principal who views records,
-choosing a bucket narrows a table; for one holding only `count` it narrows a count, since there are
-no records to show.
+One vocabulary, reached two ways. A **role** bundles permissions and is how access is authored; a
+**grant entry** names the ones held on one category and is how access is enforced. The controller
+resolves the first into the second at issuance, which is why no role name reaches an adapter.
 
-**Field**
-One part of a record, and an entity on the data plane in its own right.
-
-A field category scopes fields as a record category scopes records, so `field.view` reaches the
-columns covered by that category while `record.view` reaches whole records. The entity carries no
-`create` or `delete`, since a field exists per schema rather than per grant, and `field.count` is
-separate from `field.view` because counting records by a column's values discloses less than
-showing them.
-Post-MVP.
+**Which permissions each role carries is an open design item**, so the resolution above describes a
+mechanism with nothing behind it today: roles are currently names carrying no verbs, and so far
+permissions are recorded only in a grant's `permissions` column. See
+[RABAC alignment](../docs/atlas/roadmap/rabac-alignment.md).
 
 **Record**
 One row of data in a catalogue, which is what access is ultimately about. Records live in the
 applications served by Usher; Usher's own store holds grants.
-
-**Revision**
-A prior state of a record, where the service keeps them, and an entity on the data plane.
-
-A submission service has revisions and a search index does not, so a search token never carries
-`revision.*`. It carries `view` and `export` only: a revision is produced by updating a record rather
-than authored, and prior states are immutable. Deleting one is erasure, which meets the append-only
-audit trail and is unresolved. Post-MVP.
 
 **Resource**
 Collection of records, defined by an identifier they share.
@@ -476,6 +463,20 @@ In Overture the concrete term is cohort. Instances may expose this concept under
 names in their management UI: iMS calls it a study; other instances may
 use project, dataset, or program. Those names are instance vocabulary; Usher's internal model
 uses "resource" throughout. See "Local vocabulary" in [concepts.md](../../docs/concepts.md).
+
+**A resource's permission list** _(the value against each resource in an Usher token)_
+A list of the grants held by a principal on that resource, each naming one category and the
+permissions it carries, such as `{ "global.controlled": { "record": ["view"] } }`. Only grants held by the principal appear, so a category they lack is absent rather than named, revealing nothing about what exists.
+The list never appears empty: holding no grant on a resource means what the resource being absent
+already means, which is no access.
+
+**Revision**
+A prior state of a record, where the service keeps them, and an entity on the data plane.
+
+A submission service has revisions and a search index does not, so a search token never carries
+`revision.*`. It carries `view` and `export` only: a revision is produced by updating a record rather
+than authored, and prior states are immutable. Deleting one is erasure, which meets the append-only
+audit trail and is unresolved. Post-MVP.
 
 **Role**
 Collection of permissions.
@@ -659,12 +660,6 @@ Sessions are suspended and requests return 503 until the channel reconnects, exc
 tier, which needs no grant, so a revocation has nothing to withdraw there. This is the fail-secure
 default: uncertainty about revocation status produces denial, not access.
 
-**EGO**
-Overture's previous authorization service (managing users, groups, and policies). Usher is
-EGO's full replacement, not an integration: instances that adopt Usher retire EGO and the
-studies management service that orchestrated EGO. Existing EGO group data migrates to Usher
-resources and who belonged to them; see [architecture.md](architecture.md).
-
 **Server-side filter** _(Arranger-specific)_
 A SQON filter injected into every Arranger query by the adapter before the query reaches the search
 engine. This is where enforcement happens in Arranger. The filter is built additively: each grant in
@@ -724,6 +719,12 @@ This table is the index. A term whose collision needs more than a row is expande
 
 ## Related Overture services
 
+**EGO**
+Overture's previous authorization service (managing users, groups, and policies). Usher is
+EGO's full replacement, not an integration: instances that adopt Usher retire EGO and the
+studies management service that orchestrated EGO. Existing EGO group data migrates to Usher
+resources and who belonged to them; see [architecture.md](architecture.md).
+
 **SONG**
 Overture's genomic file metadata service. SONG's scope in Usher-adopting instances is narrowed
 to file-level manifest data: file checksums, donor/sample links, and file object identifiers.
@@ -734,7 +735,7 @@ depend on SONG.
 
 **Studies management service** _(iMS-specific; retiring)_
 A stateless orchestration layer that maps SONG studies to EGO groups and policies. Its role is
-absorbed by Usher: resource creation, writing grants, and category assignment are all
+absorbed by Usher: resource registration, writing grants, and category assignment are all
 Usher admin API operations. The studies management service is retired once EGO is replaced.
 
 ---
@@ -745,20 +746,6 @@ Terms that mean different things in different places. An entry above points here
 carrying the explanation itself, so a definition stays a definition. A term earns a place here when
 reading it with the wrong meaning produces an understanding that is plausible and wrong, rather than
 merely unfamiliar.
-
-### Instance, bare and qualified
-
-**Bare, an instance is one configured Usher**: its policy store, its categories, and the applications
-it serves. What differs between instances is configuration rather than code, which is why roles are
-defined per instance's configuration rather than by Usher itself. In Usher's own documents this is
-the default reading and needs no qualifier.
-
-**Qualified, it names a running process.** A controller instance can go down and take its connected
-bridges' push connections with it; a configured Usher, not being a process, cannot. So a
-sentence about a process names the component it is an instance of.
-
-**A bridge needs no qualifier either way.** There is one per application process already, so "each
-bridge" and "per bridge" say what "bridge instance" was reaching for.
 
 ### Atomic
 
@@ -790,6 +777,20 @@ the wire without being treated differently.
 collecting people. A Keycloak group may be mapped onto an Usher group, and the two remain distinct
 entities either way. Who owns that mapping is an open design question, and it decides whether an
 Usher administrator can create a group at all.
+
+### Instance, bare and qualified
+
+**Bare, an instance is one configured Usher**: its policy store, its categories, and the applications
+it serves. What differs between instances is configuration rather than code, which is why roles are
+defined per instance's configuration rather than by Usher itself. In Usher's own documents this is
+the default reading and needs no qualifier.
+
+**Qualified, it names a running process.** A controller instance can go down and take its connected
+bridges' push connections with it; a configured Usher, not being a process, cannot. So a
+sentence about a process names the component it is an instance of.
+
+**A bridge needs no qualifier either way.** There is one per application process already, so "each
+bridge" and "per bridge" say what "bridge instance" was reaching for.
 
 ### Relation
 
