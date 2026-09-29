@@ -10,11 +10,11 @@ Usher may sit in the authorization path for instances handling personal health i
 clinical records, genomic data, and Indigenous health data with additional ethical and legal
 protections. This context sets the bar for the threat model: a breach or access control failure is
 not merely a security incident; it may cause direct harm to individuals, violate applicable health
-privacy legislation (e.g. PHIPA in Ontario, HIPAA in the US), and undermine the trust that
-clinical and research participation depends on.
+privacy legislation (e.g. PHIPA in Ontario, HIPAA in the US), and undermine the trust underpinning
+clinical and research participation.
 
 The principle throughout: **treat all data behind Usher as sensitive by default.** Do not design
-for the average case; design for the most sensitive data the system may ever hold.
+for the average case; design for the most sensitive data that could ever sit behind Usher.
 
 ---
 
@@ -96,14 +96,13 @@ be safe; misconfiguration must fail loudly, not silently.
 - Startup validation: Usher should refuse to start rather than run with insecure defaults
   (missing key, missing IdP config, etc.).
 - **Introspecting API keys needs Usher's first credential to Keycloak, and it is a powerful one.**
-  Everything Usher does with the identity provider today is public-key verification against the
-  published JWKS, which needs no secret. The API key check requires the service calling it
-  to authenticate, and where that service presents a bearer token, the token's subject must own the
-  key. Usher introspects other
-  people's keys by definition, so it needs basic auth, and that credential can introspect anybody's
-  key. It reintroduces the shared-secret shape the token design avoided by having applications
-  register public halves. Open: whether it is its own Keycloak client rather than shared with
-  anything else Usher later needs, and how it rotates. See
+  Today Usher uses the identity provider only for public-key verification against the published
+  JWKS, which needs no secret. The API key check requires the service calling it to authenticate,
+  and where that service presents a bearer token, the token's subject must own the key. Usher
+  introspects other people's keys by definition, so it needs basic auth, and that credential can
+  introspect anybody's key. The token design avoided the shared-secret shape by having applications
+  register public halves, and this reintroduces it. Open: whether the credential is its own Keycloak
+  client rather than shared with whatever else Usher later needs, and how it rotates. See
   [../docs/atlas/roadmap/api-keys.md](../docs/atlas/roadmap/api-keys.md).
 
 ---

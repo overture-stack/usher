@@ -1,19 +1,18 @@
 # API keys: why opaque, and the narrowing that follows
 
-Programmatic access to Overture services runs on API keys issued through a Keycloak plugin the team
-maintains. Score is the main consumer today; Song was the other. Usher inherits them rather than
-designing them, and this file records the one decision taken and the one improvement worth building
-later.
+Programmatic access to Overture services runs on API keys issued through the team's Keycloak plugin.
+Score is the main consumer today; Song was the other. Usher inherits them rather than designing them,
+and this file records the one decision taken and the one improvement worth building later.
 
 ---
 
 ## Decided: keys stay opaque strings, checked rather than verified
 
-**A self-verifying token is the shape Usher cannot absorb.** The revocation guarantee has two parts,
-an Usher token that lives five minutes and a push channel announcing changes inside that window. A
-signed credential with a multi-year expiry cannot sit inside either, given what each is. Withdrawing one before
-it expires needs a revocation list, which is the issuer-side state that making it self-verifying was
-supposed to remove.
+**Usher cannot absorb a self-verifying token.** The revocation guarantee has two parts, an Usher
+token that lives five minutes and a push channel announcing changes inside that window. A signed
+credential with a multi-year expiry cannot sit inside either, given what each is. Withdrawing one
+before it expires needs a revocation list, which is the issuer-side state that making it
+self-verifying was supposed to remove.
 
 An opaque key inverts that. Revocation is a row, and the next check fails. No window, no list, no
 propagation problem.
@@ -28,8 +27,8 @@ per TTL window per principal rather than once per request, so a hundred requests
 check every five minutes, not five hundred.
 
 The sharp edge is the plugin's failure mode. An incompatible JAR makes the endpoint stop answering
-with nothing meaningful returned, which Usher cannot distinguish from "no such key" and would resolve
-to the anonymous tier. That direction is safe, since nobody gains access, and the failure is
+with nothing meaningful returned. Usher cannot distinguish that from "no such key" and would resolve
+it to the anonymous tier. That direction is safe, since nobody gains access, and the failure is
 invisible: the person sees missing data rather than a fault. The plugin distinguishing the two cases
 in its response is worth more to Usher than any latency improvement.
 
@@ -76,10 +75,10 @@ scope choices rather than accept free text.
 services move to Usher enforcement, so this is a program-level migration rather than a field-format change,
 and both forms exist in the meantime.
 
-**Open: the format.** Usher enforces at resource level for MVP, so resource names are the granularity
-the system can actually apply, with capability narrowing the obvious second axis since the token
-already carries it. The dotted form used today would collide with the separator rule if extended
-naively, so the shape needs settling rather than inheriting.
+**Open: the format.** Usher enforces at resource level for MVP, so the system can actually narrow a
+key by resource name, with capability the obvious second axis since the token already carries it.
+The dotted form used today would collide with the separator rule if extended naively, so the shape
+needs settling rather than inheriting.
 
 ---
 
@@ -91,9 +90,9 @@ forward.
 **Under intersection a negative has no meaning.** A key claiming DENY on something cannot reduce
 anything by claiming it, so it is inert. That is the problem rather than the resolution: someone
 writes DENY expecting a restriction and gets none, which is a widening relative to their intent, and
-widening is the one direction this design never accepts silently. See
-[decisions.md](../../../design/decisions.md) § Additive rendering over subtractive exclusion, where
-losing a term narrows rather than widens, which is the property an inert DENY breaks.
+this design never accepts a widening silently. See [decisions.md](../../../design/decisions.md) §
+Additive rendering over subtractive exclusion, where losing a term narrows rather than widens: an
+inert DENY breaks that property.
 
 **So a key carrying DENY is refused, not accepted and disregarded.** Refusing is loud and happens
 once, at creation. Disregarding is quiet and happens on every use.
@@ -143,13 +142,13 @@ before either does.
 
 ## Why narrowing matters, now that the field is known to exist
 
-**The deficiency is not the format, it is the scope.** A key is its holder. Anything that person may
-do, the key may do. A researcher wanting a key for a download script hands that script their whole
-access, and a key leaked from a pipeline carries everything they hold.
+**The deficiency is not the format, it is the scope.** A key is its holder: whatever that person
+may do, the key may do. A researcher wanting a key for a download script hands that script their
+whole access, and a key leaked from a pipeline carries everything they hold.
 
 **This was filed as future work and is not.** The field exists, is populated, and is already
 validated against something at issue. So the work is semantic rather than structural: deciding what
-the field means once Usher is the thing that decides permissions, which the section above settles.
+the field means once Usher is the thing that decides permissions. The section above settles that.
 
 **Why it matters more here than elsewhere.** The data is health data, and automation outlives the
 projects that created it. A script that can only read one study is a materially different exposure
@@ -163,12 +162,13 @@ from one carrying a researcher's full access three years after they stopped usin
 bearer token, the token's subject must own the key. Usher introspects other people's keys by definition, so it cannot use a
 bearer token and needs basic auth.
 
-**This is Usher's first credential to Keycloak.** Everything else Usher does there is public-key
+**This is Usher's first credential to Keycloak.** Usher's only other work there is public-key
 verification against the published JWKS, which needs no secret. A basic-auth credential able to
-introspect any key is a different class of thing, and it reintroduces the shared-secret shape that
-the JWE key design deliberately avoided by registering public halves.
+introspect any key is a different class of thing, and it reintroduces a shared secret: the JWE key
+design deliberately avoided that shape by registering public halves.
 
-It follows the deployment's own secret handling rather than anything Usher invents, and it belongs in the threat model rather than in a configuration line.
+The credential follows the deployment's own secret handling rather than a scheme of Usher's, and it
+belongs in the threat model rather than in a configuration line.
 
 ---
 
@@ -178,20 +178,19 @@ It follows the deployment's own secret handling rather than anything Usher inven
   structurally required. The opaque decision fits what exists rather than asking for a rewrite.
 - `check_api_key` returns `user_id`, `exp`, `isRevoked`, `isValid`, `message` and `scope`, so the
   exchange gets a principal, an expiry, and explicit revocation rather than inferred.
-- Revocation is observable only by the check failing, which the exchange-path design makes sufficient
-  and free. There is no event and nothing to poll.
+- Revocation is observable only by the check failing, and the exchange-path design makes that
+  sufficient and free. There is no event and nothing to poll.
 
 ---
 
 ## Open, and needed before any of this is built
 
-- **The Usher scope format.** Resource names are the granularity MVP can apply, with capability
-  narrowing the obvious second axis. The dotted form in use today would collide with the separator
-  rule if extended naively.
+- **The Usher scope format.** MVP can narrow by resource name, with capability the obvious second
+  axis. The dotted form in use today would collide with the separator rule if extended naively.
 - **Whether the interface offers scope choices or accepts free text.** Offering them needs the
   profile view to know what a person holds, which it needs anyway.
 - **Where the basic-auth credential lives and how it rotates**, and whether an introspect-anything
-  capability should be a distinct Keycloak client from anything else Usher might later need.
+  capability should be a Keycloak client of its own, separate from Usher's other future needs.
 - **Key lifetime.** [../../phase-1.md](../../phase-1.md) records that API tokens open a much longer
   window than the five-minute Usher token, that the iMS environments do not set it, and that the
   Overture demo environment sets it to 3650 days, which shows how far the knob goes.

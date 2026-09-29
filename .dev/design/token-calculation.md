@@ -1,7 +1,7 @@
 # The token calculation
 
-_The calculation the controller performs to produce a token: the rule it implements, the five steps,
-the cases that force each branch, and what remains open._
+_The controller's calculation for producing a token: the rule it implements, the five steps, the
+cases that force each branch, and what remains open._
 
 **The associative tables follow from this document rather than the other way round.** Everything
 below is written so that a schema can be checked against it.
@@ -10,15 +10,16 @@ below is written so that a schema can be checked against it.
 
 ## What is written today, and why it cannot be built from
 
-`security-workflow.md` § Tiers described three steps, and each carried a defect. The same mistakes are the ones an implementation would make.
+`security-workflow.md` § Tiers described three steps, and each carried a defect. An implementation
+would make the same mistakes.
 
 **Tier 1, the baseline.** Correct in substance, wrong in name: it called instance configuration an
 "anonymous role", and a role cannot be held by a request carrying no `sub`. Corrected there.
 
-**Tier 2 asserted a role hierarchy the model rejects.** It read "every resource where the user holds
-a `registered` or higher tier role". `rabac-alignment.md` says Usher "deliberately does not have
-them, treating roles as a flat set whose effective permissions are a union". `registered` is also a
-tier name rather than a role name. Corrected there.
+**Tier 2 asserted a role hierarchy rejected by the model.** It read "every resource where the user
+holds a `registered` or higher tier role". `rabac-alignment.md` says Usher "deliberately does not
+have them, treating roles as a flat set whose effective permissions are a union". `registered` is
+also a tier name rather than a role name. Corrected there.
 
 **Tier 3 never consulted groups.** It resolved "explicit category grant records for the user". A
 group's grants were not read, so the calculation as written gave a principal nothing through their
@@ -33,7 +34,7 @@ carries having cleared, because no such gate exists. A category selects records 
 
 ## Effective access is the ceiling narrowed by grants
 
-**Effective access is the ceiling minus every pair the grants do not name.** Read a role's capability
+**Effective access is the ceiling minus every pair not named by a grant.** Read a role's capability
 as held over every `(resource, category)` pair that exists, and read the grant set as naming the pairs
 to keep. This is RABAC's shape exactly: its `avail_session_perms` is "the maximum permission set
 available in a session", and its second stage only ever removes from it.
@@ -44,7 +45,7 @@ own definition: "this description specifies the net result. Various optimization
 as the net result is as indicated."
 
 **The invariant is `effective ⊆ ceiling`, and it holds without exception.** A grant cannot confer a
-capability the role does not carry. Assert it where the token is issued rather than documenting it,
+capability outside its role. Assert it where the token is issued rather than documenting it,
 so that a path which builds a permission set without intersecting the ceiling fails rather than
 passes.
 
@@ -66,14 +67,14 @@ structural rather than a matter of appetite for risk.
 
 **Combination stays union, and that is consistent rather than an exception.** A union of pairs kept is
 still a subtraction from the maximum. Two grants cannot contradict because neither can deny. The rule
-changes the moment anything can deny: filters combine deny-override, per the source model, so a
+changes once anything can deny: filters combine deny-override, per the source model, so a
 withholding rule beats any number of grants.
 
 ## The rules settled so far
 
 **Combination among grants is union.** `rabac-alignment.md` states roles are a flat set whose
-permissions are a union. Most restrictive would let one grant reduce what another confers, which no
-grant does. Most specific needs an ordering, and roles have none. This is the grant layer only: a
+permissions are a union. Most restrictive would let one grant reduce what another confers, and none
+does. Most specific needs an ordering, and roles have none. This is the grant layer only: a
 withholding rule subtracts, and filters combine deny-override.
 
 Five consequences.
@@ -92,7 +93,7 @@ Five consequences.
 5. **Acceptance is held per member, so a group grant does not skip it.** A grant to a group creates
    one row per affected member carrying that member's decision and the capabilities it confers.
    Ana accepting and Bo rejecting the same group grant is an ordinary outcome, and the grant itself
-   is unchanged by either. A grant a rule confers is the exception and needs no acceptance: an
+   is unchanged by either. A grant conferred by a rule is the exception and needs no acceptance: an
    anonymous request has nobody to accept, and a signed-in principal accepted the platform's terms
    when registering. It has no decision row, so step 3 would otherwise drop it.
 
@@ -105,10 +106,10 @@ walkthrough on its own hides every branch it does not take, which is how a calcu
 that looks complete and answers only one path.
 
     1. Which grants reach this principal? Those held by them directly, and those
-       held by a group they belong to. Each names one (resource, category), the
-       role its holder acts in there, and optionally one field category within
-       that category.
-       Add the `unmarked` grant each rule confers: the baseline's on every
+       held by a group they belong to. Each names one (resource, category), its
+       holder's role there, and optionally one field category within that
+       category.
+       Add the `unmarked` grant conferred by each rule: the baseline's on every
        resource whose unmarked records are open, and, if the principal is
        signed in, the signed-in rule's on every resource whose unmarked records
        are registered.
@@ -137,7 +138,7 @@ present in full or absent in full.
 
 Where a record carries more than one category, every one of them must be held. That conjunction is
 inside a single record's requirements and never across a principal's grants, and it is the part
-waiting on a subset test the query layer cannot yet express. Until it lands a record carries one
+waiting on a subset test not yet expressible in the query layer. Until it lands a record carries one
 category.
 
 ## The cases that force each branch
@@ -161,10 +162,10 @@ Against this configuration:
     A grant below is at curator unless the case says otherwise.
 
 **A category selects records within a resource.** Holding `unmarked` in HEART_STUDY reaches its
-unmarked records and not its controlled ones, so a token naming one category of a resource is an ordinary
-outcome rather than a partial failure. The one part deferred is a record carrying several categories
-at once, which needs a subset test the query layer cannot yet express; until then a record carries
-one category.
+unmarked records and not its controlled ones, so a token naming one category of a resource is an
+ordinary outcome rather than a partial failure. The one part deferred is a record carrying several
+categories at once, which needs a subset test not yet expressible in the query layer; until then a
+record carries one category.
 
 **The baseline contributes `{unmarked: [view]}` on all three resources**, since each holds records not covered by any concrete category. Rows below name only what a case adds to that or takes from it.
 
@@ -211,13 +212,13 @@ Case 3 is worth keeping: a registered principal in no group and an anonymous vis
 contents here only because no resource in this configuration has its unmarked records set to
 registered. Where one does,
 the signed-in rule gives the registered principal its grant and the anonymous visitor nothing, which
-is the one difference a present `sub` makes on its own: see cases 28 to 34, against a configuration
+is the only effect of a present `sub` alone: see cases 28 to 34, against a configuration
 with such a resource, and "Who holds a grant can follow a rule" in
 [decisions.md](decisions.md).
 
-Cases 14, 15 and 16 are the ones a role change or a membership change reaches, and all three are safe
-without anyone remembering to re-run anything, because step 4 intersects what was accepted with what
-the grant's role confers at issuance rather than trusting the stored row alone.
+Cases 14, 15 and 16 are the ones reached by a role change or a membership change, and all three are
+safe without anyone remembering to re-run anything, because step 4 intersects what was accepted with
+what the grant's role confers at issuance rather than trusting the stored row alone.
 
 Case 13 is what makes the decision table append-only, and it is why the decision time has to be a UTC
 instant rather than a date: selecting the latest decision needs a total ordering, and two decisions
@@ -246,18 +247,19 @@ These cases run against a second configuration, so every case above keeps its an
     every signed-in principal wherever the setting is registered.
     Ana is the principal, and the token's audience serves all four resources.
 
-Every grant a rule confers here is on `unmarked`, shortened as above. See "Who holds a grant can
-follow a rule" and "Records not covered by any category are `unmarked`" in [decisions.md](decisions.md).
+Every grant conferred by a rule here is on `unmarked`, shortened as above. See "Who holds a grant
+can follow a rule" and "Records not covered by any category are `unmarked`" in
+[decisions.md](decisions.md).
 
 | #   | Case                                                                      | Ana's token                                                                                                                                                                                              |
 | --- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 28  | Anonymous. Baseline on                                                    | `{unmarked: [view]}` on OPEN_ATLAS and HEART_STUDY. MEMBERS_ARCHIVE and SEALED_ARCHIVE are absent: one needs a sign-in and the other a grant                                                         |
 | 29  | Anonymous. Baseline off                                                   | `{}`. Neither rule reaches her                                                                                                                                                                           |
-| 30  | Signed in, no grants. Baseline on                                         | Case 28, plus `MEMBERS_ARCHIVE: {unmarked: [view]}`. This is the one difference a present `sub` makes on its own                                                                                      |
+| 30  | Signed in, no grants. Baseline on                                         | Case 28, plus `MEMBERS_ARCHIVE: {unmarked: [view]}`. This is the only effect of a present `sub` alone                                                                                                 |
 | 31  | Signed in, no grants. Baseline off                                        | `MEMBERS_ARCHIVE: {unmarked: [view]}` alone. An empty baseline reaches nobody on an open resource, signed in or not, because registration gating is the registered setting rather than an empty baseline |
 | 32  | Signed in. Accepted a viewer grant on HEART_STUDY/controlled. Baseline on | Case 30, with `HEART_STUDY: {unmarked: [view], controlled: [view]}`. The rule's grants and her own accumulate, and neither replaces the other                                                         |
-| 33  | Signed in, and her identity has been revoked                              | Refused. A revoked principal fails at the bridge before any query runs, so no rule reaches her: a grant a rule confers cannot outlive the identity it was conferred on                                  |
-| 34  | Carries an expired identity token                                         | **Open: refused at the exchange, or served as case 28.** Case 28 reaches less, never more, but it records a signed-in person as anonymous and hides the failed sign-in                                  |
+| 33  | Signed in, and her identity has been revoked                              | Refused. A revoked principal fails at the bridge before any query runs, so no rule reaches her: a rule's grant cannot outlive the identity it was conferred on                                           |
+| 34  | Carries an expired identity token                                         | Refused at the exchange, as case 33 is at the bridge. Serving case 28 instead would reach less, never more, but it would record a signed-in person as anonymous and hide the failed sign-in. A portal shows the anonymous view with a notice that the person was signed out |
 | 35  | Signed in. Accepted a viewer grant on SEALED_ARCHIVE/unmarked. Baseline on | Case 30, plus `SEALED_ARCHIVE: {unmarked: [view]}`. Records not covered by any category, on a resource that is not open, are reachable once someone is granted them                                             |
 
 A resource set to registered may carry a restricting category as well: the setting reaches its
@@ -268,7 +270,7 @@ unmarked records, and its controlled records need their own grant, as case 32 sh
 ## What the source model settles
 
 **The ceiling is a real gate, not advice.** RABAC's second stage removes from `avail_session_perms`
-and can never add, so a grant cannot confer a capability the role does not carry. `ceiling` is the
+and can never add, so a grant cannot confer a capability outside its role. `ceiling` is the
 right word for it: the paper's own term is "the maximum permission set available in a session".
 
 **The ceiling is global to the principal, not held per resource.** `avail_session_perms` is a function
@@ -279,32 +281,33 @@ they exist to prevent. Usher has no sessions, so the ceiling is per principal pe
 **Assignment runs through two mechanisms and no third.** User-role assignment, unchanged from NIST
 RBAC, confers the ceiling; user attributes compared against object attributes inside a filter decide
 reach. There is no per-object grant table anywhere in the model. Usher's grant rows are a set-valued
-user attribute in those terms, the `(resource, category)` pairs a principal holds, compared against
-the category a record carries.
+user attribute in those terms, the `(resource, category)` pairs held by a principal, compared against
+a record's category.
 
 **Roles confer a ceiling, so a group may confer a role and must not confer reach.** Groups are absent
-from RABAC entirely. Groups conferring roles is NIST's first option, dynamic roles, which the paper
-names and does not take. Combining the two is legitimate and is what Usher does, but it means a group
+from RABAC entirely. Groups conferring roles is NIST's first option, dynamic roles; the paper names
+it and does not take it. Combining the two is legitimate and is what Usher does, but it means a group
 feeds stage one only.
 
-**Three things the model does not have, so none can be checked against it**: groups, acceptance, and
-an administrative model. The paper faults earlier proposals for the third and its own story is that
-filter policies live in a separate file for ease of administration. Usher's whole control plane is
-therefore ours, and belongs on the list of what survives as genuinely ours.
+**Three things are absent from the model, so none can be checked against it**: groups, acceptance,
+and an administrative model. The paper faults earlier proposals for the third and its own story is
+that filter policies live in a separate file for ease of administration. Usher's whole control plane
+is therefore ours, and belongs on the list of what survives as genuinely ours.
 
 ---
 
 ## Still open, and each blocks part of the calculation
 
 - **Can a group's grants span resources?** They can today, and nobody is named as controlling group
-  membership, so one membership change grants every resource that group touches, with no acceptance
-  and without any of those resources' owners involved. Confining a group's grants to one resource
-  removes it and matches the arrangement `permissions-model.md` already describes. Groups are an
-  admitted design gap, and this is its shape. **The reading that settles the direction**: a group
-  landing permissions across resources is the shape of a system administrator failing open, since it
-  produces platform-wide reach from a membership change that no resource's owner sees and nobody is
-  named as controlling. Stated as a threat rather than a preference, the answer is no, and what
-  remains open is only how the constraint is expressed in the schema.
+  membership, so one membership change grants every resource touched by that group, with no
+  acceptance and without any of those resources' owners involved. Confining a group's grants to one
+  resource removes it and matches the arrangement already described in `permissions-model.md`.
+  Groups are an admitted design gap, and this is its shape. **The reading that settles the
+  direction**: a group landing permissions across resources is the shape of a system administrator
+  failing open, since it produces platform-wide reach from a membership change unseen by any
+  resource's owner, with nobody named as controlling it. Stated as a threat rather than a
+  preference, the answer is no, and what remains open is only how the constraint is expressed in the
+  schema.
 - **Whether removing a category from a resource warns about the grants it makes inert.** A grant
   naming a pair that no longer exists keeps nothing, so nothing is unsafe. The question is only
   whether anyone is told.

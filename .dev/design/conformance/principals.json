@@ -18,7 +18,7 @@
     },
     {
       "case": "34",
-      "reason": "Open: whether an expired identity token is refused at the exchange or served as anonymous, as case 28. No payload can be written until it is decided."
+      "reason": "An expired identity token is refused at the exchange, so no token exists. The expectation is a refusal, which belongs to the exchange's tests rather than to a payload; a portal then shows the anonymous view with a notice that the person was signed out."
     }
   ],
   "principals": [

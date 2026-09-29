@@ -9,16 +9,16 @@
 
 **Two milestones are in play and this document scopes the first.** Usher's own is phase 1, called
 the MVP internally and phase 1 wherever anyone outside this team will read it. iMicroSeq's is **the
-deliverable**, which phase 1 feeds into and which is larger: it adds submission, and at least a
+deliverable**, which builds on phase 1 and is larger: it adds submission, and at least a
 minimum management surface so data administrators can create resources and categories. Those land
 in phases after this one. Nothing below is scoped to the deliverable.
 
 Four pieces must be working together for the iMS UAC integration phase to start on time:
 
-1. Keycloak issuing a token the controller can validate (no usher code in the portal itself)
+1. Keycloak issuing a token, and the controller validating it (no usher code in the portal itself)
 2. The Arranger adapter running in Arranger's search-server, with the bridge as an in-process library (Usher token cache, revocation polling, Usher API call)
-3. The Arranger adapter injecting per-resource SQON filters at query time, derived from the grants the bridge fetches from Usher
-4. Enforcement composed at a boundary every Arranger read path inherits (hits, aggregations, saved sets and download), verified by a shared test asserting a denied principal sees nothing on each of them
+3. The Arranger adapter injecting per-resource SQON filters at query time, derived from the grants fetched from Usher by the bridge
+4. Enforcement composed at a boundary inherited by every Arranger read path (hits, aggregations, saved sets and download), verified by a shared test asserting a denied principal sees nothing on each of them
 
 **Migrating the portal off EGO is not among them.** Phase 1 runs on `overture-dev`, which has no
 EGO at all, so the move belongs to a later phase.
@@ -37,20 +37,20 @@ work is the critical constraint rather than implementation duration.
 ## The first integration target is Stage, and this document's flows are not Stage's
 
 **Stage first, in overture-dev, with the learnings carried to iMS afterwards.** The iMS UAC user
-flows define the behaviour Usher must support and they describe portal-ui, so the flows are the
-requirement and Stage is where it gets proven. Those are different lists, and reading the build order
-below as though it delivered the flows is the mistake this paragraph exists to prevent.
+flows define Usher's required behaviour and they describe portal-ui, so the flows are the
+requirement and Stage is where it gets proven. Those are different lists, and this paragraph exists
+to prevent reading the build order below as though it delivered the flows.
 
 **What it reorders.** Notification, the "Shared with Me" surface and the sharing interface are all
 portal-ui's and arrive with iMS, so none of them is on the Stage-first path. What is on it is the
-enforcement chain end to end, plus a way for grants to exist with no management interface, which the
-build order answers by mocking them.
+enforcement chain end to end, plus grants that exist without a management interface, so the build
+order mocks them.
 
 **Why Stage rather than the portal that has the flows.** Stage already runs a server side in
 overture-dev: three API routes, a server-side token exchange, and an httpOnly cookie encrypted with a
 server-only secret. A bridge sits inside a trust boundary that exists. Portal-ui is the same framework
 and simply not configured for one, so the setup carries across rather than being invented twice, which
-is the reason the order pays twice rather than once.
+is why the order pays twice rather than once.
 
 ## The build order, and why it runs backwards
 
@@ -73,9 +73,9 @@ controller then has a proven contract to implement rather than a proposed one.
 the smallest thing that proves the whole chain, and it fails visibly rather than silently.
 
 **It has to compare counts as well as rows.** Aggregate counts are half the enforcement surface and
-the half where existence leaks, because a count discloses without returning a record anyone can point
-at. It is also where the search layer has a known defect: two mechanisms disagree on AND against OR
-and one is dead at depth 2, which a multi-category filter reaches and a flat resource filter does not.
+the half where existence leaks, because a count discloses without returning a single record. It is
+also where the search layer has a known defect: two mechanisms disagree on AND against OR and one is
+dead at depth 2, reached by a multi-category filter and not by a flat resource filter.
 Comparing rows only passes the chain while leaving the leak path untested.
 
 **And against the first deployment's data it tests the resource clause only.** Neither catalogue
@@ -84,21 +84,20 @@ resources they hold, and per-category enforcement would reach production having 
 synthetic catalogue carrying a category field, used for nothing else, closes that. overture-dev is a
 playground, so this is cheap.
 
-Four things this order asks of the mock, and each is a way it could quietly fail to prove anything.
+This order asks four things of the mock, and each is a way it could quietly fail to prove anything.
 
 **Seed it from the case table rather than from what the adapter asks for.** `token-calculation.md`
 holds twenty-nine cases with expected outputs, and the count moves as the model does, so read it
-there rather than trusting a number written here. A mock grown to answer whatever the adapter needs lets
-the adapter define the contract by its own appetite, and every case nobody happened to exercise ships
-unproven. Driven the other way the mock is the specification, and step 5 becomes a matter of matching
-known answers.
+there rather than trusting a number written here. A mock grown to answer whatever the adapter needs
+lets the adapter define the contract by its own appetite, and every case left unexercised ships
+unproven. Driven the other way the mock is the specification, and step 5 becomes a matter of
+matching known answers.
 
 **It must not be accommodating.** It should hold a fixed, hand-written set of grants and refuse
-anything outside them, because the real controller may not be able to answer a question the mock
-obliged.
+anything outside them, because the mock answering a question does not mean the real controller can.
 
-**It must issue real tokens.** The token is a JWE and the bridge exists to decrypt it. A mock handing
-over a plain object skips the component step 2 is meant to exercise.
+**It must issue real tokens.** The token is a JWE and the bridge exists to decrypt it. Step 2 is
+meant to exercise that component, and a mock handing over a plain object skips it.
 
 **Stop it, at step 2, while that is free.** The bridge's most distinctive behaviour is raising when
 the controller is unreachable past the grace period, and with a mock the test is to turn the mock
@@ -106,13 +105,13 @@ off. Left to step 5 this arrives as a large unexercised body of fail-secure beha
 worst kind to meet late.
 
 **Whether the mock outlives step 5 decides whether any of this survives.** A throwaway harness loses
-the contract knowledge the moment the real controller lands. Wired to the conformance corpus, whose
+the contract knowledge as soon as the real controller lands. Wired to the conformance corpus, whose
 approved location is below, it becomes what keeps the real controller honest afterwards: the same
 cases run against the mock during steps 2 to 4 and against the real thing from step 5 on, and a
 divergence is a defect rather than a surprise.
 
-**One bridge case needs an input no controller of this release produces**, so the bridge's own tests
-build it rather than the mock issuing it: a version 1 payload carrying a `resource.` entry (see
+**One bridge case needs an input never produced by this release's controller**, so the bridge's own
+tests build it rather than the mock issuing it: a version 1 payload carrying a `resource.` entry (see
 "Category names carry their scope from the first release" in
 [decisions.md](../design/decisions.md)).
 
@@ -124,9 +123,9 @@ build it rather than the mock issuing it: a version 1 payload carrying a `resour
 
 Inverting proves each assertion load-bearing: a bridge passing `resource.pilot` through fails the
 first row, one recording the event per request rather than per payload fails it too, and one
-dropping a bare name instead of rejecting the payload fails the second. The first row is also an
-audit event the first release can produce on demand, which gives the audit path something to test
-against before any real event depends on it.
+dropping a bare name instead of rejecting the payload fails the second. The first release can also
+produce the first row's event on demand, which gives the audit path something to test against before
+any real event depends on it.
 
 ## Blockers, in the order they can be worked
 
@@ -143,10 +142,11 @@ rather than a task, since neither catalogue carries an access-level field. Item 
 Item 3 settled the payload, the JWE algorithm and payload versioning. Item 5 closed by scope, because
 nothing creates a resource at submission time in the first release. Item 7 resolved by reading the
 deployment's own Helm values. Item 8 is closed by replacement: there is no per-principal timestamp,
-and the fast path now invalidates by resource.
+and the fast path now invalidates by deletion, clearing
+the payload cache on any change to a resource's categories.
 
-**What changed about the critical path.** Item 8 was the heaviest judgement call and the thing item 6
-waited on. With it closed, item 6 is no longer waiting on anything, which means the schema session is
+**What changed about the critical path.** Item 8 was the heaviest judgement call, and item 6 waited
+on it. With it closed, item 6 is no longer waiting on anything, which means the schema session is
 the only design work between here and implementation.
 
 ### 1. Maestro/indexing question (highest risk; longest lead time)
@@ -168,7 +168,7 @@ silently does not, the resource clause matches existentially and the record is r
 detects the difference, which is why that property is recorded as a deployment precondition rather
 than a caveat.
 
-**What it gated:** the entire the Arranger adapter design.
+**What it gated:** the entire Arranger adapter design.
 
 Does the per-submission access level survive onto every indexed document, under what field name,
 at what nesting depth, and does it attach per submission or per record? If the access level is a
@@ -195,7 +195,7 @@ indexed data records, and how does Usher's grant model map to SQON filters on th
    builder (`@overture-stack/sqon-builder`, `convertSqonToQuery.ts`) exists and is used in two
    read-time places: `POST /category/:id/organization/:org/query` and an internal foreign-key
    existence check in `validationService.ts`. Nothing on the submit/validate/commit path. A
-   the Lyric adapter would require a new hook on the submission path calling the existing
+   Lyric adapter would require a new hook on the submission path calling the existing
    SQON-to-SQL machinery. That wiring is new integration work, but the machinery it calls
    already exists.
 
@@ -233,11 +233,11 @@ work. Track as a post-Nov-15 item.
 so a SQON-shaped grant is portable across the read path (Arranger) and the submission path
 (Lyric) without translation. Arranger owns the module; it does not own the language.
 
-**Planning assumption:** Lyric converges on the same SQON library that Arranger's
-`graphql-router` consumes, namely `@overture-stack/sqon` (the `modules/sqon` workspace in the
-Arranger repo). Every finding below is stated against that assumption. Findings measured
-against Lyric's current pin, `@overture-stack/sqon-builder@^1.1.0`, are superseded; they are kept in the list with the reason, since the difference between the
-two is where the safety-relevant change lives.
+**Planning assumption:** Lyric converges on the same SQON library consumed by Arranger's
+`graphql-router`, namely `@overture-stack/sqon` (the `modules/sqon` workspace in the Arranger repo).
+Every finding below is stated against that assumption. Findings measured against Lyric's current
+pin, `@overture-stack/sqon-builder@^1.1.0`, are superseded; they are kept in the list with the
+reason, since the difference between the two is where the safety-relevant change lives.
 
 - **`fieldName` is the property-name key on both sides.** Not a coincidence between Lyric's
   `sqon-builder` pin and Arranger v3 naming: under a shared module it holds automatically. No property-name translation layer is needed between Usher's
@@ -287,7 +287,7 @@ two is where the safety-relevant change lives.
 
 - **SQL injection in Lyric's SQON handler is now an open PR.** Lyric PR 219 (open since
   2026-08-20) parameterizes `fieldName` and value through drizzle's SQL template instead of
-  splicing them into `sql.raw()`. Must land before any the Lyric adapter integration work. The PR
+  splicing them into `sql.raw()`. Must land before any Lyric adapter integration work. The PR
   notes a second gap it deliberately leaves open: `fieldName` still has no allowlist against
   the dictionary's real field names. That is directly relevant to Usher, because a
   permission-derived filter supplies `fieldName` values into the same path; parameterization makes
@@ -301,9 +301,9 @@ two is where the safety-relevant change lives.
 **RESOLVED. The blocker's premise was wrong, and resource fields are not Usher's to
 know.**
 
-The question this blocker opened with, whether a per-submission access level survives onto every
-indexed document, does not need an answer. Under resource-level enforcement there is no access level
-on the document: enforcement filters on the field naming the resource a record belongs to, and the
+This blocker's opening question, whether a per-submission access level survives onto every indexed
+document, does not need an answer. Under resource-level enforcement there is no access level on the
+document: enforcement filters on the field naming a record's resource, and the
 access decision is made in Usher against that resource's categories. The nesting-depth and
 per-submission-versus-per-record sub-questions dissolve with it.
 
@@ -318,7 +318,7 @@ overloaded elsewhere in that instance. Those four checks are recorded in
 For the first integration these are settled and documented on that side, in the integration
 repository's own `.dev/docs/usher-integration.md`: two catalogues fed by different submission
 services, using different fields for the same role, at matching granularity. The instance detail
-stays there because none of it constrains Usher's design, and stating it here would make a
+stays there because none of it constrains Usher's design, and stating it here would make an
 instance's configuration read as a platform rule.
 
 One general finding is worth keeping on this side: **migration must derive resources from a
@@ -453,9 +453,9 @@ Nov 15, not before implementation starts.
 **What it gates:** database schema design (directly). The schema needs to know whether
 submission creates read grants automatically.
 
-The three options with OCAP implications are in `permissions-model.md`. For v1, deferring to
-option 3 (no automatic read access; submission and read independently governed) unblocks the
-schema without closing the door on options 1 or 2 later.
+The three options with Indigenous data governance implications are in `permissions-model.md`. For
+v1, deferring to option 3 (no automatic read access; submission and read independently governed)
+unblocks the schema without closing the door on options 1 or 2 later.
 
 **Action:** none remaining.
 
@@ -465,11 +465,11 @@ another route: submission and read are independently governed because there is n
 couple them.
 
 **It fits later without a schema change, which is the part worth checking rather than assuming.**
-`resources` already carries `created_by`, so a service account creating a resource needs no new
+`resources` already carries `registered_by`, so a service account registering a resource needs no new
 column, and grants created at the same moment are ordinary grant rows. Options 1 and 2 remain
 reachable as policy on the submission path rather than as structure here, which is where the
-ownership-policy decision already puts them: the cascade is something the submission flow supplies
-and Usher provides the mechanism for.
+ownership-policy decision already puts them: the submission flow supplies the cascade, and Usher
+provides the mechanism for it.
 
 ---
 
@@ -487,15 +487,15 @@ deliberately:
 | ---------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
 | Data-plane entities                                        | `record` and `artifact`                              | `field` and `revision`, by migration                                      |
 | `grants.field_category_id`                                 | not created                                          | added nullable, no backfill, since null is correct for every existing row |
-| `entities` and `capabilities` rows for `field`, `revision` | not inserted                                         | data, not structure                                                       |
+| `capabilities` rows for `field`, `revision`                | not inserted                                         | data, not structure                                                       |
 | Token nesting by entity                                    | **shipped**, though only `record` ever appears in it | nothing to add                                                            |
 | `record_category_id` as the column name                    | **shipped under that name**                          | nothing to rename                                                         |
 
-**The nesting ships even though the first release has one entity in it.** `{"global.unmarked": {"record":
-["view"]}}` gains nothing over `{"global.unmarked": ["view"]}` while `record` is alone. Adding the level later
-costs a payload version negotiated at the exchange and a bridge and controller rolled out in step,
-which is the mechanism built for changes nobody could foresee. Spending it on the first change that
-was foreseen would be the waste.
+**The nesting ships even though the first release has one entity in it.**
+`{"global.unmarked": {"record": ["view"]}}` gains nothing over `{"global.unmarked": ["view"]}` while
+`record` is alone. Adding the level later costs a payload version negotiated at the exchange and a
+bridge and controller rolled out in step, which is the mechanism built for unforeseeable changes.
+Spending it on the first change that was foreseen would be the waste.
 
 **The column keeps its final name from the start** for the same reason inverted: renaming
 `category_id` to `record_category_id` later is a migration plus every query that touches it, where
@@ -504,7 +504,7 @@ only one.
 
 **`artifact` is in scope, and the provenance obligation that comes with it is not.** Saved sets are
 immutable in the first integration, so the check that refuses a set drawn from an unconfigured
-resource runs on every version of a set there is. It becomes an obligation the moment a second write
+resource runs on every version of a set there is. It becomes an obligation once a second write
 path exists, which is the full sets feature, and it is recorded against that work rather than against
 this release.
 
@@ -524,8 +524,8 @@ v2 stubs in the schema.
 
 **One question surfaced by the documentation pass, and it needs answering in that session.**
 Revoking a principal entirely has no settled storage. Several documents asserted a `revoked_at`
-column on `users`, which is not in the entity schema. Either revocation sets `revoked_at` on every
-grant the principal holds, which needs no new column and records no fact about the person, or
+column on `users`, which is not in the entity schema. Either revocation sets `revoked_at` on all
+the principal's grants, which needs no new column and records no fact about the person, or
 `users` carries its own marker, which says it directly and reintroduces the per-principal marker
 rejected for the fast path. The rejection was about a change that is per resource; emergency
 revocation is the case where the change genuinely is per principal, so the two may resolve
@@ -534,7 +534,7 @@ differently and that is worth deciding rather than inheriting.
 **Action:** schema design session. Nothing blocks it.
 
 **Status:** UNBLOCKED. All three of its dependencies closed: 3 settled the payload, 5 closed by
-scope, and 8 replaced its missing field with a category version on `resources`. What remains is the
+scope, and 8 closed with no new field. What remains is the
 schema design session itself, now the largest single piece of design work left.
 
 ---
@@ -552,8 +552,8 @@ environment:
 
 **Why it is three hours, which is the part that matters.** Submitters run large uploads that outlive
 a short token and fail partway, so the lifetime was raised until they stopped failing. That is an
-availability fix paid for with a platform-wide revocation window, and it is the trade this design
-forecloses rather than inherits. See the lifetime-versus-duration decision in
+availability fix paid for with a platform-wide revocation window, and this design forecloses that
+trade rather than inheriting it. See the lifetime-versus-duration decision in
 [../design/decisions.md](../design/decisions.md) and the long-running operation item in
 [../roadmap.md](../roadmap.md).
 
@@ -568,8 +568,8 @@ reason to lengthen it.
 principal keeps minting access tokens until their refresh token stops working, so the current
 worst-case window is bounded by the 12-hour refresh lifetime rather than the 3-hour access
 lifetime, unless revocation invalidates stored refresh tokens server-side. EGO persists refresh
-tokens, so it may; that is worth confirming, because it is the number the migration is measured
-against and the difference between 3 and 12 hours is the difference between a good improvement and
+tokens, so it may; that is worth confirming, because the migration is measured against it
+and the difference between 3 and 12 hours is the difference between a good improvement and
 a large one.
 
 **One residual question, and it is a bigger window than either.** API tokens are a separate,
@@ -598,10 +598,9 @@ primary correctness risk, on a system holding health records.
 
 **Status:** CLOSED. There is no per-principal timestamp to place. The marker was per principal while
 the dangerous change is per resource, which is why its write list could not be enumerated. Replaced
-by two markers that each sit next to what changes them: the computed payload in the shared cache,
-deleted by anything altering what a principal holds, and a category version on `resources` bumped by
-any `resource_categories` write and compared on refresh. The schema change is that one column. See
-the fast-path decision in [decisions.md](../design/decisions.md).
+by deletion: the computed payload in the shared cache is deleted by anything altering what a
+principal holds, and the whole cache is cleared by any `resource_categories` write. There is no
+schema change. See the fast-path decision in [decisions.md](../design/decisions.md).
 
 ---
 
@@ -616,10 +615,10 @@ the fast-path decision in [decisions.md](../design/decisions.md).
 - **Reindex lag as a second revocation window: dissolved, not deferred.** Enforcement reads
   descriptive fields only, never a field encoding an access decision, so a grant change alters no
   indexed value and the index has nothing to be stale about. This returns only if an instance
-  chooses to filter on a prescriptive field, which the design excludes. **A grant changing is what
+  chooses to filter on a prescriptive field, and the design excludes that. **A grant changing is what
   this dissolves**, and the record's own data changing is a second case it does not reach, open and
   filed in [to-discuss.md](../design/to-discuss.md) § Adapter contract.
-- **the Lyric adapter submission-time gating.** SQON machinery exists in Lyric but is not wired to
+- **Lyric adapter submission-time gating.** SQON machinery exists in Lyric but is not wired to
   the submit/validate/commit path. Building the enforcement seam is new work with known building
   blocks; not required for Nov 15.
 
@@ -633,7 +632,7 @@ above and one external dependency outside this project's control:
 | Risk                                                                               | Gate                                                      | Status                                                                                       |
 | ---------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | The open design blockers resolved                                                  | Implementation start                                      | Carried per blocker in its own **Status** line above, so there is one copy of it to maintain |
-| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the token the bridge presents | Unknown; DevOps and infra owned                                                              |
+| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the bridge's token            | Unknown; DevOps and infra owned                                                              |
 | Resource field confirmed per catalogue                                             | the Arranger adapter config                               | Resolved for the first integration; recorded on that side                                    |
 
 Keycloak's own token exchange endpoint is not a dependency: the bridge calls the controller's
@@ -683,24 +682,25 @@ that had been passing for the wrong reason entirely.
 **A test written before a fix is a specification; written after, it is a description.** Where a
 defect is known and scheduled, write the case now rather than waiting or asserting current
 behaviour. Asserting current behaviour pins the defect. Waiting leaves the fix with nothing to
-verify against and a roadmap entry as the only record, which will not notice the day the defect
+verify against and a roadmap entry as the only record, which will not notice when the defect
 closes.
 
-**But first check whether the correct behaviour can already be asserted, because the assumption that it cannot is usually what nobody has checked.** An application deferred a case believing it
-was blocked on a scheduled design decision, then found the defect lived on a different code path
-from the one the fixture exercised. Two ordinary passing tests were possible all along, and they pin
-the correct path so that a change importing the defective behaviour fails loudly.
+**But first check whether the correct behaviour can already be asserted, because the assumption that
+it cannot is usually what nobody has checked.** An application deferred a case believing it was
+blocked on a scheduled design decision, then found the defect lived on a different code path from
+the fixture's. Two ordinary passing tests were possible all along, and they pin the correct path so
+that a change importing the defective behaviour fails loudly.
 
 **A tolerated failing test is the fallback, and it is weaker than it looks.** In a runner that
 supports them, a tolerated test that starts passing changes a glyph and nothing else: no failure, no
 effect on the exit code, nothing that forces anyone to look. So it is a record that is accurate and
-unread, which is the failure mode this document keeps finding elsewhere. Record it as
+unread, and this document keeps finding that failure mode elsewhere. Record it as
 tolerated-and-unmonitored rather than as a tripwire, and prefer a passing test pinning correct
 behaviour wherever one is possible, since that is the only form that announces itself.
 
 **Do not overload the corpus with questions it cannot answer.** The corpus compares results, and the
-pressure to make it answer everything will be constant, because it is the one artifact both sides
-run.
+pressure to make it answer everything will be constant, because it is the only artifact run by
+both sides.
 
 The test for whether a question belongs here: **can you name two inputs whose results must differ if
 and only if the property holds?** If yes, it is a corpus case, and the positive-control pairing is
@@ -729,7 +729,7 @@ they are.
    produce zero rows, and a boolean records them identically.
 2. **Expectations must cover aggregate results, not only records.** A record-only corpus passes a
    system that leaks through bucket counts, `min`/`max`, or `top_hits`. That is not hypothetical: it
-   is the worst finding an application's own audit produced.
+   is the worst finding produced by an application's own audit.
 3. **Every negative expectation carries the mechanism responsible and the false-pass modes it must
    not be satisfied by**, with each "sees nothing" case paired to a positive control on the same
    record. Detection is by running the query and comparing counts, because an assertion that the
@@ -742,13 +742,13 @@ nothing and both arms of the test looked clean until the positive control failed
 
 **Dependency: discharged.** `principals.json` requires a stable permissions payload schema, and one
 now exists as the `PermissionsPayload` type in
-[security-workflow.md](../design/security-workflow.md#the-payload-as-a-type). The member this line
-called `schemaVersion` ships as `payloadVersion`: "schema" names Lectern's job in this ecosystem, so a
-`schemaVersion` inside an authorization payload reads as the version of the data's schema, and the
-decision recording the mechanism already calls it a payload version.
+[security-workflow.md](../design/security-workflow.md#the-payload-as-a-type). The member called
+`schemaVersion` in this line ships as `payloadVersion`: "schema" names Lectern's job in this
+ecosystem, so a `schemaVersion` inside an authorization payload reads as the version of the data's
+schema, and the decision recording the mechanism already calls it a payload version.
 
-**The 29 cases and `expectations.json` are different layers, and conflating them is the mistake this
-section invites.** The cases in [token-calculation.md](../design/token-calculation.md) assert what the
+**The 29 cases and `expectations.json` are different layers, and this section invites the mistake of
+conflating them.** The cases in [token-calculation.md](../design/token-calculation.md) assert what the
 token _contains_, given grants, group membership, acceptance state and the baseline setting. The
 corpus asserts what an application _serves_, given a payload and a set of records. They chain rather
 than overlap: a case's expected payload is a `principals.json` entry, and the corpus starts where the

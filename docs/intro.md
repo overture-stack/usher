@@ -1,6 +1,6 @@
 # Data access control
 
-Not all data should be accessible to all users. Implementing that constraint correctly, consistently, and in a way that can evolve as policies change is the problem this document sets out.
+Not all data should be accessible to all users. This document sets out the problem of implementing that constraint correctly, consistently, and in a way that can evolve as policies change.
 
 > Not familiar with OAuth 2.0, JWTs, or access control basics? Start with the [IAM Primer](iam-primer.md). Technical vocabulary is introduced here as it becomes relevant; see [Where to go next](#where-to-go-next) for persona-specific reading paths.
 
@@ -32,7 +32,7 @@ Several patterns have emerged for solving selective data access at platform scal
 
 ### Separating the decision from the enforcement
 
-A central service holds the access policy and answers "what can this user see or do?" on request. Each application, or a [adapter](concepts.md#pep-policy-enforcement-point) within it, enforces that answer at the point of data access. The [decision service](concepts.md#pdp-policy-decision-point) makes no data queries; the application makes no policy decisions.
+A central service holds the access policy and answers "what can this user see or do?" on request. Each application, or an [adapter](concepts.md#pep-policy-enforcement-point) within it, enforces that answer at the point of data access. The [decision service](concepts.md#pdp-policy-decision-point) makes no data queries; the application makes no policy decisions.
 
 This separation keeps policy consistent across applications and auditable in one place. Applications can be updated independently of the policy service, and adding a new application to the platform does not require re-implementing the policy logic.
 
@@ -44,7 +44,7 @@ This is easier to audit and reason about: the full set of a user's access rights
 
 ### Communicating the decision securely
 
-The decision service needs to deliver its answer to the application in a form the application can verify but the end user cannot tamper with or read. A short-lived [encrypted token](concepts.md#jwe-json-web-encryption-encrypted-jwt) is a common approach: issued by the decision service, decrypted locally by the application, and opaque to the user making the request.
+The decision service needs to deliver its answer so that the application can verify it and the end user can neither tamper with it nor read it. A short-lived [encrypted token](concepts.md#jwe-json-web-encryption-encrypted-jwt) is a common approach: issued by the decision service, decrypted locally by the application, and opaque to the user making the request.
 
 Opacity matters, though not for the reason it might seem. The token never reaches a browser. It travels from Usher to the service holding the data, and is decrypted there. Encryption gives two things: each application gets its own key, so a token issued for the wrong one fails to decrypt instead of being quietly honoured; and grant contents stay out of logs, error reports and traces.
 
@@ -62,11 +62,11 @@ If the revocation channel is disrupted, the safe response is to stop serving dat
 
 Usher is Overture's [authorization](concepts.md#authentication-vs-authorization) service. It implements the decision/enforcement separation, explicit grant model, encrypted token delivery, and revocation channel described above.
 
-**Resources and categories** are Usher's units of access control. A resource is a collection of records (a cohort, a study, an index, or any other logical unit defined by the instance). A category is a named level of sensitivity, also defined by the instance, and a resource lists the ones its records carry. What a category means in terms of actual records is configuration held by the application's enforcement adapter. A grant reaches the records carrying the category it names, so a resource holding a mix is served in part rather than whole. Usher never sees the underlying data or its schema.
+**Resources and categories** are Usher's units of access control. A resource is a collection of records (a cohort, a study, an index, or any other logical unit defined by the instance). A category is a named level of sensitivity, also defined by the instance, and a resource lists the ones carried by its records. What a category means in terms of actual records is configuration held by the application's enforcement adapter. A grant reaches the records carrying the category it names, so a resource holding a mix is served in part rather than whole. Usher never sees the underlying data or its schema.
 
 **Grants** are explicit records: this holder acts in this role, on this category, within this resource. Usher enforces deny-by-default. No grant means no access, always.
 
-**[The Usher token](concepts.md#usher-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It carries, for each resource the user holds a grant in, the categories granted there and what they may do with each. A shared library called the bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The adapter then applies that decision before any query reaches the data layer. The token never reaches the user.
+**[The Usher token](concepts.md#usher-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It carries, for each resource where the user holds a grant, the categories granted there and what they may do with each. A shared library called the bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The adapter then applies that decision before any query reaches the data layer. The token never reaches the user.
 
 **The revocation channel** keeps a live connection open so Usher can announce a grant change immediately, with regular polling as a fallback if that connection drops. Each bridge subscribes to it.
 

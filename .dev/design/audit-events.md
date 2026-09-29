@@ -28,9 +28,9 @@ the `Z` designator, never a numeric offset**: RFC 3339 permits `+05:00`, so this
 A corpus carrying mixed offsets cannot be ordered without resolving every entry first, and
 cross-service ordering is the whole purpose of a correlated trail. Two records written minutes apart
 can appear a day apart when each writer picks its own frame, and neither value looks wrong on
-inspection. **Seconds always present**, which RFC 3339's `full-time` already requires. Truncating to minutes is
-an ordinary formatting convenience elsewhere and collapses the ordering of everything inside one
-minute. Fractional seconds are permitted and not required.
+inspection. **Seconds always present**, already required by RFC 3339's `full-time`. Truncating to
+minutes is an ordinary formatting convenience elsewhere and collapses the ordering of everything
+inside one minute. Fractional seconds are permitted and not required.
 
 ## The payload
 
@@ -52,10 +52,11 @@ These properties recur across entities:
 
 **`actorId` carries the identity provider's `sub`, which is what makes it correlate.** A correlation
 key has to be producible by every service that correlates on it, and `sub` is the only identifier
-every ushered application holds, since the Usher token carries it. Usher's `users.id` satisfies this
-because it holds the subject itself rather than a surrogate, recorded under user identifier
-discipline in `permissions-model.md`. Had it been an internal surrogate instead, no other service
-could have produced it and `actorId` would correlate with nothing.
+held by every ushered application, since the Usher token carries it. Usher stores the subject with
+its issuer, and `users.id`, Usher's own identifier, never appears in an event, since no other
+service could produce it and `actorId` would then correlate with nothing; see user identifier
+discipline in `permissions-model.md`. Once a second identity provider is supported, `actorId`
+carries the issuer as well.
 
 It holds by design rather than by coincidence, and the two look identical right up until someone
 changes one of them.
@@ -64,8 +65,9 @@ changes one of them.
 taken from the request.** A neighbouring field elsewhere on the platform is the
 opposite: Arranger's `saveSet` mutation takes a `userId` argument supplied by the client and persists
 it as the set's owner. That field and this one are not two names for one thing. They have opposite
-trust properties, and the mistake a shared name would invite is reading a client-asserted value as an
-audit identity. Different names because different provenance, and neither is renamed into the other.
+trust properties, and a shared name would invite the mistake of reading a client-asserted value as
+an audit identity. Different names because different provenance, and neither is renamed into the
+other.
 
 **`actorType` has four values because `actorId` has two ways of being absent**, and they are not the
 same fact. A system-triggered event has nobody behind it. An anonymous request has somebody behind it
@@ -76,42 +78,43 @@ claims a person loses the distinction in the direction that misleads: an empty i
 access countable, which is what answers how much open access a deployment actually serves.
 
 **Every replica of one Usher deployment emits the same `source`, and instance attribution goes in
-`data`.** The spec makes `source` + `id` the uniqueness key that deduplication depends on, and says a
-source may include more than one producer, so a source is the context an event happened in rather
-than the process that emitted it. Usher is planned as stateless replicas sharing one policy database.
+`data`.** The spec makes `source` + `id` the uniqueness key behind deduplication, and says a source
+may include more than one producer, so a source is the context of an event rather than the process
+that emitted it. Usher is planned as stateless replicas sharing one policy database.
 Giving each replica its own source would put one logical occurrence under two keys, and deduplication
 would not catch it. Which replica served a request still belongs in the event; it belongs beside the
 other domain detail, where it does not enter the key.
 
 **`system` is not an afterthought value, and the first event on the platform is likely to be one.** A
-catalogue-load check runs on nothing a principal did, so the first structured event an ushered
-application emits carries `actorType: system` and no `actorId` at all. The envelope is therefore exercised from the beginning on the case with no actor, so absence
-handling has to be right before anything carrying a real principal is ever emitted. The usual order
-is the reverse, a shape designed around the populated case with absence bolted on by whoever first
-hits it, which is how an empty string ends up where a null belongs.
+catalogue-load check runs without any action by a principal, so an ushered application's first
+structured event carries `actorType: system` and no `actorId` at all. The envelope is therefore
+exercised from the beginning on the case with no actor, so absence handling has to be right before
+anything carrying a real principal is ever emitted. The usual order is the reverse, a shape
+designed around the populated case with absence bolted on by whoever first hits it, which is how an
+empty string ends up where a null belongs.
 
 ## Alerting happens through recording, and four events already work that way
 
 Usher does not hold alerting rules or send notifications. It emits events rich enough that rules can
 be written against them elsewhere, and severity is what lets a destination route on an event without
-parsing its payload. That is the separation the envelope exists for, and it is also what A09 asks
-for once its name changed from monitoring to alerting: recording that nobody evaluates is the failure
-the category describes.
+parsing its payload. The envelope exists for that separation, which is also what A09 asks for once
+its name changed from monitoring to alerting: in the category's terms, recording without evaluation
+is itself the failure.
 
 **Most conditions are rules over the stream and belong downstream.** Repeated denials for one
 principal, a spike in grants to one resource, access at an unusual hour: all of those are visible in
 what is already recorded, and encoding them here would put policy in the wrong service and freeze it
 at release time.
 
-**A condition only Usher can see becomes an event of its own type**, and that is the whole of the
+**A condition visible only to Usher becomes an event of its own type**, and that is the whole of the
 in-process detection. Four exist:
 
 | Event                          | What it detects                                                       | Why it cannot be a downstream rule                                               |
 | ------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `grant.rateExceeded`           | one actor's grant operations crossing a threshold in a rolling window | the count is shared state across instances, so no single event stream carries it |
 | `grant.unguarded`              | a grant taking effect with no custodian to approve it                 | requires knowing the category had no custodian at that moment                    |
-| `resource.orphaned`            | a resource left with no owner                                         | a state reached by a deletion elsewhere, not an action anyone performed          |
-| `revocationChannel.modeChange` | the channel going quiet and the bridge raising                        | the absence of events, which no rule over present events can see                 |
+| `resource.orphaned`            | a resource left with no owner                                         | a state reached by a deletion elsewhere, not anyone's action                     |
+| `revocationChannel.modeChange` | the channel going quiet and the bridge raising                        | the absence of events, invisible to any rule over present events                 |
 
 **The last one is the general case: silence.** Every other condition is a pattern in
 what arrived, and a downstream rule can find it. A channel that stops carries no event to match, so
@@ -132,10 +135,10 @@ severity, which is an operations question and is recorded in the open items belo
 
 **The prefix is the organization and nothing else.** No service segment: `source` already says which
 service emitted an event, and encoding it again in `type` says the same thing twice while still
-failing at the thing a segment is supposed to do. Two services both emitting `access.denied` under
+failing at a segment's job. Two services both emitting `access.denied` under
 their own segments are two names for what a reader has to treat as one kind of occurrence; what
 actually separates Usher denying a grant from an ushered application denying a query is the entity,
-so `grant.denied` and `query.denied` do the work no segment could.
+so `grant.denied` and `query.denied` do what no segment could.
 
 **The entity carries the discrimination, which makes entity names a platform commitment rather than a
 local one.** A flat vocabulary under one organization means two services must not mean different
@@ -150,16 +153,16 @@ the segments; a segment is one word.
 **No word is both an entity and an action.** `revocation` was: an act in `grant.revocation` and
 `identity.revocation`, and an entity in what is now `revocationChannel.modeChange`. A reader meeting
 the word in one position carries the wrong meaning into the other, and the two segments are the only
-thing distinguishing them. The fix is to name the entity precisely, which the channel is, rather than
-to borrow the action's noun. This is also the first constraint on the shared entity vocabulary the
-platform owes: the same word landing in both positions across two services is the same defect with
+thing distinguishing them. The fix is to name the entity, the channel, precisely rather than to
+borrow the action's noun. This is also the first constraint on the shared entity vocabulary owed by
+the platform: the same word landing in both positions across two services is the same defect with
 nobody in a position to see it.
 
 **Two families of event, distinguished by whether anyone acted.**
 
-An **action** is something a person or service did, and it can be refused, so it carries `result`. A
-grant created, a resource registered, ownership transferred. An **observation** is something the
-system noticed, with no actor and no outcome to report: a threshold crossed, a resource left without
+An **action** is performed by a person or service, and it can be refused, so it carries `result`. A
+grant created, a resource registered, ownership transferred. An **observation** is noticed by the
+system, with no actor and no outcome to report: a threshold crossed, a resource left without
 an owner, the revocation channel changing mode. Observations carry no `result`, because there was
 nothing to succeed at.
 
@@ -180,8 +183,8 @@ or a permission that emits nothing, is a gap in one of the two lists. See
 ## A note on vocabulary
 
 The event model is its own vocabulary and does not inherit the policy model's. CloudEvents defines an
-optional `subject` attribute meaning the specific thing within a source that an event concerns. That
-is not the `sub` claim, which is what `subject` means everywhere else in this project. Usher does not
+optional `subject` attribute, naming what an event concerns within its source. That is not the `sub`
+claim, which is what `subject` means everywhere else in this project. Usher does not
 currently use the CloudEvents attribute; if it ever does, it is the events vocabulary's word, not the
 policy model's.
 
@@ -198,13 +201,13 @@ see here), `warning` is anomalous and worth reviewing, `critical` demands immedi
 Usher logs **who holds what grants, and when that changes.** It has no
 visibility into whether a token was used, what query was run, or what records were returned.
 Enforcement happens at the adapter in each consuming application (Arranger, Stage, and so on), which
-applies a decision the controller already made, and logging what it applied is that application's
+applies a decision already made by the controller, and logging what it applied is that application's
 responsibility.
 
 A complete audit trail for a health data access event requires correlating two log sources:
 Usher (permission in place) and the consuming app (permission exercised). Neither alone is
 sufficient for full forensic reconstruction. See [adapter-integration.md](adapter-integration.md)
-for the access-decision logging requirements consuming apps must implement.
+for consuming apps' access-decision logging requirements.
 
 **Every control-plane capability pairs with an event here, and no data-plane capability does.** That
 asymmetry is structural rather than an omission. Read as a gap it invites someone to close it by
@@ -216,14 +219,14 @@ inventing `record.readSucceeded`.
 | A data-plane capability, such as `record.view`     | someone acting against an ushered application | **that application**, in its own log    |
 
 Usher never observes a read, so it cannot record one. What it records is the decision, at the token
-exchange, and the token exchange is the only Usher event a data-plane capability produces. The
+exchange, and the token exchange is the only Usher event produced by a data-plane capability. The
 application records the exercise, and the two correlate through `actorId`, which is the identity
 provider's `sub` and therefore producible by both.
 
 **Two consequences follow.** An ushered application that logs nothing leaves half the trail missing
 and Usher cannot detect that, which is why the requirement sits in the adapter contract rather than
 here. And the verb-to-noun pairing below is a control-plane rule: applying it to the data plane
-produces events Usher has no way to emit.
+produces events beyond Usher's reach.
 
 ---
 
@@ -250,7 +253,8 @@ thirty times obscures the part that differs.
 | `resource.registration`        | Study or cohort registered                                                                                                       | Admin or submitter | Resource                            | `actorId`, `resourceId`, `fieldName`, `fieldValue`, `initialOwnerId`                                                       | `info`           |
 | `ownership.transfer`           | Resource ownership transferred                                                                                                   | Owner or admin     | Resource                            | `actorId`, `fromOwnerId`, `toOwnerId`, `resourceId`                                                                        | `info`           |
 | `resource.orphaned`            | Resource has no owner; admin notified                                                                                            | System             | Resource                            | `resourceId`, `lastOwnerId`, `triggerEventType`                                                                            | `critical`       |
-| `resource.visibilityChange`    | Resource hidden or restored due to ownership state                                                                               | System or admin    | Resource                            | `actorId`, `resourceId`, `fromState`, `toState`, `reason`                                                                  | `warning`        |
+| `resource.suppression`         | Resource hidden from results, its grants untouched                                                                               | Owner or admin     | Resource                            | `actorId`, `resourceId`, `reason`                                                                                          | `warning`        |
+| `resource.restoration`         | Suppressed resource shown in results again                                                                                       | Owner or admin     | Resource                            | `actorId`, `resourceId`, `reason`                                                                                          | `info`           |
 | `custodianship.assignment`     | Custodian role assigned to a user for a category within a resource                                                               | Owner or admin     | User + category + resource          | `actorId`, `custodianId`, `resourceId`, `category`                                                                         | `info`           |
 | `custodianship.removal`        | Custodian role removed from a user                                                                                               | Owner or admin     | User + category + resource          | `actorId`, `custodianId`, `resourceId`, `category`                                                                         | `info`           |
 | `grant.unguarded`              | A grant took effect without a custodian's decision because the category had none assigned                                        |                    |                                     |                                                                                                                            |                  |
@@ -267,7 +271,7 @@ without `invitation.lapse` the model records the loud refusal and drops the quie
 invitation is keyed by email and the grants it creates are keyed by subject, so this is what joins
 them, and it is the last point at which the address is in the record before being discarded.
 
-**Grant rate**, which `grant.rateExceeded` reports on, is how many grant operations one actor
+**Grant rate**, reported by `grant.rateExceeded`, is how many grant operations one actor
 performs within a set period: the `operationCount` and the `windowSeconds` in its payload. It is a
 rate rather than a running total, so an actor who issues grants steadily over months never triggers
 it while one who issues the same number in an afternoon does.
@@ -289,11 +293,11 @@ legitimate.
   minimum retention. See [security-threat-model.md](security-threat-model.md) § A09.
 - Alerting SLAs per severity level: not yet defined.
 - **A `source` convention is owed, and is deliberately deferred.** `source` plus `id` is the key
-  deduplication depends on, so an undisciplined `source` weakens deduplication whatever `type` looks
+  behind deduplication, so an undisciplined `source` weakens deduplication whatever `type` looks
   like. The attribute must be a URI-reference with an absolute URI recommended, and nothing further
   is agreed: not how a deployment is identified within it, not whether it names a service or an
-  endpoint. What is settled is the part the model needs, that one deployment is one source however
-  it ends up spelled. The spelling is a logging concern, it is visible in the trail once events are
+  endpoint. What the model needs is settled: one deployment is one source, however it ends up
+  spelled. The spelling is a logging concern, it is visible in the trail once events are
   flowing, and it does not gate the permissions model.
 - **A shared entity vocabulary is owed, and only the flat type form owes it.** Two services meaning
   different things by one entity produces two occurrences under one name, and a consumer joins them.
@@ -306,19 +310,18 @@ legitimate.
   `custodianship.assignment`, `custodianship.removal`, and `grant.unguarded`. Nothing emits them in
   the first release, because nothing assigns a custodian in it.
 - **An event is owed for a resource's categories changing, and nothing emits one.** That write
-  decides what every principal reaches and is the one the fast path watches, since it bumps the
-  resource's category version. Its type waits on the same question as its capability: whether the
+  decides what every principal reaches and is watched by the fast path, since it clears the
+  controller's payload cache. Its type waits on the same question as its capability: whether the
   authority sits with the resource's owner or the category's custodian decides whether it is
   `resource.categoryChange` or `category.association`. The event is owed whichever way that lands.
   See the capability vocabulary in [permissions-model.md](permissions-model.md).
 - `grant.unguarded` needs its required fields settling, and needs deciding whether it is an event at
-  all. It has no actor of its own: it happens as a consequence of a grant being created through a
-  category nobody governs. As a separate entry it can go missing, and a creation logged without its
-  companion reads as an ordinary grant, which is the wrong failure direction for the one thing this
-  design already lets fail permissively. As a field on `grant.creation`, it cannot be omitted without
-  omitting the creation. See [decisions.md](decisions.md) § Granting is one function, which contrasts
-  this vacancy against a resource left without an owner and explains why the two resolve in opposite
-  directions. The warning to that resource's owners is a separate delivery record and is not this
-  event either way.
+  all. It has no actor of its own: it happens as a consequence of a grant being created on a category
+  with no custodian. As a separate entry it can go missing, and a creation logged without its
+  companion reads as an ordinary grant, hiding exactly the grants unseen by any custodian. As a
+  field on `grant.creation`, it cannot be omitted without omitting the creation. See
+  [decisions.md](decisions.md) § Granting is one function, which contrasts this vacancy against a
+  resource left without an owner and explains why the two are remedied differently. The warning to
+  that resource's owners is a separate delivery record and is not this event either way.
 - Ownership events still read as transfer between single owners. Ownership is a non-empty set, so
   adding and removing an owner are the primary operations and transfer is a compound of the two.

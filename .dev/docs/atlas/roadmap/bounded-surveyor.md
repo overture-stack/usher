@@ -34,7 +34,7 @@ A researcher holds this on HEART_STUDY's controlled records, with a maximum of 1
 **The limits are not a confidentiality control.** Enough narrowed queries, each returning different
 records, approach the whole set, and "none" says fewer than the minimum match, which is a count
 thresholded at that minimum. What the role gives is friction and an audit trail, the same claim
-`export` makes against `view`.
+made by `export` against `view`.
 
 **Its page is a third variant**, beside the page for a principal who views records and the one for a
 principal who only counts: records without totals, bucket keys without counts, and no pagination. So
@@ -53,8 +53,8 @@ response is the per-capability evaluation recorded as the third widening in
 everything it matches, and saved-set creation, which collects every matching identifier. A path that
 misses them serves the whole category.
 
-**Granting it before enforcement exists yields a full viewer.** The role narrows paths the service
-already serves, so a service that does not implement the limits applies none of them: the principal
+**Granting it before enforcement exists yields a full viewer.** The role narrows the service's
+existing paths, so a service that does not implement the limits applies none of them: the principal
 sees every record, the totals, and can download, since the export path is unenforced as well. That
 is the severe direction of the unimplemented-capability rule in
 [decisions.md](../../../design/decisions.md), and it means the role must be refused at writing
@@ -83,4 +83,4 @@ catalogue holding that resource.
 
 **One number or two.** A maximum and a minimum can differ; the example sets both to 10.
 
-**A column on `grants`**, which adds to the schema work that blocker 6 waits on.
+**A column on `grants`**, which adds to the schema work holding up blocker 6.

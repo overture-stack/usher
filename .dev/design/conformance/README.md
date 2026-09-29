@@ -1,16 +1,16 @@
 # Conformance fixtures
 
-`principals.json` here is the draft of the file `phase-1.md` places at
+`principals.json` here is the draft of the file placed by `phase-1.md` at
 `.dev/usher-integration/conformance/principals.json` in the integration repository. It is drafted in
 this repository because that section names `principals.json` as Usher's to own. Owning a file and
 hosting it are separate, and moving it is a step of its own.
 
 ## What this file is
 
-Each entry is a principal and the `PermissionsPayload` a conformance run hands to an application on
-their behalf. The payloads are verbatim in the shape
-[security-workflow.md](../security-workflow.md#the-payload-as-a-type) defines, so an adapter can
-deserialize them with the same type the bridge uses.
+Each entry is a principal and the `PermissionsPayload` handed to an application on their behalf by a
+conformance run. The payloads are verbatim in the shape defined by
+[security-workflow.md](../security-workflow.md#the-payload-as-a-type), so an adapter can deserialize
+them with the bridge's own type.
 
 **It is an input, never an expectation.** What an application should serve given one of these lives
 in `expectations.json`. The split matters because the two answer different questions of different
@@ -46,7 +46,7 @@ would make every row harder to read to no purpose.
 **Temporal claims are illustrative.** Every payload carries `iat` 1767225600 and `exp` 1767225900,
 a fixed reference instant of 2026-01-01T00:00:00Z with the five minute TTL. The corpus does not
 evaluate them, since `phase-1.md` scopes token issuance and verification out of it. An adapter that
-validates `exp` against the wall clock is testing something this corpus does not assert.
+validates `exp` against the wall clock is testing beyond what this corpus asserts.
 
 ## The configuration these payloads were computed against
 
@@ -87,9 +87,8 @@ Cases 28 to 35 were computed against a second configuration, and each carries
     every signed-in principal wherever the setting is registered.
     The audience serves all four resources.
 
-Two of its cases have no payload and are listed under `omitted`: 33 is a refusal, which belongs to
-the bridge's tests, and 34 is an open question in `token-calculation.md` whose answer decides what
-the payload would hold.
+Two of its cases have no payload and are listed under `omitted`, both refusals: 33 at the bridge
+and 34 at the exchange, so each belongs to that component's tests rather than to a payload.
 
 ## Cases marked not yet implementable
 
@@ -99,7 +98,7 @@ is a description.
 
 Both carry an ordinary payload, which is the substance of each. Neither withholding nor the
 multi-category subset test can be expressed in a payload at all, so what is unimplementable lives in
-`expectations.json` and the payload here is the one a correct controller emits today. Case 23 is not
+`expectations.json` and the payload here is what a correct controller emits today. Case 23 is not
 among them: an unmapped category value is a live defect rather than an absent mechanism.
 
 Case 21 is the one worth knowing about. It is the only case distinguishing the two readings of the

@@ -6,8 +6,8 @@ copy read for this analysis was last updated 2026-07-24. Flow text is deliberate
 here, only identifiers and what follows from them.
 
 Companion to [brd-traceability.md](brd-traceability.md). The requirements say what the system must
-do; the flows say what a person does, step by step, and are therefore more specific in exactly the
-places a requirement can stay vague.
+do; the flows say what a person does, step by step, and are therefore more specific exactly where a
+requirement can stay vague.
 
 ## Vocabulary
 
@@ -50,7 +50,7 @@ researcher their access ended, because an application cannot distinguish a lapse
 stranger and no exception to the existence-denying refusal is possible. See the refusal decision in
 [../design/decisions.md](../design/decisions.md). The notices are deliberately post-MVP, so for the
 first release the flows' classification and this design agree by accident: neither ships them. They
-diverge the moment either side builds notification, and the flows' own reasoning for
+diverge as soon as either side builds notification, and the flows' own reasoning for
 nice-to-have does not survive that point, so it is worth settling with the author rather than
 discovering later.
 
@@ -70,7 +70,7 @@ needs no per-record category field and no `nested` mapping, and it would compile
 today.
 
 Its real difficulties are elsewhere and are about meaning rather than mechanism. **A shared cohort
-reintroduces the snapshot problem** that study-level sharing was chosen to avoid: a query is a
+reintroduces the snapshot problem** avoided by choosing study-level sharing: a query is a
 description, not a set, so what a recipient reaches changes as records arrive. Whether a share means
 the rows matching then or the rows matching now is a governance question with no default answer.
 Beyond that, a predicate has to be stored per grant, and a principal holding many such grants
@@ -104,14 +104,14 @@ in [../design/decisions.md](../design/decisions.md).
 ### Submitter access is broader in the flows than intended here
 
 Flow 3.3 gives a new submitter to an existing study management rights over the whole study,
-explicitly including datasets other submitters contributed earlier. The intent recorded in this
+explicitly including datasets contributed earlier by other submitters. The intent recorded in this
 project is narrower: a submitter reaches what they submitted, plus whatever they are separately
 granted, and submitters do not see each other's data by default.
 
 **Resolved: this is instance policy, not an Usher rule.** Submitters in iMS are also granted
-ownership, and that correlation is a project requirement rather than something Usher should encode.
-The flows are therefore correct about iMS and must not become correct about Usher: the cascade is a
-policy the submission flow supplies, with Usher providing the mechanism. See the ownership-policy
+ownership, and that correlation is a project requirement, so Usher should not encode it. The flows
+are therefore correct about iMS and must not become correct about Usher: the submission flow supplies
+the cascade as a policy, with Usher providing the mechanism. See the ownership-policy
 decision in [../design/decisions.md](../design/decisions.md).
 
 ### The invitation email binding
@@ -122,8 +122,9 @@ different address, because the grant is tied to the invited address.
 **Resolved against the flows.** The invited address is a placeholder held only until the grant can
 attach to a Keycloak subject, and the magic link performs that attachment against whichever account
 the recipient confirms with. Registering under a different address activates the grant rather than
-leaving it pending. This follows from the existing decision that Keycloak subjects are the primary
-identifier and email serves access invitations only, so the flows' rule is the one that changes.
+leaving it pending. This follows from the existing decision that the identity provider's subject
+identifies a principal and email serves access invitations only, so the flows' rule is the one that
+changes.
 
 Worth raising with the author, since a recipient who registers under a different address currently
 gets no access at all under the specified behaviour, which reads as a support burden rather than an

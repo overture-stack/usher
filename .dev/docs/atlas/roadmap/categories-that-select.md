@@ -16,8 +16,8 @@ so one created without a decision fails closed.
 
 ## What it looks like
 
-Four HEART_STUDY records, with "controlled" restricting and "paediatric" only selecting, read from an
-age-group field the records already carry:
+Four HEART_STUDY records, with "controlled" restricting and "paediatric" only selecting, read from
+the records' existing age-group field:
 
 | Record | Belongs to                               | Reached with the open grant | Reached with HEART_STUDY "controlled" |
 | ------ | ---------------------------------------- | --------------------------- | ------------------------------------- |
@@ -34,11 +34,11 @@ resource.
 **It narrows the multi-category problem to the part that is hard.** A record needing every one of
 its categories' grants only arises with two restricting categories on one record. One restricting
 category and any number of selecting ones needs no both-grants check, so selecting categories do not
-wait on the subset check the query layer cannot yet express (see "A category selects records within
-a resource" in [decisions.md](../../../design/decisions.md)).
+wait on the subset check, still inexpressible in the query layer (see "A category selects records
+within a resource" in [decisions.md](../../../design/decisions.md)).
 
 **It is the safe half of local categories.** A selecting category cannot release anything, so an
-owner could create one without the bypass hazard [local categories](local-categories.md) records.
+owner could create one without the bypass hazard recorded in [local categories](local-categories.md).
 Only a local restricting category waits on the conjunction.
 
 ## The rules it needs
@@ -50,19 +50,19 @@ Only a local restricting category waits on the conjunction.
    bypass by another route. Community-governed data is always a partitioning category.
 2. **A synthetic resource is a view, never an authority.** A grant on one reaches only what its
    holder already reaches through each record's home resource, narrowed to the selection. Otherwise
-   its owner releases records another resource's owner governs, which is the leak the any rule
-   produces under "Overlapping cohort access: any or all" in
+   its owner releases records governed by another resource's owner, which is the leak produced by
+   the any rule under "Overlapping cohort access: any or all" in
    [permissions-model.md](../../../design/permissions-model.md). A view of this kind is the
-   predicate-scoped grant that [uac-flows-traceability.md](../../uac-flows-traceability.md) describes
+   predicate-scoped grant described in [uac-flows-traceability.md](../../uac-flows-traceability.md)
    for sharing a virtual cohort, so the two designs meet here.
-3. **A selecting category reads a field the records already carry.** Nothing is written onto records
+3. **A selecting category reads a field already on the records.** Nothing is written onto records
    to create one; enforcement reads descriptive fields only (decisions.md, "Usher is data-agnostic").
 
 A selecting category would carry the same scope prefix as any other, `global.` or `resource.`.
 
 ## Its name is overlay
 
-The decision already names it, which settles the naming question this file used to leave open. The
-other candidates were taken anyway: `tag` is retired in [terminology usage rules](terminology-usage.md)
-because "record-level category tagging" named the mechanism as writing labels onto records, and `set`
-is reserved for Arranger's saved sets. What a grant naming an overlay would reach is rule 2 above.
+The decision already names it and settles the naming question. The other candidates were taken
+anyway: `tag` is retired in [terminology usage rules](terminology-usage.md) because "record-level
+category tagging" named the mechanism as writing labels onto records, and `set` is reserved for
+Arranger's saved sets. What a grant naming an overlay would reach is rule 2 above.

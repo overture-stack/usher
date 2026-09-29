@@ -7,18 +7,18 @@ to agentics until there are enough entries to say something that is not an anecd
 
 Spawning subagents for parts of the work rather than doing all of it in one long-running session,
 then evaluating what comes back. The occasion was a question about whether a long session degrades
-output, which this does not test. It does something more useful: it gives a task to a reader with no
-history, whose answer can be checked against the files.
+output, and this does not test that. It does something more useful: it gives a task to a reader with
+no history, whose answer can be checked against the files.
 
 **The interesting property is the one that makes it awkward.** A subagent starts with no context, so
-the prompt has to carry everything the task needs. Writing that prompt is most of the cost, and it
-is also most of the value, because a task that cannot be specified without the conversation is a
+the prompt has to carry everything needed for the task. Writing that prompt is most of the cost, and
+it is also most of the value, because a task that cannot be specified without the conversation is a
 task whose specification was never written down.
 
 ## Criteria, fixed before the first result arrived
 
-Written in advance deliberately. Grading after reading tends to produce criteria the result already
-meets.
+Written in advance deliberately. Grading after reading tends to produce criteria already met by the
+result.
 
 | Criterion           | What counts as passing                                                                                                                                                          |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,8 +29,8 @@ meets.
 | Net cost            | Time to write the prompt, plus time to verify the answer, against time to do it directly. Delegation is not free and this is the criterion most likely to be flattered          |
 
 **What would make this a bad idea**, recorded now so it is not explained away later: verification
-costing as much as doing the work; a confident answer that spot-checking shows to be wrong, since
-that is worse than no answer; or prompts so long that the specification is the work and the agent is
+costing as much as doing the work; a confident answer shown wrong by spot-checking, since that is
+worse than no answer; or prompts so long that the specification is the work and the agent is
 ceremony.
 
 ## Log
@@ -44,10 +44,10 @@ coverage, compounds, and a judgement on whether the word is genuinely overloaded
 Chosen because the same survey was done by hand earlier today for two other words, so the shape of a
 good answer is known, and because every claim in it is cheap to check with a grep.
 
-One of the two carries a planted test. The `scope` prompt asks it to check a claim this corpus makes
-about itself, that the word has five uses and is precise in all of them, which is stale. An agent
-that repeats the claim rather than testing it has failed scope fidelity in a way that is visible
-without knowing the right answer.
+One of the two carries a planted test. The `scope` prompt asks it to check this corpus's claim about
+itself, that the word has five uses and is precise in all of them, which is stale. An agent that
+repeats the claim rather than testing it has failed scope fidelity in a way that is visible without
+knowing the right answer.
 
 #### Result 1: `payload` and `plane`. Graded against the criteria above.
 
@@ -78,21 +78,20 @@ decoration.**
 `payload` moves to first on the list as a result.
 
 **The finding about delegation, separate from the findings about words.** The most valuable output
-was not the survey. It was the scope caveat, which a reader with no history had to state because it
-had no way to know what was assumed, and stating it exposed an error in the method that had been
-invisible to the person using it. **A fresh reader is useful precisely where a long session is
-confident.**
+was not the survey. It was the scope caveat: a reader with no history had to state it, having no way
+to know what was assumed, and stating it exposed an error in the method that had been invisible to
+the person using it. **A fresh reader is useful precisely where a long session is confident.**
 
 **One caution, and it is mine rather than the agent's.** Verifying a claim needs the same care as
-making one. My own check of the single-occurrence compound returned nothing and I nearly recorded the
-agent as wrong; the command was case-sensitive, which is the defect this corpus spent the day
-removing from its checker. A verification step that carries the bug it is verifying against is worse
+making one. My own check of the single-occurrence compound returned nothing and I nearly recorded
+the agent as wrong; the command was case-sensitive, and this corpus spent the day removing that very
+defect from its checker. A verification step that carries the bug it is verifying against is worse
 than no verification, because it converts a correct answer into a recorded error.
 
 #### Result 2: `corpus` and `scope`, including the planted test
 
-**It passed the planted test decisively.** Asked to check a claim this corpus makes about itself,
-it tested the claim rather than repeating it, found it false by a factor of roughly forty, and went
+**It passed the planted test decisively.** Asked to check this corpus's claim about itself, it
+tested the claim rather than repeating it, found it false by a factor of roughly forty, and went
 further than the question: it noticed that the same file contradicts itself, since a table added
 later already records the claim as stale while the original row still states it. That
 self-contradiction was introduced in this session and neither reading it nor running the prose
@@ -114,17 +113,17 @@ what someone who knew what the word meant did not think to exclude.
 **A second one, cheaper but sharper.** The corpus already carries a warning that this specific word
 names unrelated concepts across services, and that conflating two of them yields a filter that is
 syntactically valid and semantically wrong. That sentence sat in an adapter document while the word
-went unexamined in the terminology rules. Nobody had connected them, and connecting them is the kind
-of link a fresh reader makes because both passages are equally new to it.
+went unexamined in the terminology rules. Nobody had connected them, and a fresh reader makes
+exactly that kind of link, because both passages are equally new to it.
 
 ### Interim findings on delegation itself
 
 Two results, both passing, so this is early. What has shown up twice is below.
 
-**The reliable value is not the answer, it is the assumption the agent cannot make.** Both agents
-produced a scope caveat unprompted, and both caveats exposed a defect: one that file enumeration
-had silently omitted untracked files, the other that a count had included markup. Neither is a hard
-question. Both were invisible from inside because they sit in what was taken for granted.
+**The reliable value is not the answer, it is what the agent cannot assume.** Both agents produced a
+scope caveat unprompted, and both caveats exposed a defect: one that file enumeration had silently
+omitted untracked files, the other that a count had included markup. Neither is a hard question.
+Both were invisible from inside because they sit in what was taken for granted.
 
 **Specifying the task is most of the work, and that is a feature.** Each prompt took several minutes
 and consisted largely of writing down what this session had made implicit: which files count, what a
@@ -150,9 +149,9 @@ neither.
 
 **What convergence does and does not prove, written before the results arrived.** Three instances of
 one model given one prompt share their priors, so agreement measures what the model finds salient
-rather than what is true. A defect all three name is a strong candidate and not a verified finding.
-So the rule for this round: **convergence selects, verification decides**, and nothing gets applied
-because three agents agreed.
+rather than what is true. A defect named by all three is a strong candidate and not a verified
+finding. So the rule for this round: **convergence selects, verification decides**, and nothing gets
+applied because three agents agreed.
 
 **Ground truth is available and was withheld from them.** A previous pass over this document with a
 real non-technical reader produced fourteen findings and nine defect classes, recorded in
@@ -161,7 +160,7 @@ rediscovering a class means it was never fixed, and finding something outside th
 classes are incomplete.
 
 **Predictions, committed now so that agreeing with the result later costs something.** I expect all
-three to flag the `dataset` word, since the document uses it for the unit a grant names while a
+three to flag the `dataset` word, since the document uses it for the unit named by a grant while a
 section heading uses it for a body of data. I expect at least two to flag density in the section
 explaining how a decision reaches the data, which is the most mechanical part of the document. I
 expect the tier names to be flagged by at most one, because they are explained where they are
@@ -176,13 +175,14 @@ All three returned ten ranked findings with quotes, line numbers and replacement
 
 | Finding                                                                                                                                                                                                                                                                | Ranks       | Verified      |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------- |
-| A sovereignty promise the document has already voided. One line states that platform administrators cannot override a community representative; another, 137 lines earlier, says an instance can switch on a setting letting an administrator query data with no grant | 1, 1, 1     | Yes           |
+| A sovereignty promise already voided by the document. One line states that platform administrators cannot override a community representative; another, 137 lines earlier, says an instance can switch on a setting letting an administrator query data with no grant  | 1, 1, 1     | Yes           |
 | The permissive-failure admission has no actor, no size and no way to check it, and its euphemism undoes the fail-secure argument built over three sections                                                                                                             | 3, 4, 9     | Yes           |
 | Eleven unexplained product names in the second paragraph, before the problem has been stated                                                                                                                                                                           | 8, 3, 6     | Yes           |
 | A glossary entry describing the document's own vocabulary backwards. It claims the prose says approval and the token says grant; the body has 3 of the first and 63 of the second                                                                                      | 4, 10, low  | Yes, by count |
-| The document describes its own earlier section wrongly, naming two roles that section does not name                                                                                                                                                                    | low, low, 5 | Yes           |
+| The document describes its own earlier section wrongly, naming two roles absent from that section                                                                                                                                                                      | low, low, 5 | Yes           |
 
-**Found by two of three**, and also verified: the word `portion` used for exactly the thing a sentence six lines earlier says a category is not, which both ranked second.
+**Found by two of three**, and also verified: the word `portion` used for exactly what a sentence
+six lines earlier says a category is not, which both ranked second.
 
 #### Evaluation
 
@@ -223,7 +223,7 @@ reports have been accurate, and the weak link has been the person checking them.
 
 #### What was applied, and the finding the agents could not have reached
 
-Two fixes went in. Neither is the fix any of the three proposed.
+Two fixes went in. Neither is a fix proposed by any of the three.
 
 **The sovereignty contradiction was resolved in the other direction.** All three read the two
 passages and concluded the absolute claim was the false one, so all three proposed weakening it. The
@@ -239,11 +239,11 @@ contradiction without asserting which side was correct. That is the behaviour to
 was real, the diagnosis was as far as the evidence went, and the resolution needed someone who knows
 what is being built.
 
-**The clearest success is the one that is easy to undersell.** The replacement sentences were usable.
-Several of the document's most convoluted passages are now readable because three readers with no
-stake in the phrasing rewrote them, and a person who has been inside the wording cannot do that for
-the same passage twice. Surfacing convoluted phrasing, and supplying the plain version rather than a
-note asking for one, is the concrete thing this technique did well.
+**The clearest success is the one that is easy to undersell.** The replacement sentences were
+usable. Several of the document's most convoluted passages are now readable because three readers
+with no stake in the phrasing rewrote them, and a person who has been inside the wording cannot do
+that for the same passage twice. This technique did one concrete thing well: surfacing convoluted
+phrasing, and supplying the plain version rather than a note asking for one.
 
 #### The single rule behind every result above
 
@@ -263,17 +263,17 @@ someone who knows what is being built.
 Two operational corollaries, both earned rather than assumed:
 
 - **Convergence ranks, it does not filter.** The most consequential defect of the round was a
-  singleton. Three instances of one model agree on what is salient, so a defect that is consequential
-  without being salient is precisely the one a vote discards.
+  singleton. Three instances of one model agree on what is salient, so a defect that is
+  consequential without being salient is precisely the one discarded by a vote.
 - **Verify the report, and expect the verification to be the weak link.** Across the runs logged
   here, the reports were accurate and two of my own checks were wrong: one case-sensitive, one
   truncating at 210 characters where the quoted text sat at 212. A failed check looks exactly like a
   refuted claim.
-- **Verification has a blind spot that another reader does not.** "Check before asserting" catches a
-  claim nobody looked up. It does nothing for a claim where the right source was fetched and the
+- **Verification has a blind spot not shared by another reader.** "Check before asserting" catches a
+  claim never looked up. It does nothing for a claim where the right source was fetched and the
   wrong conclusion drawn from it, because the checking already happened. One instance is recorded on
-  a peer's side: they fetched the sentence "a source may include multiple producers" and wrote in the
-  same message that a source identifies an instance rather than a class. The premise was in hand and
-  the conclusion inverted it. What caught it was a second party reading the same spec against the
-  same claim, which is the one defence that works on this class and the reason an adversarial pass is
-  worth asking for rather than waiting to be offered.
+  a peer's side: they fetched the sentence "a source may include multiple producers" and wrote in
+  the same message that a source identifies an instance rather than a class. The premise was in hand
+  and the conclusion inverted it. What caught it was a second party reading the same spec against
+  the same claim, which is the one defence that works on this class, and why an adversarial
+  pass is worth asking for rather than waiting to be offered.

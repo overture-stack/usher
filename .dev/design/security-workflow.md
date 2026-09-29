@@ -102,8 +102,8 @@ The algorithm is settled: `dir` with A256GCM. How keys are rotated remains open;
 [decisions.md](decisions.md) and [adapter-integration.md](adapter-integration.md).
 
 **The `typ` header is `usher+jwt`.** Explicit typing is BCP 225 (RFC 8725) §3.11, against cross-JWT
-confusion. The value is deliberately not `at+jwt`: this is not an OAuth access token, and claiming
-that profile would be the confusion the parameter exists to prevent. A bridge validates `typ` before
+confusion. The value is deliberately not `at+jwt`: this is not an OAuth access token, so claiming
+that profile would itself be a cross-JWT confusion. A bridge validates `typ` before
 anything else it reads. See the decision and the RFC 9068 comparison behind it in
 [decisions.md](decisions.md).
 
@@ -116,7 +116,7 @@ that does may be added to the header.
 
 ## The token exchange
 
-The one call every ushered service makes to the controller. Everything else in this document is
+Every ushered service makes this one call to the controller. Everything else in this document is
 either what feeds it, what caches it, or what invalidates it.
 
 **Who calls it.** The bridge, never the adapter and never a browser. The response is encrypted to the
@@ -151,24 +151,22 @@ and its audience identifier, exactly as in step 2, and receives a token back. Th
 entirely the controller's own business, so the bridge has one operation rather than two and cannot
 get the second one wrong.
 
-Inside the controller, the refresh looks for the principal's cached payload and compares the category
-versions recorded _with that payload_ against the resources' current ones:
+Inside the controller, the refresh looks for the principal's cached payload:
 
-- **Cache present and versions match**: reissue from the cached payload with a fresh TTL, bounded by
-  the earliest grant expiry cached alongside it, with no policy query at all.
-- **Either fails**: recompute from the store and issue updated permissions.
+- **Cache present**: reissue from the cached payload with a fresh TTL, bounded by the earliest grant
+  expiry cached alongside it, with no policy query at all.
+- **Cache absent**: recompute from the store and issue updated permissions.
 
-**Both halves of that test are the controller's own state**, which is what makes it sound. The
-question the fast path has to answer is whether the payload it is about to reissue was computed under
-current categories, so the versions belong with that payload. They were briefly carried in the token
-instead, which answered a question about a different artifact. See the fast-path decision in
-[decisions.md](decisions.md).
+**The test reads only the controller's own state**, which is what makes it sound. Anything changing
+what a principal holds deletes their entry, and a change to a resource's categories clears the whole
+cache, so an entry still present was computed under current grants and categories. Nothing supplied
+with the request decides it. See the fast-path decision in [decisions.md](decisions.md).
 
 **What `generatedAt` is for, now that it is not part of this test.** It records when the permissions
-were computed, which a reissue deliberately does not change, so it and `iat` come apart by exactly the
-span a token has been served from cache. That is a diagnostic and an audit correlation rather than an
-input to any decision. Whether anything should act on it, such as a bridge forcing a recomputation
-once the underlying computation passes some age, is open and unbuilt.
+were computed, and a reissue deliberately leaves it unchanged, so the gap between it and `iat` is
+exactly how long the token has been served from cache. That is a diagnostic and an audit correlation
+rather than an input to any decision. Whether anything should act on it, such as a bridge forcing a
+recomputation once the underlying computation passes some age, is open and unbuilt.
 
 ### The anonymous exchange
 
@@ -213,13 +211,12 @@ The exchange itself is above; this is what caching adds to it.
 4. On TTL expiry, the bridge repeats step 1. A refresh is the same call, carrying the current IdP
    JWT and the bridge's audience identifier and nothing else, so the bridge has one operation rather
    than two.
-5. The controller checks two things, both its own state: whether the principal's computed payload is
-   still in the shared cache, and whether each resource's category version still matches the one
-   recorded with that payload.
-   - **Both hold:** re-issue a new JWE from the cached payload with a refreshed TTL, bounded by the
+5. The controller checks one thing, its own state: whether the principal's computed payload is still
+   in the shared cache, cleared by any change to a resource's categories.
+   - **It is:** re-issue a new JWE from the cached payload with a refreshed TTL, bounded by the
      earliest grant expiry. Fast path: no full policy query.
-   - **Either fails:** recompute grants from the policy store and issue a new JWE with
-     updated grants.
+   - **It is not:** recompute grants from the policy store and issue a new JWE with updated
+     grants.
 
 The fast path skips the full policy computation unless something has actually changed, and
 permission changes propagate within at most one TTL window for any active user. `generatedAt` is not
@@ -245,8 +242,8 @@ may tighten them.
 
 Grants are computed additively. Every user starts with no access; the controller adds grants
 in three tiers, in order, and stops where the user's credentials no longer qualify. The result
-is a `permissions` object containing every resource the user may access and the categories they hold
-within it.
+is a `permissions` object containing every resource reachable by the user and the categories they
+hold within it.
 
 ### Tiers
 
@@ -269,7 +266,7 @@ See "Who holds a grant can follow a rule" in [decisions.md](decisions.md).
 **2. The principal's own grants (computed if an authenticated IdP token is present)**
 
 For an authenticated user the controller resolves their `grants` rows, each naming one resource, one
-category within it, and the role the holder acts in there. The baseline from step 1 is already in
+category within it, and the holder's role there. The baseline from step 1 is already in
 hand and is a floor rather than an alternative, so this step adds whatever the principal holds
 beyond it. There is no role hierarchy to climb: roles are a flat set and their capabilities union.
 
@@ -277,7 +274,7 @@ beyond it. There is no role hierarchy to climb: roles are a flat set and their c
 
 A grant counts only while it is live, meaning accepted by its recipient, unexpired and unrevoked,
 each read from the grant rather than from any cached copy. Expired and revoked grants are omitted
-silently, and a category the principal holds no live grant on is simply not named.
+silently, and a category with no live grant is simply not named.
 
 **The three tiers are what the categories mean, not three separate computations.** One pass over one
 table produces all of them, and the authority for that pass is
@@ -307,12 +304,12 @@ from category to the entities reached under it, and from each entity to the acti
 ```
 
 **The entity level is load-bearing rather than decorative.** A bare `["view"]` stops saying anything
-the moment more than one entity can be acted on, since `record.view` and `field.view` are different
+as soon as more than one entity can be acted on, since `record.view` and `field.view` are different
 permissions with the same action. Nesting resolves it by structure, so an adapter that has never heard
 of an entity skips one key rather than failing to recognize a string.
 
 **`field` is the exception at the entity level**, mapping to its own categories before its actions,
-because a field is the one entity a record category further partitions. It appears only where a
+because a field is the one entity further partitioned by a record category. It appears only where a
 category is partitioned by field; absent, the record capabilities carry every column.
 
 **The entries are independent, not conditions on one another.** Holding two means holding both, so
@@ -326,8 +323,8 @@ revocation acts on the grant in the store rather than on anything visible here.
 **Every permission is category-scoped, including on unrestricted data.** A resource's open portion
 is a category like any other, named in a grant like any other. There is no separate resource-level
 permission list, and no baseline sitting outside the category system, because a baseline is what the
-superseded subtractive model needed and additive rendering does not. Every record a principal reaches is
-reached through a grant that names why.
+superseded subtractive model needed and additive rendering does not. Every record reached by a
+principal is reached through a grant that names why.
 
 This is also what makes tier differences expressible: an anonymous principal may hold
 `{ "global.unmarked": { "record": ["view"] } }` where a registered one holds `{ "global.unmarked": { "record": ["view", "update"] } }`, on the same
@@ -338,16 +335,16 @@ resource means holding at least one grant on it, so an empty list would mean the
 deliberately is that **categories are not optional**: a resource carrying none is ungrantable,
 because a grant has nothing to name.
 
-The adapter builds its filter additively: a positive clause naming the resources whose configured categories are covered by the entries. A resource carrying a category no entry names contributes no clause and
-is therefore invisible.
+The adapter builds its filter additively: a positive clause naming the resources whose configured
+categories are covered by the entries. A resource carrying a category named by no entry contributes
+no clause and is therefore invisible.
 
 **No role name travels in the token.** A role is how access is authored, not how it is enforced: the
 controller resolves a role to the capabilities it carries at issuance, so an adapter tests whether a
 capability is present and never has to learn what an instance means by `viewer`. No capability
 group travels either: `read` is expanded into its members when a role is written, so an adapter never
-sees it. Ownership is absent
-for a second reason, being a control-plane permission that Usher's own API enforces rather than any
-adapter.
+sees it. Ownership is absent for a second reason, being a control-plane permission enforced by
+Usher's own API rather than by any adapter.
 
 **Nor does a catalogue.** The token names resources, and which of an application's catalogues hold a
 resource's records, and under which field, is the adapter's to map. Usher stays agnostic of how data
@@ -400,9 +397,10 @@ still validates the `iss` claim. Only `sub` is null; no other standard claims ar
 
 ### The payload as a type
 
-`PermissionsPayload` is the decrypted token: what the bridge hands an adapter, and the one artifact the
-controller, the bridge and the conformance corpus all have to agree on. It sits in this corpus rather than a source tree because no package layout is decided yet, and
-the file it eventually lands in is a layout question that blocks nothing.
+`PermissionsPayload` is the decrypted token: what the bridge hands an adapter, and the one artifact
+that must match across the controller, the bridge and the conformance corpus. It sits in this corpus
+rather than a source tree because no package layout is decided yet, and the file it eventually lands
+in is a layout question that blocks nothing.
 
 ```typescript
 /** A list with at least one element. An empty list would mean what absence already means. */
@@ -452,6 +450,29 @@ export interface CategoryPermissions {
 	 */
 	field?: Record<CategoryName, NonEmpty<FieldAction>>;
 }
+
+/** The entities a data-plane capability acts on: exactly the keys a category entry can carry. */
+export type DataEntity = keyof CategoryPermissions;
+
+/** The entities a control-plane capability acts on: rows in Usher's own store, never in a token. */
+export type ControlEntity =
+	| 'resource'
+	| 'category'
+	| 'grant'
+	| 'group'
+	| 'role'
+	| 'ownership'
+	| 'invitation'
+	| 'custodianship';
+
+/**
+ * Every entity Usher's vocabulary knows. It is a list in code rather than a table, because no new
+ * entity comes without code: a data-plane one changes what a token carries, and a control-plane
+ * one is new API. An entity's plane is which of the two unions above it belongs to, so it is stated
+ * once per entity and two capabilities of one entity cannot disagree about it.
+ */
+export type Entity = DataEntity | ControlEntity;
+
 
 /**
  * The categories reached within one resource. Entries are independent rather than conditions on one
@@ -512,16 +533,15 @@ export interface PermissionsPayload {
 }
 ```
 
-**No category version travels in the payload.** The refresh compares the versions recorded with the
-cached payload against the resources' current ones, so they belong with that payload; a token is a
-different artifact and would answer a question about itself. See the fast-path decision in
-[decisions.md](decisions.md).
+**No category version travels in the payload, or exists at all.** A change to a resource's
+categories clears the controller's payload cache, so there is nothing to compare. See the fast-path
+decision in [decisions.md](decisions.md).
 
 **Every member is read outside the controller**, so the payload carries no bookkeeping passenger and
 holds no invariant beyond what the type states.
 
 **The ordering is the corpus's, not alphabetical.** `payloadVersion` leads because it says how to read
-the rest, the standard claims follow in the order every example uses, and the content comes last.
+the rest, the standard claims follow in the order used by every example, and the content comes last.
 
 **Unknown keys are tolerated at the entity level and nowhere above it**, which looks like it
 contradicts the payload-version decision and does not. The test is what skipping a key does: an adapter
@@ -621,10 +641,10 @@ roles (shared cache and revocation pub/sub).
 
 **Two pieces of state have no home yet, and both fail the same way when instances multiply.** The
 propagation design above holds because revocation state lives in PostgreSQL and travels by Valkey.
-Anything a controller instance holds for itself weakens as instances are added, quietly, in
+Anything held by one controller instance alone weakens as instances are added, quietly, in
 proportion to how far the platform scaled.
 
-- **The grant rate that `grant.rateExceeded` compares against `grantRateThreshold`.** Counted per
+- **The grant rate, compared by `grant.rateExceeded` against `grantRateThreshold`.** Counted per
   instance, thirty operations across three instances read as ten each, and a threshold of twenty
   never fires. That is the primary detection signal for a custodian acting at scale, so it weakens
   exactly where scale makes the misuse worth detecting. **Recommended: derive it from the audit
@@ -632,12 +652,12 @@ proportion to how far the platform scaled.
   `WHERE` clause, and a derived count cannot disagree with the audit trail it summarizes. Valkey
   would be faster and would introduce a counter that can. The cost is one query per grant operation,
   on a control-plane write path where operations are rare.
-- **The fast path's two markers.** There is no per-principal timestamp; the payload cache is shared
-  state by design and the category version lives on the resource row in PostgreSQL. Read as a scaling
-  question this is the same question as the one above, and the answer is why it took this shape: a
-  copy held per instance is shared state under another name, and a cache no write invalidates is the
-  failure mode. Invalidating by deletion, from the write that causes the change, is what removes
-  both.
+- **The fast path's one marker.** There is no per-principal timestamp and no category version; the
+  payload cache is shared state by design, deleted per principal and cleared by a category change.
+  Read as a scaling question this is the same question as the one above, and the answer is why it
+  took this shape: a copy held per instance is shared state under another name, and a cache never
+  invalidated by a write is the failure mode. Invalidating by deletion, from the write that causes
+  the change, is what removes both.
 
 The general form, worth applying to anything added later: if a controller instance would hold it
 between requests, it belongs in PostgreSQL or Valkey, and the threat model's "horizontal scaling with
@@ -652,10 +672,10 @@ no shared in-memory state" row is what catches the ones that do not.
 
 ### Interaction with the token refresh fast path
 
-When a revoked user's token expires and the bridge requests a refresh, the controller decrypts the expired
-token, reads `generatedAt`, and compares it against `revoked_at`. Since `generatedAt` is earlier
-than `revoked_at`, the fast path is skipped. Usher either rejects the refresh (if access remains
-revoked) or recomputes grants (if access has been reinstated).
+A revocation changes what the affected principals hold, so it deletes their cached payloads, as any
+such write does. When a revoked user's token expires and the bridge requests a refresh, the
+controller finds no cached entry and recomputes from the store, so the new token carries only the
+grants still live. The fast path cannot reissue revoked access, and `generatedAt` plays no part.
 
 ---
 
@@ -680,8 +700,8 @@ In revocation-uncertain mode:
 - Cached Usher tokens are **suspended**, not expired. A request needing any granted permission is
   rejected with a "service temporarily unavailable" response (HTTP 503), not a "session ended"
   response (HTTP 401).
-- **The open tier continues to be served.** Open access requires no grant, so there is nothing a
-  revocation could withdraw and nothing for the bridge to be uncertain about. Withholding it hides
+- **The open tier continues to be served.** Open access requires no grant, so a revocation has
+  nothing to withdraw and the bridge nothing to be uncertain about. Withholding it hides
   data that was never meant to be hidden.
 - The distinction matters: a suspended session resumes automatically when connectivity is restored
   and revocation status is confirmed, without requiring re-authentication. An expired session
@@ -690,15 +710,15 @@ In revocation-uncertain mode:
   fail-secure applies regardless of cause.
 
 **Serving open during an outage needs no controller, and introduces no new exposure.** An adapter
-computes `open` by complement, locally, from its own configuration rather than from the token, so
+computes `unmarked` by complement, locally, from its own configuration rather than from the token, so
 the open slice is available whether or not the controller is reachable. The known hazard of that
-computation, a category the adapter has no mapping for falling outside the set being subtracted and
-its records being served as open, is present under normal operation too and is addressed by the
+computation, a category unmapped by the adapter falling outside the set being subtracted and its
+records being served as open, is present under normal operation too and is addressed by the
 startup check against Usher's category dictionary. An outage neither creates it nor widens it.
 
 **The exemption belongs to a bridge that started cleanly, not to a cold start.** The startup check
 needs the controller, so a bridge starting while the controller is unreachable has never validated
-its configuration against the dictionary and cannot know what `open` excludes. It serves nothing
+its configuration against the dictionary and cannot know what `unmarked` excludes. It serves nothing
 until it has, which is what the startup behaviour below already requires.
 
 **A reduced result must say so.** Serving a silently smaller set is worse than serving none, because

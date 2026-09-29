@@ -1,8 +1,8 @@
 # Access Management UI
 
-_Status: in progress. What it is and how it ships are settled: a package this repository publishes
-and portals mount, rendering data handed to it. What it is handed, as a typed interface, is not, and
-needs the consuming portal in the room._
+_Status: in progress. What it is and how it ships are settled: a package published by this
+repository and mounted by portals, rendering data handed to it. What it is handed, as a typed
+interface, is not, and needs the consuming portal in the room._
 
 ---
 
@@ -57,14 +57,14 @@ for itself would need a server in every host before any host could use it. One t
 it is handed works in a server-rendered portal and a browser-only one alike, with each supplying the
 data by whatever means it has. The host decrypts, because the host holds the key.
 
-**Five constraints a consuming portal imposes**, four of them integration facts already true in
+**A consuming portal imposes five constraints**, four of them integration facts already true in
 Stage rather than preferences:
 
 - **Theming is an input, and it is CSS custom properties rather than a theme object.** Fixed styling
   looks foreign in a host and gets forked, so theming has to come from outside. Which mechanism is
   not a spelling choice: a JS theme object passed through React context and a Tailwind or shadcn
   theme are different interfaces, the second being custom properties consumed by utility classes
-  with variants by class composition. Custom properties are the one input both can supply, since
+  with variants by class composition. Custom properties are the one input common to both, since
   Tailwind v4 defines its theme as them, shadcn's convention is CSS variables for colour, and a
   CSS-in-JS runtime reads `var(--x)` without difficulty. A theme object would be correct for a host
   today and wrong for the same host after a migration already decided.
@@ -73,7 +73,7 @@ Stage rather than preferences:
   utility-class stack is decided and unstarted, with no replacement framework chosen, so this package
   ships while that host is still on CSS-in-JS and the host migrates underneath it afterwards. Same
   package, same host, two stacks, in that order, with no re-theming in between. That is what the
-  custom-properties input is for, and without it the package would need retheming at the exact moment
+  custom-properties input is for, and without it the package would need retheming exactly when
   the host has the least attention to spare.
 
   **On the older stack the host supplies the bridge**, which is work to expect rather than to
@@ -89,7 +89,7 @@ Stage rather than preferences:
 - **Components, not routes.** Where an administrative surface sits in a host's navigation is the
   host's decision, so the package assumes no route and no menu entry.
 - **No store of its own.** Everything rendered is derivable from what Usher returns plus what the
-  host injects. The moment the package needs its own data, a host is maintaining two sources for one
+  host injects. Once the package needs its own data, a host is maintaining two sources for one
   fact.
 
 **The read shape is the package's input type**, which relocates a question rather than leaving it
@@ -98,7 +98,7 @@ component's inputs specifies the contract, and that is a more concrete thing to 
 endpoint in the abstract.
 
 **One input for obtaining data, used by every path including the package's own**, and this comes from
-a failure the same pattern has already produced next door. Arranger's components take a theme and an
+a failure already produced next door by the same pattern. Arranger's components take a theme and an
 injectable fetcher, which is this shape exactly. A host routes that fetcher through its own proxy, so
 the fetcher ignores the URL it is handed and rebuilds the path from its own configuration. Every call
 honours that except one bootstrap read inside the provider, which passes an unscoped URL and a
@@ -112,23 +112,23 @@ the others has this defect available; a single uniformly-used one does not. If t
 read before it can render, that read goes through the same input as everything else.
 
 **The empty-state convention is guidance for hosts, not only an internal rule.** A host renders its
-own empty and error states on the screens either side of this surface, so it can disclose the
-distinction the package is careful about, in a place the package does not control. Stating the
+own empty and error states on the screens either side of this surface, so it can disclose what the
+package carefully withholds, in a place outside the package's control. Stating the
 convention in the package's documentation is what gives a host the chance to hold it.
 
 **How the stylesheet reaches the host is an interface decision, not a build detail.** Either the host
 imports a stylesheet or the package injects one, and never both: a package doing both leaves the
 intended consumption model ambiguous, and an auto-injected CSS import throws in plain Node, where
-`require()` cannot parse a `.css` file. Nothing internal to the package may assume a path only the
-package's own build resolves either, since a path alias surviving into shipped type declarations
+`require()` cannot parse a `.css` file. Nothing internal to the package may assume a path resolved
+only by the package's own build either, since a path alias surviving into shipped type declarations
 means nothing to a consumer. Both failures are reported from an Overture package on the target stack,
 described from a reading some weeks old and not found in that repository's current state, so the
 lessons are recorded here and the example is not cited as a place to look.
 
 **Constraints gathered from a consuming application need a date on them.** Three offered here
 described something other than what a package must support: a client-side session check framed as a
-browser-only architecture, a styling system the host has already decided to leave, and an unmerged
-pull request described as a package the platform has. Each was caught, none by this side. Where a
+browser-only architecture, the host's outgoing styling system, and an unmerged pull request
+described as one of the platform's packages. Each was caught, none by this side. Where a
 host is mid-migration, "how it works now" and "what it will need" diverge, and a published interface
 has to be built against the second.
 
@@ -148,14 +148,14 @@ holders, already-exists, already-holds, does-not-hold, one failure type per writ
 catch-all. That is the difference between telling someone a person already has access and telling
 them something went wrong.
 
-**Adopting it needs one rule the original did not have to carry.** Existence denial governs data
+**Adopting it needs one rule beyond what the original carried.** Existence denial governs data
 reads, and these are writes to the grant store, so "already has access" discloses nothing about
 records. The exception is the resource itself: a principal asking about a resource they do not manage
-must not be able to tell not-found from not-permitted, or the management API becomes the enumeration
-oracle the query path refuses to be.
+must not be able to tell not-found from not-permitted, or the management API becomes an enumeration
+oracle, undoing the query path's refusal to be one.
 
 **The profile half ports more cleanly than it looks.** The iMS view derives what someone holds by
-parsing JWT scope claims in the browser, which this design rules out, and the parsing is isolated in
+parsing JWT scope claims in the browser, ruled out by this design, and the parsing is isolated in
 one hook while the rendering component takes already-computed values and does no token handling.
 So the view survives the move to a server-side read essentially unchanged and only the derivation is
 rebuilt. Where that read comes from is therefore the whole of the work rather than part of it.
@@ -173,7 +173,7 @@ rebuilt. Where that read comes from is therefore the whole of the work rather th
 - **Granting:** give a holder a role on one category of one resource, and revoke it. There is no
   separate step assigning someone a role first: the grant carries the role, so the control is a
   holder, a category and a role together rather than two operations. A holder is a person in the
-  first release and a group later, which the same control serves. A grant may also name a field
+  first release and a group later, both served by the same control. A grant may also name a field
   category within the record category, which is post-MVP and is one more input on the same control
   rather than a second surface.
 - **Grant state:** show whether a recipient accepted, when they answered, and what they were shown
@@ -193,12 +193,14 @@ rebuilt. Where that read comes from is therefore the whole of the work rather th
 
 ### Domain label configurability
 
-**Half answered.** `entities` and `capabilities` each carry `display_name` and `description`, which
-is where per-instance wording lives: `resource` displays as "Study", `record.export` displays as
-"Download". Those are columns in Usher rather than host configuration, for the reason this package
-exists at all, that a label supplied by each host separately is the same label maintained twice.
+**Half answered.** `capabilities` carries `display_name` and `description`, so `record.export` can
+display as "Download" without each host supplying the word. An instance's word for an entity, such as
+"Study" for `resource`, is instance vocabulary: it lives in the instance's configuration of this
+package rather than in Usher's schema, as the decision on domain terms in
+[decisions.md](decisions.md) requires, and one configuration per instance still avoids the same label
+being maintained by every host.
 
-What is still open is everything not covered by those two tables: how the labels are edited, whether
+What is still open is everything not covered by those two: how the labels are edited, whether
 through a settings surface or a deployment-time load, and what a multi-tenant instance does when two
 tenants want different words for one entity.
 

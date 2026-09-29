@@ -2,7 +2,7 @@
 
 _Status: designed, not yet a spec. The enforcement seam, the category clause, the cardinality
 contract and the failure directions are settled here. What is missing is exact HTTP shapes: request
-and response bodies, error codes, and the field names and types an adapter compiles against._
+and response bodies, error codes, and the compile-time field names and types for an adapter._
 
 ---
 
@@ -85,8 +85,8 @@ the document is confident about before auditing what it admits is unsettled.
 **A closed defect described as open is the mirror image of a stale resolution**, and both hide in
 sections that read as settled. A fix rarely updates the prose describing what it fixed,
 especially when it closes something as a side effect of closing something else. The result is a
-severity claim inside a section describing current behaviour, which is exactly the sentence
-someone quotes without checking it. Re-check what a document says is broken as often as what it
+severity claim inside a section describing current behaviour, which is exactly the sentence most
+often quoted unchecked. Re-check what a document says is broken as often as what it
 says is settled.
 
 **A correction has a blast radius, and editing in place hides it.** Fixing a premise in the
@@ -101,7 +101,7 @@ you have: name a sentence elsewhere that changed as a result. If a premise corre
 nothing else in the document, either the premise was inert or you have not looked.
 
 **When a structure is scheduled to change, pick the fix that is correct before and after.** A fix
-chosen against the present shape can be right at review and wrong the day the planned change lands,
+chosen against the present shape can be right at review and wrong once the planned change lands,
 and it will not announce the transition. The published documents here have no generated index today
 and will have one when they move to the platform site, so hand-writing a list of them would be
 correct now and a stale duplicate later, while a single link into the directory is correct in both
@@ -122,7 +122,7 @@ Per protected type, per request:
 1. **From config:** the resources configured for this type, each with the field value identifying a
    record as belonging to it; and the categories configured for this type, each with the field value
    marking a record as carrying it.
-2. **From the token:** the `(resource, category)` pairs this principal holds.
+2. **From the token:** this principal's `(resource, category)` pairs.
 3. **Intersect.** The visible set is the pairs whose resource is configured for this type.
 4. **Empty intersection denies** this type. Not the absence of an entry: absence of an _overlap_.
 5. **Otherwise narrow**, with one clause per visible pair, composed with `or`. Each clause is a
@@ -137,7 +137,7 @@ category it is, and the two are not symmetrical:
     a concrete category   the category field matches that category's configured value
     open                  the category field matches none of the configured concrete values
 
-A concrete category has a value of its own to match. `open` does not: it is the residual, meaning
+A concrete category has a value of its own to match. `unmarked` does not: it is the residual, meaning
 whatever no concrete category covers, so its clause is the complement and is therefore negative where
 every other clause is positive. That asymmetry is inherent to a counter-category rather than a
 consequence of the query language, and it is where the hazard in the startup check below comes from.
@@ -153,18 +153,17 @@ produce OR between the enforcement filter and a client-supplied clause is a disc
 whatever depth it occurs at**, and it does not become acceptable because the client clause looks
 harmless: a client controls its own half, so an OR there is a client-controlled bypass of
 enforcement. This matters most in aggregations, where a widened filter discloses through a count
-without returning a record anyone can point at, which is the channel the existence invariant is
-hardest to defend in.
+without returning a single record, and where the existence invariant is hardest to defend.
 
 **Both fields are tested, and testing only the resource would be a different model.** A category
 selects records within a resource; it does not decide whether the resource is reachable. Narrowing on
 the resource field alone would make a resource of mixed sensitivity unreachable in full until it was
 registered as several resources, so its public records would not be public. Both tests are
-single-valued exact matches, so the category test costs nothing the resource test does not.
+single-valued exact matches, so the category test costs no more than the resource test.
 
 **A record carrying more than one category at once is not covered here.** That case needs a subset
-test, which the query layer cannot yet express on this shape, and it is the one part of the model
-waiting on work elsewhere. Until it lands, a record carries one category.
+test, and the query layer cannot yet express one on this shape, which makes it the one part of the
+model waiting on work elsewhere. Until it lands, a record carries one category.
 
 **Denial is per type because it cannot be per request.** A single query document can select several
 types whose configured resources differ, so one selection may be denied while another is permitted
@@ -182,7 +181,7 @@ implementation can trigger on the first and appear correct. Where a type holds r
 they diverge: a principal holding two of five studies in a catalogue has no entry for the catalogue
 and must still see two studies' records. Refusing the type is wrong; filtering is the answer.
 
-**A trap in step 6 that step 5 does not have.** A record whose field value matches no configured
+**Step 6 has a trap, and step 5 does not.** A record whose field value matches no configured
 resource is excluded by step 5, because the positive clause does not name it. The same unconfigured
 value in an artifact's provenance is absent from the complement, so step 6 does not exclude the
 artifact. **The same defect therefore fails closed on records and open on artifacts**, which is why
@@ -194,7 +193,7 @@ schema, and such a type is backed by a structurally unrelated index while inheri
 catalogue's resource field name. Each body of data with its own store and schema is its own catalogue
 and needs its own configuration, whatever the application calls the container.
 
-The failure is not a missing restriction. A filter naming a field that type's index does not have is
+The failure is not a missing restriction. A filter naming a field absent from that type's index is
 emitted verbatim and matches nothing, so **everything of that type disappears**. Point the same
 mechanism the other way and the documents disappear instead. Either way it presents as data loss
 rather than as an authorization error, which is the hardest kind to attribute.
@@ -204,13 +203,13 @@ just the document type it was built for. A type whose access question is answera
 and the authenticated identity alone should not be receiving a permission-derived filter at all; see the
 self-scoping rule below.
 
-**The resource field name is per-catalogue config, and catalogues within one instance will differ.** For
-MVP the adapter filters on a single field naming the resource a record belongs to. That field name is
-adapter config chosen per catalogue, and Usher never learns it. An instance's bodies of data
-typically arrive through different submission services and expose different fields for the same
-role, so an adapter that assumes one field name per instance is wrong.
+**The resource field name is per-catalogue config, and catalogues within one instance will differ.**
+For MVP the adapter filters on a single field naming a record's resource. That field name is adapter
+config chosen per catalogue, and Usher never learns it. An instance's bodies of data typically
+arrive through different submission services and expose different fields for the same role, so an
+adapter that assumes one field name per instance is wrong.
 
-Four things an adapter must establish about a candidate resource field before relying on it. The
+An adapter must establish four things about a candidate resource field before relying on it. The
 values are instance facts and belong in that integration's own record; what generalizes is that
 each must be checked rather than assumed:
 
@@ -231,8 +230,8 @@ each must be checked rather than assumed:
   assumed. So a field used solely in an enforcement clause and never returned in a selection set has
   nothing watching it, and a field that silently gains a second value widens the filter with no code
   change, no error and no warning. The honest fix is a sampling query against live data at startup
-  or on a schedule, which nobody has built. Until it exists, treat single-valuedness as an assumption
-  the integration asserts rather than a property the system checks.
+  or on a schedule. Until one is built, treat single-valuedness as asserted by the integration rather
+  than checked by the system.
 
   **The contract is three parts, and the third is the one usually left out.**
 
@@ -250,18 +249,18 @@ each must be checked rather than assumed:
   **So nothing gates, and the deployment has to supply what the report does not.** A reported
   violation on an enforcement field is not a diagnostic. It is a live disclosure: every filter naming
   that field is already widened, and in a deployment whose data carries no category field it is the
-  only clause enforcing anything. Treat it as an incident with an owner, not a log line, because a
-  report nobody reads is not a control.
+  only clause enforcing anything. Treat it as an incident with an owner, not a log line, because an
+  unread report is not a control.
 
   **And drift after the sample is unclosed**, in those words. A bounded sample shows the presence of
-  a violation within what it sampled and can never show absence, and it is stale the moment the next
-  document lands. No instrumentation on the filter path, no mapping signal, nothing watching. "Detection
-  deferred" is the wrong phrasing because it lets a reader believe detection is coming.
+  a violation within what it sampled and can never show absence, and it is stale as soon as the next
+  document lands. No instrumentation on the filter path, no mapping signal, nothing watching.
+  "Detection deferred" is the wrong phrasing because it lets a reader believe detection is coming.
 
 - **The field's `nested` configuration is correct**, which the search layer now derives from the
   index mapping at every call site rather than from configuration, so a missing list throws instead
   of compiling a flat filter. That closes the misconfigured-nesting half of this family and leaves
-  cardinality, which no mapping can express.
+  cardinality: no mapping can express it.
 - **Its values were observed, not read off a label.** A field's display label can describe something
   other than what the field holds. Choose a resource field from actual values.
 
@@ -281,7 +280,7 @@ to hide behind. So the exposure sits on the clause that reads as the safe one.
 **Whether that existential match is a defect depends on a fact about the deployment, and stating it
 flat either way is wrong.** A resource is a selection and a category is a restriction, so where the
 category clause exists, a record reachable through a cohort you were granted is correct rather than
-leaked: its content is protected by the category, which a custodian governs across every resource
+leaked: its content is protected by the category, governed by a custodian across every resource
 carrying it, so which cohort brought a reader to the record does not matter. Where the deployment's
 data carries no category field, there is no category clause, the resource clause is the only clause,
 and the resource axis is carrying governance it was not designed to carry. A second cohort that
@@ -289,7 +288,7 @@ granted nothing then has an authority over the record rather than a label on a s
 reachability through the first cohort is the leak.
 
 Both halves are needed. Recording only the first reads as "this is fine" in exactly the deployment
-where it is not, and recording only the second demands a control the complete model does not need.
+where it is not, and recording only the second demands a control unnecessary in the complete model.
 
 **Evidence level, stated because this claim is load-bearing.** That a `terms` clause matches a
 document when any one of the field's values is in the list is Elasticsearch's documented behaviour,
@@ -305,9 +304,9 @@ requirement and fails today. Collapsing them produces a failing test that reads 
   semantically wrong.
 
 **Establish what a query-language operator does by running it, never from reference documentation.**
-Anything enforcement depends on gets confirmed by running the compiler and reading the emitted
-query. This is not a general caution. Published operator documentation for the query language used
-by the first adapter target was found to describe two operators in terms of each other, in exactly
+Every enforcement dependency gets confirmed by running the compiler and reading the emitted query.
+This is not a general caution. Published operator documentation for the query language used by the
+first adapter target was found to describe two operators in terms of each other, in exactly
 the case where they differ, and a design that took the documented meaning to express subset
 containment would have emitted an existential predicate where a universal one was required: the
 permissive direction. The idiom that is actually correct was documented nowhere.
@@ -340,8 +339,8 @@ correct result but silently drops the audit requirement. The bypass path and the
 must be explicit.
 
 **Absent resource: reject at the router, never attempt filter construction.** When an Usher token
-is valid but contains no entry for the resource the adapter is protecting, the adapter rejects the
-request before filter construction begins.
+is valid but contains no entry for the adapter's protected resource, the adapter rejects the request
+before filter construction begins.
 
 The response shape is a choice **among indistinguishable shapes**, not an open one. An earlier
 version of this line said the choice was the adapter's own, which was too loose:
@@ -357,8 +356,8 @@ the one most often missed.
 The refusal says the same thing to every principal, with no exception. An earlier calibration
 relaxed it for someone holding a lapsed or unaccepted grant, and it was dropped because an adapter
 cannot identify such a person: a grant that is not live puts nothing in the token, so a lapsed grant
-and a stranger arrive looking identical. The support load that calibration existed to prevent is
-carried instead, and Usher tells the person directly. See the existence-denial invariant in
+and a stranger arrive looking identical. The calibration existed to prevent a support load, and Usher
+now carries that load instead by telling the person directly. See the existence-denial invariant in
 [permissions-model.md](permissions-model.md), and "A refusal carries no exception, and expiry is
 announced rather than inferred" in [decisions.md](decisions.md).
 
@@ -446,17 +445,17 @@ logs, with a shared `user_id` field suitable for cross-system correlation.
 ### Category dictionary introspection
 
 **The problem.** An adapter's configuration maps each category to a predicate over its own schema's
-fields, and an instance may also add capabilities beyond the ones Usher ships, so the dictionary this
-endpoint returns covers both vocabularies rather than categories alone. The list of categories lives in Usher. Today nothing connects the two, so every instance
-transcribes Usher's dictionary into each adapter's configuration by hand, once per schema, and keeps
-it in step by remembering to.
+fields, and an instance may also add capabilities beyond Usher's own, so this endpoint's dictionary
+covers both vocabularies rather than categories alone. The list of categories lives in Usher. Today
+nothing connects the two, so every instance transcribes Usher's dictionary into each adapter's
+configuration by hand, once per schema, and keeps it in step by remembering to.
 
 **The proposal.** An introspection endpoint on the controller returning the category dictionary,
-reachable only by a bridge and encrypted to that application's key, the same way an Usher token is.
+reachable only by a bridge and encrypted to that application's key, as an Usher token is.
 Adapter configuration is then generated against it rather than copied.
 
-**What it carries, and what it must not.** It carries category names, which is all Usher has: what a
-category selects is defined per schema and Usher never learns it. So this does not weaken
+**What it carries, and what it must not.** Usher has only category names, so that is all it carries:
+what a category selects is defined per schema and Usher never learns it. So this does not weaken
 data-agnosticism, and it must not become a route to enumerate resources, grants or principals, which
 would make it a second and unaudited read of the policy store.
 
@@ -469,37 +468,37 @@ the list unreadable to anything that is not a bridge.
 configuration against it at startup and refuse to start when a category has no mapping. Today an
 unmapped category fails closed at request time, which is the safe direction but presents as data
 quietly missing. This moves the detection to instance, which is the position taken elsewhere in
-this document: a check that configuration can answer should fail startup rather than warn, because no
+this document: a check answerable from configuration should fail startup rather than warn, because no
 request-time behaviour repairs it.
 
-**It is the compensating control for computing `open` by complement, which is the real reason to
-build it.** Where `open` means "carrying none of the known categories", a category the adapter has no
-mapping for is not in the set being subtracted, so records carrying it satisfy the complement and are
-served as open. The failure is silent and points the wrong way: an unmapped category does not hide
+**It is the compensating control for computing `unmarked` by complement, which is the real reason to
+build it.** Where `unmarked` means "carrying none of the known categories", an unmapped category is
+not in the set being subtracted, so records carrying it satisfy the complement and are served as
+open. The failure is silent and points the wrong way: an unmapped category does not hide
 its records, it exposes them. Checking the configuration against Usher's dictionary at startup is
 what closes that, and it is why this is not merely a convenience that saves transcription.
 
 **A category appears for one of three reasons, and only the third is urgent.**
 
-| Why a category appears                          | Risk while the adapter does not know it                   |
-| ----------------------------------------------- | --------------------------------------------------------- |
-| segmentation planned ahead of an upload         | none; no records carry it yet                             |
-| data is being or has just been uploaded         | records arrive under a category the adapter cannot select |
-| data already present is being further segmented | **records currently served as open are no longer open**   |
+| Why a category appears                          | Risk while the adapter does not know it                 |
+| ----------------------------------------------- | ------------------------------------------------------- |
+| segmentation planned ahead of an upload         | none; no records carry it yet                           |
+| data is being or has just been uploaded         | the adapter cannot select the arriving records          |
+| data already present is being further segmented | **records currently served as open are no longer open** |
 
 The third is a tightening, which makes it the same shape as revocation: it has to reach the adapter
 promptly or the adapter keeps serving as open what has just stopped being open. The first two are
 harmless if they arrive late.
 
 **So the dictionary follows the revocation channel rather than a polling interval**, for the same
-reason revocation does: the cases that can wait are the ones that widen, and the case that cannot is
+reason as revocation: the cases that can wait are the ones that widen, and the case that cannot is
 the one that narrows.
 
 **Mapping is configured application-side first, then in the controller**, because the two orders fail
 in opposite directions. Map the category in the adapter before defining it in Usher, and the adapter's
-predicate subtracts from `open` while nothing yet grants the category: matching records are hidden
-until Usher catches up. Define it in Usher first, and it is absent from the set the adapter subtracts:
-matching records are served to everyone until the adapter catches up.
+predicate subtracts from `unmarked` while nothing yet grants the category: matching records are hidden
+until Usher catches up. Define it in Usher first, and the adapter does not subtract it: matching
+records are served to everyone until the adapter catches up.
 
 **Which makes the two mismatches different faults, not one.**
 
@@ -518,16 +517,16 @@ can map, and the controller omits from the token any resource declaring one that
     STUDY_B declares    controlled, nation_a   -> omitted
 
 An omitted resource already means no access, so this needs no new enforcement path and no new
-failure mode. It also contains the fault: a category the adapter cannot map takes out the resources
-that carry it, not every catalogue the application serves. A wholesale refusal would make adding any
+failure mode. It also contains the fault: an unmapped category takes out the resources carrying it,
+not all of the application's catalogues. A wholesale refusal would make adding any
 category a platform-wide risk, which is a good way to discourage anyone from adding one.
 
 **Timing.** All of this applies from the first release. The enforcement clause names the category
-field, so an adapter needs a category-to-field mapping to render any clause at all, and `open` is
+field, so an adapter needs a category-to-field mapping to render any clause at all, and `unmarked` is
 computed as the complement of the mapped concrete values. That is what makes the check load-bearing
-rather than tidy: a category the adapter cannot map is absent from the set `open` subtracts, so records
-carrying it satisfy the complement and are served as open. The fault the table above calls "the leak"
-is that one, and it arrives with the first instance defining a second category.
+rather than tidy: `unmarked` does not subtract an unmapped category, so records carrying it satisfy
+the complement and are served as open. The table above calls that fault "the leak", and it arrives
+with the first instance defining a second category.
 
 ### Decryption key distribution
 
@@ -576,18 +575,18 @@ A predicate and a projection are different things, and the callback returns only
 **Established against the first integration's own interface rather than inferred**, where the hook's
 type is a function from context to a query node with no vocabulary for field visibility. So field
 restriction needs a second return channel from the bridge, or a widened one, carrying what to project
-alongside what to select. It is the first thing this design has asked for that the seam cannot
-express, and it is why field restriction is post-MVP for reasons beyond scope.
+alongside what to select. It is the first requirement in this design outside the seam's vocabulary,
+and it is why field restriction is post-MVP for reasons beyond scope.
 
-**Three properties the enforcing side reported, kept here because they generalize.**
+**Three properties reported by the enforcing side, kept here because they generalize.**
 
 A projection applied to the record path does not reach the aggregation path. Buckets are built from
 field values, so a column excluded from returned records stays enumerable through its own facet, and
 the restriction has to be applied at both points or it is not applied at all. A bucket's key is a
 field value, so the capability withheld at both points is the same one, `field.view`.
 
-A bulk export path is the most likely place for the restriction to be silently absent, because
-nothing about it looks like a query: it may take explicit column descriptors from whoever invoked it rather
+The restriction is most likely to be silently absent on a bulk export path, because nothing about
+that path looks like a query: it may take explicit column descriptors from whoever invoked it rather
 than deriving them, which makes the restriction an intersection with what was asked for rather than a
 filter over what would otherwise be returned.
 
@@ -641,7 +640,7 @@ into an oracle. Whoever owns schema generation owns that constraint.
 ### Per-app translation design
 
 How should the translation layer (permissions payload to app-native filter) be structured? Should
-the bridge provide a translation interface that each app adapter implements, or is
+the bridge provide a translation interface implemented by each app adapter, or is
 the translation entirely the adapter's concern with no shared abstraction? The answer affects how
 testable and consistent constraint enforcement is across apps.
 
@@ -670,13 +669,13 @@ tradeoff: [`arranger-auth/usher-adapter.md`](https://github.com/overture-stack/a
 
 ### Authorization unit chain
 
-The resource ID that Usher tracks must be traceable through the full serving pipeline to the
-indexed field the enforcement adapter filters on. This chain typically has four steps in Overture
+Usher's resource ID must be traceable through the full serving pipeline to the indexed field in the
+enforcement adapter's filter. This chain typically has four steps in Overture
 instances:
 
-1. **Submission unit.** The boundary the submission service uses for write-access gating (an
-   organization identifier, a programme code, a project ID). This is the unit the submitter's
-   `context.scope` is checked against.
+1. **Submission unit.** The submission service's write-access boundary (an organization
+   identifier, a programme code, a project ID). The submitter's `context.scope` is checked against
+   this unit.
 2. **Data service unit.** The cohort or collection identifier used by Lyric or SONG as a record
    attribute (the value that distinguishes which resource a record belongs to). This maps to the
    submission unit, but the mapping is instance-specific and may involve a transformation.
@@ -719,17 +718,17 @@ This question is already tracked as an existing open item in the Arranger repo a
 it now has a second reason to matter beyond the ES mapping question it was originally tracking.
 
 **Live for the first release, because the enforcement clause names a category field.** The question
-is whether the value that clause tests attaches to each indexed record or to a submission-shaped
-parent the records hang from, and at what nesting depth. A clause written against a field that
+is whether the tested category value attaches to each indexed record or to a submission-shaped
+parent of the records, and at what nesting depth. A clause written against a field that
 actually lives on a parent does not produce correct per-record access control, which is what makes
 this design-invalidating rather than an indexing detail.
 
 Two things sharpen it. The category field carries the same two unverifiable preconditions as the
-resource field, cardinality and nesting, and the search layer decides whether a clause is wrapped in a
-`nested` query from its own catalogue configuration, which Usher cannot see. A field mapped nested but
+resource field, cardinality and nesting, and the search layer decides whether a clause is wrapped in
+a `nested` query from its own catalogue configuration, invisible to Usher. A field mapped nested but
 not declared as such compiles to a flat filter with no error, failing closed for the positive
-concrete-category clauses and open for the negated `open` one. So the nesting-depth question is not
-only about whether the value is reachable, but about which direction it fails when the answer is
+concrete-category clauses and open for the negated `unmarked` one. So the nesting-depth question is
+not only about whether the value is reachable, but about which direction it fails when the answer is
 wrong.
 
 ### Access level changes and index freshness
@@ -738,15 +737,14 @@ wrong.
 encoding the access level, which is a prescriptive field. Enforcement reads descriptive fields only,
 so no indexed field changes when a grant changes and the two layers have nothing to disagree about.
 The three open questions below are recorded as answered: no reindex is triggered by an access
-change, no coordination owner is needed, and there is no window for the adapter to degrade through.
-They return only if an instance chooses to filter on a prescriptive field, which this design
-excludes.
+change, no coordination owner is needed, and the adapter has no degradation window. They return only
+if an instance chooses to filter on a prescriptive field, and this design excludes that choice.
 
 **What this supersedes is a grant changing, and not the data changing.** Read on its own the
 paragraph above retires the whole class, and it does not: a descriptive field is precisely what
 changes when the record changes, and the index carries the old value until it is reindexed. That
 second case is open and is filed in [to-discuss.md](to-discuss.md) § Adapter contract, along with the
-requirement that brings it up, consent withdrawal, which the model currently gives no home.
+requirement raising it, consent withdrawal, which currently has no home in the model.
 
 When the enforcement adapter filters on a field in a search index that encodes the access level
 (for example, a field marking whether a document belongs to an open or restricted resource),

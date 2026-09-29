@@ -47,7 +47,7 @@ specified as request and response shapes).
 | [concepts.md](../../docs/concepts.md)                | ABAC vocabulary, security primitives, permissions model entities                                                    | reference                |
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps                                                                  | reference                |
 | [security-workflow.md](security-workflow.md)         | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure                          | specced                  |
-| [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, OCAP, private data sharing               | in progress              |
+| [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, Indigenous data governance, private data sharing               | in progress              |
 | [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the 29 cases that force each branch                | specced                  |
 | [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                  | draft                    |
 | [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity       | in progress              |
@@ -59,7 +59,7 @@ specified as request and response shapes).
 | [to-discuss.md](to-discuss.md)                       | Design gaps, inconsistencies, and security properties requiring resolution before implementation                    | review                   |
 
 **This table is kept complete by a count, not by a read.** A document added to this directory is
-reachable while someone links it and unreachable the moment nobody does, and no sweep starting from
+reachable while someone links it and unreachable once nobody does, and no sweep starting from
 this table can find what the table omits. `audit-events.md` sat here unlisted for weeks while being
 normative for the audit requirements. Compare the directory listing, subdirectories included,
 against the rows that point into this directory. A bare total is not the check: a row pointing
@@ -79,7 +79,7 @@ revocation channel is unavailable are all documented in [security-workflow.md](s
 with explicit rationale for each design decision.
 
 **In progress:** The permissions model now covers the core structure (hybrid role + attribute model,
-category grants), how grants compose, the cohort overlap model, OCAP compliance
+category grants), how grants compose, the cohort overlap model, Indigenous data governance
 considerations, the iMS private data sharing use cases, and GA4GH Passport integration. Not yet
 designed: role permission definitions, the field-level restriction implementation choice, user
 groups detail, custodianship scoping, and write permissions for Lyric. See
@@ -95,14 +95,15 @@ open questions are in [adapter-integration.md](adapter-integration.md) and
 ## Decisions needed before implementation
 
 These questions are explicitly flagged as unresolved in the design documents. They require a
-deliberate answer before the relevant implementation work can begin; most have OCAP, legal, or
-cross-application implications and should not be resolved by a single developer in isolation.
+deliberate answer before the relevant implementation work can begin; most have Indigenous data
+governance, legal, or cross-application implications and should not be resolved by a single
+developer in isolation.
 
 | Question                                                                                                                          | Documented in                  | Blocks                                                                                                            |
 | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | Overlapping cohort access: if a record belongs to cohorts A and B and a user holds a grant in A only, do they see it? (OR vs AND) | [to-discuss.md](to-discuss.md) | Nothing at present: unreachable where a record cannot belong to two resources, which holds for the first instance |
 
-| Custodianship scoping: how is a custodianship.hold permission stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; OCAP instances |
+| Custodianship scoping: how is a custodianship.hold permission stored and enforced? | [permissions-model.md](permissions-model.md) | Management UI design; instances holding Indigenous data |
 | User groups design: Keycloak sync or PAP-only? Grant composition across overlapping groups? Revocation when a user leaves a group? | [permissions-model.md](permissions-model.md) | Core data model; management UI |
 | ~~JWE algorithm selection~~ settled: `dir` with A256GCM, per-application symmetric key | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |
 | Role permission definitions: what actions does each role permit beyond resource access? | [permissions-model.md](permissions-model.md) | Constraint resolution; management UI |
@@ -116,15 +117,15 @@ cross-application implications and should not be resolved by a single developer 
 See [decisions.md](decisions.md) for the full evaluation of each tool reviewed.
 
 **Usher is a grant administration and delivery layer, not a policy engine.** What it owns is the
-grant lifecycle (records with an origin, an expiry and an audit trail), an interface a non-engineer
-can administer them through, delegated custodianship for community-governed categories, a push
+grant lifecycle (records with an origin, an expiry and an audit trail), an administration interface
+usable by a non-engineer, delegated custodianship for community-governed categories, a push
 revocation channel that fails secure, and per-application adapters that apply a decision in the
 application's own query language.
 
-**The evaluation step inside it is a candidate for an existing engine.** Producing a filter
-describing what a principal may reach is something Cerbos does from its query planner and the
-Zanzibar-derived systems answer as a resource lookup, so this is the one layer where adopting rather
-than building is a live question. The counter-argument is the one recorded against OPA: where the
+**The evaluation step inside it is a candidate for an existing engine.** Cerbos's query planner
+produces a filter describing what a principal may reach, and the Zanzibar-derived systems
+answer the same question as a resource lookup, so this is the one layer where adopting rather than
+building is a live question. The counter-argument is the one recorded against OPA: where the
 policy is the grant record, an engine that evaluates conditions over attributes has little to
 evaluate, and the work becomes feeding grant data in so it can be read back out.
 

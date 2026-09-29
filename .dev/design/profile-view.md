@@ -25,15 +25,15 @@ order is to read theirs first and specify only what is missing.
 **A decrypted Usher token never leaves the service that decrypted it.** See
 [decisions.md](decisions.md) § Decrypted permissions never leave the service that decrypted them.
 
-That has a consequence this surface cannot design around. A profile view is built from permissions,
-so it needs a server side holding a bridge, and a browser calling the controller directly cannot host
-it. That holds even though what the view shows is something the person could work out from what they
-can already reach.
+This surface cannot design around that constraint. A profile view is built from permissions, so it
+needs a server side holding a bridge, and a browser calling the controller directly cannot host it.
+That holds even though the person could work out what the view shows from what they can already
+reach.
 
 The payload and a view built from it are different things. The payload carries structure, shape and
-resource identifiers that the rendering never shows; the view carries a list a person recognizes.
-Sending the payload because the rendering would be harmless is the mistake the decision exists to
-prevent.
+resource identifiers never shown by the rendering; the view carries a list recognizable to a person.
+The decision exists to prevent one mistake: sending the payload on the grounds that the rendering
+would be harmless.
 
 **What that means per application today.** Stage has a server side and can host a bridge. Portal-ui
 is the same framework and can host one, and is simply not set up to today. So the gap between them is
@@ -84,17 +84,18 @@ their own policy state.
   own state. The first reuses the exchange and gets audience separation at no extra cost; the other opens a
   second read path into the policy store and would need its own authorization basis.
 - **What an API token resolves to.** The current path issues one through a Keycloak plugin, which
-  makes it an IdP credential that Score presents like any other, and the exchange then works
+  makes it an IdP credential presented by Score like any other, and the exchange then works
   unchanged. That is the cheaper answer and it keeps Usher out of credential issuance. What needs
   confirming is the lifetime: [../docs/phase-1.md](../docs/phase-1.md) records that API tokens open a
-  much longer window than the five-minute Usher token, which is the window revocation depends on.
+  much longer window than the five-minute Usher token, and revocation depends on the shorter one.
 - **Whether a rendered view is a per-application concern or a shared contract.** If both applications
-  render from the same payload, the positive-only rule has to hold in both, and a rule two codebases
-  enforce separately is one that a codebase will eventually stop enforcing. A shared component, or a
+  render from the same payload, the positive-only rule has to hold in both, and a rule enforced
+  separately by two codebases will eventually go unenforced in one of them. A shared component, or a
   controller-side rendering, would make it structural. The neighbouring surface has already answered
-  this for itself: the management UI ships as a package from this repository that portals mount. That
-  is the same argument reaching the same place, so the burden here is on showing why this surface
-  differs rather than on justifying a shared component. See [management-ui.md](management-ui.md).
+  this for itself: the management UI ships as a package from this repository, mounted by portals.
+  That is the same argument reaching the same place, so the burden here is on showing why this
+  surface differs rather than on justifying a shared component. See
+  [management-ui.md](management-ui.md).
 - **What the view says when the controller is unreachable.** The open tier is still served during an
   outage, so a person may be looking at a reduced result set elsewhere in the application. Whether
   the profile reports that state, and how, is part of the same notification question recorded in

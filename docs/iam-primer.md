@@ -17,7 +17,7 @@ distinct:
 
 1. The user proves their identity to a trusted service (for example, by entering a password or
    using a federated login like an institutional account). This is **[authentication](concepts.md#authentication-vs-authorization)**.
-2. That service issues a token: a structured piece of data that other services can inspect to
+2. That service issues a token: a structured piece of data inspected by other services to
    confirm who the user is and what they are permitted to do. The token travels with subsequent
    requests.
 3. When the user's application calls a data service, it includes that token. The data service
@@ -65,19 +65,19 @@ contain or how they prove identity. That is the job of OpenID Connect.
 ## OpenID Connect (OIDC)
 
 OpenID Connect is a layer built on top of OAuth 2.0 that adds identity. Where OAuth 2.0 answers
-"is this client authorized to act?", OIDC answers "who is the user this client is acting for?"
+"is this client authorized to act?", OIDC answers "which user is this client acting for?"
 
 OIDC introduces the **ID token**: a signed token that contains claims about the user's identity.
 Claims are key-value pairs: the user's identifier, their email address, the groups or roles they
 belong to, when the token was issued, and when it expires.
 
-OIDC also defines a **UserInfo endpoint**: an API the client can call (with an access token) to
+OIDC also defines a **UserInfo endpoint**: an API called by the client (with an access token) to
 retrieve additional claims about the user.
 
 In practice, an OIDC identity provider like Keycloak issues two tokens after authentication:
 
 - **ID token:** identity claims about the user. Intended for the client application.
-- **Access token:** a credential the client sends to resource servers (APIs) to prove it is
+- **Access token:** a credential sent by the client to resource servers (APIs) to prove it is
   authorized to make a request. Resource servers validate this token rather than trusting the
   client's word.
 
@@ -157,9 +157,10 @@ in the Usher design and are worth knowing before reading the design documents:
 - **[PDP](concepts.md#pdp-policy-decision-point) (Policy Decision Point):** the service that answers "what can this user see or do?" Given a
   validated identity, it consults the policy store and returns a decision or set of constraints.
   Usher is the PDP.
-- **[PEP](concepts.md#pep-policy-enforcement-point) (Policy Enforcement Point):** the component that enforces the decision. It intercepts data
-  requests, applies the constraints the PDP returned, and ensures the user only receives what they
-  are permitted to see. In Usher, each application's adapter is the PEP.
+-  **[PEP](concepts.md#pep-policy-enforcement-point) (Policy Enforcement Point):** the component
+  that enforces the decision. It intercepts data requests, applies the PDP's constraints, and
+  ensures the user only receives what they are permitted to see. In Usher, each application's
+  adapter is the PEP.
 - **[PAP](concepts.md#pap-policy-administration-point) (Policy Administration Point):** the interface through which administrators define and
   manage policy: who has access to what. Usher's management UI (planned) is the PAP.
 

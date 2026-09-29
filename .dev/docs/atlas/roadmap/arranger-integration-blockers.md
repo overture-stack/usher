@@ -1,9 +1,10 @@
 # Arranger integration: blocking items
 
-Eleven items surfaced by preparing the first adapter integration. They belong here rather than in the integration's own repository because each one is a question about Usher's model, a
-decision only the developer can take, or an answer an instance owes; none is waiting on adapter
-work. Per-instance specifics belong in that integration's own repository, following the same
-split the migration item already uses.
+Eleven items surfaced by preparing the first adapter integration. They belong here rather than in
+the integration's own repository because each one is a question about Usher's model, a decision for
+the developer alone, or an answer owed by an instance; none is waiting on adapter work. Per-instance
+specifics belong in that integration's own repository, following the same split as the migration
+item.
 
 Grouped by what each is blocked on, because that is what decides who can move it.
 
@@ -13,7 +14,7 @@ Grouped by what each is blocked on, because that is what decides who can move it
 
 The first application resolves saved sets with the requesting user's identity supplied as a query
 argument, so the client asserts who it is and any principal can name any user. Correcting it needs
-an identity source the search service does not have, which is what Usher supplies.
+an identity source: the search service has none, and Usher supplies one.
 
 The tiered shape to express: own sets by default, an administrator able to list across users and
 filter by user id, and no reliance on a set identifier being unguessable. Two further parts of
@@ -36,15 +37,14 @@ records out of the search service. Walked through:
    a link. Nothing runs step 2 again.
 
 **Step 2 is a check on a request. A file is not a request.** The check works out what one named
-person may see, at the moment they ask. A file has neither of those: it has whoever opens it,
+person may see, when they ask. A file has neither of those: it has whoever opens it,
 whenever they open it. So enforcement did not get weaker at step 4. Enforcement of this kind does not
 reach step 4 at all, because what it needs to run is not there. A file is protected by where it is
 kept, which is a different mechanism, and no amount of correctness in step 2 improves it.
 
 So fixing set identity is worth doing and does not deliver an end-to-end property. Saying that it
-does would be worse than leaving it unfixed, because a protection believed to hold is one nobody
-checks. See the ceiling on records taken out of a resource, in
-`.dev/design/permissions-model.md`.
+does would be worse than leaving it unfixed, because nobody checks a protection believed to hold.
+See the ceiling on records taken out of a resource, in `.dev/design/permissions-model.md`.
 
 ### 2. The audit event shape has to exist before enforcement does
 
@@ -77,12 +77,13 @@ apart. See "A refusal carries no
 exception, and expiry is announced rather than inferred" in `.dev/design/decisions.md`. A status code
 is an implementation detail of the first case rather than the goal of it.
 
-So the open question is whether the bridge-to-adapter result grows a reason the adapter may act on,
-and if so which reasons are safe to expose to a principal who may not hold the resource at all.
+So the open question is whether the bridge-to-adapter result grows to give the adapter an actionable
+reason, and if so which reasons are safe to expose to a principal who may not hold the resource at
+all.
 
 ### 4. An unconfigured resource value fails closed on records and open on artifacts
 
-**Resolved in the design.** The value is refused at the moment data is assembled rather than filtered at query time, because a filter cannot ask whether a value is absent from a list it was never given. See "The two permissive failures are closed" in `.dev/design/decisions.md`. The analysis below is kept because the asymmetry it describes is what makes the resolution necessary.
+**Resolved in the design.** The value is refused when data is assembled rather than filtered at query time, because a filter cannot ask whether a value is absent from a list it was never given. See "The two permissive failures are closed" in `.dev/design/decisions.md`. The analysis below is kept because the asymmetry it describes is what makes the resolution necessary.
 
 The sharpest hazard found, and it is a defect in the ceiling mechanism rather than in the adapter.
 
@@ -97,11 +98,11 @@ The design already states that over-inclusion of the complement is harmless and 
 not. An unconfigured value is precisely under-inclusion, arriving through the config rather than
 through a computation error, which is why the stated rule did not catch it.
 
-**The reason this is dangerous beyond its severity:** an implementer who has verified that records
+**Why this is dangerous beyond its severity:** an implementer who has verified that records
 carrying an unconfigured value are invisible has verified nothing about artifacts, and now has
 positive reason to believe the opposite of what is true. The adapter's fixture pins the ceiling
 clause's polarity; the unmapped case needs a conformance case, since a unit test written against
-the mechanism cannot see a value the mechanism was never given.
+the mechanism cannot see a value never given to the mechanism.
 
 ## Blocked on a developer decision
 
@@ -148,8 +149,8 @@ where this narrowing is unavailable, not one where it silently degrades.
 
 ### 8. IdP claim shape, and the version it depends on
 
-The claim shape reaching the adapter's request context depends on the identity provider version a
-instance upgrades to, not the one it runs now. Where an instance is several major versions
+The claim shape reaching the adapter's request context depends on the instance's target identity
+provider version, not the one it runs now. Where an instance is several major versions
 behind its target, that upgrade is a prerequisite of the authorization work rather than a
 follow-up to it, because pinning a claim shape against the current version produces a contract
 that expires on upgrade.

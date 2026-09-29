@@ -1,10 +1,10 @@
 # Conditions beyond the data
 
-A category's two halves come apart here. Which records need a grant has so far been a field and value
-the records carry, and who holds the grant has been individual grants plus one baseline. Either half
+A category's two halves come apart here. Which records need a grant has so far been the records' own
+field and value, and who holds the grant has been individual grants plus one baseline. Either half
 can reach further: which records can be bounded in time, and who holds a grant can follow a rule
-about the person asking. This is the attribute-based access control the onboarding document
-describes, facts about the person, the data and the situation.
+about the person asking. This is the attribute-based access control described in the onboarding
+document: facts about the person, the data and the situation.
 
 | Idea                  | Status                                                                                        |
 | --------------------- | --------------------------------------------------------------------------------------------- |
@@ -15,11 +15,11 @@ describes, facts about the person, the data and the situation.
 ## Rules about the person beyond signing in
 
 The mechanism is decided: a rule decides who holds a grant, the controller evaluates it at the
-exchange, it reads only claims the provider verifies, and its result is recorded at each exchange.
-See "Who holds a grant can follow a rule" in [decisions.md](../../../design/decisions.md). What
-remains research is which rules to offer beyond signing in, such as an affiliation the identity
-provider verifies, and whether the staleness a token's lifetime allows is acceptable for each
-category a rule would confer.
+exchange, it reads only provider-verified claims, and its result is recorded at each exchange. See
+"Who holds a grant can follow a rule" in [decisions.md](../../../design/decisions.md). What remains
+research is which rules to offer beyond signing in, such as an affiliation verified by the identity
+provider, and whether the staleness allowed by a token's lifetime is acceptable for each category
+conferred by a rule.
 
 ## Embargo as a local category with a deadline
 
@@ -45,7 +45,7 @@ It meets the four requirements recorded under "Embargo" in
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | a state, not a grant                                  | the deadline belongs to the category, never to a principal's grant                                           |
 | below the resource, with separate deadlines           | one local category per embargoed segment                                                                     |
-| identifiable by the enforcing adapter                  | the segment is a field the records already carry, and the deadline stays in Usher, so nothing prescriptive is written into the data |
+| identifiable by the enforcing adapter                  | the segment is a field already on the records, and the deadline stays in Usher, so nothing prescriptive is written into the data |
 | access varying by principal within the segment        | whoever holds the embargo category's grant reaches the segment early                                         |
 
 **What it would take**, and why it is not in the first release:

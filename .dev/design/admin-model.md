@@ -7,7 +7,7 @@ users" scope and PHI implications, break-glass emergency access, rogue admin pee
 and the Custodian permission list. The audit event schema is no longer among them: it is specced
 in [audit-events.md](audit-events.md)._
 
-See [permissions-model.md](permissions-model.md) for the grant model that admins manage.
+See [permissions-model.md](permissions-model.md) for the grant model managed by admins.
 See [concepts.md](../../docs/concepts.md) for PAP / PDP / PEP vocabulary.
 See [security-threat-model.md](security-threat-model.md) for A09 (audit) and A01 (access control)
 mapping.
@@ -18,7 +18,8 @@ mapping.
 
 The permissions model introduced three privileged roles: Owner, Custodian and Admin. This document
 specifies Admin and Owner; **Custodian is the least specified of the three and is a named gap**,
-carrying one row in the taxonomy below and no permission list, and it is the role with the most governance weight and the one OCAP delegation rests on. It covers:
+carrying one row in the taxonomy below and no permission list, though it has the most governance
+weight and delegated community governance rests on it. The document covers:
 
 - Role taxonomy and what each role can and cannot do
 - How Usher identifies and validates admin status (OIDC-first; no Usher-managed admin
@@ -43,7 +44,7 @@ is not where this model starts.
 | Role            | Scope                             | Primary permission                                           | Holds data access                        |
 | --------------- | --------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
 | Submitter       | Their submitted resource          | Data provenance                                              | Open scope decision; see below           |
-| Owner           | Their designated resource(s)      | Manages grants within their resource; sets visibility policy | None from ownership                      |
+| Owner           | Their designated resource(s)      | Manages grants within their resource; sets its base tier; suppresses and restores it | None from ownership                      |
 | Custodian       | One or more categories            | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
 | Admin           | Platform-wide, the policy store   | Manages roles, resources and system configuration            | None standing; may self-grant explicitly |
 | Service account | Explicitly enumerated permissions | Performs system operations only                              | No                                       |
@@ -53,7 +54,7 @@ management rights, and **whether it gives read access to the submitted data is a
 decision**, not a settled property: see the write-versus-read blocker in
 [../docs/phase-1.md](../docs/phase-1.md), whose recommendation is that submission and read be
 governed independently. **Rejected: read access as a property of submission**, which would settle by
-assertion a question the write-versus-read blocker exists to decide.
+assertion the write-versus-read blocker's own question.
 Ownership is an optional, per-resource designation: some submitters are also owners;
 others are not. An Owner need not be the submitter. See permissions-model.md "Submitters and
 owners" for the full model and the open question on assignment timing.
@@ -214,7 +215,10 @@ governs all users. The grant is logged, traceable, and requires a deliberate act
    takes the same path and the same TTL. There is no `grant.createSelf` capability, because the
    authority to grant is one authority; what differs is the endpoint's rules. See the capability
    vocabulary in [permissions-model.md](permissions-model.md).
-5. The resulting grant behaves identically to any other grant for PEP adapter purposes. The
+5. **No approval in the first release.** From a later release a self-grant needs the approval of the
+   resource's owner or of a custodian of one of the data's categories; see
+   [decisions.md](decisions.md) § Admin self-grant is approved by the data's owner or custodian.
+6. The resulting grant behaves identically to any other grant for PEP adapter purposes. The
    Usher token carries no admin flag; the adapter sees the same token structure
    regardless of whether the grantee is an admin.
 
@@ -344,9 +348,9 @@ PUT    /admin/service-accounts/{id}  update service account permissions
 **Grant acceptance.** `POST /admin/grants/{id}/decisions` is called by the recipient, never by an
 admin, and appends a row to `grant_decisions` carrying their answer and the capabilities they were
 shown. It fires an Usher token refresh for that user. The endpoint validates that the principal
-asking is the person the grant reaches. Nothing about the grant itself changes: a later answer is another row, and
-the current one is the latest. When auto-accept is enabled at the instance level, an accepting row is
-written at creation without the recipient acting.
+asking is the grant's recipient. Nothing about the grant itself changes: a later answer is another
+row, and the current one is the latest. When auto-accept is enabled at the instance level, an
+accepting row is written at creation without the recipient acting.
 
 **Usher token for admins:** identical in structure to any other Usher token.
 It carries no admin flag. If an admin has not self-granted access to a
@@ -385,10 +389,11 @@ service account. Usher maintains its own `service_accounts` table keyed on the `
 the token, recording which specific permissions that service account holds. Admins
 manage this table through the Usher management UI.
 
-Fine-grained permissions (`resource.create`, `category.associate` and `role.assign` are examples;
-the dictionary is settled at implementation) live in Usher's policy database, not in Keycloak's role or attribute system. This is
-consistent with the principle applied to user grants throughout the model: the OIDC provider
-handles identity, Usher handles fine-grained authorization.
+Fine-grained permissions (`resource.register` and `category.associate` are examples, and the
+vocabulary is in [permissions-model.md](permissions-model.md#the-capability-vocabulary)) live in
+Usher's policy database, not in Keycloak's role or attribute system. This is consistent with the
+principle applied to user grants throughout the model: the OIDC provider handles identity, Usher
+handles fine-grained authorization.
 
 ### Properties
 
@@ -412,10 +417,10 @@ handles identity, Usher handles fine-grained authorization.
 Lyric needs to create a resource record in Usher when a new submission is ingested. Minimum
 permission set:
 
-- `resource.create`: create a new resource record
+- `resource.register`: register a new resource
 - `category.associate`: tag a resource with one or more categories at creation time
-- `grant.create` (optional): write the submitter their grant on the new resource, at the role the
-  instance gives a submitter
+- `grant.create` (optional): write the submitter their grant on the new resource, at the instance's
+  submitter role
 
 The Lyric service account holds exactly these permissions and nothing else. It cannot read
 grants, write grants for arbitrary users, or access any data.
@@ -456,7 +461,7 @@ The controls below address each step.
 
 - All audit events are emitted as structured JSON to stdout, in addition to the database write.
 - The container orchestration platform captures stdout and ships it to a log aggregation system
-  that Usher application code cannot access or modify.
+  inaccessible to Usher application code.
 - Step 4 of the tamper chain fails at the application layer (no `DELETE` access). The out-of-
   band log recorded steps 1-3 independently. Both records are needed: the database for query
   and correlation; the out-of-band log as the tamper-evident source of truth.
@@ -477,9 +482,8 @@ the form `[namespace.]entity.action`.
 
 Two properties live there rather than here. `actorType` distinguishes a human from a service
 account. The self-grant case is its own event type, `grant.selfCreation`, rather than a boolean on an
-ordinary creation. Making it a type is what lets
-alerting route on it without parsing the payload, which is the reason CloudEvents puts routable
-facts in the envelope.
+ordinary creation. Making it a type is what lets alerting route on it without parsing the payload,
+which is why CloudEvents puts routable facts in the envelope.
 
 ---
 

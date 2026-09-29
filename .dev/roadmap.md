@@ -40,19 +40,19 @@ The role and attribute hybrid is a named pattern, RABAC, which evaluates access 
 
 ### Re-evaluate build versus adopt
 
-The recorded case for building rests partly on a false premise: Cerbos was rejected for producing binary allow/deny decisions, but its query planner performs partial evaluation and returns a three-way discriminated result carrying a condition AST, which is the mechanism this design independently arrived at. Keycloak Authorization Services was never evaluated at all and is already deployed, covering the hybrid pattern, a management UI, and structured grants in a token. "Return what this principal can access" is now a standard permission across several open-source engines rather than a differentiator.
+The recorded case for building rests partly on a false premise: Cerbos was rejected for producing binary allow/deny decisions, but its query planner performs partial evaluation and returns a three-way discriminated result carrying a condition AST, and this design arrived at the same mechanism independently. Keycloak Authorization Services is already deployed and covers the hybrid pattern, a management UI, and structured grants in a token; its documentation was checked on 2026-09-28. "Return what this principal can access" is now a standard feature across several open-source engines rather than a differentiator.
 
 What survives as genuinely ours, pending assessment: delegated governance (a custodian with platform-wide authority over one category and no other admin rights), IdP independence, push revocation with fail-secure suspension, and a non-ORM enforcement path against Elasticsearch through SQON. Corrected evaluation and the wider landscape are in `.dev/design/decisions.md` § Tools reviewed before building.
 
-**Step one is closed by decision rather than by evaluation.** Keycloak is not the replacement and Usher is not built inside it, on provider independence: the policy model cannot live in the one component the architecture refuses to be tied to. The two questions that were never tested, whether Keycloak Authorization Services can emit a residual filter and whether delegated non-administrative governance is expressible in it, are accepted as untested, because neither answer would have changed the reason. See the Keycloak decision in [design/decisions.md](design/decisions.md).
+**Step one is closed by decision rather than by evaluation.** Keycloak is not the replacement and Usher is not built inside it, on provider independence: the architecture refuses to be tied to Keycloak, so the policy model cannot live there. Its two open questions were answered from its documentation on 2026-09-28, without running it: it can list all of a user's permissions, but only for resources registered in it and never as a filter, and it cannot delegate part of one resource server's policies. Neither answer changed the reason. See the Keycloak decision in [design/decisions.md](design/decisions.md).
 
-Two steps remain: spike the Cerbos query plan plus a thin grants and custodian layer against one real Arranger query, then restate the build rationale in terms of what is left over. An engine for the evaluation step is compatible with a standalone Usher, so this no longer blocks the RABAC alignment work or the database schema the way an adopt-the-identity-provider answer would have.
+Two steps remain: spike the Cerbos query plan plus a thin grants and custodian layer against one real Arranger query, then restate the build rationale in terms of what is left over. An engine for the evaluation step is compatible with a standalone Usher, so this no longer blocks the RABAC alignment work or the database schema, as an adopt-the-identity-provider answer would have.
 
 ### Restructure the docs against the onboarding artifact's order
 
-Reviewing the onboarding artifact with non-technical readers produced fifteen defect classes, sorting under resolvability, fidelity, presentation, and content addressed to the wrong reader, none of which the existing mechanical checks can express: density, affirmative framing and the dash rules had all been run over that same text and caught none of them. Two outputs: a convention proposal for agentics, and a restructuring pass here. See [documentation review patterns](docs/atlas/roadmap/doc-review-patterns.md), which is appended to as review continues.
+Reviewing the onboarding artifact with non-technical readers produced fifteen defect classes, sorting under resolvability, fidelity, presentation, and content addressed to the wrong reader, and no existing mechanical check can express any of them: density, affirmative framing and the dash rules had all been run over that same text and caught none of them. Two outputs: a convention proposal for agentics, and a restructuring pass here. See [documentation review patterns](docs/atlas/roadmap/doc-review-patterns.md), which is appended to as review continues.
 
-The order the artifact establishes, arrived at by a reader rather than an author: what the system is and the question it answers, the problem, the two questions and which software answers each, the access tiers as the organizing idea, the mechanism and the shape of the decision it carries, the decisions with their reasoning, what it is not, status, then vocabulary last as reference rather than prerequisite.
+The artifact's order, arrived at by a reader rather than an author: what the system is and the question it answers, the problem, the two questions and which software answers each, the access tiers as the organizing idea, the mechanism and the shape of the decision it carries, the decisions with their reasoning, what it is not, status, then vocabulary last as reference rather than prerequisite.
 
 `docs/concepts.md` deviates most: it opens with theory and reaches the access tiers sixth, asking a reader to hold abstractions before anything attaches to them. `docs/intro.md` is problem-first but never presents the tiers as the organizing idea. Both restructures wait until review of the artifact settles, since the order is still being tested.
 
@@ -62,7 +62,7 @@ A second review round, run as three independent reading passes, is written up in
 
 ### Reconcile the role model across the corpus
 
-Three independent reading passes over every markdown file found the two planes conflated at scale: nine passages actively teaching that a control-plane role reaches data, one of them the published `docs/concepts.md` reader's first walkthrough of an access decision, plus ten definitional sites, a plane inversion repeated at three places, four capability and role lists left incomplete by this session's decisions, three stale claims that a token carries a role name, and no `Viewer` glossary entry for the role every other entry is defined against. Ranked with a verified site for each in [role model sweep](docs/atlas/roadmap/role-model-sweep.md).
+Three independent reading passes over every markdown file found the two planes conflated at scale: nine passages actively teaching that a control-plane role reaches data, one of them the published `docs/concepts.md` reader's first walkthrough of an access decision, plus ten definitional sites, a plane inversion repeated at three places, four capability and role lists left incomplete by this session's decisions, three stale claims that a token carries a role name, and no `Viewer` glossary entry, though every other entry is defined against that role. Ranked with a verified site for each in [role model sweep](docs/atlas/roadmap/role-model-sweep.md).
 
 **Two role vocabularies are live, and the disagreement has inverted since this was written.** The
 2026-07-13 rename dropped `curator`, and `rabac-alignment.md` was the lone document that never
@@ -82,21 +82,21 @@ line numbers stopped pointing at anything. The remainder is marked open in place
 
 ### GA4GH Passport integration: three gaps
 
-**Not required for iMS v1**, which the business requirements state directly, so this is post-v1 work rather than a launch dependency.
+**Not required for iMS v1**, as the business requirements state directly, so this is post-v1 work rather than a launch dependency.
 
-The Clearinghouse design is sound and the `ControlledAccessGrants` mapping is clean, with a Visa's dataset scope matching the resource granularity MVP enforces and its `expires` feeding the existing revocation path. Three gaps remain.
+The Clearinghouse design is sound and the `ControlledAccessGrants` mapping is clean, with a Visa's dataset scope matching MVP's resource granularity and its `expires` feeding the existing revocation path. Three gaps remain.
 
 **Only one of four Visa types is mapped, and the other three have obvious homes.** `AcceptedTermsAndPolicies` is what the Registered tier already requires. `ResearcherStatus` is the usual gate for registered-access datasets in GA4GH instances. `AffiliationAndRole` maps onto resource roles and bears on the write-versus-read decision, since submission access is gated on organizational affiliation.
 
 **The signature-validation component is unconfirmed.** `docs/concepts.md` places Visa validation at the identity provider. A search found no maintained Keycloak extension providing it, and the reference work in this space (CINECA) pairs Keycloak with Rego policy code to interpret Passports instead. Confirm the component exists before scheduling Passport work: if it does not, the Clearinghouse design has a hole where its validation belongs. Not exhaustively established, so treat as unconfirmed rather than absent.
 
-**Passport interpretation satisfies the OPA revisit condition, and the two records do not reference each other.** `decisions.md` § OPA as the decision engine says OPA becomes a better fit given "conditional policy logic that cannot be expressed as grant records". Evaluating signed claims from multiple issuers against a trusted-issuer list is exactly that, and is unlike the grant-record lookup that argument rejected OPA for. This is the one layer where a policy engine has a clear case.
+**Passport interpretation satisfies the OPA revisit condition, and the two records do not reference each other.** `decisions.md` § OPA as the decision engine says OPA becomes a better fit given "conditional policy logic that cannot be expressed as grant records". Evaluating signed claims from multiple issuers against a trusted-issuer list is exactly that, and is unlike the grant-record lookup for which that argument rejected OPA. This is the one layer where a policy engine has a clear case.
 
 Revocation before Visa expiry and trusted-issuer governance are already tracked in `.dev/design/to-discuss.md` at HIGH and MEDIUM.
 
 ### API keys stay opaque, and their scope field becomes Usher's
 
-Programmatic access runs on API keys from a Keycloak plugin the team maintains, with Score as the main consumer. **Decided: keys stay opaque strings, checked at the exchange rather than self-verifying.** A signed credential with a multi-year expiry sits outside both halves of Usher's revocation guarantee, the five-minute token life and the push channel, and withdrawing one early needs the issuer-side state that self-verification removes. An opaque key revokes as a row. The check lands in the exchange path at session-start frequency rather than per request, which is the rate that makes it affordable.
+Programmatic access runs on API keys from a Keycloak plugin maintained by the team, with Score as the main consumer. **Decided: keys stay opaque strings, checked at the exchange rather than self-verifying.** A signed credential with a multi-year expiry sits outside both halves of Usher's revocation guarantee, the five-minute token life and the push channel, and withdrawing one early needs the issuer-side state removed by self-verification. An opaque key revokes as a row. The check lands in the exchange path at session-start frequency rather than per request, which is the rate that makes it affordable.
 
 **The scope field already exists and already carries EGO-style policy scopes**, so two systems encode access decisions today. It is redefined to carry Usher scope, intersected at the exchange rather than validated at issue, which makes the reduce-only property structural and keeps the dependency one-directional. `DENY` is refused rather than ignored, because under intersection a negative is inert and an inert restriction is a widening relative to what someone intended. The format waits on the capability vocabulary, since the parser's suffix must be a level and EGO's READ and WRITE cannot express view without download.
 
@@ -106,7 +106,7 @@ Introspection needs Usher's first credential to Keycloak, a basic-auth one able 
 
 The business requirements call for several owners of one resource at once, with equal rights to restrict, share and revoke, naming the real case: a principal investigator holds legal authority while submitters do the work, so all of them need it. `permissions-model.md` instead requires exactly one owner per resource and builds the ownership cascade, last-owner promotion and transfer-before-removal on that singularity.
 
-**Decided in the requirements' favour.** The change is from exactly-one to a non-empty set, which the requirements already state from the other side as at least one owner per dataset.
+**Decided in the requirements' favour.** The change is from exactly-one to a non-empty set; the requirements already state it from the other side, as at least one owner per dataset.
 
 What changes: the cascade seeds a set rather than resolving to one owner; the no-owner invariant becomes non-empty-set, blocking removal of the last owner rather than any; last-owner promotion loses its purpose, since the invariant now prevents the case it repaired. The transfer-with-consent flag survives, with one sub-decision left open, whether adding an owner counts as a transfer for consent purposes, since removal plausibly does and addition plausibly does not. See `.dev/docs/brd-traceability.md`.
 
@@ -165,7 +165,7 @@ enforce where it cannot, and record-level narrowing stays post-MVP, since a per-
 field is exactly what would put an authorization field deep enough to trigger it.
 
 **What is not settled by that, and needs building.** An endpoint that returns data can discard the
-filter entirely, which no mapping depth affects and no configuration reveals. An application found
+filter entirely, whatever the mapping depth, and no configuration reveals it. An application found
 exactly that: an aggregation wrapper returning whole-index counts while the record path was
 correct, caught by comparing counts rather than by reading code. So the corpus needs a case per
 endpoint that returns data, comparing what an under-privileged principal sees against a
@@ -193,19 +193,19 @@ immutable today: creation is the only write path, so the provenance check that r
 from an unconfigured resource runs on every version of a set that exists. Confirmed on that side after
 this roadmap had briefly recorded the opposite.
 
-The reasoning survives the correction. That check runs at the only moment both a set's sources and the
-configured list are in hand, so the moment a set can be added to, a set created clean and later
-extended from an unconfigured resource never meets it again. The full sets feature is the work that
+The reasoning survives the correction. That check runs only when both a set's sources and the
+configured list are in hand, so once a set can be added to, a set created clean and later extended
+from an unconfigured resource never meets it again. The full sets feature is the work that
 introduces that second write path.
 
 **Kept here rather than as a defect, deliberately.** A gap recorded as live gets checked, found
 absent, and dropped, and the constraint goes with it. Attached to the feature that would introduce
-it, it is waiting at the only moment anyone could reintroduce the problem. See the artifact entity in
-[design/permissions-model.md](design/permissions-model.md).
+it, it is waiting at the only moment when anyone could reintroduce the problem. See the artifact
+entity in [design/permissions-model.md](design/permissions-model.md).
 
 ### Enforcement gaps from the first adapter integration
 
-Eleven items surfaced by preparing the first adapter integration, none of them waiting on adapter work. Two were fail-open defects and are now resolved in the design, recorded under "The two permissive failures are closed" in [decisions.md](design/decisions.md). They were: an unconfigured resource value fails closed on records but **open** on derived artifacts, because it is absent from the complement the ceiling clause is built from; and an unauthenticated request currently renders to no filter at all, which is the allow-everything case rather than a restrictive default. Also covers widening the enforcement seam to distinguish no-relationship from lapsed-grant, and the mapping-format and administrator-source decisions. See [Arranger integration blockers](docs/atlas/roadmap/arranger-integration-blockers.md).
+Eleven items surfaced by preparing the first adapter integration, none of them waiting on adapter work. Two were fail-open defects and are now resolved in the design, recorded under "The two permissive failures are closed" in [decisions.md](design/decisions.md). They were: an unconfigured resource value fails closed on records but **open** on derived artifacts, because it is absent from the complement used to build the ceiling clause; and an unauthenticated request currently renders to no filter at all, which is the allow-everything case rather than a restrictive default. Also covers widening the enforcement seam to distinguish no-relationship from lapsed-grant, and the mapping-format and administrator-source decisions. See [Arranger integration blockers](docs/atlas/roadmap/arranger-integration-blockers.md).
 
 ### Saved-set identity and its grants vocabulary
 
@@ -231,7 +231,7 @@ computable by the enforcing adapter since no record says it is embargoed, and ac
 embargoed segment differs by principal.
 
 **What this does not block.** Category grant expiry is settled and available: see
-[decisions.md](design/decisions.md) § A grant's expiry is resolved before the token is written. A
+[decisions.md](design/decisions.md) § A grant's expiry is resolved before the token is written. An
 instance needing time-bounded access has it today. What expiry cannot do is release data, because
 it only ever subtracts.
 
@@ -242,7 +242,7 @@ but needs every bridge serving the study to enforce local categories before one 
 
 ### The token calculation, and the schema that should follow it
 
-The calculation the controller performs to produce a token is stale in three ways and is the
+The controller's token calculation is stale in three ways and is the
 prerequisite for the associative tables rather than the other way round. Written up with nineteen
 cases, the rules settled, and the four still open, in
 [token-calculation.md](design/token-calculation.md).
@@ -257,7 +257,7 @@ assignment, which matters because the ceiling and grant structure is taken from 
 `catalogue` and `dataset` are resolved. Six words remain, tracked with counts and verdicts under
 "Open overloads" in [terminology usage rules](docs/atlas/roadmap/terminology-usage.md): `payload`,
 `artifact`, `ceiling`, `corpus`, `plane`, `scope`, ordered by damage rather than by count. `payload`
-leads because it names the central object the system produces and the corpus disagrees with itself
+leads because it names the system's central output and the corpus disagrees with itself
 about whether the compound means the token or a field in it.
 
 `ceiling` joined the list when a reader asked what "the ceiling clause" meant: 32 uses across nine
@@ -276,14 +276,15 @@ and belongs to Arranger: whether an Arranger catalogue is a Dataset, a Distribut
 ### Record-level narrowing on a field an instance already supplies (post-MVP)
 
 Renamed from "record-level category tagging". "Tagging" named the mechanism as an act of writing
-labels onto records, which this design does not do: enforcement filters on fields already carried by the data, and only on descriptive ones. See the descriptive-versus-prescriptive rule under "Usher is
-data-agnostic" in [decisions.md](design/decisions.md). The old name survives in several documents
+labels onto records, and this design writes no labels: enforcement filters on fields already carried
+by the data, and only on descriptive ones. See the descriptive-versus-prescriptive rule under "Usher
+is data-agnostic" in [decisions.md](design/decisions.md). The old name survives in several documents
 and should go with the terminology pass, which now has somewhere to record its rules: see
 [terminology usage rules](docs/atlas/roadmap/terminology-usage.md).
 
 **This item is narrowing by category specifically, not record granularity in general.** The
 distinction was blurred and is worth holding: this item needs each record to carry category labels,
-compared against the labels a principal holds. That needs a per-record category field mapped
+compared against a principal's labels. That needs a per-record category field mapped
 `nested`, and neither iMS catalogue has one. The clinical index's `file_access` is prescriptive,
 holds one value across every record and is unexercised; the environmental catalogue has no
 equivalent. Since data is not modified to suit enforcement, this form stays unavailable there.
@@ -298,7 +299,7 @@ needs. Combining fields therefore belongs to the grant's predicate, never to the
 
 Narrowing within a resource, the same permission as SQON-scoped grants. Two constraints already established: subset containment is expressible in one clause as `not` of `not-in`, verified by executing the compiler rather than reading it, and it requires the field to be mapped `nested`, degrading silently to an existential match on a flat field. Usher cannot require a mapping shape, so this is available only where an instance supplies conforming data, verified at adapter startup. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
 
-One design item to settle when this is picked up: the shape of the resource predicate. Additive rendering has no implicit baseline for records carrying no category, so a role must render to a positive predicate of its own rather than being the default that exclusions carve into. Not needed for MVP, where the resource-field clause covers it.
+One design item to settle when this is picked up: the shape of the resource predicate. Additive rendering has no implicit baseline for records carrying no category, so a role must render to a positive predicate of its own rather than being a default reduced by exclusions. Not needed for MVP, where the resource-field clause covers it.
 
 The same startup-verification rule extends to mapping depth, not just mapping type: where an authorization field sits at depth two or deeper, an adapter's filtered-aggregation path does not apply and filtering falls back to a disjunctive one, which for an authorization predicate is OR where AND was intended. An adapter must establish the field's mapping shape at startup and refuse to enforce where it cannot, so a non-conforming instance is one where this narrowing is unavailable rather than one where it silently degrades.
 
@@ -322,13 +323,13 @@ Three sequences are recorded in design documents and nowhere an operator reads, 
 - **Establishing a category.** Define the category, appoint whoever governs it, and only then accept data carrying it. The decision to treat a custodian vacancy as a governance failure rather than a system state depends on this sequence being followed. See [decisions.md](design/decisions.md) § Granting is one function.
 - **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the controller. The reverse order serves the affected records to everyone until the application catches up. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
-A design document that says an operator must do something, without a document the operator reads, has moved the responsibility rather than discharged it.
+A design document that says an operator must do something, without an operator-facing document, has moved the responsibility rather than discharged it.
 
 ### Category dictionary introspection
 
-Adapter configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher. Nothing connects the two today, so every instance transcribes the dictionary into each adapter's configuration by hand and keeps it in step by remembering to. The proposal is an introspection endpoint on the controller returning the dictionary, reachable only by a bridge and encrypted to that application's key the way an Usher token is, so configuration is generated rather than copied.
+Adapter configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher. Nothing connects the two today, so every instance transcribes the dictionary into each adapter's configuration by hand and keeps it in step by remembering to. The proposal is an introspection endpoint on the controller returning the dictionary, reachable only by a bridge and encrypted to that application's key like an Usher token, so configuration is generated rather than copied.
 
-It carries names only, since what a category selects is defined per schema and Usher never learns it, so it does not weaken data-agnosticism. Beyond removing the duplication it lets an adapter check its configuration against the full list at startup and refuse to start on an unmapped category, moving a failure that currently presents as quietly missing data to instance time. It is also the compensating control for computing `open` as the complement of known categories: a category the adapter has no mapping for is not in the set being subtracted, so records carrying it are served as open rather than hidden. Post-MVP, arriving with record-level narrowing, since resource-level enforcement puts no category in the filter and needs no mapping. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
+It carries names only, since what a category selects is defined per schema and Usher never learns it, so it does not weaken data-agnosticism. Beyond removing the duplication it lets an adapter check its configuration against the full list at startup and refuse to start on an unmapped category, moving a failure that currently presents as quietly missing data to instance time. It is also the compensating control for computing `unmarked` as the complement of known categories: a category missing from the adapter's mapping is not in the set being subtracted, so records carrying it are served as open rather than hidden. Post-MVP, arriving with record-level narrowing, since resource-level enforcement puts no category in the filter and needs no mapping. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
 ### Adapter integration design
 
@@ -346,7 +347,7 @@ Physical schema for the permissions model entities: column types, indexes, forei
 
 Correctly blocked rather than behind: the write-versus-read decision determines whether submission writes grant rows or only registers a resource, the RABAC alignment turns permissions into entities, and an adopt decision would replace most of these tables outright.
 
-**The data access layer is a separate decision that currently exists nowhere.** No ORM or query builder is chosen, and the only mention in the corpus is the threat model requiring parameterized statements or an ORM that binds parameters, which constrains the choice without making it. Decide it on its own merits, and note that authorization-filtering Usher's own admin queries (a custodian seeing only the grants they govern) is the same residual-filter problem the enforcement layer solves, so the PAP may want the same machinery as the PEP.
+**The data access layer is a separate decision that currently exists nowhere.** No ORM or query builder is chosen, and the only mention in the corpus is the threat model requiring parameterized statements or an ORM that binds parameters, which constrains the choice without making it. Decide it on its own merits, and note that authorization-filtering Usher's own admin queries (a custodian seeing only the grants they govern) is the same residual-filter problem solved by the enforcement layer, so the PAP may want the same machinery as the PEP.
 
 ### JWE algorithm selection
 
@@ -370,11 +371,11 @@ Three UX decisions gate researcher-facing documentation: access request workflow
 
 ### Resource identifier collision at creation
 
-Nothing in the design prevents a second resource claiming an identifier an existing one already uses, and the identifier is not a label: it is the field value records carry, so it is the enforcement key. Two resources over one identifier are two governance surfaces over one body of records, and whoever holds the second can grant access to data governed by the first. It runs the other way too: a submitter reaching an existing identifier has their data land inside someone else's resource, under governance they cannot see. So collision is a write-side injection path as well as a read-side problem, and silently extending the existing resource is the most dangerous handling rather than the friendliest.
+Nothing in the design prevents a second resource claiming an identifier already used by an existing one, and the identifier is not a label: it is the field value carried by the records, so it is the enforcement key. Two resources over one identifier are two governance surfaces over one body of records, and whoever holds the second can grant access to data governed by the first. It runs the other way too: a submitter reaching an existing identifier has their data land inside someone else's resource, under governance they cannot see. So collision is a write-side injection path as well as a read-side problem, and silently extending the existing resource is the most dangerous handling rather than the friendliest.
 
-**Refusing the duplicate is itself a disclosure**, and the design already forbids it in principle: "Denying an oracle means every channel that distinguishes the two cases has to be closed." A uniqueness error distinguishes them precisely, at an endpoint nobody checked.
+**Refusing the duplicate is itself a disclosure**, and the design already forbids it in principle: "Denying an oracle means every channel that distinguishes the two cases has to be closed." A uniqueness error distinguishes them precisely, at an unchecked endpoint.
 
-The answer differs by creation path, which the corpus currently treats as one. An administrator creating through the management UI already holds the account list, every grant and the audit log, so telling them a resource exists discloses nothing they lack. A submission-path creation runs under a service account acting for a person who holds none of that, and the error reaches that person.
+The answer differs by creation path, though the corpus currently treats them as one. An administrator creating through the management UI already holds the account list, every grant and the audit log, so telling them a resource exists discloses nothing they lack. A submission-path creation runs under a service account acting for a person who holds none of that, and the error reaches that person.
 
 Three things to settle: whether submission-path creation becomes a request whose response is identical regardless of outcome, so the channel closes by making the cases indistinguishable; who resolves a collision, which has to be someone who can see both resources rather than the submitter or the system; and whether identifier uniqueness is scoped to the instance or to the catalogue, since two catalogues each holding a `HEART_STUDY` produce the same collision through configuration rather than through creation. Arranger cannot help with the last one: it has no concept of a resource, so it cannot see, report or refuse two catalogues whose records carry the same value.
 
@@ -394,28 +395,27 @@ The platform envelope is decided and applied to [audit-events.md](design/audit-e
 
 **The shared package is deliberately not built.** The JSON Schema is the cheaper artifact and does the load-bearing work, so a package would have to be argued for on its own merits rather than arriving attached to a naming decision. Worth knowing the platform is converging on TypeScript if that case is ever made: Maestro is 219 TS files with no Java, Lyric 258, and Arranger, Lectern, Stage and Usher are already there, leaving SONG at 309 Java files and Score at 267, both slated to migrate, with Ego retiring. Any such package is envelope construction and validation only, no transport, sinks, formatting or correlation-id propagation, and takes configuration as typed parameters rather than reading the environment.
 
-**Two items are owed rather than deferred, and the envelope is incomplete without the first.** A `source` convention, because `source` plus `id` is the key deduplication depends on and nothing is agreed about the attribute's shape. And a shared entity vocabulary, which only the flat type form requires: two services meaning different things by one entity produce two occurrences under one name and a consumer joins them, with no registry and no owner to prevent it. Neither belongs to Usher alone.
+**Two items are owed rather than deferred, and the envelope is incomplete without the first.** A `source` convention, because `source` plus `id` is the deduplication key and nothing is agreed about the attribute's shape. And a shared entity vocabulary, required only by the flat type form: two services meaning different things by one entity produce two occurrences under one name and a consumer joins them, with no registry and no owner to prevent it. Neither belongs to Usher alone.
 
-**One field set still needs reconciling before it is built.** Arranger's per-request event carries `catalogId`, `queryType`, `sqonSize`, `hitsReturned` and `durationMs`, with `userId` absent now and populated when auth lands. Those are `data` contents and nothing conflicts, but `userId` there is a client-supplied GraphQL argument on `saveSet` persisted as a set's owner, while `actorId` is server-derived from the token. Same-looking names, opposite trust properties, and the mistake a shared name invites is reading a client-asserted value as an audit identity.
+**One field set still needs reconciling before it is built.** Arranger's per-request event carries `catalogId`, `queryType`, `sqonSize`, `hitsReturned` and `durationMs`, with `userId` absent now and populated when auth lands. Those are `data` contents and nothing conflicts, but `userId` there is a client-supplied GraphQL argument on `saveSet` persisted as a set's owner, while `actorId` is server-derived from the token. Same-looking names, opposite trust properties, and a shared name invites the mistake of reading a client-asserted value as an audit identity.
 
 ### Registered tier: a signed-in baseline
 
 In the first release, decided 2026-09-25: the onboarding document already promises the Registered
 tier, and it adds no new mechanism. Every resource has an implicit `unmarked` category covering the
-records that its other categories do not cover, and a setting says who reaches them: open, through the baseline;
-registered, through a rule giving every signed-in principal the `unmarked` grant; or by grant. The
-controller evaluates both rules at the exchange, so the bridge sees ordinary grants. See "Who holds a
-grant can follow a rule" and "Records not covered by any category are `unmarked`" in
+records not covered by its other categories, and a setting says who reaches them: open, through the
+baseline; registered, through a rule giving every signed-in principal the `unmarked` grant; or by
+grant. The controller evaluates both rules at the exchange, so the bridge sees ordinary grants. See
+"Who holds a grant can follow a rule" and "Records not covered by any category are `unmarked`" in
 [decisions.md](design/decisions.md).
 
 Cases 28 to 35 in [token-calculation.md](design/token-calculation.md) and the conformance corpus
-cover it with and without a sign-in, against a configuration of their own. **One question is open
-before the rule is built:** whether an expired identity token is refused or served as anonymous
-(case 34).
+cover it with and without a sign-in, against a configuration of their own. An expired identity token
+is refused at the exchange, and a portal then shows the anonymous view with a notice that the person
+was signed out (case 34).
 
-**Owed:** the prose across the rest of the design corpus still treats `open` as a category, notably
-`permissions-model.md`, `to-discuss.md`, `adapter-integration.md` and `docs/concepts.md`. The token
-keys, the decisions, the calculation and the corpus are already reconciled.
+The rest of the design corpus now names the category `unmarked` wherever it is written as an
+identifier, and plain prose still says "open" for records reachable by everyone.
 
 ---
 
@@ -431,7 +431,7 @@ OIDC token validation: discovery endpoint consumption, public key caching and ro
 
 ### Permissions computation engine
 
-Resolve current permissions from the policy database and compute the `PermissionsPayload`. Supports the fast-path refresh, whose two tests are the controller's own: the principal's cached payload still being present, and the category versions recorded with it still matching the resources' current ones.
+Resolve current permissions from the policy database and compute the `PermissionsPayload`. Supports the fast-path refresh, whose one test is the controller's own: the principal's cached payload still being present, since any change to a resource's categories clears it.
 
 ### JWE token issuance
 
@@ -520,6 +520,13 @@ Consumer-facing companion to `admin-model.md` and `management-ui.md`; must cover
 
 Ethics-review-gated access with time-limited validity and renewal. The `expires_at` field on category grants anticipates this; the approval workflow is not yet designed.
 
+**Expected as an ushered application, not part of Usher.** A DAC API governed by Usher like any other
+service, storing its own applications and signed documents, and asking Usher to register a dataset and
+write its grants once an application is approved. It needs resources to carry a type, DCAT's word
+for the nature of a resource, so each service sees only the resources it serves, and it needs the
+service-assigned ownership threat designed against. Research in
+[DAC integration](docs/atlas/roadmap/dac-integration.md).
+
 ### Multi-tenancy
 
 Single instance serving multiple independent organizations with full policy isolation. Not in initial scope; architecture must not preclude it.
@@ -534,7 +541,7 @@ Globus Auth as an OIDC identity source; Globus Groups as a potential source for 
 
 ### SQON-scoped grants
 
-Optional `sqon` field on `grants` narrowing which records within a category a grant covers, enabling community-specific access and filtered-subset sharing. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
+Optional `sqon` field on `grants` narrowing a grant to some of its category's records, enabling community-specific access and filtered-subset sharing. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
 
 ### Security event streaming (Kafka)
 
@@ -551,11 +558,11 @@ surveyor](docs/atlas/roadmap/bounded-surveyor.md).
 ### Categories local to one resource
 
 An owner creates a category that exists only in their resource, so a study divides its own records
-without growing the list every other study sees. The scope prefix on every category name ships in the
-first release, so this adds a scope without renaming anything. A local category only ever adds a
-restriction, so it waits on a record
-carrying more than one category, and where its mapping lives decides whether owners can create one
-themselves. See [local categories](docs/atlas/roadmap/local-categories.md).
+without growing the list seen by every other study. The scope prefix on every category name ships in
+the first release, so this adds a scope without renaming anything. A local category only ever adds a
+restriction, so it waits on a record carrying more than one category, and where its mapping lives
+decides whether owners can create one themselves. See [local
+categories](docs/atlas/roadmap/local-categories.md).
 
 ---
 

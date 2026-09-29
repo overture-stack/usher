@@ -1,6 +1,6 @@
 # SQON-scoped grants
 
-An optional `sqon` field on `grants` that narrows which records within a category a grant covers.
+An optional `sqon` field on `grants` that narrows a grant to some of its category's records.
 
 ## What it enables
 

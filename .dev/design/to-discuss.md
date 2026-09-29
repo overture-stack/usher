@@ -17,17 +17,17 @@ these is recorded as failing closed, and each is recorded as silent, with the st
 check as the thing that makes it loud:
 
 1. A category exists in Usher and the adapter has no mapping for it.
-2. A record carries a category value the adapter has no mapping for, which serves it as open.
-3. A capability in Usher's vocabulary that the service does not implement.
+2. A record carries a category value with no adapter mapping, which serves it as open.
+3. A capability in Usher's vocabulary not implemented by the service.
 4. A field category with no column mapping, which is the cost accepted for dropping a kind property.
 5. A column appearing in an index mapping with no category, which is safe only if the check runs on
    a mapping change rather than at boot alone.
-6. A partitioning category configured as an overlay, which drops it from the complement `open` is
-   rendered as, so every principal holding the open grant reaches the records it was meant to remove.
+6. A partitioning category configured as an overlay, which drops it from the complement that renders
+   `unmarked`, so every principal holding the open grant reaches the records it was meant to remove.
    Unlike the five above this is not a mismatch between two declarations: the token is correct, the
    clause is well-formed, and the mistake exists only in the adapter's own configuration, so nothing
-   downstream can notice it. The opposite error, an overlay marked partitioning, empties `open` and is
-   impossible to miss.
+   downstream can notice it. The opposite error, an overlay marked partitioning, empties `unmarked`
+   and is impossible to miss.
 
 **Nothing in this corpus specifies the protocol.** Not what each side declares, not when it runs, not
 what either does with a mismatch, not whether the controller retains what an adapter declared.
@@ -42,7 +42,7 @@ and recorded here as the starting point rather than as the specification:
 - **When it can run is fixed rather than chosen**: at catalogue load, after the mapping has been
   fetched and before any request is served. Earlier is impossible, since the mapping is a network
   call, and later means requests were already answered under an unreconciled configuration.
-- **Mismatch behaviour should not be one rule.** A category the adapter cannot map renders no clause,
+- **Mismatch behaviour should not be one rule.** An unmapped category renders no clause,
   so it cannot enforce and the catalogue fails closed. A cardinality or aggregatability divergence is
   a report, because declaration density across real deployments is unknown and a first run that stops
   working catalogues is its own outage.
@@ -51,15 +51,15 @@ and recorded here as the starting point rather than as the specification:
 same thing across an instance, and each catalogue's adapter decides how to recognize it in that
 catalogue's data, just as it decides which field names a resource. One study can sit in two
 catalogues under one `study_id`, with its clinical records `controlled` and its environmental ones
-`open`: the clinical adapter maps `controlled` to a value every clinical record already carries, and
-the environmental adapter declares that none of its records carry it.
+`unmarked`: the clinical adapter maps `controlled` to a value already carried by every clinical
+record, and the environmental adapter declares that none of its records carry it.
 
 **That needs three states per category and catalogue, not two.**
 
 | State           | What the adapter declares              | What follows                                                                    |
 | --------------- | -------------------------------------- | ------------------------------------------------------------------------------- |
-| Mapped          | a field test that recognizes it here   | clauses render, and `open` excludes what the test matches                       |
-| Declared absent | no record in this catalogue carries it | `open` needs no exclusion for it, and resources carrying it stay reachable here |
+| Mapped          | a field test that recognizes it here   | clauses render, and `unmarked` excludes what the test matches                       |
+| Declared absent | no record in this catalogue carries it | `unmarked` needs no exclusion for it, and resources carrying it stay reachable here |
 | Not mapped      | nothing                                | the resources carrying it are taken out of this catalogue, which fails closed   |
 
 **Without the middle state the example cannot work.** The environmental adapter, having nothing to
@@ -71,8 +71,8 @@ explicitly, and the check has to ask once per catalogue rather than once per app
 **The middle state is the only one that can be wrong in the dangerous direction.** Established with
 the enforcing side. A mapped test is checkable, and a missing mapping fails closed. A declared
 absence is a claim about data, and an indexing run can falsify it without anything noticing: a
-record carrying the category arrives, no clause tests for it, and since `open` excludes only mapped
-values, the record is served as open to everyone.
+record carrying the category arrives, no clause tests for it, and since `unmarked` excludes only
+mapped values, the record is served as unmarked, to everyone where the base tier is open.
 
 **So a declared absence is the last resort.** Wherever the catalogue has a field that could carry
 the category, the category is mapped, even if the test matches nothing today: that costs nothing,
@@ -89,23 +89,23 @@ mapping change needs a mechanism that does not exist there, and both failure mod
 absence depend on it.
 
 **Where it is declared, it is verified.** The existence check in the rendering item answers whether
-any record carries the category, and it belongs with the sample the search layer already takes at
-catalogue load for cardinality. Unlike a cardinality divergence, a falsified absence is not a
-report: it is a live disclosure, which [adapter-integration.md](adapter-integration.md) already rules
-is an incident with an owner rather than a log line. It joins the preconditions the integration
-asserts and nothing else checks, beside cardinality, per-record category marking and identifier
-uniqueness across catalogues, and it is the only one a deployment adds deliberately.
+any record carries the category, and it belongs with the search layer's existing cardinality sample
+at catalogue load. Unlike a cardinality divergence, a falsified absence is not a report but a live
+disclosure: an incident with an owner rather than a log line, as
+[adapter-integration.md](adapter-integration.md) already rules. It joins the preconditions asserted
+by the integration and checked by nothing else, beside cardinality, per-record category marking and
+identifier uniqueness across catalogues, and it is the only one added deliberately by a deployment.
 
 **Retention is required rather than preferable, and the argument is about clause polarity.** Without
-it, a grant naming a field or a capability the audience does not have is writable and surfaces at
+it, a grant naming a field or a capability missing from the audience is writable and surfaces at
 query time. What happens then depends on the shape of the clause built from it: a positive clause on
-a missing field matches nothing and denies, while a negated one matches nothing, negates to match-all,
-and permits. `open` is rendered as exactly that negation. So non-retention does not defer the error,
-it converts an authoring mistake into a silent widening on the one category every principal holds.
-See the unimplemented-capability decision in [decisions.md](decisions.md).
+a missing field matches nothing and denies, while a negated one matches nothing, negates to
+match-all, and permits. `unmarked` is rendered as exactly that negation. So non-retention does not
+defer the error, it converts an authoring mistake into a silent widening on the one category held by
+every principal. See the unimplemented-capability decision in [decisions.md](decisions.md).
 
 **Why this is its own item.** The check was cited once as a mitigation and then
-cited again each time a new silent failure was found, without anyone going back to ask whether the
+cited again whenever a new silent failure was found, without anyone going back to ask whether the
 thing being relied on exists. It is now the single point of unexamined trust in the enforcement
 story, and every finding that lands on it makes it more load-bearing rather than more defined.
 
@@ -114,8 +114,8 @@ story, and every finding that lands on it makes it more load-bearing rather than
 **[HIGH] A session is never defined, and several open items are its lifecycle.**
 
 **The word covers three things.** An identity provider's session, a cached Usher token, and an
-upload in flight all appear in the corpus as a session, and none is defined. The one Usher controls
-is the second: a session, in Usher's sense, is a cached Usher token in one bridge. It begins at the
+upload in flight all appear in the corpus as a session, and none is defined. Usher controls the
+second: a session, in Usher's sense, is a cached Usher token in one bridge. It begins at the
 first exchange, is renewed at each refresh, and ends when the bridge drops it or it expires.
 
 **Each open item below is an event that ends or changes one**, and each has been recorded separately
@@ -131,13 +131,13 @@ with its own fix:
 | an upload is in flight         | a different kind of session, revocable or not                                                               | open, in its own item       |
 
 **Several copies of one application each hold their own cache**, so every announcement has to reach
-every copy. Subscribing each copy to the channel already does that, and it is the property any
-change to the channel must keep.
+every copy. Subscribing each copy to the channel already does that, and any change to the channel
+must keep that property.
 
 **What stays open beyond the rows is whether Usher also keeps a view of live sessions**, meaning who
-holds a token in which application. It would give an administrator that view, at the cost of Usher
-holding state the bridges already hold. The identity-provider features the rows rely on are listed
-under the connector design in [admin-model.md](admin-model.md).
+holds a token in which application. It would give an administrator that view, at the cost of
+duplicating the bridges' state in Usher. The rows depend on identity-provider features, listed under
+the connector design in [admin-model.md](admin-model.md).
 
 **[MEDIUM] `revoked_at` is a scalar; reinstatement and multiple revocations are undefined.**
 Downgraded, because most of the premise went with the per-user marker. `revoked_at` lives on the
@@ -189,8 +189,8 @@ recorded in [decisions.md](decisions.md). Three remain, all header decisions, al
 them open while citing the BCP for the one that was taken is the part that needs closing.
 
 1. **§3.1, verify `alg` and `enc` rather than reading them.** The algorithm is pinned as what the
-   controller emits. Nothing says the bridge pins it on read, which is the shape this class of bug
-   takes: a JOSE library handed a token honours the header it finds.
+   controller emits. Nothing says the bridge pins it on read, which is the shape of this class of
+   bug: a JOSE library handed a token honours the header it finds.
 2. **§3.6, no compression before encryption.** `zip` is unstated. It must be explicitly never used,
    because compressing a payload before encrypting it leaks plaintext through ciphertext length.
 3. **§3.10, do not trust `kid` blindly.** There is no `kid` yet, and it is the unnamed answer to the
@@ -200,7 +200,7 @@ them open while citing the BCP for the one that was taken is the part that needs
 [decisions.md](decisions.md) for why §3.12 already follows from the key separation here.
 
 **[LOW] Four token-spec details have no stated answer.** None blocks implementation; each is a number
-or a rule someone will otherwise invent at the keyboard.
+or a rule otherwise invented at the keyboard.
 
 | Question                       | Note                                                                                                                                                                                           |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -272,14 +272,14 @@ than made at implementation time:
 **Almost none of this is live in phase 1, and the reason is where each layer's names come from.**
 Component configuration, the extended mapping and GraphQL introspection all name _fields_, and
 field-level restriction is designed but not built, so in phase 1 every principal reaching a record
-reaches all of its fields and a field name discloses nothing the model restricts. Resources are
+reaches all of its fields and a field name discloses nothing restricted by the model. Resources are
 field _values_ rather than schema, and through the data paths they reach components already narrowed
-by the server-side filter, so an unreachable resource never appears there as a facet bucket, a row or
-a count. **But values also reach components through configuration, which no filter touches.** So
+by the server-side filter, so an unreachable resource never appears there as a facet bucket, a row
+or a count. **But values also reach components through configuration, and no filter touches it.** So
 what remains in phase 1 is **any surface that names resource values from configuration rather than
 from data**: a portal page listing resources from a source other than the filtered query, and
-display labels on a field that access control keys on, the next item. Everything else here is a prerequisite for field-level
-restriction, and one part of it is large.
+display labels on a field that access control keys on, the next item. Everything else here is a
+prerequisite for field-level restriction, and one part of it is large.
 
 **The principle already exists and is scoped too narrowly.** [management-ui.md](management-ui.md)
 states it: what a rendering implies "can leak while every value is correct", and "an affordance for
@@ -326,38 +326,39 @@ first integration's configuration has no way to say it, for the table or for any
 Omitting is the rule above, and this is where omission needs a mechanism. A design for it is wanted
 within phase 1, for the case below.
 
-**A catalogue a principal reaches nothing in renders nothing.** Where a principal holds no grant
+**A catalogue where a principal reaches nothing renders nothing.** Where a principal holds no grant
 reaching any record of a catalogue, no component renders for it, rather than every component
 rendering empty for each resource in it. That is live in phase 1 wherever a catalogue's records all
-carry categories a principal lacks, or where the default open grant is off, and the first
+carry categories outside a principal's grants, or where the default open grant is off, and the first
 integration serves several catalogues.
 
 **Knowing that a principal reaches nothing there has two halves, established on the enforcing
-side.** One is free and one takes a query, and they split along the two axes a grant names.
+side.** One is free and one takes a query, and they split along a grant's two axes.
 
 **The resource half is already decided.** The adapter's configuration lists, per queryable type, the
 resources configured for it, and an empty intersection with the resources named in the token already
-denies that type. So the association of resources with catalogues that Usher does not hold is held
-by the adapter, and the same decision needs a second reader: it denies the query today and would also
+denies that type. So the adapter, not Usher, holds the association of resources with catalogues,
+and the same decision needs a second reader: it denies the query today and would also
 omit the configuration. Configuration that lists a resource whose records are absent from the
 catalogue makes the intersection non-empty and the page render empty, which is a stale-configuration
 flaw and fails toward showing an empty page rather than hiding a populated one.
 
-**Under the default it never fires.** Every resource carrying `open` is reached by everyone through
-it, so the intersection is empty only where an instance removed `open` from a catalogue's resources
-or turned the default off. Intersecting per resource and category pair does not help: a principal
-holding `open` on a resource whose records in this catalogue are all `controlled` holds a pair and
-reaches nothing. So the existence check is load-bearing rather than a fallback.
+**Under the default it never fires.** Every resource with base tier open is reached by everyone
+through its `unmarked` grant, so the intersection is empty only where an instance set a catalogue's
+resources to another tier or turned the baseline off. Intersecting per resource and category pair
+does not help: a principal holding `unmarked` on a resource whose records in this catalogue are all
+`controlled` holds a pair and reaches nothing. So the existence check is load-bearing rather than a
+fallback.
 
-**The category half takes a query.** Whether any of a catalogue's records escape every category the
-principal lacks is a fact about what was indexed, so only an existence check under the principal's
-filter, never returned to them, answers it. That is the common path under the default, and it is
-cheap as a search: no documents returned, stopping at the first match.
+**The category half takes a query.** Whether any of a catalogue's records escape every category
+outside the principal's grants is a fact about what was indexed, so only an existence check under
+the principal's filter, never returned to them, answers it. That is the common path under the
+default, and it is cheap as a search: no documents returned, stopping at the first match.
 
-**Its cost is a data dependency configuration has never had.** Fetching configuration makes no call
-to the search engine today, so the check adds a failure mode that has to be specified: render
-nothing when the check cannot run, which fails closed and coincides with the outage an unreachable
-index already causes, since the search itself cannot run either. It also runs once per catalogue on
+**Its cost is a data dependency new to configuration.** Fetching configuration makes no call to the
+search engine today, so the check adds a failure mode that has to be specified: render nothing when
+the check cannot run, which fails closed and coincides with the outage already caused by an
+unreachable index, since the search itself cannot run either. It also runs once per catalogue on
 every configuration fetch, and it inherits every property of the principal's filter, including the
 defects recorded against it.
 
@@ -381,7 +382,7 @@ The per-type `createState` switch looks like the answer and is not: it chooses b
 types when the schema is built, once per catalogue and shared by every principal, so making it vary
 per principal is the per-principal schema introspection already needs.
 
-**And omission renders as emptiness, which is the disclosure the rule forbids.** A component whose
+**And omission renders as emptiness, a disclosure forbidden by the rule.** A component whose
 configuration is withheld falls back to an empty one, so a principal served no facet configuration
 gets an empty facet panel and one served no table configuration gets a table with no columns. An
 empty panel where one was expected says a panel was expected.
@@ -392,7 +393,7 @@ is a change to a published package with consumers beyond this integration rather
 shape. A design that says only "omit the configuration" produces the disclosure it was written to
 prevent, and it looks correct from the server side.
 
-**Every gate a surface applies is presentation.** The server remains the enforcement boundary, and
+**Every gate applied by a surface is presentation.** The server remains the enforcement boundary, and
 each rendering decision needs its enforced counterpart, since a configuration can be edited by
 whoever holds the browser.
 
@@ -405,18 +406,18 @@ whoever holds the browser.
 | the extended mapping                    | the same resolver, as the full field list with display names and types                                             | yes                                |
 | GraphQL introspection                   | **one schema per catalogue, built once at load and shared by every principal**, on unless a deployment disables it | **no**                             |
 
-**The hook for the first three already exists.** Configuration is fetched through GraphQL on the same
-endpoint and router as data, so it passes the point where the decrypted token sits. The resolver never
-declares the context parameter, but GraphQL passes context to every resolver regardless: the principal
-already arrives there and nothing reads it. So shaping is a signature change at the same moment the
-data paths build their filter, with no new lifecycle. The cost is one small function per surface,
-since each has its own shape, rather than one filter.
+**The hook for the first three already exists.** Configuration is fetched through GraphQL on the
+same endpoint and router as data, so it passes the point where the decrypted token sits. The
+resolver never declares the context parameter, but GraphQL passes context to every resolver
+regardless: the principal already arrives there and nothing reads it. So shaping is a signature
+change at the point where the data paths build their filter, with no new lifecycle. The cost is one
+small function per surface, since each has its own shape, rather than one filter.
 
 **Introspection is the part that is large.** Making a schema's field list depend on the principal
 means building a schema per principal, and caching per principal, which is a different order of
 change from shaping a response. Disabling introspection narrows discovery without closing it: a client
 that already knows a field's name can query it and learn from the response shape whether it exists.
-So the flag is a mitigation, and closing it is the prerequisite field-level restriction actually waits on.
+So the flag is a mitigation, and closing it is the actual prerequisite for field-level restriction.
 
 **Omission has a cost to honest consumers, and the contract already answers it.** A narrowed field
 list is indistinguishable from a catalogue that genuinely lacks the fields, which is the point for the
@@ -424,15 +425,14 @@ principal and a problem for any consumer that must know whether it is looking at
 Arranger's published introspection response carries `meta.authFiltered`, documented as "whether a
 server-side filter was active when the response was generated", currently hardcoded `false` and pinned
 by a test. Made dynamic it says a narrowing happened without saying what was narrowed, which is
-exactly the granularity omission needs, and nothing has to be added to the contract to say it.
+exactly the granularity needed for omission, and nothing has to be added to the contract to say it.
 
-**A separate disclosure surface, deliberately not folded in.** The SQON viewer renders the query a
-principal holds, which ordinarily discloses only what they built. A SQON arriving from elsewhere, a
+**A separate disclosure surface, deliberately not folded in.** The SQON viewer renders a
+principal's query, which ordinarily discloses only what they built. A SQON arriving from elsewhere, a
 shared link, a bookmark or a saved set, can name fields on which the recipient holds nothing, and no
 configuration shaping reaches it, because the content is supplied rather than served.
 
-**It also bears on a contradiction between two documents.** They give different reasons the token is
-opaque:
+**It also bears on a contradiction between two documents.** They give different reasons for the token's opacity:
 
 | Document                                     | Stated reason                                                                        |
 | -------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -529,18 +529,18 @@ at once. Do not close this item until such an instance requires a concrete decis
 `permissions-model.md` role table says "Custodian: one category across all resources."
 `admin-model.md` role table and `concepts.md` both say "one or more categories."
 The cardinality of custodianship scope affects the data model (is custodianship.hold a single
-foreign key or a join table?), the management UI, and how OCAP delegation is expressed. This is
+foreign key or a join table?), the management UI, and how delegated community governance is
+expressed. This is
 not phrasing variation; it is an unresolved design choice presented as resolved in different ways
 in different documents.
 
-**The storage half of this is largely answered by the grant table, which nobody has connected.**
+**The grant table largely answers the storage half of this, though nobody has made the connection.**
 `custodianship.hold` is written throughout as a permission needing a home, and the open question asks
 whether it is one column, one join table, or two. Under the settled model it is none of those: a
 custodian is someone holding a grant whose role is `custodian`, on one category, with the wildcard in
 the resource position. Cardinality then needs no decision, because one grant per category is the
 ordinary shape and a custodian of three categories holds three grants. Naming it as a separate
-permission is the same collapse this model keeps finding, a second place asserting what a grant
-already says.
+permission is this model's recurring collapse, a second place asserting what a grant already says.
 
 What genuinely remains is narrower than the question as posed: how a grant stores the wildcard in
 `resource_id`, and whether an instance may bound a custodian to named resources, which is the
@@ -556,7 +556,7 @@ question and the cardinality one above together decide whether custodianship.hol
 one join table, or two.
 
 **[MEDIUM] Custodian has one row in the role taxonomy and no permission list.**
-It is the role with the most governance weight and the one OCAP delegation rests on, and
+It is the role with the most governance weight and the basis of delegated community governance, and
 [admin-model.md](admin-model.md) names it as a gap rather than specifying it. It cannot be closed
 independently of custodian scoping above, since what a custodian may do and what it reaches are the
 same question asked twice.
@@ -567,7 +567,8 @@ same question asked twice.
 
 **[HIGH] Self-grant prevention is not specified in the permissions model.**
 **Still open, and the grant-gating decision makes it sharper rather than answering it.** An
-administrator may self-grant, with the custodians of the data's categories as the final gate. An
+administrator may self-grant, and from a later release needs an owner's or a custodian's approval
+to do so. An
 administrator who may appoint custodians can appoint themselves and then satisfy that gate, so the
 rule below and the gating decision have to be reconciled: either appointment is constrained, or
 grant must reject an approver who is also the grantee, or both. The audit event on appointment is
@@ -608,8 +609,9 @@ Several design questions are open:
   an admin-mediated path to honour a valid legal claim.
 - **Jurisdiction:** Age of majority varies by jurisdiction. The platform must either take a
   conservative stance (lowest applicable age) or make this an instance configuration.
-- **OCAP intersection:** If the principal is a First Nations member, community data sovereignty
-  interests (held by the nation, not the individual) may coexist with the individual's newly
+- **Indigenous data governance intersection:** If the principal is a member of a First Nation, an
+  Inuit or a Métis community, community data sovereignty interests (held collectively, not by the
+  individual) may coexist with the individual's newly
   acquired personal data rights. These do not automatically resolve in the same direction.
 
 This flow shares the same ownership transfer mechanism as ordinary ownership handoffs but has
@@ -645,12 +647,12 @@ Must be decided before the audit logging implementation begins: the tagging fiel
 logic affect the event schema and the log aggregation pipeline configuration.
 
 **[POST-V1] GA4GH Passport revocation before Visa expiry has no mechanism.**
-GA4GH Passport integration is not required for iMS v1, which the business requirements state
+GA4GH Passport integration is not required for iMS v1, as the business requirements state
 directly, so this is not a launch dependency. Kept because it is a real gap in that design and the
 severity was misleading in a blocker sweep. Original finding:
 When a DAC withdraws grant, the corresponding `ControlledAccessGrants` Visa stops being
 issued on re-authentication. The existing category grant record in Usher's policy database
-persists until `expires_at`. There is no described mechanism for Usher to detect externally-revoked
+persists until `expires_at`. Usher has no described mechanism for detecting externally-revoked
 Visas proactively. For controlled health data where an access withdrawal must take effect
 promptly, a Visa expiry window (potentially days) may not satisfy governance requirements.
 Options to consider: periodic re-validation of Visa-sourced grants on token exchange; a webhook
@@ -666,8 +668,8 @@ and revoke each one. The most critical emergency operation has no direct API pat
 `POST /admin/users/{id}/revoke` endpoint that sets `revoked_at` regardless of which resources they hold grants in
 should be considered as a v1 requirement.
 
-**A mechanism is now proposed, and it is not an endpoint that iterates.** A status on the principal
-that grant validation reads, so that freezing someone is one write rather than a sweep across every
+**A mechanism is now proposed, and it is not an endpoint that iterates.** A status on the principal,
+read by grant validation, so that freezing someone is one write rather than a sweep across every
 grant they hold:
 
 | Status      | What grant validation does                                                                                      |

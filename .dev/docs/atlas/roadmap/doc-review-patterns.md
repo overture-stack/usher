@@ -7,10 +7,10 @@ and appended to as review continues.
 
 **Why these are worth recording rather than just fixing.** Density, affirmative framing and the dash
 rules had all been run over this same text, and none of them caught any of what follows. Those
-checks are mechanical: a script counts words per sentence, greps a character, matches a phrase. Every
-class below needs a reader deciding whether a sentence can be understood, which no grep expresses.
-That makes them a different kind of rule rather than more of the same, and it is the reason the
-existing conventions passed a document that a first reader found nineteen problems in.
+checks are mechanical: a script counts words per sentence, greps a character, matches a phrase.
+Every class below needs a reader deciding whether a sentence can be understood, and no grep
+expresses that. That makes them a different kind of rule rather than more of the same, and it is
+why the existing conventions passed a document where a first reader found nineteen problems.
 
 ## Two ways a review's own findings go wrong
 
@@ -21,8 +21,8 @@ reviewer.
 The legibility pass correctly left `AGENTS.md` and `CLAUDE.md` alone, because this project's density
 table had already exempted them as agent-facing and condensed on purpose. Nothing in the method
 distinguished audience; without that table both files would have been swept and a human-facing rule
-applied to deliberately terse ones. A clean outcome reads as evidence the method worked, and the
-moment the constraint is absent is the moment nobody is checking. Stated by the agentics owner in
+applied to deliberately terse ones. A clean outcome reads as evidence the method worked, and
+whenever the constraint is absent, nobody is checking. Stated by the agentics owner in
 the exchange that produced it, from this instance.
 
 **A relayed measurement loses its caveats, and a number is the worst case.** A count of defects in a
@@ -82,7 +82,7 @@ Confirmed by checking, after three comments had been treated as local:
 | Actors ordered by institutional rank       | The three-management-roles table, ordered Admin, Custodian, Owner                          |
 | A term used before introduction            | `categories` first appeared inside the token example, explained only in the table below it |
 
-Two of those three were outside the artifact entirely, which is the half a local fix cannot reach.
+Two of those three were outside the artifact entirely, beyond the reach of any local fix.
 
 **A suggested wording that collides is evidence the existing term is ambiguous there.** Developer-stated,
 and it is the better reading: the reviewer reached for a colliding word because the word already in
@@ -153,9 +153,9 @@ recognized as a class, which is why it appears in the sequence before the axis t
 ### O. The model defined on the stand-in rather than on the term
 
 A document written for a lay audience substitutes a plain word for a model term, which is right. The
-defect is where it then puts the definitions. **Definitions belong on the word the system uses; the
+defect is where it then puts the definitions. **Definitions belong on the system's word; the
 stand-in is a pronoun and can only be used once its referent exists.** A document that explains the
-mechanism in terms of the stand-in has built the reader's model on a word the system does not have,
+mechanism in terms of the stand-in has built the reader's model on a word absent from the system,
 and a reader who later meets the real term has two concepts to reconcile where there is one.
 
 **The typography compounds it.** Where bold-on-first-use marks a term being defined, and the document
@@ -172,13 +172,13 @@ went on to define the whole mechanism on the stand-in, so the document contradic
 disclosure within three sentences. The repair that worked was moving the definitions onto the term
 and letting the stand-in carry the casual references afterwards.
 
-**The check is two passes and both are cheap.** List every word the document bolds on first use and
-ask whether the model has that word; anything it does not is a stand-in. Then read only the passages
-that define, name a structure, or state a rule, and confirm each uses the term rather than the
-stand-in. The first pass finds the words, the second finds where they do damage.
+**The check is two passes and both are cheap.** List every word bolded on first use and ask whether
+the model has that word; anything it does not is a stand-in. Then read only the passages that
+define, name a structure, or state a rule, and confirm each uses the term rather than the stand-in.
+The first pass finds the words, the second finds where they do damage.
 
 **A second failure rides along with this one, and it is the more expensive one.** Having taken the
-stand-in as a term, the same reader read categories as subdivisions a dataset owns, which is the
+stand-in as a term, the same reader read categories as subdivisions owned by a dataset, which is the
 natural reading of "a dataset lists the categories it carries". Categories are defined once for the
 instance and each resource declares which apply. The containment reading survives contact with
 everything except custodianship, which is only coherent because one category is one thing across
@@ -240,10 +240,10 @@ and found the result self-contradictory, which is the tell.
 
 **This is narrower than "opens with a negation", and the difference decides whether a check is
 useful.** A sweep for paragraph-opening negations across the corpus returned 29 matches and nearly
-all are load-bearing: "Usher is not an authentication service" and "Usher does not know the schema of
-the data it protects" are the content, not a delay before it. The test is whether the following
-positive statement makes the negation redundant, which no pattern expresses. Grep locates candidates;
-only reading separates them.
+all are load-bearing: "Usher is not an authentication service" and "Usher does not know the schema
+of the data it protects" are the content, not a delay before it. The test is whether the following
+positive statement makes the negation redundant, and no pattern expresses that. Grep locates
+candidates; only reading separates them.
 
 ### K. A qualifier carrying an argument before the argument is made
 
@@ -263,12 +263,12 @@ conversation with the developer: the error was made there, corrected there, and 
 written into a file as though the file had held it. No reader can resolve it, because the superseded
 claim exists nowhere in the corpus or in its history.
 
-**Three instances, all surfaced by the developer asking what one of them pointed at.** A roadmap line
-correcting "an earlier note here" that the same uncommitted edit had replaced, where the committed
-text it displaced was correct; a traceability file correcting "an earlier reading" of virtual-cohort
-sharing, in the commit that created that file; and a decision correcting a record of owner permission
-no document ever carried, the documents recording owner _notification_ instead, which is a
-compensating control rather than a grant gate.
+**Three instances, all surfaced by the developer asking what one of them pointed at.** A roadmap
+line correcting "an earlier note here" that had been replaced by the same uncommitted edit, where
+the committed text displaced by that edit was correct; a traceability file correcting "an earlier
+reading" of virtual-cohort sharing, in the commit that created that file; and a decision correcting
+a record of owner permission absent from every document, the documents recording owner
+_notification_ instead, which is a compensating control rather than a grant gate.
 
 **Unlike most classes here, the check is mechanical.** Grep for `was recorded as`, `was described
 as`, `an earlier note`, `earlier reading`, `previously stated`. For each hit, grep the corpus for the
@@ -276,12 +276,12 @@ claim being corrected and run `git log -S` on it. A hit with no referent in eith
 that a file's own history often cannot supply one: two of the three instances sat in files whose
 creating commit already carried the correction.
 
-**Where the correction records a rejected alternative, reframe rather than delete.** Deleting loses
-something a decisions file exists to keep: what was considered and why it lost. The fix is to move
+**Where the correction records a rejected alternative, reframe rather than delete.** A decisions
+file exists to keep what was considered and why it lost, and deleting loses that. The fix is to move
 the referent from the draft to the option. "An earlier version of this document computed exclusions
 from the configured category set" becomes "**Rejected: computing exclusions from the configured
-category set**", which carries the same information and points at something a reader can evaluate
-instead of at a version they never saw. Eight instances in this corpus took that repair.
+category set**", which carries the same information and gives a reader something to evaluate instead
+of pointing at a version they never saw. Eight instances in this corpus took that repair.
 
 **The repair is to state the fact positively and delete the correction.** Where the superseded claim
 is worth recording, name where it lives, as FR-09 in `brd-traceability.md` does for notification. A
@@ -306,8 +306,8 @@ as thinking aloud rather than as specification.
 
 **Thirty instances across a 168,000-word corpus, all thirty real.** That ratio is unlike every other
 class here, and it does not generalize. Run against the agentics corpus the same pattern returned
-eight, of which four were clear, two were false positives of a shape this corpus never produced, and
-one falsified the claim below.
+eight, of which four were clear, two were false positives of a shape never produced by this corpus,
+and one falsified the claim below.
 
 **The boundary, supplied by the agentics owner from that run: a self-referential clause survives when
 it constrains a future edit to the document, and goes when it only explains the present one.** Their
@@ -317,7 +317,7 @@ yields "the changelog is exempt" and loses the instruction to a future maintaine
 rule into the checker. The wrapper is about the document and is also the content.
 
 **So the earlier claim here, that the move is never load-bearing, was wrong**, and it was the most
-dangerous thing this entry said: a sweep trusting it would have destroyed that sentence without
+dangerous claim in this entry: a sweep trusting it would have destroyed that sentence without
 anyone looking. Checked against this corpus afterwards, one of the thirty had the same shape and had
 been damaged by its unwrap, and a second survived only because a rewording happened to preserve it.
 Both were cross-file or cross-repository placement rules, which is where the shape concentrates.
@@ -368,9 +368,12 @@ unusually dense in sentences legitimately about documents, which is plausibly th
 class is hardest to pattern. That makes it a scope note on the finding rather than a refutation, and
 the divergence is recorded rather than averaged away.
 
-**So the repair is to unwrap rather than to delete, once the boundary above has been applied.** Removing the sentence loses the fact, which is the failure mode a sweep like this invites; unwrapping a clause that constrains a future edit loses the constraint, which is the failure mode the unwrap itself invites. "One limit is worth recording: X" becomes "One limit: X".
-"This is worth stating because the obvious reading holds for one and inverts for the other" becomes
-"The obvious reading holds for one and inverts for the other."
+**So the repair is to unwrap rather than to delete, once the boundary above has been applied.**
+Removing the sentence loses the fact, the failure mode invited by a sweep like this; unwrapping a
+clause that constrains a future edit loses the constraint, the failure mode invited by the unwrap
+itself. "One limit is worth recording: X" becomes "One limit: X". "This is worth stating because the
+obvious reading holds for one and inverts for the other" becomes "The obvious reading holds for one
+and inverts for the other."
 
 **Mechanical, and the exclusion is the part worth copying.** The catching pattern is
 `worth (stating|recording|noting|naming|writing)`, `written down because`,
@@ -391,11 +394,12 @@ wrongly pitched. Each sentence is well-formed and its wrapper is defensible in i
 wrong is only visible as a habit across a corpus, and at that scale it is the dominant texture: a
 reader looking for the rule reads past the author's reasons for having written it, thirty times.
 
-**It also names why conventions alone do not fix this family.** The rules that survived a full day of
-this corpus were the ones a grep holds: no em dashes, Canadian spelling, retired terms. The rules
-that slipped repeatedly, including four times in one session immediately after correction, were the
-ones needing the author to reread as a stranger. Self-speak moved from the second group to the first
-the moment it was named as a move rather than as a matter of taste, which is the transferable part.
+**It also names why conventions alone do not fix this family.** The rules that survived a full day
+of this corpus were the grep-checkable ones: no em dashes, Canadian spelling, retired terms. The
+rules that slipped repeatedly, including four times in one session immediately after correction,
+were the ones needing the author to reread as a stranger. Self-speak moved from the second group to
+the first as soon as it was named as a move rather than as a matter of taste, which is the
+transferable part.
 
 ## Fidelity failures
 
@@ -452,9 +456,9 @@ form _(reserved for X, never for Y)_; a borrowed-terms table whose Usher column 
 Usher group", "**not** an Usher role".
 
 **The negation is usually a true and useful fact wearing the wrong clothes.** A catalogue really is
-not a governance boundary. Stated positively the same fact lands harder and reads as knowledge rather
-than as a scolding: one catalogue's records belong to many resources, so governance runs per
-resource. The repair is to find the positive fact the negation was standing in for, and where the
+not a governance boundary. Stated positively the same fact lands harder and reads as knowledge
+rather than as a scolding: one catalogue's records belong to many resources, so governance runs per
+resource. The repair is to find what positive fact the negation was standing in for, and where the
 negation carries no positive fact at all, it was a usage rule rather than a definition, which is
 class N.
 
@@ -477,10 +481,10 @@ a retired-terms list.
 rule is imperative and directs the writer. Grep for imperatives at the start of a bolded lead:
 `reserve`, `resist`, `avoid`, `prefer`, `say`, `write`, `check whether`, `before writing`.
 
-**Why the agent writes these specifically.** Each rule was the residue of an error the agent had just
-made, and the term's own entry is where the fix reads as belonging. But the agent is not the
-document's reader. A rule about how to write belongs in the agent-facing working space, which in this
-repository is the atlas, and the reference keeps only what a person looking up a word came for.
+**Why the agent writes these specifically.** Each rule was the residue of an error just made by the
+agent, and the term's own entry is where the fix reads as belonging. But the agent is not the
+document's reader. A rule about how to write belongs in the agent-facing working space, which in
+this repository is the atlas, and the reference keeps only what a person looking up a word came for.
 
 ## Recorded as unresolved rather than as a pattern
 

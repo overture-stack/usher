@@ -15,7 +15,7 @@ two-planes decision in [../../../design/decisions.md](../../../design/decisions.
 
 `rabac-alignment.md` kept `curator` through the July pass and is correct on that point in
 retrospect. The July retirement resolved `curator` to "an owner or a viewer, whichever the sentence
-means", which is precisely the conflation every tier-1 site below commits.
+means", which is precisely the conflation committed by every tier-1 site below.
 
 ---
 
@@ -48,11 +48,11 @@ role-holding language throughout `permissions-model.md`. Re-survey by reading ra
 following these coordinates.
 
 One from this tier is known open: `management-ui.md` offers **one role dropdown for both planes**,
-which is the failure the split exists to prevent.
+and the split exists to prevent exactly that failure.
 
-**The glossary's missing entries are added.** It had Submitter, Custodian, Owner and Admin, and no
-`Viewer`, which is the role every other entry is defined against, nor `Curator`. Both now exist, and
-the `Curator` entry carries the statement of the two planes.
+**The glossary's missing entries are added.** It had Submitter, Custodian, Owner and Admin, and
+neither `Curator` nor `Viewer`, though every other entry is defined against `Viewer`. Both now
+exist, and the `Curator` entry carries the statement of the two planes.
 
 ---
 
@@ -83,8 +83,8 @@ modelling one, and the people it concerns should be in the room.
 
 - **Missing `curator`**: every data-plane role list except `rabac-alignment.md:128`.
 - **Missing `submitter`**: `docs/onboarding.md:113` ("The four participants") and
-  `docs/concepts.md:296`. Both published, both omitting the role a data contributor holds. The
-  onboarding's count and caption are load-bearing on surrounding prose at `:126` and `:128`.
+  `docs/concepts.md:296`. Both published, both omitting a data contributor's role. The onboarding's
+  count and caption are load-bearing on surrounding prose at `:126` and `:128`.
 - **Missing `delete`**: `delete` appears nowhere in the corpus as a capability. Sites that enumerate
   capabilities and are now incomplete: `security-workflow.md:301`, `rabac-alignment.md:130`,
   `permissions-model.md:290`, `glossary.md:174`, `api-keys.md:114` (which reasons about the

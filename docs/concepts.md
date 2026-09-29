@@ -121,7 +121,7 @@ Analogy: the box office and event management system. This is where seat allocati
 VIP lists are maintained, and access tiers are defined.
 
 In Usher: the management UI (planned). Administrators write and revoke grants, each naming a
-resource, a category and the role its holder acts in, and decide which categories a resource lists.
+resource, a category and its holder's role, and decide which categories a resource lists.
 None of that requires access to Keycloak or any IdP admin panel.
 
 The platform-wide authorization administrator role is **Admin** (architecture shorthand: **PAP
@@ -154,7 +154,7 @@ Neither runs in the browser. Both live in the service that holds the data.
 The PIP provides attribute data used to make policy decisions: information about the user, the
 resource, or the environment. The PDP cannot resolve these on its own.
 
-Analogy: the ticket database the usher can query. It tells them whether a ticket is genuine and
+Analogy: the usher's ticket database. It tells them whether a ticket is genuine and
 what access level it represents.
 
 In Usher: the identity provider (Keycloak, Microsoft Entra ID). It validates the user's bearer token and
@@ -233,12 +233,12 @@ A **role** is a coarse-grained permission label: `owner`, `viewer`, `curator`. I
 of actions a user can perform. Roles are defined at the platform level, and the exact set is an
 instance decision.
 
-A role is named on a grant, which is the only place one is held. Nothing records separately what a
-person is trusted with, so the same person can be a curator on one category of a resource and a
-viewer on another, and being trusted broadly somewhere confers nothing anywhere else.
+A role is held only on a grant, never on the person, so the same person can be a curator on one
+category of a resource and a viewer on another, and being trusted broadly somewhere confers nothing
+anywhere else.
 
 Two things have to line up for a grant to reach anything, and they answer different questions. The
-role sets the ceiling: the acts its holder could ever perform. The category decides which records
+role sets the ceiling: the acts permitted to its holder. The category decides which records
 those acts reach.
 
 | Grants held on a resource | What the principal reaches                                                 |
@@ -298,12 +298,12 @@ Three relations carry this, and only two of them are about access:
 
 A group confers nothing by belonging to it. What a group does is let one grant name a set of people
 instead of one, so the same set can be trusted as a curator in one place and a viewer in another.
-Each person the grant reaches accepts or declines it for themselves. If a grant is revoked, everyone
-who reached data through it loses that access at once, and revocation propagates through the standard
-channel.
+Each person reached by the grant accepts or declines it for themselves. If a grant is revoked,
+everyone who reached data through it loses that access at once, and revocation propagates through the
+standard channel.
 
 Groups do not create a separate access model. They are a convenience layer over the same entity
-structure individual users use.
+structure used by individual users.
 
 ### Privileged roles
 
@@ -319,11 +319,13 @@ platform staff.
 
 The role is in the design and not in the first release, because nothing appoints a custodian in it.
 
-OCAP is the First Nations principles of Ownership, Control, Access and Possession, administered by
-the First Nations Information Governance Centre. Those principles concern who holds authority over
-data, not only who may read it, so this role is at most a mechanism for honouring them and never
-evidence of having done so. Usher has not been studied against OCAP, and that study belongs with
-the communities concerned rather than in a design document.
+For First Nations data the governing framework is OCAP, the principles of Ownership, Control,
+Access and Possession administered by the First Nations Information Governance Centre. Inuit and
+Métis data have frameworks of their own, the National Inuit Strategy on Research and the Métis data
+governance principles, and the CARE principles apply internationally. Those principles concern who
+holds authority over data, not only who may read it, so this role is at most a mechanism for
+honouring them and never evidence of having done so. Usher has not been studied against any of
+them, and that study belongs with the communities concerned rather than in a design document.
 
 **Admin** holds platform-wide authorization management rights: creating resources, assigning
 roles, managing any grant, and performing emergency revocations. An Admin does not have implicit
@@ -395,8 +397,8 @@ relationship with each approving institution. That does not scale.
 
 GA4GH (Global Alliance for Genomics and Health) is an international standards body. Its
 **Passport** specification defines a standard format for expressing access claims inside OIDC
-tokens. Specifically, it defines a structured JWT claim (`ga4gh_passport_v1`) that any
-OIDC-compliant identity system can carry. It is not a new protocol. It is a defined schema for
+tokens. Specifically, it defines a structured JWT claim (`ga4gh_passport_v1`), and any
+OIDC-compliant identity system can carry it. It is not a new protocol. It is a defined schema for
 access grants inside tokens you already use.
 
 ### Visa types
@@ -460,7 +462,7 @@ revocations fires. The researcher's session is suspended during the fail-secure 
 Resuming it means re-authenticating with a refreshed Passport.
 
 Local administrators can also revoke a grant that originated from an external Visa. Local policy
-can always restrict access downward. It cannot grant access that no Visa covers.
+can always restrict access downward. It cannot grant access not covered by a Visa.
 
 ### REMS: running your own Visa Issuer
 
@@ -500,8 +502,8 @@ A JWE encrypts the claims. The payload is ciphertext, unreadable to anyone who d
 the decryption key. JWE is also tamper-evident: the encryption carries an authentication tag, so
 any modification makes decryption fail rather than yield altered claims. That is not a signature.
 A JWE proves the content is intact and came from someone holding the key. It does not prove who
-that was. Adding that requires nesting a signed token inside the encrypted one, which Usher does
-not currently do and does not need, because there is exactly one issuer.
+that was. Adding that requires nesting a signed token inside the encrypted one. Usher does not
+currently do this and does not need to, because there is exactly one issuer.
 
 Analogy: a sealed, tamper-evident envelope. Only the recipient with the right key can open and
 read the contents. The seal proves it was not already opened and resealed.
@@ -509,7 +511,7 @@ read the contents. The seal proves it was not already opened and resealed.
 Usher issues Usher tokens as JWE. The token never reaches a browser. It travels from Usher to the
 ushered service that holds the bridge. The bridge decrypts it there.
 
-**Why encrypt a token the user never sees?** Two reasons.
+**Why encrypt a token that never reaches a browser?** Two reasons.
 
 **Each application gets its own key.** An Usher token is issued for one application. Encrypting it
 to that application's key means no other application can read it. If Usher ever computed a token
@@ -539,7 +541,7 @@ call to Usher happens on each request. That gives a short exposure window withou
 overhead.
 
 The designed lifetime is five minutes, and it is configurable. For comparison, the EGO access token
-Usher replaces on the iMS platform lives three hours, so the window this closes is a large one.
+replaced by Usher on the iMS platform lives three hours, so this closes a large window.
 
 ---
 
@@ -559,12 +561,12 @@ stop someone from entering, your only options are:
 
 Usher uses approach (3), with the signal kept next to whatever changed rather than on the person.
 The controller caches the payload it computed for each principal, and anything altering what that
-principal holds deletes the entry, so absence means recompute. Separately, each resource carries a
-category version, bumped by any change to the categories it lists and recorded alongside the cached
-payload. On refresh the controller reissues from the cache only when the entry is still there and the
-versions recorded with it still match. Both halves are the controller's own state, so nothing a
-the request sends decides whether a cached answer is still fresh. Meanwhile the revocation signal reaches bridges by push (immediate, best
-effort) and poll (configurable interval, reliable fallback).
+principal holds deletes the entry, so absence means recompute. A change to a resource's categories
+clears every cached payload, since it can change what anyone reaches. On refresh the controller
+reissues from the cache only when the entry is still there. The cache is the controller's own
+state, so nothing sent with the request decides whether a cached answer is still fresh. Meanwhile
+the revocation signal reaches bridges by push (immediate, best effort) and poll (configurable
+interval, reliable fallback).
 
 A marker on the principal was the first design and does not work, which is worth knowing because it
 is the obvious one. Adding a category to a resource changes nothing about that person's own records,
@@ -714,17 +716,17 @@ controlled ones without changing them. In `LUNG_COHORT` they may view the open r
 nothing else. Every other resource on the platform is absent, and absence means no access rather
 than a denial recorded somewhere.
 
-`payloadVersion` is the one member not about this user at all. It names the schema the rest of the
-token is written in, agreed between Usher and the adapter when the token was issued, so that a future
-version can add something an older adapter would have to be told about rather than allowed to skip.
+`payloadVersion` is the one member not about this user at all. It names the schema followed by the
+rest of the token, agreed between Usher and the adapter when the token was issued, so that when a
+future version adds a member, an older adapter is told about it rather than allowed to skip it.
 
 Three things about the shape are decisions rather than details.
 
-**A resource's unrestricted portion is a category like any other.** `open` is named in a grant the
-same way `controlled` is. Nothing is reachable because a grant declined to exclude it, so there is
-no baseline sitting outside the category system for a reader to infer.
+**A resource's unmarked records are a category like any other.** `unmarked` is named in a grant just
+as `controlled` is. Nothing is reachable because a grant declined to exclude it, so there is no
+baseline outside the category system, and a reader has nothing to infer.
 
-**Permissions attach to a category, not to the resource.** That is what lets this user update open
+**Permissions attach to a category, not to the resource.** That is what lets this user update unmarked
 records while only reading controlled ones. Two independent grants, and holding both reaches what
 either covers.
 
@@ -736,8 +738,9 @@ anything enforcing a query has its answer already.
 
 There is also no empty list. Holding no grant on a resource means the same as the resource being
 absent, so the token has one state to enforce rather than two that had to be told apart. For the
-authoritative schema, written as the `PermissionsPayload` type the adapter receives, see
-[security-workflow.md: The payload as a type](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md#the-payload-as-a-type).
+authoritative schema, written as the `PermissionsPayload` type received by the adapter, see
+[security-workflow.md: The payload as a
+type](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md#the-payload-as-a-type).
 
 The app adapter (PEP) reads the permissions payload and applies it to the outgoing query, before the query
 reaches the data layer. The payload is enforced server-side, not client-side. The client never
@@ -749,8 +752,8 @@ know why a user is excluded from certain data. It only needs to translate the pe
 its app's native query format.
 
 Each Usher token is scoped to a specific **audience**: the application service that requested it.
-Usher includes only the resources that service manages, and of those only the ones this person holds
-a grant in. That keeps the payload focused
+Usher includes only the resources managed by that service, and of those only the ones where this
+person holds a grant. That keeps the payload focused
 and prevents one service from reading another service's grants. A platform running multiple data
 applications issues a separate token for each. The user's effective access is the same across them,
 but each service sees only its own slice. An application must verify that a presented token names it

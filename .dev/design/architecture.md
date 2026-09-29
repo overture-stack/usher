@@ -59,8 +59,8 @@ Instances that do not include SONG are fully supported; Usher has no dependency 
 components sit in the control plane, the bridge and the adapter included, even though both run inside
 an application's own process: they carry and apply a decision rather than serve data. Keycloak sits
 there with them, governing identity rather than access, so the control plane is wider than Usher and
-Usher is the part of it that access control runs in. The data plane is the application's own
-query execution and the records it returns, which no Usher component reads or writes.
+access control runs in Usher's part of it. The data plane is the application's own query execution
+and the records it returns, and no Usher component reads or writes them.
 
 The components listed below are the whole instance rather than Usher alone. SONG and the ushered
 service are among them and sit in the data plane, which is why the list and the plane split do not
@@ -101,8 +101,8 @@ of an application that runs queries, and the data plane is that layer plus the r
 
 ### Controller
 
-**Role:** The control plane's central service. It holds the resources, the categories each lists and
-the grants over them, computes what each principal may reach, and distributes that to the
+**Role:** The control plane's central service. It holds the resources, their categories and the
+grants over them, computes what each principal may reach, and distributes that to the
 applications. Implements the PDP (Policy Decision Point) and
 PAP (Policy Administration Point). The controller is the central service; the bridge is the library
 that connects applications to it.
@@ -119,7 +119,7 @@ application. Two components, two jobs, and our modular design depends on keeping
   provider)
 - Resolving the grants that reach a user, from the policy database
 - Computing the permissions payload: which categories the user holds grants for within each
-  resource the requesting adapter manages
+  resource managed by the requesting adapter
 - Issuing JWE Usher tokens: encrypted, short-lived, audience-scoped per application; see
   [security-workflow.md](security-workflow.md)
 - Holding one symmetric JWE key per ushered application, and encrypting every token to the one
@@ -153,7 +153,7 @@ being served, until connectivity is restored.
 
 **Owns:**
 
-- Holding its own application's JWE key, which no other application's bridge holds
+- Holding its own application's JWE key, held by no other application's bridge
 - Presenting the user's IdP bearer token to the controller's token exchange endpoint
 - Receiving and locally caching the JWE Usher token per user
 - Decrypting Usher tokens and exposing the decoded payload as a typed `PermissionsPayload`
@@ -268,17 +268,15 @@ applications enforce decisions derived from it, without managing that state them
 
 **Two distinct uses:**
 
-1. **Shared computed-payload cache.** The fast-path refresh (see
+1.  **Shared computed-payload cache.** The fast-path refresh (see
    [security-workflow.md](security-workflow.md#session-and-caching)) holds one entry per principal
-   and audience, carrying the computed payload, the earliest grant expiry that bounds any reissue,
-   and the category version each named resource stood at when the payload was computed. Valkey gives
-   every controller instance the same view of it, so a refresh served by one instance does not
-   recompute what another already has.
+   and audience, carrying the computed payload and the earliest grant expiry that bounds any
+   reissue. Valkey gives every controller instance the same view of it, so a refresh served by one
+   instance does not recompute what another already has.
 
-   **Invalidation is by deletion, and only for this half.** Anything changing what a principal holds
-   deletes their entry, so absence means recompute and the entry cannot go subtly stale. A category
-   change does not delete it; the versions stored beside the payload are what catch that, compared
-   against the resources' current ones on refresh.
+   **Invalidation is by deletion.** Anything changing what a principal holds deletes their entry, and
+a change to a resource's categories clears the whole cache, so absence means recompute and no entry
+can go subtly stale.
 
    **What this is not.** There is no last-modified timestamp per principal. That was the first
    design and it does not work, because the marker was per principal while the dangerous change is

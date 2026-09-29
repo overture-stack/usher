@@ -33,7 +33,7 @@ versioned and proprietary, so check the current issue before citing any specific
 **Not adopted, and the reason matters.** STE's approved dictionary runs to roughly a thousand words
 and exists for procedures: do this, then do that, and here is what goes wrong. These documents
 mostly record _why_ a decision was made, which needs subordinate reasoning and needs terms of art
-that no general dictionary contains. So the dictionary rule is replaced by the local rule below: a
+absent from any general dictionary. So the dictionary rule is replaced by the local rule below: a
 term of art is either defined or not used. That serves the same purpose, admitting `predicate` and
 `resource field` while still refusing an undefined word.
 
@@ -47,8 +47,8 @@ failed more completely than one who meets a long sentence.
 STE separates a word's noun and verb senses because a technician following steps in a second
 language can trip on "test the valve" against "the test". This corpus has never had that problem.
 Every collision it has actually suffered was one word carrying two **meanings**: catalogue,
-permission, principal. Every candidate this rule surfaces is one word with one
-meaning in two grammatical roles, and each was tested against the corpus:
+permission, principal. Every candidate surfaced by this rule is one word with one meaning in two
+grammatical roles, and each was tested against the corpus:
 
 | Word   | Why no replacement survives                                                                          |
 | ------ | ---------------------------------------------------------------------------------------------------- |
@@ -67,21 +67,32 @@ word with one meaning in two grammatical roles. It belongs in the open list belo
 table of words that survived the test. Worth keeping as a lesson about the table itself: every other
 row here rests on a count, and this is the one that was checked.
 
-## A relative clause runs subject first
+## A backwards-syntax clause is rewritten subject first
 
-**An object relative clause reverses the sentence.** In "records that a category marks", the noun
-being described is the object of the clause's verb, so the words run object, subject, verb. Dropping
-the "that" makes it a zero relative, or contact clause, which is worse, since nothing signals that a
-clause has started. Several of this model's nouns are also verbs, so "Records a category marks" first
-parses as a subject and its verb, and an aside between the two pushes the verb further away.
+**The construction runs a sentence backwards.** In "records a category marks", the noun being
+described is what the clause's verb acts on, so the noun comes first and the verb acting on it comes
+last. The name is chosen over the linguistics term because "object" already means too much in this
+corpus. Nothing signals that a clause has started, and several of this model's nouns are also verbs,
+so "records a category marks" first parses as "records, a category-marks" until the sentence fails.
+Restoring the "that" does not fix it: "records that a category marks" runs in the same order.
 
-**Restoring the "that" is not the fix.** Turn the clause round so the noun leads into its own verb:
-"records marked by a category", "grants held by the user", "resources reachable by the principal",
-"records not covered by any category". An indirect question is a different construction and reads
-fine: "which records a category covers", "how many values the field holds".
+**The rule is the middle one.** A clause whose subject is a noun phrase ("a category", "a rule") or
+a quantifier pronoun ("nothing", "everyone") is rewritten. A clause whose subject is a personal
+pronoun ("the code it covers", "the grants they hold") is left alone, since it reads quickly.
 
-`check-prose.sh` flags the construction over this model's head nouns and verbs, with or without the
-"that", and the corpus passed it clean when the check was added.
+**Rewrite in this order, and take the first that reads naturally:**
+
+1. A possessive: "their grants", "the record's category", "a principal's grants".
+2. A participle after the noun: "records marked by a category", "a grant conferred by a rule".
+3. A compound modifier before it: "category-marked records".
+
+An indirect question is a different construction and reads fine: "which records a category covers",
+"how many values the field holds". A case that is truly unavoidable carries the marker
+`<!-- prose-check: allow backwards-syntax -->` on its line.
+
+`check-prose.sh` flags the construction over this model's head nouns and verbs, singular and plural,
+and over quantifier-pronoun subjects, with or without the "that". A dependency parse finds the
+general case; it is used as an editing aid and is not part of the check.
 
 ## A term of art is either defined or not used
 
@@ -111,8 +122,8 @@ expensive kind of shortcut.
 Both unresolved terms are now settled, and both went the same way.
 `quantifier` was rewritten in place, since "matches when any element matches rather than requiring
 every element" says it without the word, and the sentence carrying it also lost "existential" and
-"universal" doing the same job twice. `atomic` kept the one sense `permissions-model.md` defines, an
-operation that completes entirely or not at all, and the undefined second sense became the plain
+"universal" doing the same job twice. `atomic` kept the one sense defined in `permissions-model.md`,
+an operation that completes entirely or not at all, and the undefined second sense became the plain
 phrase: a resource cannot be divided.
 
 ## Marking a term as an identifier
@@ -125,17 +136,17 @@ token" and "permissions payload" stay plain.
 **If a sentence needs the typography to parse, rewrite the sentence.** "Assigning `grants` grants
 permission" is legible only to someone looking closely, and not at all to someone hearing it read
 aloud. Code font identifies; it does not disambiguate prose, and a sentence that depends on it has a
-structural problem the markup is hiding. Recast it so the two senses never meet: "granting a category
-to someone creates a `grants` row" says the same thing with nothing to trip over.
+structural problem hidden by the markup. Recast it so the two senses never meet: "granting a
+category to someone creates a `grants` row" says the same thing with nothing to trip over.
 
 **The onboarding document takes no code font in prose**, because its readers are not engineers.
 Field names appear there in bold, inside the token discussion, where the worked example supplies the
-context that code font would otherwise have to carry.
+context and code font does not have to carry it.
 
 ## Words reserved to one side of a distinction
 
-Each of these has a second, natural-sounding sense that the model needs kept out. The table gives
-the reserved sense and the word to use for the other one.
+Each of these has a second, natural-sounding sense to keep out of the model. The table gives the
+reserved sense and the word to use for the other one.
 
 | Word                  | Reserved for                                                                                                                      | For the other sense, write                                                                                                                                                                                                                                                                                                     |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -144,14 +155,14 @@ the reserved sense and the word to use for the other one.
 | record                | one row of data                                                                                                                   | **grant**, or **approval** in a reader-facing document. "Grant record" is unambiguous and stays                                                                                                                                                                                                                                |
 | permission            | the vocabulary entry, at either layer                                                                                             | nothing. There is no separate word for the role-level set                                                                                                                                                                                                                                                                      |
 | approval              | the process preceding a grant                                                                                                     | **grant**, for the act and its record inside Usher                                                                                                                                                                                                                                                                             |
-| state                 | a value in a defined set that Usher's own store holds: a grant's `pending` or `active`, a revocation recorded against a principal | **status**, for a condition read or derived when asked, and which can come back unknown: revocation status the bridge cannot confirm, admin status read from the IdP token, an HTTP status code                                                                                                                                |
+| state                 | a value in a defined set held by Usher's own store: a grant's `pending` or `active`, a revocation recorded against a principal    | **status**, for a condition read or derived when asked, and which can come back unknown: revocation status when the bridge cannot confirm it, admin status read from the IdP token, an HTTP status code                                                                                                                        |
 | authorization         | holding permission, the standing state a grant creates                                                                            | **access**, for the request-time result. The thing resolved is an **access decision**, and enforcement carries it out                                                                                                                                                                                                          |
 | holder                | uses that name what is held: a **grant holder**, a **token holder**, an account holder                                            | **principal**, **group** or **owner**, wherever the word would stand alone. Bare, it does not say what is being held, and the corpus had it meaning four different things, an owner most often                                                                                                                                 |
 | burst                 | a spike in traffic, and cache behaviour under one                                                                                 | **rate**, wherever what is meant is how many grant operations one actor performs within a window                                                                                                                                                                                                                               |
 | authorization service | other systems that carry the name: EGO, Keycloak Authorization Services, ELIXIR AAI                                               | **access control service** for Usher, and **access control plane** for its place in the architecture                                                                                                                                                                                                                           |
 | dataset               | reader-facing prose, where it is the lay term for a resource                                                                      | **resource**, in every design document. Listing an instance's own word is a different act and stays as it is: dataset sits beside study, project and programme there                                                                                                                                                           |
-| set                   | a saved set in Arranger, which is a list of records a person picked and kept                                                      | **nothing here.** Do not use it for a segment of Usher's data: a resource, a category, or the records either selects. Those have their own words, and borrowing this one puts an Arranger feature in the reader's mind                                                                                                         |
-| catalogue             | a body of data a service holds, as in Arranger: one schema, and so the scope a resource field name resolves in                    | **list**, wherever a list of things is what is meant, as the events Usher emits are. **vocabulary**, for the capability vocabulary, which is a defined term. **Arranger catalogue**, written qualified every time, for the `catalogueId` container that can hold more than one catalogue. **listed**, where the verb was meant |
+| set                   | a saved set in Arranger, which is a list of records picked and kept by a person                                                   | **nothing here.** Do not use it for a segment of Usher's data: a resource, a category, or the records selected by either. Those have their own words, and borrowing this one puts an Arranger feature in the reader's mind                                                                                                     |
+| catalogue             | a body of data held by a service, as in Arranger: one schema, and so the scope in which a resource field name resolves            | **list**, wherever a list of things is what is meant, as with Usher's events. **vocabulary**, for the capability vocabulary, which is a defined term. **Arranger catalogue**, written qualified every time, for the `catalogueId` container that can hold more than one catalogue. **listed**, where the verb was meant        |
 
 **Why catalogue needed the most work of these.** It had reached four senses. One was a list of
 events, which gives the word up to `list`. One was the capability vocabulary, which is a defined term
@@ -172,7 +183,7 @@ system stays the exception, since Cerbos and the wider literature both say "auth
 and reproducing their term is correct.
 
 **Why the principal and subject lines matter most.** Both are one-to-one today, and both stop being
-so under a change the architecture deliberately keeps open. A group never asks, so writing
+so under a change deliberately kept open by the architecture. A group never asks, so writing
 "principal" where "holder" is meant makes a group into something that asks. A second identity
 provider gives one principal two subjects, so writing "subject" where "principal" is meant builds in
 an assumption that holds only while there is one IdP.
@@ -189,7 +200,7 @@ correct.
 
 **Where it comes from.** Mathematics and theoretical physics, by way of formal linguistics and
 analytic philosophy. "The conservation law falls out of the symmetry." "The constraint falls out of
-the theory." It is the idiom of a derivation yielding something nobody had to stipulate.
+the theory." It is the idiom of a derivation yielding something that needed no stipulation.
 
 **Why it keeps appearing in documents like these.** It is the register of writing _about_
 derivations, and a design document is one: premise, mechanism, consequence. So it sits one step from
@@ -219,17 +230,17 @@ nothing, because nothing about it prompts a second look.
 | trivially, by construction    | say why, in words                   |
 | on pain of                    | otherwise                           |
 
-**Most of it is greppable**, unlike the plain-word rule above, which needs a glossary lookup. That is
+**Most of it is greppable**, unlike the plain-word rule below, which needs a glossary lookup. That is
 why this one is a check and that one is a judgement.
 
 **Measured elsewhere, and the measurement narrows the claim.** This rule was offered upstream for
 general use and measured against a second corpus there before adoption. Of 23 matches, roughly a
-third were the register and the rest were ordinary English that the patterns caught anyway. Two
+third were the register and the rest were ordinary English caught by the patterns anyway. Two
 specific findings are worth keeping, because both weaken arguments made above:
 
-- **`for free` does not invert.** A reader without the idiom gets approximately the right meaning, so
-  it fails the criterion this section uses to justify barring the whole register rather than listing
-  offenders. It stays in the table as wordiness rather than as a danger.
+- **`for free` does not invert.** A reader without the idiom gets approximately the right meaning,
+  so it fails this section's criterion for barring the whole register rather than listing offenders.
+  It stays in the table as wordiness rather than as a danger.
 - **The distinction between raising a question and deciding one is not mechanizable.** A pattern
   cannot tell whether "follows from" is reporting a derivation or performing one, which is the
   distinction that decides whether a given instance is a defect.
@@ -241,10 +252,10 @@ rate is a cost paid by the person who set the rule. Do not propagate it as a blo
 ## Reach for the plain word first
 
 Where a plain word is exact, the longer one is a cost with no return. A reader pays for it, and the
-word starts collecting senses precisely because it feels weighty enough to reuse: `catalogue` reached
-four senses that way, and two of them were doing work that `list` and `listed` do without ceremony.
+word starts collecting senses precisely because it feels weighty enough to reuse: `catalogue`
+reached four senses that way, and `list` and `listed` do the work of two of them without ceremony.
 
-The test is not word length. It is whether the longer word carries something the plain one drops:
+The test is not word length. It is whether the longer word carries something dropped by the plain one:
 
 | Longer word       | Keep it when                                                                                                                                        | Otherwise write     |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
@@ -257,22 +268,22 @@ The test is not word length. It is whether the longer word carries something the
 
 **This rule stops at the glossary door, and that boundary is the whole of it.** It governs words
 chosen for how they sound, never words chosen for what they mean. A defined term of art, an industry
-standard, a keyword the model has settled on: those are governed by **one word, one meaning**, and
-under that rule the term stays put however long it is and however plain a near-synonym looks. Which
-rule applies is settled by one question, not by taste: is the word defined? If the glossary or an
+standard, a settled keyword in the model: those are governed by **one word, one meaning**, and under
+that rule the term stays put however long it is and however plain a near-synonym looks. Which rule
+applies is settled by one question, not by taste: is the word defined? If the glossary or an
 external standard defines it, leave it alone.
 
-**Ignoring that boundary produces the mirror defect, and it happened here.** The capability sites were
-swept to `list` in the same pass that moved the event ones, which left `permissions-model.md` saying
-"the list has two parts" about the object `rabac-alignment.md` calls the capability vocabulary. That
-is two words for one thing, which is the _no synonyms for variety_ rule broken three sections above
-by the fix for a rule broken below it. Plainness taken past a defined term does not simplify the
-corpus; it adds a synonym to it.
+**Ignoring that boundary produces the mirror defect, and it happened here.** The capability sites
+were swept to `list` in the same pass that moved the event ones, which left `permissions-model.md`
+saying "the list has two parts" about the object called the capability vocabulary in
+`rabac-alignment.md`. That is two words for one thing: fixing a plain-word slip broke the _no synonyms
+for variety_ rule in the register table at the top of this file. Plainness taken past a defined term
+does not simplify the corpus; it adds a synonym to it.
 
 So this sits beneath **one word, one meaning** rather than beside it, in both directions. A word
 reached for because it sounds substantial is the word most likely to be reached for again in a
-different sense, which is what plainness prevents. A word that already carries a definition is one
-the first rule is holding in place, and plainness has no business touching it.
+different sense, which is what plainness prevents. A word that already carries a definition is held
+in place by the first rule, and plainness has no business touching it.
 
 ## camelCase wherever the name is not a database identifier
 
@@ -304,12 +315,18 @@ them is a question about the thing being described, not about which is the appro
 
 `client` is not available for either, being reserved for a machine principal. `adopter` is retired.
 
-**The qualifier is not decoration, and dropping it changes what the sentence denotes.** A platform runs applications that Usher does not govern: Elasticsearch, Postgres and Keycloak are all applications by any ordinary reading, and none of them carries an adapter. So a bare `application` names a set that includes them, and every claim made about what an application does, holds in configuration, or enforces is then false of most of that set. **Carrying an adapter is what makes one ushered**, and it is the property every such claim actually depends on. Where a sentence is about the thing that enforces, `ushered` is load-bearing and its absence is a defect rather than brevity.
+**The qualifier is not decoration, and dropping it changes what the sentence denotes.** A platform
+runs applications not governed by Usher: Elasticsearch, Postgres and Keycloak are all applications
+by any ordinary reading, and none of them carries an adapter. So a bare `application` names a set
+that includes them, and every claim made about what an application does, holds in configuration, or
+enforces is then false of most of that set. **Carrying an adapter is what makes one ushered**, and
+every such claim actually depends on that property. Where a sentence is about the thing that
+enforces, `ushered` is load-bearing and its absence is a defect rather than brevity.
 
 **And where a sentence needs a role rather than the thing, the role extends the term rather than
 replacing it.** An ushered service acting as the requester in a token exchange or as an adapter's
 target is still an ushered service; `requesting application` and `target service` describe what it is
-doing in that sentence. They stop being descriptions and become synonyms the moment one of them
+doing in that sentence. They stop being descriptions and become synonyms as soon as one of them
 appears where the thing itself is being named.
 
 **`data service` is the exception, and it graduated.** It was listed above as a role description
@@ -317,25 +334,25 @@ under exactly that warning. DCAT defines `dcat:DataService` as a collection of o
 through an interface that provide access to one or more datasets, which is what Arranger, Lyric,
 Score and Song each are, so the phrase now names a kind of thing rather than a thing's current job.
 **ushered data service** is therefore available as a third noun, and it is the most precise of the
-three: an ushered application may be anything, an ushered service serves requests of any kind, and an
-ushered data service is one that serves data, which is the only class Usher exists to put a decision
-in front of.
+three: an ushered application may be anything, an ushered service serves requests of any kind, and
+an ushered data service is one that serves data. Usher exists only to put a decision in front of
+that class.
 
 **It also draws the plane boundary for free.** Usher is a service and is not a data service, so the
 term separates the two sides without a sentence explaining the separation. The controller, bridge and
 adapter are not data services either.
 
-**Use it where the precision earns its place, not everywhere.** Most sentences do not turn on which
+**Use it where the precision earns its place, not everywhere.** Most sentences do not depend on which
 kind of thing is meant, and a sweep would trade a readable word for a longer one in every passage
-that never needed it, which is the plain-word rule below applied to a term of art that does have a
+that never needed it, which is the plain-word rule above applied to a term of art that does have a
 definition. Reach for it at the plane boundary, in the adapter contract, and wherever a reader could
 otherwise think Usher were one of them.
 
 ## Field against field name, and how to tell which
 
 **The same ambiguity cost Arranger a painful migration, so it is checked here rather than trusted.**
-A field is the whole key-and-value unit a record carries; the field name is the key; the value is what
-that record holds there.
+A field is the whole key-and-value unit carried by a record; the field name is the key; the value is
+what that record holds there.
 
 **The tell is what the sentence is doing with it.**
 
@@ -356,13 +373,13 @@ which only a name can be.
 ## A definition is one sentence, and the rest is detail
 
 **An entry opens with a sentence that says what the term is, and nothing else, then a blank line.**
-Everything after that is elaboration a reader may or may not need. "A collection of principals." is a
-complete entry for Group; the two-gate model is not part of what a role is, and the `entity.action`
-convention is not part of what a capability is.
+Everything after that is optional elaboration. "A collection of principals." is a complete entry for
+Group; the two-gate model is not part of what a role is, and the `entity.action` convention is not
+part of what a capability is.
 
-The defect this prevents is a defining sentence that keeps going, so a reader arrives at a clause
-about examples or mechanism before they have the meaning. It also makes the entries comparable: four
-words against six lines is visible at a glance where two run-on paragraphs are not.
+This rule prevents a defining sentence that keeps going and brings a reader to a clause about
+examples or mechanism before they have the meaning. It also makes the entries comparable: four words
+against six lines is visible at a glance where two run-on paragraphs are not.
 
 A tell that a definition has stopped and detail has started: the sentence begins naming Usher's
 behaviour, an example, or a consequence, rather than the term itself.
@@ -372,7 +389,7 @@ behaviour, an example, or a consequence, rather than the term itself.
 **A sentence about an effect on someone reads backwards when the mechanism is its subject.** "A grant
 ending removes what its holder had" makes the reader hold an abstraction, apply it to a second
 abstraction, and only then work out who it happened to. "A principal or group loses permissions when
-the grant ends" says the same thing in the order a reader needs it.
+the grant ends" says the same thing, ordered for the reader.
 
 The tell is a gerund or an event as the grammatical subject with a person as its object: a grant
 ending, adding a category, removing the owner, the absence of a rule. Those are all fine as
@@ -384,7 +401,7 @@ name them, then say what happened.
 
 ## Which subject a sentence about Usher takes
 
-**Four subjects, narrowing.** Picking the wrong one asserts something the design does not say.
+**Four subjects, narrowing.** Picking the wrong one makes the design say something it does not.
 
 | Subject                                             | When                                     | Example                                                                      |
 | --------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
@@ -406,17 +423,17 @@ values.
 ## Naming Usher and its parts
 
 **Usher** is the whole: controller, bridge and adapter. **The controller** is the deployed service,
-and the only one of the three that a network address reaches, since the bridge and the adapter are
+and the only one of the three reachable at a network address, since the bridge and the adapter are
 libraries running inside an ushered service's own process. So a bare "the service" resolves to the
-controller where a process is meant and to Usher where the thing Overture offers is meant, which is
-why it should not stand alone in a sentence that could be either. Name the controller when a
-component is meant and Usher when the system is.
+controller where a process is meant and to Usher where Overture's offering is meant, which is why it
+should not stand alone in a sentence that could be either. Name the controller when a component is
+meant and Usher when the system is.
 
 **The control plane is a third scope, and wider than Usher**, holding Keycloak as well: an identity
 provider governs identity rather than serving records, and the data plane is the only other side to
 be on. So a sentence about the control plane is not a sentence about Usher. Where Usher alone is
-meant, the phrase is **the access control plane**: the part of the control plane that access control
-runs in.
+meant, the phrase is **the access control plane**: the part of the control plane where access
+control runs.
 
 ## Name the container, not just the slot
 
@@ -432,9 +449,9 @@ work out which collection is meant, and they can only do that if they already kn
     the glossary entry    resolved
 
 **The tell is that the word names a slot rather than a thing.** A slot belongs to something, and the
-something is the half a reader cannot recover. This applies to speech as much as to documents: in
-conversation the container is usually obvious to whoever is writing and invisible to whoever is
-reading, which is what makes it easy to leave out.
+something, the other half, is what a reader cannot recover. This applies to speech as much as to
+documents: in conversation the container is usually obvious to whoever is writing and invisible to
+whoever is reading, which is what makes it easy to leave out.
 
 ## Naming who receives access
 
@@ -490,18 +507,18 @@ pass, not a second concept.
 | Retired                                                                                             | Meant                                                                             | Retired because                                                                                                                                                                                        |
 | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | requester                                                                                           | principal                                                                         | reads as neutral but adds nothing principal does not carry                                                                                                                                             |
-| caller                                                                                              | principal                                                                         | suggests a machine, which is the assumption the vocabulary exists to avoid                                                                                                                             |
+| caller                                                                                              | principal                                                                         | suggests a machine, and the vocabulary exists to avoid that assumption                                                                                                                                 |
 | plugin, for the application-side enforcement component                                              | adapter                                                                           | an Usher plugin reads as something that extends Usher itself, which nothing does yet                                                                                                                   |
 | adapter, for the identity-provider side                                                             | connector                                                                         | adapter now names the application side, so one word would face both ways                                                                                                                               |
 | approve, approval (as the act)                                                                      | grant                                                                             | a second noun for one act made a rare separation look structural                                                                                                                                       |
 | member (as a role name)                                                                             | a viewer, the base role carrying read access and no authority over other people's | named belonging rather than an act, so calling the base role `member` implied an owner was not one. `reader` was rejected: this corpus uses "a reader" forty times for whoever is reading the document |
 | membership, memberships                                                                             | a principal or group holding a role in a resource                                 | named a relation without saying what it entails; `group_users` and `resource_categories` name both sides, and a role is what the row carries                                                           |
 | privilege                                                                                           | permission                                                                        | proposed as a role-level counterpart to permission; the two layers share one vocabulary                                                                                                                |
-| record-level category tagging                                                                       | record-level narrowing                                                            | named the mechanism as writing labels onto records, which this design does not do                                                                                                                      |
+| record-level category tagging                                                                       | record-level narrowing                                                            | named the mechanism as writing labels onto records, and this design writes none                                                                                                                        |
 | **`curator` was retired on 2026-07-13 and reinstated in September.** It is not in the table above,  |
 | and the retirement is recorded here because the reversal is the part worth knowing. The July pass   |
 | resolved it to "an owner or a viewer, whichever the sentence means", which the model then showed to |
-| be exactly the conflation the plane split exists to prevent: an owner is not a wider viewer.        |
+| be exactly the conflation prevented by the plane split: an owner is not a wider viewer.             |
 
 **The two roles both carry create, read, update and delete, over different objects.** `curator` is
 the data-plane role: CRUD on records. `owner` is the control-plane role: CRUD on access to one
@@ -517,7 +534,7 @@ retrospect. The full site list is in [role-model-sweep.md](role-model-sweep.md).
 A term arriving from another system keeps that system's meaning there and does not automatically
 carry it here. The mapping table in the glossary is the reference; the rule for writing is that a
 borrowed term whose Usher column reads "nothing" has no counterpart, so reaching for it introduces a
-concept the model does not have.
+concept absent from the model.
 
 ## Open overloads, tracked
 
@@ -563,9 +580,10 @@ not to help, which is worth keeping since it looked as though it would: `dcat:Da
 study and of a catalogue, so it legitimizes both senses and adjudicates neither.
 
 **The rest are ordered by damage rather than by count.** `payload` leads now. It names the central
-object the system produces, it is used 45 times in one compound, and the corpus disagrees with itself
-about whether that compound means the token or a field in the token. `artifact` follows because it is
-the clearest, and because confusing a governance object with a published document is not harmless. `ceiling` sits third and is
-the cheapest of the six: it needs a definition rather than a rename, and the definition is already
-written in `token-calculation.md` waiting for one open question to settle which of two forms it takes.
-`scope` is last because it is a re-test of a recorded claim rather than a terminology pass.
+object produced by the system, it is used 45 times in one compound, and the corpus disagrees with
+itself about whether that compound means the token or a field in the token. `artifact` follows
+because it is the clearest, and because confusing a governance object with a published document is
+not harmless. `ceiling` sits third and is the cheapest of the six: it needs a definition rather than
+a rename, and the definition is already written in `token-calculation.md` waiting for one open
+question to settle which of two forms it takes. `scope` is last because it is a re-test of a
+recorded claim rather than a terminology pass.

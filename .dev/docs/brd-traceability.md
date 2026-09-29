@@ -5,7 +5,7 @@ design satisfies it. **The BRD is canonical and lives outside this repository**,
 iMS side as a working draft. Requirement text is deliberately not copied here: this file holds
 identifiers and what answers them, so nothing drifts except the mapping itself.
 
-Two uses: a decision can cite an identifier, and a reviewer can find the identifiers nothing cites.
+Two uses: a decision can cite an identifier, and a reviewer can find uncited identifiers.
 
 Status values: **met** means the design answers it; **partial** means answered with a stated gap;
 **open** means nothing in the design addresses it; **conflict** means the design contradicts it.
@@ -41,7 +41,7 @@ Status values: **met** means the design answers it; **partial** means answered w
 | FR-16 | met     | Open tier                                                                                                                                        |
 | FR-17 | met     | Deny by default                                                                                                                                  |
 | FR-18 | partial | Revocation propagates; removal from a portal page is portal work                                                                                 |
-| FR-19 | partial | Marked nice-to-have in both documents. Same missing mechanism as FR-09, which the flows now specify                                              |
+| FR-19 | partial | Marked nice-to-have in both documents. Same missing mechanism as FR-09, now specified by the flows                                               |
 
 ## Steward management
 
@@ -49,7 +49,7 @@ Status values: **met** means the design answers it; **partial** means answered w
 | ----- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | FR-20 | met     | Ownership cascade: the submitter becomes owner by default                                                                                                                              |
 | FR-21 | decided | Requires multiple owners with equal authority. The single-owner rule moves to a non-empty set; see the ownership item in `.dev/roadmap.md`. Design work outstanding, conflict resolved |
-| FR-22 | met     | Adding an owner rather than transferring, which the set model supports. The flows settle the open sub-decision: no consent from existing owners is required                            |
+| FR-22 | met     | Adding an owner rather than transferring, supported by the set model. The flows settle the open sub-decision: no consent from existing owners is required                              |
 | FR-23 | met     | Removal is bounded by the non-empty-set invariant. The flows settle the open sub-decision: both peer removal and self-removal are supported, and the invariant is enforced at each     |
 | FR-24 | met     | The no-owner invariant is the same rule stated from the other side                                                                                                                     |
 | FR-25 | partial | Revocation is prompt within a bounded window rather than instantaneous. Whether "immediate" admits the propagation window needs confirming with the BA                                 |
@@ -69,7 +69,7 @@ Status values: **met** means the design answers it; **partial** means answered w
 
 The requirements call for several owners of one resource per dataset with equal rights, naming the real case: a principal investigator holds legal authority while submitters do the work, so all of them need it. The design required exactly one owner and built three mechanisms on that singularity.
 
-**Decided in the requirements' favour.** Ownership becomes a non-empty set, which FR-24 already states from the other side. The cascade seeds a set rather than resolving to one owner, the invariant blocks removal of the last owner rather than any owner, and last-owner promotion is retired because the invariant now prevents the case it repaired. Two sub-decisions remain open, recorded at FR-22 and FR-23: whether adding an owner requires existing owners' consent, and whether an owner may remove a peer or only themselves.
+**Decided in the requirements' favour.** Ownership becomes a non-empty set; FR-24 already states this from the other side. The cascade seeds a set rather than resolving to one owner, the invariant blocks removal of the last owner rather than any owner, and last-owner promotion is retired because the invariant now prevents the case it repaired. Two sub-decisions remain open, recorded at FR-22 and FR-23: whether adding an owner requires existing owners' consent, and whether an owner may remove a peer or only themselves.
 
 ## Conflicts raised by the user flows
 
@@ -85,7 +85,7 @@ administrator sees users, their grants, resource metadata and audit logs, and do
 One sub-question stays open: whether a system administrator may grant data access as an override.
 
 **Submitter access breadth: instance policy, not an Usher rule.** Submitters in iMS are also
-granted ownership, which is a project requirement rather than something Usher encodes.
+granted ownership as a project requirement, so Usher does not encode it.
 
 **Invitation email binding: resolved against the flows.** The invited address is a placeholder held
 until the grant attaches to a Keycloak subject, and the magic link binds it to whichever account the

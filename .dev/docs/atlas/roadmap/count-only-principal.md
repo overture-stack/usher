@@ -33,18 +33,18 @@ three routes obtain a count without it:
 | Route       | What it recovers                                                                                                                                                                        |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Subtraction | a withheld bucket's count, as the total less the visible buckets' counts, when both come back under the one `count`                                                                     |
-| Filtering   | a bucket's count with its key withheld: count the records whose field holds a value the principal supplies, or that fall in ranges it supplies, which one unit wide rebuild a histogram |
+| Filtering   | a bucket's count with its key withheld: count the records whose field holds a value supplied by the principal, or that fall in ranges it supplies, which one unit wide rebuild a histogram |
 | Repetition  | a small group, from two counts over criteria that differ only by the people in it                                                                                                       |
 
 **So the question is wider than facets.** It is what a principal holding `count` may learn about a
-field's values by any route, and a facet is only the most visible one. Filtering is the route the
-discovery tier exists to serve, since counting the records that match someone's criteria is the use
-case, so a field's values being guessable decides more than whether it is offered as a facet.
+field's values by any route, and a facet is only the most visible one. The discovery tier exists to
+serve the filtering route, since counting the records that match someone's criteria is the use case,
+so a field's values being guessable decides more than whether it is offered as a facet.
 
 **The oracle needs no aggregation.** A plain record count under a filter confirms whether a value
-the principal names exists in data they reach, so every count is a route to the values of whatever
-it may be filtered by. Classifying aggregations governs what one response hands over unasked; it
-does not reach what a series of guesses recovers.
+named by the principal exists in data they reach, so every count is a route to the values of
+whatever it may be filtered by. Classifying aggregations governs what one response hands over
+unasked; it does not reach what a series of guesses recovers.
 
 **Exposure is a property of the field's values, not of the query surface.** An ordered numeric field
 falls to bisection, a field with few and guessable values falls to enumeration, and free text falls
@@ -84,8 +84,8 @@ it.
 category, and Usher carries them without choosing them. For a community's data that is the
 community, which is what the custodian role exists for.
 
-**Export is unaffected.** Export requires `view` and `export`, so the total an export paginates on is
-over records the exporter views and is never rounded.
+**Export is unaffected.** Export requires `view` and `export`, so an export's pagination total is
+over records viewed by the exporter and is never rounded.
 
 ## Two ways to separate a bucket's key from a record
 

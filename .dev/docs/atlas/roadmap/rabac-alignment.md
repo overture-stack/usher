@@ -28,16 +28,16 @@ grants read as additive, which describes the implementation rather than the rule
 `token-calculation.md` carries the invariant and the cases.
 
 **One difference underneath it changes what stage one is.** In NIST RBAC `PRMS = 2(OPS x OBS)`, so a
-permission already names its object and a role hands out verb-object pairs. That is why role explosion
-happens, one doctor role per patient. Usher's ceiling carries verbs only and every object arrives
-through a grant, so Usher's stage one is weaker than RABAC's and its stage two does constructive work
-RABAC's never does. The two are reconciled by reading the ceiling as universal, which is what the
-decision records.
+permission already names its object and a role hands out verb-object pairs. That is why role
+explosion happens, one doctor role per patient. Usher's ceiling carries verbs only and every object
+arrives through a grant, so Usher's stage one is weaker than RABAC's and its stage two, unlike
+RABAC's, does constructive work. The two are reconciled by reading the ceiling as universal, which
+is what the decision records.
 
 That is the whole finding. The category machinery is a well developed permission filtering policy.
-The role-to-permission assignment that the filter is supposed to be filtering was never defined, so
-the token carries a `role` label that nothing consumes, because no adapter has anything to consult
-it against.
+The filter is supposed to be filtering a role-to-permission assignment that was never defined, so
+the token carries a `role` label consumed by nothing, because no adapter has anything to consult it
+against.
 
 ## Three consequences, currently live
 
@@ -88,10 +88,10 @@ comes from a running system rather than from anticipation.
 settled when implementation starts, against real APIs, because what an API offers is discovered by
 building against it rather than decided in prose.
 
-**Customization is safe because unknown names fail closed in both directions.** A permission in a
-token that an adapter has never heard of is consulted by nothing, so it grants nothing. A permission an
-adapter checks for and the token lacks fails the check, so it denies. Neither leaks, and the worst
-outcome is access refused that should have been allowed, which someone complains about.
+**Customization is safe because unknown names fail closed in both directions.** A permission in the
+token but unknown to the adapter is consulted by nothing, so it grants nothing. A permission checked
+by the adapter but missing from the token fails the check, so it denies. Neither leaks: the worst
+outcome is access refused that should have been allowed, and someone complains.
 
 **So customization is additive, and redefining a default is the one unsafe move.** Adapters check by
 name. An instance that keeps `download` and narrows what it means leaves every adapter performing what
@@ -114,15 +114,15 @@ iterates over each `(ops, obs)` permission separately, and the paper's worked ex
 writing. That is a consequence of the formalism and the example rather than a sentence in the paper,
 which is a weaker claim than this document made before and still sufficient.
 
-The concrete case this project already asked for and the orthogonal shape cannot express: read on
-one category, read and upload on another, within the same resource. Pairing the permission with the
+This project already asked for a concrete case inexpressible in the orthogonal shape: read on one
+category, read and upload on another, within the same resource. Pairing the permission with the
 category expresses it; two lists cannot.
 
 What remains true is that a permission and a category answer different questions, and someone may
-hold a permission on a resource's open portion while reaching none of its restricted records. That is
-preserved by pairing, since open content is itself a category: holding `download` on `open` and only
-`view` on `controlled` says exactly that. No resource-level slot is needed, and adding one would
-reintroduce the baseline that additive rendering exists to do without.
+hold a permission on a resource's open portion while reaching none of its restricted records. That
+is preserved by pairing, since unmarked content is itself a category: holding `export` on `unmarked`
+and only `view` on `controlled` says exactly that. No resource-level slot is needed, and adding one
+would reintroduce a baseline, and additive rendering exists to do without one.
 
 Whether the originating role name travels alongside the permissions is a separate and smaller
 question. It is not needed for enforcement, and audit events are emitted by the controller, which
@@ -131,8 +131,9 @@ representations that can disagree.
 
 ## Roles at each plane, and one token shape for both
 
-Permissions divide by what they act on, which is the split the architecture already draws. A
-control-plane permission acts on what Usher holds; a data-plane one acts on records held by an application. Roles live at each plane, and a principal holds roles at both independently.
+Permissions divide by what they act on, as the architecture already divides them. A control-plane
+permission acts on what Usher holds; a data-plane one acts on records held by an application. Roles
+live at each plane, and a principal holds roles at both independently.
 
 **The plane names what a permission targets, not where it is enforced.** Both are enforced in the
 control plane: the controller checks a control-plane permission on an admin call, and the adapter
@@ -149,9 +150,8 @@ run inside an application, which is why enforcing there does not put policy ther
 | namespace                         | `grant.*`, `ownership.*`                             | `record.*`                                        |
 
 **The role names in that first row are examples**, as capability names are. Which roles an instance
-defines is its governance decision, and `submitter` there is a name an instance might give a group
-allowed to upload, which is a different thing from the provenance the glossary records under the same
-word.
+defines is its governance decision, and `submitter` there might name a group allowed to upload: a
+different thing from the provenance recorded in the glossary under the same word.
 
 **Overlap is the normal case rather than the exception.** An owner who is also a submitter holds a
 role at each plane, and neither implies the other. This is what "an owner holds member-level data
@@ -185,10 +185,10 @@ Resource, then category, then permissions, in both. The management token is what
 to decide which views and controls to offer, rather than discovering its own permissions by
 attempting actions and reading the failures.
 
-**Scoping built into the shape is what makes that safe.** A custodian of `controlled` receives a token
-naming `controlled` and nothing else, so they never learn which other categories exist. The
-alternative, sending the full picture with permissions marked on it, leaks by its shape. This is
-the same property the data token already has: it names only resources reachable by the principal.
+**Scoping built into the shape is what makes that safe.** A custodian of `controlled` receives a
+token naming `controlled` and nothing else, so they never learn which other categories exist. The
+alternative, sending the full picture with permissions marked on it, leaks by its shape. The data
+token already has the same property: it names only resources reachable by the principal.
 
 **A wildcard is valid in either position and means all of them.** A custodian's authority spans every
 resource, so `*` stands in the resource position; ownership permissions are not per category, so
@@ -198,11 +198,11 @@ resource, so `*` stands in the resource position; ownership permissions are not 
 `record.view` both read as "revoke" and "view" to a person, while remaining distinct strings, which is
 what allows one shape to carry two vocabularies. It also matches how audit event types are written.
 
-**A permission and the event exercising it produce match**, sharing an entity segment and differing
-only verb to noun: `grant.create` produces `grant.creation`, `grant.revoke` produces
+**A permission and the event produced by exercising it match**, sharing an entity segment and
+differing only verb to noun: `grant.create` produces `grant.creation`, `grant.revoke` produces
 `grant.revocation`, `ownership.transfer` produces `ownership.transfer`. Both vocabularies are
-unbuilt, and they will be written at different times by different people, so the correspondence needs
-stating rather than leaving to care.
+unbuilt, and they will be written at different times by different people, so the correspondence
+needs stating rather than leaving to care.
 
 **Creating access and conferring it are two acts.** The invitation flow is where they visibly come
 apart: an invitation carries the grants it will create, addressed to someone with no account, so the
@@ -220,9 +220,9 @@ the vocabulary: defining a role is not assigning one.
   follow `entity.action` and divide by plane, which is what the design commits to. Which capabilities
   exist is settled against real APIs when building starts.
 - ~~Whether a grant's permissions must sit inside the role's ceiling.~~ **Settled: they must.** The
-  filter can only remove from the maximum the roles confer, so a grant cannot hand someone a capability
-  their role does not carry, and the role is a real gate rather than advice. `effective ⊆ ceiling` is
-  asserted at issuance.
+  filter can only remove from the maximum conferred by the roles, so a grant cannot hand someone a
+  capability beyond their role, and the role is a real gate rather than advice.
+  `effective ⊆ ceiling` is asserted at issuance.
 - **Which of this is MVP.** The split itself shapes the schema, so it is not deferrable. The
   control-plane vocabulary follows custodianship, which is not in the first release.
 
@@ -259,16 +259,16 @@ rather than by omitting a feature, and the other three are omissions.
 question, not a permission question. It still needs either a two-level resource relationship or
 record-level enforcement.
 
-**Session attributes, which RABAC does not actually have.** The model defines user and object
-attributes only, and a footnote declines the rest: attributes could be associated with sessions,
-environment and system, and "User and object attributes suffice for purpose of RABAC." The worked
-example still constrains by time of day and by device, and does it by reading them as attributes of
-the session's owner, `time(sessionowner(se))` and `device(sessionowner(se))`.
+**Session attributes, absent from RABAC itself.** The model defines user and object attributes only,
+and a footnote declines the rest: attributes could be associated with sessions, environment and
+system, and "User and object attributes suffice for purpose of RABAC." The worked example still
+constrains by time of day and by device, and does it by reading them as attributes of the session's
+owner, `time(sessionowner(se))` and `device(sessionowner(se))`.
 
 That is better news for Usher than a session-attribute feature would have been. A time-of-day or
 connection-origin constraint is expressible as a user attribute, so wanting one does not require
-sessions, which Usher does not have. The time-limited admin self-grant is the nearest thing here and
-lives in the admin model rather than in the token.
+sessions, and Usher has none. The time-limited admin self-grant is the nearest thing here and lives
+in the admin model rather than in the token.
 
 **Role hierarchies.** RABAC preserves them from NIST RBAC. Usher deliberately does not have them,
 treating roles as a flat set whose effective permissions are a union. That is a considered
