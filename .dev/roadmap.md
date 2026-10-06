@@ -498,7 +498,7 @@ Shared library embedded in every ushered application: the authenticated token ex
 
 ### First publish of the two packages
 
-Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Scoping that pipeline starts when Arranger begins its adapter step. Also before the first publish: the licence, which keeps both packages private, the publishing-integrity choice, and the packaging checks waiting for CI in `tech-debt.md`.
+Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Scoping that pipeline starts when Arranger begins its adapter step. Also before the first publish: the licence, which keeps both packages private, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, real versions, since the packed bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies, and declarations free of imports they never use, since the bridge's import `webcrypto` from `node:crypto`.
 
 ### `@overture-stack/arranger-usher-adapter`
 
