@@ -16,6 +16,20 @@ a member the controller does not emit.
 
 A third is a rule of the vocabulary rather than of the type: `read` is a capability group, named
 where roles are written and expanded into its members there, so it never appears as an action.
+
+`offeredCategories` carries two rules the type cannot state: it names exactly the resources
+`permissions` names, and every category held on a resource is one that resource offers.
+
+This checker is stricter than the contract in one place, deliberately. It fails an entity key it
+does not know, because a fixture is authored and an unknown key there is a typo. The contract
+tolerates an unknown key at the entity level, and `usher-types` follows the contract.
+
+The rest hold for the controller and the validator alike. The root holds the payload's members and
+nothing else. A category name has one name after its scope, with no further separator, and field
+categories are named the same way. A resource identifier is not empty, neither is `__proto__`, and
+`sub` is a non-empty string or null. `iss` and `aud` are non-empty strings. Timestamps are
+integers, never booleans, from zero up to the largest safe integer, and `generatedAt` is not later
+than `iat`.
 """
 
 import json
@@ -32,7 +46,24 @@ ENTITY_ACTIONS = {
 # one. An adapter that tests for `read` tests for something the controller does not emit.
 CAPABILITY_GROUPS = {"read"}
 
-REQUIRED = ("payloadVersion", "sub", "iss", "aud", "iat", "exp", "generatedAt", "permissions")
+REQUIRED = (
+    "payloadVersion",
+    "sub",
+    "iss",
+    "aud",
+    "iat",
+    "exp",
+    "generatedAt",
+    "permissions",
+    "offeredCategories",
+)
+SCOPES = ("global.", "resource.")
+MAX_SAFE_INTEGER = 2**53 - 1
+
+
+def is_integer(value):
+    """True for a JSON integer. Python counts a boolean as an integer, and JSON does not."""
+    return isinstance(value, int) and not isinstance(value, bool)
 FORBIDDEN = ("categoryVersions",)
 
 
@@ -54,26 +85,39 @@ def check_payload(entry_id, payload, fail):
     for member in REQUIRED:
         if member not in payload:
             fail(f"{entry_id}: required member {member} is missing")
-    for member in FORBIDDEN:
-        if member in payload:
+    for member in payload:
+        if member in FORBIDDEN:
             fail(f"{entry_id}: {member} must not travel in the payload")
+        elif member not in REQUIRED:
+            fail(f"{entry_id}: {member} is not a member of the payload")
 
-    if payload.get("payloadVersion") != 1:
+    if not (is_integer(payload.get("payloadVersion")) and payload["payloadVersion"] == 1):
         fail(f"{entry_id}: payloadVersion must be 1")
-    if not (payload.get("sub") is None or isinstance(payload.get("sub"), str)):
-        fail(f"{entry_id}: sub must be a string or null, never absent")
-    for stamp in ("iat", "exp", "generatedAt"):
-        if not isinstance(payload.get(stamp), int):
-            fail(f"{entry_id}: {stamp} must be an integer")
-    if isinstance(payload.get("iat"), int) and isinstance(payload.get("exp"), int):
+    sub = payload.get("sub")
+    if not (sub is None or (isinstance(sub, str) and sub != "")):
+        fail(f"{entry_id}: sub must be a non-empty string or null, never absent")
+    for claim in ("iss", "aud"):
+        if not (isinstance(payload.get(claim), str) and payload[claim] != ""):
+            fail(f"{entry_id}: {claim} must be a non-empty string")
+    stamps = {stamp: payload.get(stamp) for stamp in ("iat", "exp", "generatedAt")}
+    for stamp, value in stamps.items():
+        if not (is_integer(value) and 0 <= value <= MAX_SAFE_INTEGER):
+            fail(f"{entry_id}: {stamp} must be an integer from zero to the largest safe integer")
+    if is_integer(stamps["iat"]) and is_integer(stamps["exp"]):
         if payload["exp"] <= payload["iat"]:
             fail(f"{entry_id}: exp must be later than iat")
+    if is_integer(stamps["iat"]) and is_integer(stamps["generatedAt"]):
+        if payload["generatedAt"] > payload["iat"]:
+            fail(f"{entry_id}: generatedAt must not be later than iat")
 
     permissions = payload.get("permissions")
     if not isinstance(permissions, dict):
         return fail(f"{entry_id}: permissions must be a map")
 
     for resource, categories in permissions.items():
+        check_name(f"{entry_id}/{resource}", resource, fail)
+        for category in categories if isinstance(categories, dict) else ():
+            check_category(f"{entry_id}/{resource}", category, fail)
         if not isinstance(categories, dict) or not categories:
             fail(f"{entry_id}/{resource}: a named resource carries at least one category")
             continue
@@ -90,9 +134,52 @@ def check_payload(entry_id, payload, fail):
                         fail(f"{where}: field maps to its own categories, and a present field key names at least one")
                         continue
                     for field_category, actions in value.items():
+                        check_category(f"{where}/field", field_category, fail)
                         check_actions(f"{where}/field/{field_category}", "field", actions, fail)
                 else:
                     check_actions(where, entity, value, fail)
+
+    check_offered(entry_id, permissions, payload.get("offeredCategories"), fail)
+
+
+def check_name(where, name, fail):
+    if name == "":
+        fail(f"{where}: a resource identifier is empty")
+    elif name == "__proto__":
+        fail(f"{where}: __proto__ is not a usable identifier")
+
+
+def check_category(where, category, fail):
+    if not isinstance(category, str):
+        return fail(f"{where}: a category name must be a string")
+    scope = next((prefix for prefix in SCOPES if category.startswith(prefix)), None)
+    if scope is None:
+        fail(f"{where}: {category} is not a scoped category name")
+    elif category[len(scope):] in ("", "__proto__"):
+        fail(f"{where}: {category} has no usable name after its scope")
+    elif "." in category[len(scope):]:
+        fail(f"{where}: {category} holds a separator after its scope")
+
+
+def check_offered(entry_id, permissions, offered, fail):
+    if not isinstance(offered, dict):
+        return fail(f"{entry_id}: offeredCategories must be a map")
+    if set(offered) != set(permissions):
+        fail(f"{entry_id}: offeredCategories must name exactly the resources permissions names")
+    for resource, categories in offered.items():
+        where = f"{entry_id}/offeredCategories/{resource}"
+        if not isinstance(categories, list) or not categories:
+            fail(f"{where}: a named resource offers at least one category")
+            continue
+        if len(set(categories)) != len(categories):
+            fail(f"{where}: repeats a category")
+        for category in categories:
+            check_category(where, category, fail)
+        held = permissions.get(resource)
+        if isinstance(held, dict):
+            for category in held:
+                if category not in categories:
+                    fail(f"{where}: {category} is held but not offered")
 
 
 def main():

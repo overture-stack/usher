@@ -59,10 +59,10 @@ the configuration below names them without it.
     G1 "cardiology" and G2 "study readers" are named sets of people. A role is
     named on each grant, never on the group.
 
-    HEART_STUDY    carries  controlled
-    LUNG_COHORT    carries  no concrete category
-    REEF_ARCHIVE   carries  controlled, community-governed
-    VOID_INDEX     carries  no concrete category; unmarked records by grant
+    HEART_STUDY    offers   controlled
+    LUNG_COHORT    offers   no concrete category
+    REEF_ARCHIVE   offers   controlled, community-governed
+    VOID_INDEX     offers   no concrete category; unmarked records by grant
 
     Every other resource's unmarked records are open.
 
@@ -77,10 +77,10 @@ Cases 28 to 35 were computed against a second configuration, and each carries
 
     viewer    count, view, export
 
-    OPEN_ATLAS       carries  no concrete category; unmarked records open
-    MEMBERS_ARCHIVE  carries  no concrete category; unmarked records registered
-    SEALED_ARCHIVE   carries  no concrete category; unmarked records by grant
-    HEART_STUDY      carries  controlled; unmarked records open
+    OPEN_ATLAS       offers   no concrete category; unmarked records open
+    MEMBERS_ARCHIVE  offers   no concrete category; unmarked records registered
+    SEALED_ARCHIVE   offers   no concrete category; unmarked records by grant
+    HEART_STUDY      offers   controlled; unmarked records open
 
     The baseline is on unless a case turns it off, and grants unmarked -> read
     wherever the setting is open. The signed-in rule grants unmarked -> read to
@@ -89,6 +89,13 @@ Cases 28 to 35 were computed against a second configuration, and each carries
 
 Two of its cases have no payload and are listed under `omitted`, both refusals: 33 at the bridge
 and 34 at the exchange, so each belongs to that component's tests rather than to a payload.
+
+## What each payload says a resource offers
+
+Every payload's `offeredCategories` is read from the table of its configuration: for each resource
+named in `permissions`, the concrete categories listed there and `global.unmarked`, since every resource
+in both tables has records carrying no concrete category. `.dev/check-fixtures.py` checks that it
+names exactly the resources `permissions` names and covers every category held.
 
 ## Cases marked not yet implementable
 
