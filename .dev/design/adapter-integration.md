@@ -69,6 +69,13 @@ predicate" in [decisions.md](decisions.md).
   An anonymous principal is served the open tier as always, exports included, since nothing is
   reduced for it.
 
+  **In GraphQL, a 503 is an error code rather than a status.** A GraphQL response's status speaks
+  for the whole request, so a refused operation answers with a GraphQL error carrying a stable code
+  that means temporarily unavailable, with no data, while an HTTP route such as an export answers
+  503 itself. Either way the text and the retry interval are the bridge's own for its 503, so a
+  client meets one answer whichever layer refused. Such a refusal is logged as its own event, never
+  as the failure that signals a misconfiguration.
+
 - A refused identity, whether expired, invalid or revoked, is answered by the bridge with one `401`
   and one fixed text before any read path runs, so a refusal never says which it was.
 
