@@ -12,9 +12,8 @@ Grouped by what each is blocked on, because that is what decides who can move it
 
 ### 1. Saved-set identity, and the vocabulary that expresses it
 
-The first application resolves saved sets with the requesting user's identity supplied as a query
-argument, so the client asserts who it is and any principal can name any user. Correcting it needs
-an identity source: the search service has none, and Usher supplies one.
+A saved set resolves for the identity the server establishes for the request, never for one the
+client supplies. That needs an identity source: the search service has none, and Usher supplies one.
 
 The tiered shape to express: own sets by default, an administrator able to list across users and
 filter by user id, and no reliance on a set identifier being unguessable. Two further parts of
