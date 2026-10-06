@@ -66,9 +66,9 @@ everything behind it, so the consumer side comes first and the controller last.
     4. Integration tests across the bridge and the controller, without Arranger's adapter.
     5. The profile surface, the management UI, and the submission bridge and adapter.
 
-Keycloak and Stage are integrated when a step needs them, not first. The adapter imports the bridge
-through `npm link` during development, so the bridge package and the shared types it re-exports,
-`@overture-stack/usher-types`, exist from the first step.
+Keycloak and Stage are integrated when a step needs them, not first. Until the bridge package and
+`@overture-stack/usher-types` are published, the adapter installs them from `pnpm pack` tarballs,
+never a committed local path, so both exist from the first step.
 
 **Step 1 is split by concern.** The adapter's tests, and the shared types they import, are written
 from Usher's side, since the queries and responses are Usher's concern as much as Arranger's, and
@@ -80,12 +80,11 @@ bridge's plan, step 2, is [bridge-tests.md](bridge-tests.md).
 **Data filtering comes first.** The adapter's logging tests are written with the rest, and its
 logging logic is filled in once the filtering works.
 
-**Step 1 waits on Arranger's toolchain upgrades.** `@overture-stack/usher-types` is built to what its
-first consumer can read, so it is created once Arranger's side has settled its TypeScript, zod and
-pnpm upgrades. It is not published until it is ready: local development links it, and a commit made
-while linked leaves the link out of the committed lockfile or workspace file, where both package
-managers record it. Arranger's CI cannot run the adapter's tests until the package resolves from the
-registry.
+**The packages are built to what their first consumer can read.** Both declare Node 24 or later,
+`@overture-stack/usher-types` imports no zod, and their types were checked on a sample surface from a
+TypeScript 5.8 consumer installing with npm, which is Arranger's toolchain. The real tarballs are
+type-checked the same way when the adapter first installs them. Neither is published until it is
+ready, so Arranger's CI cannot run the adapter's tests until both resolve from the registry.
 
 **Each step defines the contract of the one behind it**, by consuming it rather than by specifying it
 in advance: the adapter's tests fix what it needs from the bridge, and the bridge's tests fix what it
