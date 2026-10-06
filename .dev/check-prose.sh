@@ -68,7 +68,7 @@ report() { # name, regex, note, [exclude-path-substring ...]
 }
 
 report "em dash or spaced double dash" \
-  '—| -- ' \
+  '—| --( |$)' \
   "no dashes as prose punctuation in persisted content"
 
 # A bare auxiliary standing in for a verb phrase stated in an earlier clause.

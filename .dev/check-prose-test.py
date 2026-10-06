@@ -146,6 +146,10 @@ CASES = [
      "a section reference reads as a bare count; accepted rather than narrowed"),
 
     ("em dash", "A sentence with an em dash — here.", True, ""),
+    ("em dash", "a record thinner than the other one --", True,
+     "a double dash where a wrapped line ends, with no space after it"),
+    ("em dash", "| Column | Other |\n| ------ | ----- |", False, "a table rule is not a dash"),
+    ("em dash", "Run it with --include set.", False, "a command-line flag is not a dash"),
 
     ("a verb standing in for a phrase stated elsewhere",
      "A flat clause never reaches depth 2; an OR of ANDs, which does.", True,
