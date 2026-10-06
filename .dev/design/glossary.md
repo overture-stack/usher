@@ -80,10 +80,11 @@ access. In Overture, each application has its own PEP implemented as an adapter.
 decide: it enforces what the PDP computed. See [adapter-integration.md](adapter-integration.md).
 
 **Adapter** _(PEP adapter)_
-An application-specific library built on the bridge that translates the permissions payload into the
-application's native filter format. The first is the Arranger adapter, published as
-`@overture-stack/arranger-usher-adapter`, which turns the payload into SQON; the Lyric adapter,
-turning it into Lyric query conditions, follows.
+An application-specific library that applies the bridge's **enforcement result** at its
+application's own hook. It supplies the field names its mapping uses, and the bridge renders the
+result from them. The first is the Arranger adapter, published as
+`@overture-stack/arranger-usher-adapter`, which hands each catalogue's result to Arranger's
+server-side filter; the Lyric adapter, applying it as Lyric query conditions, follows.
 
 **Disambiguation note:** Named adapter rather than plugin, because an Usher plugin would read as
 something that extends Usher itself, and nothing does yet. Unrelated to a **connector**, which
@@ -95,7 +96,8 @@ the Arranger adapter.
 The shared library that implements the Usher protocol in applications: token exchange with the
 controller, local caching, Usher token decryption and validation, revocation channel maintenance,
 and fail-secure session suspension. Every adapter builds on it. Named for the drawbridge analogy:
-open when the controller connection is healthy, raised (returning 503) when it is not.
+open when the controller connection is healthy, raised when it is not: anything needing a granted
+permission then answers 503, while the open tier is still served.
 
 Published as `@overture-stack/usher-express-bridge`, from `modules/express-bridge` in Usher's own
 repository, which is created when implementation begins. The package and its directory name Express
@@ -132,8 +134,9 @@ cached payload still being present.
 **`PermissionsPayload`**
 The decrypted contents of an Usher token, and the single definition consumed by the controller, the
 bridge and the conformance fixtures alike. Written member by member in
-[security-workflow.md](security-workflow.md#the-payload-as-a-type). The bridge hands one to an adapter
-after decryption, so "the payload" and "the decrypted token" name the same object.
+[security-workflow.md](security-workflow.md#the-payload-as-a-type). "The payload" and "the decrypted
+token" name the same object. It stays inside the bridge, which reads it to render each catalogue's
+**enforcement result**; an adapter never receives it.
 
 **`payloadVersion`**
 A claim naming the schema of the rest of the payload, agreed at the exchange from the set of versions
@@ -629,14 +632,29 @@ object. They come apart at the second grant: the filter becomes a union of claus
 its own predicate, and each clause is itself a conjunction of a resource test and a category test.
 
 **Grace period**
-The configurable window after the revocation channel goes silent before the adapter enters
+The configurable window after a bridge's last successful check before it enters
 revocation-uncertain mode. Exists to tolerate brief network interruptions without immediately
-suspending all user sessions.
+suspending all user sessions. A successful check is a poll answered within its deadline; a pushed
+notice is applied but is not one, since nothing in it shows how long it was held.
+
+**Offered category**
+A category a resource admits: one a grant on that resource can name and its records can carry. A
+resource **offers** categories and a record **carries** one, and the two words are kept apart because
+the check that protects `unmarked` compares what a resource offers with what a catalogue maps, while
+enforcement tests what a record carries. A payload names, for each resource it names, every category
+the resource offers, held or not. See [decisions.md](decisions.md), "A catalogue's category gap is
+found by the bridge".
 
 **Open access**
 A data tier in which records require no authentication. The controller issues an anonymous grants
 token (no IdP bearer required); bridge and adapter handle it identically to an authenticated token.
 See [security-workflow.md § Permission computation pipeline](security-workflow.md#permission-computation-pipeline).
+
+**Request access** _(`UsherRequestAccess`)_
+One request's access as a bridge hands it to an adapter: the principal, with whether the results
+hold the open tier alone and whether the principal is **suspended**, and an **enforcement result** for
+each key the adapter registered. Plain data, the same from every bridge, carried in each framework's
+own per-request store under the key `usher`. See [adapter-integration.md](adapter-integration.md).
 
 **Resource field**
 The field naming a record's resource, tested by every enforcement clause.
@@ -650,15 +668,19 @@ Applies to all Usher tokens held by the adapter for that user regardless of thei
 TTLs. See [security-workflow.md](security-workflow.md).
 
 **Revocation channel**
-The mechanism by which Usher notifies adapters of revocations near-real-time. Two sub-channels:
-push (SSE or WebSocket subscription) and poll (`GET /revocations?since=<timestamp>` fallback).
-Adapters maintain both; the poll channel recovers from push channel interruptions.
+The notice stream from the controller to each bridge: one sequence of positions carrying every kind
+of notice, a principal's revocation, a category change, the baseline change, a global revocation and
+a sign-out. Two ways to read it: push (SSE or WebSocket, positions as event ids), for speed, and a
+poll for the notices after a position, which recovers what push missed and is the only liveness
+check. Bridges maintain both.
 
 **Revocation-uncertain mode**
-An adapter's state when its revocation channel has been silent for longer than the grace period.
-Sessions are suspended and requests return 503 until the channel reconnects, except for the open
-tier, which needs no grant, so a revocation has nothing to withdraw there. This is the fail-secure
-default: uncertainty about revocation status produces denial, not access.
+A bridge's state when no poll has been answered within its deadline for longer than the grace
+period. Every
+signed-in principal is **suspended**: requests are rendered from the last anonymous payload, so the
+open tier, which needs no grant, is still served, while anything only a grant could answer returns
+503 until the stream returns. This is the fail-secure default: uncertainty about revocation status
+withholds what a grant would reach, never what is open to everyone.
 
 **Server-side filter** _(Arranger-specific)_
 A SQON filter injected into every Arranger query by the adapter before the query reaches the search
@@ -671,6 +693,14 @@ whole filter is a single clause naming the resources reachable by the principal.
 Arranger's filter expression format, and the wire format emitted by the bridge. The bridge builds the
 predicate and the Arranger adapter compiles it into Arranger's query, supplying the field name for
 the catalogue being queried, since which field names a resource differs between catalogues.
+
+**Suspended** _(a principal's state)_
+A signed-in principal whose grants are on hold, because the bridge is in its revocation-uncertain
+mode or this principal's exchange failed while the notice stream is healthy. Distinct from holding
+only open data: a suspended principal's export, or a fetch only a grant could answer, returns 503
+rather than a reduced answer. A principal presenting no credential is never suspended; one whose
+credential the bridge has not yet confirmed is suspended with a null subject. Not to be confused
+with a revoked identity, which is refused with 401.
 
 **Token exchange**
 A PEP adapter's call to Usher, presenting an IdP bearer token and receiving a scoped Usher token in

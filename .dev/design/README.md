@@ -12,6 +12,25 @@ overview that introduces the patterns before the design detail.
 grouped by theme. [concepts.md](../../docs/concepts.md) covers the same vocabulary in more depth with
 rationale and context.
 
+## What these documents hold, and what they do not
+
+**They carry no scope.** What the first release contains is defined outside them, by the iMS UAC
+user flows, a live document maintained by the iMS side. [uac-flows-traceability.md](../docs/uac-flows-traceability.md)
+maps the flows to this design, and its persona status table is the closest thing to a scope
+statement; [brd-traceability.md](../docs/brd-traceability.md) covers the requirements and
+[phase-1.md](../docs/phase-1.md) what is deferred. A design can be sound and still describe
+something the first release does not want, so whether the first release contains a mechanism is
+answered there, never inferred from the model.
+
+**They hold Usher's principles and contracts, never one integration's details.** What Usher
+guarantees, and what every adapter must do, belongs here. How one application or engine behaves,
+its query language and data layer, and the evidence gathered while integrating it, belong in that
+integration's own repository. A finding that constrains every adapter is Usher's, even when one
+integration surfaced it. Vocabulary follows the same line: the glossary defines Usher's model, so a
+term naming one integration's milestone or process goes in that integration's documents. Session
+files follow it too, recording the Usher-side decision an integration prompted, with a pointer to
+the integration's document rather than its evidence.
+
 ## Reading order
 
 These documents are interconnected. The recommended path depends on what you are trying to
@@ -48,8 +67,9 @@ specified as request and response shapes).
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps                                                                  | reference                |
 | [security-workflow.md](security-workflow.md)         | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure                          | specced                  |
 | [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, Indigenous data governance, private data sharing               | in progress              |
-| [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the 29 cases that force each branch                | specced                  |
+| [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the cases that force each branch                   | specced                  |
 | [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                  | draft                    |
+| [schema.md](schema.md)                               | The controller's PostgreSQL store: tables, keys, indexes against the token calculation, the notice stream, the data access layer | draft for review         |
 | [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity       | in progress              |
 | [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                              | reference                |
 | [adapter-integration.md](adapter-integration.md)     | Per-app adapter design, bridge library (the bridge)                                                                 | designed; not yet a spec |

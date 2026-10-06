@@ -62,7 +62,8 @@ used here. See [security-threat-model.md](security-threat-model.md) for the full
                             v
                  Bridge caches token; validates locally on
                  every request within the TTL window.
-                 Adapter translates permissions payload into app-native format:
+                 Bridge renders an enforcement result per catalogue;
+                 adapter applies it in app-native form:
                    - Arranger: SQON filter object
                    - Lyric: database WHERE clause
                    - Stage: API query parameters
@@ -127,8 +128,7 @@ calling application's key, so a service without that key receives something it c
 
 A researcher's first request of the day against a search service:
 
-1. The adapter intercepts the request and extracts the IdP bearer token, then asks the bridge for a
-   `PermissionsPayload`.
+1. The bridge's middleware intercepts the request and extracts the IdP bearer token.
 2. The bridge has no unexpired Usher token for this principal, so it calls the controller's exchange
    endpoint, sending the IdP token and its own audience identifier.
 3. The controller validates the IdP token against the identity provider's public keys. This answers
@@ -136,10 +136,11 @@ A researcher's first request of the day against a search service:
 4. The controller reads its own store: which grants reach this principal, what each one's role
    permits, which of them are live, and whether the principal has been revoked. This is the permission computation pipeline below.
 5. The controller writes an Usher token: the permissions, an `aud` naming the calling instance, an
-   `exp` no later than the earliest expiry among the grants it drew on, and a `generatedAt` stamp. It
+   `exp` no later than the earliest expiry among the grants it drew on or the sign-in token's own
+   `exp`, and a `generatedAt` stamp. It
    encrypts the token with the key held for that application.
-6. The bridge decrypts it with the same key, caches it for its TTL, and hands the adapter a typed
-   `PermissionsPayload`.
+6. The bridge decrypts it with the same key, caches it for its TTL, and reads the typed
+   `PermissionsPayload` to render one enforcement result per catalogue, which it hands the adapter.
 7. Every later request inside the TTL window is answered from that cache, with no controller call.
 
 **Step 3 and step 4 are different questions asked of different systems**, which is the whole
@@ -207,8 +208,11 @@ The exchange itself is above; this is what caching adds to it.
 2. The controller validates the IdP JWT with the configured provider, resolves the user's current
    permissions, and returns an Usher token in JWE form with a short TTL (default: 5 minutes,
    configurable per instance).
-3. The bridge caches the Usher token. All requests within the TTL window are validated and
-   processed locally, with no controller network call.
+3. The bridge caches the Usher token, keyed by a SHA-256 digest of the whole sign-in token and
+   indexed by the subject in the decrypted payload. All requests within the TTL window are validated
+   and processed locally, with no controller network call. The key is never a claim read from the
+   sign-in token, which the bridge does not validate: a token forged to carry a cached subject would
+   otherwise be served that subject's access without ever reaching the exchange.
 4. On TTL expiry, the bridge repeats step 1. A refresh is the same call, carrying the current IdP
    JWT and the bridge's audience identifier and nothing else, so the bridge has one operation rather
    than two.
@@ -398,10 +402,10 @@ still validates the `iss` claim. Only `sub` is null; no other standard claims ar
 
 ### The payload as a type
 
-`PermissionsPayload` is the decrypted token: what the bridge hands an adapter, and the one artifact
-that must match across the controller, the bridge and the conformance corpus. It sits in this corpus
-rather than a source tree because no package layout is decided yet, and the file it eventually lands
-in is a layout question that blocks nothing.
+`PermissionsPayload` is the decrypted token: what the bridge reads to render each catalogue's
+enforcement result for an adapter, and the one artifact that must match across the controller, the
+bridge and the conformance corpus. It moves into `modules/types` in this repository, published as
+`@overture-stack/usher-types`, when implementation begins, and the bridge re-exports it.
 
 ```typescript
 /** A list with at least one element. An empty list would mean what absence already means. */
@@ -531,6 +535,16 @@ export interface PermissionsPayload {
 	 * be empty, which is a registered principal holding no grants at all.
 	 */
 	permissions: Record<ResourceIdentifier, ResourcePermissions>;
+
+	/**
+	 * The categories each resource named in `permissions` offers, held or not, `global.unmarked`
+	 * included where the resource has records carrying no concrete category. A bridge compares them
+	 * with each catalogue's mapping before rendering the resource there: `unmarked` is a complement,
+	 * so a category the catalogue neither maps nor declares absent would be served as unmarked, and
+	 * the resource is withheld from that catalogue instead. Names exactly the resources `permissions`
+	 * names, and every category held on a resource is one it offers.
+	 */
+	offeredCategories: Record<ResourceIdentifier, NonEmpty<CategoryName>>;
 }
 ```
 
@@ -538,8 +552,9 @@ export interface PermissionsPayload {
 categories clears the controller's payload cache, so there is nothing to compare. See the fast-path
 decision in [decisions.md](decisions.md).
 
-**Every member is read outside the controller**, so the payload carries no bookkeeping passenger and
-holds no invariant beyond what the type states.
+**Every member is read outside the controller**, so the payload carries no bookkeeping passenger. It
+holds no invariant beyond what the type states except the two tying `offeredCategories` to
+`permissions`, which `usher-types`' validator holds.
 
 **The ordering is the corpus's, not alphabetical.** `payloadVersion` leads because it says how to read
 the rest, the standard claims follow in the order used by every example, and the content comes last.
@@ -551,7 +566,9 @@ adapter that skips an unknown member of the payload root may skip a restriction,
 same polarity argument that requires the controller to retain what an adapter declared applies here.
 
 **What the type refuses.** An empty action list, an action belonging to another entity, an action
-outside the vocabulary, a missing `payloadVersion`, and `sub` omitted rather than set to `null`. That
+outside the vocabulary, a missing `payloadVersion`, `sub` omitted rather than set to `null`, and
+offerings that name a resource `permissions` does not, omit one it does, or leave out a category held
+there. The last three are rules the type cannot state, so the validator holds them. That
 last one matters: anonymous is an explicit `null`, so an absent `sub` is a malformed token rather than
 an anonymous one. Every token example in this corpus satisfies the type, including the field-nesting
 and artifact shapes in
@@ -580,36 +597,40 @@ again. See the fast-path decision in [decisions.md](decisions.md).
 **An anonymous visitor cannot be named, and needs no name.** They hold a shared token with a null
 `sub`, so a notice naming a principal cannot reach them. A resource leaving open access is a
 category change, which is announced by resource to the applications that serve it, and their bridges
-drop every token naming it, the anonymous one included. A change to the baseline itself uses a
-notice telling each bridge to drop its entry for principals with no `sub`. See
+drop every token naming it, the anonymous one included. A change to the baseline drops every entry,
+since every signed-in payload carries the baseline's grants too. See
 [decisions.md](decisions.md#a-category-change-is-announced-to-the-applications-that-serve-the-resource).
 
-> **Open, and it belongs to the schema session.** Revoking a principal _entirely_, rather than one
-> grant, has no settled storage. Setting `revoked_at` on every grant they hold expresses it with no
-> new column and leaves nothing to say that the person, rather than each grant, was stopped. A column
-> on `users` says it directly and reintroduces a per-principal marker, which was rejected for the
-> fast path and may still be right here, since emergency revocation is exactly the case where the
-> dangerous change _is_ per principal. No such column is in the entity schema, so nothing may be
-> written against one until this is decided. See blocker 6 in [phase-1.md](../docs/phase-1.md).
+**Revoking a principal entirely is a row of its own.** A row in `principal_revocations`, lifted to
+reverse it, stops the person at the exchange with `401`, and a principal notice drops their entries
+at every bridge. See [schema.md](schema.md), decision A, proposed.
 
 ### Propagation: push + poll
 
-**Push (primary):** On revocation, the controller immediately pushes a revocation event to
-connected bridges (via SSE or WebSocket) containing the user ID and `revoked_at` timestamp.
-Bridges that receive this event drop the cached Usher token for that user immediately.
-Revocation takes effect on the next request, within seconds.
+**One notice stream carries every kind of notice**: a principal's revocation, a category change,
+the baseline change, a global revocation and a sign-out. Each notice holds a position in one
+sequence the controller issues, and push and poll serve the same stream.
 
-**Poll (fallback):** Bridges poll a lightweight endpoint at a short interval (default: 30
-seconds):
+**Push (primary):** the controller pushes each notice to connected bridges, carrying its position as
+the event's id. Bridges drop the affected cached tokens at once, so a revocation takes effect on the
+next request, within seconds. A bridge whose push connection drops resumes with `Last-Event-ID`.
 
-`GET /revocations?since=<timestamp>`
+**Poll (always):** bridges poll at a short interval (default: 30 seconds), whether or not the push
+is connected, for the notices after the last poll answer they applied, rather than after a time.
+Pushed notices never move that position, so a notice an instance's push lost is still polled. In normal operation the answer is empty and
+cheap, and a bridge that missed a pushed notice of any kind picks it up within one poll interval.
+Polling by position rather than by time is what keeps a notice from being lost to clock skew
+between a bridge and the controller, or to a write that commits after a concurrent poll has read
+past it. **Positions must therefore follow commit order**: the controller serializes notice writes,
+which are rare, or serves a poll only below its oldest open transaction.
 
-This returns the list of user IDs whose revocation state changed since the given timestamp. In
-normal operation the response is empty and cheap. A bridge that missed the push event picks up
-the revocation within one poll interval.
+**A sign-out reaches every bridge through the stream.** The controller is the one receiver of the
+identity provider's back-channel logout, and relays it as a notice naming the principal, so the
+logout reaches every application rather than only the one the identity provider called.
 
 Worst-case revocation propagation: poll interval (30 seconds), not token TTL (5 minutes). Push
-provides speed; poll provides reliability.
+provides speed; poll provides reliability. Against an attacker who holds the stream back, the bound
+is the grace period, after which the bridge stops honouring grants.
 
 ### Multi-instance propagation
 
@@ -618,20 +639,20 @@ A revocation request may reach any instance. Without coordination, only that ins
 the revocation event to its connected bridge subscribers; bridges connected to other instances
 would not be notified until their next poll.
 
-To avoid this, every controller instance publishes revocation events to a **Valkey pub/sub
-channel** immediately after writing `revoked_at` to PostgreSQL. All instances subscribe to this
-channel and push the event to each of their connected bridge subscribers on receipt.
+To avoid this, a **Valkey pub/sub channel** wakes every instance, and the notices themselves are
+read from PostgreSQL. Pub/sub delivers at most once, so a message it loses must cost a delay and
+nothing more, which is why it carries a wake-up rather than the notice.
 
 The sequence for a revocation processed by instance A, with bridges connected to both A and B:
 
-1. Instance A writes `revoked_at` to PostgreSQL.
-2. Instance A publishes the revocation event to the Valkey channel.
-3. Instance A pushes the event to its own connected bridges directly.
-4. Instance B receives the Valkey pub/sub message.
-5. Instance B pushes the event to its own connected bridges.
+1. Instance A writes the revocation and its notice to PostgreSQL, in one transaction.
+2. Instance A publishes a wake-up on the Valkey channel.
+3. Every instance, A included, on a wake-up or on a short timer in case one was lost, reads the
+   notices after the last position it pushed, and pushes them to its own connected bridges.
 
-The poll endpoint (`GET /revocations?since=<timestamp>`) reads from PostgreSQL, which is already
-updated in step 1. Bridges using the poll fallback reach the correct state regardless of which
+The poll reads the same table. Bridges keep two positions: the push resumes from the last pushed
+notice, and the poll asks after the last poll answer, which pushed notices never move, so a notice
+one instance's push missed is still polled. Bridges reach the correct state regardless of which
 controller instance they poll.
 
 Controller instances are stateless between requests beyond their Valkey channel subscription.
@@ -676,7 +697,10 @@ no shared in-memory state" row is what catches the ones that do not.
 A revocation changes what the affected principals hold, so it deletes their cached payloads, as any
 such write does. When a revoked user's token expires and the bridge requests a refresh, the
 controller finds no cached entry and recomputes from the store, so the new token carries only the
-grants still live. The fast path cannot reissue revoked access, and `generatedAt` plays no part.
+grants still live. The fast path cannot reissue revoked access, and `generatedAt` plays no part,
+provided a computation that began before the revocation cannot write its payload into the cache after
+the revocation cleared it. That guard is not yet specified; see the payload cache item in
+[to-discuss.md](to-discuss.md).
 
 ---
 
@@ -692,15 +716,17 @@ valid for the duration of its TTL. This is an active attack on the revocation me
 
 **If a bridge cannot confirm revocation status, it does not trust cached tokens.**
 
-Each bridge tracks the timestamp of its last successful revocation check (push received, or poll
-returned successfully). If this timestamp exceeds a configurable grace period (default: 60
+Each bridge tracks the timestamp of its last successful revocation check: a poll answered within
+its deadline. If this timestamp exceeds a configurable grace period (default: 60
 seconds) without a new successful check, the bridge enters **revocation-uncertain mode**.
 
 In revocation-uncertain mode:
 
-- Cached Usher tokens are **suspended**, not expired. A request needing any granted permission is
-  rejected with a "service temporarily unavailable" response (HTTP 503), not a "session ended"
-  response (HTTP 401).
+- Cached Usher tokens are **suspended**, not expired. Each signed-in principal's access is marked
+  suspended, and a request that only a grant could answer is rejected with a "service temporarily
+  unavailable" response (HTTP 503), not a "session ended" response (HTTP 401). What that means per
+  operation, a search served the open tier and an export, a grant-only fetch or a write answered
+  503, is in [adapter-integration.md](adapter-integration.md).
 - **The open tier continues to be served.** Open access requires no grant, so a revocation has
   nothing to withdraw and the bridge nothing to be uncertain about. Withholding it hides
   data that was never meant to be hidden.
@@ -710,32 +736,51 @@ In revocation-uncertain mode:
 - The grace period absorbs brief, non-adversarial network interruptions. After the grace period,
   fail-secure applies regardless of cause.
 
-**Serving open during an outage needs no controller, and introduces no new exposure.** An adapter
-computes `unmarked` by complement, locally, from its own configuration rather than from the token, so
-the open slice is available whether or not the controller is reachable. The known hazard of that
-computation, a category unmapped by the adapter falling outside the set being subtracted and its
-records being served as open, is present under normal operation too and is addressed by the
-startup check against Usher's category dictionary. An outage neither creates it nor widens it.
+**The open tier during an outage is the last anonymous payload, rendered by the bridge.** The
+bridge fetches the anonymous payload at startup and keeps it fresh, so it holds one whenever the
+controller has answered at least once, and keeps honouring it past its own `exp` until the stream
+returns. It is never `unmarked` computed from an adapter's configuration: a resource whose unmarked
+records are open only to signed-in principals, or only by grant, would then be served to everyone.
+The known hazard of rendering `unmarked` by complement, a category unmapped by the adapter falling
+outside the set being subtracted, is present under normal operation too and is addressed by the
+bridge comparing each resource's offered categories, carried in the payload, with the catalogue's
+mapping. The anonymous payload carries them for the open tier. A category added to a resource during
+an outage is not learned until the stream returns, and the trade accepted below covers it, as it
+covers any narrowing an outage hides: data moves from closed to open far more often than the reverse.
+Mapping a category before any record carrying it is indexed keeps those records out of `unmarked`
+regardless.
 
-**The exemption belongs to a bridge that started cleanly, not to a cold start.** The startup check
-needs the controller, so a bridge starting while the controller is unreachable has never validated
-its configuration against the dictionary and cannot know what `unmarked` excludes. It serves nothing
+**One change an outage does hide, and it is accepted.** A resource narrowed from open to closed
+while the controller is unreachable keeps being served as open until the channel returns. Data moves
+from closed to open far more often than the reverse, so serving the open tier through an outage
+is the right trade (developer decision, 2026-10-03).
+
+**The exemption belongs to a bridge that started cleanly, not to a cold start.** The offerings come
+from the controller, so a bridge starting while the controller is unreachable has never compared its
+configuration with them and cannot know what `unmarked` leaves out. It serves nothing
 until it has, which is what the startup behaviour below already requires.
 
 **A reduced result must say so.** Serving a silently smaller set is worse than serving none, because
 a researcher reads missing rows as absent data rather than as withheld data, and acts on it. The
 adapter signals that the result is open-tier only, and the interface says so where the results appear.
 
-**Liveness via push connection.** When using SSE or WebSocket for push events, the persistent
-connection itself is the liveness signal. A dropped connection that cannot be re-established
-within the grace period is sufficient to trigger revocation-uncertain mode; no separate
-heartbeat is needed.
+**Only a timely poll proves the stream is live.** A check succeeds when a poll is answered within
+its deadline, timed on the bridge's own clock from request to answer. Push delivers notices sooner
+but never counts as a check: a connection held open while its events are delayed looks the same as
+one that is current, which is what lets an attacker who delays rather than drops sustain a revoked
+session. Over TLS, an attacker cannot tell which answer carries which person's notice, and a notice
+rides in every answer until applied, so holding one back means holding back every answer, and the
+grace period runs out. The deadline stays below the grace period less the poll interval, so the grace
+period is the worst case whatever the attack. Decided 2026-10-06.
 
 **Startup behaviour.** At bridge startup, no cached tokens exist and the revocation channel is
 not yet established. The bridge must not serve requests until the revocation channel is confirmed
 active: doing so would create a window with no revocation coverage. In practice this means the
-bridge enters a brief initializing state on startup, queuing or rejecting requests until the
-first successful push connection or poll response confirms channel health. The grace period clock
+bridge is cold, answering 503 before any read path, until its first check is confirmed and an
+anonymous payload fetched after that check is accepted. A payload fetched earlier serves only as the
+key's self-test and is never kept: the open tier is not free of revocation, since a category notice
+can withdraw open access, and a payload fetched before the stream's head would miss a notice
+committed in between, which is never delivered because it lies before the head. The grace period clock
 starts from that point, not from process start.
 
 **The operational trade-off.** Legitimate users are also affected when the revocation channel is

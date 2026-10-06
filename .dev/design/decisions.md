@@ -549,6 +549,12 @@ by its audience, so an announcement reaching every bridge would tell application
 they do not serve, and audience separation exists to prevent that. The controller already knows which
 audiences serve which resources, so the fan-out is filtered by audience rather than broadcast.
 
+**A change to the baseline drops every entry, not only the anonymous one.** Every signed-in payload
+carries the baseline's grants as well, so dropping the anonymous entry alone would leave a narrowed
+baseline reaching signed-in principals for up to a token lifetime. The controller clears its payload
+cache with it. Baseline changes are rare, and the rush of exchanges that follows is held by the
+in-flight bound.
+
 **Gaining access waits, which is the safe direction.** Someone who gains access, because a resource
 opened or a category left it, holds no token naming it yet and gains it at the next refresh.
 
@@ -777,8 +783,21 @@ happens to hold.
 **The `unmarked` complement is where an unrecognized category fails the other way**, and the startup
 check in `adapter-integration.md` exists because of it. A category value unmapped in the adapter is
 absent from the set subtracted by `unmarked`, so records carrying it satisfy the complement and are
-served as unmarked. Checking the adapter's category configuration against Usher's dictionary at
-startup, and failing startup rather than warning, is what closes that.
+served as unmarked. The bridge comparing each resource's offered categories with the catalogue's
+mapping is what closes that, as the next section records, and each category is in one of three
+states for each catalogue:
+
+| State           | What the adapter declares              | What follows                                                                 |
+| --------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| Mapped          | a field test that recognizes it        | its clauses render, and `unmarked` excludes what the test matches            |
+| Declared absent | no record in this catalogue carries it | `unmarked` needs no exclusion for it                                         |
+| Neither         | nothing                                | the resources offering it are taken out of this catalogue, and an error-level event names the catalogue and the category |
+
+**A category in neither state withholds its resources rather than stopping startup.** Both fail
+closed, and withholding keeps one catalogue's gap from taking down every other catalogue the
+application serves. The error-level event is what keeps it from presenting as data quietly missing.
+Decided 2026-10-02. A declared absence is the state that can be wrong in the dangerous direction, so
+it is the last resort, per the reconciliation discussion in [to-discuss.md](to-discuss.md).
 
 **Unexercised in v1.** Where an instance defines one category, all-versus-any is not observable.
 The first instance defines one, so nothing depends on this rule until a second arrives.
@@ -793,11 +812,30 @@ Enforcement filters on two fields, and the emitted clause pairs them:
 
     or(
       and( in(<resource field>, [HEART_STUDY]), in(<category field>, [controlled]) ),
-      and( in(<resource field>, [HEART_STUDY]), not-in(<category field>, [...every concrete value]) )
+      and( in(<resource field>, [HEART_STUDY]), not( in(<category field>, [...every concrete value]) ) )
     )
 
 The second disjunct is `unmarked`. Both fields must be single-valued, and each must be mapped in the
 adapter's configuration for the catalogue it serves.
+
+**The canonical form groups by category, and only a grant to view records earns a clause.** For each
+category held with `record` and `view`, the bridge emits one `and` of an `in` over every resource
+holding it and that category's test, composed with `or`, plus one `unmarked` clause over every
+resource whose unmarked records are held. That grows with categories rather than with resources
+times categories. One narrowing serves every read path, so an entry carrying only `artifact`
+actions, or `record` with `count` alone, contributes no clause, and is a deny where it was the only
+entry: rendering "per held category" without that condition would let a person who may only create
+artifacts on a study search its records. `@overture-stack/usher-types` defines the form, and the
+bridge's tests compare against it.
+
+**`unmarked` is a `not` around an `in`, never a `not-in`.** On a nested category field, `not-in`
+asks whether some nested item holds a value outside the list, so it drops records carrying no
+category entries at all, which are exactly the unmarked ones. `not( in(...) )` asks whether any item
+holds a listed value, so it is right on a flat field and a nested one alike. With no concrete
+category mapped, every record of the resource is unmarked, so `unmarked` is the resource test alone,
+and such a catalogue needs no category field at all. So the first release's bridge emits no `not-in`, and the post-MVP subset test
+uses one only inside a `not`, around a held list that is never empty, since zero grants is a deny
+before any filter is built.
 
 **The filter cannot verify two dependencies about either field**, so both are preconditions asserted
 by an integration rather than properties guaranteed by the model:
@@ -812,6 +850,23 @@ cardinality, and the search layer's filter path carries no instrumentation that 
 gaining a second value. See [adapter-integration.md](adapter-integration.md) for why this is
 unverifiable today rather than merely unverified, and for the `nestedFieldNames` hazard, which lands
 on the permissive side for the negated `unmarked` clause specifically.
+
+**The unit of access is the record an application returns, never an item nested inside it.** A
+record is admitted or withheld whole, so an admitted record's nested items come with it, in its hits
+and in what its facets count, whatever their own values. That is what single-valued means
+here: the access-relevant value belongs to the record, not to its items. Data whose access varies
+among one record's nested items needs a record per unit of access, decided when it is indexed, the
+same remedy as separately governed data becoming its own resource. Which nested shapes the adapter
+enforces on is decided against this rule before a catalogue needs one, and until then it refuses to
+enforce on a nested field at startup.
+
+**Content nested in a record is part of what a reader is admitted to; a reference to another
+catalogue's record is not.** A file record listing its specimens' identifiers shows those identifiers
+and nothing more: the specimens are records of their own catalogue, reached only under that
+catalogue's grants. Withholding part of a record's own nested content is field-level control, a later
+release, which also covers a privileged flat value such as a government identification number.
+Access that varies with each nested item's own value is a different capability again, not designed,
+and recorded on the roadmap. Confirmed for iMicroSeq's first release on 2026-10-03.
 
 A positive `in` clause on a single-valued field is an exact match whether the field is flat or nested,
 so neither dependency applies to the concrete-category clauses. They apply to the `unmarked` clause,
@@ -842,12 +897,9 @@ one instance:
   a proxy for a property of the data. The same field name can be either, so the judgement is
   per-integration and belongs in that integration's own record.
 
-**What MVP gives up.** A resource containing records of mixed sensitivity must be split into
-separate resources; there is no sub-resource granularity. Under Indigenous data governance that is
-arguably the correct outcome, since separately governed data gets its own resource and its own
-custodian rather than living as a tag inside another study. Row-level and field-level narrowing
-within a resource were already out of MVP scope, and record-level narrowing sits post-MVP alongside
-SQON-scoped grants: they are the same permission, narrowing within a resource.
+**What MVP gives up.** Narrowing within a resource on anything but its categories: SQON-scoped
+grants, which narrow on other fields, and field-level narrowing. A record carries one category until
+the subset test above lands.
 
 **Tradeoffs accepted.** Resolving the ambiguity this way makes four sections of
 `permissions-model.md` describe a post-MVP model, and they are marked accordingly.
@@ -856,6 +908,64 @@ Instance-specific resource field names, catalogue topology, and the reasoning be
 integration's choice of field belong in that integration's own repository, not here. See
 [adapter-integration.md](adapter-integration.md) for what an adapter must establish about a candidate
 field before using it.
+
+---
+
+### A catalogue's category gap is found by the bridge, from the categories each resource offers
+
+**Decided 2026-10-05.** That the gap withholds resources from one catalogue was decided 2026-10-02,
+in the three states above. This settles where the check runs and what it reads. The adapter's job is
+unchanged: it still turns its application's configuration, whatever its shape, into the one
+registration the bridge reads, and the bridge compares that registration with what each resource
+offers, the same way for every application.
+
+**The bridge checks, catalogue by catalogue, before rendering a resource there.** A resource is in a
+catalogue's clauses only if every concrete category it offers is mapped by that catalogue or declared
+absent from it. A resource failing that is left out of every clause for the catalogue, which is what
+an omitted resource already means, and an error-level `category.unmapped` event names the catalogue,
+the category and the resource, once for each of the three. Other catalogues are unaffected.
+
+**What the check compares, and where it stops.** It compares what Usher says a resource offers with
+what a catalogue registered, and never reads the data. A category value present in the records and
+mapped nowhere, case 23, is outside it and stays open with the reconciliation protocol, and a
+catalogue registered as open by configuration is outside it too. Registration refuses a declared
+absence on a catalogue that names a category field, since absence is the last resort, for a catalogue
+with no field that could carry the category.
+
+**What a resource offers comes in the payload, beside the grants.** `offeredCategories` names, for
+each resource named in `permissions`, every category the resource offers, held or not. The controller
+reads them when it computes the payload, so they come from the same snapshot as the grants. A change
+to a resource's categories already clears the controller's payload cache and announces the resource
+on the notice stream, which drops every entry naming it, so the offerings are refreshed by what
+refreshes the grants. Nothing is disclosed about a resource not already named in the payload, but the
+payload now names categories the principal does not hold, so the offerings are enforcement input
+only: never rendered, never returned in any view, the principal's own included, and logged only as
+`category.unmapped` names them.
+
+**This reverses an earlier rejection, on its own terms.** Carrying a resource's full category set in
+the token was considered when rendering became additive, and set aside because additive rendering
+does not need it. `unmarked` is the one complement additive rendering keeps, and it is what needs it.
+
+| Where the check runs, and what it reads                          | Withholds from one catalogue only                                                    | What it costs                                                                                                                                        |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the controller, omitting the resource from the token             | no: a token covers every catalogue of its application                                | the controller would hold adapter configuration, which Usher never holds                                                                             |
+| the bridge, against Usher's category names alone                 | no: it cannot tell which resources offer the gap, so the catalogue's `unmarked` goes | nothing new in the payload                                                                                                                           |
+| the bridge, against offerings read from an endpoint of their own | yes                                                                                  | a second cache to keep in step with the grants, and a read that fails apart from the exchange                                                        |
+| **the bridge, against offerings carried in the payload**         | yes                                                                                  | each payload grows by the categories offered by the resources it names, and outside the open tier a gap is found at first use rather than at startup |
+
+**The open tier is checked at startup.** The bridge fetches the anonymous payload at startup, so a
+gap on a resource whose unmarked records are open to everyone, which exposes the most, is found
+before any request is served. A gap on a resource only signed-in principals reach is found the first
+time a payload names it.
+
+**A resource-scoped category counts like any other.** A version 1 bridge enforces no grant on one,
+but records carrying it are still outside `unmarked` only if the catalogue maps it, so a catalogue
+maps or declares absent every category its resources offer, whatever its scope.
+
+**The introspection endpoint stays, for a different job.** Generating adapter configuration from
+Usher's list of categories saves transcription and is post-MVP. It is not the check, which needs to
+know which resources offer a category, not only that it exists. See
+[adapter-integration.md](adapter-integration.md) § Category dictionary introspection.
 
 ---
 
@@ -882,8 +992,8 @@ every other owner capability, and never reaching the global scope.
 
 **A version 1 bridge accepts `resource.` entries and enforces `global.` ones only.** A `resource.`
 entry is removed by the bridge before the payload reaches the adapter, so it reaches nothing, and is
-recorded as `category.unenforced` with the reason `notImplemented`, once per payload received rather
-than once per request (see [audit-events.md](audit-events.md)). Dropping it is safe, because a grant
+recorded as `category.unenforced` with the reason `notImplemented`, once for each such entry in a
+payload received rather than once per request (see [audit-events.md](audit-events.md)). Dropping it is safe, because a grant
 that reaches nothing only narrows what its holder sees, and recording it makes a local category
 arriving early visible rather than silent. It also gives the first release an event for exercising
 the audit path end to end. A bare
@@ -1118,6 +1228,19 @@ mapping. Passing the _complement_, the reader's unheld resources, converts a sub
 disjointness test, and disjointness is expressible against a flat keyword array. An artifact
 survives exactly when it requires none of what the reader lacks.
 
+**The disjointness test needs a positive half beside it**, because an artifact with no recorded
+provenance is disjoint from everything and would pass it for every reader. So an artifact key's
+narrowing is an `and` of an `in` over the configured resources held by the reader and a `not` around
+an `in` over the complement: an artifact passes when its provenance is non-empty and lies wholly
+within what the reader holds. With every configured resource held, the `not` is left out and the
+`in` stands alone. Decided 2026-10-05.
+
+**Holding a resource, for this test, means holding record `view` on every category it offers.**
+Provenance records resources, not the categories drawn on, so an artifact built from a resource's
+controlled records names only the resource. Counting any held category would let a reader holding
+only its unmarked records see it. The closed reading also hides an artifact built from unmarked
+records alone from that reader, which is the accepted cost until provenance records categories too.
+
 **The complement is computed locally, and the token does not change.** A first reading of this
 concluded the token had to carry the complement, which would have reversed the least-information
 position on naming unheld resources. It does not, and the reason is worth keeping.
@@ -1230,7 +1353,7 @@ SQON carries no notion of direction, and its only identity element is the one th
 narrowing. An empty combination is a valid, intentional, tested value in
 `@overture-stack/sqon`: `SqonCombinationSchema` declares `content: zod.array(SqonSchema)` with
 no minimum length, `SqonBuilder.empty()` produces `{ op: 'and', content: [] }`, and every
-builder chain starts from it (`SqonBuilder.in(...)` is "empty, then add a clause"). A
+builder chain starts from it (`SqonBuilder.in(...)` is "empty, then add a clause").
 An empty `and` compiles to `bool.must: []`, which is match-all.
 
 **Verified against a live cluster on 2026-08-24, and it resolves to the unsafe side.** An empty
@@ -1269,7 +1392,7 @@ none of them is a hand-written literal:
 
 | Arm      | What the adapter returns                                                   |
 | -------- | -------------------------------------------------------------------------- |
-| `deny`   | `matchNothing(fieldName)` from the query module                            |
+| `deny`   | the filter `matchNothing(fieldName)` builds, from the query module         |
 | `narrow` | The rendered filter                                                        |
 | `allow`  | The application's exported allow-all sentinel, taken from its package root |
 
@@ -1305,9 +1428,11 @@ obligation.
 `kind: 'deny'` asserts only "do not query the data layer." It carries no status code, since the
 existence-denial invariant means a search endpoint should likely return an empty result set
 rather than a 403 that confirms the resource exists; that realization stays the adapter's
-decision. The `reason` field exists for the audit trail rather than control flow: access never
-held, access withdrawn, and misconfiguration are three different events, and collapsed into a
-bare denial the revocation case becomes uncountable.
+decision. The `reason` field labels the audit event and selects the message the person is told
+(see "A denial is named at catalogue level, and never at record level"), and never drives control
+flow. Holding no grants and a misconfiguration are different events. Whether a grant was never held
+or was withdrawn is recorded by the grant's own `grant.revocation` event rather than by the deny,
+so the revocation case stays countable.
 
 The unavailable case is deliberately absent. The bridge must return 503 upstream before the
 translation callback is invoked, so this type describes only the branch where a payload
@@ -1335,6 +1460,152 @@ AST. Its documented rationale is the one recorded here, a discriminated union at
 that principals must handle each case distinctly. Two designs reaching the same three-way split from
 different starting points is the strongest available evidence that the problem forces it rather
 than that anyone preferred it.
+
+---
+
+### The bridge's cache is keyed by the sign-in token, never by a claim inside it
+
+**The threat.** The bridge never validates a sign-in token itself; the controller does, at the
+exchange. A cache looked up by the subject read from an incoming sign-in token would serve a cached
+principal's access to anyone who mints a token carrying that subject, without an exchange ever
+happening:
+
+1. Ana's Usher token is cached.
+2. Mallory sends a sign-in token she made herself, signed with any key, whose subject is Ana's.
+3. The bridge finds Ana's entry and attaches Ana's access.
+4. Nothing ever validates Mallory's token.
+
+**Decision.** The cache is keyed by a SHA-256 digest of the whole sign-in token, and entries are
+indexed by the subject read from the decrypted Usher payload, which the bridge can trust, so a
+notice naming a principal still finds every entry of theirs. A forged token is a new digest, so it
+goes to the exchange and is refused there.
+
+**What follows from it.**
+
+- A refusal is cached too, in its own bounded store, until the sign-in token's `exp`, capped at the
+  token lifetime, so repeated junk costs no exchanges and can only ever evict other junk.
+- Concurrent requests carrying one sign-in token share one exchange, and the exchanges in flight are
+  bounded, beyond which the bridge answers 503.
+- The bridge refuses locally only a three-part signed token whose own `exp` has passed, by the
+  controller's clock tolerance. Every other credential goes to the exchange, since API keys are
+  opaque strings checked there.
+- An entry ends at the earlier of its Usher token's `exp` and its sign-in token's `exp`, and the
+  controller caps the Usher token's `exp` at the sign-in token's, so access never outlives the sign-in.
+
+**The bridge never refuses a credential the controller would accept.** The local `exp` refusal keeps
+to this, since the controller refuses the same token by the same tolerance, and any later local check
+has to show it keeps to it before it is built. Checking a sign-in token's signature at the bridge
+does not: a key the provider rotated in minutes ago looks the same as an invented one until the
+provider is asked, API keys carry no signature at all, and every way a second validator can disagree
+with the controller refuses a person the controller would admit. It would also put identity provider
+configuration into every ushered application, which the design gives to the controller's connector
+alone. So the bridge does not check signatures (decided 2026-10-06; the research is the bridge's
+[sign-in signature precheck](../docs/atlas/bridge/signin-signature-precheck.md)).
+
+**A flood of unique junk credentials is answered by the in-flight bound, and that trade is accepted
+for the first release.** The bound keeps the controller up, and cached principals keep their access
+until their entries end, while new sign-ins and refreshes are answered 503 for as long as the flood
+lasts. The anonymous refresh runs outside the bound, so the open tier stays fresh. Admission control
+that keeps sign-ins served through a flood is on the roadmap as research. Decided 2026-10-06.
+
+**The controller sets the bound, and tells its bridges.** A bound each bridge sets for itself
+multiplies with the replicas: 64 exchanges per bridge across twenty replicas is 1,280 at once against
+one controller, a number nobody chose and one that grows with every scale-out. The bound exists to
+protect the controller, so the controller owns it. Decided 2026-10-06; the number, and how it reaches
+a bridge, are open on the roadmap, and the bridge's own default stands in until then.
+
+---
+
+### A refused identity gets one 401, whatever the reason
+
+An expired sign-in token, an invalid one and a revoked identity are all answered `401`, with
+`WWW-Authenticate: Bearer error="invalid_token"` and one fixed text: "You are no longer signed in, so
+this request was not served. You can sign in again, or continue without signing in." Only the log
+records which it was. Decided 2026-10-04.
+
+| Alternative                                     | Why not                                                                                       |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `401` for expired or invalid, `403` for revoked | tells the holder of a stolen token that the account was revoked, which is an existence oracle |
+| one `401`, with the reason in its error details | the same leak, less visibly                                                                   |
+| serve the request as anonymous                  | case 34 rejects it: a person who believes they are signed in silently sees less               |
+| `403` for all                                   | clients read 403 as signed in but not allowed, so no portal drops the session                 |
+
+A portal answers it by dropping the session and showing the anonymous view with a notice. A revoked
+person who signs in again gets the same answer, so the text never promises more than it gives.
+
+---
+
+### A suspended principal is answered by what the open tier can settle
+
+Past the grace period, or when one principal's exchange fails while the notice stream is healthy,
+the bridge renders from the last anonymous payload and marks the signed-in principal suspended. An
+application then answers each operation by whether the open tier settles it: a search is served the
+open tier with a notice, while an export, a fetch only a grant could answer and a write answer 503.
+A missing object answers 503 too, so a 503 never tells a protected object from a missing one.
+Decided 2026-10-04; the table is in [adapter-integration.md](adapter-integration.md).
+
+| Alternative                                       | Why not                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 503 for everything                                | hides open data that was never meant to be hidden                                                 |
+| keep serving cached grants until they expire      | defeats the revocation channel, which is the threat the mode exists for                           |
+| serve a suspended principal's export as open tier | a permanent file missing that person's restricted rows reads as complete                          |
+| 404 for both protected and missing objects        | leaks nothing, but tells a person who normally has access that their file is gone                 |
+| 404 for missing and 503 for protected             | anyone who can cause an outage maps which identifiers exist                                       |
+| reuse `openTierOnly` instead of `suspended`       | an adapter cannot tell "holds only open data" from "grants on hold", which need different answers |
+
+Serving a suspended principal's export with an open-tier marker instead of 503 is on the roadmap as a
+possible improvement, since it would only help where a portal reads the marker.
+
+---
+
+### A denial is named at catalogue level, and never at record level
+
+A `deny` result asserts that the data layer is not queried. What the person making the request is
+told is a separate question, and the answer is whatever cannot be turned into an existence oracle:
+a response that differs depending on whether something the principal may not see exists.
+
+**Decision: each deny reason maps to one fixed message, and nothing finer than a catalogue is ever
+named.**
+
+| Reason             | What the person is told                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `no-grants`        | "You have no access to this catalogue."                                                                         |
+| `unknown-resource` | "The server could not apply its access control because of a problem in its configuration, not in this request." |
+
+**Never held and withdrawn give the same text.** Whether access was never granted or has been
+revoked is the audit trail's distinction, never the response's. Telling them apart in the response
+would tell a former holder that their grant has been taken away, before anyone has chosen to tell
+them.
+
+**`unknown-resource` is the operator's mistake, not the person's.** So its message says the problem
+is in the server's configuration and gives no detail of it. The detail goes to the error-level log
+event, where an operator can act on it.
+
+**The message is safe only while the catalogue is already visible to the principal.** Today every
+catalogue is listed to everyone, through discovery and introspection, so naming a denial confirms
+nothing that was not already known. If catalogues are ever listed per principal, a deny on a
+catalogue hidden from that principal must answer exactly as a nonexistent catalogue does, or the
+message confirms that the hidden one exists. Pin this coupling with a test now, so that changing
+the listings breaks something visible.
+
+**Partial access carries no message and no count.** When a filter narrows a result, nothing says
+how much was removed. A notice that access control is in effect is allowed only if it is
+unconditional: shown on every catalogue where access control applies, whether or not anything was
+withheld from this result.
+
+- A notice that appears only when narrowing removed something is an existence oracle. A query on a
+  rare attribute, combined with whether the notice appears, tells the person that matching records
+  exist.
+- A notice derived from "this catalogue holds resources you do not" reveals that those resources
+  exist.
+
+An unconditional notice carries no information, which is what makes it safe. Counts and facets are
+computed within the filter, and no response anywhere says how many records were hidden.
+
+**How it reaches the application.** The adapter hands the application the deny as a distinct
+value, alongside its reason, and the application answers with the reason's text. Any path that
+still has to compose a filter uses `matchNothing`, so a skipped message path still matches no
+records.
 
 ---
 
@@ -1397,8 +1668,9 @@ A short token TTL limits the staleness window but requires frequent token refres
 round-trip latency. A long TTL reduces round-trips but widens the window where a revoked grant is
 still honoured.
 
-Usher uses a push revocation channel (SSE or WebSocket with poll fallback): adapters subscribe and
-receive notification when grants change. Cached tokens are invalidated on notification rather than
+Usher uses a push revocation channel, Server-Sent Events beside a poll that always runs: bridges
+subscribe and receive notification when grants change. Only a poll answered within its deadline
+proves the channel live, which bounds an attacker who delays notices rather than dropping them (decided 2026-10-06; the rule is in [security-workflow.md § Revocation channel integrity and fail-secure behaviour](security-workflow.md#revocation-channel-integrity-and-fail-secure-behaviour)). Cached tokens are invalidated on notification rather than
 on expiry. The TTL is a backstop, not the primary revocation mechanism. This is about revocation
 specifically: a grant reaching a date it always carried is handled by the token's own `exp`, since
 nothing needs announcing when both sides knew the date at issuance.
@@ -1416,8 +1688,9 @@ If a revoked grant notification is never delivered, the adapter would continue h
 has been withdrawn. An adversary who can silence the revocation channel would preserve stale access
 indefinitely with pure TTL fallback.
 
-When the revocation channel is unavailable beyond the configured grace period, the adapter returns
-503 (service unavailable) and suspends data access until connectivity is restored. An adversary who
+When the revocation channel is unavailable beyond the configured grace period, the bridge suspends
+every granted permission until connectivity is restored: anything a grant alone could answer gets 503
+(service unavailable), while the open tier, which needs no grant, is still served. An adversary who
 silences the channel gains no access; they only cause a service disruption.
 
 **Tradeoffs accepted.** A revocation channel outage becomes a data access outage. This is the
@@ -1759,11 +2032,57 @@ narrowing as specified belongs to the search application rather than to the plat
 predicate's meaning depends on the backend, that reasoning belongs in the one component that can
 vary or refuse on a declared capability.
 
+### The bridge's filters carry no empty group, no empty exclusion and no pivot
+
+What a SQON means is defined once, in Arranger's reference: an empty group adds no condition and so
+matches every document searched, while an empty `in` matches nothing. See
+[SQONs In Detail](https://github.com/overture-stack/arranger/blob/main/docs/reference/04-sqon-in-detail.md#filters-that-restrict-access).
+The bridge produces access filters, so it follows the rules for them there, and four stricter ones
+of its own.
+
+**Zero grants is a deny before any filter is built**, as "Holding no grants is a distinct state,
+never an empty filter" sets out. Three cases reach it besides holding nothing at all, and each
+produces a deny rather than a filter: every grant sits in other catalogues, which only a catalogue
+that registered its resource list can tell; every grant names a category unmapped in this catalogue;
+and a narrowing whose predicates all fall away during rendering.
+
+**A list that could not be loaded is a deny, never an empty list.** An empty list is a statement
+about the data, and a failed load is not. So the artifact provenance ceiling is left out only when
+the configured resource list is present and every resource in it is held; an empty or unavailable
+configured list denies.
+
+**A set of values is one leaf's value list**, never a group of single-value leaves, so an empty set
+keeps its meaning instead of becoming a group that matches everything.
+
+**No exclusion has an empty value list, and no filter has a pivot.** Arranger accepts an empty
+`not-in` as excluding nothing, so the rule is Usher's to keep, which `unmarked`'s form above does.
+Usher's filters test single-valued fields, so they need no pivot, and until pivoted groups are
+covered by their own conformance cases none is emitted. If Usher ever needs a pivoted filter, its
+rules are settled before it is designed.
+
+**The bridge's output is checked before it leaves the bridge.** The validator in
+`@overture-stack/usher-types` refuses an empty group, every exclusion operator, a pivot, a null one
+included, and every shape Arranger's guard refuses, and Arranger's guard checks again on arrival. So a defect on either side
+fails closed, and neither side relies on the other.
+
+**The validator is stricter than these rules, and every reader then sees the same node.** A node
+carries only `op` and `content`, and a clause only `fieldName` and `value`, since a reader that looks
+members up through inheritance and one that copies own members alone would otherwise see different
+filters. No clause is an exclusion of any kind, since `unmarked` is a `not` around an `in`. No clause
+is a wildcard or its `filter` alias, and no `in` or `all` value holds a marker that Arranger reads as
+an instruction: a `*` pattern, a `set_id:` reference or `__missing__`. A `not` sits only directly
+inside an `and` that also holds an `in`, which is where `unmarked` puts it, and an empty `in` never
+appears inside a narrowing, since a deny is the deny arm.
+
+**After MVP, a grant carrying its own SQON is checked when it is written**, against the same rules,
+so a grant that could only widen is never stored. The wildcard and `not` rules may need revisiting
+then, since a grant's own filter may want what the bridge's never does.
+
 ### The enforcement component is an adapter, and the bridge ships from Usher's repository
 
 **Adapter rather than plugin.** An Usher plugin reads as something that extends Usher itself. Usher
 may genuinely have such a thing one day, but it is not what is being built: the component extends an
-application, translating the permissions payload into that application's enforcement. The identity
+application, applying the bridge's enforcement result at that application's own hook. The identity
 provider side, previously also called an adapter, is a connector, so each word faces one way.
 
 **The bridge's code lives in Usher's repository and is published from there**, and every adapter

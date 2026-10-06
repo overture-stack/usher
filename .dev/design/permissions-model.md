@@ -706,8 +706,8 @@ An event is owed whichever side wins.
 
 ## Entity schema
 
-The logical model. Specific column names, types, and indexes are not yet specified: see the
-database schema design item in the roadmap.
+The logical model. Column types, keys and indexes are in [schema.md](schema.md), which is a draft
+for review.
 
         primary entities, describing state
 
@@ -1419,7 +1419,8 @@ governance requires it. See the resolved question in Open questions.
 > with the category's, so an adapter that cannot map a category name to a field predicate cannot render
 > a clause. `unmarked` is the complement of the mapped concrete values, which is why an unmapped category
 > exposes records rather than hiding them, and why the reconciliation check in
-> [adapter-integration.md](adapter-integration.md) fails startup rather than warning. See "A category
+> [adapter-integration.md](adapter-integration.md) withholds the resources carrying an unmapped
+> category and logs an error rather than warning. See "A category
 > selects records within a resource" in [decisions.md](decisions.md).
 
 Categories in Usher's model are named abstractions. Usher has no knowledge of what fields in
@@ -1448,6 +1449,13 @@ config.
 
 Field-level restrictions control which fields within a record a user can see, independent of
 whether they can see the record itself. Which approach to take is open.
+
+**What it is for, mainly nested records.** Content nested inside a record is part of the record a
+reader is admitted to, so field-level control is how part of that content is withheld, such as the
+specimen details embedded in a file record. It also covers a privileged flat value, such as a
+government identification number. Access that varies with each nested item's own value is not this,
+and is not designed; see "The unit of access is the record an application returns" in
+[decisions.md](decisions.md).
 
 **A. Resource-level restrictions.** Restrictions are uniform across all users with access to a
 resource. Nobody granted resource X reaches `clinical_notes`, whatever the role on their grant.

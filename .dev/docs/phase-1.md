@@ -54,29 +54,52 @@ is why the order pays twice rather than once.
 
 ## The build order, and why it runs backwards
 
-Settled plan. The controller is built last and the consumer side first, against a mock.
+Settled plan. Each piece is tested and built before the piece it depends on, against mocks of
+everything behind it, so the consumer side comes first and the controller last.
 
-    0. Configure Keycloak, so that a person can sign in.
-    1. A barebones controller with mocked grants. The Usher backend is faked.
-    2. The Arranger adapter and the bridge, built against it.
-    3. Compare results in the portal: signed in against anonymous, rows and counts.
-    4. The profile surface and the rest of the Keycloak integration.
-    5. The real controller, tying it together.
-    6. Management UI, and the submission bridge and adapter, in parallel.
+    1. The Arranger adapter, in the Arranger repository: tests for the requests it will
+       actually receive, with the bridge and the controller mocked, then the adapter itself.
+    2. The bridge, in this repository: tests with the controller mocked, then the bridge,
+       then the adapter and the bridge tested together.
+    3. The controller: tests for whatever the bridge's tests do not already cover, then the
+       controller itself.
+    4. Integration tests across the bridge and the controller, without Arranger's adapter.
+    5. The profile surface, the management UI, and the submission bridge and adapter.
 
-**Step 2 is where the contract gets defined**, by the thing that consumes it rather than by
-specifying it in advance. How a filter is actually applied, what the adapter needs and when, and which
+Keycloak and Stage are integrated when a step needs them, not first. The adapter imports the bridge
+through `npm link` during development, so the bridge package and the shared types it re-exports,
+`@overture-stack/usher-types`, exist from the first step.
+
+**Step 1 is split by concern.** The adapter's tests, and the shared types they import, are written
+from Usher's side, since the queries and responses are Usher's concern as much as Arranger's, and
+reviewed from Arranger's until they are ready to code against. The enforcement itself is then
+implemented from Arranger's side, with review from Usher's. The plan for those tests is in Arranger's
+repository at `.dev/docs/arranger-auth/usher-adapter-tests.md`, beside the adapter's design. The
+bridge's plan, step 2, is [bridge-tests.md](bridge-tests.md).
+
+**Data filtering comes first.** The adapter's logging tests are written with the rest, and its
+logging logic is filled in once the filtering works.
+
+**Step 1 waits on Arranger's toolchain upgrades.** `@overture-stack/usher-types` is built to what its
+first consumer can read, so it is created once Arranger's side has settled its TypeScript, zod and
+pnpm upgrades. It is not published until it is ready: local development links it, and a commit made
+while linked leaves the link out of the committed lockfile or workspace file, where both package
+managers record it. Arranger's CI cannot run the adapter's tests until the package resolves from the
+registry.
+
+**Each step defines the contract of the one behind it**, by consuming it rather than by specifying it
+in advance: the adapter's tests fix what it needs from the bridge, and the bridge's tests fix what it
+needs from the controller. How a filter is actually applied, what each side needs and when, and which
 blindspots the design has are all discovered by building the path instead of reviewing it. The real
 controller then has a proven contract to implement rather than a proposed one.
 
-**Step 3 is the acceptance test for enforcement.** Signed in against anonymous over the same query is
-the smallest thing that proves the whole chain, and it fails visibly rather than silently.
+**Signed in against anonymous is the acceptance test for enforcement, once Stage is integrated.** The
+same query both ways is the smallest thing that proves the whole chain, and it fails visibly rather
+than silently.
 
 **It has to compare counts as well as rows.** Aggregate counts are half the enforcement surface and
-the half where existence leaks, because a count discloses without returning a single record. It is
-also where the search layer has a known defect: two mechanisms disagree on AND against OR and one is
-dead at depth 2, reached by a multi-category filter and not by a flat resource filter.
-Comparing rows only passes the chain while leaving the leak path untested.
+the half where existence leaks, because a count discloses without returning a single record.
+Comparing rows only passes the chain while leaving that path untested.
 
 **And against the first deployment's data it tests the resource clause only.** Neither catalogue
 carries a field distinguishing categories, so signed in and anonymous differ solely in which
@@ -84,31 +107,34 @@ resources they hold, and per-category enforcement would reach production having 
 synthetic catalogue carrying a category field, used for nothing else, closes that. overture-dev is a
 playground, so this is cheap.
 
-This order asks four things of the mock, and each is a way it could quietly fail to prove anything.
+This order asks four things of the mocks, the bridge's for the adapter step and the controller's for
+the bridge step, and each is a way a mock could quietly fail to prove anything.
 
-**Seed it from the case table rather than from what the adapter asks for.** `token-calculation.md`
-holds twenty-nine cases with expected outputs, and the count moves as the model does, so read it
-there rather than trusting a number written here. A mock grown to answer whatever the adapter needs
-lets the adapter define the contract by its own appetite, and every case left unexercised ships
-unproven. Driven the other way the mock is the specification, and step 5 becomes a matter of
-matching known answers.
+**Seed them from the case table rather than from what the consumer asks for.** The consumer's tests
+decide the shape of the interface; the case table decides its answers. `token-calculation.md` holds
+the cases with expected outputs, and the count moves as the model does, so it is read there rather
+than written here. A mock grown to answer whatever the consumer needs lets the consumer define the
+contract by its own appetite, and every case left unexercised ships unproven. Driven the other way
+the mock is the specification, and building the controller becomes a matter of matching known
+answers.
 
-**It must not be accommodating.** It should hold a fixed, hand-written set of grants and refuse
-anything outside them, because the mock answering a question does not mean the real controller can.
+**They must not be accommodating.** Each holds a fixed, hand-written set of answers and refuses
+anything outside it, because a mock answering a question does not mean the real piece can.
 
-**It must issue real tokens.** The token is a JWE and the bridge exists to decrypt it. Step 2 is
-meant to exercise that component, and a mock handing over a plain object skips it.
+**The controller mock must issue real tokens.** The token is a JWE and the bridge exists to decrypt
+it. The bridge step is meant to exercise that component, and a mock handing over a plain object
+skips it.
 
-**Stop it, at step 2, while that is free.** The bridge's most distinctive behaviour is raising when
-the controller is unreachable past the grace period, and with a mock the test is to turn the mock
-off. Left to step 5 this arrives as a large unexercised body of fail-secure behaviour, which is the
-worst kind to meet late.
+**Stop the controller mock during the bridge step, while that is free.** The bridge's most
+distinctive behaviour is raising when the controller is unreachable past the grace period, and with
+a mock the test is to turn the mock off. Left to the controller step this arrives as a large
+unexercised body of fail-secure behaviour, which is the worst kind to meet late.
 
-**Whether the mock outlives step 5 decides whether any of this survives.** A throwaway harness loses
-the contract knowledge as soon as the real controller lands. Wired to the conformance corpus, whose
-approved location is below, it becomes what keeps the real controller honest afterwards: the same
-cases run against the mock during steps 2 to 4 and against the real thing from step 5 on, and a
-divergence is a defect rather than a surprise.
+**Whether the mocks outlive the controller decides whether any of this survives.** A throwaway
+harness loses the contract knowledge as soon as the real controller lands. Wired to the conformance
+corpus, whose approved location is below, the controller mock becomes what keeps the real controller
+honest afterwards: the same cases run against the mock until the controller lands and against the
+real thing after, and a divergence is a defect rather than a surprise.
 
 **One bridge case needs an input never produced by this release's controller**, so the bridge's own
 tests build it rather than the mock issuing it: a version 1 payload carrying a `resource.` entry (see
@@ -117,7 +143,7 @@ tests build it rather than the mock issuing it: a version 1 payload carrying a `
 
 | Given                                                                                   | Then                                                                                                                         |
 | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `global.unmarked` and `resource.pilot` on HEART_STUDY, then two requests inside the TTL     | the adapter receives `global.unmarked` alone, and exactly one `category.unenforced` is recorded, naming the principal, HEART_STUDY, `resource.pilot`, the payload version and `notImplemented` |
+| `global.unmarked` and `resource.pilot` on HEART_STUDY, then two requests inside the TTL     | the enforcement result is rendered from `global.unmarked` alone, and exactly one `category.unenforced` is recorded, naming the principal, HEART_STUDY, `resource.pilot`, the payload version and `notImplemented` |
 | a bare `open` on HEART_STUDY                                                            | the payload is malformed: treated as not received, the application reports unavailable rather than an empty answer, and the rejection is logged |
 | an unknown prefix, `local.pilot`                                                        | the same as a bare name                                                                                                      |
 
@@ -378,11 +404,12 @@ the ES response arrives and before surfacing to the client, giving per-row field
 single ES round trip. This would require a response transformer hook in the adapter API contract
 in addition to the query modifier, which becomes a blocker 4 concern at that point.
 
-**RESOLVED, and simplified by the resource-level decision.** Under resource-level
-enforcement there are no per-record category predicates, so the emitted filter is a single positive
-clause on the resource field and the additive-versus-subtractive question is moot for MVP. It governs
-the post-MVP record-level case, where the single-clause encoding is `not` of `not-in` (verified by
-executing the compiler) and requires a `nested` mapping. Both recorded in
+**RESOLVED.** A category selects records within a resource from the first release, so the emitted
+filter pairs the resource field with the category field. Concrete categories render additively, and
+`unmarked` is the one complement, a `not` around an `in`, whose failure on an unmapped category the
+bridge's check of each resource's offered categories covers. The post-MVP subset test for a record
+carrying several categories is where the `not` of `not-in` encoding applies (verified by executing
+the compiler), and it requires a `nested` mapping. All recorded in
 [`decisions.md`](../design/decisions.md).
 
 The adapter
@@ -407,9 +434,10 @@ criterion. Full rationale, including the audit-locality and pipeline-inversion a
 
 Three things follow for the payload:
 
-- **The token carries held grants only.** Moving a resource's full configured category set into
-  the token was considered, to make subtractive rendering fail closed on config drift. Additive
-  rendering does not need it.
+- **The token carries held grants, and what each resource it names offers.** Moving a resource's
+  full category set into the token was first set aside because additive rendering does not need it.
+  `unmarked` is the complement additive rendering keeps, and it does, so the payload carries
+  `offeredCategories` (decided 2026-10-05, in [`decisions.md`](../design/decisions.md)).
 - **A role in a resource becomes an explicit positive grant.** There is no implicit baseline for untagged
   records any more, so a role must render to a predicate of its own. The exact shape is open
   and is tracked in `roadmap.md`.
@@ -429,6 +457,11 @@ all resolved, so this no longer gates anything: a mock can issue real tokens. Th
 carries one schema, and the negotiation handshake is built alongside it so that a second version is a
 controller-side addition rather than a coordinated upgrade at both ends.
 
+One member was added after closing, before anything shipped: `offeredCategories`, what each resource
+named in the payload offers, which the bridge checks a catalogue's mapping against. It is decided in
+[`decisions.md`](../design/decisions.md), "A catalogue's category gap is found by the bridge", and
+the fixtures carry it.
+
 ---
 
 ### 4. Adapter API contract spec
@@ -436,7 +469,8 @@ controller-side addition rather than a coordinated upgrade at both ends.
 **What it gates:** the bridge and all adapter implementations.
 
 Concrete HTTP shapes are still missing: token exchange request/response bodies, error codes,
-revocation poll endpoint (`GET /revocations?since=`), push subscription handshake. The design
+the notice stream's poll endpoint (the notices after a position) and its deadline, push subscription
+handshake. The design
 intent is in `adapter-integration.md`; it needs to become a spec with exact field names and types.
 
 **Action:** one focused pass to turn the design doc into a typed API spec, once item 3 settles the
@@ -531,11 +565,11 @@ rejected for the fast path. The rejection was about a change that is per resourc
 revocation is the case where the change genuinely is per principal, so the two may resolve
 differently and that is worth deciding rather than inheriting.
 
-**Action:** schema design session. Nothing blocks it.
+**Action:** review the draft in [schema.md](../design/schema.md) and settle its eight decisions.
 
-**Status:** UNBLOCKED. All three of its dependencies closed: 3 settled the payload, 5 closed by
-scope, and 8 closed with no new field. What remains is the
-schema design session itself, now the largest single piece of design work left.
+**Status:** DRAFTED. All three of its dependencies closed: 3 settled the payload, 5 closed by scope,
+and 8 closed with no new field. The bridge's test plan then fixed the channel half, so the draft
+covers the whole store.
 
 ---
 
@@ -646,8 +680,9 @@ shrinks or disappears, so it is worth raising as an explicit dependency with its
 
 **Approved location:** iMS infra repo, `.dev/usher-integration/`.
 
-**`principals.json` is drafted**, at [.dev/design/conformance/](../design/conformance/), with all 29
-cases expanded into real payload shape and a validator beside it. It is drafted in this repository
+**`principals.json` is drafted**, at [.dev/design/conformance/](../design/conformance/), with every case
+that produces a payload expanded into real payload shape, the three that produce none listed with the
+reason, and a validator beside it. It is drafted in this repository
 because this section names that file Usher's to own; moving it into the location below is a step of
 its own. Its README records two deliberate divergences from the case table.
 
@@ -713,6 +748,7 @@ Worked both ways, since the boundary is not where it first appears:
 | ------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------ |
 | Does a denied principal see records              | Yes: denied against permitted, same records                   | Corpus                               |
 | Does a facet leak values a principal may not see | Yes: under-privileged against fully-privileged, same endpoint | Corpus                               |
+| Does full access lose anything                   | Yes: fully-privileged against access control off, same data   | Corpus                               |
 | Which layer produced an outcome                  | Partly: some wrong reasons are pairable, "which layer" is not | Corpus for the pairable half only    |
 | Did a query rewrite rather than scan             | No: results are identical by design                           | Profile or explain, never the corpus |
 
@@ -747,8 +783,8 @@ now exists as the `PermissionsPayload` type in
 ecosystem, so a `schemaVersion` inside an authorization payload reads as the version of the data's
 schema, and the decision recording the mechanism already calls it a payload version.
 
-**The 29 cases and `expectations.json` are different layers, and this section invites the mistake of
-conflating them.** The cases in [token-calculation.md](../design/token-calculation.md) assert what the
+**The token calculation's cases and `expectations.json` are different layers, and this section
+invites the mistake of conflating them.** The cases in [token-calculation.md](../design/token-calculation.md) assert what the
 token _contains_, given grants, group membership, acceptance state and the baseline setting. The
 corpus asserts what an application _serves_, given a payload and a set of records. They chain rather
 than overlap: a case's expected payload is a `principals.json` entry, and the corpus starts where the

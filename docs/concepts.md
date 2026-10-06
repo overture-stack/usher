@@ -742,13 +742,13 @@ authoritative schema, written as the `PermissionsPayload` type received by the a
 [security-workflow.md: The payload as a
 type](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md#the-payload-as-a-type).
 
-The app adapter (PEP) reads the permissions payload and applies it to the outgoing query, before the query
-reaches the data layer. The payload is enforced server-side, not client-side. The client never
+The app's bridge reads the permissions payload and turns it into a filter for each catalogue, and the
+app adapter (PEP) applies that filter to the outgoing query, before the query reaches the data layer. The payload is enforced server-side, not client-side. The client never
 receives data it was not supposed to see. It cannot bypass the payload by modifying the query.
 
 Usher tokens are the core mechanism by which Usher delegates enforcement to per-app adapters,
 without requiring those adapters to understand the full policy model. The adapter does not need to
-know why a user is excluded from certain data. It only needs to translate the permissions payload into
+know why a user is excluded from certain data. It only needs to apply the filter the bridge gives it, in
 its app's native query format.
 
 Each Usher token is scoped to a specific **audience**: the application service that requested it.

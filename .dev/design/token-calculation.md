@@ -129,12 +129,16 @@ that looks complete and answers only one path.
        actions held. Grants naming a field category collect under that category's
        `field` key. A category not kept is simply not named, and the records
        carrying it are not reached; a field category not kept is not named either,
-       and its columns are not shown.
+       and its columns are not shown. Beside them, every category each of those
+       resources offers, held or not.
 
-Step 5 decides what the token says, and the adapter decides what that reaches: one clause per named
-category, pairing the resource's field value with the category's, composed with `or`. So a resource
+Step 5 decides what the token says, and the bridge renders what that reaches: for each category
+held with `record` and `view`, a clause pairing the resource's field value with the category's,
+composed with `or`. So a resource
 of mixed sensitivity serves each principal the records reached by their categories, rather than being
-present in full or absent in full.
+present in full or absent in full. The offered categories are what the bridge checks a catalogue's
+mapping against before rendering a resource there, since a category it does not map would otherwise
+be served as unmarked.
 
 Where a record carries more than one category, every one of them must be held. That conjunction is
 inside a single record's requirements and never across a principal's grants, and it is the part
@@ -151,9 +155,9 @@ Against this configuration:
     G1 "cardiology" and G2 "study readers" are named sets of people and nothing
     more. A role is named on each grant, never on the group.
 
-    HEART_STUDY     carries  controlled
-    LUNG_COHORT     carries  no concrete category
-    REEF_ARCHIVE    carries  controlled, community-governed
+    HEART_STUDY     offers   controlled
+    LUNG_COHORT     offers   no concrete category
+    REEF_ARCHIVE    offers   controlled, community-governed
 
     Every resource's unmarked records are open unless a case says otherwise.
     The baseline is on and grants unmarked -> read wherever the setting is open.
@@ -237,10 +241,10 @@ These cases run against a second configuration, so every case above keeps its an
 
         viewer   carries  view
 
-    OPEN_ATLAS       carries  no concrete category; unmarked records open
-    MEMBERS_ARCHIVE  carries  no concrete category; unmarked records registered
-    SEALED_ARCHIVE   carries  no concrete category; unmarked records by grant
-    HEART_STUDY      carries  controlled; unmarked records open
+    OPEN_ATLAS       offers   no concrete category; unmarked records open
+    MEMBERS_ARCHIVE  offers   no concrete category; unmarked records registered
+    SEALED_ARCHIVE   offers   no concrete category; unmarked records by grant
+    HEART_STUDY      offers   controlled; unmarked records open
 
     The baseline is on unless a case turns it off, and grants unmarked -> read
     wherever the setting is open. The signed-in rule grants unmarked -> read to

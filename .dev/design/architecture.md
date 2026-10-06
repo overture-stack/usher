@@ -125,18 +125,19 @@ application. Two components, two jobs, and our modular design depends on keeping
 - Holding one symmetric JWE key per ushered application, and encrypting every token to the one
   application it is issued for, so no bridge can read another application's tokens
 - Writing `revoked_at` timestamps to the policy database on revocation
-- Publishing revocation events to Valkey pub/sub so all controller instances notify their
-  connected bridge subscribers (see [Multi-instance propagation](security-workflow.md#multi-instance-propagation))
+- Publishing a wake-up to Valkey pub/sub after writing a notice, so every controller instance reads
+  the new notices and pushes them to its connected bridges (see [Multi-instance propagation](security-workflow.md#multi-instance-propagation))
 - Hosting the management API (PAP: writing and revoking grants, category management,
   revocation)
-- Hosting the revocation poll endpoint (`GET /revocations?since=<timestamp>`) for bridge fallback
+- Hosting the notice stream's poll endpoint, which returns the notices after a position, for bridge
+  fallback and as the bridge's liveness check
 - Future: management UI (visual PAP interface)
 
 **Does not own:**
 
 - User authentication → **Keycloak**
 - Querying the data layer or executing data queries → the **application's** own data layer
-- Translating the permissions payload into application-native query formats → **adapter**
+- Applying each catalogue's enforcement result in application-native form → **adapter**
 - Holding an application's key alone: each application's **bridge** holds the same key, delivered to
   both by the secrets operator
 
@@ -156,8 +157,8 @@ being served, until connectivity is restored.
 - Holding its own application's JWE key, held by no other application's bridge
 - Presenting the user's IdP bearer token to the controller's token exchange endpoint
 - Receiving and locally caching the JWE Usher token per user
-- Decrypting Usher tokens and exposing the decoded payload as a typed `PermissionsPayload`
-  object to the adapter: adapters never see the raw JWE or any key
+- Decrypting Usher tokens and rendering each request's access for the adapter: adapters never see
+  the raw JWE, any key or the payload
 - Validating the Usher token on every request within the TTL window (no network call to the
   controller in the common case)
 - Maintaining the revocation channel: SSE or WebSocket push subscription with reconnection
@@ -167,8 +168,8 @@ being served, until connectivity is restored.
 - Dropping a person's cached token when the identity provider's back-channel logout reaches the
   application
 - Entering revocation-uncertain mode after the grace period (default: 60 seconds without a
-  successful revocation check): suspending sessions and returning 503 until connectivity is
-  restored
+  successful revocation check): suspending sessions and returning 503 for anything needing a
+  granted permission, while the open tier is still served, until connectivity is restored
 
 **Its logic does not depend on the web framework.** Everything above lives in a core that knows
 nothing of Express, and the Express layer only wires it into middleware and routes, so a bridge for
@@ -285,10 +286,11 @@ can go subtly stale.
    was authoritative in Valkey or cached from PostgreSQL, closed with it: there is no timestamp to
    place.
 
-2. **Revocation pub/sub backbone.** When a revocation is processed by one controller instance,
-   it publishes an event to a Valkey pub/sub channel. All other instances subscribe to this
-   channel and forward the event to their connected bridge subscribers via SSE or WebSocket. This
-   is how revocation propagates across a horizontally scaled instance without direct
+2. **Revocation wake-ups.** When one controller instance writes a notice, it publishes a wake-up
+   to a Valkey pub/sub channel. Every instance subscribes, reads the notices after the last position
+   it pushed from PostgreSQL, and pushes them to its connected bridges over SSE. Pub/sub delivers at
+   most once, so it carries no notice itself: a lost wake-up costs a delay, never a notice. This is
+   how revocation propagates across a horizontally scaled instance without direct
    instance-to-instance coordination. See [Multi-instance propagation](security-workflow.md#multi-instance-propagation).
 
 **Does not own:** authoritative policy state → **PostgreSQL**. Valkey accelerates reads and
@@ -308,13 +310,14 @@ distributes events; PostgreSQL is the source of truth.
 | Hold every application's JWE key                       |          | ✓          |        |         |
 | Hold its own application's JWE key                     |          |            | ✓      |         |
 | Cache Usher token                                      |          |            | ✓      |         |
-| Decrypt and expose `PermissionsPayload`                |          |            | ✓      |         |
+| Decrypt and read `PermissionsPayload`                  |          |            | ✓      |         |
+| Intercept requests and render enforcement results      |          |            | ✓      |         |
 | Validate Usher token locally                           |          |            | ✓      |         |
 | Subscribe to revocation channel                        |          |            | ✓      |         |
 | Publish revocation events (cross-instance, via Valkey) |          | ✓          |        |         |
 | Dismiss revoked session                                |          |            | ✓      |         |
 | Raise on controller loss (fail-secure)                 |          |            | ✓      |         |
-| Translate permissions payload to query filters         |          |            |        | ✓       |
-| Intercept and filter data requests                     |          |            |        | ✓       |
+| Apply enforcement results as query filters             |          |            |        | ✓       |
+| Filter data requests at the application's hook         |          |            |        | ✓       |
 | Manage policy (grants, resource users, categories)     |          | ✓          |        |         |
 | Expose management API and future UI                    |          | ✓          |        |         |

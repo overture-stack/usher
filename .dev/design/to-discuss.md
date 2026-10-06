@@ -32,6 +32,39 @@ check as the thing that makes it loud:
 **Nothing in this corpus specifies the protocol.** Not what each side declares, not when it runs, not
 what either does with a mismatch, not whether the controller retains what an adapter declared.
 
+**Failure mode 1 now has one (decided 2026-10-05).** The controller declares what each resource
+offers, in the payload; the adapter declares each catalogue's mapping and absences, at registration
+with the bridge; the bridge compares them before rendering a resource for a catalogue, at startup for
+the open tier; a mismatch withholds the resource from that catalogue with an error-level event; and
+the controller retains nothing an adapter declared. See [decisions.md](decisions.md), "A catalogue's
+category gap is found by the bridge". Modes 2 to 6 remain.
+
+**A positive `unmarked` would make modes 1, 2 and 6 fail closed (research, raised
+2026-10-04).** Three of the six fail open for one reason: `unmarked` is a complement, so whatever the
+catalogue does not exclude is served as unmarked. If each catalogue instead declared how its data marks
+an unmarked record, by a value or by the category field being absent, `unmarked` would be a positive
+test like every other category, and a record nobody recognizes would match no clause:
+
+| Case                                                             | `unmarked` as a complement, today                            | `unmarked` as a declared positive test         |
+| ---------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| mode 1, a category offered and not mapped                        | served as unmarked, unless the bridge withholds the resource | hidden; the offerings check only makes it loud |
+| mode 2, a value in the data nobody mapped                        | served as unmarked                                           | hidden                                         |
+| mode 6, a partitioning category set as an overlay                | served as unmarked                                           | no complement to drop it from                  |
+| unmarked records marked by a value the catalogue did not declare | served                                                       | hidden, which is visible as open data missing  |
+
+**What it costs.** Absence has no first-class test in SQON: the first application compiles a reserved
+`__missing__` value into an existence check, which is one compiler's convention rather than the query
+language's, so a bridge emitting it would tie every adapter to that convention or need a SQON
+operator added. It also reverses a modelled position, that `unmarked` has no value of its own, so the
+glossary and the `unmarked` decision would move with it. Raised for the developer as research, not
+built: the bridge renders the complement as planned, and the change would be local to one clause.
+
+**Mode 2's data check needs the same declaration either way.** Comparing the values found in a
+catalogue's category field with its mapping can flag a value as unknown only if the catalogue says
+which values mean unmarked; otherwise a catalogue marking its unmarked records with a value of its own
+reports that value as unknown on every run. So the declaration is a precondition of the data check
+even if `unmarked` stays a complement.
+
 **Three of the four now have an answer from the enforcing side**, offered by the first integration
 and recorded here as the starting point rather than as the specification:
 
@@ -54,13 +87,16 @@ catalogues under one `study_id`, with its clinical records `controlled` and its 
 `unmarked`: the clinical adapter maps `controlled` to a value already carried by every clinical
 record, and the environmental adapter declares that none of its records carry it.
 
-**That needs three states per category and catalogue, not two.**
+**That needs three states per category and catalogue, not two.** Adopted on 2026-10-02, with the
+third state logged as an error-level startup event; the decision is recorded in
+[decisions.md](decisions.md), under "The `unmarked` complement is where an unrecognized category
+fails the other way".
 
-| State           | What the adapter declares              | What follows                                                                    |
-| --------------- | -------------------------------------- | ------------------------------------------------------------------------------- |
+| State           | What the adapter declares              | What follows                                                                        |
+| --------------- | -------------------------------------- | ----------------------------------------------------------------------------------- |
 | Mapped          | a field test that recognizes it here   | clauses render, and `unmarked` excludes what the test matches                       |
-| Declared absent | no record in this catalogue carries it | `unmarked` needs no exclusion for it, and resources carrying it stay reachable here |
-| Not mapped      | nothing                                | the resources carrying it are taken out of this catalogue, which fails closed   |
+| Declared absent | no record in this catalogue carries it | `unmarked` needs no exclusion for it, and resources offering it stay reachable here |
+| Not mapped      | nothing                                | the resources offering it are taken out of this catalogue, which fails closed       |
 
 **Without the middle state the example cannot work.** The environmental adapter, having nothing to
 map `controlled` to, falls into the third row and takes out the whole study, open records included.
@@ -121,14 +157,14 @@ first exchange, is renewed at each refresh, and ends when the bridge drops it or
 **Each open item below is an event that ends or changes one**, and each has been recorded separately
 with its own fix:
 
-| Event                          | What the bridges do                                                                                         | Status                      |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------- |
-| a grant is revoked             | the channel names the principal, and bridges drop that principal's token                                    | designed                    |
-| a resource's categories change | the channel names the resource to the applications serving it, and their bridges drop every token naming it | decided                     |
-| a person signs out             | the identity provider's back-channel logout reaches the application, which drops the person's token         | agreed, not yet specified   |
-| a person is suspended          | the channel names the person, and bridges drop their token                                                  | open: the emergency cut-off |
-| announcements arrive late      | a withdrawn grant keeps working while the grace clock resets                                                | open: the revocation delay  |
-| an upload is in flight         | a different kind of session, revocable or not                                                               | open, in its own item       |
+| Event                          | What the bridges do                                                                                                                               | Status                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| a grant is revoked             | the channel names the principal, and bridges drop that principal's token                                                                          | designed                         |
+| a resource's categories change | the stream names the resource to the applications serving it, whose bridges drop every token naming it                                            | decided, filtered by audience    |
+| a person signs out             | the controller receives the identity provider's back-channel logout and relays it as a principal notice, so every bridge drops the person's token | decided                          |
+| a person is revoked            | the exchange refuses them with `401`, and a principal notice drops their token everywhere                                                         | proposed: schema.md's decision A |
+| announcements arrive late      | only a poll answered within its deadline resets the grace clock, so the grace period bounds the delay                                             | decided                          |
+| an upload is in flight         | a different kind of session, revocable or not                                                                                                     | open, in its own item            |
 
 **Several copies of one application each hold their own cache**, so every announcement has to reach
 every copy. Subscribing each copy to the channel already does that, and any change to the channel
@@ -150,6 +186,10 @@ What stays open is narrower and belongs with the same unanswered question as eve
 stopping a principal outright: revoking a _person_ rather than a grant has no settled storage, so
 whether that is a sweep over their grants or a marker on `users` decides whether reinstatement is
 many writes or one. See blocker 6 in [../docs/phase-1.md](../docs/phase-1.md).
+
+**Answered by [schema.md](schema.md)'s decision A (proposed 2026-10-04).** Revoking a person is a row
+in `principal_revocations`, and reinstating them lifts it, so each is one write, the history survives
+a lift, and a second revocation is a second row.
 
 ---
 
@@ -468,22 +508,31 @@ nor metadata shaping, so it does not wait on them.
 | When                  | What holds                                                                 |
 | --------------------- | -------------------------------------------------------------------------- |
 | until the hook exists | operators leave a field that access control keys on without display labels |
-| once it exists        | configuration narrows the labels to the values reachable by the principal       |
+| once it exists        | configuration narrows the labels to the values reachable by the principal  |
 
 The first integration records the same requirement on its side, as a per-request shaping hook for
 configuration.
 
 ## Security model
 
-**[HIGH] Adversarial delay within the grace period is distinct from adversarial blocking.**
-The fail-secure design responds to blocking of the revocation channel: if events stop arriving,
-the bridge enters revocation-uncertain mode after 60 seconds. A more targeted attack delays
-(rather than drops) revocation events for a specific user, keeping the bridge's
-last-successful-check timestamp just within the grace period indefinitely. The bridge never enters
-revocation-uncertain mode; the revoked session is sustained. This is an adversarial delay pattern
-and the current design does not address it. Possible mitigations include per-user revocation
-confirmation rather than channel-wide liveness checks, or a narrower per-user TTL after a
-revocation event is known to be in flight.
+**[HIGH] A payload computed before a change can be written to the cache after the change cleared
+it.**
+The fast path's promise, that a revoked grant is never reissued, holds only if a computation cannot
+outlive the change it missed:
+
+1. Ana asks for a token, and controller instance A computes her payload from the policy as it stands.
+2. Her grant is revoked. Instance B commits the revocation and deletes her cached payload.
+3. Instance A finishes, and writes the payload it computed in step 1 into the cache.
+4. Every later refresh reads that payload, and reissues the revoked grant, for as long as the entry is
+   kept, which nothing bounds today.
+
+**Proposed fix: a policy generation in the cache key, with a lifetime as a backstop.** A single
+counter in PostgreSQL is bumped in every transaction that changes what anyone holds. A computation
+reads it in the same snapshot as the policy and stores its payload under a key carrying it, so a late
+write lands under a generation nothing reads any more. Every cache entry also expires after a set
+lifetime, so no defect elsewhere can keep one alive indefinitely. Policy writes are rare, so one
+counter serializing them costs nothing measurable, and the cache refills on demand. The bridge has
+its own side of this race, an exchange answer overtaken by a notice, and handles it already.
 
 **[HIGH] GDPR right to erasure conflicts with the append-only audit log.**
 The audit log is INSERT-only by design (application role has no UPDATE or DELETE) and contains
@@ -496,6 +545,29 @@ table that can be nulled on erasure); or a legal basis argument that audit logs 
 constitute a lawful retention purpose that overrides erasure requests. This should be decided
 before the audit schema is finalized.
 
+**For the developer's decision (brief, 2026-10-04).** The schema draft narrows what the question
+is about:
+
+- **The subject is already a pseudonym.** `actorId` is the identity provider's `sub`, and Usher
+  stores no name or email address for a principal. Erasing the account at the identity provider
+  leaves Usher's trail naming a subject nothing in Usher can resolve to a person.
+- **The exception is the email address in three invitation events.** `invitation.creation`,
+  `invitation.claim` and `invitation.lapse` carry it in clear, and the claim event joins it to the
+  subject. The invitation row itself is deleted once claimed, so the audit log is the one place Usher
+  keeps an address, permanently, beside the subject it became.
+
+| Option for the address in audit events                                                | What an investigator can still answer                                       | What an erasure request leaves                                           |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| keep it in clear, as today                                                            | everything                                                                  | the address, joined to the subject, for as long as the log is kept       |
+| **a keyed digest: HMAC-SHA-256 of the lower-cased address, key in the secrets store** | "was this address invited, by whom, and to what", by anyone holding the key | a digest, unreadable without the key and a guess at the address          |
+| per-invitation encryption, with a deletable key row                                   | everything, until a key is deleted                                          | nothing readable for that invitation, at the cost of a mutable key table |
+
+**Recommended: the keyed digest**, since it keeps the trail's purpose, answering who invited whom,
+without the log holding addresses. Whether a pseudonymous trail is then kept against an erasure request
+is a legal question rather than a design one: it is for the developer and the institution's privacy
+office, per jurisdiction, and for any community whose data governance agreement asks for the trail as
+accountability. The schema does not depend on the answer, since `audit_log` keeps `data` as JSON.
+
 **[MEDIUM] Controller instance failure produces a thundering-herd reconnection.**
 Each controller instance maintains persistent SSE/WebSocket connections to its bridge subscribers.
 If an instance goes down, all its connected bridges simultaneously lose their push connections
@@ -506,6 +578,13 @@ many concurrent bridge connections must surviving instances handle in a worst-ca
 High-availability design for the controller is listed as not yet designed; this failure mode
 should be a named requirement for that design.
 
+**The denial-of-service half is bounded by the liveness rule (2026-10-04).** Only a poll answered in
+time proves the stream is live, and the load balancer sends polls to the surviving instances, so
+killing an instance does not put its bridges into the uncertain mode. Their push connections reconnect
+with backoff and jitter, and the notices they missed arrive by poll meanwhile. The capacity question,
+how many push connections a surviving instance must absorb, stays a named requirement of the
+high-availability design.
+
 **[MEDIUM] Migration tooling DDL access undermines the INSERT-only audit constraint.**
 Schema migrations require elevated database privileges (ALTER TABLE, DROP COLUMN). If migration
 tooling runs with credentials that include the audit table, the INSERT-only constraint is
@@ -513,6 +592,12 @@ vacuously satisfied at the application layer while being bypassed at the migrati
 security boundary between migration-time database access and runtime application access should
 be described: separate database roles, separate credential paths, and a policy for what migration
 scripts are permitted to do with the audit table.
+
+**Proposed resolution: [schema.md](schema.md)'s decision H, with the policy added.** Migrations run
+at deployment under a role and credentials of their own, and the running controller's role cannot
+alter the schema or touch the audit log beyond inserting. The policy for migrations: one may add to
+the audit table's structure, columns or indexes, and never updates, deletes or rewrites its rows,
+which review of each migration checks.
 
 ---
 
@@ -672,11 +757,11 @@ should be considered as a v1 requirement.
 read by grant validation, so that freezing someone is one write rather than a sweep across every
 grant they hold:
 
-| Status      | What grant validation does                                                                                      |
-| ----------- | --------------------------------------------------------------------------------------------------------------- |
-| `active`    | grants resolve normally                                                                                         |
-| `suspended` | grants resolve to nothing, and the grants themselves are untouched                                              |
-| `blocked`   | as suspended, and any attempt to grant this principal access warns the author and notifies someone for approval |
+| Status    | What grant validation does                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------- |
+| `active`  | grants resolve normally                                                                                       |
+| `revoked` | grants resolve to nothing, and the grants themselves are untouched                                            |
+| `blocked` | as revoked, and any attempt to grant this principal access warns the author and notifies someone for approval |
 
 **Why a status rather than a bulk revoke.** Setting `revoked_at` across every grant destroys what
 was held, so restoring access means reconstructing it from an audit trail. A status leaves the grants
@@ -688,6 +773,15 @@ fast enough to be an emergency operation.
 warning, who receives the approval notice, and how it interacts with the cached payload, which must
 be deleted on any status change for the freeze to take effect inside one TTL rather than at the end
 of one.
+
+**[schema.md](schema.md)'s decision A is this mechanism (2026-10-04).** The `revoked` row is a
+principal revocation: one row written, the grants untouched, lifted to reverse it. The exchange then
+refuses the principal with `401`, as case 33 does, and a principal notice drops their entries at every
+bridge, so a freeze takes effect within the revocation bound rather than at the end of a TTL. The row
+read `suspended` until that word was given to a different state: a principal whose grants are held
+back by a bridge in its uncertain mode, answered `503` and resuming by itself (see the glossary). A
+freeze is lifted by someone rather than resumed, so it is a revocation. Still open: who may revoke and
+lift, and whether `blocked` earns a state of its own.
 
 **[POST-V1] Trusted-issuers governance for GA4GH Passports is not described.**
 Same scope as the Visa revocation item above. Original finding:

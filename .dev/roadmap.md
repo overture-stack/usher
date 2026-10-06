@@ -156,13 +156,13 @@ this was previously open; it now needs designing rather than deciding.
 
 ### Conformance case per endpoint that returns data
 
-**Replaces the aggregation-path requirement violation, which is settled.** The defect required an
-authorization field at nesting depth two or greater; the settled filter is a single positive
-containment clause on a flat, depth-one field, so the triggering condition cannot arise. With one clause there is also no sibling composition, which makes the `should` versus
-`must` question moot rather than answered. Two conditions keep it that way, and both are already
-required elsewhere: the adapter establishes the field's mapping shape at startup and refuses to
-enforce where it cannot, and record-level narrowing stays post-MVP, since a per-record category
-field is exactly what would put an authorization field deep enough to trigger it.
+**Replaces the aggregation-path requirement violation, which is settled at any depth.** The search
+application's nested aggregation mechanisms read only the client's filter, and the enforcement filter
+reaches facets through the composed query alone, which compiles with correct nesting at any depth.
+Checked on both engines with an access field nested two deep, and pinned by that application's
+nested-facet parity cells. So the mechanisms' disagreement about AND and OR is facet correctness on
+the client's filter, not an enforcement path. The record is the unit of access in any case, and the
+adapter refuses to enforce on a nested field until a nested shape is decided.
 
 **What is not settled by that, and needs building.** An endpoint that returns data can discard the
 filter entirely, whatever the mapping depth, and no configuration reveals it. An application found
@@ -171,6 +171,22 @@ correct, caught by comparing counts rather than by reading code. So the corpus n
 endpoint that returns data, comparing what an under-privileged principal sees against a
 fully-privileged one, not only assertions that records are filtered. Specified in
 `design/permissions-model.md`; this is the entry it previously lacked.
+
+**Two cases gate controlled data, on every endpoint that returns data.** An instance serves
+controlled data only once both pass against its own deployment: records, counts, facets and exports
+alike.
+
+- **Per endpoint:** an under-privileged principal against a fully-privileged one, as above.
+- **Parity:** a principal holding every grant sees exactly what the same instance returns with
+  access control off. Any difference is a defect, with one deliberate exception: a record whose
+  resource value is not configured is hidden from everyone, a fully-privileged principal included,
+  because an unconfigured resource fails closed.
+
+**Parity has a precondition, checked before the comparison.** Every resource value present in the
+instance's data must be configured. Otherwise the exception hides records, and parity fails for a
+reason that is correct behaviour rather than a defect. So list the distinct resource values in the
+data against the configuration first: a value missing from it is configured before go-live, or the
+records carrying it stay hidden from everyone.
 
 ### Artifact provenance must be checked on every write, once artifacts can be written twice
 
@@ -196,6 +212,14 @@ Eleven items surfaced by preparing the first adapter integration, none of them w
 ### Saved-set identity and its grants vocabulary
 
 Usher must publish the vocabulary expressing own-sets-by-default, an administrator listing across users, and no reliance on an unguessable set identifier. Recorded as a cycle deliberately: the integration lists this as a prerequisite for Usher while its central fix depends on Usher, and Usher publishing the vocabulary first is what breaks it. Bounded by the derived-artifact constraint, so per-principal set scoping cannot be an end-to-end property on its own. See [Arranger integration blockers](docs/atlas/roadmap/arranger-integration-blockers.md).
+
+### Admission control against a flood of junk credentials
+
+Research. The first release answers a flood of unique junk credentials with the in-flight bound alone, an accepted trade: the controller stays up, cached principals keep their access, and new sign-ins wait. An admission-priority lane in the bridge kept sign-ins served against every measured flood shape, and needs key knowledge the controller could serve. See [sign-in signature precheck](docs/atlas/bridge/signin-signature-precheck.md).
+
+### The controller's bound on exchanges in flight
+
+Decided 2026-10-06: the controller sets the bound and tells its bridges, since a bound each bridge sets for itself multiplies with the replicas. Open: the number; how a bridge learns it; how the controller shares it among replicas it cannot tell apart, since every replica of an application presents the same key; and whether the controller also enforces it at the exchange, since a share announced to the bridges binds only the bridges that honour it. Whether the bridge keeps a configuration option of its own is cheapest to settle before the first publish. See [decisions.md](design/decisions.md), "The bridge's cache is keyed by the sign-in token".
 
 ### Federation posture
 
@@ -228,15 +252,16 @@ but needs every bridge serving the study to enforce local categories before one 
 
 ### The token calculation, and the schema that should follow it
 
-The controller's token calculation is stale in three ways and is the
-prerequisite for the associative tables rather than the other way round. Written up with nineteen
-cases, the rules settled, and the four still open, in
-[token-calculation.md](design/token-calculation.md).
+The calculation is the prerequisite for the associative tables rather than the other way round.
+[token-calculation.md](design/token-calculation.md) states it: the rule, five steps, and the cases
+that force each branch. The three defects in what was written before it are corrected at their
+source.
 
-Four questions block it. Whether a role's ceiling is global to the principal or held per resource.
-Whether a group's grants may span resources, which today they may, with nobody named as controlling
-group membership. What acceptance is for, since a group grant bypasses it. And what RABAC defines for
-assignment, which matters because the ceiling and grant structure is taken from it deliberately.
+Three questions remain, and each blocks part of the calculation rather than all of it:
+
+- How the schema confines a group's grants to one resource. That they are confined is settled.
+- Whether removing a category from a resource warns about the grants it makes inert.
+- Where the withholding layer lives. Case 21 pins its behaviour ahead of the mechanism.
 
 ### Terminology: six open overloads, and DCAT as the outside check
 
@@ -248,8 +273,9 @@ about whether the compound means the token or a field in it.
 
 `ceiling` joined the list when a reader asked what "the ceiling clause" meant: 32 uses across nine
 files, reaching published `docs/concepts.md`, and defined nowhere. It is the cheapest of the six,
-needing a definition rather than a rename, but the definition waits on whether a role's ceiling is
-global to the principal or held per resource.
+needing a definition rather than a rename, and the question the definition waited on is settled: a
+role's ceiling is global to the principal, per "What the source model settles" in
+[token-calculation.md](design/token-calculation.md).
 
 `dataset` went to a register rule rather than a rename: design documents say `resource`,
 reader-facing prose keeps `dataset`, and the glossary entry carries the mapping. **What that pass
@@ -289,6 +315,24 @@ One design item to settle when this is picked up: the shape of the resource pred
 
 The same startup-verification rule extends to mapping depth, not just mapping type: where an authorization field sits at depth two or deeper, an adapter's filtered-aggregation path does not apply and filtering falls back to a disjunctive one, which for an authorization predicate is OR where AND was intended. An adapter must establish the field's mapping shape at startup and refuse to enforce where it cannot, so a non-conforming instance is one where this narrowing is unavailable rather than one where it silently degrades.
 
+### An open-tier marker on a suspended principal's export (possible improvement)
+
+In the uncertain mode a suspended principal's export answers 503, since a file holding only open
+records would read as complete and a browser's download never shows a response header. Serving the
+open tier with a marker instead would keep exports working through an outage, and becomes worth it
+once portals reliably surface the marker to the person downloading. See "A suspended principal is
+answered by what the open tier can settle" in [decisions.md](design/decisions.md).
+
+### Access that varies among one record's nested items (post-MVP, research)
+
+Not designed, and possibly worth supporting. Field-level control withholds a field from everyone
+lacking a grant on it; this would instead admit or strip each nested item by its own value, so one
+record shows different items to different readers. Hard because every read path would have to strip
+items inside a record, hits, facets and exports alike, where today each admits or withholds the
+record whole. Where nested content needs its own governance today, it becomes its own catalogue, as
+iMicroSeq's specimens are beside its files. See "The unit of access is the record an application
+returns" in [decisions.md](design/decisions.md).
+
 ### Define resource derivation for migration
 
 `architecture.md`'s migration table maps each EGO study group to an Usher resource one to one. That holds only where a resource corresponds to an entity with its own creation operation. Where an instance's resources instead correspond to a registered vocabulary or to an attribute of some other entity, there is no creation operation to map and the step needs its own definition.
@@ -307,15 +351,15 @@ Three sequences are recorded in design documents and nowhere an operator reads, 
 
 - **Break-glass access.** If every platform administrator is unavailable, recovery is an IdP operation. Who is authorized to perform it, and what audit trail the IdP layer is expected to produce, is undocumented. See [admin-model.md](design/admin-model.md).
 - **Establishing a category.** Define the category, appoint whoever governs it, and only then accept data carrying it. The decision to treat a custodian vacancy as a governance failure rather than a system state depends on this sequence being followed. See [decisions.md](design/decisions.md) § Granting is one function.
-- **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the controller. The reverse order serves the affected records to everyone until the application catches up. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
+- **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the controller, and both before any record carrying it is indexed, since the check compares registrations with what Usher declares and never reads the data. The reverse order withholds each resource offering the category from the catalogues not yet mapping it, the whole resource rather than the affected records, until the application catches up. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
 A design document that says an operator must do something, without an operator-facing document, has moved the responsibility rather than discharged it.
 
 ### Category dictionary introspection
 
-Adapter configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher. Nothing connects the two today, so every instance transcribes the dictionary into each adapter's configuration by hand and keeps it in step by remembering to. The proposal is an introspection endpoint on the controller returning the dictionary, reachable only by a bridge and encrypted to that application's key like an Usher token, so configuration is generated rather than copied.
+Adapter configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher, so every instance transcribes it into each adapter's configuration by hand. The proposal is an introspection endpoint on the controller returning the list, reachable only by a bridge and encrypted to that application's key like an Usher token, so configuration is generated rather than copied. Post-MVP: a convenience only, since the check protecting `unmarked` from an unmapped category runs in the bridge from the offered categories carried in the payload, from the first release. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
-It carries names only, since what a category selects is defined per schema and Usher never learns it, so it does not weaken data-agnosticism. Beyond removing the duplication it lets an adapter check its configuration against the full list at startup and refuse to start on an unmapped category, moving a failure that currently presents as quietly missing data to instance time. It is also the compensating control for computing `unmarked` as the complement of known categories: a category missing from the adapter's mapping is not in the set being subtracted, so records carrying it are served as open rather than hidden. Post-MVP, arriving with record-level narrowing, since resource-level enforcement puts no category in the filter and needs no mapping. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
+It carries names only, since what a category selects is defined per schema and Usher never learns it, so it does not weaken data-agnosticism, and it must not become a route to enumerate resources, grants or principals.
 
 ### Adapter integration design
 
@@ -329,11 +373,11 @@ answer: a study whose records sit in two catalogues under different access.
 
 ### Database schema design
 
-Physical schema for the permissions model entities: column types, indexes, foreign key constraints, and migration strategy. The engine is decided (PostgreSQL); the logical entity list is drafted in `.dev/design/permissions-model.md`, with four of its twelve tables marked placeholders and no entity at all for custodian scoping.
-
-Correctly blocked rather than behind: the write-versus-read decision determines whether submission writes grant rows or only registers a resource, the RABAC alignment turns permissions into entities, and an adopt decision would replace most of these tables outright.
-
-**The data access layer is a separate decision that currently exists nowhere.** No ORM or query builder is chosen, and the only mention in the corpus is the threat model requiring parameterized statements or an ORM that binds parameters, which constrains the choice without making it. Decide it on its own merits, and note that authorization-filtering Usher's own admin queries (a custodian seeing only the grants they govern) is the same residual-filter problem solved by the enforcement layer, so the PAP may want the same machinery as the PEP.
+**Drafted in [design/schema.md](design/schema.md), for review.** It turns the logical model into
+tables, reads them against the token calculation's steps, and adds the notice stream that the
+bridge's test plan fixes for the controller. Eight decisions await review there, among them how a
+principal's revocation is stored, how a group is confined to one resource, and the data access
+layer, where the recommendation is Kysely.
 
 ### JWE algorithm selection
 
@@ -407,6 +451,9 @@ identifier, and plain prose still says "open" for records reachable by everyone.
 
 ## Implementation: Core service
 
+The controller lives in `apps/controller` in this repository as the private package
+`@overture-stack/usher-controller`, since it is deployed as a service rather than published.
+
 ### Technology stack
 
 TypeScript confirmed; HTTP framework decided (Fastify, with an explicit framework-agnostic application layer constraint). See [technology stack decisions](docs/atlas/roadmap/technology-stack.md).
@@ -425,7 +472,7 @@ Encrypt the permissions payload with the selected algorithms; embed `generatedAt
 
 ### Revocation system
 
-Revocation notice naming the principal; push channel (SSE or WebSocket); poll endpoint (`GET /revocations?since=<timestamp>`); scopes: single user, resource-wide, global.
+One notice stream, in positions that follow commit order: a principal's revocation, a category change, the baseline change, a global revocation, and a sign-out relayed from the identity provider. Push channel (SSE or WebSocket) carrying positions as event ids; a poll endpoint returning the notices after a position, answered within a deadline. See [security-workflow.md](design/security-workflow.md) and [schema.md](design/schema.md).
 
 ### Audit logging
 
@@ -441,17 +488,25 @@ Schema implementation and migration tooling. Integrity controls: transactions, f
 
 ## Implementation: Integration
 
+### `@overture-stack/usher-types`
+
+Types and runtime validators shared by the controller, the bridge and adapters: the permissions payload, the enforcement result, the request's access value and the notices. Lives in `modules/types`. Built and tested on the bridge's branch, awaiting review; unpublished.
+
 ### `@overture-stack/usher-express-bridge`
 
-Shared library embedded in all applications: token exchange, local validation, TTL caching, revocation channel (push + poll fallback), revocation-uncertain mode (503 after grace period). Lives in `modules/express-bridge` in this repository, created when implementation begins, and is published from here for adapters to import. Its logic stays separate from the Express middleware and routing, so a bridge for another framework can reuse it.
+Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/express-bridge`, with its core free of Express so a bridge for another framework can reuse it. Built and tested on the bridge's branch, awaiting review; unpublished.
+
+### First publish of the two packages
+
+Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Scoping that pipeline starts when Arranger begins its adapter step. Also before the first publish: the licence, which keeps both packages private, the publishing-integrity choice, and the packaging checks waiting for CI in `tech-debt.md`.
 
 ### `@overture-stack/arranger-usher-adapter`
 
-Adapter for `arranger-graphql-router`. Translates permissions payload into server-side SQON filters. First integration target. Arranger-specific design in `arranger/.dev/docs/arranger-auth/usher-adapter.md`.
+Adapter for `arranger-graphql-router`. Applies the bridge's enforcement results as server-side SQON filters. First integration target. Arranger-specific design in `arranger/.dev/docs/arranger-auth/usher-adapter.md`.
 
 ### Additional per-app adapters
 
-The Lyric adapter and others, each translating the permissions payload into the app's native query format.
+The Lyric adapter and others, each applying the bridge's enforcement results in the app's native query format.
 
 ---
 
@@ -462,6 +517,17 @@ Design not yet started; see `.dev/design/management-ui.md`. High-level scope: re
 ---
 
 ## Testing
+
+### Finding untested code, settled before the bridge is built
+
+To be worked out before implementation of `@overture-stack/usher-express-bridge` begins, so the bridge and the controller are measured from their first commit.
+
+A whole-suite coverage report misses the gaps that matter. A branch that one module's own test never reaches still reads as covered when another test runs it incidentally, and a file no test imports may not appear at all. Two layers find them mechanically:
+
+- **Code a module's own test never reaches:** run each co-located test file alone, measuring only the source file beside it, so whatever stays uncovered is a gap whatever else executes it. `c8 --all` also lists files no test loads, at 0%. The built-in `node --test --experimental-test-coverage` omits them even with an include filter, and with `tsx` it reports a false 100% unless source maps are enabled. Both behaviours were checked on Node 24.16, tsx 4.22.3 and c8 12.0.0.
+- **Code a test runs but never checks:** mutation testing scoped to the same pairs, which changes the code and reruns only its own test. A change no test notices is a gap. It is slower, so it is for the security-critical modules: the bridge's rendering and validation, and the controller's token calculation.
+
+To decide: built-in coverage or `c8`; whether CI fails a build when a security-critical file gains uncovered branches, rather than chasing a total percentage; and whether the pairing script is proposed to the agentics testing convention.
 
 ### Load and latency testing
 
