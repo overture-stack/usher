@@ -76,6 +76,17 @@ predicate" in [decisions.md](decisions.md).
   client meets one answer whichever layer refused. Such a refusal is logged as its own event, never
   as the failure that signals a misconfiguration.
 
+  **The interface's notice comes from one header, set by the bridge.** Every response to a suspended
+  principal carries `Usher-Suspended: true`, set by the bridge's Express layer and exposed to
+  browsers through `Access-Control-Expose-Headers`, so an interface shows the notice the same way in
+  every application, whatever its API. An anonymous principal and a confirmed one never carry it.
+
+- **Federated search is refused under access control until the federation posture is decided.** A
+  narrowing forwarded to another instance cannot be verified there, and would tell that instance
+  what the principal holds. An application whose configuration combines the two refuses to start,
+  and one wired that way regardless fails each federated request as a misconfiguration. See the
+  roadmap's "Federation posture".
+
 - A refused identity, whether expired, invalid or revoked, is answered by the bridge with one `401`
   and one fixed text before any read path runs, so a refusal never says which it was.
 

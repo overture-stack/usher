@@ -223,7 +223,7 @@ Decided 2026-10-06: the controller sets the bound and tells its bridges, since a
 
 ### Federation posture
 
-Whether an instance holding grants should federate at all, given that a remote cannot be compelled to enforce and a remote that ignores a forwarded filter is indistinguishable from one that applied it and matched everything. Needs a decision rather than more description.
+Whether an instance holding grants should federate at all, given that a remote cannot be compelled to enforce and a remote that ignores a forwarded filter is indistinguishable from one that applied it and matched everything. Needs a decision rather than more description. Until it is made, federated search is refused under access control; see [adapter-integration.md](design/adapter-integration.md).
 
 ### Rework permissions model for resource-level MVP
 
