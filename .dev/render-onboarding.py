@@ -25,7 +25,7 @@ import os
 import re
 import sys
 
-TITLE = "Overture - User Access Control"
+TITLE = "Overture User Access Control"
 
 BLOCK_TAGS = ("div", "ol", "ul", "pre", "dl", "footer", "table", "p",
               "blockquote", "section", "figure", "h1", "h2", "h3")
