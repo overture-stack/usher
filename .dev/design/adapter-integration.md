@@ -81,6 +81,12 @@ predicate" in [decisions.md](decisions.md).
   browsers through `Access-Control-Expose-Headers`, so an interface shows the notice the same way in
   every application, whatever its API. An anonymous principal and a confirmed one never carry it.
 
+- **Readiness follows the bridge only while it is cold.** An application reports itself not ready
+  until its bridge leaves cold, since a cold bridge serves nothing, and ready in every mode after,
+  uncertain included, since the open tier keeps flowing through a silence. Readiness that dropped an
+  uncertain bridge would take open data offline on every instance whenever the channel goes quiet,
+  and would let anyone able to cut the channel take the service down. Liveness never depends on the
+  bridge, or a controller outage becomes a restart loop.
 - **Federated search is refused under access control until the federation posture is decided.** A
   narrowing forwarded to another instance cannot be verified there, and would tell that instance
   what the principal holds. An application whose configuration combines the two refuses to start,
