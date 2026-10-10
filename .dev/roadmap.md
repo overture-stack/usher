@@ -135,6 +135,10 @@ declining an invitation, and the registration invitation. Revocation and owner-r
 nice-to-have in both documents. A design omitting notification does not deliver these flows, so this
 moves from unaddressed to specified-but-undesigned.
 
+### Step-up authentication for controlled categories
+
+A second factor for the people with controlled access, which only Usher knows, rather than for everyone. The shape follows RFC 9470, the OAuth step-up challenge: a category is marked as needing a stronger sign-in, and a principal whose token's `acr` falls short has it left out, with the bridge answering a challenge that names the level. The portal then signs the person in again at that level, and the identity provider's level-of-authentication flow asks for the second factor. Usher reads `acr` alone, as the connector design in [admin-model.md](design/admin-model.md) already expects, and the same mechanism serves the self-grant step-up recorded there. Until it exists, a deployment holding controlled data requires a second factor of everyone. Not designed: the category's marking, the challenge's form at the bridge, and how a portal shows a request it can satisfy only after a stronger sign-in.
+
 ### Authorization for long-running operations
 
 Submission is the only enforcement path that runs long enough for a credential to expire
@@ -498,7 +502,7 @@ Shared library embedded in every ushered application: the authenticated token ex
 
 ### First publish of the two packages
 
-Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Scoping that pipeline starts when Arranger begins its adapter step. Also before the first publish: the licence, which keeps both packages private, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, real versions, since the packed bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies, and declarations free of imports they never use, since the bridge's import `webcrypto` from `node:crypto`.
+Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Arranger's adapter is built and reviewed and merges only once both packages are published, so the first publish is its last step. Also before the first publish: the licence, which keeps both packages private, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, real versions, since the packed bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies, and declarations free of imports they never use, since the bridge's import `webcrypto` from `node:crypto`.
 
 ### `@overture-stack/arranger-usher-adapter`
 

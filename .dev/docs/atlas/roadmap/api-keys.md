@@ -63,8 +63,8 @@ what that resolves to at exchange, against what they hold at that moment. A key 
 holder's access narrows to nothing rather than to what was true when it was minted.
 
 **Safe by its shape, and only on Usher's path.** Song and Score consume scopes directly and intersect
-against nothing, so until they move to Usher enforcement, issue-time validation remains their only
-control. The intersection property is Usher's, not the platform's.
+against nothing, so until they move to Usher enforcement, they rely on issue-time validation to
+bound what a key carries. The intersection property is Usher's, not the platform's.
 
 **The cost is a creation-time surprise.** Someone can mint a key claiming scope they do not hold, and
 on Usher's path it will quietly do less. That is a usability problem rather than a security one, and the fix belongs
@@ -100,6 +100,14 @@ once, at creation. Disregarding is quiet and happens on every use.
 Nothing is lost expressively. An additive model says what a key may do, so "everything except X" is
 written as the list without X, and DENY was only ever a way of saying that subtractively.
 
+**Any change to the plugin made for Usher ships as a new major version** (the developer, 2026-10-09).
+Song and Score consume the plugin today, so a major version is what tells them a release behaves
+differently rather than letting a range they pin pick it up.
+
+**Refusing it is a change to the plugin, and not yet requested.** The plugin accepts DENY today, as a
+legal access level and a legal Keycloak scope name. The change is requested of the plugin's owner as
+part of adopting the Usher scope format, not before.
+
 ---
 
 ## The suffix constraint, and what it depends on
@@ -120,12 +128,15 @@ data-plane actions are `count`, `view`, `export`, `create`, `update` and `delete
 shapes are available once that lands:
 
 - **Name carries resource and category, suffix carries a coarse level.** `STUDY_A.controlled.READ`
-  parses today with no plugin change, and cannot express view-without-download.
+  parses today, but does not mint without more: issuing checks every scope against Keycloak's
+  authorization model (see below), so it needs that model populated for every resource-and-category
+  combination a key could name, each with READ and WRITE scopes and permissions. It cannot express
+  view-without-download either.
 - **The accepted suffix set becomes the capability vocabulary.** Needs a plugin change, and is the
   only one that expresses what narrowing is for.
 
-The second is what the feature is for; the first is what exists. Neither can be chosen before the
-capability names are.
+The second is what the feature is for. The first only looks free: minting it keeps keys tied to an
+authorization model held in Keycloak, which is what Usher replaces.
 
 ---
 
@@ -177,7 +188,20 @@ belongs in the threat model rather than in a configuration line.
 - Keys are `UUID.randomUUID()` strings, hashed at rest, so nothing is self-verifying and a check is
   structurally required. The opaque decision fits what exists rather than asking for a rewrite.
 - `check_api_key` returns `user_id`, `exp`, `isRevoked`, `isValid`, `message` and `scope`, so the
-  exchange gets a principal, an expiry, and explicit revocation rather than inferred.
+  exchange gets a principal, an expiry, and explicit revocation rather than inferred. `scope` is null
+  whenever the key is not valid, so an invalid key carries no scope rather than a stale one, and scope
+  cannot be read apart from validity.
+- **Issuing is coupled to Keycloak's authorization model.** For every scope requested, some client's
+  authorization resource server must hold a Resource named exactly the scope's name, carrying a
+  Scope named exactly its level, with a permission the caller satisfies. Every scope must pass, so one
+  miss refuses the whole key as an invalid scope. The plugin depends on the EGO-era authorization
+  model at issue, not only through the string format, and Usher-native scope names, which have no
+  Keycloak resource, cannot be minted until that check is replaced.
+- **A key's lifetime is `APIKEY_DURATION_DAYS`**, read from the plugin's environment and 365 when
+  unset, applied at issue as that many days from then and stored on the key. A key is valid while it
+  is neither expired nor revoked. So the lifetime is deployment-wide, with no per-key lifetime, which
+  leaves a short-lived key for a script inexpressible; lowering it shortens no key already issued; and
+  an environment leaving it unset issues one-year keys, not unlimited ones.
 - Revocation is observable only by the check failing, and the exchange-path design makes that
   sufficient and free. There is no event and nothing to poll.
 
@@ -192,5 +216,9 @@ belongs in the threat model rather than in a configuration line.
 - **Where the basic-auth credential lives and how it rotates**, and whether an introspect-anything
   capability should be a Keycloak client of its own, separate from Usher's other future needs.
 - **Key lifetime.** [../../phase-1.md](../../phase-1.md) records that API tokens open a much longer
-  window than the five-minute Usher token, that the iMS environments do not set it, and that the
-  Overture demo environment sets it to 3650 days, which shows how far the knob goes.
+  window than the five-minute Usher token, and the Overture demo environment sets 3650 days. The
+  plugin's lifetime is deployment-wide and fixed at issue, as above; whether Usher wants per-key
+  lifetimes, such as short keys for scripts, is open.
+- **The plugin's issue-time check.** Usher scope names have no Keycloak resource, so minting them needs
+  the plugin's check against Keycloak's authorization model replaced. What replaces it, if anything,
+  follows from intersection at exchange, which already bounds what a key yields.

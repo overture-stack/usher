@@ -176,7 +176,7 @@ Usher has no bootstrap logic of its own. The identity provider handles this enti
 3. The Keycloak admin assigns that role to the user who will be the first Usher admin.
 4. When that user authenticates, their OIDC token carries the `usher-platform-admin` claim.
    Usher reads the claim, recognizes admin status, and the management API and UI become
-   available. No Usher-side initialisation is required.
+   available. No Usher-side initialization is required.
 
 Usher has no `BOOTSTRAP_ADMIN_EMAIL` configuration, no `platform_admins` table, and no startup
 warning for missing admins. Adding or removing admins is a Keycloak (or IdP) operation.
