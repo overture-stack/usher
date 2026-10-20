@@ -25,7 +25,7 @@ Status values: **met** means the design answers it; **partial** means answered w
 | ----- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | FR-05 | met     | Categories assigned to a resource at submission; the submission flow creates the resource                                                                                                                                                  |
 | FR-06 | met     | `invitations` keyed by email address                                                                                                                                                                                                       |
-| FR-07 | met     | Invitation and acceptance flow, plus the invitation link that binds an existing account under a different address                                                                                                                          |
+| FR-07 | met     | Invitation and acceptance flow, plus the invitation link that lets an existing account holding the invited address claim it                                                                                                                |
 | FR-09 | partial | The flows put notification on the critical path in four places, so it is specified rather than absent. No mechanism is designed yet                                                                                                        |
 | FR-10 | partial | The data exists in `grants` with `granted_by`, and the acceptance timestamp in `grant_decisions`. The flows specify the presentation: sharer, share time, and acceptance timestamp on a "Shared with Me" page. Interface work, not started |
 | FR-11 | met     | Revocation on the grant, push channel with poll fallback. How a whole principal is stopped is open; see blocker 6                                                                                                                          |
@@ -87,9 +87,10 @@ One sub-question stays open: whether a system administrator may grant data acces
 **Submitter access breadth: instance policy, not an Usher rule.** Submitters in iMS are also
 granted ownership as a project requirement, so Usher does not encode it.
 
-**Invitation email binding: resolved against the flows.** The invited address is a placeholder held
-until the grant attaches to a Keycloak subject, and the magic link binds it to whichever account the
-recipient confirms with. Registering under a different address activates the grant.
+**Invitation email binding: resolved with the flows.** An invitation binds only to an account
+holding the invited address, verified, so registering under a different address leaves it
+unclaimed. Binding whichever account confirmed with the link would let a forwarded message transfer
+access to controlled data.
 
 ## Resolved: FR-04, NFR-04 and the aggregation path
 

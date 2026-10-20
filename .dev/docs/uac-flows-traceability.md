@@ -21,12 +21,13 @@ The flows also say **constraint token** where this design says **Usher token**.
 
 ## What the flows settle
 
-| Question                                            | Was                 | Flows say                                                                        |
-| --------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
-| Does adding an owner need existing owners' consent? | Open (FR-22)        | No. A Steward adds another by email with no consent step (4.5)                   |
-| May an owner remove a peer, or only themselves?     | Open (FR-23)        | Both. Peer removal is its own flow (4.6); self-removal is another (4.7)          |
-| Where is the non-empty-owner invariant enforced?    | Unstated            | At both removal paths: self-removal (4.7) and admin removal of a submitter (5.3) |
-| Which component enforces download?                  | Open (FR-02, FR-15) | The file API, on every request, independently of the search path                 |
+| Question                                                  | Was                                        | Flows say                                                                         |
+| --------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
+| Does adding an owner need existing owners' consent?       | Open (FR-22)                               | No. A Steward adds another by email with no consent step (4.5)                    |
+| May an owner remove a peer, or only themselves?           | Open (FR-23)                               | Both. Peer removal is its own flow (4.6); self-removal is another (4.7)           |
+| Where is the non-empty-owner invariant enforced?          | Unstated                                   | At both removal paths: self-removal (4.7) and admin removal of a submitter (5.3)  |
+| Which component enforces download?                        | Open (FR-02, FR-15)                        | The file API, on every request, independently of the search path                  |
+| Does an invitation bind an account under another address? | Bound any account confirming with the link | No. It waits for an account holding the invited address, verified (cross-persona) |
 
 **The invariant's wording is already drafted.** Flow 4.7 blocks the sole Steward from removing
 themselves and tells them to add another first. This is the non-empty-set rule arrived at
@@ -113,22 +114,6 @@ ownership, and that correlation is a project requirement, so Usher should not en
 are therefore correct about iMS and must not become correct about Usher: the submission flow supplies
 the cascade as a policy, with Usher providing the mechanism. See the ownership-policy
 decision in [../design/decisions.md](../design/decisions.md).
-
-### The invitation email binding
-
-The cross-persona table says a grant stays pending when the invited person registers under a
-different address, because the grant is tied to the invited address.
-
-**Resolved against the flows.** The invited address is a placeholder held only until the grant can
-attach to a Keycloak subject, and the magic link performs that attachment against whichever account
-the recipient confirms with. Registering under a different address activates the grant rather than
-leaving it pending. This follows from the existing decision that the identity provider's subject
-identifies a principal and email serves access invitations only, so the flows' rule is the one that
-changes.
-
-Worth raising with the author, since a recipient who registers under a different address currently
-gets no access at all under the specified behaviour, which reads as a support burden rather than an
-intended security property.
 
 ## Inconsistencies inside the flows themselves
 

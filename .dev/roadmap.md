@@ -337,6 +337,16 @@ record whole. Where nested content needs its own governance today, it becomes it
 iMicroSeq's specimens are beside its files. See "The unit of access is the record an application
 returns" in [decisions.md](design/decisions.md).
 
+### Secondary addresses on an account (post-MVP)
+
+The MVP binds invitations through the one verified address Keycloak holds per account, and shows a
+grant's sharer by name only. Secondary addresses, one per organization, would let an account claim
+an invitation sent to a work address, and let a grant show the sharer's organizational address
+rather than the personal one that identifies their account. Keycloak holds one address and one
+verified flag per account, so a secondary address is a custom attribute it never verifies, and this
+needs a verification flow of Usher's own. See "One account, several addresses, and only verified
+ones bind" in [decisions.md](design/decisions.md).
+
 ### Define resource derivation for migration
 
 `architecture.md`'s migration table maps each EGO study group to an Usher resource one to one. That holds only where a resource corresponds to an entity with its own creation operation. Where an instance's resources instead correspond to a registered vocabulary or to an attribute of some other entity, there is no creation operation to map and the step needs its own definition.

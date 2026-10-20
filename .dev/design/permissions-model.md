@@ -1007,24 +1007,22 @@ its own expiry, so it duplicates none of a grant's fields, and a grant never exi
 principal does.
 
 That is also what frees `pending` to name one thing. It is a grant state, meaning a registered
-grantee has not yet accepted, and it never means an address with no account behind it. The invited address is a placeholder held only until the grant can attach to a
-Keycloak subject, and it is discarded once one exists.
+grantee has not yet accepted, and it never means an address with no account behind it. An invitation
+waits until an account holding the invited address, verified, claims it.
 
-The invitation link is what performs that attachment, and it binds the grant to **whichever account
-the recipient confirms with**. Three paths reach the same place:
+The grant attaches only to **an account that holds the invited address, verified**. Three paths:
 
-1. The recipient registers using the invited address. Registration triggers a lookup by that
-   address.
-2. The recipient registers using a different address. The link, not the address, carries the
-   binding, so the grant still attaches to the account they created.
-3. The recipient already has an account, under the invited address or another one. Confirmation
-   happens after they log in.
+1. The recipient registers using the invited address. Once they verify it, a lookup by that address
+   finds the invitation.
+2. The recipient already has an account holding the invited address, verified. The claim happens
+   after they sign in through the invitation's link.
+3. The recipient's account holds a different address. Nothing binds, and the steward invites them
+   again at the address their account holds.
 
 Matching rows are migrated to `grants`, with no decision row until the recipient answers, under the
-account's Keycloak subject, and the `invitations` row is deleted after migration. Since an
-account may hold more than one verified address, a lookup by address matches any of them, and only
-a verified address may bind a grant: otherwise claiming an address would be enough to collect
-grants intended for whoever holds it.
+account's Keycloak subject, and the `invitations` row is deleted after migration. A lookup by address
+matches any of the account's verified addresses, and only a verified address may bind a grant:
+otherwise claiming an address would be enough to collect grants intended for whoever holds it.
 
 ### What these entities render into
 
@@ -1108,17 +1106,15 @@ acting.
 **Each of these acts is audited.** Creation, the recipient's answer, the binding of an invited
 identity, and revocation each produce an audit entry.
 
-**Claiming an access invitation from an existing account.** The migration above fires on registration
-keyed to the invited address, which leaves a gap: an invitee who already holds an account under a
-different address never triggers that event, so the pending row waits indefinitely with nothing to
-resolve it.
+**Claiming an access invitation from an existing account.** The migration above fires when a new
+account verifies the invited address, which leaves a gap: an invitee whose account already holds that
+address, verified, triggers nothing, so the pending row would wait with nothing to resolve it.
 
-An invitation link closes that gap, under one constraint that is the whole design: **the link binds
-identity and never creates or activates a grant.** Its only function is to answer which account
-belongs to an already-approved invitee, moving the row from `invitations` to `grants`
-under that account's Keycloak subject. The grant that produced the grant is unchanged, and the
-acceptance step that activates it still applies. An invitee may either sign in with an existing
-account or register a new one; both routes end at the same identity binding.
+The invitation link closes that gap, under one constraint that is the whole design: **the link binds
+identity and never creates or activates a grant.** Its only function is to bring the invitee to sign
+in, so that the account holding the invited address can be identified, moving the row from
+`invitations` to `grants` under that account's Keycloak subject. The approval behind the grant is
+unchanged, and the acceptance step that activates it still applies.
 
 **An invitation lapses seven days after it is created, and its `expires_at` belongs to the grant.**
 The seven days run from `invited_at`, so the invitation's own deadline needs no column, and an
@@ -1127,12 +1123,13 @@ of the resulting grant, carried onto that grant when the invitation is claimed.
 How a link is verified, whether against a stored hash of a random secret or as a signed token, is
 not yet designed.
 
-The link is single-use and lives no longer than its invitation, and the binding-not-granting rule is
-what makes those sufficient rather than merely advisable. If a link could activate access, the
-invited mailbox would become the authorization boundary, and a forwarded message or a compromised
-mailbox would transfer access to controlled data: a materially weaker gate than the Controlled tier
-requires everywhere else. Binding identity leaks nothing, because an account that binds to a grant
-it was never granted still holds no grant.
+The link is single-use and lives no longer than its invitation. Neither is what stops a forwarded
+link: binding requires the invited address, verified, on the account that signs in, so a forwarded
+link gives its holder nothing. If a link could bind whichever account confirmed with it, or activate
+access, the invited mailbox would become the authorization boundary, and a forwarded message would
+transfer access to controlled data: a materially weaker gate than the Controlled tier requires
+everywhere else. A compromised mailbox is the limit that remains, since whoever controls it can
+verify the address and claim the invitation.
 
 Group grants have no acceptance step, so this path applies only to grants issued to an individual
 address.

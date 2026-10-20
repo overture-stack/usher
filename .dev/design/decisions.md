@@ -2283,9 +2283,9 @@ identifies their account, particularly for an administrator.
 
 Two consequences for grants:
 
-- **An access invitation matches on any of the account's addresses, not only the username.** This is
-  the same conclusion as the placeholder decision below, arrived at from the account side rather
-  than the invitation side.
+- **An access invitation matches on any of the account's verified addresses, not only the username.**
+  An invitation binds only to an account holding the invited address, verified (the decision below),
+  so a secondary address is how an account claims an invitation sent to a work address.
 - **An address may bind a grant only once verified.** Otherwise claiming an address is enough to
   collect grants intended for whoever really holds it, which turns address entry into a grant-theft
   path. Verification is what makes a secondary address usable, not mere assertion.
@@ -2294,30 +2294,46 @@ Two consequences for grants:
 recipient see who shared data with them. Showing the sharer's name and organizational address
 satisfies that without exposing the personal address identifying their account.
 
-**To verify before designing against it: whether the identity provider models more than one address
-per user natively, or whether secondary addresses are custom attributes.** If the latter, this design
-has to specify the verification flow for a secondary address rather than inherit it, and the
-security property above depends on that flow existing.
+**Keycloak holds one address per account, so a secondary address is this design's to verify.** Its
+user model carries a single email and a single verified flag, read from Keycloak 26.8.0's source
+rather than tested. A secondary address would therefore be a custom attribute, which Keycloak never
+verifies. This design has to specify the verification flow for a secondary address rather than
+inherit it, and the security property above depends on that flow existing.
+
+**The MVP uses the one address Keycloak holds.** An account binds invitations through its single
+verified address, and secondary addresses, with the verification flow they need, come after the MVP.
+Until then a grant shows its sharer by name only, since the one address is the personal one that
+identifies their account.
 
 ---
 
-### The invited email is a placeholder, not an identifier
+### An invitation binds only to an account holding the invited address, verified
 
-An invitation is held against an email address only until it can be attached to a Keycloak
-subject. The magic link in the invitation is what performs that attachment, and it binds the grant
-to **whichever account the recipient confirms with**, whether that account is created in response to
-the invitation or already existed under a different address. Confirmation happens after account
-creation for a new account, or after logging in for an existing one.
+An invitation is held against an email address until an account holding that address, verified,
+claims it. The link in the invitation brings the recipient to sign in or register, and the grant
+attaches to their account only if the invited address is one of its verified addresses. The claim
+happens after account creation for a new account, or after signing in for an existing one, and the
+grant then waits for the recipient's acceptance like any other.
 
-This contradicts the portal flows, which hold a grant pending when the recipient registers under a
-different address than the one invited. The flows treat the invited address as the identity; this
-design treats it as a placeholder that is discarded once a real subject exists, which is the
-existing decision that the identity provider's subject identifies a principal.
+**The data steward chose a person, and the invited mailbox stands in for that person only as far as
+they control it.** Binding instead to whichever account confirms with the link would make the link a
+bearer credential for the grant: a forwarded message would transfer access to controlled data, and
+whoever held the email would decide who received it. Requiring the invited address, verified, keeps
+the grant with an account that has proved control of that address.
 
-**The link is a bearer credential for the grant.** Whoever holds it and confirms receives the grant,
-since the whole point is that the confirming account need not match the invited address. Expiry and
-single use are therefore load-bearing rather than hygiene, and forwarding is the threat to state
-explicitly in the threat model.
+**Rejected: binding to whichever account confirms with the link.** It let a recipient whose account
+uses a different address claim an invitation without help, which is the cost below.
+
+**What this costs: an account under a different address gets nothing from the invitation.** The
+steward invites the recipient again at the address their account holds. Once accounts can hold
+secondary addresses, adding and verifying the invited address also works.
+
+**What this does not stop: whoever controls the invited mailbox can verify the address and claim
+the invitation.** That is the limit of inviting anyone by email. A forwarded link gives its holder
+nothing, so the link's single use and seven-day lapse are hygiene rather than the safeguard.
+
+This matches the iMS portal flows, which hold a grant pending when the recipient registers under a
+different address than the one invited.
 
 ---
 
