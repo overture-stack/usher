@@ -166,11 +166,11 @@ Usher has no bootstrap logic of its own. The identity provider handles this enti
 
 **For Keycloak (the default):**
 
-1. At Keycloak instance time, a Keycloak realm administrator is created via Keycloak's own
-   bootstrap mechanism (typically the `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` environment
-   variables, set before first launch). In Overture's instance, a Terraform Keycloak operator
-   currently under evaluation automates realm configuration at deploy time, reducing the need
-   for manual Keycloak UI work.
+1. At Keycloak instance time, a Keycloak administrator is created via Keycloak's own
+   bootstrap mechanism (the `KC_BOOTSTRAP_ADMIN_USERNAME` / `KC_BOOTSTRAP_ADMIN_PASSWORD`
+   environment variables, set before first launch). In Overture's instances, Terraform's Keycloak
+   provider configures the realm and its clients at deploy time, reducing the need for manual
+   Keycloak UI work.
 2. That Keycloak admin creates a realm for Usher and defines a realm role named
    `usher-platform-admin` (the exact name is configurable in the Usher connector config).
 3. The Keycloak admin assigns that role to the user who will be the first Usher admin.
@@ -582,6 +582,14 @@ administrators (assigning or revoking the admin role, disabling user accounts) a
 logged by Keycloak's own audit system, not by Usher's audit log. The boundary must be explicitly
 documented so that security auditors understand that Usher's audit log is not a complete record
 of all privilege changes on the platform. Both logs are required for a complete audit trail.
+
+**Whoever manages a realm's users can make a platform admin:** in Keycloak, holding `manage-users` for a
+realm is enough to assign any role in that realm that is not one of Keycloak's own admin roles, and `usher-platform-admin` is not one. So every administrator who manages the realm's
+users can make someone a platform admin, themselves included, and is trusted at that level: a
+realm's administrators are its system administrators (accepted 2026-10-13). A role meant only for
+user support must get its rights through Keycloak's fine-grained admin permissions rather than
+`manage-users`, so that it cannot assign roles. Such an assignment is recorded only in Keycloak's
+own audit log, as the constraint above says.
 
 **Token TTL bounds the deprovisioning lag:** when an admin's role is revoked in the identity
 provider, any token they already hold remains valid until expiry. Instances must configure short

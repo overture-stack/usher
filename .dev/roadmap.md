@@ -133,11 +133,12 @@ Recorded previously as absent from the design with nothing addressing it. The fl
 critical path in four places: sharing with an existing user, sharing with an unregistered address,
 declining an invitation, and the registration invitation. Revocation and owner-removal notices are
 nice-to-have in both documents. A design omitting notification does not deliver these flows, so this
-moves from unaddressed to specified-but-undesigned.
+moves from unaddressed to specified-but-undesigned. Which component sends it is undesigned too, but
+it is not Keycloak, which holds no grants and knows nothing of an invitation's link.
 
 ### Step-up authentication for controlled categories
 
-A second factor for the people with controlled access, which only Usher knows, rather than for everyone. The shape follows RFC 9470, the OAuth step-up challenge: a category is marked as needing a stronger sign-in, and a principal whose token's `acr` falls short has it left out, with the bridge answering a challenge that names the level. The portal then signs the person in again at that level, and the identity provider's level-of-authentication flow asks for the second factor. Usher reads `acr` alone, as the connector design in [admin-model.md](design/admin-model.md) already expects, and the same mechanism serves the self-grant step-up recorded there. Until it exists, a deployment holding controlled data requires a second factor of everyone. Not designed: the category's marking, the challenge's form at the bridge, and how a portal shows a request it can satisfy only after a stronger sign-in.
+A second factor for the people with controlled access, which only Usher knows, rather than for everyone. The shape follows RFC 9470, the OAuth step-up challenge: a category is marked as needing a stronger sign-in, and a principal whose token's `acr` falls short has it left out, with the bridge answering a challenge that names the level. The portal then signs the person in again at that level, and the identity provider's level-of-authentication flow asks for the second factor. Usher reads `acr` alone, as the connector design in [admin-model.md](design/admin-model.md) already expects, and the same mechanism serves the self-grant step-up recorded there. Until it exists, a deployment holding controlled data requires a second factor of everyone, which Overture's Keycloak standard now asks of every password sign-in in the `overture` realm. What the step-up adds is therefore narrower: letting a deployment drop that realm-wide requirement for people without controlled access, and giving a self-grant its re-prompt at the moment of granting, which a second factor at sign-in does not. Not designed: the category's marking, the challenge's form at the bridge, and how a portal shows a request it can satisfy only after a stronger sign-in.
 
 ### Authorization for long-running operations
 
@@ -363,7 +364,7 @@ MVP uses pre-registration: cohorts exist in Usher before data is submitted. Thre
 
 Three sequences are recorded in design documents and nowhere an operator reads, which means each is a responsibility with no owner. They are not related to each other beyond that, and the absence of a destination is what they have in common.
 
-- **Break-glass access.** If every platform administrator is unavailable, recovery is an IdP operation. Who is authorized to perform it, and what audit trail the IdP layer is expected to produce, is undocumented. See [admin-model.md](design/admin-model.md).
+- **Break-glass access.** If every platform administrator is unavailable, recovery is an IdP operation. Overture's own deployment documents it beside its Keycloak configuration: who may run it, and the events it relies on as its audit trail. A deployment of Usher elsewhere has nothing of Usher's to start from. See [admin-model.md](design/admin-model.md).
 - **Establishing a category.** Define the category, appoint whoever governs it, and only then accept data carrying it. The decision to treat a custodian vacancy as a governance failure rather than a system state depends on this sequence being followed. See [decisions.md](design/decisions.md) § Granting is one function.
 - **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the controller, and both before any record carrying it is indexed, since the check compares registrations with what Usher declares and never reads the data. The reverse order withholds each resource offering the category from the catalogues not yet mapping it, the whole resource rather than the affected records, until the application catches up. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
@@ -401,9 +402,9 @@ layer, where the recommendation is Kysely.
 
 High-availability design for stateless Usher instances sharing a policy database as source of truth. Container strategy, health check endpoints, replica configuration.
 
-### Keycloak realm configuration via Terraform operator
+### Keycloak realm configuration via Terraform
 
-Keycloak Terraform operator under evaluation in overture-dev. If adopted, Usher can ship a module provisioning the `usher-platform-admin` role, the Lyric service account, and realm config. Track outcome; update the instance architecture doc.
+Overture's own deployments configure Keycloak through Terraform's Keycloak provider, from a module that every new deployment copies as its standard. What Usher needs from a realm, its `usher-platform-admin` role, the Lyric service account and an audience mapper per client, can join that standard or ship as a module of Usher's own; that choice is open. Update the instance architecture doc either way.
 
 ### Usher ↔ portal-ui API contract
 
