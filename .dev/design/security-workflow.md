@@ -131,8 +131,10 @@ A researcher's first request of the day against a search service:
 1. The bridge's middleware intercepts the request and extracts the IdP bearer token.
 2. The bridge has no unexpired Usher token for this principal, so it calls the controller's exchange
    endpoint, sending the IdP token and its own audience identifier.
-3. The controller validates the IdP token against the identity provider's public keys. This answers
-   whether the token is genuine and current. It answers nothing about access.
+3. The controller validates the IdP token against the identity provider's public keys, and checks
+   that its `aud` claim names the calling application, as rule B in
+   [delegated-access.md](delegated-access.md) requires. This answers whether the token is genuine,
+   current and addressed here. It answers nothing about access.
 4. The controller reads its own store: which grants reach this principal, what each one's role
    permits, which of them are live, and whether the principal has been revoked. This is the permission computation pipeline below.
 5. The controller writes an Usher token: the permissions, an `aud` naming the calling instance, an

@@ -70,7 +70,7 @@ specified as request and response shapes).
 | [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the cases that force each branch                   | specced                  |
 | [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                  | draft                    |
 | [schema.md](schema.md)                               | The controller's PostgreSQL store: tables, keys, indexes against the token calculation, the notice stream, the data access layer | draft for review         |
-| [delegated-access.md](delegated-access.md)           | A client acting for a person: who the principal is, which token reaches which application, what stays the client's | draft for review         |
+| [delegated-access.md](delegated-access.md)           | A client acting for a person: who the principal is, which token reaches which application, what stays the client's | specced                  |
 | [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity       | in progress              |
 | [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                              | reference                |
 | [adapter-integration.md](adapter-integration.md)     | Per-app adapter design, bridge library (the bridge)                                                                 | designed; not yet a spec |

@@ -3,8 +3,8 @@
 _How a client acting for a person reaches an Usher-protected application: an assistant's host, a
 portal's backend, a pipeline run for someone._
 
-**Status: a draft for review.** Rule A is decided; rule B is proposed for the developer's decision,
-marked **Decide**. Nothing here is built.
+**Status: decided, not built.** Rules A and B are both decided. Two recommendations, marked
+**Decide**, await the developer's team.
 
 ---
 
@@ -43,20 +43,62 @@ someone, and a client reading for nobody is a service account with grants of its
 alternative, a client holding broad grants and filtering for each person itself, puts enforcement
 back inside the client, which is what the bridge exists to prevent.
 
-**Decide B: a sign-in token reaches only the application it was issued for.** The controller
-accepts a sign-in token from a bridge only when the token's audience names that bridge's
-application. The threat is a token captured at one hop, at a server, in a log or by a proxy, being
-replayed at another application. With this rule, each hop needs a token of its own, token exchange
-at the identity provider is how a client gets one, and forwarding a token issued for something else
-fails closed. The security workflow already requires `aud` to be validated without saying what it
-must name; this says it. The cost falls on configuration: an identity provider has to issue a
-portal's tokens naming each application the portal calls, which Keycloak does with audience mappers,
-and the deployment runbook says so.
+**B: a sign-in token works only at an application it is addressed to.** Decided 2026-10-16. The
+controller accepts a sign-in token from a bridge only when the token's `aud` claim names that
+bridge's application. The identity provider writes the addresses, and Usher checks them; the
+identity provider enforces nothing. The threat is a token captured at one place, on a device, in a
+log or by a proxy, being replayed directly at an application it was not meant for.
+
+**Addresses are set per client, not per sign-in.** An identity provider cannot know at sign-in what
+a person will go on to do. So each client's tokens name every application that client is built to
+call, set once when the client is registered, which Keycloak does with an audience mapper on the
+client. A portal's tokens name each application the portal calls, and the deployment runbook says
+so.
+
+**What it protects, and what it does not:**
+
+- A token addressed to one recipient is refused everywhere else. A desktop assistant's token
+  addressed only to the operator's MCP server cannot be replayed directly at the search server.
+- A chain in which each service passes a person's sign-in on by token exchange gets a token per hop,
+  and forwarding a token addressed to something else fails closed.
+- A portal's token names every application the portal calls, so one captured from the portal works
+  at each of them, with or without this rule. The rule adds little for such a token.
+
+**The cost is configuration.** Each client needs its audience mapper. A missing one makes that
+client's requests fail closed: they are refused, never wrongly accepted. Deployments without Usher
+are unaffected.
 
 **The client that asked for a token reaches the trail as its actor.** Usher records a sign-in
 token's `azp`, the client it was issued to, beside the subject, and an `act` claim too where the
 identity provider adds one; Keycloak adds `act` only with its delegation feature, still a preview.
 Access does not change, since the person's grants decide either way.
+
+**A client that cannot keep a secret is named, not proven.** A desktop or browser application is a
+public client: it signs in with PKCE and holds no secret, because any secret shipped inside it can be
+extracted. Any application can present a public client's ID, so the actor recorded for one is
+attribution only. Access does not change, by rule A. The MCP host's connection plan applies this in
+§3: a deployment holding controlled data lets only an operator-run MCP server, which can keep a
+secret, receive tokens addressed to the search server, so the actor on that path is proven (decided
+2026-10-16). Which kinds of client may receive such tokens is set out in the two recommendations
+below.
+
+**Decide: each kind of client is decided for itself, and an undecided kind is refused.** No single
+rule covers every client, since one would bar legitimate command-line tools. The default for a kind
+not yet decided is the secure one: in a deployment holding controlled data, a client that cannot
+keep a secret, or that hands the person's token to code that cannot, receives no token addressed to
+an Usher-protected application. Command-line tools, such as one downloading files from Score, are
+decided with their integration.
+
+**Decide: a browser portal's backend holds the token.** Arranger's components call the search server
+from the browser, so a portal that passes the person's token to the page is a client that cannot
+keep a secret, and the default above would shut it out of a deployment holding controlled data. In
+such a deployment, the portal's backend holds the token and calls the search server itself, and the
+page never sees it. This is the backend-for-frontend pattern, the first and strongest of the three
+in RFC 10017, OAuth 2.0 for Browser-Based Applications. A script injected into the page can still
+send requests through the backend while the page is open, but cannot take the token away. The
+backend defends every request against cross-site forgery, the components' downloads included. It
+affects Stage, the iMicroSeq portal and OHCRN's researcher interface, each to be checked against its
+current wiring.
 
 **Nothing crosses to another identity domain.** A token from this deployment's identity provider is
 never sent outside it, and Usher accepts no token issued by another identity provider or another

@@ -119,6 +119,13 @@ instance. A token is scoped to one audience; Usher includes only the resources m
 audience in the token, keeping the token focused and the adapter's job simple. Modelled on the
 `aud` claim in OAuth 2.0 Token Exchange (RFC 8693).
 
+**Disambiguation note:** A sign-in token from the identity provider carries an `aud` claim of its
+own, and it is a different thing. An Usher token's audience is one service, set by the exchange's
+`audience` parameter. A sign-in token's `aud` lists every application its client is configured to
+call, set by the client's registration at the identity provider, and rule B in
+[delegated-access.md](delegated-access.md) checks it. Prose says "a sign-in token's `aud`" for the
+second, never a bare "audience".
+
 **Usher token** _(permissions token)_
 A JWE-encrypted token issued by Usher carrying a principal's permissions for one service. Cached by
 the adapter for its TTL; decrypted and validated locally on each subsequent request without a
