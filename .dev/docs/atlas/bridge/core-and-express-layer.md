@@ -7,8 +7,8 @@ prototype of the core and its Express layer or against a standalone check, neith
 unless the sentence says it was read from source, from a specification or from the design, or
 reasoned.
 
-The bridge is the shared library that each application protected by Usher, Overture's access-control
-service, embeds to turn a request's credential into that request's access. This note settles its
+The bridge is the shared library that each application protected by Usher, Overture's access
+enforcement system, embeds to turn a request's credential into that request's access. This note settles its
 structure: one core with no web framework in it, a thin Express layer over that core, and the core's
 state, stores, clocks, rendering, events and handling of concurrent requests. Four neighbouring topics
 have notes of their own: [jose for the Usher token](jose-usher-token.md),

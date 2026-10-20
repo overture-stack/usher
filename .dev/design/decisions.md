@@ -23,7 +23,7 @@ Admin API, but they are rules, not records of who was granted what, so the grant
 them would stay in Usher whichever engine evaluates them.
 
 **What it contributed.** The standalone PDP service pattern, rather than an embedded library, is
-the right architecture for an access control service shared across applications, and its REST API is
+the right architecture for a policy decision point shared across applications, and its REST API is
 a reference for Usher's decision API: a clear request schema (principal, resource, action) and a
 structured, auditable response. Its query plan returns the same three-way result as Usher's
 enforcement path.
@@ -1150,7 +1150,7 @@ their own, whether a draft submission is theirs. **Usher is not involved in thos
 through it is a mistake rather than an excess of caution.**
 
 The test is what the predicate is over. A grant-derived predicate asks what the principal holds, and
-only the access control service knows the answer. A self-scoping predicate asks whether the record
+only Usher knows the answer. A self-scoping predicate asks whether the record
 names the principal, and the record already carries it.
 
 Both produce different rows for different principals, which is the resemblance that misleads. It
@@ -1833,7 +1833,7 @@ a "shared with me" listing) resolves that information via the Keycloak admin API
 layer, not by storing email in Usher's policy tables.
 
 **Tradeoffs accepted.** The portal layer bears responsibility for email-to-ID resolution and
-display. This is a deliberate separation: Usher is an access control service, not a directory.
+display. This is a deliberate separation: Usher is an access enforcement system, not a directory.
 
 ---
 
@@ -2435,7 +2435,7 @@ an admin or by the Lyric service account at submission time), Usher is the recor
 resource's existence, name, and category assignments.
 
 Instances that include SONG use it for its original purpose (file manifests and genomic
-metadata) and Usher for access control. Instances without SONG are fully supported; Usher has
+metadata) and Usher for access enforcement. Instances without SONG are fully supported; Usher has
 no SONG dependency.
 
 ---

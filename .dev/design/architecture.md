@@ -55,11 +55,12 @@ Instances that do not include SONG are fully supported; Usher has no dependency 
 
 ## Which plane each component sits in
 
-**Usher is the access control plane; the applications are the data plane.** All three of Usher's own
+**Usher sits in the access control plane; the applications are the data plane.** All three of Usher's own
 components sit in the control plane, the bridge and the adapter included, even though both run inside
 an application's own process: they carry and apply a decision rather than serve data. Keycloak sits
-there with them, governing identity rather than access, so the control plane is wider than Usher and
-access control runs in Usher's part of it. The data plane is the application's own query execution
+there with them, governing identity rather than access, so the control plane is wider than Usher.
+The access control plane is the part of it where access is approved and enforced: Usher, and an
+approval service beside it where a deployment has one. The data plane is the application's own query execution
 and the records it returns, and no Usher component reads or writes them.
 
 The components listed below are the whole instance rather than Usher alone. SONG and the ushered

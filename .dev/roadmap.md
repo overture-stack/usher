@@ -574,14 +574,14 @@ Consumer-facing companion to `admin-model.md` and `management-ui.md`; must cover
 
 ### DACO-style access approval workflows
 
-Ethics-review-gated access with time-limited validity and renewal. The `expires_at` field on category grants anticipates this; the approval workflow is not yet designed.
+Ethics-review-gated access with time-limited validity and renewal, as DACO, ICGC's Data Access Compliance Office, runs it. The `expires_at` field on category grants anticipates this; the approval workflow is not yet designed.
 
-**Expected as an ushered application, not part of Usher.** A DAC API governed by Usher like any other
-service, storing its own applications and signed documents, and asking Usher to register a dataset and
+**Expected as an ushered application, not part of Usher.** An approval service, tentatively named
+Audition, governed by Usher like any other service, storing its own applications and signed documents, and asking Usher to register a dataset and
 write its grants once an application is approved. It needs resources to carry a type, DCAT's word
 for the nature of a resource, so each service sees only the resources it serves, and it needs the
 service-assigned ownership threat designed against. Research in
-[DAC integration](docs/atlas/roadmap/dac-integration.md).
+[Approval service](docs/atlas/roadmap/approval-service.md).
 
 ### Multi-tenancy
 

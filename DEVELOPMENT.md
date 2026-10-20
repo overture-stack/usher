@@ -5,11 +5,13 @@ Internal guide for contributors. For community contribution guidelines, see `CON
 
 ## What Usher is
 
-Usher is the access control plane for the Overture platform: it holds the grants that say who may
+Usher is the access enforcement system for the Overture platform: it holds the grants that say who may
 reach what and hands them to each application, which enforces them at its own query layer.
-Decisions are ABAC (Attribute-Based Access Control), and the answer travels as an encrypted Usher
+Decisions follow RABAC (role-centric attribute-based access control): a role decides which actions
+are available, and attributes such as a record's categories decide which data they reach. The
+answer travels as an encrypted Usher
 token applied by a per-app adapter. The [README](README.md) has the full framing, including the two
-properties that separate it from a conventional access control service.
+properties that separate it from a conventional authorization service.
 
 Usher is not an authentication service. Authentication is delegated to the configured identity
 provider (Keycloak, Microsoft Entra ID, or any OIDC-compatible provider).

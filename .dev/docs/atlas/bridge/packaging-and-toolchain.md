@@ -5,8 +5,8 @@ to 7.0.2, tsdown 0.23.0, tsx 4.23.15, zod 4.6.5, jose 6.2.12, Express 4.22.3 and
 2026-10-04. Every behaviour stated here was run there unless the sentence says it was read from
 source, read from documentation, or reasoned.
 
-This note sets how the shared libraries of Usher, the access-control service for Overture
-applications, are built, published and tested. The bridge, `@overture-stack/usher-express-bridge`,
+This note sets how the shared libraries of Usher, the access enforcement system for
+Overture applications, are built, published and tested. The bridge, `@overture-stack/usher-express-bridge`,
 is the library each protected application embeds to turn a person's sign-in credential into the
 request's access. The types package, `@overture-stack/usher-types`, holds the types and runtime
 validators shared by the bridge and every adapter, and it depends on no web framework.

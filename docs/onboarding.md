@@ -14,7 +14,7 @@
 
 # Overture User Access Control
 
-<p class="subtitle">Usher is Overture's access control plane. For every application on the platform, it keeps track of what each person has been "granted" permission to see or do, and hands those grants to the applications. It also gives the people who govern access one place to change them. Its role is closer to a keychain than a lock: each application does its own unlocking, and Usher never touches the data it governs. This document is an orientation to that model, to the security properties it rests on, and to the reasoning behind each decision that shaped this design.</p>
+<p class="subtitle">Usher is Overture's access enforcement system. For every application on the platform, it keeps track of what each person has been "granted" permission to see or do, and hands those grants to the applications. It also gives the people who govern access one place to change them. Its role is closer to a keychain than a lock: each application does its own unlocking, and Usher never touches the data it governs. This document is an orientation to that model, to the security properties it rests on, and to the reasoning behind each decision that shaped this design.</p>
 
 <p class="status"><b>Status:</b> the requirements are fully defined and implementation has begun. The shared component embedded in every ushered application to read Usher's answer is built and tested, and the database schema is drafted for review. The security mechanism is designed in full, and the permissions model is set out in this document for review. Each ushered application's adapter contract will be settled with that application at integration time. The administrative interface ships from Usher as a package mounted by each portal, reimplementing what the iMS Studies Management service does today. The first integration is the Stage portal over Arranger's search, proven in a development environment, with what it teaches carried to iMS afterwards. The two halves of the environmental submission service follow, Lyric alongside SONG with Score, and then Muse and Singularity complete the iMS MVP on the clinical data side.</p>
 
@@ -171,9 +171,9 @@ This flags and does not block. A custodian is entitled to issue every one of tho
 
 Everything above is what gets decided: the tiers, the participants, and the datasets and categories named in a grant. What follows is how a decision made from those reaches the data, and what it looks like on the way.
 
-Two different things happen, in two different places, and the whole design rests on keeping them apart. Usher keeps every rule about what each person is allowed to see or do, and those rules live nowhere else. Together, those rules are the **policy**. Applying the policy to one particular request is **enforcement**, and that happens somewhere else entirely: inside each application, whenever someone asks for something.
+Two different things happen, in two different places, and the whole design rests on keeping them apart. Usher keeps every rule about what each person is allowed to see or do, and those rules live nowhere else. Together, those rules are the **policy**. Applying the policy to one particular request is **enforcement**, and that happens somewhere else entirely: inside each application, in a small part of Usher that runs there, whenever someone asks for something. Everywhere else, this document says "Usher" for its central service.
 
-Usher decides and never touches data. The applications enforce and never decide. Everything below is how a decision gets from the first to the second.
+Usher decides and never touches data. Its part inside each application enforces and never decides. Everything below is how a decision gets from the first to the second.
 
 That decision travels as one object, called the **Usher token**. It is Usher's encrypted answer to "what may this person see or do", issued for a single named application, and only that application can decrypt it.
 
@@ -268,7 +268,7 @@ Three of the four rows differ, and each of those three widens access under subtr
 
 ### One place holds the rules, and every application obeys them
 
-Usher holds the policy and makes no data queries of its own. Each application carries a small component that asks Usher what to apply, then applies it before any query reaches the data. Applications make no policy decisions themselves.
+Usher holds the policy and makes no data queries of its own. Each application carries a small part of Usher, which asks Usher what to apply, then applies it before any query reaches the data. Applications make no policy decisions themselves.
 
 This keeps the rules consistent as the platform grows. Adding an application does not mean re-implementing the access logic, and when a rule changes or a decision has to be explained, there is exactly one place to look.
 
@@ -308,7 +308,7 @@ So the honest answer to "how fine can this get" is: as fine as the descriptions 
 
 Keycloak already runs on the platform and already holds the accounts, groups and identities. Usher rebuilds none of that: no accounts, no sign-in, no federation with institutional logins. What Keycloak does not offer is an interface safe to give anyone outside a small group of engineers, because administering access through it means handing someone the controls for the whole identity system.
 
-So Usher is the layer above it. Keycloak establishes who someone is. Usher keeps the access policy in a database of its own and computes what a person may see or do. Each application receives that answer and enforces it before any query runs. It then presents access management as a small number of comprehensible tasks, aimed at the people who make access decisions rather than at the people who run the identity system.
+So Usher is the layer above it. Keycloak establishes who someone is. Usher keeps the access policy in a database of its own and computes what a person may see or do. Usher's part inside each application receives that answer and enforces it before any query runs. It then presents access management as a small number of comprehensible tasks, aimed at the people who make access decisions rather than at the people who run the identity system.
 
 **Keycloak does have an authorization feature of its own, and it has been ruled out as a replacement.** It is already deployed, which made it the candidate most likely to make some of this unnecessary. It was set aside on independence: Overture intends to support more than one identity provider, so the rules about who may reach what cannot live inside one of them. Its documentation later answered two questions about it, and neither changed that. It can list what a person may reach, but only for items registered in it one by one, and it hands a data service no filter to apply. And it cannot give a community representative authority over their own data alone, fully audited, with no other administrative rights. The whole community-governance decision rests on that second requirement, and this design meets it with the custodian role rather than by relying on an off-the-shelf feature.
 
@@ -365,12 +365,12 @@ None of this is needed to follow the document. It is here so the vocabulary is n
 <dl>
     <dt>Authorization</dt>
     <dd>Deciding what someone may see or do. Distinct from authentication, which is confirming who they are.</dd>
-    <dt>Attribute-based access control, or ABAC</dt>
-    <dd>Deciding access from facts about the person asking, the data, and the situation, rather than from a fixed job title. It is what allows one person to reach some datasets and not others without inventing a new role for every combination.</dd>
+    <dt>Role-centric attribute-based access control, or RABAC</dt>
+    <dd>Deciding access in two steps. A role decides which actions someone may take at all, and facts about the person asking, the data and the situation decide which data those actions reach. It is what allows one person to reach some datasets and not others without inventing a new role for every combination.</dd>
     <dt>Policy</dt>
     <dd>Every rule about what each person is allowed to see or do. Usher keeps them all, in one place, and nothing else does.</dd>
     <dt>Enforcement</dt>
-    <dd>Applying those rules to one particular request, before any data is fetched. It happens inside each application rather than in Usher, which is why Usher never touches the data it governs.</dd>
+    <dd>Applying those rules to one particular request, before any data is fetched. The part of Usher that does it runs inside each application and only shapes the request. The application fetches the data, which is why Usher never touches the data it governs.</dd>
     <dt>Approval</dt>
     <dd>The decision that someone may reach something, made by a dataset's owner or by a category's custodian. Everything in this document follows from one, since nothing is reachable unless an approval says so.</dd>
     <dt>Grant</dt>
@@ -398,5 +398,5 @@ None of this is needed to follow the document. It is here so the vocabulary is n
   </dl>
 
 <footer>
-    Usher is the user access control system for Overture. Prepared as an orientation to the permissions and security model and the reasoning behind it.
+    Usher is the access enforcement system for Overture. Prepared as an orientation to the permissions and security model and the reasoning behind it.
   </footer>

@@ -35,7 +35,7 @@ Adapted from [softeng/agentics](https://github.com/oicr-softeng/agentics). This 
 
 ## Project notes
 
-- Usher is the standalone ABAC access control service for the Overture platform, and its access control plane: answers "what is this user allowed to see?" and returns encrypted Usher tokens (JWE) that per-app adapters enforce. Handles personal health information
+- Usher is the access enforcement system for the Overture platform, the enforcement half of its access control plane, on a RABAC model (role-centric attribute-based access control): answers "what is this user allowed to see?" and returns encrypted Usher tokens (JWE) that per-app adapters enforce. Handles personal health information
 - Key concepts (PDP, PAP, PEP, JWE, fail-secure, Usher tokens) are in `docs/concepts.md`; the OWASP Top 10:2025 threat model is in `.dev/design/security-threat-model.md`; the design index is at `.dev/design/README.md`
 - **Design-first:** do not implement a component without a completed design in `.dev/design/`. Open design questions are tracked there
 - **Model-agnostic:** the service core uses generic terms (`resource`, `role`, `category`); domain-specific labels (study, patient, cohort) belong in the management UI layer only

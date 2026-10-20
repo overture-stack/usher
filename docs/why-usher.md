@@ -155,7 +155,7 @@ possible sources of grants rather than alternatives to it.
 **Building it per application**
 
 The most common approach on data platforms is to implement access control separately in each
-application. This is the default before a shared access control service exists.
+application. This is the default before a shared enforcement system exists.
 
 The result is enforcement drift: each application's rules diverge over time. Audit trails are
 fragmented across application logs. Access changes must be propagated to every application
@@ -209,7 +209,7 @@ Across the tools above, its specific contribution is the combination of:
   resources and categories. It is not designed for complex conditional policies or relationship
   graphs. Teams with those requirements may find OPA or a Zanzibar-style system a better fit,
   potentially with Usher's management and delivery layer on top.
--  **Not a compliance framework.** Usher provides the technical mechanism for access control. The
+-  **Not a compliance framework.** Usher provides the technical mechanism for access enforcement. The
   policies (who gets access, under what conditions) are a governance and organizational concern,
   implemented by Usher but not defined by it. Who reviews a request, and where that review happens,
   is the part of this that is scoped to the first release rather than settled. A data access

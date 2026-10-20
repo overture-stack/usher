@@ -735,14 +735,14 @@ logic affect the event schema and the log aggregation pipeline configuration.
 GA4GH Passport integration is not required for iMS v1, as the business requirements state
 directly, so this is not a launch dependency. Kept because it is a real gap in that design and the
 severity was misleading in a blocker sweep. Original finding:
-When a DAC withdraws grant, the corresponding `ControlledAccessGrants` Visa stops being
+When a data access committee withdraws its approval, the corresponding `ControlledAccessGrants` Visa stops being
 issued on re-authentication. The existing category grant record in Usher's policy database
 persists until `expires_at`. Usher has no described mechanism for detecting externally-revoked
 Visas proactively. For controlled health data where an access withdrawal must take effect
 promptly, a Visa expiry window (potentially days) may not satisfy governance requirements.
 Options to consider: periodic re-validation of Visa-sourced grants on token exchange; a webhook
 from the Visa Issuer on revocation; or an explicit operator-triggered revocation via the
-management API when informed of a DAC withdrawal.
+management API when informed that a data access committee has withdrawn an approval.
 
 **[MEDIUM] No "revoke user everywhere" API despite it being the primary emergency operation.**
 `security-workflow.md` describes "single user" as the standard revocation scope. `admin-model.md`
@@ -785,7 +785,7 @@ lift, and whether `blocked` earns a state of its own.
 
 **[POST-V1] Trusted-issuers governance for GA4GH Passports is not described.**
 Same scope as the Visa revocation item above. Original finding:
-Adding a new Visa Issuer (a new collaborating DAC) requires updating Keycloak's
+Adding a new Visa Issuer (a new collaborating data access committee) requires updating Keycloak's
 trusted-issuers list. A malicious or compromised issuer could grant controlled access to all
 data on the platform. The governance workflow for this operation (who approves it, what audit
 record it creates, whether it requires two-admin sign-off) is not described anywhere. For a

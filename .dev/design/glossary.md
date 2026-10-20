@@ -196,8 +196,29 @@ order. Every other entry keeps its article.
 
 The entries below are alphabetical, because a glossary is looked up more often than it is read.
 
+**Access approval**
+One half of the access control plane: reviewing an application for access and deciding it, in an
+approval service such as DACO. Its decision is an **approval**, which Usher records as a grant.
+
+**Access control** _(the whole: approval and enforcement together)_
+Deciding who may reach what, and making those decisions hold. Overture's **access control plane**
+has two halves: access approval, done in an approval service, and access enforcement, done by Usher.
+Usher alone is never called access control.
+
+**Disambiguation note:** "Control" here means deciding and enforcing together. That is close to the
+sense of OCAP's principle of Control and CARE's authority to control data, both of which a community
+exercises in Usher's model through custodians, and both are quoted as written. The acronyms on the
+approval side are commonly misread as control: the C in DAC stands for committee, and the C in DACO
+for compliance, which is why both are written out here.
+
+**Access enforcement**
+Usher's half of the access control plane: making each grant hold in every ushered application, on
+every request, until it expires or is revoked. Usher enforces as a system. The controller keeps the
+grants and computes each person's permissions, the bridge turns them into each request's
+**enforcement result**, and the adapter applies that result at its application's own hook.
+
 **Approval**
-A decision reached before a grant and outside Usher: an ethics approval, an access committee's
+A decision reached before a grant and outside Usher: an ethics approval, a data access committee's
 determination, a review. Usher records the grant that follows one, with a clause saying where the
 decision came from.
 
@@ -339,6 +360,18 @@ The number of records matching a query or one bucket, and what the `count` capab
 A principal holding `count` without `view` receives counts and no records. What they may count by,
 and whether rounding applies, is research, in [count-only principal](../docs/atlas/roadmap/count-only-principal.md).
 
+**DACO** _(Data Access Compliance Office, a proper name)_
+ICGC's office that reviews researchers' applications for controlled data against ICGC policy, and
+approves or refuses them. It is on the approval side of the line: where an Usher instance honours its
+approvals, each is recorded as a grant. Written out at its first use in each document, because its C
+is commonly read as control.
+
+**Data access committee**
+The people who review researchers' applications for access to a dataset, and approve or refuse them.
+Always written in full. The acronym DAC is retired here, because it is read as data access control,
+which is Usher's side, and in security as discretionary access control. A committee's approval
+arrives in Usher as a grant, possibly by way of a GA4GH Visa.
+
 **Entity**
 
 What a capability acts on: the first segment of its name.
@@ -380,6 +413,13 @@ columns covered by that category while `record.view` reaches whole records. The 
 separate from `field.view` because counting records by a column's values discloses less than
 showing them.
 Post-MVP.
+
+**Governance**
+Who decides about access to data, by what rules, and how those decisions are recorded. It is the
+umbrella over both sides of the line: a data access committee or a compliance office approving
+applications, and owners and custodians granting access directly in Usher. It never names either side
+alone. Community data governance, under frameworks such as OCAP and CARE, is governance in this
+sense, and Usher's model holds it through custodians.
 
 **Grant** _(the action, and the record it leaves)_
 Action of assigning permissions to a principal or a group.
@@ -727,30 +767,33 @@ borrowed terms have no Usher counterpart at all.
 This table is the index. A term whose collision needs more than a row is expanded under
 [Disambiguations](#disambiguations) below, and linked from wherever it is defined.
 
-| Term                      | Comes from                | Means there                                                               | In Usher                                                                                                                                                        |
-| ------------------------- | ------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sub`, subject            | OIDC, Keycloak            | the identifier of the authenticated account                               | the identifier **of** a principal, not the principal itself. Stored as `users.id`                                                                               |
-| user                      | Keycloak                  | a human account in a realm                                                | a human principal. One of the two kinds                                                                                                                         |
-| client                    | Keycloak                  | an application authenticating as itself                                   | a machine principal. The other kind                                                                                                                             |
-| group                     | Keycloak                  | a collection of users in a realm                                          | a separate entity. A Keycloak group may be mapped onto an Usher group; the two stay distinct                                                                    |
-| role                      | Keycloak                  | a realm or client role, held in the IdP                                   | a separate entity. Usher's roles (`viewer`, `owner`) are named on `grants` rows in Usher's own store, and Keycloak's are coarse assignments it keeps for itself |
-| scope                     | OAuth 2.0                 | a string limiting what a token permits                                    | **nothing.** What a grant permits is carried as permissions per category                                                                                        |
-| authorization server      | OAuth 2.0                 | the component that authenticates a person and issues them an access token | **Keycloak.** Usher's controller decides what an already-authenticated principal may reach, and issues tokens to applications                                   |
-| audience, `aud`           | OAuth 2.0 Token Exchange  | the service a token is issued for                                         | the same, unchanged                                                                                                                                             |
-| subject, resource, action | XACML                     | three of the four request categories                                      | subject becomes principal; resource is unchanged; action becomes permission                                                                                     |
-| PDP, PAP, PEP             | XACML                     | decision, administration and enforcement points                           | the same, and used as-is                                                                                                                                        |
-| group, policy             | EGO                       | study groups, and access policies attached to them                        | retired. An EGO group maps to a resource, an EGO policy to the grants on it                                                                                     |
-| Visa, Passport            | GA4GH                     | signed claims about a researcher                                          | a `ControlledAccessGrants` Visa maps to a category grant. The other three Visa types are unmapped so far                                                        |
-| dataset                   | GA4GH                     | the unit a Visa is scoped to                                              | resource                                                                                                                                                        |
-| catalogue                 | Arranger                  | one index configuration, keyed by `catalogueId`                           | coarser than a catalogue, and one Arranger catalogue can hold more than one. Always written qualified here, per the Catalogue entry                             |
-| `documentType`            | Arranger                  | the GraphQL root field name                                               | **nothing.** Several Arranger catalogues can share one, as the first instance's development search server shows: five of them, four `records`                   |
-| index, mapping            | Elasticsearch, OpenSearch | storage and its field types                                               | **nothing directly.** A catalogue's backing store, which Usher treats as opaque                                                                                 |
-| cohort                    | Overture                  | a collection of records sharing defining characteristics                  | **resource.** Usher's generic term; cohort is what Overture calls one, in the data science sense the Cohort entry sets out                                      |
-| study                     | iMS                       | the top-level collection of the data lake                                 | resource                                                                                                                                                        |
-| dataset                   | iMS                       | used loosely at several levels below a study                              | no fixed mapping; the term sits at several levels, and which one is meant is local to the document using it                                                     |
-| Data Steward              | iMS flows                 | owns datasets, shares them, adds other stewards                           | **owner.** Usher's custodian is a separate role, holding authority over one category across all resources                                                       |
-| Data Admin                | iMS flows                 | the platform administration persona                                       | **administrator**, meaning system administrator rather than a data-plane role                                                                                   |
-| constraint token          | iMS flows                 | the object carrying an access decision                                    | Usher token                                                                                                                                                     |
+| Term                      | Comes from                | Means there                                                                       | In Usher                                                                                                                                                        |
+| ------------------------- | ------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sub`, subject            | OIDC, Keycloak            | the identifier of the authenticated account                                       | the identifier **of** a principal, not the principal itself. Stored as `users.id`                                                                               |
+| user                      | Keycloak                  | a human account in a realm                                                        | a human principal. One of the two kinds                                                                                                                         |
+| client                    | Keycloak                  | an application authenticating as itself                                           | a machine principal. The other kind                                                                                                                             |
+| group                     | Keycloak                  | a collection of users in a realm                                                  | a separate entity. A Keycloak group may be mapped onto an Usher group; the two stay distinct                                                                    |
+| role                      | Keycloak                  | a realm or client role, held in the IdP                                           | a separate entity. Usher's roles (`viewer`, `owner`) are named on `grants` rows in Usher's own store, and Keycloak's are coarse assignments it keeps for itself |
+| scope                     | OAuth 2.0                 | a string limiting what a token permits                                            | **nothing.** What a grant permits is carried as permissions per category                                                                                        |
+| authorization server      | OAuth 2.0                 | the component that authenticates a person and issues them an access token         | **Keycloak.** Usher's controller decides what an already-authenticated principal may reach, and issues tokens to applications                                   |
+| audience, `aud`           | OAuth 2.0 Token Exchange  | the service a token is issued for                                                 | the same, unchanged                                                                                                                                             |
+| subject, resource, action | XACML                     | three of the four request categories                                              | subject becomes principal; resource is unchanged; action becomes permission                                                                                     |
+| PDP, PAP, PEP             | XACML                     | decision, administration and enforcement points                                   | the same, and used as-is                                                                                                                                        |
+| group, policy             | EGO                       | study groups, and access policies attached to them                                | retired. An EGO group maps to a resource, an EGO policy to the grants on it                                                                                     |
+| Visa, Passport            | GA4GH                     | signed claims about a researcher                                                  | a `ControlledAccessGrants` Visa maps to a category grant. The other three Visa types are unmapped so far                                                        |
+| dataset                   | GA4GH                     | the unit a Visa is scoped to                                                      | resource                                                                                                                                                        |
+| data access committee     | GA4GH, EGA                | the people who review applications for a dataset, and approve or refuse them      | **nothing in the model.** Its approval arrives as a grant. Never abbreviated to DAC here                                                                        |
+| DACO                      | ICGC                      | the Data Access Compliance Office, which reviews applications against ICGC policy | **nothing in the model.** An approval service, whose approvals would arrive as grants                                                                           |
+| Control                   | OCAP (FNIGC)              | a First Nations community's authority over the processes that affect its data     | **governance, held through custodians.** Not access control; quoted as the principle's name                                                                     |
+| catalogue                 | Arranger                  | one index configuration, keyed by `catalogueId`                                   | coarser than a catalogue, and one Arranger catalogue can hold more than one. Always written qualified here, per the Catalogue entry                             |
+| `documentType`            | Arranger                  | the GraphQL root field name                                                       | **nothing.** Several Arranger catalogues can share one, as the first instance's development search server shows: five of them, four `records`                   |
+| index, mapping            | Elasticsearch, OpenSearch | storage and its field types                                                       | **nothing directly.** A catalogue's backing store, which Usher treats as opaque                                                                                 |
+| cohort                    | Overture                  | a collection of records sharing defining characteristics                          | **resource.** Usher's generic term; cohort is what Overture calls one, in the data science sense the Cohort entry sets out                                      |
+| study                     | iMS                       | the top-level collection of the data lake                                         | resource                                                                                                                                                        |
+| dataset                   | iMS                       | used loosely at several levels below a study                                      | no fixed mapping; the term sits at several levels, and which one is meant is local to the document using it                                                     |
+| Data Steward              | iMS flows                 | owns datasets, shares them, adds other stewards                                   | **owner.** Usher's custodian is a separate role, holding authority over one category across all resources                                                       |
+| Data Admin                | iMS flows                 | the platform administration persona                                               | **administrator**, meaning system administrator rather than a data-plane role                                                                                   |
+| constraint token          | iMS flows                 | the object carrying an access decision                                            | Usher token                                                                                                                                                     |
 
 ---
 

@@ -1,6 +1,6 @@
 # Usher: Design Index
 
-Usher is the access control plane for the Overture platform: it holds the grants that say who may
+Usher is the access enforcement system for the Overture platform: it holds the grants that say who may
 reach what and hands them to each application, which enforces them at its own query layer. See the
 [README](../../README.md) for what that framing rules in and out, including why Usher is not an
 authentication service. This file indexes the design and does not restate it.
@@ -63,7 +63,7 @@ specified as request and response shapes).
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | [glossary.md](glossary.md)                           | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts          | reference                |
 | [architecture.md](architecture.md)                   | Component responsibilities (Keycloak, controller, bridge, adapter, infrastructure); stateless application principle | in progress              |
-| [concepts.md](../../docs/concepts.md)                | ABAC vocabulary, security primitives, permissions model entities                                                    | reference                |
+| [concepts.md](../../docs/concepts.md)                | RABAC vocabulary, security primitives, permissions model entities                                                   | reference                |
 | [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps                                                                  | reference                |
 | [security-workflow.md](security-workflow.md)         | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure                          | specced                  |
 | [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, Indigenous data governance, private data sharing               | in progress              |

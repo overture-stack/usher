@@ -205,8 +205,8 @@ administrator access, people do, and the reader never learns which people. So th
 share that blind spot, which was the open question that mattered most.
 
 **The finding that argues against the method as stated.** The single most consequential defect was
-found by **one** agent of three. One line tells the reader that anonymous requests pass through the
-access control service, which contradicts two later statements that it never touches the data and is
+found by **one** agent of three. One line tells the reader that anonymous requests pass through
+Usher, which contradicts two later statements that it never touches the data and is
 only asked a question. A privacy reviewer reading it would conclude the service holds a query log
 over health data. It is a material false claim about where health data flows, it was a singleton, and
 a rule of applying only what converges would have shipped it.

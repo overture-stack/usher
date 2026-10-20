@@ -524,7 +524,7 @@ can cost features and never confidentiality.
 | user lookup through the admin API | Keycloak                                                       | display names at the portal layer, and finding a person to grant access to | the provider's own directory interface                                     |
 
 **OPA note:** Open Policy Agent was considered as a policy evaluation engine. It is not a v1
-dependency. Usher's ABAC model is structured (defined schema: `grants`, `grant_decisions`,
+dependency. Usher's RABAC model is structured (defined schema: `grants`, `grant_decisions`,
 resource_categories), and permissions computation is a mechanical derivation from that data
 rather than open-ended policy composition. OPA adds operational complexity without clear benefit
 at this scale. Revisit if the policy model grows to require arbitrary composition or distributed

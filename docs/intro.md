@@ -96,7 +96,7 @@ PDP/PEP/PAP) before Usher-specific vocabulary.
 
 **Building or integrating with Usher** (developer, integration engineer)
 
-- [Concepts](concepts.md): ABAC, PDP/PAP/PEP, Usher tokens, fail-secure, revocation
+- [Concepts](concepts.md): RABAC, PDP/PAP/PEP, Usher tokens, fail-secure, revocation
 - [Why Usher](why-usher.md): architectural context and tool comparisons
 - [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md): full document set with reading order by role
 - [Adapter integration](https://github.com/overture-stack/usher/blob/main/.dev/design/adapter-integration.md): the API contract for building an enforcement adapter

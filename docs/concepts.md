@@ -86,7 +86,7 @@ grant permits, attributes for scope (which resource, which category). The roles 
 narrow to wide. `viewer` and `curator` act on records, `owner` acts on who may reach them, and a
 person can hold one, the other, or both.
 
-**This hybrid is a recognized pattern rather than a local invention.** It is close to RABAC,
+**This hybrid is a recognized pattern rather than a local invention.** It follows RABAC,
 role-centric attribute-based access control
 ([Jin, Sandhu and Krishnan, MMM-ACNS 2012](https://www.profsandhu.com/confrnc/misconf/mmm-acns12-rabac-paper.pdf)),
 which extends RBAC with an attribute-based filter applied after the role check rather than in place
@@ -359,7 +359,7 @@ enough for a resource whose only category is its unrestricted portion.
 
 **Controlled:** access requires an explicit, per-dataset grant. In simpler instances, an
 Admin or Custodian grants access directly through the management UI. In larger or federated
-instances, a Data Access Committee (DAC) reviews researcher applications. It approves or denies
+instances, a data access committee reviews researcher applications. It approves or denies
 access based on research purpose and institution. Approved grants can be mapped automatically via
 GA4GH Passports, if configured.
 
@@ -391,7 +391,7 @@ integration is relevant when researchers hold access approvals issued by institu
 instance. Those approvals then need to be honoured automatically.
 
 The scenario: a researcher at one institution holds a data access approval. It was issued by a data
-access committee (DAC) at a different institution. Those two institutions do not share identity
+access committee at a different institution. Those two institutions do not share identity
 infrastructure. Without a shared standard, each data holder must establish a direct trust
 relationship with each approving institution. That does not scale.
 
@@ -414,7 +414,7 @@ relevant to Overture:
 | `ResearcherStatus`         | Researcher holds bona fide researcher status, for example ELIXIR Researcher |
 
 `ControlledAccessGrants` is the visa type that maps directly to Usher's Controlled access tier. A
-DAC grant for a specific dataset is the external origin of a category grant.
+data access committee's approval for a specific dataset is the external origin of a category grant.
 
 ### The three roles in a Passport ecosystem
 
@@ -429,7 +429,7 @@ Different parties in a Passport-enabled ecosystem play distinct roles:
 The examples above are real services you may meet in this space. REMS is the Resource Entitlement
 Management System from CSC Finland, described further below. ELIXIR is Europe's life-science data
 infrastructure, and ELIXIR AAI is its authentication and authorization service. GHGA, mentioned
-later, is the German Human Genome-Phenome Archive. A DAC is a Data Access Committee: the group that
+later, is the German Human Genome-Phenome Archive. A data access committee is the group that
 reviews and approves researcher applications.
 
 Usher plays the Clearinghouse role. It does not validate Passport signatures itself: that belongs
@@ -443,7 +443,7 @@ external Passport Visa.
 
 ### The flow
 
-    Researcher obtains Visas from external DAC via REMS or similar
+    Researcher obtains Visas from an external data access committee via REMS or similar
       -> Passport Broker (LifeScience Login / ELIXIR) bundles them into a Passport
       -> Researcher authenticates to Keycloak with their Passport
       -> Keycloak (GA4GH Passport extension):
@@ -466,10 +466,10 @@ can always restrict access downward. It cannot grant access not covered by a Vis
 
 ### REMS: running your own Visa Issuer
 
-An Overture instance may want its own controlled-access approval workflow. That means a DAC
-reviewing applications and approving or denying them through a managed process. For that, REMS
+An Overture instance may want its own controlled-access approval workflow. That means a data access
+committee reviewing applications and approving or denying them through a managed process. For that, REMS
 (Resource Entitlement Management System, from CSC Finland) is the standard tool. REMS issues
-`ControlledAccessGrants` Visas as output when a DAC approves a request, and integrates with
+`ControlledAccessGrants` Visas as output when a data access committee approves a request, and integrates with
 Keycloak. It is used in production by ELIXIR, GHGA, and other GA4GH-aligned platforms.
 
 REMS is optional. An Overture instance can accept Passports from external Brokers without running

@@ -1,14 +1,18 @@
-# A DAC API as an ushered application
+# The approval service as an ushered application
 
 Future scope, recorded as research ahead of the integration. Nothing here is in the first release,
 and nothing here is decided beyond the direction in the first section.
+
+**Tentative name: Audition.** The approval service is where applications for access are reviewed
+and decided, the access approval half of the access control plane, with Usher as the enforcement
+half. Choosing its name is parked; Audition is a placeholder.
 
 ## The direction
 
 **A data access committee layer is its own ushered application, not part of Usher.** Usher stays
 narrow, performant and stable: it stores no signed documents, no applicant details from
-applications, and serves no API for a DAC interface. Usher governs who may review and who may approve
-in the DAC service the same way it governs who may read in Arranger, and the DAC service asks Usher
+applications, and serves no API for the approval service's interface. Usher governs who may review and who may approve
+in the approval service the same way it governs who may read in Arranger, and the approval service asks Usher
 to register resources and write grants once an application is approved.
 
 This replaces an earlier expectation in `permissions-model.md`, that a request and a decision about
@@ -16,23 +20,23 @@ it would become control-plane entities in Usher's own model.
 
 ## Two flows
 
-| Flow               | The committee approves                                 | What the DAC service then asks of Usher                                                                                |
-| ------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Dataset onboarding | an application to bring a dataset onto the platform    | register the dataset as a resource, name its owner, and grant its submitters `submitter`, so Lyric accepts their uploads |
-| Data access        | a researcher's application for an existing dataset     | grant the researcher a data-plane role on the dataset's categories, with an expiry                                     |
+| Flow               | The committee approves                              | What the approval service then asks of Usher                                                                             |
+| ------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Dataset onboarding | an application to bring a dataset onto the platform | register the dataset as a resource, name its owner, and grant its submitters `submitter`, so Lyric accepts their uploads |
+| Data access        | a researcher's application for an existing dataset  | grant the researcher a data-plane role on the dataset's categories, with an expiry                                       |
 
 The second is the ethics-review-gated access with time-limited validity described in the roadmap's
-DACO entry, and the `expires_at` column on `grants` is where its validity goes.
+entry on approval workflows in the style of DACO, ICGC's Data Access Compliance Office, and the `expires_at` column on `grants` is where its validity goes.
 
 ## The dataset onboarding flow, step by step
 
-| Step | What happens                                                                                                                      | What a resource type does                                                                                 |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| 1    | Applications arrive at the DAC service as records of an `access-committee` resource, one per committee                               | The resource has type `access-committee`, so no Arranger or Lyric token names it and no dataset list shows it        |
-| 2    | Reviewers and approvers hold roles on the committee's resource                                                                            | Only roles that make sense on an `access-committee` resource can be granted there                                       |
-| 3    | An application is approved; the DAC service's account asks Usher to register HEART_STUDY and name X owner, Y and Z submitters     | The DAC service's account may register only `dataset` resources, which bounds what a compromised account does |
-| 4    | Lyric's token for Y names HEART_STUDY with `record.create`                                                                        | `dataset` resources are served by Lyric, Arranger and Score                                                 |
-| 5    | A researcher later applies to the DAC for access to HEART_STUDY's data                                                            | If the DAC service also serves `dataset`, its tokens name HEART_STUDY, and a reviewer role there carries only capabilities on applications |
+| Step | What happens                                                                                                                       | What a resource type does                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Applications arrive at the approval service as records of an `access-committee` resource, one per committee                        | The resource has type `access-committee`, so no Arranger or Lyric token names it and no dataset list shows it                                   |
+| 2    | Reviewers and approvers hold roles on the committee's resource                                                                     | Only roles that make sense on an `access-committee` resource can be granted there                                                               |
+| 3    | An application is approved; the approval service's account asks Usher to register HEART_STUDY and name X owner, Y and Z submitters | The approval service's account may register only `dataset` resources, which bounds what a compromised account does                              |
+| 4    | Lyric's token for Y names HEART_STUDY with `record.create`                                                                         | `dataset` resources are served by Lyric, Arranger and Score                                                                                     |
+| 5    | A researcher later applies through the approval service for access to HEART_STUDY's data                                           | If the approval service also serves `dataset`, its tokens name HEART_STUDY, and a reviewer role there carries only capabilities on applications |
 
 **What the model already handles.** Capabilities belong to entities, so a role carrying a capability
 on applications means nothing to Arranger, even on a resource served by both services. What it does
@@ -58,15 +62,15 @@ platform, the way it seeds roles, so the values are generic rather than one plat
 
 **The values name what a resource is, never the service serving it.** One dataset is served by
 several services at once: its metadata by a search service, its submissions by a submission service,
-its files by a file service, and applications for access to it by a DAC service. A type named after
+its files by a file service, and applications for access to it by an approval service. A type named after
 one of them would force the dataset to be registered once per service, with every grant written and
 revoked once per copy, and Usher exists to prevent that drift between applications. What a service
 does decides which types it declares, not what the types are called.
 
-| Value              | What the resource is                                     | Served by                                  | Arrives                |
-| ------------------ | -------------------------------------------------------- | ------------------------------------------ | ---------------------- |
-| `dataset`          | a body of research data, DCAT's `dcat:Dataset`            | search, submission and file services       | the first release      |
-| `access-committee` | the applications one data access committee handles       | the DAC service                            | with the integration   |
+| Value              | What the resource is                               | Served by                            | Arrives              |
+| ------------------ | -------------------------------------------------- | ------------------------------------ | -------------------- |
+| `dataset`          | a body of research data, DCAT's `dcat:Dataset`     | search, submission and file services | the first release    |
+| `access-committee` | the applications one data access committee handles | the approval service                 | with the integration |
 
 Two candidates were rejected. **`study`** is one platform's word, and domain terms are instance
 vocabulary, kept out of Usher's model. **`files`** would split a dataset from its own files: two
@@ -77,7 +81,7 @@ it does today. A type for files would fit only files that belong to no dataset.
 Values are lowercase, like every identifier in the model.
 
 **The onboarding document keeps "dataset" as its word for every resource.** It will not cover the
-DAC integration, so its everyday sense and the type's never meet in one reader's context.
+approval service, so its everyday sense and the type's never meet in one reader's context.
 
 **Not in the first release.** Every resource there is one type. The type changes which resources a
 token names rather than the token's shape, so adding it later is a column with a default rather than
@@ -121,18 +125,18 @@ The data access flow needs only data-plane grants, which is the containable form
 
 ## New entities, and so a payload version
 
-Applications are data-plane records of the DAC service, held within an `access-committee` resource,
+Applications are data-plane records of the approval service, held within an `access-committee` resource,
 so `application` is a new data-plane entity, with actions such as viewing, reviewing and approving.
 
 **An applicant reaching only their own applications needs selection relative to the person asking.**
 A reviewer holds one grant on the committee's resource and reaches all of its applications. An
 applicant has to reach only the ones they submitted, which is a record selected by who asks rather
 than by a fixed value, the post-MVP narrowing recorded in `permissions-model.md` as
-principal-relative selection. It is a prerequisite for this integration, unless the DAC service
+principal-relative selection. It is a prerequisite for this integration, unless the approval service
 shows applicants their own applications without Usher deciding it.
 
 How the signed documents are modelled, as a part of an application or as an entity of their own, is
-open; either way the DAC service stores them and Usher does not. A new data-plane entity changes
+open; either way the approval service stores them and Usher does not. A new data-plane entity changes
 what a token carries, which is a payload version and a coordinated deploy, and it arrives with the
 integration.
 
@@ -140,17 +144,17 @@ integration.
 
 REMS already does applications, approval workflows and licences. It sends each entitlement to a
 configured endpoint and can issue signed GA4GH visas. It is MIT licensed and maintained, with v2.39.1
-released in April 2026. Whether the DAC API is built or REMS is ushered is a decision for the
+released in April 2026. Whether the approval service is built or REMS is ushered is a decision for the
 integration; the Usher side is the same either way.
 
 ## Open questions
 
 - Where each application's declaration of the types it serves lives: instance configuration or a
   table.
-- What groups applications into a DAC resource: a committee, a programme or something else, and which
-  field of the DAC service's records carries it.
+- What groups applications into an `access-committee` resource: a committee, a programme or something
+  else, and which field of the approval service's records carries it.
 - Whether a service-assigned owner needs an administrator's confirmation.
-- Which roles the DAC service needs, such as reviewer and approver, and which actions on applications
+- Which roles the approval service needs, such as reviewer and approver, and which actions on applications
   each carries.
 
 ## Sources, checked 2026-09-28

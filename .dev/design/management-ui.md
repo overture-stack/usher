@@ -220,8 +220,8 @@ log be queryable through the UI, or export-only?
 ### Request and approval workflows
 
 Should the UI support a workflow where a user requests access to a resource or category grant,
-and an admin approves or denies? This is relevant for DACO-style gated access (ethics-review-
-required). Not in current scope but should be considered in the UI architecture so it can be
+and an admin approves or denies? This is relevant for gated access in the style of DACO, ICGC's Data Access
+Compliance Office, where ethics review is required. Not in current scope but should be considered in the UI architecture so it can be
 added without a full redesign.
 
 ### Multi-tenancy

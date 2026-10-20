@@ -126,7 +126,7 @@ getting it wrong fails silently in one direction and loudly in the other.
 
 Categories are independent axes: holding a grant for one category does not imply holding a grant
 for another, even within the same resource. What a category name means in terms of actual records
-or fields is instance configuration that lives in the enforcement adapter, not in Usher.
+or fields is instance configuration that lives in the enforcement adapter, not in the controller.
 
 ### Category grants
 
@@ -491,7 +491,7 @@ state machine belongs to that service. **That holds for the first release and is
 Usher.** A data access committee layer is expected to be an ushered application of its own rather than
 part of Usher: its applications become data-plane records of that service, the vocabulary extends to
 them by a payload version without restructuring, and that is the test of whether this shape is
-right. See [DAC integration](../docs/atlas/roadmap/dac-integration.md). Files in an object store
+right. See [the approval service](../docs/atlas/roadmap/approval-service.md). Files in an object store
 stay out for a different and more durable reason: the audience separates the metadata service from
 the object store, and the sensitivity gap between metadata and payload is what categories are for.
 
@@ -1473,9 +1473,9 @@ categories using the same model that governs record-level access. A user's categ
 determine which fields they can see. A user who holds the `indigenous_data` grant sees fields tagged
 `indigenous_data`; without it, those fields are absent.
 
-**The tagging lives in adapter configuration, not in Usher.** An earlier sketch put it in a
+**The tagging lives in adapter configuration, not in the controller.** An earlier sketch put it in a
 `field_categories(field_name, category_id)` table here, which would have contradicted the principle
-outright: Usher never learns a field name, and the resource field mapping already lives in adapter
+outright: the controller never learns a field name, and the resource field mapping already lives in adapter
 config for exactly that reason. Column tagging belongs beside it. That deletes a table rather than
 adding one.
 
