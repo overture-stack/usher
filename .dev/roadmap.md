@@ -610,6 +610,10 @@ Globus Auth as an OIDC identity source; Globus Groups as a potential source for 
 
 Optional `sqon` field on `grants` narrowing a grant to some of its category's records, enabling community-specific access and filtered-subset sharing. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
 
+### A reachability report
+
+For one person and one resource, how many records the person reaches and which categories gate the rest, shown to the resource's owners and a category's custodians within what they govern. Administrators see the gating categories without counts, and small counts in sensitive categories are suppressed. The counts come from the application holding the data, so Usher never reads a record. Wanted by iMS's management screens after its MVP. See [A reachability report](docs/atlas/roadmap/reachability-report.md).
+
 ### Security event streaming (Kafka)
 
 Upgrade path from Valkey Streams for durable, replayable event fan-out to external consumers (SIEM, compliance, alerting). Not needed for v1; no architectural changes required to add it later.

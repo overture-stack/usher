@@ -73,15 +73,17 @@ grant through the same permissions system that governs all users.
 Usher is a full replacement for EGO, not an integration partner. The migration path for
 EGO-based instances (primarily iMS):
 
-1. **Resource migration.** Enumerate EGO groups whose names match the `STUDY-<id>` convention.
-   Create one Usher resource per group, mapping the study identifier to the resource's name and
-   metadata.
+1. **Resource migration.** Enumerate EGO groups named by a study's identifier and a prefix the
+   deployment configures, for example `STUDY-<id>`; a study may have several, one per service that
+   reads them. Create one Usher resource per study, mapping the study identifier to the resource's
+   name and metadata.
 2. **Resource user migration.** Map EGO group members to Usher `grants` rows. EGO user UUIDs resolve
    to Keycloak user IDs (both systems use Keycloak-issued UUIDs for the same user population).
-3. **Policy migration.** EGO policies (`STUDY-<id>` policies with `WRITE` permission for the
-   corresponding group) map to Usher category grants. The category in Usher is instance-specific;
-   the studies management service's implicit "access to this study" becomes an explicit category
-   grant (for example, `registered` or `controlled_access` depending on instance policy).
+3. **Policy migration.** EGO policies (each named like its group, such as `STUDY-<id>`, with
+   `WRITE` permission for the corresponding group) map to Usher category grants. The category in
+   Usher is instance-specific; the studies management service's implicit "access to this study"
+   becomes an explicit category grant (for example, `registered` or `controlled_access` depending
+   on instance policy).
 4. **Service retirement.** The studies management service (the orchestration layer over EGO) is
    retired. Its operations (creating a study group, adding a member, removing a member) become
    Usher admin API calls.

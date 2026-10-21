@@ -499,6 +499,19 @@ mechanism with nothing behind it today: roles are currently names carrying no ve
 permissions are recorded only in a grant's `permissions` column. See
 [RABAC alignment](../docs/atlas/roadmap/rabac-alignment.md).
 
+**Policy**
+The resources, their categories and the grants over them, which carry the permissions: the state in
+the policy store that says who may reach what. Administrators manage it at the PAP and the PDP
+evaluates it. Invitations and audit entries are stored beside it without being part of it, since
+they record process rather than state.
+
+**Disambiguation note:** in Usher's documents, "policy" always means that stored state, so a
+sentence about a policy points at particular resources, categories and grants. Two other senses
+reach these documents. An EGO policy is one permission object per study. Its counterpart here is
+the grants on one resource, as [Terms borrowed from other systems](#terms-borrowed-from-other-systems)
+maps it. An organization's policy in the everyday sense, such as iMS's rule for who stewards a new
+submission, is a decision that organization makes. It reaches Usher as the grants that carry it out.
+
 **Record**
 One row of data in a catalogue, which is what access is ultimately about. Records live in the
 applications served by Usher; Usher's own store holds grants.
