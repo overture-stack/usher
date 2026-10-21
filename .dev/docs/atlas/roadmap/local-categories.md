@@ -56,10 +56,11 @@ one needs both grants, and the trace shows what happens otherwise:
 | 2    | REEF_ARCHIVE's owner creates a local `pilot` on `consent_group` PILOT and grants it                |
 | 3    | if either grant were enough, a `pilot` grant alone would reach community-governed records, and one category's restriction would be bypassed by another's |
 
-That is the conjunction under "A category selects records within a resource" in
-[decisions.md](../../../design/decisions.md): every category carried by a record must be held. It
-waits on a subset test, still inexpressible in the query layer, and until it lands a record carries
-one category, so local categories cannot ship before it.
+That is the conjunction under "A category is a condition over records" in
+[decisions.md](../../../design/decisions.md): every category a record matches must be held. Since
+categories became conditions, a record carries every category it matches and the bridge enforces
+resource categories, so enforcement no longer holds local categories back. What remains is an owner
+creating one, which needs `category.create` bounded to one resource.
 
 **No narrower form avoids this.** Restricting local categories to new values in the field read by a
 shared category would stop one record matching two categories, but only by having owners write

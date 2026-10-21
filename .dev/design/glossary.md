@@ -306,12 +306,15 @@ catalogue's records belong to many resources, since a resource is a value in a f
 rather than a container.
 
 **Category**
-Collection of records, defined by properties they carry.
+Collection of records, defined by a condition over properties they carry.
 
-Usher names the categories for its own instance and holds nothing else about them: which properties define one, and so which records fall
-inside it, is settled per schema, because a property only means something inside one schema.
-Reaching a segment requires a grant naming that category in that resource. See
-[permissions-model.md](permissions-model.md).
+Usher names the categories for its own instance and holds nothing else about them. Which records a
+category selects is a condition in each catalogue's category mapping, written in SQON, because a
+property only means something inside one schema; "this field holds this value" is the simplest
+condition. A record carries every category whose condition it matches, so it may carry several or
+none, and reaching it requires a grant on every one, in the resource it belongs to. A global category
+applies to every resource whose records match it. See
+[decisions.md](decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches).
 
 **A category name means the same thing across every resource**, which is what makes it grantable and
 governable: one custodian governs one category wherever it appears, and a grant on it would otherwise
@@ -326,8 +329,15 @@ An explicit, logged record allowing a specific user to reach a specific category
 specific resource, with the permissions carried by the grant. Grants are additive: each renders a
 positive predicate, and content selected by no grant is simply never reached rather than excluded
 by a rule. A category is carried by a record, so a grant reaches the records carrying it rather than
-the resource holding them. What is deferred is a record carrying more than one category at once.
-See [permissions-model.md](permissions-model.md).
+the resource holding them. A record carrying several categories needs a grant on each. The filter
+that enforces this excludes the categories a principal does not hold, which is the rendering's job
+rather than the grant's. See [permissions-model.md](permissions-model.md).
+
+**Category mapping**
+The conditions defining each category for one catalogue, kept in the Usher registration beside the
+catalogue's configuration and apart from the GraphQL router's merged configuration. It defines each
+global category once and each resource category under its resource, and names the field holding a
+record's resource. Never written as bare "mapping", which also names the index mapping.
 
 **Cohort** _(data science sense: applied to data, not people)_
 A named partition of data records sharing one or more defining characteristics, identified by a
@@ -698,12 +708,13 @@ suspending all user sessions. A successful check is a poll answered within its d
 notice is applied but is not one, since nothing in it shows how long it was held.
 
 **Offered category**
-A category a resource admits: one a grant on that resource can name and its records can carry. A
-resource **offers** categories and a record **carries** one, and the two words are kept apart because
-the check that protects `unmarked` compares what a resource offers with what a catalogue maps, while
-enforcement tests what a record carries. A payload names, for each resource it names, every category
-the resource offers, held or not. See [decisions.md](decisions.md), "A catalogue's category gap is
-found by the bridge".
+A category that can gate a resource's records: every global category, and the resource's own
+resource categories. A resource **offers** categories and a record **carries** those whose
+condition it matches, and the two words are kept apart because the check compares what Usher defines
+with what a catalogue's category mapping defines, while enforcement tests what a record carries. A
+payload names every global category Usher defines, and each named resource's own resource
+categories, held or not. See [decisions.md](decisions.md), "A catalogue's category gap is found by
+the bridge".
 
 **Open access**
 A data tier in which records require no authentication. The controller issues an anonymous grants
@@ -800,7 +811,7 @@ This table is the index. A term whose collision needs more than a row is expande
 | Control                   | OCAP (FNIGC)              | a First Nations community's authority over the processes that affect its data     | **governance, held through custodians.** Not access control; quoted as the principle's name                                                                     |
 | catalogue                 | Arranger                  | one index configuration, keyed by `catalogueId`                                   | coarser than a catalogue, and one Arranger catalogue can hold more than one. Always written qualified here, per the Catalogue entry                             |
 | `documentType`            | Arranger                  | the GraphQL root field name                                                       | **nothing.** Several Arranger catalogues can share one, as the first instance's development search server shows: five of them, four `records`                   |
-| index, mapping            | Elasticsearch, OpenSearch | storage and its field types                                                       | **nothing directly.** A catalogue's backing store, which Usher treats as opaque                                                                                 |
+| index, mapping            | Elasticsearch, OpenSearch | storage and its field types                                                       | **nothing directly.** A catalogue's backing store, which Usher treats as opaque. Always written "index mapping", since the category mapping is something else   |
 | cohort                    | Overture                  | a collection of records sharing defining characteristics                          | **resource.** Usher's generic term; cohort is what Overture calls one, in the data science sense the Cohort entry sets out                                      |
 | study                     | iMS                       | the top-level collection of the data lake                                         | resource                                                                                                                                                        |
 | dataset                   | iMS                       | used loosely at several levels below a study                                      | no fixed mapping; the term sits at several levels, and which one is meant is local to the document using it                                                     |

@@ -220,53 +220,49 @@ wrong regardless of how well it translates.
 
 Per protected type, per request:
 
-1. **From config:** the resources configured for this type, each with the field value identifying a
-   record as belonging to it; and the categories configured for this type, each with the field value
-   marking a record as carrying it.
-2. **From the token:** this principal's `(resource, category)` pairs.
+1. **From config:** the field naming a record's resource, an optional list of resources, and the
+   category mapping: each global category's condition, each resource category's condition under its
+   resource, and the categories declared absent.
+2. **From the token:** this principal's `(resource, category)` pairs, every global category Usher
+   defines, and each named resource's own resource categories.
 3. **Intersect.** The visible set is the pairs whose resource is configured for this type.
 4. **Empty intersection denies** this type. Not the absence of an entry: absence of an _overlap_.
-5. **Otherwise narrow**, with one clause per visible pair, composed with `or`. Each clause is a
-   conjunction of two field tests, the resource's and the category's.
+5. **Otherwise narrow**, with one conjunction: the resources held, a `not` around the known
+   resources not held, and, for each category, a `not` excluding its records within the held
+   resources lacking it, plus one for unmarked records where some held resource lacks them. Each
+   category test carries a missing-field test for every field its condition reads, and the filter
+   grows with categories rather than resources.
 6. **For a derived artifact, the narrowing is the ceiling**: an `in` over the configured resources the
    principal holds, record `view` on every category each offers, and a `not` around an `in` over the
    complement, so an artifact passes only when its provenance is non-empty and lies wholly within
    what the principal holds.
 
-**Step 5 carries the whole model, so its two field tests are separate.** The
-resource test is a positive match on the resource field. The category test depends on which kind of
-category it is, and the two are not symmetrical:
-
-    a concrete category   the category field matches that category's configured value
-    open                  the category field matches none of the configured concrete values
-
-A concrete category has a value of its own to match. `unmarked` does not: it is the residual, meaning
-whatever no concrete category covers, so its clause is the complement and is therefore negative where
-every other clause is positive. That asymmetry is inherent to a counter-category rather than a
-consequence of the query language, and it is where the hazard in the startup check below comes from.
+**Step 5 carries the whole model.** The resource test is a positive match on the resource field. Each
+category is a condition in the category mapping, and `unmarked` has no condition of its own: it is the
+records matching none. So the filter's exclusions are negative where the resource test is positive,
+which is inherent to requiring every category a record matches, and it is where the guards in
+[decisions.md](decisions.md) come from: the bridge checks the rendered filter against its payload,
+and a record missing a field a condition reads counts as in that category.
 
 **How the clauses compose, which is an invariant rather than an implementation note.**
 
-    within one grant     AND      the resource test AND the category test
-    across grants        OR       the union of what the principal holds
+    within the filter        AND   the resources held, the complement, one exclusion per category
+    within an exclusion      AND   the resources lacking that category, and its condition
     against the client   AND      always, at every depth
 
-A correct emitted filter is an AND whose enforcement side is an OR of ANDs. **Any mechanism that can
+A correct emitted filter is an AND whose enforcement side is itself an AND of the resources held and
+one exclusion per category. **Any mechanism that can
 produce OR between the enforcement filter and a client-supplied clause is a disclosure defect,
 whatever depth it occurs at**, and it does not become acceptable because the client clause looks
 harmless: a client controls its own half, so an OR there is a client-controlled bypass of
 enforcement. This matters most in aggregations, where a widened filter discloses through a count
 without returning a single record, and where the existence invariant is hardest to defend.
 
-**Both fields are tested, and testing only the resource would be a different model.** A category
-selects records within a resource; it does not decide whether the resource is reachable. Narrowing on
-the resource field alone would make a resource of mixed sensitivity unreachable in full until it was
-registered as several resources, so its public records would not be public. Both tests are
-single-valued exact matches, so the category test costs no more than the resource test.
-
-**A record carrying more than one category at once is not covered here.** That case needs a subset
-test, and the query layer cannot yet express one on this shape, which makes it the one part of the
-model waiting on work elsewhere. Until it lands, a record carries one category.
+**The resource and the categories are both tested, and testing only the resource would be a
+different model.** A category selects records within a resource; it does not decide whether the
+resource is reachable. Narrowing on the resource field alone would make a resource of mixed
+sensitivity unreachable in full until it was registered as several resources, so its public records
+would not be public.
 
 **Denial is per type because it cannot be per request.** A single query document can select several
 types whose configured resources differ, so one selection may be denied while another is permitted
@@ -316,50 +312,17 @@ An adapter must establish four things about a candidate resource field before re
 values are instance facts and belong in that integration's own record; what generalizes is that
 each must be checked rather than assumed:
 
-- **It is single-valued.** A positive `in` clause on a single-valued field is an exact match whether
-  the field is mapped flat or nested, which is what keeps the filter free of any assumption about
-  the mapping. If the field is ever multi-valued the same clause silently becomes "carries any of
-  these," and the filter widens with no code change and no error.
-- **Cardinality is verified against a declaration, not inferred.** An Elasticsearch mapping cannot
-  express cardinality: any field may hold one value or many, and the emitted query is identical
-  either way. Where a catalogue's own configuration declares it, that declaration is the checkable
-  source and the adapter should verify against it at startup.
-
-  **This check is currently unverifiable rather than merely unverified, and the distinction decides
-  how much weight it carries.** A declaration is a claim about the data and nothing compares it to
-  the data. The search layer's only cardinality instrumentation sits on the response path, warns
-  only when a returned field holds two or more values, and is silent at exactly one; the
-  filter-compilation path has none at all, confirmed by grep on the search layer rather than
-  assumed. So a field used solely in an enforcement clause and never returned in a selection set has
-  nothing watching it, and a field that silently gains a second value widens the filter with no code
-  change, no error and no warning. The honest fix is a sampling query against live data at startup
-  or on a schedule. Until one is built, treat single-valuedness as asserted by the integration rather
-  than checked by the system.
-
-  **The contract is three parts, and the third is the one usually left out.**
-
-  **The deployment commits** that every enforcement field carries one value per record, and keeps it
-  so. Usher's controller cannot check this and never will, since it does not know field names by
-  design.
-
-  **The search layer samples and reports.** The adapter declares which fields are enforcement fields;
-  the search layer samples the live index at catalogue load and compares observed cardinality against
-  each field's declaration, reporting both a wrong declaration and an absent one over multi-valued
-  data. It is deliberately **report-only and off the critical path**: it does not fail the catalogue,
-  because failing closed on a first run could stop catalogues that have worked for months, and the
-  density of declarations across real deployments is unknown.
-
-  **So nothing gates, and the deployment has to supply what the report does not.** A reported
-  violation on an enforcement field is not a diagnostic. It is a live disclosure: every filter naming
-  that field is already widened, and in a deployment whose data carries no category field it is the
-  only clause enforcing anything. Treat it as an incident with an owner, not a log line, because an
-  unread report is not a control.
-
-  **And drift after the sample is unclosed**, in those words. A bounded sample shows the presence of
-  a violation within what it sampled and can never show absence, and it is stale as soon as the next
-  document lands. No instrumentation on the filter path, no mapping signal, nothing watching.
-  "Detection deferred" is the wrong phrasing because it lets a reader believe detection is coming.
-
+- **It holds one value per record, which is a contract rule.** A positive `in` clause is existential
+  over a multi-valued field, so a record holding two resources would satisfy either one's test. The
+  rendering hides a record holding a known resource the principal does not hold, where known means
+  registered or named in the payload, and excludes a record any of whose resources lacks a category
+  it matches. The adapter's startup check refuses a
+  catalogue holding records with more than one resource value, with a message naming how many and
+  never a value; where the engine refuses the check itself, because inline scripts are disabled or
+  the field has no doc values, the catalogue is refused too, naming why. Decided 2026-10-20, replacing
+  an earlier plan for report-only sampling that left the catalogue running: a reported violation is a
+  live disclosure, so it fails closed. Drift after startup is what the complement test covers, and a
+  second value registered nowhere is the residual, held by the contract.
 - **The field's `nested` configuration is correct**, which the search layer now derives from the
   index mapping at every call site rather than from configuration, so a missing list throws instead
   of compiling a flat filter. That closes the misconfigured-nesting half of this family and leaves
@@ -380,18 +343,10 @@ inverts for the other.
 row's left cell the dangerous one, and the resource clause is positive with no exclusion counterpart
 to hide behind. So the exposure sits on the clause that reads as the safe one.
 
-**Whether that existential match is a defect depends on a fact about the deployment, and stating it
-flat either way is wrong.** A resource is a selection and a category is a restriction, so where the
-category clause exists, a record reachable through a cohort you were granted is correct rather than
-leaked: its content is protected by the category, governed by a custodian across every resource
-carrying it, so which cohort brought a reader to the record does not matter. Where the deployment's
-data carries no category field, there is no category clause, the resource clause is the only clause,
-and the resource axis is carrying governance it was not designed to carry. A second cohort that
-granted nothing then has an authority over the record rather than a label on a selection, and
-reachability through the first cohort is the leak.
-
-Both halves are needed. Recording only the first reads as "this is fine" in exactly the deployment
-where it is not, and recording only the second demands a control unnecessary in the complete model.
+**A record holding two resources is outside the contract, whatever categories exist.** Each resource
+has owners who decide who reaches its records, so a record in two resources could be shared by
+either owner without the other's say. That is why one value per record is a contract rule rather than
+a judgement that depends on the deployment.
 
 **Evidence level, stated because this claim is load-bearing.** That a `terms` clause matches a
 document when any one of the field's values is in the list is Elasticsearch's documented behaviour,
@@ -641,16 +596,18 @@ the matching records to everyone.
 | the controller knows categories the adapter does not       | the adapter cannot select records it is supposed to exclude | refuse: this is the leak                                         |
 | the adapter maps categories the controller does not define | predicates nobody grants against, hiding records needlessly | warn, once this endpoint gives the full list: nothing is exposed |
 
-**What a registration carries**, for each catalogue: the resource and category field names, the value
-each concrete category maps to, the categories declared absent, an optional resource list, and
-whether the catalogue is open by configuration. An adapter registers at startup, so a corrected
+**What a registration carries**, for each catalogue: the resource field name, the category mapping
+(each global category's condition, and each resource category's condition under its resource), the
+categories declared absent, an optional resource list, and whether the catalogue is open by
+configuration. An adapter registers at startup, so a corrected
 mapping takes effect when the application starts again.
 
 **The check runs in the bridge, catalogue by catalogue, and withholds resources rather than blocking
 an application.** A mapping belongs to one catalogue and a token covers the whole application, so
 the controller cannot withhold a resource from one catalogue alone. The bridge holds both halves: each
-catalogue's mapping and declared absences from the adapter's registration, and what each resource
-offers from the payload's `offeredCategories`:
+catalogue's mapping and declared absences from the adapter's registration, and what Usher defines
+from the payload's `globalCategories` and `resourceCategories`. A resource category the catalogue
+does not define withholds the resource offering it:
 
     catalogue maps       controlled, indigenous
     STUDY_A offers       unmarked, controlled             -> rendered
@@ -658,15 +615,15 @@ offers from the payload's `offeredCategories`:
 
 An omitted resource already means no access, so this needs no new enforcement path and no new
 failure mode. It also contains the fault: an unmapped category takes out the resources offering it,
-from that catalogue alone, not all of the application's catalogues. A wholesale refusal would make adding any
-category a platform-wide risk, which is a good way to discourage anyone from adding one.
+from that catalogue alone, not all of the application's catalogues. A global category is different:
+it gates every resource whose records match, so a catalogue that does not define it cannot serve any
+resource safely, and its whole result is denied. That is why a new global category is defined or
+declared absent in every catalogue's mapping before it is created in Usher.
 
-**Timing.** All of this applies from the first release. The enforcement clause names the category
-field, so an adapter needs a category-to-field mapping to render any clause at all, and `unmarked` is
-computed as the complement of the mapped concrete values. That is what makes the check load-bearing
-rather than tidy: `unmarked` does not subtract an unmapped category, so records carrying it satisfy
-the complement and are served as open. The table above calls that fault "the leak", and it arrives
-with the first instance defining a second category.
+**Timing.** All of this applies from the first release. The filter excludes every category not
+held, so a category the mapping does not define is one it cannot exclude, and its records would be
+served. That is what makes the check load-bearing rather than tidy, and the table above calls that
+fault "the leak".
 
 ### Decryption key distribution
 
@@ -798,9 +755,11 @@ produces the wrong filter at request time. Each adapter's design doc should spec
 is validated at startup and what happens when validation fails.
 
 A second consideration in choosing a filter shape: **how the filter degrades under
-misconfiguration.** An exclusion filter built from a category field that is misspelled or absent
-from the target schema may match everything (since `NOT(matches nothing)` compiles to match-all),
-degrading toward full access. An inclusion filter under the same conditions degrades toward no
+misconfiguration.** An exclusion filter built from a condition on a field that is misspelled or
+absent from the target schema may match everything (since `NOT(matches nothing)` compiles to
+match-all), degrading toward full access; the released rendering is exclusionary, so its guard is
+the startup check refusing a condition on a field the index mapping lacks, and the missing-field test
+counting a record without the field as in the category. An inclusion filter under the same conditions degrades toward no
 access. Where a target service's type system allows it, prefer the shape that degrades toward
 denial, and supplement it with startup validation that catches the misconfiguration before any
 request is served. The adapter-specific design doc (in that service's repo) records which shape
@@ -857,19 +816,16 @@ This question is already tracked as an existing open item in the Arranger repo a
 [`.dev/docs/atlas/lyric-maestro-indexing-gap.md`](https://github.com/overture-stack/arranger/blob/main/.dev/docs/atlas/lyric-maestro-indexing-gap.md);
 it now has a second reason to matter beyond the ES mapping question it was originally tracking.
 
-**Live for the first release, because the enforcement clause names a category field.** The question
-is whether the tested category value attaches to each indexed record or to a submission-shaped
-parent of the records, and at what nesting depth. A clause written against a field that
+**Live for the first release, because conditions read the records' fields.** The question is whether
+the field a condition reads attaches to each indexed record or to a submission-shaped parent of the
+records, and at what nesting depth. A clause written against a field that
 actually lives on a parent does not produce correct per-record access control, which is what makes
 this design-invalidating rather than an indexing detail.
 
-Two things sharpen it. The category field carries the same two unverifiable preconditions as the
-resource field, cardinality and nesting, and the search layer decides whether a clause is wrapped in
-a `nested` query from its own catalogue configuration, invisible to Usher. A field mapped nested but
-not declared as such compiles to a flat filter with no error, failing closed for the positive
-concrete-category clauses and open for the negated `unmarked` one. So the nesting-depth question is
-not only about whether the value is reachable, but about which direction it fails when the answer is
-wrong.
+Two things sharpen it. A condition may not read a field inside a `nested` mapping, and the adapter
+refuses one at startup, since an excluded condition compiled flat over nested data would fail open.
+So the nesting-depth question decides whether a category can be written at all for that data, until
+categories over nested values arrive field by field.
 
 ### Access level changes and index freshness
 

@@ -65,10 +65,9 @@ exactly. The second lets a user build a virtual cohort on the Explore Data page 
 A cohort built from Explore Data filters is a query. Sharing it is a grant scoped to a predicate
 rather than to a resource, which is the permission recorded here as SQON-scoped grants.
 
-**It is not blocked by the index shapes that block category-based record narrowing.** A cohort
-assembled from portal facets is a predicate over descriptive fields already carried by the records, so it
-needs no per-record category field and no `nested` mapping, and it would compile on both catalogues
-today.
+**It is not blocked by index shapes.** A cohort assembled from portal facets is a predicate over
+descriptive fields already carried by the records, as a category's condition is, so it needs no new
+field and no `nested` mapping, and it would compile on both catalogues today.
 
 Its real difficulties are elsewhere and are about meaning rather than mechanism. **A shared cohort
 reintroduces the snapshot problem** avoided by choosing study-level sharing: a query is a
@@ -78,8 +77,10 @@ Beyond that, a predicate has to be stored per grant, and a principal holding man
 composes into a correspondingly large filter.
 
 **Resolved: not required for MVP.** Sharing a virtual cohort is wanted but not immediate, so the
-flow ships with Option 1 only. Record-level narrowing therefore stays post-MVP consistently across
-the requirements, the flows and this design, with no route left that quietly depends on it.
+flow ships with Option 1 only. Narrowing a grant to a query therefore stays post-MVP consistently
+across the requirements, the flows and this design, with no route left that quietly depends on it.
+Narrowing by category is in the first release: a record carries every category whose condition it
+matches.
 
 ### Admin authority points two ways
 

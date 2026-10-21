@@ -420,9 +420,8 @@ export type ResourceIdentifier = string;
  * A category name, prefixed by its scope: `global` for a category the whole platform shares, so a
  * name reads `global.controlled` rather than `controlled`, and `resource` for one that exists only
  * in the resource it is listed under. The part after the prefix is the name as the instance
- * configures it, opaque to the controller, and never contains the separator. A version 1 bridge
- * enforces `global` only: a `resource` entry reaches nothing and is recorded as
- * `category.unenforced`. A key outside both forms makes the payload malformed.
+ * configures it, opaque to the controller, and never contains the separator. The bridge enforces
+ * both scopes. A key outside both forms makes the payload malformed.
  */
 export type CategoryName = `global.${string}` | `resource.${string}`;
 
@@ -539,14 +538,18 @@ export interface PermissionsPayload {
 	permissions: Record<ResourceIdentifier, ResourcePermissions>;
 
 	/**
-	 * The categories each resource named in `permissions` offers, held or not, `global.unmarked`
-	 * included where the resource has records carrying no concrete category. A bridge compares them
-	 * with each catalogue's mapping before rendering the resource there: `unmarked` is a complement,
-	 * so a category the catalogue neither maps nor declares absent would be served as unmarked, and
-	 * the resource is withheld from that catalogue instead. Names exactly the resources `permissions`
-	 * names, and every category held on a resource is one it offers.
+	 * Every concrete global category Usher defines, never `global.unmarked`; may be empty. A bridge
+	 * compares them with each catalogue's category mapping: a global category the catalogue neither
+	 * defines nor declares absent could not be excluded, so the catalogue's whole result is denied.
 	 */
-	offeredCategories: Record<ResourceIdentifier, NonEmpty<CategoryName>>;
+	globalCategories: CategoryName[];
+
+	/**
+	 * Each resource's own `resource.` categories, held or not; a list may be empty. Names exactly the
+	 * resources `permissions` names. A resource category the catalogue neither defines nor declares
+	 * absent withholds that resource from the catalogue.
+	 */
+	resourceCategories: Record<ResourceIdentifier, CategoryName[]>;
 }
 ```
 
@@ -555,8 +558,10 @@ categories clears the controller's payload cache, so there is nothing to compare
 decision in [decisions.md](decisions.md).
 
 **Every member is read outside the controller**, so the payload carries no bookkeeping passenger. It
-holds no invariant beyond what the type states except the two tying `offeredCategories` to
-`permissions`, which `usher-types`' validator holds.
+holds no invariant beyond what the type states except the ones tying `resourceCategories` to
+`permissions`, which `usher-types`' validator holds. Both category members are required: a payload
+missing either, holding null, or carrying the earlier `offeredCategories` is refused, while empty
+lists are accepted.
 
 **The ordering is the corpus's, not alphabetical.** `payloadVersion` leads because it says how to read
 the rest, the standard claims follow in the order used by every example, and the content comes last.

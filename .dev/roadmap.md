@@ -299,24 +299,18 @@ is data-agnostic" in [decisions.md](design/decisions.md). The old name survives 
 and should go with the terminology pass, which now has somewhere to record its rules: see
 [terminology usage rules](docs/atlas/roadmap/terminology-usage.md).
 
-**This item is narrowing by category specifically, not record granularity in general.** The
-distinction was blurred and is worth holding: this item needs each record to carry category labels,
-compared against a principal's labels. That needs a per-record category field mapped
-`nested`, and neither iMS catalogue has one. The clinical index's `file_access` is prescriptive,
-holds one value across every record and is unexercised; the environmental catalogue has no
-equivalent. Since data is not modified to suit enforcement, this form stays unavailable there.
+**Narrowing by category is in the first release (decided 2026-10-20).** A category is a condition
+over descriptive fields the records already carry, and a record carries every category whose
+condition it matches, so no per-record category field and no `nested` mapping are needed. See "A
+category is a condition over records" in [decisions.md](design/decisions.md). The clinical index's
+`file_access` stays out of it, being prescriptive.
 
-**Narrowing within a resource by predicate is available now and is not this item.** A filter over
-descriptive fields already carried by the records narrows at record granularity with positive clauses on
-flat keywords, on both catalogues, with no mapping change. Granularity finer than a study can come
-from a narrower resource field or from a predicate-scoped grant, neither of which waits on this. The
-two differ in whether fields can be combined: a resource field is one existing single-valued field, so
-a key composed of two of them is not expressible, while a predicate carries as many clauses as it
-needs. Combining fields therefore belongs to the grant's predicate, never to the key.
-
-Narrowing within a resource, the same permission as SQON-scoped grants. Two constraints already established: subset containment is expressible in one clause as `not` of `not-in`, verified by executing the compiler rather than reading it, and it requires the field to be mapped `nested`, degrading silently to an existential match on a flat field. Usher cannot require a mapping shape, so this is available only where an instance supplies conforming data, verified at adapter startup. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
-
-One design item to settle when this is picked up: the shape of the resource predicate. Additive rendering has no implicit baseline for records carrying no category, so a role must render to a positive predicate of its own rather than being a default reduced by exclusions. Not needed for MVP, where the resource-field clause covers it.
+**What stays post-MVP is narrowing a grant to a query**, the same permission as SQON-scoped grants:
+a grant carrying its own predicate, which is how a virtual cohort would be shared. A resource field
+is one existing field holding one value per record, so combining fields belongs to a category's
+condition or a grant's predicate, never to the key. See [SQON-scoped
+grants](docs/atlas/roadmap/sqon-scoped-grants.md). Categories over nested values also stay post-MVP,
+field by field.
 
 The same startup-verification rule extends to mapping depth, not just mapping type: where an authorization field sits at depth two or deeper, an adapter's filtered-aggregation path does not apply and filtering falls back to a disjunctive one, which for an authorization predicate is OR where AND was intended. An adapter must establish the field's mapping shape at startup and refuse to enforce where it cannot, so a non-conforming instance is one where this narrowing is unavailable rather than one where it silently degrades.
 
@@ -422,7 +416,7 @@ Nothing in the design prevents a second resource claiming an identifier already 
 
 The answer differs by creation path, though the corpus currently treats them as one. An administrator creating through the management UI already holds the account list, every grant and the audit log, so telling them a resource exists discloses nothing they lack. A submission-path creation runs under a service account acting for a person who holds none of that, and the error reaches that person.
 
-Three things to settle: whether submission-path creation becomes a request whose response is identical regardless of outcome, so the channel closes by making the cases indistinguishable; who resolves a collision, which has to be someone who can see both resources rather than the submitter or the system; and whether identifier uniqueness is scoped to the instance or to the catalogue, since two catalogues each holding a `HEART_STUDY` produce the same collision through configuration rather than through creation. Arranger cannot help with the last one: it has no concept of a resource, so it cannot see, report or refuse two catalogues whose records carry the same value.
+Uniqueness is scoped to the instance (decided 2026-10-20): one id names one study within one Usher, so the same value in two catalogues is the same resource, and registering a different resource under an existing name is refused. A name is accepted only from an allowed set of characters, by default letters, digits, dot, underscore and hyphen, widened per instance, and a name differing from an existing one only in letter case is refused. Two things remain to settle: whether submission-path creation becomes a request whose response is identical regardless of outcome, so the channel closes by making the cases indistinguishable; and who resolves a collision, which has to be someone who can see both resources rather than the submitter or the system.
 
 **Separate the constraint from the handling when taking these.** Whether a duplicate errors, queues or offers an extension is the handling. Whether a duplicate can exist at all is a uniqueness constraint on the identifier, and a schema shipped without one permits the split-brain rather than merely failing to handle it.
 
@@ -608,7 +602,7 @@ Globus Auth as an OIDC identity source; Globus Groups as a potential source for 
 
 ### SQON-scoped grants
 
-Optional `sqon` field on `grants` narrowing a grant to some of its category's records, enabling community-specific access and filtered-subset sharing. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
+Optional `sqon` field on `grants` narrowing a grant to some of its category's records, enabling filtered-subset sharing, such as a virtual cohort. One community's records no longer need it: that subset is a category of its own. See [SQON-scoped grants](docs/atlas/roadmap/sqon-scoped-grants.md).
 
 ### A reachability report
 
@@ -631,8 +625,9 @@ surveyor](docs/atlas/roadmap/bounded-surveyor.md).
 An owner creates a category that exists only in their resource, so a study divides its own records
 without growing the list seen by every other study. The scope prefix on every category name ships in
 the first release, so this adds a scope without renaming anything. A local category only ever adds a
-restriction, so it waits on a record carrying more than one category, and where its mapping lives
-decides whether owners can create one themselves. See [local
+restriction, and the bridge enforces resource categories since categories became conditions. What
+remains is an owner creating one: its condition lives in the category mapping, a deployed
+configuration, which decides whether owners can create one themselves. See [local
 categories](docs/atlas/roadmap/local-categories.md).
 
 ---

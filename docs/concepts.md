@@ -212,9 +212,9 @@ The difference matters if you are planning an instance:
 |                                                                                                                 | Supported in the first release | Not yet |
 | --------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------- |
 | One record, one resource, named by a field value                                                                | Yes                            |         |
-| Records narrowed within a resource by the category they carry                                                   | Yes                            |         |
+| Records narrowed within a resource by the categories they carry, each a condition over their fields             | Yes                            |         |
 | A record satisfying two cohort predicates at once, such as `disease_type == "rare"` and `age_at_diagnosis < 18` |                                | Later   |
-| A record carrying two categories at once, needing a grant for both                                              |                                | Later   |
+| A record carrying two categories at once, needing a grant for both                                              | Yes                            |         |
 | Narrowing to individual fields                                                                                  |                                | Later   |
 
 One resource per record also settles a question that would otherwise be open. If a record could

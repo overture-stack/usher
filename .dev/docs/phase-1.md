@@ -102,8 +102,9 @@ Comparing rows only passes the chain while leaving that path untested.
 
 **And against the first deployment's data it tests the resource clause only.** Neither catalogue
 carries a field distinguishing categories, so signed in and anonymous differ solely in which
-resources they hold, and per-category enforcement would reach production having never run. One
-synthetic catalogue carrying a category field, used for nothing else, closes that. overture-dev is a
+resources they hold, and per-category enforcement would reach production having never run. Since a
+category is a condition over fields the data already carries, a synthetic definition, such as
+controlled meaning published before a chosen date, closes that. overture-dev is a
 playground, so this is cheap.
 
 This order asks four things of the mocks, the bridge's for the adapter step and the controller's for
@@ -176,9 +177,9 @@ the only design work between here and implementation.
 
 ### 1. Maestro/indexing question (highest risk; longest lead time)
 
-**Status:** LIVE, and the reading that closed it is what makes it live. The enforcement clause now
-names a category field alongside the resource field, so the nesting-depth and
-per-submission-versus-per-record questions apply from the first release rather than after it.
+**Status:** LIVE, and the reading that closed it is what makes it live. Categories are conditions
+over the records' own fields, so the nesting-depth and per-submission-versus-per-record questions
+apply from the first release rather than after it.
 
 **Both of the first instance's catalogues have been read directly and neither carries an
 access-level field at all.** That is the answer rather than a deferral, and one consequence follows: with no field distinguishing categories, the category clause
@@ -334,8 +335,8 @@ per-submission-versus-per-record sub-questions dissolve with it.
 
 What replaces the question is a per-integration one, and it lands outside this repository by design:
 each catalogue supplies a resource field name as adapter config, and Usher never learns it. An
-adapter must establish that the candidate field is single-valued, that its cardinality is verified
-against a declaration rather than inferred from an Elasticsearch mapping (which cannot express it),
+adapter must establish that the candidate field holds one value per record, which the adapter's
+startup check verifies against the data, since an Elasticsearch mapping cannot express it,
 that its values were observed rather than read off a display label, and that the term is not
 overloaded elsewhere in that instance. Those four checks are recorded in
 [`adapter-integration.md`](../design/adapter-integration.md).
@@ -403,18 +404,15 @@ the ES response arrives and before surfacing to the client, giving per-row field
 single ES round trip. This would require a response transformer hook in the adapter API contract
 in addition to the query modifier, which becomes a blocker 4 concern at that point.
 
-**RESOLVED.** A category selects records within a resource from the first release, so the emitted
-filter pairs the resource field with the category field. Concrete categories render additively, and
-`unmarked` is the one complement, a `not` around an `in`, whose failure on an unmapped category the
-bridge's check of each resource's offered categories covers. The post-MVP subset test for a record
-carrying several categories is where the `not` of `not-in` encoding applies (verified by executing
-the compiler), and it requires a `nested` mapping. All recorded in
-[`decisions.md`](../design/decisions.md).
+**RESOLVED.** A category is a condition over records, and a record carries every category whose
+condition it matches, from the first release (decided 2026-10-20). The filter excludes, per resource,
+every category not held, and a record missing a field a condition reads counts as in that category.
+All recorded in [`decisions.md`](../design/decisions.md).
 
-The adapter
-renders a resolved grant set as a union of positive predicates, one branch per grant held, rather
-than computing exclusions by subtracting held categories from a locally configured category set.
-The decision depends on failure direction: in a subtractive model, losing a term widens access; in
+The rendering was first additive, a union of positive predicates with no exclusions, and requiring
+every category a record matches made it exclusionary. The table below is why the released rendering
+carries guards: the bridge checks the rendered filter against its payload, and an undefined
+global category denies the catalogue. The decision depended on failure direction: in a subtractive model, losing a term widens access; in
 an additive model, losing a term narrows it.
 
 | Failure                                                   | Subtractive                          | Additive                      |
@@ -433,10 +431,10 @@ criterion. Full rationale, including the audit-locality and pipeline-inversion a
 
 Three things follow for the payload:
 
-- **The token carries held grants, and what each resource it names offers.** Moving a resource's
+- **The token carries held grants, and the categories that can gate them.** Moving a resource's
   full category set into the token was first set aside because additive rendering does not need it.
-  `unmarked` is the complement additive rendering keeps, and it does, so the payload carries
-  `offeredCategories` (decided 2026-10-05, in [`decisions.md`](../design/decisions.md)).
+  Exclusionary rendering does, so the payload carries `globalCategories` and `resourceCategories`
+  (decided 2026-10-05, revised 2026-10-20, in [`decisions.md`](../design/decisions.md)).
 - **A role in a resource becomes an explicit positive grant.** There is no implicit baseline for untagged
   records any more, so a role must render to a predicate of its own. The exact shape is open
   and is tracked in `roadmap.md`.
@@ -456,10 +454,10 @@ all resolved, so this no longer gates anything: a mock can issue real tokens. Th
 carries one schema, and the negotiation handshake is built alongside it so that a second version is a
 controller-side addition rather than a coordinated upgrade at both ends.
 
-One member was added after closing, before anything shipped: `offeredCategories`, what each resource
-named in the payload offers, which the bridge checks a catalogue's mapping against. It is decided in
-[`decisions.md`](../design/decisions.md), "A catalogue's category gap is found by the bridge", and
-the fixtures carry it.
+Members were added after closing, before anything shipped: `globalCategories` and
+`resourceCategories`, what Usher defines, which the bridge checks a catalogue's category mapping
+against. They are decided in [`decisions.md`](../design/decisions.md), "A catalogue's category gap
+is found by the bridge", and the fixtures move to them with the bridge's code.
 
 ---
 

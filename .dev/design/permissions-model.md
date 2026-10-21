@@ -101,9 +101,9 @@ unioned.
 
 ### Categories
 
-> **Note:** categories are independent, overlapping axes, and a grant set renders as one clause per
-> held category rather than as a single clause naming the resource. See "The visibility rule" below
-> for what that reaches and for the one part of it still deferred.
+> **Note:** categories are independent, overlapping axes, each a condition over records in a
+> catalogue's category mapping, and a record needs a grant on every category it matches. See "The
+> visibility rule" below for what that reaches.
 
 A category is a collection of data, defined by properties it carries. On the record axis it selects
 records, and on the field axis it selects parts of a record; which axis a category is scoping is
@@ -467,8 +467,7 @@ other two: permission to see prior states applies to the rows and columns alread
 person. **The reason it is not a kind is concrete rather than aesthetic.** As a kind, a category
 with `{version}` would mean that seeing the history of a _controlled_ record needs both the
 `controlled` grant and the version grant, and the adapter would have to conjoin two categories over
-one piece of data. That is the subset test: this design defers it and the query layer cannot express
-it. As an entity, `revision.view` is a capability, capabilities already attach per category, and
+one piece of data, for a record's history as well as its rows. As an entity, `revision.view` is a capability, capabilities already attach per category, and
 `{controlled: [record.view, revision.view]}` says the same thing with no conjunction at all.
 
 **A revision carries no categories of its own**, inheriting whatever its record carries, so the
@@ -1144,14 +1143,11 @@ A record is visible to a user when the user holds a grant for every one of **tha
 categories, in the resource holding it. Stated the other way round, a record is hidden when it
 carries any category outside the user's grants.
 
-> **Scope: one clause of this is deferred, and it is not the one that filters.** A category maps to a
-> per-record predicate, and the enforcement clause pairs the resource's field value with the
-> category's, so a resource of mixed sensitivity serves each principal the records reached by their
-> categories. What is deferred is a record carrying **more than one** category at once, which needs
-> a subset test, and on a flat field the query layer cannot yet express one. Until it lands a record
-> carries one category, and the conjunction described below states what that test will enforce
-> rather than something running today. See "A category selects records within a resource" in
-> [decisions.md](decisions.md), which also records the two constraints that govern the deferred work.
+> **Scope: operative.** A category is a condition over records, and a record carries every category
+> whose condition it matches, so the conjunction described below is what the filter enforces. The
+> filter excludes, per resource, every category the principal does not hold. See "A category is a
+> condition over records" in [decisions.md](decisions.md), which records the guards that keep a lost
+> exclusion from widening access.
 
 The existence-denial invariant below holds under either model, since both filter before any result
 is computed.
@@ -1398,12 +1394,10 @@ present in every row below, and the token is never empty.
 | unmarked, indigenous | `unmarked`, `indigenous`               | the residual, plus records carrying `indigenous`          |
 | unmarked, both       | `unmarked`, `controlled`, `indigenous` | every record                                              |
 
-**The last two rows depend on a rule that is deferred.** A record carrying `controlled` _and_
-`indigenous` needs a grant for both, which is the subset test, not yet expressible in the query
-layer. Until it lands a record carries one category, so the case does not arise and each row is the
-union of what its clauses select. When it lands, holding `controlled` alone stops reaching the
-records that also carry `indigenous`, and holding both reaches them again, because no ungranted
-category remains on them. This is the intended MVP behaviour: per-resource scoping ensures each
+**The last two rows depend on the every-category rule.** A record carrying `controlled` _and_
+`indigenous` needs a grant for both, so holding `controlled` alone does not reach the records that
+also carry `indigenous`, and holding both reaches them, because no ungranted category remains on
+them. This is the intended MVP behaviour: per-resource scoping ensures each
 grant was approved by the relevant governance body for that specific resource, so holding both is
 sufficient. SQON-scoped grants (post-MVP) can narrow further within a category if compound-access
 governance requires it. See the resolved question in Open questions.

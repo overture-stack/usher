@@ -728,11 +728,17 @@ the full mechanism, see
 
 ---
 
-### A category selects records within a resource; only multi-category records are deferred
+### A category is a condition over records, and a record needs every category it matches
 
-A record is visible if the principal holds every category carried by **that record**, for the
-resource it belongs to. A resource of mixed sensitivity serves each principal the records reached by
-their categories, rather than being reachable in full or not at all.
+**Decided 2026-10-20, once Arranger and Usher Bridge had sized it.** A category is a named
+condition over a catalogue's records, written in SQON in the catalogue's **category mapping**: the
+Usher registration kept beside the catalogue's configuration. "This field holds this value" is the
+simplest condition. Usher holds only the names, the category mapping says which records each name
+selects, and neither side reads the other's half.
+
+A record is visible if the principal holds every category **that record** matches, for the resource
+it belongs to. A resource of mixed sensitivity serves each principal the records reached by their
+categories, rather than being reachable in full or not at all.
 
 **What this means concretely**, for a resource with unmarked and controlled records:
 
@@ -740,16 +746,9 @@ their categories, rather than being reachable in full or not at all.
     Bo holds controlled   reaches the controlled records
     Bo holds both         reaches both sets
 
-**The enforcement clause is two field tests, not one.** The adapter matches the resource's field value
-and the category's field value together, as a conjunction, and composes one such clause per grant with
-`or`. Both are single-valued exact matches, so a category costs no more to enforce than a resource
-does. `unmarked` is the exception in shape rather than in principle: being the residual it has no value of
-its own, so its clause excludes every configured concrete value instead of matching one.
-
-**What is deferred is a record carrying more than one category at once**, which needs a subset test,
-and the query layer cannot yet express one on a flat field. Until that lands, a record carries one
-category, and the table below describes what the subset test will enforce rather than a rule running
-today.
+**A record carries every category whose condition it matches.** Overlap needs no multi-valued field:
+a record that is both controlled and Indigenous matches both conditions. A record matching none is
+`unmarked`.
 
 **The word "every" applies to what the data requires, not to what the principal holds.** The wording invites
 a misreading worth heading off: it does not mean a principal reaches only where all their categories
@@ -774,91 +773,131 @@ bypassed by another is not one. If holding any single category were enough, a pr
 second category. This is not specific to community governance: it holds for any two independent
 restrictions, and community governance only makes the consequence severe.
 
-Two properties follow. Adding a category to a record can only narrow access and never widen it, which
-lets an instance introduce a classification without auditing existing grants. And an unrecognized
-category fails closed where a record carries it alongside a known one, contributing no clause, where
-the any-category rule would leave the record reachable through whichever category the principal
-happens to hold.
+**Adding a category to a record can only narrow access, never widen it**, which lets an instance
+introduce a classification without auditing existing grants.
 
-**The `unmarked` complement is where an unrecognized category fails the other way**, and the startup
-check in `adapter-integration.md` exists because of it. A category value unmapped in the adapter is
-absent from the set subtracted by `unmarked`, so records carrying it satisfy the complement and are
-served as unmarked. The bridge comparing each resource's offered categories with the catalogue's
-mapping is what closes that, as the next section records, and each category is in one of three
-states for each catalogue:
+**A broad category is a second gate, not an umbrella.** A category such as `indigenous`, matching
+every Indigenous record, reads as though it includes each community's own category. It does not:
+every record it matches also matches the community's category, so granted alone it opens nothing.
+It is needed only where a second body must approve, and is then named for that body. One category
+per approving body is the default.
 
-| State           | What the adapter declares              | What follows                                                                 |
-| --------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
-| Mapped          | a field test that recognizes it        | its clauses render, and `unmarked` excludes what the test matches            |
-| Declared absent | no record in this catalogue carries it | `unmarked` needs no exclusion for it                                         |
-| Neither         | nothing                                | the resources offering it are taken out of this catalogue, and an error-level event names the catalogue and the category |
+**Categories are restrictions, not partitions.** A category states a condition for reading a record;
+it does not name a slice granted instead of the rest. Expressing which part of a resource someone
+may reach on grounds other than sensitivity is still a different mechanism, either narrowing on a
+further field or a second concept, rather than a reinterpretation of this one.
 
-**A category in neither state withholds its resources rather than stopping startup.** Both fail
-closed, and withholding keeps one catalogue's gap from taking down every other catalogue the
-application serves. The error-level event is what keeps it from presenting as data quietly missing.
-Decided 2026-10-02. A declared absence is the state that can be wrong in the dangerous direction, so
-it is the last resort, per the reconciliation discussion in [to-discuss.md](to-discuss.md).
+**Global categories apply wherever their condition matches.** A global category is defined once per
+catalogue and gates every resource whose records match it, so Usher does not list it per resource.
+A resource lists only its own resource categories, defined under it in the category mapping.
+Forgetting to list a category therefore cannot leave its records less protected.
 
-**Unexercised in v1.** Where an instance defines one category, all-versus-any is not observable.
-The first instance defines one, so nothing depends on this rule until a second arrives.
+Each global category is in one of three states for each catalogue. A resource category is either
+defined under its resource or missing, since only a global category can be declared absent:
 
-**Categories are restrictions, not partitions**, and the distinction survives a category selecting
-records. A category states a condition for reading a record; it does not name a slice granted
-instead of the rest. Expressing which part of a resource someone may reach on
-grounds other than sensitivity is still a different mechanism, either narrowing on a further field or
-a second concept, rather than a reinterpretation of this one.
+| State               | What the category mapping declares     | What follows                                                                                                                                                                                                                                                                                                                           |
+| ------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Defined             | a condition selecting its records      | its test renders, and `unmarked` excludes what the condition matches                                                                                                                                                                                                                                                                   |
+| Declared absent     | no record in this catalogue matches it | nothing renders for it                                                                                                                                                                                                                                                                                                                 |
+| Neither, or missing | nothing                                | for a global category, the catalogue's whole result is denied; for a resource category, that resource is withheld from the catalogue. Either way an event names the catalogue and the category. A resource category defined in the mapping but not offered by Usher is never held, so its records are excluded, and a warning names it |
 
-Enforcement filters on two fields, and the emitted clause pairs them:
+**A global gap denies the whole catalogue**, because a global category gates every resource whose
+records match, so no resource of the catalogue can be served safely without its condition. A
+declared absence is the state that can be wrong in the dangerous direction, so it is the last
+resort, per the reconciliation discussion in [to-discuss.md](to-discuss.md). And a new global
+category is defined or declared absent in every catalogue's mapping before it is created in Usher.
 
-    or(
-      and( in(<resource field>, [HEART_STUDY]), in(<category field>, [controlled]) ),
-      and( in(<resource field>, [HEART_STUDY]), not( in(<category field>, [...every concrete value]) ) )
+**The rendering excludes what is not held, one clause per category.** For each resource R the
+principal holds, with H(R) the categories held on it and C(R) the global categories plus R's own,
+lacking(c) is the held resources R with c in C(R) but not in H(R), and lacking(unmarked) the held
+resources whose unmarked records are not held. The bridge renders:
+
+    and( in(<resource field>, [the resources held]),
+         not( in(<resource field>, [the known resources not held]) ),
+         not( and( in(<resource field>, lacking(c)), c ) )      for each category c with a lacking list
+         not( and( in(<resource field>, lacking(unmarked)),
+                   not( or( every global category's test,
+                            every lacking resource on the record carries one of its own ) ) ) )
+                                                               when lacking(unmarked) is not empty
     )
 
-The second disjunct is `unmarked`. Both fields must be single-valued, and each must be mapped in the
-adapter's configuration for the catalogue it serves.
+Each `c` stands for its condition together with a missing-field test for every field the condition
+reads. A record escapes the unmarked clause only if a global category holds for it, or every one of
+its resources lacking `unmarked` carries a category of its own; a resource defining none can only be
+covered by a global. So no resource's unmarked records pass by matching another resource's
+category, a multi-valued record included. The known resources
+are the registered resource list, or else every resource the payload names, and the known resources
+not held are those minus the ones held with record view. The filter grows with the number of
+categories, not with resources or with how a principal's grants divide them, which is what keeps it
+inside the engines' clause limits: OpenSearch counts clauses across the whole query, and a form with
+one alternative per group of resources was refused at a few resources by a few dozen categories when
+measured. Holding every category on every resource reduces the filter to its resource test. Only a grant to view records earns a place in the filter: an entry carrying only
+`artifact` actions, or `record` with `count` alone, contributes nothing, and is a deny where it was
+the only entry.
 
-**The canonical form groups by category, and only a grant to view records earns a clause.** For each
-category held with `record` and `view`, the bridge emits one `and` of an `in` over every resource
-holding it and that category's test, composed with `or`, plus one `unmarked` clause over every
-resource whose unmarked records are held. That grows with categories rather than with resources
-times categories. One narrowing serves every read path, so an entry carrying only `artifact`
-actions, or `record` with `count` alone, contributes no clause, and is a deny where it was the only
-entry: rendering "per held category" without that condition would let a person who may only create
-artifacts on a study search its records. `@overture-stack/usher-types` defines the form, and the
-bridge's tests compare against it.
+**Usher's policy stays additive; the rendering does not.** A grant still says what someone may reach,
+never what they may not. Turning the categories held into the exclusion of every category not held
+is the rendering's job, since "every category a record matches is held" is a statement about the
+categories not held. That brings back the hazard recorded in the decision on additive rendering
+below: a lost exclusion widens access. The outcome rule, that a dropped or broken piece only narrows,
+is kept three ways. The bridge's rendering guard reads its own filter back and checks it against the
+payload and registration it came from, the resources held, the complement and every lacking list,
+denying the catalogue's result on any mismatch. Arranger refuses an access filter holding an empty
+group. And a search engine refusing part of a query fails the request rather than answering with
+records missing. Separately, the bridge's clause guard denies a filter weighing more than the
+catalogue's clause limit, weighed so that OpenSearch's own limit, which counts across the whole
+query, binds no earlier.
 
-**`unmarked` is a `not` around an `in`, never a `not-in`.** On a nested category field, `not-in`
-asks whether some nested item holds a value outside the list, so it drops records carrying no
-category entries at all, which are exactly the unmarked ones. `not( in(...) )` asks whether any item
-holds a listed value, so it is right on a flat field and a nested one alike. With no concrete
-category mapped, every record of the resource is unmarked, so `unmarked` is the resource test alone,
-and such a catalogue needs no category field at all. So the first release's bridge emits no `not-in`, and the post-MVP subset test
-uses one only inside a `not`, around a held list that is never empty, since zero grants is a deny
-before any filter is built.
+**A record missing a field a condition reads counts as in that category.** Only the renderer writes
+that test, `in(<field>, ["__missing__"])`, which a condition written by a mapping's author may not
+contain. A record with a gap in its data is therefore restricted, never served as `unmarked`.
 
-**The filter cannot verify two dependencies about either field**, so both are preconditions asserted
-by an integration rather than properties guaranteed by the model:
+**What a condition may use.** Fields of keyword, date or number type: each engine's numeric types,
+and `date` with no format or only the ISO and epoch-millisecond formats, so a value parses as written;
+`date_nanos` waits until a catalogue needs it. A multi-field passes where its subfield's own type is
+allowed, and never a field
+inside a `nested` mapping, nor the resource field, which keys a record to its resource and is never
+a category's condition. Operators: `in`, `not` around a condition, `and`, `or`, and `gt`, `gte`,
+`lt`, `lte` and `between` on dates and numbers. Excluded: `wildcard` and its `filter` alias,
+`some-not-in`, `all`, and any value holding `set_id:`, `*` or `__missing__`. Values are fixed: no
+date math such as `now`, since a condition moving records between categories as time passes would
+change who sees them with no grant changing and no audit event, which is an embargo and waits for a
+design of its own; a `between` lists its bounds lowest first; and each value matches its field's
+type, a non-empty string on a keyword, a full date or date-time on a date, a finite number on a
+number. The adapter checks all of
+this at startup, and the engine validates each compiled condition, date bounds included.
+`@overture-stack/usher-types` holds the two grammars: one for authored conditions, with a depth cap,
+and one for rendered filters, a structural parse of the shape above.
 
-| Dependency                                                                        | Visible to                        |
-| --------------------------------------------------------------------------------- | --------------------------------- |
-| Whether the field is mapped `nested` (the compiler's `nestedFieldNames` argument) | Neither the query nor the SQON    |
-| How many values the field actually holds                                          | Neither the query nor the mapping |
+**What review enforces, because software cannot check meaning.** These are rules for whoever writes
+a category mapping:
 
-Both fields must be single-valued, and no running code checks it: the mapping cannot express
-cardinality, and the search layer's filter path carries no instrumentation that would notice a field
-gaining a second value. See [adapter-integration.md](adapter-integration.md) for why this is
-unverifiable today rather than merely unverified, and for the `nestedFieldNames` hazard, which lands
-on the permissive side for the negated `unmarked` clause specifically.
+- A condition reads descriptive fields only: facts true whoever sees the record. Never a
+  prescriptive field such as "access: controlled", and never anything a user can edit, such as a
+  saved set.
+- A catch-all is written as a negation of the known values, so registering a new value only
+  restricts. Otherwise an unexpected value matches no condition and is `unmarked`, which is the main
+  difference in behaviour from additive rendering.
+- A condition on a field many records lack moves every record lacking it behind a grant.
+
+Two proposals were rejected: Usher approving the fields conditions read, which proves nothing a
+deploy review does not, and the adapter reporting its mapping version to Usher, which the deploy
+history already records.
+
+**A catalogue's resource field holds one value per record.** This is a contract rule, and the filter
+cannot check it: no SQON form says every value of a field is in a list. The rendering hides a
+record holding a known resource the principal does not hold, and excludes a record any of whose
+resources lacks a category the record matches, since `in` is existential. The adapter's startup check refuses a catalogue holding records
+with more than one resource value, naming the count, which also covers a second value registered
+nowhere.
 
 **The unit of access is the record an application returns, never an item nested inside it.** A
 record is admitted or withheld whole, so an admitted record's nested items come with it, in its hits
-and in what its facets count, whatever their own values. That is what single-valued means
+and in what its facets count, whatever their own values. That is what one value per record means
 here: the access-relevant value belongs to the record, not to its items. Data whose access varies
 among one record's nested items needs a record per unit of access, decided when it is indexed, the
-same remedy as separately governed data becoming its own resource. Which nested shapes the adapter
-enforces on is decided against this rule before a catalogue needs one, and until then it refuses to
-enforce on a nested field at startup.
+same remedy as separately governed data becoming its own resource. Categories over nested values come
+later, field by field, and until then the adapter refuses a condition on a nested field at startup.
 
 **Content nested in a record is part of what a reader is admitted to; a reference to another
 catalogue's record is not.** A file record listing its specimens' identifiers shows those identifiers
@@ -867,10 +906,6 @@ catalogue's grants. Withholding part of a record's own nested content is field-l
 release, which also covers a privileged flat value such as a government identification number.
 Access that varies with each nested item's own value is a different capability again, not designed,
 and recorded on the roadmap. Confirmed for iMicroSeq's first release on 2026-10-03.
-
-A positive `in` clause on a single-valued field is an exact match whether the field is flat or nested,
-so neither dependency applies to the concrete-category clauses. They apply to the `unmarked` clause,
-because it is the negated one.
 
 **The resource field name is adapter config, set per catalogue, and those fields are homologues across
 data types.** One slot, filled differently for each body of data served by an instance, which is the
@@ -897,12 +932,14 @@ one instance:
   a proxy for a property of the data. The same field name can be either, so the judgement is
   per-integration and belongs in that integration's own record.
 
-**What MVP gives up.** Narrowing within a resource on anything but its categories: SQON-scoped
-grants, which narrow on other fields, and field-level narrowing. A record carries one category until
-the subset test above lands.
+**One id names one study within one Usher.** Where several catalogues hold the same resource value,
+it is the same resource, and every catalogue's resource field holds the same kind of identifier.
+Each catalogue renders that resource with its own resource field and its own conditions, so a global
+category may select differently in two catalogues; a remote node's identifiers in network search are
+outside this rule.
 
-**Tradeoffs accepted.** Resolving the ambiguity this way makes four sections of
-`permissions-model.md` describe a post-MVP model, and they are marked accordingly.
+**What the first release gives up.** Narrowing within a resource on anything but its categories:
+SQON-scoped grants, which narrow on other fields, and field-level narrowing.
 
 Instance-specific resource field names, catalogue topology, and the reasoning behind a given
 integration's choice of field belong in that integration's own repository, not here. See
@@ -913,38 +950,47 @@ field before using it.
 
 ### A catalogue's category gap is found by the bridge, from the categories each resource offers
 
-**Decided 2026-10-05.** That the gap withholds resources from one catalogue was decided 2026-10-02,
-in the three states above. This settles where the check runs and what it reads. The adapter's job is
-unchanged: it still turns its application's configuration, whatever its shape, into the one
-registration the bridge reads, and the bridge compares that registration with what each resource
-offers, the same way for every application.
+**Decided 2026-10-05; revised 2026-10-20, when categories became conditions.** The adapter's job is
+unchanged: it turns its application's configuration, whatever its shape, into the one registration
+the bridge reads, and the bridge compares that registration with the payload, the same way for every
+application.
 
-**The bridge checks, catalogue by catalogue, before rendering a resource there.** A resource is in a
-catalogue's clauses only if every concrete category it offers is mapped by that catalogue or declared
-absent from it. A resource failing that is left out of every clause for the catalogue, which is what
-an omitted resource already means, and an error-level `category.unmapped` event names the catalogue,
-the category and the resource, once for each of the three. Other catalogues are unaffected.
+**The bridge checks, catalogue by catalogue, on every payload.** Every global category Usher defines
+must be defined or declared absent in the catalogue's category mapping. A global in neither state
+denies the catalogue's whole result, and a critical `category.unmapped` event names the catalogue and
+the category. A global the catalogue defines and Usher does not is never held, so its records are
+always excluded, and a warning names it, since it is likely a typo. A resource is rendered in a
+catalogue only if every resource category it offers is defined there or declared absent. A resource
+failing that is left out of the catalogue's filter, which is what an omitted resource already means,
+and an error-level `category.unmapped` event names the catalogue, the category and the resource, once
+for each of the three. Other catalogues are unaffected.
 
-**What the check compares, and where it stops.** It compares what Usher says a resource offers with
-what a catalogue registered, and never reads the data. A category value present in the records and
-mapped nowhere, case 23, is outside it and stays open with the reconciliation protocol, and a
-catalogue registered as open by configuration is outside it too. Registration refuses a declared
-absence on a catalogue that names a category field, since absence is the last resort, for a catalogue
-with no field that could carry the category.
+**What the check compares, and where it stops.** It compares what Usher says with what a catalogue
+registered, and never reads the data. An unexpected value in the records matches no condition, so
+it is `unmarked`; a catch-all negation in the mapping covers it, which is governance, and settles
+case 23 that way. A catalogue registered as open by configuration is outside the check too. A
+declared absence is the last resort, for a catalogue whose records cannot match the category.
 
-**What a resource offers comes in the payload, beside the grants.** `offeredCategories` names, for
-each resource named in `permissions`, every category the resource offers, held or not. The controller
-reads them when it computes the payload, so they come from the same snapshot as the grants. A change
-to a resource's categories already clears the controller's payload cache and announces the resource
-on the notice stream, which drops every entry naming it, so the offerings are refreshed by what
-refreshes the grants. Nothing is disclosed about a resource not already named in the payload, but the
-payload now names categories the principal does not hold, so the offerings are enforcement input
-only: never rendered, never returned in any view, the principal's own included, and logged only as
-`category.unmapped` names them.
+**What Usher says comes in the payload, beside the grants.** `globalCategories` names every concrete
+global category Usher defines, never `global.unmarked`, and may be empty. `resourceCategories` names,
+for each resource named in `permissions`, the resource's own `resource.` categories, held or not, and
+may hold an empty list. Both are required: a payload missing either, holding null, or carrying the
+earlier `offeredCategories` is refused. The controller reads them when it computes the payload, so
+they come from the same snapshot as the grants. A change to a resource's categories already clears
+the controller's payload cache and announces the resource on the notice stream, which drops every
+entry naming it, so they are refreshed by what refreshes the grants. Nothing is disclosed about a
+resource not already named in the payload, but the payload names categories the principal does not
+hold, so these members are enforcement input only: never rendered, never returned in any view, the
+principal's own included, and logged only as `category.unmapped` names them.
 
-**This reverses an earlier rejection, on its own terms.** Carrying a resource's full category set in
-the token was considered when rendering became additive, and set aside because additive rendering
-does not need it. `unmarked` is the one complement additive rendering keeps, and it is what needs it.
+**The payload stays at version 1.** No version was ever published, so its shape changed in place.
+Renaming the earlier member is what makes a stale build fail closed rather than misread a payload.
+
+**This reverses an earlier rejection, on its own terms.** Carrying categories the principal does not
+hold was set aside while rendering was additive. Exclusionary rendering needs every category that can
+gate a resource's records, so they are carried.
+
+For resource categories, where the check runs was weighed this way:
 
 | Where the check runs, and what it reads                          | Withholds from one catalogue only                                                    | What it costs                                                                                                                                        |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -958,9 +1004,8 @@ gap on a resource whose unmarked records are open to everyone, which exposes the
 before any request is served. A gap on a resource only signed-in principals reach is found the first
 time a payload names it.
 
-**A resource-scoped category counts like any other.** A version 1 bridge enforces no grant on one,
-but records carrying it are still outside `unmarked` only if the catalogue maps it, so a catalogue
-maps or declares absent every category its resources offer, whatever its scope.
+**A resource category is enforced like a global one.** Its condition sits under its resource in the
+category mapping, and records matching it are outside `unmarked` there.
 
 **The introspection endpoint stays, for a different job.** Generating adapter configuration from
 Usher's list of categories saves transcription and is post-MVP. It is not the check, which needs to
@@ -990,22 +1035,16 @@ than being stored twice.
 categories of their own once local categories exist: `category.create` bounded to one resource like
 every other owner capability, and never reaching the global scope.
 
-**A version 1 bridge accepts `resource.` entries and enforces `global.` ones only.** A `resource.`
-entry is removed by the bridge before the payload reaches the adapter, so it reaches nothing, and is
-recorded as `category.unenforced` with the reason `notImplemented`, once for each such entry in a
-payload received rather than once per request (see [audit-events.md](audit-events.md)). Dropping it is safe, because a grant
-that reaches nothing only narrows what its holder sees, and recording it makes a local category
-arriving early visible rather than silent. It also gives the first release an event for exercising
-the audit path end to end. A bare
-name or an unknown prefix is different: it means the controller and the bridge disagree about the
-format, so the payload is treated as not received, which the application reports as unavailable
-rather than serving as an empty answer, and the rejection is logged.
+**The bridge enforces both scopes.** A `resource.` category's condition sits under its resource in the
+category mapping, and the payload's `resourceCategories` names each resource's own, so a grant on one
+renders like a grant on a global category. A bare name or an unknown prefix means the controller
+and the bridge disagree about the format, so the payload is treated as not received, which the
+application reports as unavailable rather than serving as an empty answer, and the rejection is
+logged.
 
-**Dropping covers a principal's grant and nothing else.** A local category also restricts the
-records carrying it, and a bridge that only drops `resource.` entries still serves those records to
-anyone holding their global category. So no resource may define a local category while an
-application serving it runs a bridge that does not enforce them; enforcing one takes an adapter that
-can render a record carrying more than one category.
+**Creating local categories is still future scope.** Enforcement no longer waits on anything, but an
+owner creating a category of their own needs `category.create` bounded to one resource, which the
+first release does not grant.
 
 **Prose keeps everyday words.** Reader-facing documents say "platform" and name categories
 without the prefix, since the prefix is a key for software rather than vocabulary for readers.
@@ -1014,9 +1053,12 @@ without the prefix, since the prefix is a key for software rather than vocabular
 
 ### Additive rendering over subtractive exclusion
 
-> **Scope: operative now.** Each held category renders as its own predicate, paired with the
-> resource's and composed with `or`, so this decision governs the first release's filter rather than
-> a later one.
+> **Scope: restated 2026-10-20.** Usher's policy and its permission computation stay additive. The
+> filter does not: once categories became conditions, rendering became exclusionary, because a record
+> is visible only when every category it matches is held, which is a statement about the categories
+> not held. See [the category decision](#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches).
+> The failure table below compares the two renderings as first weighed, and the table after it shows
+> how the released rendering keeps the outcome rule.
 >
 > Two things were established while resolving it, and both are recorded here so the post-MVP work
 > does not repeat them.
@@ -1056,7 +1098,7 @@ without the prefix, since the prefix is a key for software rather than vocabular
 > data models it does not know, so record-level narrowing is available only where an instance
 > supplies data satisfying that precondition, verified at adapter startup rather than assumed.
 >
-> **The precondition is unmet on the first instance, and it is narrower than it first reads.**
+> **The precondition was unmet on the first instance, which is what led to categories as conditions.**
 > What is missing is a per-record _category_ field. Neither iMS catalogue carries one, and nothing
 > may be written into the data to create one, so the subset comparison above has no field to operate
 > on.
@@ -1070,9 +1112,10 @@ without the prefix, since the prefix is a key for software rather than vocabular
 > category** is what these preconditions block. **Narrowing by predicate** is not blocked by any of
 > them.
 
-The bridge renders a resolved grant set as a union of positive predicates, one branch per grant
-held, composed with `or`. The adapter compiles that into its own backend dialect. It does not compute exclusions by subtracting the held categories from
-the full category set configured for a resource.
+As first decided, the bridge rendered a resolved grant set as a union of positive predicates, one
+branch per grant held, composed with `or`, and computed no exclusions. The released model reverses
+that for categories, for the reason in the scope note above, and the rationale below is why the
+released rendering carries its guards.
 
 This supersedes the subtractive visibility rule currently described in
 [permissions-model.md](permissions-model.md); those sections are marked for rework.
@@ -1090,6 +1133,16 @@ model, losing a term widens access. In an additive model, losing a term narrows 
 
 The unregistered tag value and the dropped clause are what decide it. The rest are ties, or fixable
 under either model.
+
+**Under the released rendering, the same failures go this way:**
+
+| Failure                                                     | Released rendering                                                                                                |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Category exists in Usher, undefined in the category mapping | a global category denies the catalogue's whole result; a resource category withholds its resource                 |
+| Data arrives carrying a value no condition expects          | `unmarked`, unless a catch-all negation covers it, which is governance                                            |
+| A bug drops or shortens a clause in the composed filter     | the bridge's guard compares the filter with its payload and denies on a mismatch; Arranger refuses an empty group |
+| A condition names a field the catalogue lacks               | the adapter's startup check refuses it                                                                            |
+| Principal holds zero grants                                 | denies                                                                                                            |
 
 **This is not hypothetical in the query library being used.** Terms disappearing is a
 demonstrated property of `@overture-stack/sqon`, not a speculative risk: empty combinations
@@ -1124,7 +1177,8 @@ of an unstated default.
 category set into the token was considered, as a way to make subtractive rendering fail closed on
 config drift. Additive rendering does not need it, since an unmapped category contributes nothing
 rather than silently skipping an exclusion. The token therefore continues to name only positive
-grants, and `permissions-model.md`'s least-information instinct is preserved, though note its
+grants, and `permissions-model.md`'s least-information instinct is preserved for grants (the payload
+now also carries `globalCategories` and `resourceCategories`, as enforcement input only), though note its
 stated rationale (parity with OAuth scopes, UMA RPT permissions, and GA4GH Passport Visas) was
 inherited from the superseded assumption that the user holds the token. The conclusion stands on
 the absence of any remaining benefit, not on that parity.
@@ -1383,7 +1437,8 @@ of it is the one form that inverts.
 value. The bridge returns a discriminated result to the adapter rather than a filter:
 
     type Enforcement =
-      | { kind: 'deny';   reason: 'no-grants' | 'unknown-resource' }
+      | { kind: 'deny';   reason: 'no-grants' | 'unknown-resource' | 'unmapped-category'
+                                | 'rendering-mismatch' | 'filter-limit' }
       | { kind: 'narrow'; sqon: SqonNode }
       | { kind: 'allow' }
 
@@ -1567,19 +1622,24 @@ a response that differs depending on whether something the principal may not see
 **Decision: each deny reason maps to one fixed message, and nothing finer than a catalogue is ever
 named.**
 
-| Reason             | What the person is told                                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `no-grants`        | "You have no access to this catalogue."                                                                         |
-| `unknown-resource` | "The server could not apply its access control because of a problem in its configuration, not in this request." |
+| Reason               | What the person is told                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `no-grants`          | "You have no access to this catalogue."                                                                         |
+| `unknown-resource`   | "The server could not apply its access control because of a problem in its configuration, not in this request." |
+| `unmapped-category`  | "The server could not apply its access control because of a problem in its configuration, not in this request." |
+| `rendering-mismatch` | "The server could not apply its access control because of a problem in its configuration, not in this request." |
+| `filter-limit`       | "Your access is more than this catalogue's filter can express, so its records were not served."                 |
 
 **Never held and withdrawn give the same text.** Whether access was never granted or has been
 revoked is the audit trail's distinction, never the response's. Telling them apart in the response
 would tell a former holder that their grant has been taken away, before anyone has chosen to tell
 them.
 
-**`unknown-resource` is the operator's mistake, not the person's.** So its message says the problem
-is in the server's configuration and gives no detail of it. The detail goes to the error-level log
-event, where an operator can act on it.
+**`unknown-resource`, `unmapped-category` and `rendering-mismatch` are the operator's mistake or the
+system's, not the person's.** So their message says the problem is in the server's configuration and
+gives no detail of it. The detail goes to the log event, where an operator can act on it.
+`filter-limit` is neither the person's mistake nor a fault: their grants are more than one filter can
+carry, which the message says without counting them.
 
 **The message is safe only while the catalogue is already visible to the principal.** Today every
 catalogue is listed to everyone, through discovery and introspection, so naming a denial confirms
@@ -1952,9 +2012,8 @@ living as a label inside someone else's study.
 
 **What the list shape does not change.** A category is a clause in the filter, paired with the
 resource's, so the list shape is what the emitted filter is built from rather than metadata sitting
-beside it. What it does not by itself deliver is a record answering to two categories at once. That
-waits on a
-per-record category field, which is the precondition recorded above.
+beside it. A record answering to two categories at once needs no per-record category field: since
+categories became conditions, it matches both.
 
 ---
 
@@ -2068,11 +2127,17 @@ fails closed, and neither side relies on the other.
 **The validator is stricter than these rules, and every reader then sees the same node.** A node
 carries only `op` and `content`, and a clause only `fieldName` and `value`, since a reader that looks
 members up through inheritance and one that copies own members alone would otherwise see different
-filters. No clause is an exclusion of any kind, since `unmarked` is a `not` around an `in`. No clause
-is a wildcard or its `filter` alias, and no `in` or `all` value holds a marker that Arranger reads as
-an instruction: a `*` pattern, a `set_id:` reference or `__missing__`. A `not` sits only directly
-inside an `and` that also holds an `in`, which is where `unmarked` puts it, and an empty `in` never
-appears inside a narrowing, since a deny is the deny arm.
+filters. A record key's narrowing is checked against the rendered-filter grammar, a structural parse
+of the canonical shape in [the category decision](#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches):
+an `and` of an `in` over the resources held, an optional `not` around an `in` over the known
+resources not held, one `not` per category with a lacking list, and an optional `not` for the
+unmarked records. Those resource lists, and the scoping of each resource category's test inside
+the unmarked clause, are the only tests on the resource field.
+Each condition inside follows the authored-condition grammar, and `__missing__` appears only in the
+renderer's own missing-field tests. No clause is a wildcard or its `filter` alias, and no other
+value holds a marker that Arranger reads as an instruction: a `*` pattern or a `set_id:` reference.
+An empty `in` never appears inside a narrowing, since a deny is the deny arm. Artifact narrowings
+keep the earlier rule: a `not` sits only directly inside an `and` that also holds an `in`.
 
 **After MVP, a grant carrying its own SQON is checked when it is written**, against the same rules,
 so a grant that could only widen is never stored. The wildcard and `not` rules may need revisiting
@@ -2770,10 +2835,10 @@ refusal is where the conformance case belongs.
 ### Records not covered by any category are `unmarked`, and open is who reaches them
 
 **Every resource has one implicit category, `global.unmarked`, covering the records not covered by
-its other categories.** Every other category is concrete: it is defined by a field value carried by
-records, and the adapter renders it as a positive clause naming that value. `unmarked` has no value
-of its own. It is what is left once the concrete categories have selected theirs, so its clause is a
-complement, and no resource lists it because every resource has it.
+its other categories.** Every other category is concrete: it is defined by a condition in the
+category mapping. `unmarked` has no condition of its own. It is what is left once the concrete
+categories have selected theirs, the records matching none of them, and no resource lists it because
+every resource has it.
 
 **Open is not a category.** It names who reaches a resource's unmarked records. The earlier framing
 made `open` a category, so one word named both which records and who reaches them, and reading the

@@ -120,10 +120,13 @@ resource impossible to write. Groups carry no rows in the first release, so this
 
 `name` is the identifier the data carries and the payload names, so it is unique; what happens when a
 registration collides with an existing one is the roadmap's "Resource identifier collision at
-creation". Registration also refuses a name holding a marker that a search application reads as an
-instruction in a filter value, `*`, `__missing__` or `set_id:`, using the list `usher-types` exports:
-the bridge lists resource names in its filters and refuses any such value, so every narrowing naming
-that resource would otherwise fail.
+creation". Registration accepts a name only from an allowed set of characters, by default letters,
+digits, dot, underscore and hyphen, which an instance can widen in configuration. It also refuses a
+name holding a marker that a search application reads as an instruction in a filter value, `*`,
+`__missing__` or `set_id:`, using the list `usher-types` exports, since `__missing__` is made only of
+allowed characters, and a name differing from an existing one only in letter case. The bridge lists
+resource names in its filters and refuses any such value, so every narrowing naming that resource
+would otherwise fail.
 
     categories
       id                 uuid         primary key
@@ -330,14 +333,14 @@ decided here.
 
 ## The token calculation, against the indexes
 
-| Step     | Reads                                                       | Index                                                                                                                            |
-| -------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| exchange | is the principal revoked                                    | the partial unique index on `principal_revocations (user_id) where lifted_at is null`                                            |
-| 1        | grants held directly, and through each group the user is in | `grants (holder_user_id) where revoked_at is null`; `group_users (user_id)`; `grants (holder_group_id) where revoked_at is null` |
-| 2, 4     | each kept grant's role, expanded                            | the primary key of `role_permissions`, read once per distinct role                                                               |
-| 3        | this principal's latest decision on each grant              | `grant_decisions (user_id, grant_id, decided_at desc)`                                                                           |
-| 4        | whether the resource still offers the category              | the primary key of `resource_categories`                                                                                         |
-| 5        | which resources this audience serves                        | the primary key of `application_resources`; the payload, `offeredCategories` included, names only those, and is stored in Valkey |
+| Step     | Reads                                                       | Index                                                                                                                             |
+| -------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| exchange | is the principal revoked                                    | the partial unique index on `principal_revocations (user_id) where lifted_at is null`                                             |
+| 1        | grants held directly, and through each group the user is in | `grants (holder_user_id) where revoked_at is null`; `group_users (user_id)`; `grants (holder_group_id) where revoked_at is null`  |
+| 2, 4     | each kept grant's role, expanded                            | the primary key of `role_permissions`, read once per distinct role                                                                |
+| 3        | this principal's latest decision on each grant              | `grant_decisions (user_id, grant_id, decided_at desc)`                                                                            |
+| 4        | whether the resource still offers the category              | the primary key of `resource_categories`                                                                                          |
+| 5        | which resources this audience serves                        | the primary key of `application_resources`; the payload, `resourceCategories` included, names only those, and is stored in Valkey |
 
 Expiry is read at issuance, as `expires_at > now()`, rather than indexed: a principal holds few
 grants, and an index on a moving comparison does not help. The controller caps an Usher token's `exp`

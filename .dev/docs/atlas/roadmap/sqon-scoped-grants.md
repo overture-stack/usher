@@ -4,9 +4,9 @@ An optional `sqon` field on `grants` that narrows a grant to some of its categor
 
 ## What it enables
 
-Enables governance bodies to approve access to a specific subset of their category (e.g. "indigenous records from community X only") rather than the full category within a resource. Requires SQON evaluation permission in the bridge: the bridge ANDs the grant's SQON filter into the query alongside the category-level filter.
+Enables sharing a filtered subset of records (a SQON-defined cohort) rather than a whole study, with the filter state captured in the grant at share time. This is the iMS flows' "share by virtual cohort", a post-MVP ticket. Requires SQON evaluation permission in the bridge: the bridge ANDs the grant's SQON filter into the query alongside the category-level filter.
 
-Also enables sharing a filtered subset of records (a SQON-defined cohort) rather than a whole study, with the filter state captured in the grant at share time.
+Approving a subset of one category, such as one community's records, no longer needs this: since categories became conditions, that subset is a category of its own, defined by its condition in the category mapping.
 
 ## References
 

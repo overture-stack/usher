@@ -39,6 +39,15 @@ the open tier; a mismatch withholds the resource from that catalogue with an err
 the controller retains nothing an adapter declared. See [decisions.md](decisions.md), "A catalogue's
 category gap is found by the bridge". Modes 2 to 6 remain.
 
+**The category model changes modes 1, 2 and 6 (decided 2026-10-20).** Mode 1 closes structurally: a
+global category undefined in a catalogue denies its whole result, and a resource category withholds
+its resource. Mode 2 is now a value no condition expects, which is `unmarked` unless a catch-all
+negation in the category mapping covers it, so it is held by governance rather than by the filter.
+Mode 6 no longer arises as written, since a category is a condition rather than a configured value and
+`unmarked` is the records matching none. `unmarked` stays a complement, and only the renderer writes
+`__missing__`, for the missing-field test. The research below is kept for its reasoning. See
+[decisions.md](decisions.md), "A category is a condition over records".
+
 **A positive `unmarked` would make modes 1, 2 and 6 fail closed (research, raised
 2026-10-04).** Three of the six fail open for one reason: `unmarked` is a complement, so whatever the
 catalogue does not exclude is served as unmarked. If each catalogue instead declared how its data marks

@@ -92,10 +92,11 @@ and 34 at the exchange, so each belongs to that component's tests rather than to
 
 ## What each payload says a resource offers
 
-Every payload's `offeredCategories` is read from the table of its configuration: for each resource
-named in `permissions`, the concrete categories listed there and `global.unmarked`, since every resource
-in both tables has records carrying no concrete category. `.dev/check-fixtures.py` checks that it
-names exactly the resources `permissions` names and covers every category held.
+Every payload's category members are read from the table of its configuration: `globalCategories`
+lists the concrete global categories defined, and `resourceCategories` lists, for each resource named
+in `permissions`, its own resource categories. `.dev/check-fixtures.py` checks that the second names
+exactly the resources `permissions` names. The fixtures move to these members in the same change as
+the bridge's code.
 
 ## Cases marked not yet implementable
 
@@ -103,10 +104,12 @@ Two entries carry `"implementable": false`, cases 21 and 22. They are cases rath
 `token-calculation.md`: a case written before the mechanism is a specification, and one written after
 is a description.
 
-Both carry an ordinary payload, which is the substance of each. Neither withholding nor the
-multi-category subset test can be expressed in a payload at all, so what is unimplementable lives in
-`expectations.json` and the payload here is what a correct controller emits today. Case 23 is not
-among them: an unmapped category value is a live defect rather than an absent mechanism.
+Both carry an ordinary payload, which is the substance of each. Neither withholding nor a record's
+several categories can be expressed in a payload at all, so what is unimplementable lives in
+`expectations.json` and the payload here is what a correct controller emits. Case 22, a record
+carrying two categories, becomes implementable once the bridge renders conditions. Case 23, a value
+no condition expects, is settled by governance: it is `unmarked` unless a catch-all negation covers
+it.
 
 Case 21 is the one worth knowing about. It is the only case distinguishing the two readings of the
 model, additive grants against a narrowed ceiling, and until something can withhold, no test can
