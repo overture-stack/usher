@@ -1574,19 +1574,21 @@ a bridge, are open on the roadmap, and the bridge's own default stands in until 
 ### A refused identity gets one 401, whatever the reason
 
 An expired sign-in token, an invalid one and a revoked identity are all answered `401`, with
-`WWW-Authenticate: Bearer error="invalid_token"` and one fixed text: "You are no longer signed in, so
-this request was not served. You can sign in again, or continue without signing in." Only the log
-records which it was. Decided 2026-10-04.
+`WWW-Authenticate: Bearer error="invalid_token"` and one fixed text: "Sign in again for a new token,
+or leave the token out to get the data available to everyone." Only the log records which it was.
+Decided 2026-10-04.
 
-| Alternative                                     | Why not                                                                                       |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `401` for expired or invalid, `403` for revoked | tells the holder of a stolen token that the account was revoked, which is an existence oracle |
-| one `401`, with the reason in its error details | the same leak, less visibly                                                                   |
-| serve the request as anonymous                  | case 34 rejects it: a person who believes they are signed in silently sees less               |
-| `403` for all                                   | clients read 403 as signed in but not allowed, so no portal drops the session                 |
+| Alternative                                     | Why not                                                                                                   |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `401` for expired or invalid, `403` for revoked | tells the holder of a stolen token that the account was revoked, which is an existence oracle             |
+| one `401`, with the reason in its error details | the same leak, less visibly                                                                               |
+| serve the request as anonymous                  | case 34 rejects it: a person who believes they are signed in silently sees less                           |
+| `403` for all                                   | clients read 403 as signed in but not allowed, so no client renews an expired token and it never recovers |
 
-A portal answers it by dropping the session and showing the anonymous view with a notice. A revoked
-person who signs in again gets the same answer, so the text never promises more than it gives.
+A client renews its sign-in token once, and a 401 that persists after a successful renewal is final
+for that token. A portal then keeps the person signed in, replaces the view with its own refusal, and
+offers Log out, leaving that choice to the person. A revoked person who signs in again gets the same
+answer, so the text never promises more than it gives.
 
 ---
 

@@ -15,19 +15,25 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 
 **Decrypting**
 
-- The bridge calls `jwtDecrypt` with a key resolver and every option in
+- The bridge calls `jwtDecrypt` with its one decryption key and every option in
   [Each option closes a default](#each-option-closes-a-default) set, and passes no `crit` option.
 - The Usher token's clock tolerance is 0.
 - Before jose reads anything, the bridge reads the protected header with `decodeProtectedHeader` and
   rejects the token unless `typ` is exactly `usher+jwt`.
-- The resolver rejects a protected header carrying any member other than `alg`, `enc` and `typ`.
-- `kid` joins that allowlist only together with key rotation.
-- The resolver takes the key from a `Map` keyed by `kid`, which holds one entry until rotation lands.
+- Before decryption, the bridge rejects a protected header carrying any member other than `alg`,
+  `enc` and `typ`.
+- `kid` joins that allowlist only together with key rotation, and with it a key resolver taking the
+  key from a `Map` keyed by `kid`. Until then the one key is passed directly, and the allowlist
+  refuses any `kid`, which has the same effect.
 
 **The key**
 
 - The bridge's API takes the key as a 43-character base64url string in canonical form, and the bridge
-  does not start on any other value.
+  does not start on any other value. Whitespace around the key is ignored, since it is never part of a
+  key and a pasted value often carries it.
+- On any other value, `start()` rejects with a fixed-text `UsherContractError` naming the rule, and
+  the bridge stays cold and logs `bridge.startRefusal`, which
+  [audit-events.md](../../../design/audit-events.md) registers as critical.
 - After import the bridge holds the key only as `CryptoKey`s and keeps no reference to the raw bytes.
 - The key that decrypts the Usher token is a non-extractable AES-GCM `CryptoKey` whose only usage is
   decrypt.
@@ -39,10 +45,21 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 **Validating**
 
 - The strict `usher-types` validator checks the claims after jose.
+- `usher-types` validates by hand and builds no zod schema of its own: a zod `record` skips a
+  `__proto__` key unchecked, and zod's issues quote input keys
+  ([technology stack](../roadmap/technology-stack.md)).
+- The enforcement-result validator still applies `SqonSchema` from `@overture-stack/sqon` to each
+  SQON, as its own step. `SqonSchema` is a zod schema, so a `ZodError` can still arise there, and
+  the fixed-text rule under **Logging** keeps it out of the validator's errors. The Usher token's
+  payload carries no SQON, so zod never runs while a token is read.
+- Each validator returns a snapshot of own members, read once.
 - `requiredClaims` is generated from the validator's member list, never written by hand.
 - jose's generic type parameter stays at its default, and the validator produces the payload's type.
-- The reader for a `payloadVersion` is selected through a `Map` or a zod literal union, never by
-  indexing a plain object.
+- The reader for a `payloadVersion` is selected through a `Map`, never by indexing a plain object.
+- The `Map` keys its one reader by usher-types' `PAYLOAD_VERSION`, the version `validatePayload`
+  reads, rather than by the number written again.
+- `start` refuses any listed version with no reader in that `Map`, as `payloadVersionUnreadable`, so
+  a bridge never starts listing a version it would then reject.
 - `sub` is bound to the kind of exchange: a non-null `sub` answering an anonymous exchange, or a null
   `sub` answering an exchange that carried a credential, rejects the token.
 - An Usher token whose `sub` differs from the subject of a three-part sign-in token is rejected.
@@ -72,10 +89,12 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
   leaves it cold, answering 503 before any read path.
 - Each rejection is logged as a `token.rejection` event carrying one of the fixed
   [reason codes](#reason-codes).
-- The startup token's rejection is logged as `token.rejection` like any other.
-- The cold state that follows a rejected startup token has a reason code of its own, which names a
-  probable key mismatch. [audit-events.md](../../../design/audit-events.md) registers that reason on
-  `revocationChannel.modeChange`.
+- At startup, a wrong application key shows first on the anonymous exchange, whose channel
+  assertion the controller refuses with 401: the bridge logs `token.exchangeFailure` with cause
+  `assertionRefused` and `revocationChannel.modeChange` with reason `probableKeyMismatch`, and stays
+  cold. An anonymous token failing decryption at startup is named the same way, after its
+  `token.rejection` with reason `decryptionFailed`.
+  [audit-events.md](../../../design/audit-events.md) registers every one of these events.
 
 **Logging**
 
@@ -101,8 +120,8 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 
 **The exchange response and the controller mock**
 
-- The exchange's HTTP layer caps the response body before jose reads it, with a configurable cap that
-  has a default.
+- The exchange's HTTP layer caps the response body before jose reads it, at 1 MiB unless configured
+  as `responseCapBytes`. An answer past the cap is rejected unread, as `tokenTooLarge`.
 - The controller mock mints whole corpus payloads with `new EncryptJWT(payload)` under the header
   `{ alg: 'dir', enc: 'A256GCM', typ: 'usher+jwt' }`.
 - The mock never sets the IV, the content encryption key, the subject by its setter, or `zip`.
@@ -118,8 +137,8 @@ The `typ` value, `dir` with A256GCM and the key per application are recorded in
 [adapter-integration.md](../../../design/adapter-integration.md) ("Fail-secure when the bridge cannot
 deliver a resolved permissions payload"), and the single 401 for a refused identity is in
 decisions.md ("A refused identity gets one 401, whatever the reason"). No design document records
-the clock tolerance of 0 yet: [to-discuss.md](../../../design/to-discuss.md) still lists clock skew
-for `exp` and `iat` among the token-spec details with no stated answer.
+the clock tolerance of 0: [to-discuss.md](../../../design/to-discuss.md) lists clock skew for `exp`
+and `iat` among the token-spec details with no stated answer.
 
 ## Terms used here
 
@@ -127,12 +146,15 @@ for `exp` and `iat` among the token-spec details with no stated answer.
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Usher token           | the controller's answer to the exchange, a JWE carrying the principal's payload                                                                                                                                                                     |
 | reject (a token)      | the bridge fails to read an Usher token, at any step from the header check to the validator; the token is treated as not received and the request gets 503. [Bridge core and Express layer](core-and-express-layer.md) names this outcome malformed |
-| reject (a library)    | jose, zod or WebCrypto throws on an input; inside token reading, that is one way the bridge rejects the token                                                                                                                                       |
+| reject (a library)    | a library throws on an input. Inside token reading the libraries are jose and WebCrypto, and a throw from either makes the bridge reject the token                                                                                                  |
+| reject (a promise)    | JavaScript's sense, used only of `start()`: the promise it returns settles with an `UsherContractError` when the bridge refuses to start. It is never a rejected token                                                                              |
 | malformed (a payload) | the validator rejects the decrypted payload; one cause of a rejected token, with the same 503                                                                                                                                                       |
-| refuse                | reserved for the identity outcome: the controller refuses the identity at the exchange, or the bridge refuses locally a signed sign-in token whose own `exp` has passed; the request gets the one fixed 401                                         |
+| refuse (an identity)  | the identity outcome: the controller refuses the identity at the exchange, or the bridge refuses locally a signed sign-in token whose own `exp` has passed; the request gets the one fixed 401                                                      |
+| refuse (to start)     | the bridge does not start, for an unusable key, a second bridge for one audience, a refused configuration or a seam that throws. It stays cold, answers 503 and logs `bridge.startRefusal`. It is neither an identity outcome nor a rejected token  |
 
-**A rejected token is never a refusal.** A refusal says something about the person's identity. A
-rejection says something about the controller or the deployment.
+**A rejected token is never a refusal.** A refused identity says something about the person, and a
+refusal to start says something about how the bridge was set up. A rejected token says something
+about the controller or the deployment.
 
 ## The package
 
@@ -188,8 +210,11 @@ nonzero tolerance reaches jose.
 
 **A tolerance of 0 makes acceptance and the per-request drop use the same rule.** Skew can then only
 shorten an entry. A bridge clock ahead of the controller's by more than a token's life rejects every
-token, which fails closed and visibly. The controller's clock tolerance still governs the
-local refusal of an expired three-part sign-in token, a separate setting.
+token, which fails closed and visibly. The local refusal of an expired three-part sign-in token
+takes its tolerance from a separate setting in configuration, `localRefusalClockToleranceMs`,
+60000 ms by default. It must never be set below the controller's own tolerance, or the bridge would
+refuse what the controller accepts
+([Bridge core and Express layer](core-and-express-layer.md), "Configuration").
 
 **The key's usage restriction does not pin the algorithm.** Without `keyManagementAlgorithms`, jose
 accepted an `A256GCMKW` token under the bridge's own non-extractable, decrypt-only key. The allowlist
@@ -220,7 +245,7 @@ const decryptOptions = {
 	issuer: controllerIssuer,
 	keyManagementAlgorithms: ['dir'],
 	maxDecompressedLength: 0,
-	requiredClaims: membersEveryListedVersionRequires, // generated from the usher-types schemas
+	requiredClaims: membersEveryListedVersionRequires, // generated from the usher-types validators' member lists
 	typ: 'usher+jwt', // backstop; the exact check below runs first
 };
 
@@ -232,31 +257,27 @@ const readProtectedHeader = (usherToken: string) => {
 	}
 };
 
-const resolveKey = (protectedHeader: JWEHeaderParameters) => {
+// With key rotation, the key comes from a resolver selecting from a Map keyed by kid instead.
+const tokenKey = applicationKey; // non-extractable AES-GCM CryptoKey, usage ['decrypt']
+
+const readUsherToken = async (usherToken: string) => {
+	const protectedHeader = readProtectedHeader(usherToken);
+	if (protectedHeader.typ !== 'usher+jwt') {
+		throw new UsherTokenRejected('headerType');
+	}
 	if (Object.keys(protectedHeader).some((member) => !allowedHeaderMembers.has(member))) {
 		throw new UsherTokenRejected('headerMember');
 	}
-	const key = keyring.get(protectedHeader.kid); // a Map; today one entry, under undefined
-	if (key === undefined) {
-		throw new UsherTokenRejected('headerKeyId');
-	}
-	return key; // non-extractable AES-GCM CryptoKey, usage ['decrypt']
-};
-
-const readUsherToken = async (usherToken: string) => {
-	if (readProtectedHeader(usherToken).typ !== 'usher+jwt') {
-		throw new UsherTokenRejected('headerType');
-	}
-	const { payload } = await jwtDecrypt(usherToken, resolveKey, decryptOptions); // payload only
+	const { payload } = await jwtDecrypt(usherToken, tokenKey, decryptOptions); // payload only
 	const reader = payloadReaders.get(payload.payloadVersion); // a Map, never a plain object
 	if (reader === undefined) {
 		throw new UsherTokenRejected('payloadVersionUnlisted');
 	}
-	const parsed = reader.safeParse(payload);
-	if (!parsed.success) {
+	const validated = reader(payload); // an usher-types validator, written by hand
+	if (!validated.success) {
 		throw new UsherTokenRejected('payloadMalformed');
 	}
-	return parsed.data;
+	return validated.payload; // a snapshot of own members, read once
 };
 ```
 
@@ -291,8 +312,9 @@ The encoded protected header is the additional authenticated data for AES-GCM (r
 source), so any change to it fails decryption, even reordering the same members. A header that passed
 the checks is therefore authenticated the moment decryption succeeds.
 
-**The member allowlist closes two open items on the read side.** It rejects `zip`, `cty`, `crit`,
-`jku`, `jwk` and `x5u`, and any `iss`, `sub` or `aud` copied into the header. With the two algorithm
+**The member allowlist closes two open items on the read side.** It rejects `zip`, `cty`, `jku`,
+`jwk` and `x5u`, and any `iss`, `sub` or `aud` copied into the header. A `crit` header never reaches
+it, because jose rejects any `crit` before the resolver runs. With the two algorithm
 allowlists, it makes RFC 8725 §3.1 (pin `alg` and `enc` on read) and §3.6 (never compress) hold in the
 bridge. Both are listed open in [to-discuss.md](../../../design/to-discuss.md). Any future header
 member becomes a deliberate change on both sides.
@@ -318,11 +340,13 @@ Neither library guarantees a 32-byte key, so the bridge checks it itself.
 
 ### The startup check
 
-1. Require the configured key to match `^[A-Za-z0-9_-]{43}$`. Forty-three base64url characters carry
-   258 bits, so any match decodes to exactly 32 bytes. The pattern is the length check.
-2. Require canonical form: encoding the decoded bytes again gives back the configured string. The last
+1. Remove whitespace around the configured key, then require it to match `^[A-Za-z0-9_-]{43}$`.
+   Forty-three base64url characters carry 258 bits, so any match decodes to exactly 32 bytes. The
+   pattern is the length check.
+2. Require canonical form: encoding the decoded bytes again gives back the key from step 1. The last
    character carries two unused bits, so four strings decode to the same 32 bytes. This keeps the
-   configured value unambiguous and rejects no other key.
+   configured value unambiguous and turns away no 32-byte key, since each has exactly one canonical
+   string.
 3. Check that the decoded length is 32, as defence in depth.
 4. Import with `crypto.subtle.importKey('raw', bytes, { name: 'AES-GCM' }, false, ['decrypt'])`.
 
@@ -364,8 +388,11 @@ in [Revocation notice stream](revocation-notice-stream.md).
 Any wrong 32-byte key, another application's included, fails as `JWEDecryptionFailed`. Altered
 ciphertext, tag or IV fails identically. The failure tells nobody which part was wrong.
 
-The bridge fetches the anonymous payload at startup, so a key mismatch shows as a failed decryption
-of that first token. The bridge then stays cold, since it holds no accepted anonymous payload.
+The bridge fetches the anonymous payload at startup. The exchange is authenticated by a channel
+assertion signed under a subkey of the application key, so a key mismatch shows first as that
+assertion refused with 401, before any token is decrypted; a token encrypted under another key still
+fails as `JWEDecryptionFailed`. Either way the bridge stays cold, since it holds no accepted anonymous
+payload.
 
 **One mismatch passes the self-test.** If the same wrong key is configured for this application on
 both sides, decryption succeeds. The audience check is then the only defence, so it stays mandatory.
@@ -373,49 +400,68 @@ Key distinctness across applications is a deployment check that the bridge canno
 
 ## What jose checks, and what the validator must
 
-The [payload type](../../../design/security-workflow.md#the-payload-as-a-type) has nine members:
-`payloadVersion`, `sub`, `iss`, `aud`, `iat`, `exp`, `generatedAt`, `permissions` and
-`offeredCategories`. `offeredCategories` is under a proposal in
-[decisions.md](../../../design/decisions.md), on where a catalogue's category gap is found. Generating
-`requiredClaims` from the validator keeps the bridge right whichever way the proposal goes.
+The [payload type](../../../design/security-workflow.md#the-payload-as-a-type) has eleven members:
+`payloadVersion`, `sub`, `iss`, `aud`, `iat`, `exp`, `generatedAt`, `permissions`,
+`globalCategories`, `resourceCategories` and `servedResources`. `requiredClaims`, generated from the
+validator, therefore includes both category members and `servedResources`, so a token missing any of
+them is rejected before the validator runs. `globalCategories` lists every concrete global category
+Usher defines, never `global.unmarked`, once for the whole payload, since a global category applies
+to every resource whose records match it. `resourceCategories` lists each resource's own
+`resource.` categories, under exactly the resources named in `permissions`. The bridge compares the categories each resource
+offers with each catalogue's mapping and declared absences, which it reads from the adapter's
+registration
+([adapter-integration.md](../../../design/adapter-integration.md), "Category dictionary
+introspection"). A resource offering a category neither mapped nor declared absent by a catalogue is
+withheld from that catalogue
+([decisions.md](../../../design/decisions.md#a-catalogues-category-gap-is-found-by-the-bridge-from-the-categories-each-resource-offers)).
+The check stays generic: the adapter turns its application's configuration, whatever its shape, into
+the one registration read by the bridge. `servedResources` lists every resource served by the
+audience, held or not. A key knows each of them, together with its own resource list when it has one, so a
+record holding a known resource the principal does not hold is withheld.
 
-| Concern                                                                                   | jose, with the options above                                                                      | The `usher-types` validator                                                                                             |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| five parts, a JSON header, `crit`, `zip`, pinned `alg` and `enc`, IV, tag and key lengths | yes                                                                                               | nothing more                                                                                                            |
-| integrity of the header and the ciphertext                                                | yes                                                                                               | nothing more                                                                                                            |
-| the plaintext is a JSON object                                                            | yes                                                                                               | nothing more                                                                                                            |
-| `typ`                                                                                     | a normalized comparison                                                                           | nothing; the exact pre-check covers it                                                                                  |
-| presence of every member                                                                  | yes; `sub: null` counts as present, and an omitted `sub` is rejected                              | also required                                                                                                           |
-| `iss`                                                                                     | equal to the configured issuer                                                                    | a string                                                                                                                |
-| `aud`                                                                                     | accepts an array containing the audience                                                          | a string, so an array is malformed                                                                                      |
-| `exp`, `iat`, `nbf`                                                                       | times checked only when present; `iat`'s time only with `maxTokenAge`; fractional values accepted | integers for `iat`, `exp` and `generatedAt`                                                                             |
-| `payloadVersion`                                                                          | presence only                                                                                     | one of the versions listed by the bridge                                                                                |
-| `sub`                                                                                     | presence only                                                                                     | a non-empty string or `null`, then bound to the kind of exchange                                                        |
-| members at the root                                                                       | ignored                                                                                           | a strict object: any member outside the type, `nbf` and `jti` included, is malformed                                    |
-| category names in `permissions` and in `field`                                            | none                                                                                              | `global.<name>` or `resource.<name>`; a bare name or another prefix is malformed                                        |
-| a `resource.` category                                                                    | none                                                                                              | passes, and rendering records it as `category.unenforced`                                                               |
-| action lists                                                                              | none                                                                                              | non-empty, each action in its own entity's vocabulary                                                                   |
-| an unknown entity key                                                                     | none                                                                                              | tolerated and stripped, so it reaches nothing                                                                           |
-| empty `permissions`                                                                       | none                                                                                              | valid: a principal holding no grants                                                                                    |
-| `offeredCategories`                                                                       | none                                                                                              | a non-empty list per resource; names exactly the resources named in `permissions`; includes every category held on each |
+| Concern                                                                                   | jose, with the options above                                                                      | The `usher-types` validator                                                                                                         |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| five parts, a JSON header, `crit`, `zip`, pinned `alg` and `enc`, IV, tag and key lengths | yes                                                                                               | nothing more                                                                                                                        |
+| integrity of the header and the ciphertext                                                | yes                                                                                               | nothing more                                                                                                                        |
+| the plaintext is a JSON object                                                            | yes                                                                                               | nothing more                                                                                                                        |
+| `typ`                                                                                     | a normalized comparison                                                                           | nothing; the exact pre-check covers it                                                                                              |
+| presence of every member                                                                  | yes; `sub: null` counts as present, and an omitted `sub` is rejected                              | also required                                                                                                                       |
+| `iss`                                                                                     | equal to the configured issuer                                                                    | a string                                                                                                                            |
+| `aud`                                                                                     | accepts an array containing the audience                                                          | a string, so an array is malformed                                                                                                  |
+| `exp`, `iat`, `nbf`                                                                       | times checked only when present; `iat`'s time only with `maxTokenAge`; fractional values accepted | integers for `iat`, `exp` and `generatedAt`                                                                                         |
+| `payloadVersion`                                                                          | presence only                                                                                     | one of the versions listed by the bridge                                                                                            |
+| `sub`                                                                                     | presence only                                                                                     | a non-empty string or `null`, then bound to the kind of exchange                                                                    |
+| members at the root                                                                       | ignored                                                                                           | a strict object: any member outside the type, `nbf` and `jti` included, is malformed                                                |
+| category names in `permissions` and in `field`                                            | none                                                                                              | `global.<name>` or `resource.<name>`; a bare name or another prefix is malformed                                                    |
+| a `resource.` category                                                                    | none                                                                                              | passes, and rendering enforces it on its own resource                                                                               |
+| action lists                                                                              | none                                                                                              | non-empty, each action in its own entity's vocabulary                                                                               |
+| an unknown entity key                                                                     | none                                                                                              | tolerated and stripped, so it reaches nothing                                                                                       |
+| empty `permissions`                                                                       | none                                                                                              | valid: a principal holding no grants                                                                                                |
+| `globalCategories`                                                                        | presence only                                                                                     | distinct concrete global category names, never `global.unmarked`, possibly none; `null` is malformed                                |
+| `resourceCategories`                                                                      | presence only                                                                                     | per resource, distinct `resource.` names, never `resource.unmarked`; names exactly the resources in `permissions`                   |
+| a category held on a resource                                                             | none                                                                                              | `global.unmarked`, or listed in `globalCategories` or under its resource in `resourceCategories`                                    |
+| `servedResources`                                                                         | presence only                                                                                     | distinct resource identifiers, possibly none; lists every resource `permissions` or `resourceCategories` names; `null` is malformed |
 
-Every row but the last was run through jose and then a zod 4.6.5 schema written for the purpose. The
-last row comes from the type's rules and the [test plan](../../bridge-tests.md), not from a run. A
-schema with only the first eight members accepted none of the 35 payloads in
-[principals.json](../../../design/conformance/principals.json): all failed on `offeredCategories` as
-an unknown member. One with the ninth member accepted all 35.
+Every row but the last four was run through jose and then a zod 4.6.5 schema written for the
+purpose. The last four rows come from the type's rules, not from that run, and the
+[test plan](../../bridge-tests.md) carries the first three of them. A schema with only the first
+eight members accepted none of the 35 payloads in
+[principals.json](../../../design/conformance/principals.json): all failed on a category member as an
+unknown member.
 
 The [fixture checker](../../../check-fixtures.py) also fails a repeated action in one list and an
 `exp` at or before `iat` (read from its source).
 
 Three further rules:
 
-- **Select the reader for `payloadVersion` through a `Map` or a zod literal union, never by indexing a
-  plain object.** `payloadVersion` can be any JSON value, and a name such as `constructor` returns an
-  inherited member. That still fails, but as an unexpected error rather than an unlisted version.
+- **Select the reader for `payloadVersion` through a `Map`, never by indexing a plain object.**
+  `payloadVersion` can be any JSON value, and a name such as `constructor` returns an inherited
+  member. That still fails, but as an unexpected error rather than an unlisted version.
 - **A resource identifier or category name of `__proto__` is malformed.** zod 4.6.5's `record` drops
   such a key silently rather than rejecting it. Dropping narrows, so it fails closed. It still breaks
-  "malformed means not received", and leaves the `offeredCategories` rules unchecked for that key.
+  "malformed means not received", and leaves the rules tying `resourceCategories` to `permissions`
+  unchecked for that key.
+  This is one of the two reasons `usher-types` validates by hand rather than through zod.
 - **Leave jose's generic at its default.** `jwtDecrypt<PermissionsPayload>` types the payload as
   `PermissionsPayload & JWTPayload`. `JWTPayload` declares `sub?: string`, so the intersection is
   `string` and the `null` disappears. TypeScript 5.8.3 and 7.0.2 both show it.
@@ -452,7 +498,7 @@ the same way.
   on a claim failure therefore breaks the rule that nothing of the payload is logged.
 - zod's issues carry paths that hold resource identifiers and category names. `ZodError.message` and
   `String(error)` include them, `reportInput` adds the received value, and an unknown-member issue names
-  the members.
+  the members. This is the other reason `usher-types` validates by hand.
 - jose's messages can include header parameter names taken from the token, line breaks included.
   Logging a message lets a token's author write into the log.
 
@@ -472,14 +518,16 @@ events the bridge emits.
 | `decodeProtectedHeader` cannot read the header                                                      | `headerUnreadable`       |
 | `typ` is not exactly `usher+jwt`                                                                    | `headerType`             |
 | a header member outside the allowlist                                                               | `headerMember`           |
-| `kid` not in the keyring                                                                            | `headerKeyId`            |
+| `kid` not in the keyring, once key rotation brings one                                              | `headerKeyId`            |
 | `JOSEAlgNotAllowed`                                                                                 | `algorithmNotAllowed`    |
 | `JOSENotSupported`                                                                                  | `headerUnsupported`      |
 | `JWEInvalid`                                                                                        | `tokenMalformed`         |
+| the exchange's answer passes the response cap, so nothing of it is read                             | `tokenTooLarge`          |
 | `JWEDecryptionFailed`                                                                               | `decryptionFailed`       |
 | `JWTInvalid`                                                                                        | `claimsNotObject`        |
 | `JWTExpired`                                                                                        | `expired`                |
-| `JWTClaimValidationFailed`                                                                          | `claimRejected`          |
+| `JWTClaimValidationFailed` naming `aud` as its `claim`, a value not naming this application         | `audienceRejected`       |
+| `JWTClaimValidationFailed` otherwise: another claim, or a missing `aud`                             | `claimRejected`          |
 | a `payloadVersion` not listed by the bridge                                                         | `payloadVersionUnlisted` |
 | the validator rejects the payload                                                                   | `payloadMalformed`       |
 | `sub` does not match the kind of exchange, or differs from a three-part sign-in token's own subject | `subjectMismatch`        |
@@ -501,8 +549,9 @@ events the bridge emits.
 ## Decryption cost
 
 Measured on the machine named at the top: `jwtDecrypt` with a `CryptoKey`, the median of three runs of
-10,000 sequential calls after 1,000 warm-up calls. The payloads had eight members, before
-`offeredCategories`, so sizes and times are lower bounds for the payload as typed today.
+10,000 sequential calls after 1,000 warm-up calls. The payloads had eight members, without the
+category members or `servedResources`, so sizes and times are lower bounds for the eleven-member
+payload.
 
 | Payload                                    | Plaintext | Token     | Decrypt | Decrypt and validate |
 | ------------------------------------------ | --------- | --------- | ------- | -------------------- |
@@ -528,7 +577,7 @@ is at or before now" never drops such an entry. The per-request drop is therefor
 
 ## Rotation readiness
 
-A resolver selecting from a `Map` keeps rotation open without deciding it.
+A resolver selecting from a `Map`, added with rotation, keeps rotation open without deciding it.
 [adapter-integration.md](../../../design/adapter-integration.md) ("Decryption key distribution")
 leaves rotation open. These were run with `kid` in the member allowlist, which is how it would stand
 once rotation lands:
@@ -564,7 +613,8 @@ const usherToken = await new EncryptJWT(payload) // the whole corpus payload, su
   member order survive a round trip.
 - **Seed it from the corpus.** Passing each payload from
   [principals.json](../../../design/conformance/principals.json) keeps the mock on the corpus, as the
-  [test plan](../../bridge-tests.md) requires, `offeredCategories` included.
+  [test plan](../../bridge-tests.md) requires, `globalCategories`, `resourceCategories` and
+  `servedResources` included.
 - **Stamp a distinct `sub` per credential, in the payload.** All 31 signed-in cases in principals.json
   carry the same `sub`, so a test that two principals never share an entry passes vacuously unless
   each credential's payload carries a subject of its own. For a three-part sign-in token, that
@@ -583,15 +633,17 @@ const usherToken = await new EncryptJWT(payload) // the whole corpus payload, su
 
 ## Not verified
 
-- The timings come from the machine named at the top, not from the cluster nodes that run the
+- The timings come from the machine named at the top, not from the machines that run the
   applications. Memory use was not measured here.
-- With no controller yet, the cap on the exchange response before decryption was not tested.
+- The cap on the exchange response was tested against a controller mock on a local port, not against
+  the controller. The eleven-member token's size was not measured again: the 1 MiB default rests on
+  the 186 KB measured for 500 resources without the category members or `servedResources`.
 - Stage, a Next.js application whose server side would embed a bridge, was not tested. jose's build is
   universal, so it should load there; that is unverified, as are edge runtimes.
 - The zod schemas were written for these checks. They are not the `usher-types` validators, and the
-  `offeredCategories` rules were not run.
-- Whether the controller can hold an encrypt-only, non-extractable `CryptoKey` for `EncryptJWT`, the
-  way the bridge holds a decrypt-only one, was not run.
+  rules for the category members and `servedResources` were not run through them.
+- Whether the controller can hold an encrypt-only, non-extractable `CryptoKey` for `EncryptJWT`, as
+  the bridge holds a decrypt-only one, was not run.
 - Whether a draft revision of NIST SP 800-38D changes the 2^32 bound was not checked.
 
 ## Open questions
@@ -603,16 +655,3 @@ const usherToken = await new EncryptJWT(payload) // the whole corpus payload, su
    well before the bound, or rotation runs on a schedule short enough that no plausible rate reaches
    it. `kid` arrives with the mechanism, as [to-discuss.md](../../../design/to-discuss.md) says ("the
    rule and the mechanism arrive together or neither does").
-2. **The default of the token size bound, the cap on the exchange response.** Before
-   `offeredCategories`, a principal holding grants in 500 resources produced a 186 KB token, and the
-   nine-member token is larger and is to be measured again. A cap rejects any answer beyond it. That
-   bounds memory but leaves a principal with very many grants unable to get access, so the default
-   sets that point for every deployment that does not configure its own.
-   [to-discuss.md](../../../design/to-discuss.md) lists the bound as open. The open default does not
-   block implementation.
-3. **The mode change a startup key mismatch is logged as.**
-   [audit-events.md](../../../design/audit-events.md) registers a probable key mismatch among the
-   reasons of `revocationChannel.modeChange`, an event that records the bridge moving between modes.
-   A bridge whose startup token is rejected never leaves cold, so no mode changes. Either the bridge
-   emits a startup `modeChange` whose `fromMode` marks the start, or it emits cold to cold. No design
-   document says which.

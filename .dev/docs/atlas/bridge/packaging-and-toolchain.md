@@ -12,17 +12,18 @@ request's access. The types package, `@overture-stack/usher-types`, holds the ty
 validators shared by the bridge and every adapter, and it depends on no web framework.
 
 The toolchain itself is decided in [technology-stack.md](../roadmap/technology-stack.md) and is not
-reopened here: Node 24, pnpm workspaces, TypeScript and zod at their latest, zod as a peer dependency,
-tsdown pinned exactly while below 1.0, `node:test` run as a bare `tsx --test`, and jose for the Usher
-token. No pnpm version is named there, and the workspace's version is set below.
+reopened here: Node 24, pnpm workspaces, TypeScript and zod at their latest, zod as a peer dependency
+only of a published package whose shipped source imports it, tsdown pinned exactly while below 1.0,
+`node:test` run as a bare `tsx --test`, and jose for the Usher token. No pnpm version is named there,
+and the workspace's version is set below.
 
 ## Decisions
 
 ### Module format
 
 - Both packages ship as ESM only, with no CommonJS build and no `require` condition.
-- Each entry point's export condition is `default` rather than `import`, so `require()` resolves it
-  too.
+- Each entry point exports `types`, `import` and `default`, all into `dist`, with `types` first;
+  `default` is the condition that lets `require()` resolve it.
 - Neither manifest has a top-level `main` or `types` field.
 - Both packages export named bindings only.
 - Neither package uses top-level await anywhere in its module graph.
@@ -38,7 +39,9 @@ token. No pnpm version is named there, and the workspace's version is set below.
   two caches can disagree about a revocation.
 - The registry behind that refusal is process-wide and lives on `globalThis`, so that two copies of
   the package share it.
-- How the refusal is reported is [open](#open-questions).
+- A refusal to start rejects `start()` with a fixed-text `UsherContractError` naming the rule. The
+  bridge stays cold and logs `bridge.startRefusal`, registered at severity `critical` in
+  [audit-events.md](../../../design/audit-events.md#events).
 
 ### Build and declarations
 
@@ -48,24 +51,45 @@ token. No pnpm version is named there, and the workspace's version is set below.
 - A separate `tsc -p tsconfig.json` step type-checks the source, since the build does not.
 - CI type-checks the packed tarballs from a TypeScript 5.8 consumer on every build.
 - `@types/node` is pinned to the 24 line.
-- A new TypeScript minor waits until rolldown-plugin-dts supports it, so "TypeScript at its latest"
+- `isolatedDeclarations` and `exactOptionalPropertyTypes` are on in `tsconfig.base.json`, so
+  rolldown-plugin-dts emits the declarations through its oxc generator, never through tsgo.
+- A new TypeScript minor waits until rolldown-plugin-dts's `~7.0.0` peer range admits it, which
+  `strictPeerDependencies` enforces, so "TypeScript at its latest"
   means the latest version supported by tsdown, a narrowing absent from
   [technology-stack.md](../roadmap/technology-stack.md).
-- Whether Usher's own packages keep `skipLibCheck` off is [open](#open-questions).
+- Type-aware typescript-eslint, whose peer range on TypeScript stopped below 6.1 on the check date,
+  cannot run against TypeScript 7, so linting needs a TypeScript 6 beside it.
+- `skipLibCheck` stays off in Usher's own packages. Kept off, it caught the nightly's failure inside
+  zod's declarations, at the cost of builds failing on declarations outside Usher's control.
 - jose is declared in `dependencies`.
+- `@overture-stack/sqon` is a regular dependency of `usher-types`, at `^1.0.0-rc.6`, because the
+  validators use its `SqonSchema`, its operator lists, its aliases and its depth limit at run time.
+  It is not a peer, so an application whose adapter turns SQON into another query language need not
+  install sqon itself.
+- Inside Arranger's monorepo, Arranger adds an `overrides` entry pointing the sqon of `usher-types`
+  at its workspace module, so the monorepo holds one copy. Two copies would still be safe: only plain
+  data crosses between them, and the validator refuses any operator unknown to its own copy.
+- Neither `usher-types` nor the bridge has zod as a peer, since
+  [technology-stack.md](../roadmap/technology-stack.md) makes zod a peer only of a package whose
+  shipped source imports it. `usher-types` keeps zod as a devDependency for its tests.
 - tsdown's `deps: { onlyBundle: [] }` turns any package from `node_modules` that would be inlined
-  into a build failure.
+  into a build failure. Neither committed tsdown configuration sets it, so only the check on the
+  packed JavaScript below catches an inlined dependency.
 - No public declaration names `CryptoKey` or a jose type.
 - A CI check confirms that the packed bridge's JavaScript imports `jose` and
   `@overture-stack/usher-types` and holds neither's code.
-- A CI check confirms that the packed bridge's declarations mention neither `jose` nor `CryptoKey`.
+- A CI check confirms that the packed bridge's declarations mention neither `jose` nor `CryptoKey`,
+  and import only names they use.
 - `usher-types` is a peer dependency of the bridge, never a regular dependency, so the bridge uses
-  the copy the host's install provides rather than one of its own. Why one copy matters is under
-  [Freezing the request's access](#freezing-the-requests-access).
-- How a host is assured that its adapter reads the same copy is [open](#open-questions).
+  the copy provided by the host's install rather than a copy of its own. The peer keeps one copy of the
+  contract and of `SqonSchema` in a host.
+- The peer, together with the host's own dependency on `usher-types`, is enough to hold one copy
+  under pnpm.
 - In the workspace the bridge declares `usher-types` as a peer at `workspace:^` and in
   `devDependencies`, so the published peer range is a caret range.
-- A test shows that two copies of `usher-types` in one host fail closed.
+- There is no `WeakSet` and no check of which copy attached a value, so two copies of `usher-types`
+  in one host interoperate (reasoned, not run: no test runs two copies). What two copies would still do is under
+  [Freezing the request's access](#freezing-the-requests-access).
 
 ### The core's place
 
@@ -79,29 +103,51 @@ token. No pnpm version is named there, and the workspace's version is set below.
 
 ### The request's access
 
-- `usher-types` defines `attachAccess`, `readAccess` and the validators. Adapters import them from
-  `usher-types` directly, since under
+- `usher-types` defines `attachAccess`, `readAccess`, `resultFor` and the validators. Adapters import
+  them from `usher-types` directly, since under
   [adapter-integration.md](../../../design/adapter-integration.md#decided) an adapter depends on
   `usher-types` alone.
-- The bridge re-exports `usher-types`, as
-  [security-workflow.md](../../../design/security-workflow.md#the-payload-as-a-type) records. With
-  `usher-types` a peer, the re-export resolves to the host's one copy.
+- The validators check by hand, never through zod at run time: a zod record skips a `__proto__` key
+  unchecked, and zod's issues quote input keys. `SqonSchema` from `@overture-stack/sqon` is still
+  applied, as a step of its own.
+- Each validator returns a snapshot of the value's own members, reading each once.
+- The enforcement validator refuses an empty group anywhere; any exclusion (`not-in`, `some-not-in`
+  and their aliases); a pivot, null included; any member beyond `op` and `content` in a node, or
+  beyond `fieldName` and `value` in a clause; `wildcard` and its alias `filter`; a value holding a
+  marker read by Arranger as an instruction (a `*` pattern, a `set_id:` reference, `__missing__`); a
+  `not` anywhere except directly inside an `and` that also holds an `in`; an empty `in` inside a
+  narrowing; a range holding no bound, or any bound other than a finite number or a non-empty
+  string; and a `between` holding other than two bounds. These are the rules for the bridge's filters recorded in
+  [decisions.md](../../../design/decisions.md#the-bridges-filters-carry-no-empty-group-no-empty-exclusion-and-no-pivot),
+  with its note to revisit the wildcard and `not` rules for a grant carrying its own SQON after MVP.
+- The bridge re-exports the registration types `KeyRegistration`, `OpenKeyRegistration` and
+  `RecordKeyRegistration` from `usher-types`; adapters import everything else from `usher-types`
+  itself. With `usher-types` a peer, the re-export resolves to the host's one copy.
 - The bridge package exports no constant naming the store key, since such a constant invites reads by
   key.
 - The access validator follows the shape in
   [adapter-integration.md](../../../design/adapter-integration.md#decided), `suspended` included, as
   [decisions.md](../../../design/decisions.md#a-suspended-principal-is-answered-by-what-the-open-tier-can-settle)
   records.
+- A principal states its credential: `none`, never suspended; `unconfirmed`, suspended and served
+  the open tier; or `confirmed`, naming its subject as `subject` while its grants hold and as
+  `attributionOnlySubject` while suspended. That covers uncertain mode, where no exchange runs, and
+  an exchange that fails while the stream is healthy.
+- The access validator therefore checks each state's exact members, and requires `openTierOnly` of
+  every principal without a confirmed credential and of every suspended one.
 - The access validator is strict, so the real bridge and every fake bridge attach exactly this shape.
 - The bridge package declares `readonly usher?: unknown` on the global `Express.Locals` interface.
-- `attachAccess` validates the value, deep-freezes it, records it in a module-level `WeakSet`, and
-  writes it to the store it is handed.
+- `attachAccess` validates the value, deep-freezes it, and writes it to the store it is handed as a
+  data member that is non-writable, non-configurable and non-enumerable.
+- Refusing a store that already holds `usher` is part of the contract of `attachAccess`, so every
+  framework's bridge and every fake bridge share that guard, whatever their store.
+- `readAccess` accepts only a member shaped as `attachAccess` leaves it: a data member,
+  non-writable, non-configurable, non-enumerable and deeply frozen. It never runs an accessor, and
+  it returns a fresh frozen copy it has validated.
 - `readAccess` throws when the value is missing, invalid or of an unknown version, as
-  adapter-integration.md states, and also for any value not recorded by `attachAccess`.
-- The Express layer then defines `res.locals.usher` as non-writable and non-configurable.
+  adapter-integration.md states, and also for a member of any other shape.
+- `resultFor(access, key)` reads results by own member only.
 - The bridge deep-freezes rendered results before caching them.
-- Whether `attachAccess` itself refuses a store that already holds `usher` is
-  [open](#open-questions).
 
 ### Errors and logs
 
@@ -110,7 +156,7 @@ token. No pnpm version is named there, and the workspace's version is set below.
 - A validation failure logs only the fixed fields of its registered event, never zod's issue kinds:
   `token.rejection` with its `reason` code for an Usher token, `revocationChannel.malformed` with its
   `reason` code for a notice or a poll answer, and `bridge.internalError` with its `stage` for any
-  other, such as a rendered result that `attachAccess` refuses.
+  other, such as a rendered result refused by `attachAccess`.
 - The Express layer catches synchronous throws and asynchronous rejections alike, answers 503 with
   nothing attached, and never calls `next(err)`.
 - That 503 is logged as `bridge.internalError`, carrying only its `stage`, at severity `critical`.
@@ -120,15 +166,9 @@ token. No pnpm version is named there, and the workspace's version is set below.
   and the [core note](core-and-express-layer.md#logging) maps each to its fields.
 - A rejected Usher token is logged as `token.rejection` with a reason code, as the
   [jose note](jose-usher-token.md) sets out.
-- The zod peer range is `^4.6.5`, the version tested and the latest named in
-  [technology-stack.md](../roadmap/technology-stack.md). A consumer whose own range excludes it gets
-  ERESOLVE under npm, and an npm workspace whose range admits it has its shared zod upgraded,
-  as [Ranges under npm and pnpm](#ranges-under-npm-and-pnpm) shows.
-- At startup the bridge checks the zod version in use, and stays cold outside the zod versions tested
-  in CI. How that cold state is reported is [open](#open-questions).
-- The range admits minors not yet run in CI, so a host moving to a later minor turns every bridge
-  cold, answering 503 everywhere, until CI has run that minor (reasoned).
-- Whether the startup check also validates a fixed set of known answers is [open](#open-questions).
+- The bridge checks no zod version at startup, since neither package imports zod at run time.
+- No check of the validators' known answers runs at startup either. It is revisited with publishing
+  integrity, which is [open](#open-questions).
 
 ### Clocks and timers
 
@@ -145,30 +185,51 @@ token. No pnpm version is named there, and the workspace's version is set below.
   reasoned from how the operating systems define their clocks, not run.
 - Code reaches timers through the globals or an injected clock, never through a named or namespace
   import from `node:timers` or `node:timers/promises`.
-- Any abort of a poll's deadline counts as no check, whatever the abort's reason.
+- A poll left open past its deadline is aborted at that deadline, and any abort counts as no check,
+  whatever its reason.
 - Tests inject both clocks and mock only `setTimeout` among the timers, never `Date`: mock timers do
   not drive `performance.now()`, and a mocked `Date` cannot step the wall clock apart from the timers
   ([mock timers](#mock-timers-on-node-2416)).
 
 ### Workspace, tests and publishing
 
-- The workspace pins pnpm 11.28.2, with `allowBuilds: { esbuild: false }`, a pnpm catalogue for zod,
-  and a committed lockfile.
-- A move to a new pnpm major is a change of its own, with these settings verified again on it.
-- `minimumReleaseAge` stays unset. An exact pin to a fresh version then passes, and pnpm records the
-  pass in `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`, while a range or a dist-tag still
-  resolves the older version, as [The release-age gate](#the-release-age-gate) shows.
+- The workspace pins pnpm 12.9.1 and declares every pnpm setting in `pnpm-workspace.yaml`:
+  `allowBuilds` with esbuild and `@scarf/scarf` both false, `blockExoticSubdeps`,
+  `minimumReleaseAge: 1440`, `strictDepBuilds`, `strictPeerDependencies`, `trustPolicy: no-downgrade`
+  and `verifyDepsBeforeRun: error`, a catalogue holding every development tool's version, and a
+  committed lockfile.
+- Any pnpm 11 older than 11.28.4 crashes when it switches to the 12.9.1 pin and leaves a broken
+  entry in the shared store ([pnpm/pnpm#16594](https://github.com/pnpm/pnpm/issues/16594)), so a
+  machine's own pnpm is brought to 11.28.4 or later, or to 12, before it runs anything in the
+  workspace.
+- A move to a new pnpm major is a change of its own, with these settings verified again on it. Under
+  a pnpm 12 pin the lockfile gains an additive `packageManagerDependencies` document, so the pin and
+  the lockfile change in one commit.
+- `minimumReleaseAge` is set explicitly to 1440 minutes, so a version younger than a day is refused
+  even under an exact pin. Left unset, an exact pin to a fresh version would pass and be recorded in
+  `minimumReleaseAgeExclude`, as [The release-age gate](#the-release-age-gate) shows.
 - CI or review treats any change to `minimumReleaseAgeExclude` as a supply-chain decision.
-- Whether the workspace sets `strictPeerDependencies: true` is [open](#open-questions).
+- `strictPeerDependencies` is on in the workspace, which turns pnpm's warning about an out-of-range
+  peer into a failure, as [Ranges under npm and pnpm](#ranges-under-npm-and-pnpm) shows. It fails an
+  install on a third-party dependency's unmet peer, as a typescript-eslint parser beside TypeScript 7
+  showed. The peers of the workspace's own packages are checked where a consumer depends on them.
 - Inside the workspace, the bridge resolves `usher-types` through a source export condition,
-  `@overture-stack/source`, pointing at `src/index.ts`.
-- That condition is set through `NODE_OPTIONS=--conditions=@overture-stack/source` and through
-  TypeScript's `customConditions`.
-- Whether the publish step removes the condition from the published exports map is
-  [open](#open-questions).
+  `@overture-stack/source`, pointing at `src/index.ts`. Both packages declare it in their exports
+  map.
+- That condition is set through each package's test script,
+  `tsx --conditions=@overture-stack/source --test`, and through TypeScript's `customConditions`.
+- The publish step strips the condition from the published exports map, through `publishConfig`.
+  Kept, the condition would name `src/index.ts`, left out by `"files"`, and would break
+  resolution for any consumer that sets the same condition, such as a workspace in the same
+  `@overture-stack` namespace adopting it, since Node does not fall back to another condition when
+  the file named by a matched condition is missing (reasoned, not run).
+- fast-check 4.10.2 is a devDependency of `usher-types`, for property tests of its validators.
 - Every test file is named `*.test.ts`, and shared test helpers take names outside the test glob
   under [Tests](#tests).
 - Both packages are published from CI with integrity controls, whose form is open.
+- Each package's `prepublishOnly` script refuses unconditionally, which stops a local publish run by
+  accident. A publish with scripts skipped never runs it. The release job publishes that way, with
+  `pnpm publish --ignore-scripts`.
 - Coverage is open, as the
   [roadmap](../../../roadmap.md#finding-untested-code-settled-before-the-bridge-is-built) leaves it.
 
@@ -202,15 +263,15 @@ the 24 line on the check date was 24.19.1.
 
 ### The manifest
 
+The module fields of each package's manifest, as published:
+
 ```json
 {
 	"engines": { "node": ">=24" },
 	"exports": {
-		".": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" },
-		"./package.json": "./package.json"
+		".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "default": "./dist/index.js" }
 	},
-	"files": ["dist"],
-	"sideEffects": false,
+	"files": ["dist", "README.md"],
 	"type": "module"
 }
 ```
@@ -287,8 +348,8 @@ export default defineConfig({
 });
 ```
 
-Its output was `index.mjs` and `index.d.mts`. zod, declared as a peer, and `usher-types`, declared in
-that run as a regular dependency, stayed external, and the global `Locals` declaration was kept in
+Its output was `index.mjs` and `index.d.mts`. zod and `usher-types`, declared in that run as a peer
+and as a regular dependency, stayed external, and the global `Locals` declaration was kept in
 the declaration file.
 
 ### jose in the build
@@ -298,12 +359,12 @@ string as a non-extractable, decrypt-only `CryptoKey`, called `jwtDecrypt` with 
 audience, the issuer and `typ`, and returned a type of its own. It was built with the configuration
 above in four variants.
 
-| Variant                                                                                                 | JavaScript output                                                                                          | Declarations                                                                        |
-| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| jose in `dependencies`                                                                                  | 0.74 kB; imports `base64url` and `jwtDecrypt` from `jose`; no jose code                                    | no `jose`, `CryptoKey`, `Headers`, `Response`, `URL`, `AbortSignal` or `Uint8Array` |
-| jose only in `devDependencies`                                                                          | 40.35 kB, jose inlined; exit code 0, with an informational hint naming jose                                | unchanged                                                                           |
+| Variant                                                                                                 | JavaScript output                                                                                         | Declarations                                                                        |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| jose in `dependencies`                                                                                  | 0.74 kB; imports `base64url` and `jwtDecrypt` from `jose`; no jose code                                   | no `jose`, `CryptoKey`, `Headers`, `Response`, `URL`, `AbortSignal` or `Uint8Array` |
+| jose only in `devDependencies`                                                                          | 40.35 kB, jose inlined; exit code 0, with an informational hint naming jose                               | unchanged                                                                           |
 | jose only in `devDependencies`, with `deps: { onlyBundle: [] }`                                         | build fails, exit code 1: "jose is located in node_modules but is not included in deps.onlyBundle option" | none                                                                                |
-| jose in `dependencies`, with a public function taking a `CryptoKey` and returning `jwtDecrypt`'s result | builds, exit code 0                                                                                        | `CryptoKey` and `import("jose").JWTDecryptResult`                                   |
+| jose in `dependencies`, with a public function taking a `CryptoKey` and returning `jwtDecrypt`'s result | builds, exit code 0                                                                                       | `CryptoKey` and `import("jose").JWTDecryptResult`                                   |
 
 - The first variant's output decrypted a token minted with jose's `EncryptJWT`, so the external
   import works at run time. It also built unchanged under `deps: { onlyBundle: [] }`.
@@ -333,7 +394,7 @@ above in four variants.
   nightly 7.1.0-dev.20261004.1, npm refuses the install twice over: rolldown-plugin-dts peers
   `~7.0.0`, and tsdown's own `^7.0.0` excludes prereleases. Forced with `--legacy-peer-deps`, the
   default build falls back to the classic API and fails (`Cannot read properties of undefined
-  (reading 'useCaseSensitiveFileNames')`). The default build therefore breaks on each new TypeScript
+(reading 'useCaseSensitiveFileNames')`). The default build therefore breaks on each new TypeScript
   minor until rolldown-plugin-dts follows.
 - **Naming the generator explicitly builds on that nightly.** The configuration is
   `dts: { generator: 'tsgo', tsgo: { path } }`, with `path` taken from typescript's
@@ -363,13 +424,24 @@ Each consumer compiled against the packed tarballs with `module` and `moduleReso
 Arranger's search-server. The rows marked "both ways" ran once with `skipLibCheck` off and once with
 it on.
 
-| Consumer TypeScript | Express types                      | Installer   | Resolution | Result          |
-| ------------------- | ---------------------------------- | ----------- | ---------- | --------------- |
-| 5.8.3               | 4.17.25 (serve-static-core 4.19.9) | npm         | nodenext   | clean both ways |
-| 5.8.3               | 5.0.6 (serve-static-core 5.1.3)    | npm         | nodenext   | clean both ways |
-| 5.8.3               | 4.17.25                            | pnpm 12.9.1 | nodenext   | clean both ways |
-| 5.8.3               | 5.0.6                              | npm         | bundler    | clean           |
-| 5.9.3, 6.0.3, 7.0.2 | 4.17.25 and 5.0.6                  | npm         | nodenext   | clean           |
+| Consumer TypeScript | Express types                      | Installer   | Resolution | Result                    |
+| ------------------- | ---------------------------------- | ----------- | ---------- | ------------------------- |
+| 5.8.3               | 4.17.25 (serve-static-core 4.19.9) | npm         | nodenext   | clean both ways           |
+| 5.8.3               | 5.0.6 (serve-static-core 5.1.3)    | npm         | nodenext   | clean both ways           |
+| 5.8.3               | 4.17.25                            | pnpm 12.9.1 | nodenext   | clean both ways           |
+| 5.8.3               | 5.0.6                              | npm         | bundler    | clean                     |
+| 5.9.3, 6.0.3, 7.0.2 | 4.17.25 and 5.0.6                  | npm         | nodenext   | clean                     |
+| 5.9.3               | serve-static-core 4.17.33          | npm         | nodenext   | clean, `skipLibCheck` off |
+| 5.9.3               | serve-static-core 4.19.8           | npm         | nodenext   | clean, `skipLibCheck` off |
+| 5.9.3               | serve-static-core 5.1.3            | npm         | nodenext   | clean, `skipLibCheck` off |
+
+The last three rows compiled the packed `usher-types` and bridge themselves, not the sample, with
+`@types/node` 24.19.1. They set the bridge's optional peer on `@types/express-serve-static-core` at
+`^4.17.33 || ^5.1.3`: 4.17.33 is the floor `@types/express` 4 declares, and 4.19.8 is what Arranger's
+lockfile resolves. A floor above it, such as the 4.19.9 of the first row, made npm nest a second copy
+in a consumer resolving 4.19.8, after which that consumer's own declaration build could no longer
+name the package. A negative control, writing `res.locals.usher`, failed with TS2540 on all three, so
+the `Locals` declaration reached each.
 
 The surface was a sample, not the real `PermissionsPayload`, `Enforcement` and `UsherRequestAccess`.
 It held:
@@ -432,27 +504,26 @@ still satisfies it.
 - Augmenting the module `express-serve-static-core` instead also typed `res.locals.usher`, under npm
   and under pnpm's default layout. It leaves `Express.Locals` untouched, and it depends on that module
   resolving from the bridge's location. The global form needs no resolution.
-- The bridge's emitted declarations import `RequestHandler` and `Response` from `express`, while its
-  runtime JavaScript imports nothing from it. TypeScript consumers therefore need `@types/express`,
-  which fits an optional peer.
+- The bridge's emitted declarations import `NextFunction`, `Request` and `Response` from
+  `express-serve-static-core`, while its runtime JavaScript imports nothing from it. TypeScript
+  consumers therefore need `@types/express-serve-static-core`, which fits an optional peer.
 
-Peer ranges that match what was measured:
+The bridge's peer ranges on Express:
 
 ```json
 {
 	"peerDependencies": {
-		"@types/express": "^4.17.21 || ^5.0.0",
-		"express": "^4.18.2 || ^5.0.0",
-		"zod": "^4.6.5"
+		"@types/express-serve-static-core": "^4.17.33 || ^5.1.3",
+		"express": "^4.22.3 || ^5.2.1"
 	},
 	"peerDependenciesMeta": {
-		"@types/express": { "optional": true }
+		"@types/express-serve-static-core": { "optional": true }
 	}
 }
 ```
 
-The bridge also peers `usher-types`, at a caret range on the workspace version of `usher-types`, a
-form not built in this run.
+The bridge also peers `usher-types`, declared `workspace:^`, which publishes as a caret range on the
+workspace version of `usher-types`.
 
 ## Express 4 and 5 when middleware fails
 
@@ -494,24 +565,35 @@ After the first five attempts, the value read back was the original.
 
 - **The lock covers the property, not `res.locals` itself.** On both Express versions `res.locals` is
   an ordinary writable property of the response. Replacing it with an empty object fails closed,
-  because `readAccess` then throws. The `WeakSet` check makes a rebuild with another well-formed value
-  fail closed too.
-- **The `WeakSet` check needs one copy of `usher-types`.** Each copy records values in a `WeakSet` of
-  its own, so two copies in one process refuse each other's values. The adapter imports `usher-types`
-  for `readAccess`. A host holding a second copy under the bridge would therefore reject every value
-  attached by the bridge, and every read path would throw, leaving the answer to the adapter's and
-  the host's error handling: an outage rather than a leak (reasoned, not run). Two copies could also
-  disagree about which access versions they accept. That is why `usher-types` is a peer dependency
-  of the bridge: a peer resolves to the copy installed by the host, and the host already has
-  `usher-types` through its adapter (reasoned, not run). Whether the install gives the bridge and
-  the adapter the same copy depends on its layout, as the [open questions](#open-questions) set
-  out. The install's check is only as strict as its settings: pnpm links an out-of-range peer with
-  only a warning, as the [zod ranges](#ranges-under-npm-and-pnpm) show. The two-copy test covers what an install lets
+  because `readAccess` then throws. A rebuild that puts another well-formed value under `usher`
+  fails closed too, because `readAccess` accepts only a member shaped as `attachAccess` leaves it,
+  and a spread or an assignment leaves a writable, enumerable one (reasoned, not run). Only a
+  rebuild that defines `usher` with the same attributes around another deep-frozen, well-formed
+  value passes (reasoned). The lock in that run left `usher` enumerable, while `attachAccess` as
+  decided leaves it non-enumerable, so a spread of `res.locals` carries no `usher` at all (reasoned,
+  not run).
+- **Two copies of `usher-types` interoperate, and the peer keeps one.** `readAccess` checks the
+  member's shape and the value, never which copy attached it, so a value attached through one copy
+  reads through another (reasoned, not run). Two copies could still disagree about which access
+  versions they accept. That is why `usher-types` is a peer dependency of the bridge: a peer
+  resolves to the copy installed by the host, so the host holds one copy of the contract and of
+  `SqonSchema`. Under pnpm's isolated layout a peer of the bridge resolves from the host's own
+  dependencies, and the adapter's dependency is out of its sight (reasoned, not run), so the host's
+  own dependency on `usher-types` is what holds one copy beside the peer. The install's check is
+  only as strict as its settings: pnpm links an out-of-range peer with only a warning, as the
+  [zod ranges](#ranges-under-npm-and-pnpm) show. The two-copy test covers what an install lets
   through. Every fake bridge, Arranger's included, must attach through the real `attachAccess`.
-- **The freeze must be deep, and its test must look deep.** `attachAccess` attaches the fresh parse
-  output rather than a cached object, and rendered results are deep-frozen before caching, so one
-  request's change can never reach the shared anonymous entry. The "frozen" assertion in
-  [bridge-tests.md](../../bridge-tests.md#the-express-layer) must check `results` and every SQON node.
+- **No `WeakSet`, because two copies would turn it into an outage.** Each copy's `WeakSet` would
+  refuse the values attached through the other, so every read path would throw: an outage rather than
+  a leak (reasoned).
+- **`attachAccess` refuses an occupied store itself.** Without that refusal, a second attach would
+  take the store over with its own value, since nothing else stops it (reasoned, not run); the lock
+  table's row above shows the refusal.
+- **The freeze must be deep, and its test must look deep.** `attachAccess` attaches the fresh
+  snapshot returned by its validator rather than a cached object, and rendered results are deep-frozen
+  before caching, so one request's change can never reach the shared anonymous entry. The "frozen"
+  assertion in [bridge-tests.md](../../bridge-tests.md#the-express-layer) must check `results` and
+  every SQON node.
   A top-level `Object.isFrozen` check passes against a shallow freeze, and the inversion row that
   attaches the access unfrozen would then prove nothing about nested values.
 
@@ -523,13 +605,19 @@ pass-through (reasoned, not run).
 
 ## zod as a peer
 
+Neither `usher-types` nor the bridge has zod as a peer: `usher-types` validates by hand and keeps zod
+for its tests alone. The findings below were measured with sample packages that peered zod and built
+their validators with it, and they hold for any package that does. zod still runs inside
+`SqonSchema`, applied by the validators as a step of their own, since `@overture-stack/sqon`
+1.0.0-rc.6 has zod as a regular dependency (read from its manifest).
+
 ### Copies of zod in one process
 
 - zod 4.6.5 is itself a dual package: `import` resolves to `index.js` and `require` to `index.cjs`.
   One installed version can therefore load as two instances.
 - zod 4 tolerates copies at runtime. Its `instanceof` checks a set of traits rather than a
   constructor, and its global configuration and registry live on `globalThis` (read from source). An
-  error thrown through the `usher-types` ESM copy was `instanceof` a CommonJS consumer's `ZodError`,
+  error thrown through the sample package's ESM copy was `instanceof` a CommonJS consumer's `ZodError`,
   and schemas composed across instances parsed and rejected correctly.
 - Two copies at different minors break type assignability. With the consumer on 4.5.4 and the package
   on 4.6.5, assigning a package schema to the consumer's `zod.ZodType` fails, because
@@ -542,24 +630,26 @@ pass-through (reasoned, not run).
   `Unrecognized key: "<the key>"`.
 - Issue paths hold the payload's record keys, which are resource identifiers and category names.
   `ZodError.message` serializes every issue, keys and paths included.
-- A host's `zod.config({ customError })` rewrites the messages of the `usher-types` validators. After
-  a consumer set a `customError` that echoes `issue.input`, the validators reported messages such as
-  `rejected input 7`, where their default message was `Invalid input: expected 1`.
+- A host's `zod.config({ customError })` rewrites the messages of validators built with zod. After a
+  consumer set a `customError` that echoes `issue.input`, the sample validators reported messages
+  such as `rejected input 7`, where their default message was `Invalid input: expected 1`.
 - A host may forward an error's message to its clients. Express does so outside production, as
   [Express 4 and 5 when middleware fails](#express-4-and-5-when-middleware-fails) shows, and a host's
   own error formatting can do the same in production.
 - zod's global configuration also holds `jitless` and a post-processing hook. Importing zod's
   `compile` entry point replaces the validation routine of every schema constructed after that import
   (read from zod 4.6.5's source, not run). A host's zod setup can therefore change the engine behind
-  the validators, not only their messages. A check of known answers at startup is one countermeasure,
-  and whether to add it is [open](#open-questions).
+  a validator built with zod, not only its messages. The hand-written checks in `usher-types` are out
+  of that reach, while the `SqonSchema` step can fall within it (reasoned, not run). A check of known
+  answers at startup is one countermeasure, and none runs: it is revisited with publishing
+  integrity, which is [open](#open-questions).
 - zod issue kinds, such as `invalid_type`, carry no input, but each addition to a log event would need
   checking again against the rule that no payload content reaches a log.
 
 ### Ranges under npm and pnpm
 
-zod is a peer, so the copy in use is the host's. zod reports its own version at runtime, as
-`core.version` on its namespace, and the startup check reads it there.
+These rows were measured with a sample package peering zod, so the copy in use was the host's. zod
+reports its own version at runtime, as `core.version` on its namespace.
 
 | Consumer's own zod range             | npm 11.5.1                                                                 | pnpm 12.9.1                                                                    |
 | ------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -567,26 +657,27 @@ zod is a peer, so the copy in use is the host's. zod reports its own version at 
 | `^4.2.0`, with the lockfile at 4.5.4 | exits 0 and upgrades the shared zod to 4.6.5                               | not run                                                                        |
 
 npm refuses only when the consumer's own range excludes the peer's. In an npm workspace whose zod
-users declare a range that admits the peer, adding the package upgrades the zod shared by every
-package in the workspace. Arranger's ranges and lockfile match the second row
-([Consumers today](#consumers-today)), so the upgrade would reach each of its packages that uses zod
+users declare a range that admits the peer, adding a package that peers zod upgrades the zod shared
+by every package in the workspace. Arranger's ranges and lockfile match the second row
+([Consumers](#consumers)), so the upgrade would reach each of its packages that uses zod
 (reasoned from that row, not run in Arranger). Under pnpm, `pnpm peers check` names the gap ("unmet
-peer zod Installed: 4.5.4 Wanted: ^4.6.5"), and the package runs on 4.5.4. A bridge that refuses to
-start on a zod outside its tested versions fails closed, rather than running Usher's security
-validators on a version never exercised by a test.
+peer zod Installed: 4.5.4 Wanted: ^4.6.5"), and the package runs on 4.5.4. Neither of Usher's
+packages peers zod, so a host's zod range meets neither of them.
 
 ### The lower bound
 
 Sample schemas built against 4.6.5 (a strict object, a discriminated union, lazy recursion, a record,
 a literal and an enum) type-checked on TypeScript 5.8.3 and validated correctly with the newest patch
-of every zod minor from 4.0 to 4.6, each as the only copy. The real schemas' lower bound depends on the
-API they use, so a CI matrix over zod minors sets it once the validators exist.
+of every zod minor from 4.0 to 4.6, each as the only copy. `usher-types` imports no zod, so it sets
+no zod lower bound of its own, and `@overture-stack/sqon` brings its own range. A package whose
+shipped source imports zod sets its lower bound from the API it uses, through a CI matrix over zod
+minors.
 
 ## The workspace
 
 ### pnpm settings
 
-A `pnpm-workspace.yaml` with these settings installed cleanly under pnpm 12.9.1:
+A sample `pnpm-workspace.yaml`, not the workspace's own, installed cleanly under pnpm 12.9.1:
 
 ```yaml
 allowBuilds:
@@ -600,10 +691,13 @@ packages: ['apps/*', 'modules/*']
 saveExact: true
 ```
 
-The root `package.json` names `"packageManager": "pnpm@11.28.2"`, and its development dependencies
-are exact: typescript 7.0.2, tsdown 0.23.0, tsx 4.23.15, `@types/node` 24.19.1, and c8 12.0.0 if c8
-is chosen. Each is taken at its latest when the package is created, with two exceptions:
-`@types/node` takes the newest of the 24 line, and typescript the latest version that tsdown supports.
+The root `package.json` names `"packageManager": "pnpm@12.9.1"` and holds three devDependencies
+through the catalogue: Prettier, and TypeScript and `@types/node` for type-checking the root
+`scripts/`. Every development tool's version lives in the catalogue as
+a range, except tsdown, which is exact while below 1.0, and the lockfile pins each exact resolution.
+Each is taken at its latest when the package is created, with two exceptions: `@types/node` takes
+the newest of the 24 line, and typescript the latest version within rolldown-plugin-dts's peer
+range.
 
 - **Build scripts.** By default pnpm 12.9.1 fails an install on any dependency build script not yet
   reviewed (`ERR_PNPM_IGNORED_BUILDS`, exit code 1). esbuild's postinstall, pulled in by tsx, is the
@@ -647,11 +741,11 @@ Inside the workspace the bridge resolves `usher-types` through its exports map, 
 `dist`. With `usher-types` unbuilt, the bridge's tests fail with `ERR_MODULE_NOT_FOUND`. Three ways
 keep the test command a bare `tsx --test`:
 
-| Way                                                                                                                                                      | Cost                                                                                                                                                                                                                                           |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| build `usher-types` before the bridge's tests run                                                                                                        | a build before each test run; running workspace scripts in dependency order is pnpm's documented behaviour, not run                                                                                                                            |
-| the decided source export condition, `@overture-stack/source` pointing at `src/index.ts`, set through `NODE_OPTIONS` and TypeScript's `customConditions` | the published exports map names a file left out of `"files"`, unless the condition is removed at publish (reasoned, not run); zod ships a `@zod/source` condition of the same kind                                                             |
-| TypeScript `paths` mapping the package to its source, honoured by a bare `tsx --test`                                                                    | when `usher-types` was not a declared dependency, tsdown inlined its source into the bridge's `dist`, a second set of validators, and `onlyBundle` does not catch it; CI must check that the bridge's `dist` never contains `usher-types` code |
+| Way                                                                                                                                                                                     | Cost                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| build `usher-types` before the bridge's tests run                                                                                                                                       | a build before each test run; running workspace scripts in dependency order is pnpm's documented behaviour, not run                                                                                                                            |
+| the decided source export condition, `@overture-stack/source` pointing at `src/index.ts`, set through each package's `tsx --conditions` test script and TypeScript's `customConditions` | the published exports map names a file left out of `"files"`, unless the condition is removed at publish (reasoned, not run); zod ships a `@zod/source` condition of the same kind                                                             |
+| TypeScript `paths` mapping the package to its source, honoured by a bare `tsx --test`                                                                                                   | when `usher-types` was not a declared dependency, tsdown inlined its source into the bridge's `dist`, a second set of validators, and `onlyBundle` does not catch it; CI must check that the bridge's `dist` never contains `usher-types` code |
 
 ## Tests
 
@@ -743,11 +837,11 @@ sibling, and one whole-suite `c8 --all` run for files loaded by no test.
 
 The [roadmap](../../../roadmap.md#finding-untested-code-settled-before-the-bridge-is-built) says
 built-in coverage under tsx "reports a false 100% unless source maps are enabled", checked on tsx
-4.22.3. That still holds for tsx 4.22.3 and for `node --import tsx`. A bare `tsx --test` has turned
-source maps on by itself since tsx 4.23.9, and line attribution is still wrong with them. The roadmap
-line should say that built-in coverage under tsx misreports lines either way.
+4.22.3. That holds for tsx 4.22.3 and for `node --import tsx`. A bare `tsx --test` has turned source
+maps on by itself since tsx 4.23.9, and line attribution is wrong with them too, so built-in
+coverage under tsx misreports lines either way.
 
-## Consumers today
+## Consumers
 
 - **Arranger's search-server** is an ESM package (`"type": "module"`) on `express` `^4.18.2`,
   `@types/express` `^4.17.21` and `typescript` `^5.8.2`. It compiles with `module` and
@@ -760,7 +854,8 @@ line should say that built-in coverage under tsx misreports lines either way.
   repository) creates `usher-types` once Arranger's TypeScript, zod and pnpm upgrades are settled.
   The declaration results above remove the TypeScript reason, as long as the CI consumer check holds.
   [technology-stack.md](../roadmap/technology-stack.md) gives the same TypeScript reason. The zod
-  reason stands, because of the shared upgrade described above.
+  reason falls away, since neither package peers zod and so neither brings the shared upgrade
+  described above (reasoned).
 - **Stage** is a Next.js application with a server side, and it was not run. By reasoning, Next.js
   either bundles server code or loads packages listed as server external through Node, and both accept
   ESM. The bridge belongs in the second group, so that separate server bundles do not each hold a copy
@@ -771,16 +866,14 @@ line should say that built-in coverage under tsx misreports lines either way.
 
 - Stage, and any consumer that tests with Jest, were not run against the ESM-only packages. Jest's
   module runtime does not use Node's `require`, so `require(esm)` may not help a Jest-based consumer.
-- Only sample schemas were built, not the real validators, so the zod lower bound and the real
-  declaration surface are not established.
+- The packed packages themselves were compiled only by the TypeScript 5.9.3 consumers in the rows
+  naming serve-static-core alone. Every other consumer row compiled the sample surface, so no
+  consumer from TypeScript 5.8 has compiled the real declarations.
 - The TypeScript 7.1 findings come from a nightly, and may change before release.
-- The workspace settings ran under pnpm 12.9.1, not under the pinned 11.28.2. Three things ran under
-  neither version: `allowBuilds: { esbuild: true }`, `.npmrc` handling, and whether an older global
-  pnpm hands over to the version pinned in `packageManager`.
-- The bridge's declared form for `usher-types`, a peer at `workspace:^` plus a devDependency, was
-  neither built nor packed; the build above declared it as a regular dependency. tsdown inlined jose
-  when jose was only a devDependency, so the CI check on the bridge's JavaScript is what shows that
-  the peer stays an import.
+- Three things were not run under pnpm 12.9.1: `allowBuilds: { esbuild: true }`, `.npmrc` handling,
+  and whether an older pnpm 12 hands over to the version pinned in `packageManager`.
+- tsdown inlined jose when jose was only a devDependency, so only the check on the bridge's packed
+  JavaScript shows that the `usher-types` peer stays an import.
 - No host holding two copies of `usher-types` was run, and no host that gets `usher-types` only
   through its adapter was installed.
 - tsdown's own exports generation and its publint and arethetypeswrong integration, Express 5 under
@@ -794,62 +887,33 @@ line should say that built-in coverage under tsx misreports lines either way.
   `readAccess`, not in a host that rebuilds `res.locals` itself.
 - What the exchange carries is decided: the sign-in credential, an API key included, which reaches
   the bridge as `Bearer` like any other; the bridge's audience identifier; and the set of payload
-  versions the bridge supports, as [decisions.md](../../../design/decisions.md) records ("Payload
+  versions supported by the bridge, as [decisions.md](../../../design/decisions.md) records ("Payload
   versions are negotiated at the exchange"). The answer is held to a configurable size cap before
-  decryption, whose default is open in the [jose note](jose-usher-token.md#open-questions). No note
-  yet covers how the exchange is encoded on the wire: the form of the request, how each value is
-  carried in it, and the content types of the request and the answer. That needs a note of its own.
+  decryption, 1 MiB by default, which rests on the sizes measured in the
+  [jose note](jose-usher-token.md#not-verified). How the exchange is encoded on the wire, its method,
+  body and content types, is fixed by the exchange's row under "What this settles for the controller"
+  in [bridge-tests.md](../../bridge-tests.md#what-this-settles-for-the-controller).
 - The publishing options under [Open questions](#open-questions) (npm provenance, trusted publishing,
   two-factor authentication on the scope) were reasoned, not checked against the registry or the
   release pipeline.
-- Whether Node's `--experimental-test-coverage` is stable on Node 24 was not checked. It still needs
-  the flag.
+- Whether Node's `--experimental-test-coverage` is stable on Node 24 was not checked. It needs the
+  flag on Node 24.16.
 
 ## Open questions
 
-1. **`skipLibCheck` in Usher's own packages.** Whether they keep it off. Kept off, it caught the
-   nightly's failure inside zod's declarations, at the cost of builds failing on declarations outside
-   Usher's control.
-2. **Whether `attachAccess` refuses a store that already holds `usher`.** On Express the lock makes a
-   second `attachAccess` on the same store throw. A refusal inside `attachAccess` would give every
-   framework's bridge, and every fake bridge, the same guard; without it, a store with no lock takes
-   the second value (reasoned, not run).
-3. **A check of known answers at startup.** Beside the version check, the bridge could validate a
-   fixed set of known-good and known-bad values at startup and stay cold if any answer differs. That
-   also catches a host's zod setup that changes the validation engine, as
-   [Why errors and logs carry fixed text only](#why-errors-and-logs-carry-fixed-text-only) describes.
-4. **`strictPeerDependencies` in Usher's own workspace.** Setting it to `true` turns pnpm's warning
-   about an out-of-range peer into a failure, as
-   [Ranges under npm and pnpm](#ranges-under-npm-and-pnpm) shows.
-5. **Publishing integrity.** The bridge holds the application key and builds every predicate, so a
+1. **Publishing integrity.** The bridge holds the application key and builds every predicate, so a
    tampered publish of either package would undo access control in every ushered application. Option
    (a): publish from a CI provider supported by npm's trusted publishing and provenance, so each
    version is tied to the commit and workflow that built it. Option (b): publish from the existing
    release pipeline with a scoped automation token, and require two-factor authentication on the
    `@overture-stack` scope for people. (a) lets a consumer verify where a version came from; (b) keeps
    the pipeline as it is but protects only the credentials. Which CI providers npm accepts for trusted
-   publishing was not checked. The choice belongs to the release work, not to this note.
-6. **Coverage.** Option (a): c8, one run per test file with `--include` set to its sibling, plus one
+   publishing was not checked. The choice belongs to the release work, not to this note. A check of
+   the validators' known answers at startup, which neither package runs, is revisited with it,
+   as [Why errors and logs carry fixed text only](#why-errors-and-logs-carry-fixed-text-only) notes.
+2. **Coverage.** Option (a): c8, one run per test file with `--include` set to its sibling, plus one
    whole-suite `c8 --all` run; only c8 lists files loaded by no test. Option (b): Node's built-in
    coverage, faster, but under tsx it omits files loaded by no test and misplaces lines. Separately:
    whether coverage runs under tsx, like the tests, or under Node's own type stripping. Type stripping
    reported uncovered lines correctly for both tools, and needs `.ts` import specifiers with
    `allowImportingTsExtensions`.
-7. **The source condition in the published manifest.** `@overture-stack/source` points at
-   `src/index.ts`, which `"files"` leaves out. Either the publish step removes the condition from the
-   exports map, or the published map keeps it, naming a file that is not published. Kept, it breaks
-   resolution for any consumer that sets the same condition, such as a workspace in the same
-   `@overture-stack` namespace adopting it, since Node does not fall back to another condition when
-   the file a matched condition names is missing (reasoned, not run).
-8. **How a host holds one copy of `usher-types`.** The bridge's peer resolves to the copy the host's
-   install provides, and that is the adapter's copy only when the install places them together.
-   Under pnpm's isolated layout a peer of the bridge resolves from the host's own dependencies, and
-   the adapter's dependency is out of its sight, so a host that does not declare `usher-types` itself
-   can end up with a second copy (reasoned, not run). Two ways close it: the host declares
-   `usher-types` itself, or the adapter also takes `usher-types` as a peer. Two copies that an
-   install still lets through fail closed, which the two-copy test covers.
-9. **How two startup refusals are reported.** The bridge stays cold while the zod in use is outside
-   the tested versions, and it refuses a second instance for one audience. Neither has a registered
-   event or reason code. [audit-events.md](../../../design/audit-events.md#events) gives the reasons of
-   `revocationChannel.modeChange` as including holding no anonymous payload and a probable key
-   mismatch, and names no reason for an untested zod.

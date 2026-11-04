@@ -95,6 +95,9 @@ predicate" in [decisions.md](decisions.md).
 
 - A refused identity, whether expired, invalid or revoked, is answered by the bridge with one `401`
   and one fixed text before any read path runs, so a refusal never says which it was.
+  Its `WWW-Authenticate` challenge, like the `400`'s, is exposed to browsers through
+  `Access-Control-Expose-Headers`, so an interface calling from another origin can tell a refused
+  identity from any other `401`.
 
 **The request's access is one value, the same from every bridge.** It is plain, JSON-shaped data,
 defined with its validator in `@overture-stack/usher-types`:
