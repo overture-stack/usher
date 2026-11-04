@@ -368,8 +368,30 @@ export const INTEGRITY = Object.freeze({
   check: '23514',
   foreignKey: '23503',
   notNull: '23502',
+  restrict: '23001',
   unique: '23505',
 });
+
+/**
+ * The codes a delete is refused with while an `ON DELETE RESTRICT` key references the row:
+ * PostgreSQL 15 answers 23503 and PostgreSQL 18 answers 23001. A test pins that the key refuses the
+ * delete, not which of the two the server gives.
+ */
+export const RESTRICTED_DELETE_CODES: ReadonlySet<string> = new Set([
+  INTEGRITY.foreignKey,
+  INTEGRITY.restrict,
+]);
+
+/**
+ * Whether an error is a delete refused by a referencing `ON DELETE RESTRICT` key, under either of
+ * {@link RESTRICTED_DELETE_CODES}, for `assert.rejects`.
+ *
+ * @param error what the delete rejected with.
+ */
+export const isRestrictedDelete = (error: unknown): boolean =>
+  error instanceof pg.DatabaseError &&
+  error.code !== undefined &&
+  RESTRICTED_DELETE_CODES.has(error.code);
 
 /** PostgreSQL's code for a privilege the role does not hold, ownership included. */
 export const INSUFFICIENT_PRIVILEGE = '42501';

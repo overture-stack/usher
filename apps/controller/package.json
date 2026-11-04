@@ -1,4 +1,7 @@
 {
+  "dependencies": {
+    "pg": "catalog:"
+  },
   "devDependencies": {
     "@overture-stack/usher-express-bridge": "workspace:^",
     "@overture-stack/usher-types": "workspace:^",
@@ -11,7 +14,6 @@
     "express": "catalog:",
     "fast-check": "catalog:",
     "jose": "catalog:",
-    "pg": "catalog:",
     "prettier": "catalog:",
     "testcontainers": "catalog:",
     "tsx": "catalog:",

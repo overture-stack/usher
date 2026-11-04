@@ -2,7 +2,12 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import pg from 'pg';
 
-import { USHER_SCHEMA } from './database.js';
+import type { MigrationOptions } from './controller.js';
+import {
+  type DatabaseTemplate,
+  USHER_SCHEMA,
+  USHER_TEMPLATE,
+} from './database.js';
 import { type Cleanup, eventually } from './waiting.js';
 
 /**
@@ -1483,6 +1488,32 @@ export const seedPolicy = (
   inTransactionAs(client, SYSTEM_ACTOR, () => seedWithin(client, fixture));
 
 /**
+ * The controller's template with {@link SEEDED_ROLES} written as the controller writes them at its
+ * start (#207 Q11): a store as a started controller leaves it, for a test seeding a fixture that names
+ * those roles while starting no controller. Run again on a clone, it sets the retention floor alone,
+ * as the migrations do, since the roles are written only to a store holding none.
+ */
+export const STARTED_STORE_TEMPLATE: DatabaseTemplate = Object.freeze({
+  migrate: async (options: MigrationOptions) => {
+    await USHER_TEMPLATE.migrate(options);
+    const client = new pg.Client({ connectionString: options.databaseUrl });
+    await client.connect();
+    try {
+      const { rows } = await client.query<{ held: boolean }>(
+        `SELECT EXISTS (SELECT 1 FROM ${qualified(roles)}) AS held`,
+      );
+      if (rows[0]?.held !== true) {
+        await seedPolicy(client, { roles: SEEDED_ROLES });
+      }
+    } finally {
+      await client.end();
+    }
+  },
+  name: 'usher_template_started',
+  schema: USHER_SCHEMA,
+});
+
+/**
  * Fixtures combined into one: each record merged by name, a later fixture's entry winning; each list
  * joined in order; and the issuer the last fixture naming one gives, so a fixture's issuer is never
  * dropped by merging it with one naming none.
@@ -2009,7 +2040,7 @@ export const noticesAfter = async (
   const { rows } = await client.query<
     Omit<StoredNotice, 'position'> & { position: string }
   >(
-    `SELECT ${quotedColumn(columns.audience)}::text AS audience, extract(epoch FROM ${quotedColumn(columns.createdAt)})::text AS "createdAt", ${quotedColumn(columns.kind)} AS kind, ${quotedColumn(columns.position)}::text AS position, ${quotedColumn(columns.resourceExternalId)} AS "resourceExternalId", ${quotedColumn(columns.idpSubjectId)} AS subject, xmin::text AS transaction FROM ${qualified(notices)} WHERE ${quotedColumn(columns.position)} > $1::bigint ORDER BY ${quotedColumn(columns.position)}`,
+    `SELECT ${quotedColumn(columns.audience)}::text AS audience, extract(epoch FROM ${quotedColumn(columns.createdAt)})::text AS "createdAt", ${quotedColumn(columns.kind)} AS kind, ${quotedColumn(columns.position)}::text AS position, ${quotedColumn(columns.resourceExternalId)} AS "resourceExternalId", ${quotedColumn(columns.idpSubjectId)} AS subject, xmin::text AS transaction FROM ${qualified(notices)} WHERE ${quotedColumn(columns.position)} > $1::bigint ORDER BY ${qualified(notices)}.${quotedColumn(columns.position)}`,
     [position.toString()],
   );
   return rows.map((row) => ({ ...row, position: BigInt(row.position) }));

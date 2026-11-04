@@ -18,13 +18,13 @@ import {
   untilBlocked,
   untilWaiting,
   USHER_SCHEMA,
-  USHER_TEMPLATE,
   whileHolding,
   writerIsWaiting,
 } from './database.js';
 
-// The controller's migrations do not exist yet, so the harness proves its cloning on a stand-in
-// migration that builds one table and grants it to the runtime role, as the real ones must.
+// The harness proves its cloning on a stand-in migration that builds one table and grants it to the
+// runtime role, as the controller's migrations do, so these tests need none of the controller's
+// schema.
 const standInTemplate = (
   migrations: MigrationOptions[] = [],
 ): DatabaseTemplate => ({
@@ -446,17 +446,24 @@ suite('a writer held part way through its writes', () => {
   });
 });
 
-suite('while the Usher Controller is not implemented', () => {
-  test("fails that file's database with the seam's plain message, leaving no template behind and the run able to go on", async (context) => {
-    await assert.rejects(createTestDatabase(), {
-      message:
-        'the Usher Controller is not implemented yet: src/migrations.ts is missing',
+suite('a template whose migration fails', () => {
+  test("fails that file's database with the migration's error, leaving no template behind and the run able to go on", async (context) => {
+    const failing: DatabaseTemplate = {
+      migrate: async () => {
+        throw new Error('the template migration failed');
+      },
+      name: `failing_template_${randomBytes(6).toString('hex')}`,
+      schema: USHER_SCHEMA,
+    };
+
+    await assert.rejects(createTestDatabase(failing), {
+      message: 'the template migration failed',
     });
 
     const database = await createTestDatabase(SHARED_TEMPLATE);
     context.after(() => database.close());
     const observer = await database.connect('migration');
 
-    assert.equal(await databaseCount(observer, USHER_TEMPLATE.name), 0);
+    assert.equal(await databaseCount(observer, failing.name), 0);
   });
 });

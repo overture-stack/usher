@@ -345,7 +345,7 @@ const CONTROLLER_MODULES = {
     path: 'src/configuration.ts',
   },
   main: { path: 'src/main.ts' },
-  migrations: { exportName: 'migrate', path: 'src/migrations.ts' },
+  migrations: { exportName: 'migrate', path: 'src/migrations/index.ts' },
 } as const satisfies Record<string, ControllerExport | ControllerModule>;
 
 /** The least a stream's maximum lifetime may be configured to, in seconds; a lower one is refused. */

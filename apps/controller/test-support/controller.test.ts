@@ -10,7 +10,6 @@ import {
   ENVIRONMENT_VARIABLES,
   environmentFor,
   type FieldWithVariable,
-  migrate,
   readConfiguration,
   readRefusal,
   refusalText,
@@ -229,21 +228,6 @@ suite('while the Usher Controller is not implemented', () => {
       {
         message:
           'the Usher Controller is not implemented yet: src/main.ts is missing',
-      },
-    );
-  });
-
-  test('names the missing migrations module when migrations are applied', async () => {
-    await assert.rejects(
-      migrate({
-        databaseUrl: CONFIGURATION.databaseUrl,
-        retentionFloorSeconds: 390,
-        runtimeRole: 'usher_controller',
-        schema: 'usher',
-      }),
-      {
-        message:
-          'the Usher Controller is not implemented yet: src/migrations.ts is missing',
       },
     );
   });

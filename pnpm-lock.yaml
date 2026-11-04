@@ -237,6 +237,10 @@ importers:
         version: 7.0.2
 
   apps/controller:
+    dependencies:
+      pg:
+        specifier: 'catalog:'
+        version: 8.23.1
     devDependencies:
       '@overture-stack/usher-express-bridge':
         specifier: workspace:^
@@ -271,9 +275,6 @@ importers:
       jose:
         specifier: 'catalog:'
         version: 6.2.15
-      pg:
-        specifier: 'catalog:'
-        version: 8.23.1
       prettier:
         specifier: 'catalog:'
         version: 3.9.10
