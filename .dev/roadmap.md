@@ -218,13 +218,9 @@ Eleven items surfaced by preparing the first adapter integration, none of them w
 
 Usher must publish the vocabulary expressing own-sets-by-default, an administrator listing across users, and no reliance on an unguessable set identifier. Recorded as a cycle deliberately: the integration lists this as a prerequisite for Usher while its central fix depends on Usher, and Usher publishing the vocabulary first is what breaks it. Bounded by the derived-artifact constraint, so per-principal set scoping cannot be an end-to-end property on its own. See [Arranger integration blockers](docs/atlas/roadmap/arranger-integration-blockers.md).
 
-### Admission control against a flood of junk credentials
+### Admission control at the controller
 
-Research. The first release answers a flood of unique junk credentials with the in-flight bound alone, an accepted trade: the controller stays up, cached principals keep their access, and new sign-ins wait. An admission-priority lane in the bridge kept sign-ins served against every measured flood shape, and needs key knowledge the controller could serve. See [sign-in signature precheck](docs/atlas/bridge/signin-signature-precheck.md).
-
-### The controller's bound on exchanges in flight
-
-Decided 2026-10-06: the controller sets the bound and tells its bridges, since a bound each bridge sets for itself multiplies with the replicas. Open: the number; how a bridge learns it; how the controller shares it among replicas it cannot tell apart, since every replica of an application presents the same key; and whether the controller also enforces it at the exchange, since a share announced to the bridges binds only the bridges that honour it. Whether the bridge keeps a configuration option of its own is cheapest to settle before the first publish. See [decisions.md](design/decisions.md), "The bridge's cache is keyed by the sign-in token".
+Proposed in [to-discuss.md](design/to-discuss.md), "The controller has no budget of its own", to settle before the controller's exchange unit. The controller budgets each application as a whole, refuses every credential at its cheapest failing check, and tells bridges to back off with `Retry-After`. API keys gain a watermark the controller checks before any lookup, minted by the Keycloak API key plugin. The bridge's own option for the bound goes before the first publish. This refines the 2026-10-06 decision that the controller sets the bound and tells its bridges ([decisions.md](design/decisions.md), "The bridge's cache is keyed by the sign-in token"). Research beyond it: keeping sign-ins served within the application a flood targets, which an admission-priority lane in the bridge did against every measured flood shape; see [sign-in signature precheck](docs/atlas/bridge/signin-signature-precheck.md).
 
 ### Federation posture
 
@@ -300,7 +296,7 @@ and should go with the terminology pass, which now has somewhere to record its r
 [terminology usage rules](docs/atlas/roadmap/terminology-usage.md).
 
 **Narrowing by category is in the first release (decided 2026-10-20).** A category is a condition
-over descriptive fields the records already carry, and a record carries every category whose
+over descriptive fields already carried by the records, and a record carries every category whose
 condition it matches, so no per-record category field and no `nested` mapping are needed. See "A
 category is a condition over records" in [decisions.md](design/decisions.md). The clinical index's
 `file_access` stays out of it, being prescriptive.
@@ -507,7 +503,11 @@ Shared library embedded in every ushered application: the authenticated token ex
 
 ### First publish of the two packages
 
-Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Arranger's adapter is built and reviewed and merges only once both packages are published, so the first publish is its last step. Also before the first publish: the licence, which keeps both packages private, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, real versions, since the packed bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies, and declarations free of imports they never use, since the bridge's import `webcrypto` from `node:crypto`.
+Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Arranger's adapter is built and reviewed and merges only once both packages are published, so the first publish is its last step. Also before the first publish: lifting `private: true` from both packages, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, and real versions, since the packed bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies. Pre-releases are `0.0.1-beta.N` under the `next` dist-tag, and main keeps `0.0.0-dev` (developer, 2026-11-03).
+
+### Licence for Usher's packages, with their v1 releases
+
+Defined when the packages reach v1, as part of the MVP launch (developer, 2026-11-03). Pre-releases publish without one, as `"license": "UNLICENSED"` (developer, 2026-11-03).
 
 ### `@overture-stack/arranger-usher-adapter`
 
@@ -533,10 +533,16 @@ To be worked out before implementation of `@overture-stack/usher-express-bridge`
 
 A whole-suite coverage report misses the gaps that matter. A branch that one module's own test never reaches still reads as covered when another test runs it incidentally, and a file no test imports may not appear at all. Two layers find them mechanically:
 
-- **Code a module's own test never reaches:** run each co-located test file alone, measuring only the source file beside it, so whatever stays uncovered is a gap whatever else executes it. `c8 --all` also lists files no test loads, at 0%. The built-in `node --test --experimental-test-coverage` omits them even with an include filter, and with `tsx` it reports a false 100% unless source maps are enabled. Both behaviours were checked on Node 24.16, tsx 4.22.3 and c8 12.0.0.
+- **Code a module's own test never reaches:** run each co-located test file alone, measuring only the source file beside it, so whatever stays uncovered is a gap whatever else executes it. `c8 --all` also lists files no test loads, at 0%. The built-in `node --test --experimental-test-coverage` omits them even with an include filter, and with `tsx` it misreports lines either way: 100% without source maps, and wrong lines with them. See the coverage table in [packaging-and-toolchain.md](docs/atlas/bridge/packaging-and-toolchain.md).
 - **Code a test runs but never checks:** mutation testing scoped to the same pairs, which changes the code and reruns only its own test. A change no test notices is a gap. It is slower, so it is for the security-critical modules: the bridge's rendering and validation, and the controller's token calculation.
 
 To decide: built-in coverage or `c8`; whether CI fails a build when a security-critical file gains uncovered branches, rather than chasing a total percentage; and whether the pairing script is proposed to the agentics testing convention.
+
+### Linting with ESLint
+
+The workspace formats with Prettier and checks types with `tsc`, and nothing yet reads the code for mistakes the compiler accepts. Add ESLint across every package, run by one workspace script beside `format:check` and `typecheck`, and in CI once the pipeline runs these.
+
+The configuration starts from Arranger's, so code moving between the repositories meets the same checks, and improves on it where Usher can: typed rules, which need each package's `tsconfig.json`, and a security plugin, given the bridge's and controller's code paths are security-critical. An improvement worth having in both repositories goes back to Arranger too.
 
 ### Load and latency testing
 

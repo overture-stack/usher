@@ -543,6 +543,16 @@ lifetime, so no defect elsewhere can keep one alive indefinitely. Policy writes 
 counter serializing them costs nothing measurable, and the cache refills on demand. The bridge has
 its own side of this race, an exchange answer overtaken by a notice, and handles it already.
 
+**[MEDIUM] A restore puts the policy generation back, so a cache keyed by it alone can match a
+payload from before the restore.** The generation is a counter in the database, so restoring a backup
+returns it to numbers already used for different policy. After writes resume, a payload cached under
+one of those numbers before the restore matches a key read after it, and is served although the
+policy beneath it differs, until the cache lifetime ends it. The notice stream meets the same problem
+with an epoch changed whenever its history restarts. To settle before the controller's payload cache.
+
+**Proposed: the cache key carries an epoch beside the generation**, changed on every restore as the
+notice stream's is, so no entry stored before a restore can match a key read after it.
+
 **[HIGH] GDPR right to erasure conflicts with the append-only audit log.**
 The audit log is INSERT-only by design (application role has no UPDATE or DELETE) and contains
 user-identifying fields (`actorId`, `target_user_id`). GDPR and similar regulations give
@@ -593,6 +603,73 @@ killing an instance does not put its bridges into the uncertain mode. Their push
 with backoff and jitter, and the notices they missed arrive by poll meanwhile. The capacity question,
 how many push connections a surviving instance must absorb, stays a named requirement of the
 high-availability design.
+
+**[HIGH] The controller has no budget of its own, so its protection is a cap each bridge sets.**
+A bridge allows 64 exchanges in flight, so twenty replicas of one application put 1,280 against the
+controller at once, a number chosen by no one. A bridge that ignores its cap, through a defect or a
+compromise, meets no limit at all. Each fix so far adds another cap in another layer. To settle
+before the controller's exchange unit.
+
+**Proposed: the controller enforces its own admission, and refuses every credential at its cheapest
+failing check.** Five parts.
+
+1. **One enforcement point, per application.** The controller identifies the calling bridge by its channel
+   assertion, signed under a key shared by every replica of an application. So it budgets an
+   application as a whole and never needs to tell replicas apart. Over its share, an application's
+   exchange is answered `503` with `Retry-After` at once, and every other application keeps its own
+   share.
+2. **Checks ordered by cost.** Only a credential passing every offline check takes a database slot:
+
+   | Order | Check                                                                                          | Cost                      |
+   | ----- | ---------------------------------------------------------------------------------------------- | ------------------------- |
+   | 1     | the bridge's channel assertion                                                                 | one signature check       |
+   | 2     | the credential's shape; for a sign-in token, its issuer, audience, expiry and key id against the cached key set | string comparisons        |
+   | 3     | the credential's own mark: a sign-in token's signature, an API key's watermark                 | one signature or MAC, no I/O |
+   | 4     | admission into the application's share                                                         | a counter                 |
+   | 5     | the identity lookup, revocation and the token calculation                                     | the database              |
+
+   Tokens already carry such a mark: a sign-in token's signature, and an Usher token's
+   authenticated encryption, which a forged token fails at the bridge's decryption. An API key is
+   the one credential without one.
+3. **API keys carry a watermark.** A key minted by the platform reads `<prefix>_<version><random><mac>`:
+   a fixed prefix, a version naming the MAC key, the random body, and a MAC over the rest under a key
+   of this instance. The controller discards a junk key, or one minted by another instance, before
+   any lookup. The MAC proves where a key was minted, never that it is still valid: expiry,
+   revocation and scope stay with the lookup, so keys stay opaque and checked, as
+   [api-keys.md](../docs/atlas/roadmap/api-keys.md) decides. A leaked MAC key brings the filter down
+   to today's cost and no further. The prefix also lets a log redactor and secret scanners find a
+   leaked key. The Keycloak API key plugin mints the keys, so the change is the plugin's. A key
+   minted before it takes the lookup path until it expires or is rotated, and while such keys are
+   accepted, junk shaped like them still costs a lookup. So the filter is whole only from a date after
+   which an unwatermarked key is refused, and keys are issued for years.
+4. **Bridges cooperate rather than configure.** A bridge keeps a fixed cap only to bound its own
+   memory, honours `Retry-After` with jitter, and has no option for the bound, removed before the
+   first publish.
+5. **No automatic ban.** An application that keeps overrunning its share raises an alert event.
+   Banning it is revoking its key, which a person does. A ban the controller imposed itself would let
+   an attacker lock an application out by flooding its search server.
+
+**No message broker.** An exchange runs while a person's request waits for it. A queue adds delay to
+every sign-in and keeps junk ahead of real requests, and a broker's durability and replay are worth
+nothing for a request that is stale in seconds. Shedding load serves this better than queueing it.
+Durable streams stay where nobody waits, as the roadmap's event fan-out.
+
+**What it changes.** It refines [decisions.md](decisions.md) § The bridge's cache is keyed by the
+sign-in token, never by a claim inside it: the controller still sets the bound, and tells its bridges
+by `Retry-After` rather than by announcing a number. That removes three open questions: the number,
+how a bridge learns it, and how replicas share it. Against a flood aimed at one application, the
+others keep their sign-ins served. Within the targeted application, junk is refused before it takes a
+slot, which covers part of the roadmap's admission-control research.
+
+**Open within it:**
+- each application's share: equal, or weighted by registration;
+- whether shares are counted per controller instance or across instances, in Valkey;
+- the threshold for the alert event;
+- the watermark's MAC keys: how the plugin and the controller share them, and how they rotate;
+- the date after which an unwatermarked API key is refused, and how holders are told to rotate;
+- Fastify's load-shedding and rate-limit plugins, checked against the registry before writing our
+  own;
+- the cost of verifying the identity provider's signature algorithm, measured rather than assumed.
 
 **[MEDIUM] Migration tooling DDL access undermines the INSERT-only audit constraint.**
 Schema migrations require elevated database privileges (ALTER TABLE, DROP COLUMN). If migration
@@ -714,6 +791,15 @@ any paediatric data.
 
 ## Integration and operations
 
+**[MEDIUM] A rollback cannot run an older release's migration step, which refuses a database holding
+newer migrations.** The runner refuses a record departing from its own release's migrations. That is
+right for a forward run, and wrong for a rollback: an older release meeting a newer schema refuses
+before it starts. Decide G already keeps the schema usable by the release before it, since a
+migration removing anything ships one release after the code stops reading it, so a rollback can run
+the older release without its migration step. Whether the runner accepts a record ahead of its own,
+and how a deployment's procedure carries the rollback, is open. To settle before the first release
+that has a predecessor.
+
 **[MEDIUM] Audit log noise from vulnerability scanners and automated probes needs a tagging mechanism.**
 Automated vulnerability scanners and pentesting tools will hammer Usher's auth endpoints with
 probing requests, flooding the audit log with failed-auth events that are not genuine incidents.
@@ -817,3 +903,97 @@ policy recompute). Is the system in a degraded-but-safe mode (poll-only revocati
 propagation, higher controller load)? Or does Valkey unavailability trigger fail-secure across
 all bridges? The failure mode should be a named design choice, not an implicit consequence of
 implementation.
+
+**[HIGH] How Usher learns about a person's identities, and how they relate over time, is not designed.**
+The question: Usher names every person by an identity provider's subject, and learns about that
+identity only when it asks. When an account in Keycloak is created, changed, disabled or deleted, or a
+person comes to hold more than one identity, what does Usher learn, when, and what does it do about it?
+Decide it before the controller's Policy Management API is final, since several answers need an entry
+point there.
+
+**How Usher meets a person today.** Usher stores no name or email address. A person is a row keyed by
+the provider's issuer and subject, under an internal identifier that never leaves Usher, and grants
+name that internal identifier. Usher records the row the first time it meets the subject, in one of
+three ways:
+
+1. The person signs in to an application, and the bridge exchanges their sign-in token with the
+   controller.
+2. A steward adds them by address before they ever sign in. The controller asks the directory which
+   account holds that verified address and records the subject it answers.
+3. No account holds the address yet. Usher keeps an invitation by address until an account holding it,
+   verified, claims it.
+
+Creating an account therefore needs nothing from Keycloak: Usher asks when it needs to. Everything after
+creation is different, because nothing tells Usher that an account changed.
+
+**What nothing tells Usher today.**
+
+| Change in Keycloak                                                                        | What follows in Usher, as designed                                                                                                                       |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| an account deleted                                                                        | its grants stay live with no end, listings count them, a deleted sole owner still satisfies the rule that a resource always has an owner                 |
+| an account disabled                                                                       | nothing, until the person's current tokens expire                                                                                                         |
+| an account deleted and created again for the same address                                 | a new subject, so the old grants are orphaned and a steward grants access again, with nothing linking the two                                            |
+| an address passed to a different person, as an institution can reissue one               | a grant by address resolves to whoever holds it now, and a pending invitation to it can be claimed by the new holder                                     |
+| one person holding two accounts, as a brokered sign-in can create a second one instead of linking | grants split across two subjects, and a steward can't tell they are one person                                                                 |
+| an administrator signing a person out, a password reset, or a "not before" revocation     | nothing, unless Keycloak also sends a back-channel logout, which is not verified                                                                         |
+| a person given or losing the administrator role                                           | takes effect with their next token, but Usher's audit trail never records who became an administrator or when                                           |
+| a realm exported and imported, or a person moved to another realm or provider             | their subject can change, with the same effect as a recreated account                                                                                     |
+
+**Access already has a bound; Usher's records don't.** A sign-in token lives about five minutes, the
+portal renews it before it expires and ends the session when renewal fails (#182), and an Usher token
+expires no later than the sign-in token it came from. So whatever happens in Keycloak, a person who can
+no longer sign in loses access within one token lifetime, with nothing sent to Usher. What the bound
+does not reach is what Usher records: grants, owners, group members and the audit trail keep describing
+an identity that has changed or gone. The bound is the one guarantee that holds when every message from
+Keycloak is lost, so it deserves an end-to-end test of its own.
+
+**Routes for Usher to learn of a change**, which combine rather than exclude each other:
+
+| Route                                                                                                                                                 | What it covers                                                                                    | What it costs                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Usher asks Keycloak**: the controller polls Keycloak's stored admin events (account deleted, disabled, updated, role mappings changed) with the credential it already uses for the directory | each change, minutes behind, with no extension to build                                           | admin events turned on in the realm and kept long enough to be read; read access to events for that credential    |
+| **Keycloak tells Usher**: an event listener extension in Keycloak posts the same events to the controller                                             | each change within seconds                                                                        | an extension to build, deploy and keep compatible with each Keycloak version; an event lost in transit is gone     |
+| **Reconciliation**: a nightly check of every subject holding a live grant against the directory                                                       | anything the event routes missed, and deployments with neither                                    | one directory lookup per subject per run; it finds that an account is gone, not who it was                         |
+| **An operating rule**: accounts are disabled rather than deleted, except to carry out an erasure request, which goes through Usher first             | keeps every subject resolvable                                                                    | a rule for operators, enforced by review rather than software                                                     |
+
+Recommended: the first and third together, the poll for timeliness and the nightly check as its
+backstop, with the operating rule written into the runbook.
+
+**How identities relate: a direction for after the first release.** A person can hold more than one
+identity over time: accounts at a second identity provider, or a new account in a provider that can't
+merge two. EGO already records each user's provider and provider subject beside its own identifier,
+which is what lets the EGO migration resolve a member by subject first. The direction:
+
+- a person in Usher may hold several identities, each an issuer and subject;
+- an administrator links two identities to one person as a recorded act with an audit event of its own,
+  and unlinking is recorded the same way;
+- linking never rewrites history: earlier grants and events keep naming the identity they named, and the
+  link is what ties a person's trail together;
+- grants already name Usher's internal identifier rather than the subject, so this needs a table of
+  identities beside the people table, not a change to what grants hold.
+
+**To decide**, whichever route is chosen:
+
+- On deletion: whether the person's grants are revoked with a system reason (`accountDeleted`) and a
+  principal notice, and whether a deleted sole owner still counts as an owner.
+- On disabling: a principal notice so caches drop, with grants kept, since the account may return.
+- What listings and the audit trail show for a subject nothing resolves.
+- Whether administrator role changes read from Keycloak's events are recorded in Usher's audit trail.
+- How an address passing to a new person is guarded: showing whom an address resolved to before a grant
+  is confirmed, and invitations' seven-day lapse as the outer bound.
+- Who may link identities, what evidence a link needs, and whether a link can be undone.
+
+**Realm settings this depends on**, for the deployment standard (#193): admin events stored with enough
+retention; brokered sign-ins linked to an existing account rather than creating a second one; a
+back-channel logout address on every client whose sign-ins reach Usher, with that client's front-channel
+logout off, since Keycloak sends no back-channel logout to a client with front-channel logout on; and the
+controller's directory credential limited to looking up users and reading events.
+
+**To verify first, against a real Keycloak**: what it sends and records when an account is deleted or
+disabled, when an administrator signs a person out, when a portal signs a person out from its server
+with a refresh token, on a password reset, on a "not before" revocation, and when a role mapping changes.
+
+Related: the erasure item above, which decides what may be kept about a person; the "revoke user
+everywhere" item above, which a deletion's revocation would use; the identity provider features table in
+[admin-model.md](admin-model.md), whose admin events row anticipates learning of a deleted account
+without designing it; and the EGO migration (#216), which resolves members by subject first.
