@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "extends": "../tsconfig.base.json",
+  "include": ["*.ts"]
+}

@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "customConditions": ["@overture-stack/source"],
+    "declaration": true,
+    "exactOptionalPropertyTypes": true,
+    "isolatedDeclarations": true,
+    "lib": ["es2025"],
+    "module": "nodenext",
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
+    "strict": true,
+    "target": "es2025",
+    "types": ["node"],
+    "verbatimModuleSyntax": true
+  }
+}

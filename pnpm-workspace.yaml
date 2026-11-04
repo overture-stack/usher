@@ -1,0 +1,34 @@
+allowBuilds:
+  '@scarf/scarf': false # telemetry, blocked before it can arrive as a transitive dependency
+  esbuild: false
+
+blockExoticSubdeps: true
+
+catalog:
+  '@types/express-serve-static-core': ^5.1.3
+  '@types/node': ^24.19.1
+  eventsource-parser: ^4.1.1
+  express: ^5.2.1
+  express4: npm:express@^4.22.3
+  fast-check: ^4.10.2
+  jose: ^6.2.12
+  prettier: ^3.9.9
+  tsdown: 0.23.0
+  tsx: ^4.23.15
+  typescript: ~7.0.2
+  undici: ^8.11.2
+  zod: ^4.6.5
+
+minimumReleaseAge: 1440
+
+packages:
+  - apps/*
+  - modules/*
+
+strictDepBuilds: true
+
+strictPeerDependencies: true
+
+trustPolicy: no-downgrade
+
+verifyDepsBeforeRun: error

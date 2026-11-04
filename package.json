@@ -1,0 +1,23 @@
+{
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": "^24.11.0 || >=26.0.0"
+  },
+  "packageManager": "pnpm@12.9.1+sha512.06b055fff5cd20dc12781de173ced3310ce0951bf2ec620211a16045d5444d5c93a663210764ef29a653a610459ba0368f0e74f84d80c54723cf95aae7bc0d6d",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "check:pack": "node scripts/check-pack.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm -r --no-bail --no-sort test",
+    "test:scripts": "node --test \"scripts/*.test.ts\"",
+    "typecheck": "pnpm -r --no-bail --no-sort typecheck",
+    "typecheck:scripts": "tsc -p scripts"
+  },
+  "type": "module"
+}
