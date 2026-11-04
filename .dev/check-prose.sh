@@ -67,8 +67,12 @@ report() { # name, regex, note, [exclude-path-substring ...]
   printf '\n== %s ==\n%s\n   -> %s\n' "$name" "$hits" "$note"
 }
 
-report "em dash or spaced double dash" \
-  '—| --( |$)' \
+# All four forms agentics' writing-style.md bans: the em dash, the en dash, a
+# double hyphen standing in for a dash, and a space-hyphen-space connector. The
+# last needs a non-space character before it, so a bullet marker at the start of
+# a line passes, and no table pipe on either side, so an empty cell passes.
+report "em dash, en dash or spaced dash" \
+  '—|–| --( |$)|[^[:space:]|] - [^|]' \
   "no dashes as prose punctuation in persisted content"
 
 # A bare auxiliary standing in for a verb phrase stated in an earlier clause.

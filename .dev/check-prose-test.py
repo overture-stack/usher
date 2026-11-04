@@ -150,6 +150,13 @@ CASES = [
      "a double dash where a wrapped line ends, with no space after it"),
     ("em dash", "| Column | Other |\n| ------ | ----- |", False, "a table rule is not a dash"),
     ("em dash", "Run it with --include set.", False, "a command-line flag is not a dash"),
+    ("en dash", "A sentence with an en dash – here.", True, ""),
+    ("spaced dash", "The controller sets the bound - and tells its bridges.", True,
+     "a space-hyphen-space connector"),
+    ("spaced dash", "- a bullet item\n  - a nested bullet item", False, "a bullet marker is not a dash"),
+    ("spaced dash", "| Kind | Value |\n| ---- | ----- |\n| none | - |", False, "an empty table cell is not a dash"),
+    ("spaced dash", "Subtract with `size - 32` first.", "known",
+     "arithmetic inside inline code reads as a connector; accepted, since the corpus has none"),
 
     ("a verb standing in for a phrase stated elsewhere",
      "A flat clause never reaches depth 2; an OR of ANDs, which does.", True,
