@@ -6,9 +6,9 @@ ID's public discovery documents and key sets, and Keycloak's documentation and s
 
 The Usher bridge is the library embedded in each ushered application to trade a person's sign-in
 token for their access. This note holds the research behind two of the bridge's contracts in
-[decisions.md](../../../design/decisions.md): the bridge checks no sign-in token's signature,
-proposed there on 2026-10-04, and the bridge answers a flood of junk credentials with its in-flight
-bound alone, a trade accepted for the first release.
+[decisions.md](../../../design/decisions.md): the bridge checks no sign-in token's signature, and the
+bridge answers a flood of junk credentials with its in-flight bound alone, a trade accepted for the
+first release. Both were decided on 2026-10-06.
 
 ## Decisions
 
@@ -16,9 +16,16 @@ bound alone, a trade accepted for the first release.
   ([decisions.md](../../../design/decisions.md), "The bridge's cache is keyed by the sign-in token,
   never by a claim inside it").
 - The bridge does not check a sign-in token's signature, in any form that can refuse it; decisions.md
-  records this as proposed on 2026-10-04.
-- The bridge refuses locally only a three-part signed token whose own `exp` has passed, by the
-  controller's clock tolerance, and sends every other bearer credential it can read to the exchange.
+  records this.
+- The bridge refuses locally only a three-part signed token whose own `exp` has passed, and sends
+  every other bearer credential it can read to the exchange.
+- That refusal's clock tolerance comes from configuration as `localRefusalClockToleranceMs`,
+  60000 ms by default. It must never be set below the controller's own tolerance, or the bridge would
+  refuse what the controller accepts ([Bridge core and Express layer](core-and-express-layer.md),
+  "Decisions"). No design document records the controller's tolerance, which "Not verified" lists
+  among what is unknown of the controller's sign-in validation.
+- A token refused for its own `exp` is never stored in the refusal store, since its `exp` refuses it
+  again on every request.
 - Two `Authorization` lines, a scheme other than `Bearer`, or an `access_token` query parameter get
   `400` with `error="invalid_request"`, and are never exchanged
   ([Bridge core and Express layer](core-and-express-layer.md), "Reading the credential"). API keys
@@ -32,14 +39,15 @@ bound alone, a trade accepted for the first release.
 - The anonymous refresh runs outside the in-flight bound, so a flood cannot stop the open tier from
   refreshing.
 - Admission control that keeps sign-ins served through a flood is research on the
-  [roadmap](../../../roadmap.md), "Admission control against a flood of junk credentials".
+  [roadmap](../../../roadmap.md), "Admission control at the controller".
 - The admission-priority lane is the leading candidate for that research.
 - If a signature check or the lane is ever built, the controller serves the key sets to bridges, and
   each bridge refreshes its copy in the background (see "Provider knowledge in every application").
-- A rate-limit answer from the controller, a 429, has the unavailable outcome: 503, with its status
-  logged. It never has the failed outcome, the one that serves a signed-in person the open tier. So a
-  controller shedding exchanges with 429 moves no signed-in person to the open tier, while one
-  shedding with 503 lands on the failure path
+- A rate-limit answer from the controller, a 429, has the unavailable outcome: 503, logged as
+  `token.exchangeFailure` with cause `status`, which carries no status code. It never has the failed
+  outcome, the one that serves a signed-in person the open tier. So a controller shedding exchanges
+  with 429 moves no signed-in person to the open tier, while one shedding with 503 lands on the
+  failure path. The log reads the same for both
   ([Bridge core and Express layer](core-and-express-layer.md), "Reading the answer", which names
   both outcomes).
 - No log event carries a sign-in token's key identifier. A bridge behind on a key rotation is
@@ -47,11 +55,11 @@ bound alone, a trade accepted for the first release.
 
 **Why no refusing check, whether strict or lenient.**
 
-| Reason                                                                                                                                                                                                                                                 | Evidence                                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| It cannot stop the flood it exists for. A check keeping the never-refuse rule must let through a token naming a key not held by the bridge, and the sender writes that name. API keys carry no signature at all.                                       | "Why a refusing check cannot keep the flood out" |
-| It puts identity provider configuration into every ushered application. The design gives that configuration to the controller's connector alone. Keys fetched from the providers also need network access from every application pod to each provider. | "Provider knowledge in every application"        |
-| It is a second validator. Every way it can disagree with the controller refuses a person admitted by the controller.                                                                                                                                   | "A second validator that can disagree"           |
+| Reason                                                                                                                                                                                                                                             | Evidence                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| It cannot stop the flood it exists for. A check keeping the never-refuse rule must let through a token naming a key not held by the bridge, and the sender writes that name. API keys carry no signature at all.                                   | "Why a refusing check cannot keep the flood out" |
+| It puts identity provider configuration into every ushered application. The design gives that configuration to the controller's connector alone. Keys fetched from the providers also need network access from every application to each provider. | "Provider knowledge in every application"        |
+| It is a second validator. Every way it can disagree with the controller refuses a person admitted by the controller.                                                                                                                               | "A second validator that can disagree"           |
 
 ## Terms used here
 
@@ -83,10 +91,8 @@ junk credentials.
 **So a precheck adds nothing to confidentiality.** Keying the cache by a digest of the whole token
 already defeats a forged subject. What is left is availability, and only against the last row.
 
-**The test plan overstates what a check would do.** The "Open for review" item in the
-[test plan](../../bridge-tests.md) says a check would keep forged tokens off the exchange entirely.
-It keeps off only forgeries that claim a held key. That item also calls the check an option
-being researched, while decisions.md records as proposed that the bridge checks no signatures.
+**A check would not keep forged tokens off the exchange entirely.** It keeps off only forgeries that
+claim a held key.
 
 ## One flood, traced
 
@@ -176,20 +182,20 @@ decided rule that every bearer value the bridge can read goes to the exchange, w
 | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | issuer, key set location and allowed algorithms in every ushered application; with several providers, a map from issuer to key set | [architecture.md](../../../design/architecture.md) lists among what Keycloak does not own "Any awareness of bridges or adapters: Keycloak is not aware they exist; the controller validates IdP tokens against Keycloak on the bridge's behalf". [admin-model.md](../../../design/admin-model.md) says "The connector is the only component that knows it is talking to a specific provider". |
 | each provider added to the controller must also reach every bridge                                                                 | under a strict check, a bridge that has not caught up refuses that provider's people                                                                                                                                                                                                                                                                                                          |
-| network egress from application pods to the identity provider                                                                      | today they need egress to the controller only. By default Keycloak's backchannel URLs equal its frontchannel URLs, so discovery from an address inside the cluster returns the public key set location unless `hostname-backchannel-dynamic` is enabled ([hostname guide](https://www.keycloak.org/server/hostname)).                                                                         |
+| network egress from every application to the identity provider                                                                     | without a check they need egress to the controller only. By default Keycloak's backchannel URLs equal its frontchannel URLs, so discovery from an internal address returns the public key set location unless `hostname-backchannel-dynamic` is enabled ([hostname guide](https://www.keycloak.org/server/hostname)).                                                                         |
 | a discovery client                                                                                                                 | jose has no OpenID Connect discovery (read from its source, not run), so finding the key set from an issuer needs openid-client or a hand-written metadata fetch                                                                                                                                                                                                                              |
 
 architecture.md also lists among Keycloak's duties "Exposing public keys so downstream services can
-verify IdP token signatures". Read beside the same section's statement that Keycloak is unaware of
-bridges and adapters, the downstream service meant there is the controller.
+verify IdP token signatures". The same section says Keycloak is unaware of bridges and adapters, so
+the downstream service meant there is the controller.
 
 **If a check or the lane is ever built, the controller serves the key sets.** Configured in each
 bridge, per provider, that knowledge would cost every row above. Served by the controller and
-refreshed in the background, the key sets keep one source of truth, need no egress from application
-pods to providers, and leave the connector the only component that talks to a provider. That costs a
+refreshed in the background, the key sets keep one source of truth, need no egress from applications
+to providers, and leave the connector the only component that talks to a provider. That costs a
 new controller endpoint and a refresh loop in the bridge. Even then, the bridge holds a map from
-issuer to key set and an algorithm allowlist equal to the controller's (conditions 4 and 5 under
-"If a refusing check is ever built"). Until
+issuer to key set and an algorithm allowlist equal to the controller's (the conditions on choosing
+a key set by issuer and on the algorithm allowlist, under "If a refusing check is ever built"). Until
 its next refresh it also lacks a newly added provider's keys, so a strict check refuses that
 provider's people.
 
@@ -256,16 +262,16 @@ controller.
 
 ## Admission control, on the roadmap as research
 
-| Candidate                                                                                               | What it does                                                                                             | Measured                           | What it costs or leaves open                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| the in-flight bound alone (decided for the first release)                                               | answers 503 beyond the bound                                                                             | 0 of 200 sign-ins under flood      | keeps the controller up, which is its job; every new sign-in and every refresh is answered 503 while a flood lasts                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| an admission-priority lane in the bridge (the leading candidate)                                        | refuses nothing locally; reserves part of the bound for tokens whose signature verifies under a held key | 200 of 200 against each junk shape | needs key knowledge, which the controller serves (see "Provider knowledge in every application"). API key holders, and tokens under a key rotated within the last cooldown, share the capped lane with junk. Anyone able to obtain tokens from the same provider, for example through self-registration, can fill the reserved lane, since no audience is checked. A bridge without keys puts every credential in the capped lane, which lowers capacity and refuses no one (reasoned, not measured). The split between the lanes is one more setting. |
-| per-client limits before authentication, at the ingress or the bridge                                   | limits exchanges for new digests per client                                                              | not measured                       | before authentication the only client key is a network address. Behind a portal's server side (Stage is a Next.js application with one), every person arrives as one client, so one abuser exhausts everyone's budget. The bridge reads the address only through the host application's Express `trust proxy` setting. A permissive setting lets forwarded headers rotate identities. A restrictive one gives every person the proxy's address. An address is personal information, so it stays out of every log event.                                |
-| rate limiting on the Usher API (listed as not started in the [design index](../../../design/README.md)) | limits exchanges at the controller                                                                       | not measured                       | the client of the exchange is the bridge ([security-workflow.md](../../../design/security-workflow.md), "The token exchange": "The bridge, never the adapter and never a browser"), so a limit there meters a whole application and cannot tell junk from sign-ins. It protects the controller, not the people signing in. How the bridge reads a rate-limit answer from the controller is set in [Bridge core and Express layer](core-and-express-layer.md).                                                                                          |
+| Candidate                                                             | What it does                                                                                             | Measured                           | What it costs or leaves open                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the in-flight bound alone (decided for the first release)             | answers 503 beyond the bound                                                                             | 0 of 200 sign-ins under flood      | keeps the controller up, which is its job; every new sign-in and every refresh is answered 503 while a flood lasts                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| an admission-priority lane in the bridge (the leading candidate)      | refuses nothing locally; reserves part of the bound for tokens whose signature verifies under a held key | 200 of 200 against each junk shape | needs key knowledge, which the controller serves (see "Provider knowledge in every application"). API key holders, and tokens under a key rotated within the last cooldown, share the capped lane with junk. Anyone able to obtain tokens from the same provider, for example through self-registration, can fill the reserved lane, since no audience is checked. A bridge without keys puts every credential in the capped lane, which lowers capacity and refuses no one (reasoned, not measured). The split between the lanes is one more setting.                                   |
+| per-client limits before authentication, at the ingress or the bridge | limits exchanges for new digests per client                                                              | not measured                       | before authentication the only client key is a network address. Behind a portal's server side (Stage is a Next.js application with one), every person arrives as one client, so one abuser exhausts everyone's budget. The bridge reads the address only through the host application's Express `trust proxy` setting. A permissive setting lets forwarded headers rotate identities. A restrictive one gives every person the proxy's address. An address is personal information, so a per-client limit adds none to the bridge's own events, whose registered fields hold no address. |
+| rate limiting on the Usher API                                        | limits exchanges at the controller                                                                       | not measured                       | the client of the exchange is the bridge ([security-workflow.md](../../../design/security-workflow.md), "The token exchange": "The bridge, never the adapter and never a browser"), so a limit there meters a whole application and cannot tell junk from sign-ins. It protects the controller, not the people signing in. How the bridge reads a rate-limit answer from the controller is set in [Bridge core and Express layer](core-and-express-layer.md).                                                                                                                            |
 
 ## If a refusing check is ever built
 
-The proposal in decisions.md is not to build one. Every condition below would be required. The
+decisions.md decides not to build one. Every condition below would be required. The
 admission-priority lane needs the conditions on keys and on the request path too, though not the
 controller invariants, since a disagreement there only moves a legitimate token into the capped lane.
 
@@ -273,12 +279,14 @@ controller invariants, since a disagreement there only moves a legitimate token 
 
 1. Off by default, enabled by configuration per application.
 2. `compactVerify` only: the signature, and no claims. The local `exp` refusal stays the only claim
-   the bridge reads.
+   the bridge refuses on. The bridge reads the token's own `sub` only to check the Usher token's
+   subject against it, and never trusts it. A mismatch is answered 503, never refused
+   ([jose for the Usher token](jose-usher-token.md), "Binding sub to the exchange").
 3. The key sets served by the controller, held as a local key set rebuilt in the background, never
    fetched inside a request.
 4. The key set chosen by the token's unverified issuer, only among issuers served by the controller.
    A fetch address is never derived from the token's `iss`, `jku` or `x5u` or from an embedded `jwk`
-   header. Discovery never runs from a token's `iss`. Otherwise an application pod fetches from
+   header. Discovery never runs from a token's `iss`. Otherwise an application fetches from
    addresses chosen by a sender. jose's local key set ignores those headers. Key sets from several
    providers are never merged, since two providers' identifiers can collide.
 5. The algorithm allowlist equal to the controller's.
@@ -287,8 +295,8 @@ controller invariants, since a disagreement there only moves a legitimate token 
 
 6. Refuse only when the signature check returned false, under a held key and an allowed algorithm.
    jose reads a fault inside WebCrypto as a failed signature. So the bridge cannot key the refusal on
-   jose's error class alone. It needs its own check of the verify result, or a fault would tell a
-   signed-in person they are no longer signed in.
+   jose's error class alone. It needs its own check of the verify result, or a fault would refuse a
+   signed-in person whose token is valid.
 7. Let everything else through: an unknown key, several matching keys, no keys available, an
    algorithm outside the allowlist, a malformed token, a credential that is not a signed token.
 8. Answer a local refusal with the same `401` and the same fixed text as the exchange
@@ -313,7 +321,7 @@ controller invariants, since a disagreement there only moves a legitimate token 
     administrator sets one (read from source, not run). Its java-keystore provider does not, as the
     disagreement table shows. So that provider is either declared unsupported where a bridge checks
     signatures, or every key change gets a new key component, and so a new key identifier; which of
-    the two is open, like the choice in condition 10. Entra's identifiers are SHA-1 certificate
+    the two is open, like the choice between one shared verifier and separate implementations. Entra's identifiers are SHA-1 certificate
     thumbprints: for all seven keys in the v2 set, the identifier equals `x5t` and the SHA-1 of the
     certificate in `x5c`, whose public key matches the key (checked against the published set).
 
@@ -339,7 +347,7 @@ type AdmissionLane = 'held-key' | 'unverified';
     key identifier. No trusted subject exists before the exchange. No event may carry any part of the
     sign-in token, and the key identifier is part of it, written by its sender. A bridge behind on a
     rotation is diagnosed from the controller's side. As a `credential.refusal`, the event would need
-    an `origin` value not yet registered in [audit-events.md](../../../design/audit-events.md).
+    an `origin` value not registered in [audit-events.md](../../../design/audit-events.md).
 
 **Measured verdicts of the middle option**, against a local key set:
 
@@ -360,11 +368,11 @@ type AdmissionLane = 'held-key' | 'unverified';
 **What changes in the test plan.** A refusing check would empty three rows of the "Cache" suite in
 the [test plan](../../bridge-tests.md) of meaning, if their tokens claim a held key:
 
-| Row                                                  | Why it would no longer test anything                          |
-| ---------------------------------------------------- | ------------------------------------------------------------- |
-| a forged token carrying a cached principal's subject | refused before the cache key mattered                         |
-| a refused token sent again                           | "no exchange" passes without the refusal store doing anything |
-| a flood of unique refused tokens                     | never fills the store                                         |
+| Row                                                                                       | Why it would no longer test anything                          |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| a sign-in token forged to carry a cached principal's subject                              | refused before the cache key mattered                         |
+| a sign-in token refused by the controller, sent again inside the TTL and before its `exp` | "no exchange" passes without the refusal store doing anything |
+| a flood of unique refused tokens                                                          | never fills the store                                         |
 
 Its inversion under "Each assertion is proven load-bearing", keying the cache by the subject inside
 the sign-in token, would no longer fail. These fixtures would have to use unknown key identifiers or
@@ -409,10 +417,14 @@ never refused locally.
 
 ## Open questions
 
-1. **Whether a refusing check shares the controller's verifier, and how it treats Keycloak's
-   java-keystore provider.** The bridge checks no signatures, as proposed in decisions.md, so this
-   arises only if a refusing check is ever built. One verifier shared with the controller keeps the
-   encoding and algorithm rows of the disagreement table from drifting, while separate
-   implementations make each row a test run against both (condition 10). The java-keystore provider
-   keeps a key identifier across new key material, so it is either declared unsupported where a
-   bridge checks signatures, or every key change gets a new key component (condition 11).
+Both questions arise only if a refusing check is ever built. The bridge checks no signatures, as
+decisions.md records.
+
+1. **Whether a refusing check shares the controller's verifier.** One verifier shared with the
+   controller keeps the encoding and algorithm rows of the disagreement table from drifting, while
+   separate implementations make each row a test run against both (the condition that the
+   controller's signature check is no more lenient than a compact JWS check).
+2. **How a refusing check treats Keycloak's java-keystore provider.** That provider keeps a key
+   identifier across new key material, so it is either declared unsupported where a bridge checks
+   signatures, or every key change gets a new key component, and so a new key identifier (the
+   condition that each provider binds a key identifier to its key material).

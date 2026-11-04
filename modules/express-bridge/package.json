@@ -1,0 +1,62 @@
+{
+  "dependencies": {
+    "eventsource-parser": "catalog:",
+    "jose": "catalog:",
+    "undici": "catalog:"
+  },
+  "devDependencies": {
+    "@overture-stack/usher-types": "workspace:^",
+    "@types/express-serve-static-core": "catalog:",
+    "@types/node": "catalog:",
+    "express": "catalog:",
+    "express4": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "@overture-stack/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "license": "UNLICENSED",
+  "name": "@overture-stack/usher-express-bridge",
+  "peerDependencies": {
+    "@overture-stack/usher-types": "workspace:^",
+    "@types/express-serve-static-core": "^4.17.33 || ^5.1.3",
+    "express": "^4.22.3 || ^5.2.1"
+  },
+  "peerDependenciesMeta": {
+    "@types/express-serve-static-core": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "node -e \"console.error('A local publish is refused: packages are published by the release job'); process.exit(1)\"",
+    "test": "tsx --conditions=@overture-stack/source --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "0.0.0-dev"
+}
