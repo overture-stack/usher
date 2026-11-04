@@ -54,6 +54,12 @@ their own policy state.
 - **See the permissions I hold.** Which resources, which categories within them, and what each lets
   me do. Rendered from the payload, and positive only: what someone lacks is not shown, because the
   absence of a grant is what discloses that restricted data exists at all.
+- **See when each permission ends, and which have ended recently.** Each grant's end date, and the
+  grants that expired or were revoked within a recent window, with when. A search never says why it
+  returns less, since a narrowed answer says nothing of what it withheld, so this is the one place a
+  person learns that their access changed. Showing a grant they held discloses nothing they were not
+  already given. The payload carries neither, since an Usher token holds only its own `exp`, so this
+  depends on the read path in the first open question below.
 - **API tokens.** Create and revoke the long-lived credential used for programmatic access, notably
   Score. See the open question below: the current path issues these through a Keycloak plugin rather
   than through Usher, and whether that stays true is undecided.

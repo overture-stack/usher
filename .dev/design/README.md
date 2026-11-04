@@ -57,6 +57,10 @@ responsibilities belong to the bridge vs the adapter), then
 [adapter-integration.md](adapter-integration.md) (the API contract, designed in intent and not yet
 specified as request and response shapes).
 
+**Building a client or a portal:** [client-integration.md](client-integration.md) (what each answer
+means, renewal, and what a portal shows the person), then
+[profile-view.md](profile-view.md) (where a person sees their own access).
+
 ## Document coverage
 
 | Document                                             | Topic                                                                                                               | Status                   |
@@ -74,6 +78,7 @@ specified as request and response shapes).
 | [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity       | in progress              |
 | [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                              | reference                |
 | [adapter-integration.md](adapter-integration.md)     | Per-app adapter design, bridge library (the bridge)                                                                 | designed; not yet a spec |
+| [client-integration.md](client-integration.md)       | What a client receives and does with each answer; renewal; what a portal shows the person                           | designed                 |
 | [management-ui.md](management-ui.md)                 | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on                             | in progress              |
 | [profile-view.md](profile-view.md)                   | Where a person acts on their own access: permissions held, API tokens                                               | not started              |
 | [audit-events.md](audit-events.md)                   | Policy-plane events, common fields, severity mapping                                                                | specced                  |

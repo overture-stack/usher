@@ -660,10 +660,10 @@ cryptographic: a compromised bridge cannot read another application's tokens at 
 application cannot share one, since sharing an identifier would mean sharing a key, and audience
 separation is cryptographic rather than a comparison of strings.
 
-**Symmetric, because the deployment already distributes secrets and asymmetry adds nothing here.**
-Keys live in Vault or OpenBao and reach both pods through the secrets operator, so asymmetry would
-solve no provisioning problem, no key-exchange endpoint is needed, and the controller fetches no
-public key from an application. `dir` also carries no wrapped key, which is the smallest
+**Symmetric, because the controller generates each key and asymmetry adds nothing here.** The
+controller generates an application's key when the application is registered and shows it once, for
+the application's own secrets, so asymmetry would solve no provisioning problem, no key-exchange
+endpoint is needed, and the controller fetches no public key from an application. `dir` also carries no wrapped key, which is the smallest
 token and the fastest decrypt on the only cryptographic operation in the request path.
 
 **The objection to symmetric, and why it does not bite.** A bridge holding the key can mint tokens as
@@ -720,17 +720,17 @@ the whole of the case: neither depends on where the user sits.
 **Tradeoffs accepted.** Each bridge needs a decryption key provisioned at deploy
 time, and audience scoping makes those keys per-application rather than instance-wide. Key
 rotation is an operational concern that would not exist with a signed token. The cost is smaller than
-it first appears because the deployment already solves it: keys live in Vault or OpenBao and reach
-both the controller and the application through the secrets operator, so onboarding an application is
-a secret written once and injected into two pods rather than a provisioning problem of its own. For
-the full mechanism, see
-[security-workflow.md: Usher token format](security-workflow.md#usher-token-format-jwe).
+it first appears: the controller generates each application's key at registration, keeps it encrypted
+in its own store, and shows it once, so onboarding an application is one secret written to that
+application, with nothing in the controller's deployment changed or restarted. For the full
+mechanism, see [security-workflow.md: Usher token format](security-workflow.md#usher-token-format-jwe)
+and [schema.md](schema.md) § Applications.
 
 ---
 
 ### A category is a condition over records, and a record needs every category it matches
 
-**Decided 2026-10-20, once Arranger and Usher Bridge had sized it.** A category is a named
+**Decided 2026-10-20, once the adapter's and the bridge's changes had been sized.** A category is a named
 condition over a catalogue's records, written in SQON in the catalogue's **category mapping**: the
 Usher registration kept beside the catalogue's configuration. "This field holds this value" is the
 simplest condition. Usher holds only the names, the category mapping says which records each name
@@ -826,7 +826,7 @@ reads. A record escapes the unmarked clause only if a global category holds for 
 its resources lacking `unmarked` carries a category of its own; a resource defining none can only be
 covered by a global. So no resource's unmarked records pass by matching another resource's
 category, a multi-valued record included. The known resources
-are the registered resource list, or else every resource the payload names, and the known resources
+are the registered resource list, or else every resource named by the payload, and the known resources
 not held are those minus the ones held with record view. The filter grows with the number of
 categories, not with resources or with how a principal's grants divide them, which is what keeps it
 inside the engines' clause limits: OpenSearch counts clauses across the whole query, and a form with
@@ -1539,6 +1539,9 @@ goes to the exchange and is refused there.
 
 - A refusal is cached too, in its own bounded store, until the sign-in token's `exp`, capped at the
   token lifetime, so repeated junk costs no exchanges and can only ever evict other junk.
+- A principal notice does not lift a cached refusal: a restored principal is refused on the
+  credential refused before, until it expires, and is granted on the fresh token a renewal brings. A
+  refused credential carries no subject the bridge has verified, so no notice can name it.
 - Concurrent requests carrying one sign-in token share one exchange, and the exchanges in flight are
   bounded, beyond which the bridge answers 503.
 - The bridge refuses locally only a three-part signed token whose own `exp` has passed, by the
@@ -1612,6 +1615,70 @@ Decided 2026-10-04; the table is in [adapter-integration.md](adapter-integration
 
 Serving a suspended principal's export with an open-tier marker instead of 503 is on the roadmap as a
 possible improvement, since it would only help where a portal reads the marker.
+
+---
+
+### A principal states its credential, and a suspended one keeps a confirmed identity for attribution alone
+
+The bridge hands an adapter one of four principals: no credential, an unconfirmed credential, a
+confirmed one whose grants hold, and a confirmed one suspended by an outage. The last carries its
+identity as `attributionOnlySubject`, never as `subject`, so an ownership check cannot act on a
+principal whose grants are on hold. Decided 2026-11-02; the shape is in
+[adapter-integration.md](adapter-integration.md).
+
+| Alternative                                          | Why not                                                                                                        |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| a null subject for every suspended principal         | an outage's activity cannot be attributed, and an audit by creator finds nothing for it                         |
+| a suspended principal's identity kept as `subject`   | a check such as "a submitter may edit their own submission" would act while the principal's grants are on hold |
+| anonymous read from a null subject                   | a state read from a missing value, which is where an unconfirmed or misbuilt principal passes for anonymous    |
+| an unconfirmed credential's `sub` trusted            | the bridge only decodes a sign-in token, so anyone could write any `sub` into one                              |
+
+---
+
+### An application's own filtering stays its own, whatever its enforcement switch says
+
+Every application's switch, named `ENABLE_ACCESS_ENFORCEMENT`, turns on Usher's enforcement over
+principals. A filter the application applies for its own reasons, such as serving a subset of its
+data, applies with the switch off as well, and off behaves exactly as unset. With the switch on, an
+application unable to apply both filters refuses to start. Decided 2026-11-02.
+
+| Alternative                                         | Why not                                                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| refuse an application's filter with the switch off  | treats every filter as access control, so a filter scoping data for performance is refused       |
+| drop the application's filter with the switch on    | serves records the application meant to withhold                                                 |
+| drop Usher's filter when the application has one    | turns enforcement off while the switch says on                                                   |
+| name the switch `ENABLE_ACCESS_CONTROL`             | access control is approval and enforcement together, and approval happens elsewhere             |
+
+---
+
+### A saved set's creator is a recorded state, and its identity never leaves the server
+
+A set records how it was saved: by a confirmed principal, anonymously, or unattributed where the
+application is not told who is asking. A suspended principal cannot save one. No reader is served a
+set's creator, the creator included, in any deployment. An anonymous set is reached only by naming
+it. Decided 2026-11-02; who reaches which is in [adapter-integration.md](adapter-integration.md).
+
+| Alternative                                     | Why not                                                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| anonymous read from a missing creator           | a suspended or misattributed save would read as anonymous and become reachable by everyone                            |
+| list anonymous sets to every reader             | anyone could write into a list shown to every reader, and each visitor's saved query would be shown to all              |
+| cap anonymous saves                             | no cap holds reliably against saves made without signing in, so anonymous sets expire and are cleaned up instead     |
+| serve the creator's id to the creator           | nothing needs it, and a client-sent value would read as verified                                                    |
+| serve a client-sent creator where nothing verifies it | any client can write any value there, including someone else's identifier                                      |
+
+---
+
+### A client compares against exported values, and no header names the layer that answered
+
+`@overture-stack/usher-types` exports the suspended header's name and value and the challenge's
+error values, so a client and the bridge compare against one source. Statuses and `Retry-After` are
+standard HTTP and are not exported. Decided 2026-10-30; what a client does with each answer is in
+[client-integration.md](client-integration.md).
+
+| Alternative                                   | Why not                                                                                                                                  |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| a marker header naming the answering layer    | the application, not the bridge, refuses a suspended principal's grant-only read, so the marker would mislead in the case it exists for |
+| export the statuses and `Retry-After` seconds | HTTP already fixes them, and a constant would be a second source for the same value                                                     |
 
 ---
 

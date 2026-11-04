@@ -95,10 +95,11 @@ implementation against a published standard.
 
 **The key is per application, and that is what matters rather than whether it is symmetric.** One key
 exists per controller-and-application pair, so no bridge can decrypt another application's token and
-the `aud` claim is a cryptographic boundary rather than a claim-level assertion. The key is symmetric
-and lives in the secrets store, reaching both the controller and that application through the secrets
-operator, which is how every other secret on the platform already travels. Onboarding an application
-is a secret written once and injected into two pods. Users never hold any of these keys.
+the `aud` claim is a cryptographic boundary rather than a claim-level assertion. The key is symmetric.
+The controller generates it when the application is registered, keeps it encrypted under its
+key-encryption key, and shows it once, for the application's own secrets. Onboarding an application
+is that one secret written to the application, with nothing in the controller's deployment changed or
+restarted; see [schema.md](schema.md) § Applications. Users never hold any of these keys.
 
 The algorithm is settled: `dir` with A256GCM. How keys are rotated remains open; see
 [decisions.md](decisions.md) and [adapter-integration.md](adapter-integration.md).
@@ -406,8 +407,9 @@ still validates the `iss` claim. Only `sub` is null; no other standard claims ar
 
 `PermissionsPayload` is the decrypted token: what the bridge reads to render each catalogue's
 enforcement result for an adapter, and the one artifact that must match across the controller, the
-bridge and the conformance corpus. It moves into `modules/types` in this repository, published as
-`@overture-stack/usher-types`, when implementation begins, and the bridge re-exports it.
+bridge and the conformance corpus. It lives in `modules/types`, published as
+`@overture-stack/usher-types`, from which an adapter imports it; the bridge re-exports only the
+registration types.
 
 ```typescript
 /** A list with at least one element. An empty list would mean what absence already means. */
@@ -827,9 +829,8 @@ integration built to work there would be building against an artifact that is go
 
 ### Decryption key distribution
 
-Receiving it is settled: the secrets operator delivers the same symmetric key to the controller and
-to that application's pod, which is how every other secret on the platform already travels. Rotation
-is not: how often, and how a bridge picks up a new key without dropping tokens still in flight. See
+Receiving it is settled: the controller generates the key when the application is registered and
+keeps it, and the application receives it once, through its own secrets. Rotation is not: how often, and how a bridge picks up a new key without dropping tokens still in flight. See
 [adapter-integration.md](adapter-integration.md).
 
 ### Grace period configurability scope
