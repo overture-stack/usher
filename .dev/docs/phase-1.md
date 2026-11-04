@@ -141,11 +141,11 @@ tests build it rather than the mock issuing it: a version 1 payload carrying a `
 "Category names carry their scope from the first release" in
 [decisions.md](../design/decisions.md)).
 
-| Given                                                                                   | Then                                                                                                                         |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `global.unmarked` and `resource.pilot` on HEART_STUDY, then two requests inside the TTL     | the enforcement result is rendered from `global.unmarked` alone, and exactly one `category.unenforced` is recorded, naming the principal, HEART_STUDY, `resource.pilot`, the payload version and `notImplemented` |
-| a bare `open` on HEART_STUDY                                                            | the payload is malformed: treated as not received, the application reports unavailable rather than an empty answer, and the rejection is logged |
-| an unknown prefix, `local.pilot`                                                        | the same as a bare name                                                                                                      |
+| Given                                                                                   | Then                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `global.unmarked` and `resource.pilot` on HEART_STUDY, then two requests inside the TTL | the enforcement result is rendered from `global.unmarked` alone, and exactly one `category.unenforced` is recorded, naming the principal, HEART_STUDY, `resource.pilot`, the payload version and `notImplemented` |
+| a bare `open` on HEART_STUDY                                                            | the payload is malformed: treated as not received, the application reports unavailable rather than an empty answer, and the rejection is logged                                                                   |
+| an unknown prefix, `local.pilot`                                                        | the same as a bare name                                                                                                                                                                                           |
 
 Inverting proves each assertion load-bearing: a bridge passing `resource.pilot` through fails the
 first row, one recording the event per request rather than per payload fails it too, and one
@@ -514,13 +514,13 @@ what a later change costs.
 and a coordinated deploy of every bridge.** So the two are future-proofed differently, and
 deliberately:
 
-|                                                            | First release                                        | Arrives later, and how                                                    |
-| ---------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
-| Data-plane entities                                        | `record` and `artifact`                              | `field` and `revision`, by migration                                      |
-| `grants.field_category_id`                                 | not created                                          | added nullable, no backfill, since null is correct for every existing row |
-| `capabilities` rows for `field`, `revision`                | not inserted                                         | data, not structure                                                       |
-| Token nesting by entity                                    | **shipped**, though only `record` ever appears in it | nothing to add                                                            |
-| `record_category_id` as the column name                    | **shipped under that name**                          | nothing to rename                                                         |
+|                                             | First release                                        | Arrives later, and how                                                    |
+| ------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| Data-plane entities                         | `record` and `artifact`                              | `field` and `revision`, by migration                                      |
+| `grants.field_category_id`                  | not created                                          | added nullable, no backfill, since null is correct for every existing row |
+| `capabilities` rows for `field`, `revision` | not inserted                                         | data, not structure                                                       |
+| Token nesting by entity                     | **shipped**, though only `record` ever appears in it | nothing to add                                                            |
+| `record_category_id` as the column name     | **shipped under that name**                          | nothing to rename                                                         |
 
 **The nesting ships even though the first release has one entity in it.**
 `{"global.unmarked": {"record": ["view"]}}` gains nothing over `{"global.unmarked": ["view"]}` while
@@ -660,11 +660,11 @@ schema change. See the fast-path decision in [decisions.md](../design/decisions.
 Implementation velocity is not the risk. The critical path runs through the open design blockers
 above and one external dependency outside this project's control:
 
-| Risk                                                                               | Gate                                                      | Status                                                                                       |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| The open design blockers resolved                                                  | Implementation start                                      | Carried per blocker in its own **Status** line above, so there is one copy of it to maintain |
-| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the bridge's token            | Unknown; DevOps and infra owned                                                              |
-| Resource field confirmed per catalogue                                             | the Arranger adapter config                               | Resolved for the first integration; recorded on that side                                    |
+| Risk                                                                               | Gate                                           | Status                                                                                       |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| The open design blockers resolved                                                  | Implementation start                           | Carried per blocker in its own **Status** line above, so there is one copy of it to maintain |
+| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the bridge's token | Unknown; DevOps and infra owned                                                              |
+| Resource field confirmed per catalogue                                             | the Arranger adapter config                    | Resolved for the first integration; recorded on that side                                    |
 
 Keycloak's own token exchange endpoint is not a dependency: the bridge calls the controller's
 exchange endpoint, and the controller validates the presented token against Keycloak's JWKS. The

@@ -19,12 +19,12 @@ so one created without a decision fails closed.
 Four HEART_STUDY records, with "controlled" restricting and "paediatric" only selecting, read from
 the records' existing age-group field:
 
-| Record | Belongs to                               | Reached with the open grant | Reached with HEART_STUDY "controlled" |
-| ------ | ---------------------------------------- | --------------------------- | ------------------------------------- |
-| r1     | "controlled", selected by "paediatric"   | no                          | yes                                   |
-| r2     | selected by "paediatric" only            | yes                         | yes                                   |
-| r3     | "controlled" only                        | no                          | yes                                   |
-| r4     | nothing                                  | yes                         | yes                                   |
+| Record | Belongs to                             | Reached with the open grant | Reached with HEART_STUDY "controlled" |
+| ------ | -------------------------------------- | --------------------------- | ------------------------------------- |
+| r1     | "controlled", selected by "paediatric" | no                          | yes                                   |
+| r2     | selected by "paediatric" only          | yes                         | yes                                   |
+| r3     | "controlled" only                      | no                          | yes                                   |
+| r4     | nothing                                | yes                         | yes                                   |
 
 "paediatric" changes who reaches nothing. It picks out r1 and r2, and that selection is the synthetic
 resource.

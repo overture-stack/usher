@@ -152,11 +152,11 @@ non-negotiable.
 Usher constructs queries against its own database and against IdP APIs. Adapters translate
 permissions payloads into app-native queries (SQON, SQL, etc.).
 
-| Design choice                                                                                                                                                     | Addresses                                                      |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| All Usher database queries must use parameterized statements or an ORM that handles parameter binding                                                             | Prevents SQL injection into Usher's policy store               |
-| Resource IDs, category names, and user identifiers from permissions payloads must be validated against an allowlist before the bridge renders them into a filter  | Prevents permissions payload injection into downstream queries |
-| Usher's API validates all input at the boundary (type, length, format)                                                                                            | Prevents malformed input from reaching internal logic          |
+| Design choice                                                                                                                                                    | Addresses                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| All Usher database queries must use parameterized statements or an ORM that handles parameter binding                                                            | Prevents SQL injection into Usher's policy store               |
+| Resource IDs, category names, and user identifiers from permissions payloads must be validated against an allowlist before the bridge renders them into a filter | Prevents permissions payload injection into downstream queries |
+| Usher's API validates all input at the boundary (type, length, format)                                                                                           | Prevents malformed input from reaching internal logic          |
 
 **Gaps:** Adapter-side injection prevention is the most significant gap. The bridge renders
 permissions payload values into a filter, and each PEP adapter applies that filter in its app's

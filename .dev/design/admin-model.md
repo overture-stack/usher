@@ -41,13 +41,13 @@ Ordered by widening scope rather than by seniority, matching
 [permissions-model.md](permissions-model.md): a reader meets the narrowest first, and central control
 is not where this model starts.
 
-| Role            | Scope                             | Primary permission                                           | Holds data access                        |
-| --------------- | --------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
-| Submitter       | Their submitted resource          | Data provenance                                              | Open scope decision; see below           |
+| Role            | Scope                             | Primary permission                                                                   | Holds data access                        |
+| --------------- | --------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------- |
+| Submitter       | Their submitted resource          | Data provenance                                                                      | Open scope decision; see below           |
 | Owner           | Their designated resource(s)      | Manages grants within their resource; sets its base tier; suppresses and restores it | None from ownership                      |
-| Custodian       | One or more categories            | Manages grants for their categories across all resources     | No (unless separately granted as a user) |
-| Admin           | Platform-wide, the policy store   | Manages roles, resources and system configuration            | None standing; may self-grant explicitly |
-| Service account | Explicitly enumerated permissions | Performs system operations only                              | No                                       |
+| Custodian       | One or more categories            | Manages grants for their categories across all resources                             | No (unless separately granted as a user) |
+| Admin           | Platform-wide, the policy store   | Manages roles, resources and system configuration                                    | None standing; may self-grant explicitly |
+| Service account | Explicitly enumerated permissions | Performs system operations only                                                      | No                                       |
 
 **Submitter vs. owner:** submission establishes data provenance. It does not automatically give
 management rights, and **whether it gives read access to the submitted data is an open scope

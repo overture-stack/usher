@@ -620,17 +620,18 @@ failing check.** Five parts.
    share.
 2. **Checks ordered by cost.** Only a credential passing every offline check takes a database slot:
 
-   | Order | Check                                                                                          | Cost                      |
-   | ----- | ---------------------------------------------------------------------------------------------- | ------------------------- |
-   | 1     | the bridge's channel assertion                                                                 | one signature check       |
-   | 2     | the credential's shape; for a sign-in token, its issuer, audience, expiry and key id against the cached key set | string comparisons        |
-   | 3     | the credential's own mark: a sign-in token's signature, an API key's watermark                 | one signature or MAC, no I/O |
-   | 4     | admission into the application's share                                                         | a counter                 |
-   | 5     | the identity lookup, revocation and the token calculation                                     | the database              |
+   | Order | Check                                                                                                           | Cost                         |
+   | ----- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+   | 1     | the bridge's channel assertion                                                                                  | one signature check          |
+   | 2     | the credential's shape; for a sign-in token, its issuer, audience, expiry and key id against the cached key set | string comparisons           |
+   | 3     | the credential's own mark: a sign-in token's signature, an API key's watermark                                  | one signature or MAC, no I/O |
+   | 4     | admission into the application's share                                                                          | a counter                    |
+   | 5     | the identity lookup, revocation and the token calculation                                                       | the database                 |
 
    Tokens already carry such a mark: a sign-in token's signature, and an Usher token's
    authenticated encryption, which a forged token fails at the bridge's decryption. An API key is
    the one credential without one.
+
 3. **API keys carry a watermark.** A key minted by the platform reads `<prefix>_<version><random><mac>`:
    a fixed prefix, a version naming the MAC key, the random body, and a MAC over the rest under a key
    of this instance. The controller discards a junk key, or one minted by another instance, before
@@ -662,6 +663,7 @@ others keep their sign-ins served. Within the targeted application, junk is refu
 slot, which covers part of the roadmap's admission-control research.
 
 **Open within it:**
+
 - each application's share: equal, or weighted by registration;
 - whether shares are counted per controller instance or across instances, in Valkey;
 - the threshold for the alert event;
@@ -928,16 +930,16 @@ creation is different, because nothing tells Usher that an account changed.
 
 **What nothing tells Usher today.**
 
-| Change in Keycloak                                                                        | What follows in Usher, as designed                                                                                                                       |
-| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| an account deleted                                                                        | its grants stay live with no end, listings count them, a deleted sole owner still satisfies the rule that a resource always has an owner                 |
-| an account disabled                                                                       | nothing, until the person's current tokens expire                                                                                                         |
-| an account deleted and created again for the same address                                 | a new subject, so the old grants are orphaned and a steward grants access again, with nothing linking the two                                            |
-| an address passed to a different person, as an institution can reissue one               | a grant by address resolves to whoever holds it now, and a pending invitation to it can be claimed by the new holder                                     |
-| one person holding two accounts, as a brokered sign-in can create a second one instead of linking | grants split across two subjects, and a steward can't tell they are one person                                                                 |
-| an administrator signing a person out, a password reset, or a "not before" revocation     | nothing, unless Keycloak also sends a back-channel logout, which is not verified                                                                         |
-| a person given or losing the administrator role                                           | takes effect with their next token, but Usher's audit trail never records who became an administrator or when                                           |
-| a realm exported and imported, or a person moved to another realm or provider             | their subject can change, with the same effect as a recreated account                                                                                     |
+| Change in Keycloak                                                                                | What follows in Usher, as designed                                                                                                       |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| an account deleted                                                                                | its grants stay live with no end, listings count them, a deleted sole owner still satisfies the rule that a resource always has an owner |
+| an account disabled                                                                               | nothing, until the person's current tokens expire                                                                                        |
+| an account deleted and created again for the same address                                         | a new subject, so the old grants are orphaned and a steward grants access again, with nothing linking the two                            |
+| an address passed to a different person, as an institution can reissue one                        | a grant by address resolves to whoever holds it now, and a pending invitation to it can be claimed by the new holder                     |
+| one person holding two accounts, as a brokered sign-in can create a second one instead of linking | grants split across two subjects, and a steward can't tell they are one person                                                           |
+| an administrator signing a person out, a password reset, or a "not before" revocation             | nothing, unless Keycloak also sends a back-channel logout, which is not verified                                                         |
+| a person given or losing the administrator role                                                   | takes effect with their next token, but Usher's audit trail never records who became an administrator or when                            |
+| a realm exported and imported, or a person moved to another realm or provider                     | their subject can change, with the same effect as a recreated account                                                                    |
 
 **Access already has a bound; Usher's records don't.** A sign-in token lives about five minutes, the
 portal renews it before it expires and ends the session when renewal fails (#182), and an Usher token
@@ -949,12 +951,12 @@ Keycloak is lost, so it deserves an end-to-end test of its own.
 
 **Routes for Usher to learn of a change**, which combine rather than exclude each other:
 
-| Route                                                                                                                                                 | What it covers                                                                                    | What it costs                                                                                                     |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Usher asks Keycloak**: the controller polls Keycloak's stored admin events (account deleted, disabled, updated, role mappings changed) with the credential it already uses for the directory | each change, minutes behind, with no extension to build                                           | admin events turned on in the realm and kept long enough to be read; read access to events for that credential    |
-| **Keycloak tells Usher**: an event listener extension in Keycloak posts the same events to the controller                                             | each change within seconds                                                                        | an extension to build, deploy and keep compatible with each Keycloak version; an event lost in transit is gone     |
-| **Reconciliation**: a nightly check of every subject holding a live grant against the directory                                                       | anything the event routes missed, and deployments with neither                                    | one directory lookup per subject per run; it finds that an account is gone, not who it was                         |
-| **An operating rule**: accounts are disabled rather than deleted, except to carry out an erasure request, which goes through Usher first             | keeps every subject resolvable                                                                    | a rule for operators, enforced by review rather than software                                                     |
+| Route                                                                                                                                                                                          | What it covers                                                 | What it costs                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Usher asks Keycloak**: the controller polls Keycloak's stored admin events (account deleted, disabled, updated, role mappings changed) with the credential it already uses for the directory | each change, minutes behind, with no extension to build        | admin events turned on in the realm and kept long enough to be read; read access to events for that credential |
+| **Keycloak tells Usher**: an event listener extension in Keycloak posts the same events to the controller                                                                                      | each change within seconds                                     | an extension to build, deploy and keep compatible with each Keycloak version; an event lost in transit is gone |
+| **Reconciliation**: a nightly check of every subject holding a live grant against the directory                                                                                                | anything the event routes missed, and deployments with neither | one directory lookup per subject per run; it finds that an account is gone, not who it was                     |
+| **An operating rule**: accounts are disabled rather than deleted, except to carry out an erasure request, which goes through Usher first                                                       | keeps every subject resolvable                                 | a rule for operators, enforced by review rather than software                                                  |
 
 Recommended: the first and third together, the poll for timeliness and the nightly check as its
 backstop, with the operating rule written into the runbook.

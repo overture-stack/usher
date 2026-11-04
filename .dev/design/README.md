@@ -63,26 +63,26 @@ means, renewal, and what a portal shows the person), then
 
 ## Document coverage
 
-| Document                                             | Topic                                                                                                               | Status                   |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| [glossary.md](glossary.md)                           | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts          | reference                |
-| [architecture.md](architecture.md)                   | Component responsibilities (Keycloak, controller, bridge, adapter, infrastructure); stateless application principle | in progress              |
-| [concepts.md](../../docs/concepts.md)                | RABAC vocabulary, security primitives, permissions model entities                                                   | reference                |
-| [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps                                                                  | reference                |
-| [security-workflow.md](security-workflow.md)         | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure                          | specced                  |
-| [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, Indigenous data governance, private data sharing               | in progress              |
-| [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the cases that force each branch                   | specced                  |
-| [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                  | draft                    |
+| Document                                             | Topic                                                                                                                            | Status                   |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| [glossary.md](glossary.md)                           | Quick-reference term definitions: system roles, tokens, policy entities, admin roles, integration concepts                       | reference                |
+| [architecture.md](architecture.md)                   | Component responsibilities (Keycloak, controller, bridge, adapter, infrastructure); stateless application principle              | in progress              |
+| [concepts.md](../../docs/concepts.md)                | RABAC vocabulary, security primitives, permissions model entities                                                                | reference                |
+| [security-threat-model.md](security-threat-model.md) | OWASP Top 10:2025 mapping; addressed vs. open gaps                                                                               | reference                |
+| [security-workflow.md](security-workflow.md)         | Token issuance, Usher token lifecycle, revocation, multi-instance propagation, fail-secure                                       | specced                  |
+| [permissions-model.md](permissions-model.md)         | Hybrid role + attribute model, categories, how overlapping cohorts behave, Indigenous data governance, private data sharing      | in progress              |
+| [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the cases that force each branch                                | specced                  |
+| [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                               | draft                    |
 | [schema.md](schema.md)                               | The controller's PostgreSQL store: tables, keys, indexes against the token calculation, the notice stream, the data access layer | draft for review         |
-| [delegated-access.md](delegated-access.md)           | A client acting for a person: who the principal is, which token reaches which application, what stays the client's | specced                  |
-| [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity       | in progress              |
-| [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                              | reference                |
-| [adapter-integration.md](adapter-integration.md)     | Per-app adapter design, bridge library (the bridge)                                                                 | designed; not yet a spec |
-| [client-integration.md](client-integration.md)       | What a client receives and does with each answer; renewal; what a portal shows the person                           | designed                 |
-| [management-ui.md](management-ui.md)                 | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on                             | in progress              |
-| [profile-view.md](profile-view.md)                   | Where a person acts on their own access: permissions held, API tokens                                               | not started              |
-| [audit-events.md](audit-events.md)                   | Policy-plane events, common fields, severity mapping                                                                | specced                  |
-| [to-discuss.md](to-discuss.md)                       | Design gaps, inconsistencies, and security properties requiring resolution before implementation                    | review                   |
+| [delegated-access.md](delegated-access.md)           | A client acting for a person: who the principal is, which token reaches which application, what stays the client's               | specced                  |
+| [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity                    | in progress              |
+| [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                                           | reference                |
+| [adapter-integration.md](adapter-integration.md)     | Per-app adapter design, bridge library (the bridge)                                                                              | designed; not yet a spec |
+| [client-integration.md](client-integration.md)       | What a client receives and does with each answer; renewal; what a portal shows the person                                        | designed                 |
+| [management-ui.md](management-ui.md)                 | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on                                          | in progress              |
+| [profile-view.md](profile-view.md)                   | Where a person acts on their own access: permissions held, API tokens                                                            | not started              |
+| [audit-events.md](audit-events.md)                   | Policy-plane events, common fields, severity mapping                                                                             | specced                  |
+| [to-discuss.md](to-discuss.md)                       | Design gaps, inconsistencies, and security properties requiring resolution before implementation                                 | review                   |
 
 **This table is kept complete by a count, not by a read.** A document added to this directory is
 reachable while someone links it and unreachable once nobody does, and no sweep starting from

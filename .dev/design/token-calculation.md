@@ -52,12 +52,12 @@ passes.
 Four behaviours that were separate stipulations follow from this one rule, which is the reason to
 state it this way:
 
-| Behaviour                                                | Was                              | Is                                           |
-| -------------------------------------------------------- | -------------------------------- | -------------------------------------------- |
-| No grants means nothing reachable                        | asserted                         | the ceiling minus everything, which is empty |
-| No grant on a resource means nobody reaches it          | asserted, case 10               | no pair to keep                              |
-| An empty category does not satisfy its own condition     | patched after shipping as a hole | nothing kept is nothing reached              |
-| A category can only ever restrict                        | asserted in reader prose         | every category is a condition that removes   |
+| Behaviour                                            | Was                              | Is                                           |
+| ---------------------------------------------------- | -------------------------------- | -------------------------------------------- |
+| No grants means nothing reachable                    | asserted                         | the ceiling minus everything, which is empty |
+| No grant on a resource means nobody reaches it       | asserted, case 10                | no pair to keep                              |
+| An empty category does not satisfy its own condition | patched after shipping as a hole | nothing kept is nothing reached              |
+| A category can only ever restrict                    | asserted in reader prose         | every category is a condition that removes   |
 
 **Where it diverges from RABAC, deliberately.** An object with no applicable filter keeps its
 permissions there, because a NIST RBAC permission is an `(operation, object)` pair and the role has
@@ -252,16 +252,16 @@ Every grant conferred by a rule here is on `unmarked`, shortened as above. See "
 can follow a rule" and "Records not covered by any category are `unmarked`" in
 [decisions.md](decisions.md).
 
-| #   | Case                                                                      | Ana's token                                                                                                                                                                                              |
-| --- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 28  | Anonymous. Baseline on                                                    | `{unmarked: [view]}` on OPEN_ATLAS and HEART_STUDY. MEMBERS_ARCHIVE and SEALED_ARCHIVE are absent: one needs a sign-in and the other a grant                                                         |
-| 29  | Anonymous. Baseline off                                                   | `{}`. Neither rule reaches her                                                                                                                                                                           |
-| 30  | Signed in, no grants. Baseline on                                         | Case 28, plus `MEMBERS_ARCHIVE: {unmarked: [view]}`. This is the only effect of a present `sub` alone                                                                                                 |
-| 31  | Signed in, no grants. Baseline off                                        | `MEMBERS_ARCHIVE: {unmarked: [view]}` alone. An empty baseline reaches nobody on an open resource, signed in or not, because registration gating is the registered setting rather than an empty baseline |
-| 32  | Signed in. Accepted a viewer grant on HEART_STUDY/controlled. Baseline on | Case 30, with `HEART_STUDY: {unmarked: [view], controlled: [view]}`. The rule's grants and her own accumulate, and neither replaces the other                                                         |
-| 33  | Signed in, and her identity has been revoked                              | Refused. A revoked principal fails at the bridge before any query runs, so no rule reaches her: a rule's grant cannot outlive the identity it was conferred on                                           |
-| 34  | Carries an expired identity token                                         | Refused at the exchange, as case 33 is at the bridge. Serving case 28 instead would reach less, never more, but it would record a signed-in person as anonymous and hide the failed sign-in. A portal shows the anonymous view with a notice that the person was signed out |
-| 35  | Signed in. Accepted a viewer grant on SEALED_ARCHIVE/unmarked. Baseline on | Case 30, plus `SEALED_ARCHIVE: {unmarked: [view]}`. Records not covered by any category, on a resource that is not open, are reachable once someone is granted them                                             |
+| #   | Case                                                                       | Ana's token                                                                                                                                                                                                                                                                 |
+| --- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 28  | Anonymous. Baseline on                                                     | `{unmarked: [view]}` on OPEN_ATLAS and HEART_STUDY. MEMBERS_ARCHIVE and SEALED_ARCHIVE are absent: one needs a sign-in and the other a grant                                                                                                                                |
+| 29  | Anonymous. Baseline off                                                    | `{}`. Neither rule reaches her                                                                                                                                                                                                                                              |
+| 30  | Signed in, no grants. Baseline on                                          | Case 28, plus `MEMBERS_ARCHIVE: {unmarked: [view]}`. This is the only effect of a present `sub` alone                                                                                                                                                                       |
+| 31  | Signed in, no grants. Baseline off                                         | `MEMBERS_ARCHIVE: {unmarked: [view]}` alone. An empty baseline reaches nobody on an open resource, signed in or not, because registration gating is the registered setting rather than an empty baseline                                                                    |
+| 32  | Signed in. Accepted a viewer grant on HEART_STUDY/controlled. Baseline on  | Case 30, with `HEART_STUDY: {unmarked: [view], controlled: [view]}`. The rule's grants and her own accumulate, and neither replaces the other                                                                                                                               |
+| 33  | Signed in, and her identity has been revoked                               | Refused. A revoked principal fails at the bridge before any query runs, so no rule reaches her: a rule's grant cannot outlive the identity it was conferred on                                                                                                              |
+| 34  | Carries an expired identity token                                          | Refused at the exchange, as case 33 is at the bridge. Serving case 28 instead would reach less, never more, but it would record a signed-in person as anonymous and hide the failed sign-in. A portal shows the anonymous view with a notice that the person was signed out |
+| 35  | Signed in. Accepted a viewer grant on SEALED_ARCHIVE/unmarked. Baseline on | Case 30, plus `SEALED_ARCHIVE: {unmarked: [view]}`. Records not covered by any category, on a resource that is not open, are reachable once someone is granted them                                                                                                         |
 
 A resource set to registered may carry a restricting category as well: the setting reaches its
 unmarked records, and its controlled records need their own grant, as case 32 shows for an open one.
