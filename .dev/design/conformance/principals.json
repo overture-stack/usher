@@ -1,5 +1,4 @@
 {
-  "$schema": "./principals.schema.json",
   "about": {
     "purpose": "Conformance inputs: a principal and the PermissionsPayload an application is handed on their behalf. Never an expectation; what should be served lives in expectations.json.",
     "payloadShape": "security-workflow.md, The payload as a type",
@@ -14,11 +13,11 @@
     },
     {
       "case": "33",
-      "reason": "A revoked principal fails at the bridge before any query runs, so no token exists. The expectation is a refusal, which belongs to the bridge's tests rather than to a payload."
+      "reason": "A revoked principal is refused at the exchange before any query runs, so no token exists. The expectation is a refusal, which belongs to the exchange's tests rather than to a payload."
     },
     {
       "case": "34",
-      "reason": "An expired identity token is refused at the exchange, so no token exists. The expectation is a refusal, which belongs to the exchange's tests rather than to a payload; a portal then shows the anonymous view with a notice that the person was signed out."
+      "reason": "An expired sign-in token is refused by the bridge once it is past its exp by the bridge's tolerance, and by the exchange before that, so no token exists. The expectation is a refusal, which belongs to the bridge's and the exchange's tests rather than to a payload. A client renews its sign-in token once; a 401 that persists after a successful renewal is final for that token, and a portal then keeps the person signed in, replaces the view with its own refusal, and offers Log out, leaving that choice to the person."
     }
   ],
   "principals": [
@@ -35,7 +34,17 @@
         "exp": 1767225900,
         "generatedAt": 1767225600,
         "permissions": {},
-        "offeredCategories": {}
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {},
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -54,39 +63,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -105,39 +121,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -156,39 +179,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -207,7 +237,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -224,32 +256,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -268,39 +305,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -338,32 +382,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -382,7 +431,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -399,32 +450,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -444,21 +500,27 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -473,27 +535,28 @@
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
       "id": "case-10",
       "case": "10",
       "description": "VOID_INDEX carries no concrete category, its unmarked records are by grant, and nobody is granted them. It is absent from the map, so no clause selects any of its records and it is reachable by nobody.",
-      "notes": "The assertion lives in expectations.json: every VOID_INDEX record is invisible to every principal in this file, including this one.",
+      "notes": "expectations.json holds a VOID_INDEX record withheld from this principal. No payload in this file holds VOID_INDEX, so no principal here reaches its records.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -506,39 +569,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -557,39 +627,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -608,39 +685,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -659,7 +743,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -676,32 +762,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -720,7 +811,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -734,32 +827,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -778,7 +876,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -792,32 +892,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -836,39 +941,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -887,39 +999,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -938,39 +1057,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -989,28 +1115,36 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -1029,14 +1163,18 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
@@ -1050,20 +1188,21 @@
             }
           }
         },
-        "offeredCategories": {
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": [],
+          "HEART_STUDY": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -1082,7 +1221,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -1099,32 +1240,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -1132,7 +1278,7 @@
       "case": "21",
       "description": "Accepted grant on controlled, against a record withheld until a date. The payload is case 05's, because nothing in it can express withholding, and that is the point of the case.",
       "implementable": false,
-      "notes": "The only case distinguishing additive grants from a narrowed ceiling. Until a withholding layer exists, no test can catch an implementation that gets the direction wrong. expectations.json asserts no reach against the withheld record.",
+      "notes": "The only case distinguishing additive grants from a narrowed ceiling. Until a withholding layer exists, no test can catch an implementation that gets the direction wrong. Nothing in a payload or a key registration can express withholding yet, so the case has no entry in expectations.json.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -1145,7 +1291,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -1162,40 +1310,44 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
       "id": "case-22",
       "case": "22",
       "description": "A record carries controlled and community-governed, and she holds only controlled. Both are needed, and the payload cannot say so.",
-      "implementable": false,
-      "notes": "Waiting on the subset test the query layer cannot yet express. Until it lands a record carries one category.",
+      "notes": "Implementable: the key's conditions decide a record's categories, and a record is served only when each of them is held on its resource. The case's records and their expected outcomes are in expectations.json.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -1208,21 +1360,27 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -1237,27 +1395,28 @@
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
       "id": "case-23",
       "case": "23",
       "description": "A record carries a category value the adapter has no mapping for. The principal is ordinary; the defect is that the record is served as unmarked, to whoever reaches the unmarked records.",
-      "notes": "This is the failure the startup reconciliation check exists to prevent. The assertion lives in expectations.json and in records.json, not here.",
+      "notes": "This is the failure the startup reconciliation check exists to prevent. expectations.json holds its record, served as unmarked, beside a controlled record withheld on the same study.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -1270,39 +1429,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -1322,7 +1488,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ],
               "field": {
                 "global.basic": [
@@ -1334,32 +1502,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -1378,7 +1551,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ],
               "field": {
                 "global.clinician": [
@@ -1391,32 +1566,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -1436,39 +1616,46 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -1487,7 +1674,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ],
               "revision": [
                 "view"
@@ -1497,39 +1686,44 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
       "id": "case-27",
       "case": "27",
       "description": "She holds artifact.create on HEART_STUDY's unmarked records.",
-      "notes": "An artifact drawn from two resources needs the capability under both. expectations.json should carry that pair, since the provenance rule is expressed in the token rather than beside it.",
+      "notes": "An artifact drawn from two resources needs the capability under both, which is the provenance rule expressed in the token rather than beside it. Artifact keys are refused at registration, leaving downloads to a download service, so no key judges this capability and expectations.json holds no case for it.",
       "payload": {
         "payloadVersion": 1,
         "sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -1542,7 +1736,9 @@
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ],
               "artifact": [
                 "create"
@@ -1552,32 +1748,37 @@
           "LUNG_COHORT": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "REEF_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "LUNG_COHORT": [
-            "global.unmarked"
-          ],
-          "REEF_ARCHIVE": [
-            "global.community-governed",
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.community-governed",
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "HEART_STUDY": [],
+          "LUNG_COHORT": [],
+          "REEF_ARCHIVE": []
+        },
+        "servedResources": [
+          "HEART_STUDY",
+          "LUNG_COHORT",
+          "REEF_ARCHIVE",
+          "VOID_INDEX"
+        ]
       }
     },
     {
@@ -1597,27 +1798,35 @@
           "OPEN_ATLAS": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "OPEN_ATLAS": [
-            "global.unmarked"
-          ],
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "OPEN_ATLAS": [],
+          "HEART_STUDY": []
+        },
+        "servedResources": [
+          "OPEN_ATLAS",
+          "MEMBERS_ARCHIVE",
+          "SEALED_ARCHIVE",
+          "HEART_STUDY"
+        ]
       }
     },
     {
@@ -1634,7 +1843,16 @@
         "exp": 1767225900,
         "generatedAt": 1767225600,
         "permissions": {},
-        "offeredCategories": {}
+        "globalCategories": [
+          "global.controlled"
+        ],
+        "resourceCategories": {},
+        "servedResources": [
+          "OPEN_ATLAS",
+          "MEMBERS_ARCHIVE",
+          "SEALED_ARCHIVE",
+          "HEART_STUDY"
+        ]
       }
     },
     {
@@ -1654,37 +1872,45 @@
           "OPEN_ATLAS": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "MEMBERS_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "OPEN_ATLAS": [
-            "global.unmarked"
-          ],
-          "MEMBERS_ARCHIVE": [
-            "global.unmarked"
-          ],
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "OPEN_ATLAS": [],
+          "MEMBERS_ARCHIVE": [],
+          "HEART_STUDY": []
+        },
+        "servedResources": [
+          "OPEN_ATLAS",
+          "MEMBERS_ARCHIVE",
+          "SEALED_ARCHIVE",
+          "HEART_STUDY"
+        ]
       }
     },
     {
@@ -1704,16 +1930,25 @@
           "MEMBERS_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           }
         },
-        "offeredCategories": {
-          "MEMBERS_ARCHIVE": [
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "MEMBERS_ARCHIVE": []
+        },
+        "servedResources": [
+          "OPEN_ATLAS",
+          "MEMBERS_ARCHIVE",
+          "SEALED_ARCHIVE",
+          "HEART_STUDY"
+        ]
       }
     },
     {
@@ -1733,21 +1968,27 @@
           "OPEN_ATLAS": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "MEMBERS_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             },
             "global.controlled": {
@@ -1759,18 +2000,20 @@
             }
           }
         },
-        "offeredCategories": {
-          "OPEN_ATLAS": [
-            "global.unmarked"
-          ],
-          "MEMBERS_ARCHIVE": [
-            "global.unmarked"
-          ],
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "OPEN_ATLAS": [],
+          "MEMBERS_ARCHIVE": [],
+          "HEART_STUDY": []
+        },
+        "servedResources": [
+          "OPEN_ATLAS",
+          "MEMBERS_ARCHIVE",
+          "SEALED_ARCHIVE",
+          "HEART_STUDY"
+        ]
       }
     },
     {
@@ -1790,21 +2033,27 @@
           "OPEN_ATLAS": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "MEMBERS_ARCHIVE": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
           "HEART_STUDY": {
             "global.unmarked": {
               "record": [
-                "view"
+                "count",
+                "view",
+                "export"
               ]
             }
           },
@@ -1818,21 +2067,21 @@
             }
           }
         },
-        "offeredCategories": {
-          "OPEN_ATLAS": [
-            "global.unmarked"
-          ],
-          "MEMBERS_ARCHIVE": [
-            "global.unmarked"
-          ],
-          "HEART_STUDY": [
-            "global.controlled",
-            "global.unmarked"
-          ],
-          "SEALED_ARCHIVE": [
-            "global.unmarked"
-          ]
-        }
+        "globalCategories": [
+          "global.controlled"
+        ],
+        "resourceCategories": {
+          "OPEN_ATLAS": [],
+          "MEMBERS_ARCHIVE": [],
+          "HEART_STUDY": [],
+          "SEALED_ARCHIVE": []
+        },
+        "servedResources": [
+          "OPEN_ATLAS",
+          "MEMBERS_ARCHIVE",
+          "SEALED_ARCHIVE",
+          "HEART_STUDY"
+        ]
       }
     }
   ]

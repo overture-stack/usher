@@ -1,0 +1,264 @@
+{
+  "about": {
+    "keyRegistration": "Each case's key as an adapter registers it, in the shape accepted by usher-types' validateRegistration: its kind, resource field name and category conditions, and its resource list when it has one.",
+    "outcomes": "served: the key narrows the catalogue and the record is within the narrowing, or the key allows every record. withheld: the key narrows the catalogue and the record is outside it. denied: the key refuses the catalogue outright, so no record is judged; a denial never counts as withheld.",
+    "principalId": "The id of the principals.json entry supplying a case's payload.",
+    "purpose": "Conformance expectations: what an application serves one principal through one key, record by record. With the payload in principals.json, each case holds everything needed to check it.",
+    "readFirst": "README.md in this directory",
+    "records": "Each record judged: its values by field name, the key's resource field among them, its outcome, and the reason for it.",
+    "rule": "A record carries every category whose condition it matches, and lacking a field read by a condition counts as matching it. It is served when the principal holds record view on its resource for each of its categories, or for global.unmarked when it carries none: permissions-model.md, The visibility rule."
+  },
+  "cases": [
+    {
+      "keyRegistration": {
+        "categories": {
+          "global": {
+            "global.community-governed": {
+              "content": {
+                "fieldName": "data_category",
+                "value": [
+                  "community-governed"
+                ]
+              },
+              "op": "in"
+            },
+            "global.controlled": {
+              "content": {
+                "fieldName": "data_category",
+                "value": [
+                  "controlled"
+                ]
+              },
+              "op": "in"
+            }
+          }
+        },
+        "kind": "record",
+        "resourceFieldName": "study_id"
+      },
+      "principalId": "case-01",
+      "records": [
+        {
+          "fields": {
+            "data_category": [
+              "open"
+            ],
+            "study_id": "HEART_STUDY"
+          },
+          "outcome": "denied",
+          "reason": "Its principal holds nothing, so the key denies the whole catalogue as no-grants and even an unmarked record is never judged."
+        }
+      ]
+    },
+    {
+      "keyRegistration": {
+        "categories": {
+          "global": {
+            "global.community-governed": {
+              "content": {
+                "fieldName": "data_category",
+                "value": [
+                  "community-governed"
+                ]
+              },
+              "op": "in"
+            },
+            "global.controlled": {
+              "content": {
+                "fieldName": "data_category",
+                "value": [
+                  "controlled"
+                ]
+              },
+              "op": "in"
+            }
+          }
+        },
+        "kind": "record",
+        "resourceFieldName": "study_id"
+      },
+      "principalId": "case-10",
+      "records": [
+        {
+          "fields": {
+            "data_category": [
+              "open"
+            ],
+            "study_id": "VOID_INDEX"
+          },
+          "outcome": "withheld",
+          "reason": "VOID_INDEX is served and not held, since its unmarked records are by grant and nobody holds them, so a record on it is withheld even though it is unmarked."
+        },
+        {
+          "fields": {
+            "data_category": [
+              "open"
+            ],
+            "study_id": "HEART_STUDY"
+          },
+          "outcome": "served",
+          "reason": "Unmarked, and unmarked is held on HEART_STUDY, so withholding VOID_INDEX takes nothing from the studies held."
+        }
+      ]
+    },
+    {
+      "keyRegistration": {
+        "categories": {
+          "global": {
+            "global.community-governed": {
+              "content": {
+                "fieldName": "data_category",
+                "value": [
+                  "community-governed"
+                ]
+              },
+              "op": "in"
+            },
+            "global.controlled": {
+              "content": {
+                "fieldName": "data_category",
+                "value": [
+                  "controlled"
+                ]
+              },
+              "op": "in"
+            }
+          }
+        },
+        "kind": "record",
+        "resourceFieldName": "study_id"
+      },
+      "principalId": "case-22",
+      "records": [
+        {
+          "fields": {
+            "data_category": [
+              "community-governed",
+              "controlled"
+            ],
+            "study_id": "REEF_ARCHIVE"
+          },
+          "outcome": "withheld",
+          "reason": "It carries both categories, and community-governed is not held on REEF_ARCHIVE: a record needs each of its categories held."
+        },
+        {
+          "fields": {
+            "data_category": [
+              "controlled"
+            ],
+            "study_id": "REEF_ARCHIVE"
+          },
+          "outcome": "served",
+          "reason": "It carries controlled alone, which is held on REEF_ARCHIVE."
+        },
+        {
+          "fields": {
+            "data_category": [
+              "community-governed"
+            ],
+            "study_id": "REEF_ARCHIVE"
+          },
+          "outcome": "withheld",
+          "reason": "It carries community-governed, which is not held on REEF_ARCHIVE."
+        },
+        {
+          "fields": {
+            "data_category": [
+              "open"
+            ],
+            "study_id": "REEF_ARCHIVE"
+          },
+          "outcome": "served",
+          "reason": "No condition matches open, so it carries no category: it is unmarked, and unmarked is held on REEF_ARCHIVE."
+        },
+        {
+          "fields": {
+            "data_category": [],
+            "study_id": "REEF_ARCHIVE"
+          },
+          "outcome": "withheld",
+          "reason": "An empty category field reads as missing, so it counts as carrying both categories, community-governed among them."
+        },
+        {
+          "fields": {
+            "study_id": "REEF_ARCHIVE"
+          },
+          "outcome": "withheld",
+          "reason": "An absent category field reads as missing, as an empty one does, so it counts as carrying both categories."
+        },
+        {
+          "fields": {
+            "data_category": [
+              "controlled"
+            ],
+            "study_id": "HEART_STUDY"
+          },
+          "outcome": "withheld",
+          "reason": "It carries controlled, which is held on REEF_ARCHIVE alone and not on HEART_STUDY."
+        },
+        {
+          "fields": {
+            "data_category": [
+              "open"
+            ],
+            "study_id": "HEART_STUDY"
+          },
+          "outcome": "served",
+          "reason": "No condition matches open, so it is unmarked, and unmarked is held on HEART_STUDY."
+        }
+      ]
+    },
+    {
+      "keyRegistration": {
+        "categories": {
+          "global": {
+            "global.community-governed": {
+              "content": {
+                "fieldName": "data_category",
+                "value": [
+                  "community-governed"
+                ]
+              },
+              "op": "in"
+            },
+            "global.controlled": {
+              "content": {
+                "fieldName": "data_category",
+                "value": [
+                  "controlled"
+                ]
+              },
+              "op": "in"
+            }
+          }
+        },
+        "kind": "record",
+        "resourceFieldName": "study_id"
+      },
+      "principalId": "case-23",
+      "records": [
+        {
+          "fields": {
+            "data_category": [
+              "restricted"
+            ],
+            "study_id": "HEART_STUDY"
+          },
+          "outcome": "served",
+          "reason": "No condition expects restricted, so it carries no category and is served as unmarked, held on HEART_STUDY: only a catch-all condition in the key would withhold it."
+        },
+        {
+          "fields": {
+            "data_category": [
+              "controlled"
+            ],
+            "study_id": "HEART_STUDY"
+          },
+          "outcome": "withheld",
+          "reason": "It carries controlled, which is not held on HEART_STUDY, so a value expected by a condition is withheld where restricted is served."
+        }
+      ]
+    }
+  ],
+  "formatVersion": 1
+}
