@@ -194,10 +194,11 @@ and the workspace's version is set below.
 ### Workspace, tests and publishing
 
 - The workspace pins pnpm 12.9.1 and declares every pnpm setting in `pnpm-workspace.yaml`:
-  `allowBuilds` with esbuild and `@scarf/scarf` both false, `blockExoticSubdeps`,
-  `minimumReleaseAge: 1440`, `strictDepBuilds`, `strictPeerDependencies`, `trustPolicy: no-downgrade`
-  and `verifyDepsBeforeRun: error`, a catalogue holding every development tool's version, and a
-  committed lockfile.
+  `allowBuilds` refusing the builds of esbuild, `@scarf/scarf`, and the controller suites'
+  `cpu-features`, `protobufjs` and `ssh2`, `blockExoticSubdeps`, `minimumReleaseAge: 1440`,
+  `strictDepBuilds`, `strictPeerDependencies`, `trustPolicy: no-downgrade` and
+  `verifyDepsBeforeRun: error`, a catalogue holding every development tool's version, and a committed
+  lockfile.
 - Any pnpm 11 older than 11.28.4 crashes when it switches to the 12.9.1 pin and leaves a broken
   entry in the shared store ([pnpm/pnpm#16594](https://github.com/pnpm/pnpm/issues/16594)), so a
   machine's own pnpm is brought to 11.28.4 or later, or to 12, before it runs anything in the

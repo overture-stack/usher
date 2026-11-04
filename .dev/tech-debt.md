@@ -45,3 +45,22 @@ token that verifies under the trusted issuer and is refused anyway, and a tally 
 that does not.
 standalone: no
 context: waits on the controller's back-channel logout endpoint.
+
+`pnpm-workspace.yaml` overrides the glob archiver-utils resolves to `^14.0.3`, outside the
+`glob ^10` range archiver-utils requires, since that range carries GHSA-3g3m-2fjr-6pw4 and, through
+its minimatch, GHSA-g3hv-75wg-m249. archiver-utils reaches the workspace only under testcontainers'
+archiver, and calls glob's `sync` alone, which glob 14 keeps.
+fix: remove the override once testcontainers depends on an archiver whose chain resolves glob 14.0.2
+or later and minimatch 11.0.1 or later.
+standalone: yes
+
+Two support modules in `apps/controller/test-support/` copy code the packages keep internal:
+`sqonEvaluator.ts` copies usher-types' test-only SQON evaluator, and `bridgeWire.ts` reproduces the
+bridge's side of the wire from `modules/express-bridge/src/core/` and `modules/types/src/`. Nothing
+compares a copy with its source, so a change to the source leaves the controller's suites checking
+the old behaviour without failing.
+fix: import the evaluator from the private workspace package planned with the bridge refactor, and
+give the functions `bridgeWire.ts` reproduces an import the suites can use, in that package or as a
+test-only export, so neither copy remains.
+standalone: no
+context: the evaluator waits on that package.
