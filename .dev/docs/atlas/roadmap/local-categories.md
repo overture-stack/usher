@@ -9,22 +9,22 @@ records without growing the shared list seen by every other study. Shared catego
 HEART_STUDY's owner creates `pilot`, selecting the records whose `consent_group` is `PILOT`, a field
 already on the study's submissions:
 
-| Step | What happens                                                                                                  |
-| ---- | ------------------------------------------------------------------------------------------------------------- |
-| 1    | the category is stored on HEART_STUDY as `resource.pilot`; the shared list is unchanged, and no other resource sees it |
+| Step | What happens                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | the category is stored on HEART_STUDY as `resource.pilot`; the shared list is unchanged, and no other resource sees it                           |
 | 2    | HEART_STUDY's PILOT records now need a grant naming it, and leave `unmarked`, which covers only what no other category claims, so access narrows |
-| 3    | the owner grants a researcher `resource.pilot` on HEART_STUDY as a viewer, a grant of the same shape as today's |
-| 4    | the researcher's token gains `resource.pilot` under HEART_STUDY, beside `global.unmarked`                          |
+| 3    | the owner grants a researcher `resource.pilot` on HEART_STUDY as a viewer, a grant of the same shape as today's                                  |
+| 4    | the researcher's token gains `resource.pilot` under HEART_STUDY, beside `global.unmarked`                                                        |
 
 ## What a category becomes
 
-|                       | Shared                   | Local                             |
-| --------------------- | ------------------------ | --------------------------------- |
-| scope                 | the platform             | one resource                      |
-| name                  | `global.controlled`      | `resource.pilot`                  |
-| created by            | an admin, and only one   | the resource's owner, or an admin |
+|                       | Shared                                            | Local                             |
+| --------------------- | ------------------------------------------------- | --------------------------------- |
+| scope                 | the platform                                      | one resource                      |
+| name                  | `global.controlled`                               | `resource.pilot`                  |
+| created by            | an admin, and only one                            | the resource's owner, or an admin |
 | governed by           | its custodian, and each carrying resource's owner | the resource's owner              |
-| grant and token shape | unchanged                | unchanged                         |
+| grant and token shape | unchanged                                         | unchanged                         |
 
 **A category is its name and its scope, and the name carries the scope as a prefix**, for example
 `global.controlled` and `resource.controlled`. There is no separate display name. The prefix names
@@ -50,10 +50,10 @@ requirement that display labels on a field used as an access-control key be narr
 **A local category only ever adds a restriction.** A record carrying a shared category and a local
 one needs both grants, and the trace shows what happens otherwise:
 
-| Step | What happens                                                                                       |
-| ---- | -------------------------------------------------------------------------------------------------- |
-| 1    | a REEF_ARCHIVE record is community-governed, and its `consent_group` is PILOT                      |
-| 2    | REEF_ARCHIVE's owner creates a local `pilot` on `consent_group` PILOT and grants it                |
+| Step | What happens                                                                                                                                             |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | a REEF_ARCHIVE record is community-governed, and its `consent_group` is PILOT                                                                            |
+| 2    | REEF_ARCHIVE's owner creates a local `pilot` on `consent_group` PILOT and grants it                                                                      |
 | 3    | if either grant were enough, a `pilot` grant alone would reach community-governed records, and one category's restriction would be bypassed by another's |
 
 That is the conjunction under "A category is a condition over records" in

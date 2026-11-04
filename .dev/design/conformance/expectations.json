@@ -16,18 +16,14 @@
             "global.community-governed": {
               "content": {
                 "fieldName": "data_category",
-                "value": [
-                  "community-governed"
-                ]
+                "value": ["community-governed"]
               },
               "op": "in"
             },
             "global.controlled": {
               "content": {
                 "fieldName": "data_category",
-                "value": [
-                  "controlled"
-                ]
+                "value": ["controlled"]
               },
               "op": "in"
             }
@@ -40,9 +36,7 @@
       "records": [
         {
           "fields": {
-            "data_category": [
-              "open"
-            ],
+            "data_category": ["open"],
             "study_id": "HEART_STUDY"
           },
           "outcome": "denied",
@@ -57,18 +51,14 @@
             "global.community-governed": {
               "content": {
                 "fieldName": "data_category",
-                "value": [
-                  "community-governed"
-                ]
+                "value": ["community-governed"]
               },
               "op": "in"
             },
             "global.controlled": {
               "content": {
                 "fieldName": "data_category",
-                "value": [
-                  "controlled"
-                ]
+                "value": ["controlled"]
               },
               "op": "in"
             }
@@ -81,9 +71,7 @@
       "records": [
         {
           "fields": {
-            "data_category": [
-              "open"
-            ],
+            "data_category": ["open"],
             "study_id": "VOID_INDEX"
           },
           "outcome": "withheld",
@@ -91,9 +79,7 @@
         },
         {
           "fields": {
-            "data_category": [
-              "open"
-            ],
+            "data_category": ["open"],
             "study_id": "HEART_STUDY"
           },
           "outcome": "served",
@@ -108,18 +94,14 @@
             "global.community-governed": {
               "content": {
                 "fieldName": "data_category",
-                "value": [
-                  "community-governed"
-                ]
+                "value": ["community-governed"]
               },
               "op": "in"
             },
             "global.controlled": {
               "content": {
                 "fieldName": "data_category",
-                "value": [
-                  "controlled"
-                ]
+                "value": ["controlled"]
               },
               "op": "in"
             }
@@ -132,10 +114,7 @@
       "records": [
         {
           "fields": {
-            "data_category": [
-              "community-governed",
-              "controlled"
-            ],
+            "data_category": ["community-governed", "controlled"],
             "study_id": "REEF_ARCHIVE"
           },
           "outcome": "withheld",
@@ -143,9 +122,7 @@
         },
         {
           "fields": {
-            "data_category": [
-              "controlled"
-            ],
+            "data_category": ["controlled"],
             "study_id": "REEF_ARCHIVE"
           },
           "outcome": "served",
@@ -153,9 +130,7 @@
         },
         {
           "fields": {
-            "data_category": [
-              "community-governed"
-            ],
+            "data_category": ["community-governed"],
             "study_id": "REEF_ARCHIVE"
           },
           "outcome": "withheld",
@@ -163,9 +138,7 @@
         },
         {
           "fields": {
-            "data_category": [
-              "open"
-            ],
+            "data_category": ["open"],
             "study_id": "REEF_ARCHIVE"
           },
           "outcome": "served",
@@ -188,9 +161,7 @@
         },
         {
           "fields": {
-            "data_category": [
-              "controlled"
-            ],
+            "data_category": ["controlled"],
             "study_id": "HEART_STUDY"
           },
           "outcome": "withheld",
@@ -198,9 +169,7 @@
         },
         {
           "fields": {
-            "data_category": [
-              "open"
-            ],
+            "data_category": ["open"],
             "study_id": "HEART_STUDY"
           },
           "outcome": "served",
@@ -215,18 +184,14 @@
             "global.community-governed": {
               "content": {
                 "fieldName": "data_category",
-                "value": [
-                  "community-governed"
-                ]
+                "value": ["community-governed"]
               },
               "op": "in"
             },
             "global.controlled": {
               "content": {
                 "fieldName": "data_category",
-                "value": [
-                  "controlled"
-                ]
+                "value": ["controlled"]
               },
               "op": "in"
             }
@@ -239,9 +204,7 @@
       "records": [
         {
           "fields": {
-            "data_category": [
-              "restricted"
-            ],
+            "data_category": ["restricted"],
             "study_id": "HEART_STUDY"
           },
           "outcome": "served",
@@ -249,9 +212,7 @@
         },
         {
           "fields": {
-            "data_category": [
-              "controlled"
-            ],
+            "data_category": ["controlled"],
             "study_id": "HEART_STUDY"
           },
           "outcome": "withheld",

@@ -13,10 +13,10 @@ side of that boundary, as [adapter-integration.md](adapter-integration.md) is th
 
 Two kinds of client read it:
 
-| Client                                                   | Who reads the answer                                 |
-| -------------------------------------------------------- | ---------------------------------------------------- |
-| A script, a notebook, a command-line tool, curl          | The person running it, from the status and the body  |
-| A portal: its server proxies requests, its pages render  | The portal's code, which writes its own text for the person |
+| Client                                                  | Who reads the answer                                        |
+| ------------------------------------------------------- | ----------------------------------------------------------- |
+| A script, a notebook, a command-line tool, curl         | The person running it, from the status and the body         |
+| A portal: its server proxies requests, its pages render | The portal's code, which writes its own text for the person |
 
 The rules under [Every client](#every-client) hold for both. [Portals](#portals) adds what a person
 sees.
@@ -27,13 +27,13 @@ sees.
 
 ### What each answer means
 
-| Answer                                                        | Meaning                                                                                                      | What the client does                                                                                     |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `200` with `Usher-Suspended: true`                            | The principal's grants are on hold, so only the data available to everyone was served                       | Treat the results as limited, never as complete, and ask again later for the full set                    |
-| `401` with `WWW-Authenticate: Bearer error="invalid_token"`   | A refused identity: the sign-in token is expired, invalid or revoked, and the answer never says which        | Renew the sign-in token once and retry once; see [Renewal](#renewal)                                    |
-| `400` with `WWW-Authenticate: Bearer error="invalid_request"` | The request carried more than one credential, or one anywhere but the `Authorization` header                 | Send one bearer token, in the `Authorization` header; retrying unchanged gets the same answer             |
-| `403`                                                         | The application denied what was asked: nothing granted reaches it                                            | Do not renew, since a new token holds the same grants; tell the person, or stop                          |
-| `503` with `Retry-After`                                      | Access could not be confirmed: the service cannot reach Usher, or the request needs a grant that is on hold  | Wait the interval, then retry; it is not a sign-in problem, so do not renew                              |
+| Answer                                                        | Meaning                                                                                                     | What the client does                                                                          |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `200` with `Usher-Suspended: true`                            | The principal's grants are on hold, so only the data available to everyone was served                       | Treat the results as limited, never as complete, and ask again later for the full set         |
+| `401` with `WWW-Authenticate: Bearer error="invalid_token"`   | A refused identity: the sign-in token is expired, invalid or revoked, and the answer never says which       | Renew the sign-in token once and retry once; see [Renewal](#renewal)                          |
+| `400` with `WWW-Authenticate: Bearer error="invalid_request"` | The request carried more than one credential, or one anywhere but the `Authorization` header                | Send one bearer token, in the `Authorization` header; retrying unchanged gets the same answer |
+| `403`                                                         | The application denied what was asked: nothing granted reaches it                                           | Do not renew, since a new token holds the same grants; tell the person, or stop               |
+| `503` with `Retry-After`                                      | Access could not be confirmed: the service cannot reach Usher, or the request needs a grant that is on hold | Wait the interval, then retry; it is not a sign-in problem, so do not renew                   |
 
 **The bodies are short fixed texts, the same for every reason behind them.** The `401` reads "Sign in
 again for a new token, or leave the token out to get the data available to everyone." A refusal never
@@ -66,10 +66,10 @@ is reachable again, and the second holds whatever token is sent.
 constants the bridge sends. Its exports import neither Express nor any Node built-in, so a portal's
 browser code can use them:
 
-| Export             | Value                                                        |
-| ------------------ | ------------------------------------------------------------ |
-| `SUSPENDED_HEADER` | `Usher-Suspended`                                            |
-| `SUSPENDED_VALUE`  | `true`                                                       |
+| Export             | Value                                                                |
+| ------------------ | -------------------------------------------------------------------- |
+| `SUSPENDED_HEADER` | `Usher-Suspended`                                                    |
+| `SUSPENDED_VALUE`  | `true`                                                               |
 | `CHALLENGE_ERRORS` | `invalidToken: 'invalid_token'`, `invalidRequest: 'invalid_request'` |
 
 Statuses and `Retry-After` are standard HTTP and are not exported. No header names the layer that
@@ -100,14 +100,14 @@ comes back. Both halves have rules.
 
 ### What the person sees
 
-| Answer                                     | The portal shows                                                                                                                                                         |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Usher-Suspended: true`                    | The results, with a notice that only the data available to everyone is shown for now                                                                                    |
-| `401` that persists after the renewal      | The refusal, in place of the view, with Try again. The person stays signed in, and the only account action offered is Log out, which the person chooses. The portal never signs them out itself |
-| `403`                                      | The refusal for what was asked                                                                                                                                           |
-| `503` from the service                     | A notice that access could not be confirmed, and to try again later                                                                                                     |
-| The portal's own sign-in outage            | The portal's own notice, told apart from the service's `503` by the portal's own response code                                                                          |
-| The portal's own session ended             | Sign-out, through the portal's own session handling                                                                                                                      |
+| Answer                                | The portal shows                                                                                                                                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Usher-Suspended: true`               | The results, with a notice that only the data available to everyone is shown for now                                                                                                            |
+| `401` that persists after the renewal | The refusal, in place of the view, with Try again. The person stays signed in, and the only account action offered is Log out, which the person chooses. The portal never signs them out itself |
+| `403`                                 | The refusal for what was asked                                                                                                                                                                  |
+| `503` from the service                | A notice that access could not be confirmed, and to try again later                                                                                                                             |
+| The portal's own sign-in outage       | The portal's own notice, told apart from the service's `503` by the portal's own response code                                                                                                  |
+| The portal's own session ended        | Sign-out, through the portal's own session handling                                                                                                                                             |
 
 **After a final answer, nothing is sent until something changes.** A refused identity or a `403` stops
 the page's requests until the token changes, the person changes, or the person chooses Try again.

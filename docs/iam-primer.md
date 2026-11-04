@@ -157,7 +157,7 @@ in the Usher design and are worth knowing before reading the design documents:
 - **[PDP](concepts.md#pdp-policy-decision-point) (Policy Decision Point):** the service that answers "what can this user see or do?" Given a
   validated identity, it consults the policy store and returns a decision or set of constraints.
   Usher is the PDP.
--  **[PEP](concepts.md#pep-policy-enforcement-point) (Policy Enforcement Point):** the component
+- **[PEP](concepts.md#pep-policy-enforcement-point) (Policy Enforcement Point):** the component
   that enforces the decision. It intercepts data requests, applies the PDP's constraints, and
   ensures the user only receives what they are permitted to see. In Usher, each application's
   adapter is the PEP.

@@ -30,11 +30,11 @@ since a principal viewing open records and counting controlled ones needs two se
 **Withholding a bucket's key protects only what the principal could not otherwise obtain**, and
 three routes obtain a count without it:
 
-| Route       | What it recovers                                                                                                                                                                        |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Subtraction | a withheld bucket's count, as the total less the visible buckets' counts, when both come back under the one `count`                                                                     |
+| Route       | What it recovers                                                                                                                                                                           |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Subtraction | a withheld bucket's count, as the total less the visible buckets' counts, when both come back under the one `count`                                                                        |
 | Filtering   | a bucket's count with its key withheld: count the records whose field holds a value supplied by the principal, or that fall in ranges it supplies, which one unit wide rebuild a histogram |
-| Repetition  | a small group, from two counts over criteria that differ only by the people in it                                                                                                       |
+| Repetition  | a small group, from two counts over criteria that differ only by the people in it                                                                                                          |
 
 **So the question is wider than facets.** It is what a principal holding `count` may learn about a
 field's values by any route, and a facet is only the most visible one. The discovery tier exists to

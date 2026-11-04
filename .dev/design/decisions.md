@@ -232,13 +232,13 @@ Recorded because the reasons for building were written against a narrower field 
 exists, and any of these could displace part of this design. Checked against each project's
 documentation and releases on 2026-09-28; the sources are listed at the end of this section.
 
-| Project | What it offers here                                                                                     | Model                           | Status, September 2026                                                   |
-| ------- | ------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------ |
-| Cerbos  | Query plan as a filter AST, with ORM adapters and an unpublished Java one for Elasticsearch            | Policy as code, attribute-based | v0.55.0; Hub on premises at the enterprise tier                          |
-| OPA     | Compile API emitting SQL or UCAST filters, since v1.9.0                                                 | Policy as code (Rego)           | CNCF graduated; v1.21.0                                                  |
-| OpenFGA | `ListObjects` returns identifiers, 1000 per call unless streamed; `ReadChanges` is polled               | Relationship-based (Zanzibar)   | CNCF incubating since October 2025; Auth0 FGA is its hosted form         |
-| SpiceDB | `LookupResources`; a Watch API streaming relationship changes, replayable for about a day               | Relationship-based (Zanzibar)   | Apache-2.0, v1.56.2; search-index replication only in hosted Materialize |
-| Permify | Data filtering and lookup; a Watch API                                                                  | Relationship-based (Zanzibar)   | Acquired by FusionAuth in November 2025; AGPL-3.0, releases slowed       |
+| Project | What it offers here                                                                         | Model                           | Status, September 2026                                                   |
+| ------- | ------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------ |
+| Cerbos  | Query plan as a filter AST, with ORM adapters and an unpublished Java one for Elasticsearch | Policy as code, attribute-based | v0.55.0; Hub on premises at the enterprise tier                          |
+| OPA     | Compile API emitting SQL or UCAST filters, since v1.9.0                                     | Policy as code (Rego)           | CNCF graduated; v1.21.0                                                  |
+| OpenFGA | `ListObjects` returns identifiers, 1000 per call unless streamed; `ReadChanges` is polled   | Relationship-based (Zanzibar)   | CNCF incubating since October 2025; Auth0 FGA is its hosted form         |
+| SpiceDB | `LookupResources`; a Watch API streaming relationship changes, replayable for about a day   | Relationship-based (Zanzibar)   | Apache-2.0, v1.56.2; search-index replication only in hosted Materialize |
+| Permify | Data filtering and lookup; a Watch API                                                      | Relationship-based (Zanzibar)   | Acquired by FusionAuth in November 2025; AGPL-3.0, releases slowed       |
 
 Three qualifications. Most of these implement relationship-based access control, which differs from
 role-plus-attribute in how policy is expressed rather than only in vocabulary. Oso's open-source
@@ -324,12 +324,12 @@ a proof.
 
 Four requirements carry it, and the check above sharpens each:
 
-| Requirement                                       | What exists                                                                                                                   | What is left to Usher                                          |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Delegated governance                              | Relationship stores express a custodian's check but do not enforce it on writes; Ranger's zones and Gen3's Requestor bound an administrator by resource | Authority over one kind of data across datasets, enforced     |
-| Independence from the identity provider           | Every engine above already has it                                                                                             | Distinguishes Usher from Keycloak only                         |
-| Push revocation with fail-secure suspension       | SpiceDB's Watch pushes relationship changes; OpenFGA is polled; Ranger and OPA pull; none suspends when its channel goes quiet | The push to every application, and the suspension             |
-| Enforcement against Elasticsearch through SQON    | Only Cerbos's unpublished Java adapter targets Elasticsearch; nothing emits SQON                                               | The SQON path, as an adapter whichever engine evaluates        |
+| Requirement                                    | What exists                                                                                                                                             | What is left to Usher                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Delegated governance                           | Relationship stores express a custodian's check but do not enforce it on writes; Ranger's zones and Gen3's Requestor bound an administrator by resource | Authority over one kind of data across datasets, enforced |
+| Independence from the identity provider        | Every engine above already has it                                                                                                                       | Distinguishes Usher from Keycloak only                    |
+| Push revocation with fail-secure suspension    | SpiceDB's Watch pushes relationship changes; OpenFGA is polled; Ranger and OPA pull; none suspends when its channel goes quiet                          | The push to every application, and the suspension         |
+| Enforcement against Elasticsearch through SQON | Only Cerbos's unpublished Java adapter targets Elasticsearch; nothing emits SQON                                                                        | The SQON path, as an adapter whichever engine evaluates   |
 
 Structured grants output is supplied by several of the engines above, so it belongs among the
 requirements to evaluate rather than among the reasons to build. Restate this section once an
@@ -1626,12 +1626,12 @@ identity as `attributionOnlySubject`, never as `subject`, so an ownership check 
 principal whose grants are on hold. Decided 2026-11-02; the shape is in
 [adapter-integration.md](adapter-integration.md).
 
-| Alternative                                          | Why not                                                                                                        |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| a null subject for every suspended principal         | an outage's activity cannot be attributed, and an audit by creator finds nothing for it                         |
-| a suspended principal's identity kept as `subject`   | a check such as "a submitter may edit their own submission" would act while the principal's grants are on hold |
-| anonymous read from a null subject                   | a state read from a missing value, which is where an unconfirmed or misbuilt principal passes for anonymous    |
-| an unconfirmed credential's `sub` trusted            | the bridge only decodes a sign-in token, so anyone could write any `sub` into one                              |
+| Alternative                                        | Why not                                                                                                        |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| a null subject for every suspended principal       | an outage's activity cannot be attributed, and an audit by creator finds nothing for it                        |
+| a suspended principal's identity kept as `subject` | a check such as "a submitter may edit their own submission" would act while the principal's grants are on hold |
+| anonymous read from a null subject                 | a state read from a missing value, which is where an unconfirmed or misbuilt principal passes for anonymous    |
+| an unconfirmed credential's `sub` trusted          | the bridge only decodes a sign-in token, so anyone could write any `sub` into one                              |
 
 ---
 
@@ -1642,12 +1642,12 @@ principals. A filter the application applies for its own reasons, such as servin
 data, applies with the switch off as well, and off behaves exactly as unset. With the switch on, an
 application unable to apply both filters refuses to start. Decided 2026-11-02.
 
-| Alternative                                         | Why not                                                                                          |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| refuse an application's filter with the switch off  | treats every filter as access control, so a filter scoping data for performance is refused       |
-| drop the application's filter with the switch on    | serves records the application meant to withhold                                                 |
-| drop Usher's filter when the application has one    | turns enforcement off while the switch says on                                                   |
-| name the switch `ENABLE_ACCESS_CONTROL`             | access control is approval and enforcement together, and approval happens elsewhere             |
+| Alternative                                        | Why not                                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| refuse an application's filter with the switch off | treats every filter as access control, so a filter scoping data for performance is refused |
+| drop the application's filter with the switch on   | serves records the application meant to withhold                                           |
+| drop Usher's filter when the application has one   | turns enforcement off while the switch says on                                             |
+| name the switch `ENABLE_ACCESS_CONTROL`            | access control is approval and enforcement together, and approval happens elsewhere        |
 
 ---
 
@@ -1658,13 +1658,13 @@ application is not told who is asking. A suspended principal cannot save one. No
 set's creator, the creator included, in any deployment. An anonymous set is reached only by naming
 it. Decided 2026-11-02; who reaches which is in [adapter-integration.md](adapter-integration.md).
 
-| Alternative                                     | Why not                                                                                                               |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| anonymous read from a missing creator           | a suspended or misattributed save would read as anonymous and become reachable by everyone                            |
-| list anonymous sets to every reader             | anyone could write into a list shown to every reader, and each visitor's saved query would be shown to all              |
-| cap anonymous saves                             | no cap holds reliably against saves made without signing in, so anonymous sets expire and are cleaned up instead     |
-| serve the creator's id to the creator           | nothing needs it, and a client-sent value would read as verified                                                    |
-| serve a client-sent creator where nothing verifies it | any client can write any value there, including someone else's identifier                                      |
+| Alternative                                           | Why not                                                                                                          |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| anonymous read from a missing creator                 | a suspended or misattributed save would read as anonymous and become reachable by everyone                       |
+| list anonymous sets to every reader                   | anyone could write into a list shown to every reader, and each visitor's saved query would be shown to all       |
+| cap anonymous saves                                   | no cap holds reliably against saves made without signing in, so anonymous sets expire and are cleaned up instead |
+| serve the creator's id to the creator                 | nothing needs it, and a client-sent value would read as verified                                                 |
+| serve a client-sent creator where nothing verifies it | any client can write any value there, including someone else's identifier                                        |
 
 ---
 
@@ -1675,8 +1675,8 @@ error values, so a client and the bridge compare against one source. Statuses an
 standard HTTP and are not exported. Decided 2026-10-30; what a client does with each answer is in
 [client-integration.md](client-integration.md).
 
-| Alternative                                   | Why not                                                                                                                                  |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Alternative                                   | Why not                                                                                                                                 |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | a marker header naming the answering layer    | the application, not the bridge, refuses a suspended principal's grant-only read, so the marker would mislead in the case it exists for |
 | export the statuses and `Retry-After` seconds | HTTP already fixes them, and a constant would be a second source for the same value                                                     |
 
@@ -2349,7 +2349,7 @@ settled them:
   process was violated when that happens.
 - **A candidate answer exists and is not chosen:** while a category has no custodian, refuse to
   create new grants on it, leaving everything already running untouched.
--  **Owners currently get a stronger response than custodians do.** An ownerless resource can be
+- **Owners currently get a stronger response than custodians do.** An ownerless resource can be
   suppressed entirely; a custodian-less category stops nothing. Whether that ordering is right is
   worth revisiting alongside the two above.
 
@@ -2917,11 +2917,11 @@ is what a grant selects, and open is one answer to who holds it.
 
 **A resource's unmarked records are reached in one of three ways**, a setting on the resource:
 
-| Setting    | Who reaches the unmarked records                        | Through            |
-| ---------- | ------------------------------------------------------- | ------------------ |
-| open       | everyone                                                | the baseline       |
-| registered | anyone signed in                                        | the signed-in rule |
-| by grant   | holders of a grant naming `unmarked` on that resource   | ordinary grants    |
+| Setting    | Who reaches the unmarked records                      | Through            |
+| ---------- | ----------------------------------------------------- | ------------------ |
+| open       | everyone                                              | the baseline       |
+| registered | anyone signed in                                      | the signed-in rule |
+| by grant   | holders of a grant naming `unmarked` on that resource | ordinary grants    |
 
 **By grant is what makes the leftover reachable when it is not open.** Under the earlier framing,
 removing `open` from a resource left its uncategorized records covered by no category, so no grant

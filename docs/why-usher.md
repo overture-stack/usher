@@ -180,7 +180,7 @@ Across the tools above, its specific contribution is the combination of:
 - **Categories within a dataset, enforced alike by every application.** The platforms above filter at
   program, project or index level, or inside one application. Usher's grants name a category within a
   dataset, and every application serving the data applies them the same way.
--  **Grant lifecycle as data.** Access is a set of grant records, each with an origin, an expiring
+- **Grant lifecycle as data.** Access is a set of grant records, each with an origin, an expiring
   validity and an audit trail, administered through an interface rather than deployed as policy
   files. This is what a governance reviewer reads and what a custodian changes, and it is the half
   of the problem left unaddressed by a policy engine.
@@ -209,7 +209,7 @@ Across the tools above, its specific contribution is the combination of:
   resources and categories. It is not designed for complex conditional policies or relationship
   graphs. Teams with those requirements may find OPA or a Zanzibar-style system a better fit,
   potentially with Usher's management and delivery layer on top.
--  **Not a compliance framework.** Usher provides the technical mechanism for access enforcement. The
+- **Not a compliance framework.** Usher provides the technical mechanism for access enforcement. The
   policies (who gets access, under what conditions) are a governance and organizational concern,
   implemented by Usher but not defined by it. Who reviews a request, and where that review happens,
   is the part of this that is scoped to the first release rather than settled. A data access
