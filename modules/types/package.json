@@ -1,0 +1,48 @@
+{
+  "dependencies": {
+    "@overture-stack/sqon": "^1.0.0-rc.6"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "fast-check": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "@overture-stack/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "license": "UNLICENSED",
+  "name": "@overture-stack/usher-types",
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "node -e \"console.error('A local publish is refused: packages are published by the release job'); process.exit(1)\"",
+    "test": "tsx --conditions=@overture-stack/source --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "0.0.0-dev"
+}
