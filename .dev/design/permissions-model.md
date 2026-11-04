@@ -630,7 +630,9 @@ first release, and `custodianship.assign` and `custodianship.remove` are therefo
 either. That is a decision rather than an omission: seeding the appointment
 capability into `admin` is the act that would open the recorded self-appointment hole: an
 administrator who may appoint custodians can appoint themselves and then satisfy their own grant's
-gate. Leaving it unseeded closes that for now without pretending the hole is solved.
+gate. Leaving it unseeded closes that for now without pretending the hole is solved. For the same
+reason, `role.define` refuses a role carrying either capability while the hole stands, since defining
+such a role opens it as surely as seeding one would.
 
 **Read the matrix rather than the role name when reviewing a grant**, and render it rather than the
 name in an interface. That is what `display_name` and `description` on `capabilities` are for, and it
@@ -710,7 +712,8 @@ for review.
 
         primary entities, describing state
 
-        users                  (id, idp_issuer, idp_subject)
+        users                  (id, created_at)
+        user_identities        (id, user_id, idp_issuer, idp_subject_id, added_at, added_by)
     groups                 (id, name, description)
             resources              (id, name, description, base_tier, suppressed, registered_by,
                             registered_at, updated_at)
@@ -800,13 +803,13 @@ record for somebody and would leave `unmarked` empty.
 **Each table answers one step of the token calculation**, which is the order to read them in and
 why each exists. The calculation is in [token-calculation.md](token-calculation.md).
 
-| Step | Question                                                                         | Tables                                         |
-| ---- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
-| 1    | Which grants reach this principal, directly or through a group they belong to?   | `grants`, `group_users`                        |
-| 2    | What does each grant's role carry, expanded to capabilities?                     | `role_permissions`, `capabilities`             |
-| 3    | What did this principal last answer about each, and is the grant still live?     | `grant_decisions`, `grants`                    |
-| 4    | What a kept grant confers now, and whether the resource still lists its category | `role_permissions`, `resource_categories`      |
-| 5    | Assemble the token                                                               | nothing. It is computed and stored nowhere     |
+| Step | Question                                                                         | Tables                                     |
+| ---- | -------------------------------------------------------------------------------- | ------------------------------------------ |
+| 1    | Which grants reach this principal, directly or through a group they belong to?   | `grants`, `group_users`                    |
+| 2    | What does each grant's role carry, expanded to capabilities?                     | `role_permissions`, `capabilities`         |
+| 3    | What did this principal last answer about each, and is the grant still live?     | `grant_decisions`, `grants`                |
+| 4    | What a kept grant confers now, and whether the resource still lists its category | `role_permissions`, `resource_categories`  |
+| 5    | Assemble the token                                                               | nothing. It is computed and stored nowhere |
 
 The step numbers are the calculation's own, so the two documents can be read against each other
 rather than each being taken on its own.
@@ -984,11 +987,13 @@ the resource from results without touching any grant, set by `resource.suppress`
 
 **User identifier discipline.** `users.id` is Usher's own identifier, used by `grants`,
 `grant_decisions` and every other reference inside Usher, and it never leaves Usher. Outside Usher a
-principal is known by the identity provider's subject, the `sub` claim, stored in `idp_subject`
-beside the provider in `idp_issuer`. The two are unique together, because a subject is unique only
-within the provider that issued it, and a second provider could issue a subject already in use by
-the first, which would hand one person another's grants. Audit events and the Usher token carry the
-subject, since every ushered application can produce it from the token it already holds. With one
+principal is known by the identity provider's subject, the `sub` claim, stored as `idp_subject_id`
+on a `user_identities` row, beside the provider in `idp_issuer`. The two are unique together, because
+a subject is unique only within the provider that issued it, and a second provider could issue a
+subject already in use by the first, which would hand one person another's grants. A person may hold
+several identities, one per provider account, and holds exactly one in the first release. Audit
+events and the Usher token carry the subject, since every ushered application can produce it from the
+token it already holds. With one
 provider in the first release the subject alone is unambiguous; supporting a second means both carry
 the issuer as well, which is a payload version change. Usher stores no email address or display
 name; a portal resolves those from the identity provider. The one exception is `invitations`, which
@@ -1629,11 +1634,11 @@ is a control-plane act and belongs to these management roles, never to a data-pl
 The three management roles, ordered by widening scope rather than by seniority, since a reader
 meets the narrowest first and central control is not the model's starting point:
 
-| Role             | Scope                             | Data access                    |
-| ---------------- | --------------------------------- | ------------------------------ |
-| Owner            | Their designated resource(s) only | None from ownership            |
-| Custodian        | One category across all resources | No (unless separately granted) |
-| Admin            | All resources; the policy store   | None standing; self-grant only |
+| Role      | Scope                             | Data access                    |
+| --------- | --------------------------------- | ------------------------------ |
+| Owner     | Their designated resource(s) only | None from ownership            |
+| Custodian | One category across all resources | No (unless separately granted) |
+| Admin     | All resources; the policy store   | None standing; self-grant only |
 
 **Naming.** The community-governance role is a **Custodian** rather than a Steward, because the
 requirements document already uses "Data Steward" for the resource owner, and before this rename the
@@ -2068,7 +2073,7 @@ Three options with meaningfully different implications, particularly for consent
    access unit. Wider automatic read surface area; may be appropriate for institutional cohorts
    but not for mixed or individual-consent data.
 
-3.  **No automatic read access.** Write access and read access are independently governed.
+3. **No automatic read access.** Write access and read access are independently governed.
    Submission creates a resource registration and a provenance record, but does not create any Usher
    grants. Read access requires an explicit grant through the standard category grant flow. Most
    restrictive; most aligned with Indigenous data governance and consent-constrained scenarios; adds

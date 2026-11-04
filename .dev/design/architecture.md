@@ -123,13 +123,14 @@ application. Two components, two jobs, and our modular design depends on keeping
   resource managed by the requesting adapter
 - Issuing JWE Usher tokens: encrypted, short-lived, audience-scoped per application; see
   [security-workflow.md](security-workflow.md)
-- Holding one symmetric JWE key per ushered application, and encrypting every token to the one
-  application it is issued for, so no bridge can read another application's tokens
+- Generating one symmetric JWE key per ushered application when it is registered, keeping it
+  encrypted under the key-encryption key, and encrypting every token to the one application it is
+  issued for, so no bridge can read another application's tokens
 - Writing `revoked_at` timestamps to the policy database on revocation
 - Publishing a wake-up to Valkey pub/sub after writing a notice, so every controller instance reads
   the new notices and pushes them to its connected bridges (see [Multi-instance propagation](security-workflow.md#multi-instance-propagation))
-- Hosting the management API (PAP: writing and revoking grants, category management,
-  revocation)
+- Hosting the management API (PAP: registering applications and issuing or revoking their keys,
+  writing and revoking grants, category management, revocation)
 - Hosting the notice stream's poll endpoint, which returns the notices after a position, for bridge
   fallback and as the bridge's liveness check
 - Future: management UI (visual PAP interface)
@@ -139,8 +140,39 @@ application. Two components, two jobs, and our modular design depends on keeping
 - User authentication → **Keycloak**
 - Querying the data layer or executing data queries → the **application's** own data layer
 - Applying each catalogue's enforcement result in application-native form → **adapter**
-- Holding an application's key alone: each application's **bridge** holds the same key, delivered to
-  both by the secrets operator
+- Holding an application's key alone: each application's **bridge** holds the same key, received
+  once through the application's own secrets
+
+**Configuration.** The database is the only list of applications. The controller's environment holds
+its secrets, all read once at start:
+
+- `USHER_KEY_ENCRYPTION_KEY`, the key-encryption key: 43 base64url characters decoding to 32 bytes,
+  in canonical form, the same format as an application's key
+- `USHER_DATABASE_PASSWORD` and `USHER_CACHE_PASSWORD`, the PostgreSQL and Valkey passwords, each in
+  its own variable. A connection URL is the kind of value that ends up in a log or an error, so a
+  password inside either URL refuses startup
+
+A missing or malformed value refuses startup, naming the variable and never its value. Whitespace
+around a key's value is ignored, since it is never part of a key and a pasted value often carries it.
+A key-encryption key other than the one the stored keys were encrypted under also refuses startup;
+see [schema.md](schema.md) § Applications.
+
+Registering an application, or issuing or revoking its key, is a database write, so none of them
+changes the environment or restarts the controller, whether it runs as one process on a host or as
+many replicas.
+
+**Liveness and readiness are two answers.** `/health/live` says the process runs. `/health/ready`
+says an instance can answer an exchange correctly: it has started and is not stopping, its store
+answers within a bound and, on an instance whose role writes, is not read-only, and its audit log
+takes a write. Valkey is not part of readiness, since an instance without it still answers correctly
+and picks up new keys through its 30-second reload. Neither answer carries a body, so neither says
+anything about the instance to whoever asks.
+
+**The controller connects to its store directly, or through a pooler in session mode.** Each
+connection carries the store's statement and idle-in-transaction limits as startup parameters, and
+those limits are what stop a statement the controller has abandoned: closing the client's socket
+stops nothing a pooler holds open on the server. A pooler in transaction mode refuses those
+parameters or drops them, so a start whose connection does not carry them is refused.
 
 ---
 
@@ -271,21 +303,21 @@ applications enforce decisions derived from it, without managing that state them
 **Two distinct uses:**
 
 1.  **Shared computed-payload cache.** The fast-path refresh (see
-   [security-workflow.md](security-workflow.md#session-and-caching)) holds one entry per principal
-   and audience, carrying the computed payload and the earliest grant expiry that bounds any
-   reissue. Valkey gives every controller instance the same view of it, so a refresh served by one
-   instance does not recompute what another already has.
+    [security-workflow.md](security-workflow.md#session-and-caching)) holds one entry per principal
+    and audience, carrying the computed payload and the earliest grant expiry that bounds any
+    reissue. Valkey gives every controller instance the same view of it, so a refresh served by one
+    instance does not recompute what another already has.
 
-   **Invalidation is by deletion.** Anything changing what a principal holds deletes their entry, and
+**Invalidation is by deletion.** Anything changing what a principal holds deletes their entry, and
 a change to a resource's categories clears the whole cache, so absence means recompute and no entry
 can go subtly stale.
 
-   **What this is not.** There is no last-modified timestamp per principal. That was the first
-   design and it does not work, because the marker was per principal while the dangerous change is
-   per resource, and it is recorded as rejected in
-   [decisions.md](decisions.md). The open blocker that once sat here, over whether such a timestamp
-   was authoritative in Valkey or cached from PostgreSQL, closed with it: there is no timestamp to
-   place.
+**What this is not.** There is no last-modified timestamp per principal. That was the first
+design and it does not work, because the marker was per principal while the dangerous change is
+per resource, and it is recorded as rejected in
+[decisions.md](decisions.md). The open blocker that once sat here, over whether such a timestamp
+was authoritative in Valkey or cached from PostgreSQL, closed with it: there is no timestamp to
+place.
 
 2. **Revocation wake-ups.** When one controller instance writes a notice, it publishes a wake-up
    to a Valkey pub/sub channel. Every instance subscribes, reads the notices after the last position

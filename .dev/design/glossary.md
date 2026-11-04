@@ -45,14 +45,18 @@ client credentials, not user sessions. See [admin-model.md](admin-model.md).
 
 **Identity**
 What the identity provider validates and asserts _about_ a principal: the answer to who someone is,
-where the principal is the actor asking. A principal has an identity.
+where the principal is the actor asking. Usher records each of a principal's identities as one
+identity provider account, issuer and subject, on a `user_identities` row. A principal holds exactly
+one in the first release.
 
 **Subject**
 The `sub` claim, and the Keycloak subject it names: the string by which one identity provider knows a
 principal. Usher stores it with the provider that issued it, since a subject is unique only within
 one provider, and audit events and the Usher token carry it. It is producible by every ushered
 application from the token it already holds, which is what lets `actorId` on an audit event correlate
-across services. Usher's own `users.id` is internal and never leaves Usher.
+across services. Usher's own `users.id` is internal and never leaves Usher. Every column holding a
+subject is named `idp_subject_id`, after OpenID Connect's "subject identifier": the one column ending
+in `_id` that references no table, its `idp_` prefix marking a value from outside Usher.
 
 _Disambiguation:_ [subject](#subject)
 
@@ -215,7 +219,9 @@ for compliance, which is why both are written out here.
 Usher's half of the access control plane: making each grant hold in every ushered application, on
 every request, until it expires or is revoked. Usher enforces as a system. The controller keeps the
 grants and computes each person's permissions, the bridge turns them into each request's
-**enforcement result**, and the adapter applies that result at its application's own hook.
+**enforcement result**, and the adapter applies that result at its application's own hook. Every
+application's switch for it is named for this half, `ENABLE_ACCESS_ENFORCEMENT`, since approval
+happens elsewhere.
 
 **Approval**
 A decision reached before a grant and outside Usher: an ethics approval, a data access committee's
@@ -484,6 +490,12 @@ grants are created, or the invitation lapses unused. Where the person already ha
 invitation is needed and the grant is created directly, with a start date if it is not to begin
 immediately.
 
+**Name, display name, description** _(three fields, three jobs)_
+A **name** is an identifier people write and the system matches exactly, such as the resource name
+a record carries. A **display name** is the label people read in place of an identifier not meant to
+be read, such as an application's generated ID; nothing matches against it, so changing it changes
+no behaviour. A **description** says what the thing is for, and is never shown in place of either.
+
 **Permission**
 Capability allowed to a principal or a group.
 
@@ -577,7 +589,9 @@ _Disambiguation:_ [role](#role)
 A stored list of record identifiers drawn from one catalogue, and belonging to it: an identifier
 means nothing, or means something else, against another catalogue. The identifiers are a snapshot of
 what the creator could reach when the set was saved, so resolving one re-applies enforcement over the
-stored list. See the Arranger integration's own record for the current state of this.
+stored list. A set records how it was saved, as `principal`, `anonymous` or `unattributed`, and its
+creator's identity never leaves the server. See [adapter-integration.md](adapter-integration.md) for
+who reaches which.
 
 **Submitter** _(a role, and separately a record of who uploaded)_
 Someone who may write to a resource.
@@ -662,6 +676,13 @@ midnight fall in one rolling hour, where two fixed hours would split them into s
 
 ## Integration concepts
 
+**Application key** _(and the key-encryption key protecting it)_
+The symmetric key one application shares with the controller. It encrypts that application's Usher
+tokens, and every other use derives a subkey from it. The controller generates it when the
+application is registered and shows it once, for the application's own secrets. It stores the key
+encrypted under its **key-encryption key**, the one key the controller reads from its environment,
+so the database holds no application key in readable form. See [schema.md](schema.md) § Applications.
+
 **Complement**
 The resources not held by a principal, from among those configured for this instance. An adapter
 computes it at startup, from its own configuration minus the resources named in the token, and tests
@@ -669,11 +690,30 @@ a derived artifact against it: an artifact survives exactly when it requires non
 rather than platform-wide, which is what spares Usher from naming the complement itself. See
 [decisions.md](decisions.md) § A self-scoping predicate is not an access decision.
 
+**Confirmed** _(a credential's state)_
+A credential the controller vouched for: the bridge holds a live entry for it from an exchange, or
+this request's own exchange verified it. Only then is its subject trusted, since the bridge only
+decodes a sign-in token and the controller checks its signature. The state has a lifetime: an entry
+that expired, or that a notice dropped, confirms nothing, and the principal falls back to
+`unconfirmed`. A principal's `credential` names the state outright, as `none`, `unconfirmed` or
+`confirmed`, so no adapter reads one from a missing subject.
+
 **Enforcement result** _(`deny`, `narrow` or `allow`)_
 What the bridge returns to the adapter for one catalogue: `deny` with a reason, `narrow` with the
 filter to apply, or `allow` for a catalogue open by configuration. Each arm has its own expression
 at the application and none is an absent filter, so an omission never reads as consent. See
 [decisions.md](decisions.md) § Holding no grants is a distinct state, never an empty filter.
+
+**Expiry** _(of a grant, and of a token)_
+Two things end on their own, and neither is anyone's act. A **grant's expiry** is the end of the
+period it was given, its `expires_at`, after which the controller leaves it out of every token it
+issues: the person keeps everything else and loses what that grant gave, with no refusal. A
+**token's expiry** is the `exp` of a sign-in token or an Usher token. A sign-in token past its `exp`
+is refused like any other refused identity, with one `401`, and a portal renews it with the identity
+provider without the person seeing it. The controller caps an Usher token's `exp` at the earliest
+`expires_at` among the grants it carries and the sign-in token's own `exp`. So a grant's expiry
+narrows access, while a token's expiry, once renewed, changes nothing the person can reach. See
+[schema.md](schema.md).
 
 **Fail-secure**
 The design principle that uncertainty about authorization state defaults to denial of access rather
@@ -733,10 +773,28 @@ Its field name is per-catalogue adapter configuration, which Usher never holds; 
 resource's identifier. See [adapter-integration.md](adapter-integration.md) § Writing an adapter
 design document.
 
-**Revocation**
-The invalidation of a user's access, recorded as a `revoked_at` timestamp in Usher's database.
-Applies to all Usher tokens held by the adapter for that user regardless of their individual
-TTLs. See [security-workflow.md](security-workflow.md).
+**Revocation** _(of a grant, of a principal, and of an application key)_
+Two acts withdraw a person's access early, and they reach the person differently. **Revoking a grant** sets the
+grant's `revoked_at`, so it leaves every token issued from then on: like a grant's expiry, it
+narrows, and a data request answers as though the grant had never been held. **Revoking a principal**
+is a row in `principal_revocations`, which the exchange refuses even while the person still has
+grants, so every request from them is answered `401` until the row is lifted, and lifting it keeps
+the history.
+Both are announced on the revocation channel, so each takes effect at the next request rather than
+when a cached token expires. See [security-workflow.md](security-workflow.md) and
+[schema.md](schema.md).
+**Revoking an application key** concerns an application rather than a person. It sets the key's
+`revoked_at`, and every controller instance then refuses exchanges made with it, once Valkey wakes it
+or within 30 seconds. It is not announced on the revocation channel, so Usher tokens already issued
+under the key stay readable to that application's bridges until they expire. See
+[schema.md](schema.md) § Applications.
+
+**Disambiguation note:** A data request never says which of these happened. Every refused identity,
+expired, invalid or revoked, gets one `401` and one text, and a narrowed answer says nothing of what
+it withheld. An application can still separate what it observes: a `401` that persists after the
+sign-in token has been renewed is a refused identity, never an expired one, and nothing refuses a
+person for a grant's expiry or revocation. Telling a person which of their own grants ended, and when,
+is the [profile view](profile-view.md)'s job.
 
 **Revocation channel**
 The notice stream from the controller to each bridge: one sequence of positions carrying every kind
@@ -754,11 +812,13 @@ open tier, which needs no grant, is still served, while anything only a grant co
 withholds what a grant would reach, never what is open to everyone.
 
 **Server-side filter** _(Arranger-specific)_
-A SQON filter injected into every Arranger query by the adapter before the query reaches the search
-engine. This is where enforcement happens in Arranger. The filter is built additively: each grant in
-the token renders one positive predicate, and those compose with `or`, so a record matching no
-predicate is simply never returned. Nothing is subtracted and no exclusion is computed. Under MVP the
-whole filter is a single clause naming the resources reachable by the principal.
+A SQON filter Arranger's GraphQL router combines with every read before the query reaches the search
+engine, whatever the client asked for. It is Arranger's general way of narrowing what it serves, not
+a synonym for enforcement: the Usher adapter supplies one to enforce access, and an application
+embedding Arranger may supply its own for reasons unrelated to principals, such as serving a subset
+of its data. Usher's is built additively: each grant in the token renders one positive predicate,
+and those compose with `or`, so a record matching no predicate is simply never returned. Nothing is
+subtracted and no exclusion is computed.
 
 **SQON (Structured Query Object Notation)** _(Arranger-specific)_
 Arranger's filter expression format, and the wire format emitted by the bridge. The bridge builds the
@@ -769,8 +829,10 @@ the catalogue being queried, since which field names a resource differs between 
 A signed-in principal whose grants are on hold, because the bridge is in its revocation-uncertain
 mode or this principal's exchange failed while the notice stream is healthy. Distinct from holding
 only open data: a suspended principal's export, or a fetch only a grant could answer, returns 503
-rather than a reduced answer. A principal presenting no credential is never suspended; one whose
-credential the bridge has not yet confirmed is suspended with a null subject. Not to be confused
+rather than a reduced answer. A principal presenting no credential is never suspended, and one whose
+credential is unconfirmed always is. A suspended principal whose credential is **confirmed** keeps
+its identity for attribution in log events alone, as `attributionOnlySubject`, never as the
+`subject` read by an ownership check. Not to be confused
 with a revoked identity, which is refused with 401.
 
 **Token exchange**
@@ -793,7 +855,7 @@ This table is the index. A term whose collision needs more than a row is expande
 
 | Term                      | Comes from                | Means there                                                                       | In Usher                                                                                                                                                        |
 | ------------------------- | ------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sub`, subject            | OIDC, Keycloak            | the identifier of the authenticated account                                       | the identifier **of** a principal, not the principal itself. Stored as `users.id`                                                                               |
+| `sub`, subject            | OIDC, Keycloak            | the identifier of the authenticated account                                       | the identifier **of** a principal, not the principal itself. Stored as `idp_subject_id`, beside its issuer, on one of the principal's identities               |
 | user                      | Keycloak                  | a human account in a realm                                                        | a human principal. One of the two kinds                                                                                                                         |
 | client                    | Keycloak                  | an application authenticating as itself                                           | a machine principal. The other kind                                                                                                                             |
 | group                     | Keycloak                  | a collection of users in a realm                                                  | a separate entity. A Keycloak group may be mapped onto an Usher group; the two stay distinct                                                                    |
@@ -924,8 +986,8 @@ adapter. The two are unrelated beyond sharing a word.
 ### Subject
 
 **In OIDC and Keycloak**, the `sub` claim: the string by which one identity provider knows an
-account. Usher reserves the word for this meaning, and stores the string with its issuer on the
-principal's row.
+account. Usher reserves the word for this meaning, and stores the string with its issuer as
+`idp_subject_id`, on one of the principal's identity rows.
 
 **In XACML**, the subject is the _actor_ making a request, which is what Usher calls a principal.
 A reader arriving from XACML will take "subject" to mean the asker rather than one of its

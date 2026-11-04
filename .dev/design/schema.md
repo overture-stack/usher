@@ -13,15 +13,17 @@ steps of [token-calculation.md](token-calculation.md), and adds the channel half
 
 ## What is stored where
 
-| Store                    | Holds                                                                                           | Why there                                                                            |
-| ------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| PostgreSQL               | the policy model, the notice stream, and the audit log                                          | the source of truth: transactional, and read by every controller instance            |
-| Valkey                   | the payload cache behind the refresh fast path, and the pub/sub waking instances to new notices | shared between instances, and disposable: losing it costs recomputation, never truth |
-| Controller configuration | the capability vocabulary's defaults, token lifetime, grace period, poll interval               | changes with a release or a deployment, never at runtime                             |
-| Instance configuration   | the baseline and the signed-in rule, and the platform's default base tier                       | settings of the instance rather than facts about any principal                       |
+| Store                    | Holds                                                                                           | Why there                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| PostgreSQL               | the policy model, the applications and their keys, the notice stream, and the audit log         | the source of truth: transactional, and read by every controller instance              |
+| Valkey                   | the payload cache behind the refresh fast path, and the pub/sub waking instances to new notices | shared between instances, and disposable: losing it costs recomputation, never truth   |
+| Controller configuration | the capability vocabulary's defaults, token lifetime, grace period, poll interval               | changes with a release or a deployment, never at runtime                               |
+| Controller secrets       | the key-encryption key, and the credentials for PostgreSQL and Valkey                           | read once at start; registering an application or changing its keys never touches them |
+| Instance configuration   | the baseline and the signed-in rule, and the platform's default base tier                       | settings of the instance rather than facts about any principal                         |
 
 Nothing a principal is granted lives outside PostgreSQL, so a Valkey loss never widens access: the
-fast path finds no cached payload and recomputes from the store.
+fast path finds no cached payload and recomputes from the store. An application's key is stored only
+encrypted under the key-encryption key, so a read of the database or of a backup yields no key.
 
 ---
 
@@ -35,7 +37,9 @@ fast path finds no cached payload and recomputes from the store.
 - **Fixed vocabularies** are `text` with a `CHECK` constraint rather than a PostgreSQL enum, since
   adding a value is then a constraint change rather than a type migration.
 - **Foreign keys** are `ON DELETE RESTRICT` throughout. Nothing a grant points at is deleted while
-  the grant exists, and grants are never deleted, only revoked or expired.
+  the grant exists, and grants are never deleted, only revoked or expired. PostgreSQL 18 reports a
+  delete refused by such a key as `23001`, `restrict_violation`, where earlier releases report
+  `23503`, `foreign_key_violation`, so code turning the refusal into an answer accepts either.
 - **Append-only tables are append-only by privilege**, not only by convention: the controller's
   database role holds `INSERT` and `SELECT` alone on `grant_decisions`, `notices` and `audit_log`,
   and on `principal_revocations` may update only `lifted_by` and `lifted_at`. A defect in the
@@ -51,14 +55,28 @@ Read in the order of the token calculation's steps, which is the order each tabl
 
     users
       id                 uuid         primary key
-      idp_issuer         text         not null
-      idp_subject        text         not null
       created_at         timestamptz  not null
-      unique (idp_issuer, idp_subject)
 
-`users.id` never leaves Usher; outside it a principal is the provider's subject, unique only together
-with its issuer. A row is written at a principal's first exchange, and no email address or display
-name is stored.
+    user_identities
+      id                 uuid         primary key
+      user_id            uuid         not null  references users
+      idp_issuer         text         not null
+      idp_subject_id     text         not null
+      added_at           timestamptz  not null
+      added_by           uuid                   references users
+      unique (idp_issuer, idp_subject_id)
+
+`users` holds the person, and `user_identities` each identity provider account by which Usher knows
+them. `users.id` never leaves Usher. Outside it a principal is known by a subject identifier, unique
+only together with its issuer. Every column holding a subject identifier is named `idp_subject_id`,
+`notices` included: the one column ending in `_id` that references no table, its `idp_` prefix
+marking a value from outside Usher.
+
+A principal's first exchange writes the person and their identity together, with `added_by` empty,
+since the system is the actor. A person left with no identity is refused at commit. In the first
+release each person holds exactly one identity. Linking a second identity to the same person is open
+in [to-discuss.md](to-discuss.md), with how Usher learns about a person's identities. No email address
+or display name is stored.
 
     principal_revocations
       id                 uuid         primary key
@@ -151,18 +169,79 @@ cost a deferred trigger for a rule the registration path already holds.
 ### Applications
 
     applications
-      id                 text         primary key
+      id                 uuid         primary key
+      display_name       text         not null
       description        text
       registered_by      uuid         not null  references users
       registered_at      timestamptz  not null
 
+    application_keys
+      id                 uuid         primary key
+      application_id     uuid         not null  references applications
+      encrypted_key      bytea        not null
+      issued_by          uuid         not null  references users
+      issued_at          timestamptz  not null
+      confirmed_at       timestamptz
+      revoked_by         uuid                   references users
+      revoked_at         timestamptz
+
+    key_encryption_key_check
+      only_row           boolean      primary key  default true  check (only_row)
+      check_value        bytea        not null
+      recorded_at        timestamptz  not null
+
     application_resources
-      application_id     text         not null  references applications
+      application_id     uuid         not null  references applications
       resource_id        uuid         not null  references resources
       primary key (application_id, resource_id)
 
-`applications.id` is the audience, as `aud` names it. Its key lives in the secrets store and never in
-the database. `application_resources` is what case 18 in
+`applications.id` is the audience, as `aud` names it, generated like every other identifier.
+`display_name` is the label people read in its place and is never matched against anything. It is
+stored trimmed and normalized to NFC, the form in which its length is counted. `description` says
+what the application is for. See the glossary's "Name, display name, description".
+
+**The controller generates each application's key, and a registration issues the first one.** The
+controller stores the key encrypted under the key-encryption key and shows it once, for the
+application's own secrets; it never logs it and never shows it again. The encryption is
+authenticated, with the application's and the key's identifiers bound into it, so a key copied onto
+another application's row fails to decrypt rather than letting one application pass as another. A
+key is live from `issued_at` until `revoked_at`, and like a grant is revoked, never deleted.
+`confirmed_at` records the first exchange whose channel assertion verifies under it, whatever the
+exchange's own answer, which is how an admin sees that the key reached the application: its first
+replica, never its last. Changes to `applications` and `application_keys` are recorded like any
+other policy change, except that a key's record never copies `encrypted_key`: change records are
+append-only and never re-encrypted, so a copy there would outlive a rotation of the key-encryption
+key protecting it. Neither table raises the policy generation, since no key changes what any
+principal may reach.
+
+**A wrong key-encryption key refuses startup, and a damaged row refuses one application.** The first
+start records a check value derived from the key-encryption key through a subkey of its own, which
+reveals nothing about it, and every start compares it. A mismatch refuses startup, naming the
+variable, however many applications are registered, none included. The table holds one row, so of
+two instances first started with different keys, the second refuses. With the check passed, a stored
+key that fails to decrypt was altered: the controller starts, logs the key's identifier, and refuses
+that application with the same `401` as every other refusal. A reload treats such a key the same
+way, so a row altered while the controller runs is caught at the next reload.
+
+**Every controller instance holds the live keys in memory**, loaded at start and reloaded when a
+registration, an issue or a revocation wakes it through Valkey, and every 30 seconds besides, so a
+missed wake-up delays a revocation by at most 30 seconds, the same worst case a bridge's 30-second
+poll sets for a notice when push is down. The instance answering a registration or an issue holds
+the new key before it answers, so the key works there at once. An exchange naming an application
+with no live key, or none at all, is refused from memory with the same `401` as a bad signature, its
+reason only in the controller's log, as one of `unknownApplication`, `noLiveKey`, `invalidSignature`
+or `expiredAssertion`. A flood of invented identifiers then costs no database read. Revoking a key
+also ends every push stream opened under it, on each instance as it learns of the revocation, so a
+key revoked as compromised receives no further notice. None of registering, issuing or revoking
+restarts the controller, however it is deployed.
+
+A table rather than a column, so a rotation can hold two live keys for one application while its
+replicas move over; how keys rotate, the key-encryption key's included, is open in
+[adapter-integration.md](adapter-integration.md) § Decryption key distribution. Each act is an audit
+event: `application.registration`, `applicationKey.issuance` and `applicationKey.revocation`, and
+the observations `applicationKey.confirmation` and, at `critical`, `applicationKey.unreadable`.
+
+`application_resources` is what case 18 in
 [token-calculation.md](token-calculation.md) reads: a grant on a resource the audience does not serve
 is left out of that audience's token. A resource can be served by several applications. Who may write
 the mapping is open, with resource registration in [admin-model.md](admin-model.md).
@@ -188,9 +267,12 @@ the mapping is open, with resource registration in [admin-model.md](admin-model.
       capability_id      uuid         not null  references capabilities
       primary key (role_id, capability_id)
 
-The capability vocabulary's defaults come from controller configuration and are seeded at startup;
-an instance's additions are rows. Roles and their permissions are seeded from the matrix in
-[permissions-model.md](permissions-model.md) § The seeded roles.
+The capability vocabulary is fixed in code, and each start writes every capability the store lacks;
+an instance's own wording for a capability is its `display_name`, which a start never rewrites. Each
+start also writes every seeded role the store lacks, with its permissions from the matrix in
+[permissions-model.md](permissions-model.md) § The seeded roles, and changes no role the store holds.
+So a seeded role added in a later release reaches an existing store at its next start, while a change
+to an existing seeded role's matrix reaches it only through a migration.
 
 ### Grants and decisions
 
@@ -257,19 +339,22 @@ written.
 ### The notice stream
 
     notices
-      position           bigint       generated always as identity  primary key
-      kind               text         not null  check (kind in ('principal', 'category',
-                                                'baseline', 'global'))
-      subject            text
-      resource_name      text
-      created_at         timestamptz  not null
-      check ((kind = 'principal') = (subject is not null))
-      check ((kind = 'category') = (resource_name is not null))
+      position              bigint       generated always as identity  primary key
+      kind                  text         not null  check (kind in ('baseline', 'category',
+                                                   'global', 'principal', 'servedResources'))
+      idp_subject_id        text         check (idp_subject_id <> '')
+      resource_external_id  text         check (resource_external_id <> '')
+      audience              uuid         references applications
+      created_at            timestamptz  not null
+      check ((kind = 'principal') = (idp_subject_id is not null))
+      check ((kind = 'category') = (resource_external_id is not null))
+      check ((kind = 'servedResources') = (audience is not null))
 
 One table carries every kind the bridge's notice stream does. A principal's revocation and a sign-out
 relayed from the identity provider are both `principal` notices naming the subject, since a bridge
-treats them alike. A category change names the resource as the payload names it, and the baseline
-and global kinds name nothing.
+treats them alike. A category change names the resource by its external id, as the payload names it.
+A change to the set served by an application names that application as `audience`, and the
+baseline and global kinds name nothing.
 
 **Positions follow commit order, by serializing the writes.** An identity value is assigned at
 insert, so two transactions can commit out of order and a poll reading between them would skip the
@@ -282,7 +367,9 @@ opaque to the bridge and carries a position and an epoch. Notices are kept for t
 may lag and still act on them: the token lifetime plus the grace period, with a margin. Trimming
 records how far it reached, so the answer is judged against that watermark rather than against the
 oldest notice left, and the epoch changes whenever history restarts, as after a restore, so restored
-positions are never read as the old ones. A `410` drops every cached entry, which fails closed: the
+positions are never read as the old ones. A cursor also carries the creation time of the notice at
+its position, so a position a restore gave to another notice answers `410` even where a runbook
+kept the epoch. A `410` drops every cached entry, which fails closed: the
 bridge exchanges again for everyone, and nothing revoked survives. How a restore changes the epoch is
 a step for the deployment runbook.
 
@@ -290,6 +377,14 @@ a step for the deployment runbook.
       singleton          boolean      primary key  default true  check (singleton)
       epoch              uuid         not null
       trimmed_through    bigint       not null
+
+    notice_retention
+      singleton          boolean      primary key  default true  check (singleton)
+      floor_seconds      integer      not null  check (floor_seconds > 0)
+
+**The retention floor is set by the migration, never by the controller.** Each migration run stores
+it, and the controller's role may read it and not write it, so a defect in the controller can never
+trim a notice a bridge may still act on.
 
 **Decide E: category notices are filtered by audience, and principal notices are tagged per
 audience.** The controller holds which applications serve which resources, since a token names only
@@ -329,12 +424,36 @@ as an audit event, or the trail could not say who could reach what, and when. Ho
 kept against a person's request for erasure is open in [to-discuss.md](to-discuss.md), and is not
 decided here.
 
+### The change record
+
+    change_records
+      id                 uuid         primary key
+      table_name         text         not null
+      operation          text         not null  check (operation in ('INSERT', 'UPDATE', 'DELETE'))
+      row_key            jsonb        not null
+      old_row            jsonb
+      new_row            jsonb
+      actor_type         text         not null  check (actor_type in ('anonymous', 'human',
+                                                'serviceAccount', 'system'))
+      idp_subject_id     text
+      recorded_at        timestamptz  not null
+      check ((actor_type in ('human', 'serviceAccount')) = (idp_subject_id is not null and
+             idp_subject_id <> ''))
+      check ((old_row is null) = (operation = 'INSERT') and (new_row is null) = (operation = 'DELETE'))
+
+**Every change to a policy table is recorded by the database itself.** A trigger on each policy
+table writes the operation, the row's key, its values before and after, and the actor the changing
+transaction declared, so a change made outside the controller's code still leaves a record. The
+audit log says what a person did; the change record says what each row became. A secret column is
+never copied: an application key's record leaves out `encrypted_key`.
+
 ---
 
 ## The token calculation, against the indexes
 
 | Step     | Reads                                                       | Index                                                                                                                             |
 | -------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| exchange | which person holds the sign-in token's identity             | the unique index on `user_identities (idp_issuer, idp_subject_id)`                                                                |
 | exchange | is the principal revoked                                    | the partial unique index on `principal_revocations (user_id) where lifted_at is null`                                             |
 | 1        | grants held directly, and through each group the user is in | `grants (holder_user_id) where revoked_at is null`; `group_users (user_id)`; `grants (holder_group_id) where revoked_at is null`  |
 | 2, 4     | each kept grant's role, expanded                            | the primary key of `role_permissions`, read once per distinct role                                                                |
@@ -350,15 +469,16 @@ at the earliest of the kept grants' `expires_at` and the sign-in token's own `ex
 
 ## The data access layer
 
-**Decide F: Kysely, a typed query builder, over an ORM or raw SQL.** The threat model requires
-parameterized statements or a layer that binds parameters, and that constrains the choice without
-making it.
+**Decide F: Kysely, a typed query builder, over an ORM or raw SQL, for queries.** The threat model
+requires parameterized statements or a layer that binds parameters, and that constrains the choice
+without making it. Migrations are outside it: they run through the controller's own runner, below
+Decide G.
 
-| Option                             | Better                                                                               | Worse                                                                                     |
-| ---------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| **Kysely (recommended)**           | SQL in typed TypeScript, always parameterized, no hidden queries, its own migrations | the schema's types are declared or generated rather than inferred from a model            |
-| Drizzle                            | a schema written as code, with migrations generated from it                          | more abstraction between the query and what runs, on the path that decides access         |
-| A raw driver with tagged templates | the fewest layers, and the plainest SQL                                              | parameterization depends on every call site using the template, which a review must catch |
+| Option                             | Better                                                           | Worse                                                                                     |
+| ---------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Kysely (recommended)**           | SQL in typed TypeScript, always parameterized, no hidden queries | the schema's types are declared or generated rather than inferred from a model            |
+| Drizzle                            | a schema written as code, with migrations generated from it      | more abstraction between the query and what runs, on the path that decides access         |
+| A raw driver with tagged templates | the fewest layers, and the plainest SQL                          | parameterization depends on every call site using the template, which a review must catch |
 
 The access-deciding queries are few and must read as plainly as the calculation they implement, so a
 builder that emits exactly the SQL written suits them better than a model that decides it. The
@@ -366,15 +486,45 @@ management interface's queries, a custodian seeing only the grants they govern, 
 residual-filter problem the bridge solves, and may want the same machinery later. Versions are
 checked when the controller is built, not recorded here.
 
-**Decide G: migrations are numbered, forward-only and reviewed.** Each runs in a transaction, none is
-edited once released, and a correction is a new migration. Rolling back a deployment does not roll
-back its schema, so a migration that removes anything ships one release after the code stops reading
-it.
+**Decide G: migrations are numbered, forward-only and reviewed.** Each runs in a transaction of its
+own, none is edited once released, and a correction is a new migration. Rolling back a deployment
+does not roll back its schema, so a migration that removes anything ships one release after the code
+stops reading it.
+
+    schema_migrations
+      name               text         primary key
+      checksum           text         not null
+      applied_at         timestamptz  not null
+
+**The controller's own runner applies them, since no library's runner keeps this record.** Each
+migration commits together with its row, which holds the SHA-256 of the file applied, and the runner
+refuses before writing anything when a recorded migration has changed, is missing, or is out of
+order, or when the runtime role could act as the schema's owner. Kysely's runner records a name and a
+time alone, and runs a batch in one transaction.
 
 **Decide H: the controller's database role cannot alter the schema.** Migrations run under a separate
 role at deployment, and the running controller holds only the privileges its queries need, the
 append-only tables above included. A compromised controller can then read and write policy, which it
 must, but cannot widen its own privileges or drop the audit log.
+
+**Every function a migration creates starts closed to everyone but its grantees.** The first
+migration revokes `EXECUTE` on new functions from `PUBLIC` as the migration role's own default, so a
+later migration need not remember to. The default is the role's, not the schema's, since a default
+set for one schema only adds to the role's and cannot remove `PUBLIC`'s.
+
+**At start, the controller refuses a role that could change the schema or rewrite history.** It
+refuses a role attribute such as superuser or `BYPASSRLS`, and membership in a predefined role that
+writes every table or reaches the server itself: `pg_write_all_data`, `pg_execute_server_program`,
+`pg_read_server_files` and `pg_write_server_files`. It also refuses ownership of anything in the
+schema, `CREATE` on the schema or the database, any grant option, `TRUNCATE`, `TRIGGER`, and any
+write on an append-only table beyond what the migrations grant, `INSERT` included. The append-only
+tables are `audit_log`, `change_records`, `grant_decisions`, `notices` and
+`key_encryption_key_check`. `change_records` is written only by its trigger, so a role able to insert
+into it could forge history. Any other grant the release does not use, `pg_read_all_data` among
+them, is tolerated and logged at `warning`, naming the privilege and the table. So an instance of one
+release keeps running after the next release's migration adds a grant. A role that may write
+anything must be able to insert into `audit_log`, and a role that may only read still starts, since
+it changes nothing and so has nothing to record.
 
 ---
 

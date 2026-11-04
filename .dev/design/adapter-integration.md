@@ -79,7 +79,17 @@ predicate" in [decisions.md](decisions.md).
   **The interface's notice comes from one header, set by the bridge.** Every response to a suspended
   principal carries `Usher-Suspended: true`, set by the bridge's Express layer and exposed to
   browsers through `Access-Control-Expose-Headers`, so an interface shows the notice the same way in
-  every application, whatever its API. An anonymous principal and a confirmed one never carry it.
+  every application, whatever its API. A principal presenting no credential never carries it, and
+  nor does a confirmed one whose grants hold. A client compares against the header's name and value
+  as `@overture-stack/usher-types` exports them; [client-integration.md](client-integration.md) has
+  what it does with each answer.
+
+- **An export cut short by a row limit says so, and with access enforcement on, no request raises
+  the limit.** A file is the read most easily taken further, so the configured limit is a ceiling: a
+  request may lower it, never raise it. A cut export says so in its response headers, and in its file
+  name too, since a page submitting a download as a form reads no headers. Its count covers only the
+  records visible to the principal. Each application marks it its own way; Arranger's is in
+  [client-integration.md](client-integration.md) § Downloads.
 
 - **Readiness follows the bridge only while it is cold.** An application reports itself not ready
   until its bridge leaves cold, since a cold bridge serves nothing, and ready in every mode after,
@@ -104,22 +114,33 @@ defined with its validator in `@overture-stack/usher-types`:
 
     UsherRequestAccess
       version     1
-      principal   subject, or null when none is trusted; openTierOnly; suspended
+      principal   credential: none, unconfirmed or confirmed; openTierOnly; suspended; and, once
+                  confirmed, its subject: as subject while its grants hold, as
+                  attributionOnlySubject while suspended
       results     one enforcement result for each key the adapter registered
 
 - `version` lets an adapter refuse a shape it was not built for, so a later extension, such as
   field-level restrictions, fails closed in an older adapter rather than being half read.
-- `subject` is the trusted identity for log events, and later for a saved set's owner. It is null
-  when no trusted identity is known: for an anonymous principal, and for a credential the bridge has
-  not yet confirmed.
+- `credential` states what the principal presented, so no adapter infers a state from a missing
+  value: `none` for no credential, `unconfirmed` for one the bridge has not confirmed, and `confirmed`
+  for one the controller vouched for. A credential is confirmed while the bridge holds a live entry
+  for it from an exchange, or when this request's own exchange verified it. An expired entry, or one
+  dropped by a notice, confirms nothing, so the principal falls back to `unconfirmed`. The bridge only
+  decodes a sign-in token and the controller checks its signature at the exchange, so the `sub` of
+  an unconfirmed credential is never trusted.
+- `subject` is the trusted identity, for log events and for decisions about the principal's own
+  data, such as a saved set's owner. Only a confirmed principal whose grants hold carries it. A
+  suspended confirmed principal carries the same identity as `attributionOnlySubject`, for
+  attribution in log events alone. The type keeps it from an ownership check: reading `subject`
+  compiles only once both `credential` and `suspended` are narrowed. `subjectToLog` returns whichever
+  is present, and an adapter logs `credential` beside it, so a null is never read as a state.
 - `openTierOnly` says the results hold the open tier alone, and never whether anything was withheld
   from a result.
 - `suspended` says a signed-in principal's grants are on hold: the bridge is in its uncertain mode,
   or this principal's exchange failed while the notice stream is healthy. A principal presenting no
-  credential is never suspended. One whose credential the bridge has not confirmed, because it has
-  not exchanged it, is suspended with a null subject: signed in, identity unconfirmed, and served the
-  open tier. It lets an adapter tell "holds only open data" from "grants on hold", which call
-  for different notices and, for an export, a different answer.
+  credential is never suspended, and an unconfirmed one always is: signed in, identity unconfirmed,
+  and served the open tier. It lets an adapter tell "holds only open data" from "grants on hold",
+  which call for different notices and, for an export, a different answer.
 - It never carries the token, the payload or the grants: the adapter receives decisions, not their
   inputs.
 
@@ -135,6 +156,31 @@ Nothing about the value depends on which. The store is explicit rather than an `
 so an adapter's callback depends only on what it is handed. Typing the store follows the same split: the
 bridge for a framework declares `usher` on that framework's store type, such as Express's `Locals`,
 while `@overture-stack/usher-types` stays free of any framework.
+
+**A saved set records how it was saved, as a state, and its creator's identity never leaves the
+server.** A saved set is the first artifact an application keeps (see
+[permissions-model.md](permissions-model.md)), and these are its defaults, which artifact grants can
+tighten later. They apply where the application is told who is asking; an application that is not
+told keeps its earlier sharing rules, apart from the creator's identity, which no deployment serves.
+
+| Saved by                             | Recorded as                                 | Reached by                                                  |
+| ------------------------------------ | ------------------------------------------- | ----------------------------------------------------------- |
+| A confirmed principal, grants in force | `principal`, with its subject             | its creator, listed; and anyone naming the set by its id    |
+| A principal presenting no credential | `anonymous`                                 | anyone naming the set by its id; listed to no one           |
+| A suspended principal                | nothing: the save is refused                | no set exists                                               |
+| An application not told who is asking | `unattributed`, keeping the client's value as data | everyone, listed                                     |
+
+- **Every read of a set narrows its records to the reader's own access**, under any server-side
+  filter, Usher's or the application's own. Handing someone a set confers nothing.
+- **The creator's identity is used on the server alone**: to list a principal's own sets, and by
+  operators querying the store directly. No reader is served it, the creator included.
+- **A principal's set serves its saved query to its creator alone.** An anonymous or unattributed
+  set serves its query to whoever reaches the set.
+- **A client filters, sorts and aggregates sets only on fields served alike to every reader of the
+  set.** A field narrowed or withheld per reader is refused as a filter or sort key, and empty in an
+  aggregation, since otherwise it answers guesses about the value it hides.
+- **A set saved before these states existed is read as unattributed**, by a written rule rather than
+  from the missing value.
 
 **User IDs (not email addresses) are the identifiers in all API interactions.** The bridge
 presents the user's Keycloak subject (`sub` claim) to the controller's token exchange endpoint.
@@ -442,9 +488,9 @@ captured in the component description.
 
 **Bridge (`@overture-stack/usher-express-bridge`), shared by all adapters:**
 
-- Hold its own application's JWE key. The key is symmetric and reaches the bridge and the controller
-  from the secrets store, so onboarding is one secret written once rather than a registration
-  distribution; rotation is the part still open
+- Hold its own application's JWE key. The key is symmetric: the controller generates it when the
+  application is registered, and the application receives it once, through its own secrets.
+  Rotation is the part still open
 - Exchange the user's IdP bearer token for an Usher token in JWE form with the controller; for
   unauthenticated requests, perform the exchange with no bearer token to receive an
   anonymous Usher token containing only open-tier grants
@@ -488,17 +534,19 @@ layer and are that application's audit responsibility.
 Each adapter emits one structured event each time it applies a result or refuses a request, from
 its filter callback, since only the callback knows a result was applied:
 
-| Event                        | Level | Fields                                                                     |
-| ---------------------------- | ----- | -------------------------------------------------------------------------- |
-| `access_control.denied`      | info  | `catalogue`, `readPath`, `reason`, `requestId`, `suspended`, `userId`      |
-| `access_control.permitted`   | info  | `catalogue`, `enforcement`, `readPath`, `requestId`, `suspended`, `userId` |
-| `access_control.unavailable` | warn  | `catalogue`, `readPath`, `requestId`, `suspended`, `userId`                |
+| Event                            | Level | Fields                                                                                   |
+| -------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `access_enforcement.denied`      | info  | `catalogue`, `credential`, `readPath`, `reason`, `requestId`, `suspended`, `userId`      |
+| `access_enforcement.permitted`   | info  | `catalogue`, `credential`, `enforcement`, `readPath`, `requestId`, `suspended`, `userId` |
+| `access_enforcement.unavailable` | warn  | `catalogue`, `credential`, `readPath`, `requestId`, `suspended`, `userId`                |
 
 `enforcement` is the arm the bridge returned, `narrow` or `allow`, recorded whenever the adapter ran.
 A boolean saying only whether a filter was applied cannot tell a catalogue open by configuration
 from a narrowed request, and a missing entry is what enforcement not running looks like. `reason` is
 the deny's own, `no-grants` or `unknown-resource`, or `no-result` for a configured catalogue missing
-from the request's results. `userId` is the subject, null for an anonymous or suspended principal.
+from the request's results. `userId` is what `subjectToLog` returns: the subject of a confirmed
+principal, suspended or not, and null for any other. `credential` beside it says which state a null
+stands for.
 `requestId` is generated by the application for each request, never taken from a client header, and
 the same on every event one request causes. The time is the log envelope's. The names are camelCase,
 as the audit envelope's are. See the enforcement result in [decisions.md](decisions.md) § Holding no
@@ -516,18 +564,29 @@ A complete audit trail for a health data access event requires correlating Usher
 must ensure their adapter logs are shipped to the same log aggregation infrastructure as Usher's
 logs, with a shared `userId` field suitable for cross-system correlation.
 
-**Every application reads the bridge's configuration under the same names**, and only while its
-access control is on. A missing or malformed value refuses startup, naming the variable and never
-its value. The bridge's tuning options keep their defaults, with no variable until one is needed.
+**An application's switch turns on access enforcement, and its own filtering stays its own.** The
+switch, named `ENABLE_ACCESS_ENFORCEMENT` in every application, decides whether Usher's enforcement
+applies to principals, people and service accounts alike. An application may also narrow what it serves for
+reasons unrelated to principals, such as serving a subset of its data, and that filter applies
+whatever the switch says: off and unset behave the same. With the switch on, an application unable
+to apply its own filter beside Usher's refuses to start, naming both, rather than drop either.
+Dropping its own would serve what it meant to withhold, and dropping Usher's would turn enforcement
+off while the switch says on.
 
-| Variable                 | Feeds                                           | Rule                                                                  |
-| ------------------------ | ----------------------------------------------- | --------------------------------------------------------------------- |
-| `USHER_APPLICATION_KEY`  | the application's key                           | a secret from the secrets store, never in a values file, never logged |
-| `USHER_AUDIENCE`         | the application's audience identifier           | as the application is registered in Usher                             |
-| `USHER_CONTROLLER_URL`   | where the controller answers                    | `https`, or `http` to a loopback address only                         |
-| `USHER_EVENT_SOURCE`     | the CloudEvents `source` of the bridge's events | the same on every replica of the application                          |
-| `USHER_ISSUER`           | the issuer Usher's tokens carry                 | the controller's own                                                  |
-| `USHER_PAYLOAD_VERSIONS` | the payload versions the application reads      | optional: a comma-separated list, `1` by default                      |
+**Every application reads the bridge's configuration under the same names**, and only while its
+access enforcement is on. A missing or malformed value refuses startup, naming the variable and never
+its value. Whitespace around the key's value is ignored, since it is never part of a key and a
+pasted value often carries it. The bridge's tuning options keep their defaults, with no variable
+until one is needed.
+
+| Variable                 | Feeds                                           | Rule                                                                       |
+| ------------------------ | ----------------------------------------------- | -------------------------------------------------------------------------- |
+| `USHER_KEY`              | the application's key                           | a secret, shown once when the key is issued; never committed, never logged |
+| `USHER_AUDIENCE`         | the application's audience identifier           | the identifier Usher generated when the application was registered         |
+| `USHER_CONTROLLER_URL`   | where the controller answers                    | `https`, or `http` to a loopback address only                              |
+| `USHER_EVENT_SOURCE`     | the CloudEvents `source` of the bridge's events | the same on every replica of the application                               |
+| `USHER_ISSUER`           | the issuer Usher's tokens carry                 | the controller's own                                                       |
+| `USHER_PAYLOAD_VERSIONS` | the payload versions the application reads      | optional: a comma-separated list, `1` by default                           |
 
 ---
 
@@ -630,13 +689,24 @@ fault "the leak".
 
 ### Decryption key distribution
 
-Settled: the key is symmetric, one per controller-and-application pair, held in Vault or OpenBao and
-delivered to both pods by the secrets operator. Adapters hold none. What remains open is rotation:
-how often, and how a bridge picks up a new key without dropping in-flight tokens.
+Settled: the key is symmetric, one per controller-and-application pair. The controller generates it
+when the application is registered and keeps it encrypted, and the application receives it once,
+through its own secrets; see [schema.md](schema.md) § Applications. Adapters hold none. What remains
+open is rotation, the key-encryption key's included: how often, how a bridge picks up a new key
+without dropping in-flight tokens, and how an admin sees that an old key has stopped being used.
+`confirmed_at` cannot say so, since it marks the first replica to use the new key, never the last.
+
+The application reads its key from the environment at start, as `USHER_KEY`, so a new
+key reaches an application only when it restarts. A rotation keeps the old key live until every
+replica has restarted, which is why an application can hold two live keys. How the key reaches that
+variable belongs to each deployment: the design names the variable and leaves delivery to the
+deployment's own secrets.
 
 Options considered and not taken:
 
-- Environment variable at deploy time (simple, but rotation requires redeploy)
+- Prescribing one delivery for every deployment, such as a variable set by hand at deploy time:
+  deployments already keep secrets in their own ways, and one prescribed route would bind them all
+  to it
 - Issued by the controller itself via a key-exchange endpoint requiring mutual TLS or a bootstrap
   token
 
