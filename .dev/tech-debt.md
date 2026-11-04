@@ -32,3 +32,11 @@ declarations name neither `jose` nor `CryptoKey`, that the packed JavaScript imp
 fix: add them as steps in the repository's first CI pipeline, beside `pnpm format:check`.
 standalone: no
 context: waits on Usher having a CI pipeline, which the deployment runs through Jenkins.
+
+The audit table records no refused back-channel logout token: `identity.signOut` covers an accepted
+sign-out only.
+fix: record a refused logout token as a refused management credential is recorded, one event for a
+token that verifies under the trusted issuer and is refused anyway, and a tally per reason for one
+that does not.
+standalone: no
+context: waits on the controller's back-channel logout endpoint.
