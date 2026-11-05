@@ -1,0 +1,745 @@
+import assert from 'node:assert/strict';
+import { request } from 'node:http';
+import { suite, test, type TestContext } from 'node:test';
+
+import type { FastifyInstance } from 'fastify';
+
+import type { Actor, AuditEvent, LineFields } from '../eventLog/index.js';
+import { createServer } from '../http/index.js';
+import type {
+  TokenClaims,
+  TokenVerification,
+} from '../identityProvider/index.js';
+import {
+  managementRoute,
+  REFUSED_SUBJECT_MAXIMUM_LENGTH,
+  STORE_FAILED,
+} from './managementRoute.js';
+import { BODY_LIMIT_BYTES, problem } from './problems.js';
+import { readTextMembers } from './requestBody.js';
+import type {
+  ManagementOperation,
+  OperationOutcome,
+  StoredRefusal,
+} from './types.js';
+
+const NOW = Date.UTC(2026, 10, 4, 12, 0, 0);
+
+const SECONDS = Math.floor(NOW / 1000);
+
+const ISSUER = 'https://auth.example.org/realms/usher';
+
+const SETTINGS = Object.freeze({
+  administratorRole: 'usher-platform-admin',
+  clock: { now: () => NOW },
+  identityProviderIssuer: ISSUER,
+  managementAudience: 'usher-management',
+  managementClients: ['usher-ui'],
+});
+
+const SHELF_LIMIT = problem(
+  'shelfFull',
+  409,
+  'Shelf full',
+  'The shelf is full.',
+);
+
+const claimsOf = (
+  departures: Readonly<Record<string, unknown>> = {},
+): TokenClaims =>
+  Object.fromEntries(
+    Object.entries({
+      aud: ['usher-management'],
+      azp: 'usher-ui',
+      exp: SECONDS + 300,
+      iat: SECONDS - 10,
+      iss: ISSUER,
+      realm_access: { roles: ['usher-platform-admin'] },
+      sub: 'subject-ana',
+      ...departures,
+    }).filter(([, value]) => value !== undefined),
+  );
+
+const verified = (
+  departures?: Readonly<Record<string, unknown>>,
+): TokenVerification => ({ claims: claimsOf(departures), kind: 'verified' });
+
+interface Recorded {
+  actor: Actor;
+  event: AuditEvent;
+}
+
+interface Line {
+  fields: LineFields | undefined;
+  message: string;
+}
+
+interface Stand {
+  counted: string[];
+  lines: Line[];
+  ran: { input: unknown; params: Readonly<Record<string, string>> }[];
+  recorded: Recorded[];
+  server: FastifyInstance;
+}
+
+interface StandOptions {
+  /** What the operation answers. */
+  outcome?: () => Promise<OperationOutcome>;
+
+  /** What the store says of the principal's standing, or a failure to say. */
+  standing?: () => Promise<StoredRefusal | undefined>;
+
+  /** What the verifier gives each token. */
+  verifications?: Readonly<Record<string, TokenVerification>>;
+}
+
+const ROUTE = '/admin/shelves/{id}/books';
+
+// An operation shaped as the application operations are: administrators alone, a JSON body holding
+// one required text member, and an event naming the shelf the request names.
+const shelving = (
+  ran: Stand['ran'],
+  outcome: () => Promise<OperationOutcome>,
+): ManagementOperation<{ title: string }> => ({
+  administratorOnly: true,
+  body: 'required',
+  event: {
+    named: async (params) =>
+      params['id'] === 'shelf-1' ? { shelfId: 'shelf-1' } : {},
+    type: 'application.registration',
+  },
+  method: 'POST',
+  readInput: (body) => {
+    const reading = readTextMembers(body ?? {}, { title: { required: true } });
+    return reading.kind === 'read'
+      ? { input: { title: reading.members['title'] ?? '' }, kind: 'read' }
+      : reading;
+  },
+  route: ROUTE,
+  run: async ({ input, params }) => {
+    ran.push({ input, params });
+    return outcome();
+  },
+});
+
+const standUp = async (
+  context: TestContext,
+  {
+    outcome = async () => ({
+      body: { shelved: true },
+      forbidsStoring: true,
+      kind: 'answered',
+      status: 201,
+    }),
+    standing = async () => undefined,
+    verifications = {},
+  }: StandOptions = {},
+): Promise<Stand> => {
+  const stand: Omit<Stand, 'server'> = {
+    counted: [],
+    lines: [],
+    ran: [],
+    recorded: [],
+  };
+  const server = createServer({ isReady: () => true, trustedProxies: [] });
+  server.route(
+    managementRoute(shelving(stand.ran, outcome), {
+      eventLog: {
+        error: (message, fields) => {
+          stand.lines.push({ fields, message });
+        },
+      },
+      refusalTally: {
+        count: (reason) => {
+          stand.counted.push(reason);
+        },
+      },
+      settings: SETTINGS,
+      storedRefusal: standing,
+      tokenVerifier: {
+        verify: async (token) =>
+          verifications[token] ?? {
+            kind: 'unverified',
+            reason: 'invalidSignature',
+          },
+      },
+      trail: {
+        recordEvent: async (actor, event) => {
+          stand.recorded.push({ actor, event });
+          return 'event-id';
+        },
+      },
+    }),
+  );
+  context.after(() => server.close());
+  return { ...stand, server };
+};
+
+const BODY = '{"title":"Dubliners"}';
+
+const post = (
+  { server }: Stand,
+  {
+    body = BODY,
+    headers = {},
+    token = 'admin',
+    url = '/admin/shelves/shelf-1/books',
+  }: {
+    body?: string;
+    headers?: Readonly<Record<string, string>>;
+    token?: string | null;
+    url?: string;
+  } = {},
+) =>
+  server.inject({
+    headers: {
+      'content-type': 'application/json',
+      ...(token === null ? {} : { authorization: `Bearer ${token}` }),
+      ...headers,
+    },
+    method: 'POST',
+    payload: body,
+    url,
+  });
+
+// Two Authorization header lines, sent over a socket, since an injected request carries one value per
+// header.
+const twiceAuthorized = async ({
+  server,
+}: Stand): Promise<{ body: string; statusCode: number }> => {
+  const url = await server.listen({ host: '127.0.0.1', port: 0 });
+  const { hostname, port } = new URL(url);
+  return new Promise((resolve, reject) => {
+    const sent = request(
+      {
+        // Built from entries, since Node types a known header as holding one value.
+        headers: Object.fromEntries([
+          ['authorization', ['Bearer admin', 'Bearer admin']],
+          ['content-length', String(Buffer.byteLength(BODY))],
+          ['content-type', 'application/json'],
+        ]),
+        host: hostname,
+        method: 'POST',
+        path: '/admin/shelves/shelf-1/books',
+        port,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => {
+          resolve({
+            body: Buffer.concat(chunks).toString('utf8'),
+            statusCode: response.statusCode ?? 0,
+          });
+        });
+      },
+    );
+    sent.on('error', reject);
+    sent.end(BODY);
+  });
+};
+
+const codeOf = (answer: { body: string }): unknown => {
+  const parsed: unknown = JSON.parse(answer.body);
+  return typeof parsed === 'object' && parsed !== null
+    ? Reflect.get(parsed, 'code')
+    : undefined;
+};
+
+const ADMIN = { admin: verified() };
+
+suite('admitting a request to a management operation', () => {
+  test('runs the operation for a platform administrator, answering what it answers, and forbids storing an answer that says so', async (context) => {
+    const stand = await standUp(context, { verifications: ADMIN });
+
+    const answer = await post(stand);
+
+    assert.equal(answer.statusCode, 201);
+    assert.equal(answer.headers['cache-control'], 'no-store');
+    assert.deepEqual(JSON.parse(answer.body), { shelved: true });
+    assert.deepEqual(stand.ran, [
+      { input: { title: 'Dubliners' }, params: { id: 'shelf-1' } },
+    ]);
+    assert.deepEqual(stand.recorded, []);
+  });
+
+  test('refuses a request with no credential 401 naming the Bearer scheme, recording and counting nothing', async (context) => {
+    const stand = await standUp(context);
+
+    const answer = await post(stand, { token: null });
+
+    assert.equal(answer.statusCode, 401);
+    assert.equal(answer.headers['www-authenticate'], 'Bearer');
+    assert.match(
+      String(answer.headers['content-type']),
+      /^application\/problem\+json/u,
+    );
+    assert.deepEqual([stand.recorded, stand.counted, stand.ran], [[], [], []]);
+  });
+
+  test('refuses two credentials, another scheme, or a credential in the query 400, before verifying anything, counting each as malformedCredential', async (context) => {
+    const stand = await standUp(context, { verifications: ADMIN });
+
+    const answers = [
+      await twiceAuthorized(stand),
+      await post(stand, { headers: { authorization: 'Basic admin' } }),
+      await post(stand, {
+        token: null,
+        url: '/admin/shelves/shelf-1/books?access_token=admin',
+      }),
+    ];
+
+    answers.forEach((answer) => {
+      assert.equal(answer.statusCode, 400);
+      assert.equal(codeOf(answer), 'malformedCredential');
+    });
+    assert.deepEqual(stand.counted, [
+      'malformedCredential',
+      'malformedCredential',
+      'malformedCredential',
+    ]);
+    assert.deepEqual([stand.recorded, stand.ran], [[], []]);
+  });
+
+  test('counts a credential it cannot verify by its reason, recording no event for it', async (context) => {
+    const stand = await standUp(context, {
+      verifications: {
+        forged: { kind: 'unverified', reason: 'invalidSignature' },
+        other: { kind: 'unverified', reason: 'otherIssuer' },
+      },
+    });
+
+    const answers = [
+      await post(stand, { token: 'other' }),
+      await post(stand, { token: 'forged' }),
+    ];
+
+    answers.forEach((answer) => assert.equal(answer.statusCode, 401));
+    assert.deepEqual(stand.counted, ['otherIssuer', 'invalidSignature']);
+    assert.deepEqual(stand.recorded, []);
+  });
+
+  test('records a verified token naming no usable subject as managementToken.refusal for missingSubject, naming no subject and counting nothing', async (context) => {
+    const stand = await standUp(context, {
+      verifications: {
+        blank: verified({ sub: '' }),
+        nameless: verified({ sub: undefined }),
+        numbered: verified({ sub: 7 }),
+      },
+    });
+
+    const answers = [
+      await post(stand, { token: 'nameless' }),
+      await post(stand, { token: 'blank' }),
+      await post(stand, { token: 'numbered' }),
+    ];
+
+    answers.forEach((answer) => {
+      assert.equal(answer.statusCode, 401);
+      assert.equal(codeOf(answer), 'credentialRefused');
+    });
+    assert.deepEqual(
+      stand.recorded,
+      answers.map(() => ({
+        actor: { type: 'anonymous' },
+        event: {
+          data: {
+            method: 'POST',
+            reason: 'missingSubject',
+            result: 'denied',
+            route: ROUTE,
+            sourceIp: '127.0.0.1',
+          },
+          severity: 'warning',
+          type: 'managementToken.refusal',
+        },
+      })),
+    );
+    assert.deepEqual([stand.counted, stand.ran], [[], []]);
+  });
+
+  test("records a verified token refused for its claims as managementToken.refusal, its actor anonymous, naming the route's template and the token's subject", async (context) => {
+    const stand = await standUp(context, {
+      verifications: { expired: verified({ exp: SECONDS - 60 }) },
+    });
+
+    const answer = await post(stand, { token: 'expired' });
+
+    assert.equal(answer.statusCode, 401);
+    assert.deepEqual(stand.recorded, [
+      {
+        actor: { type: 'anonymous' },
+        event: {
+          data: {
+            method: 'POST',
+            reason: 'expiredToken',
+            refusedSubject: 'subject-ana',
+            result: 'denied',
+            route: ROUTE,
+            sourceIp: '127.0.0.1',
+          },
+          severity: 'warning',
+          type: 'managementToken.refusal',
+        },
+      },
+    ]);
+    assert.deepEqual(stand.ran, []);
+  });
+
+  test('names a refused subject of the maximum length whole, and leaves out a longer one', async (context) => {
+    const atLimit = 'a'.repeat(REFUSED_SUBJECT_MAXIMUM_LENGTH);
+    const pastLimit = 'b'.repeat(REFUSED_SUBJECT_MAXIMUM_LENGTH + 1);
+    const stand = await standUp(context, {
+      verifications: {
+        atLimit: verified({ exp: undefined, sub: atLimit }),
+        pastLimit: verified({ exp: undefined, sub: pastLimit }),
+      },
+    });
+
+    await post(stand, { token: 'atLimit' });
+    await post(stand, { token: 'pastLimit' });
+
+    assert.deepEqual(
+      stand.recorded.map(({ event }) => event.data['refusedSubject']),
+      [atLimit, undefined],
+    );
+    assert.equal(
+      Object.hasOwn(stand.recorded[1]?.event.data ?? {}, 'refusedSubject'),
+      false,
+    );
+  });
+
+  test('answers every refused credential alike, whether recorded, counted or neither', async (context) => {
+    const stand = await standUp(context, {
+      verifications: {
+        expired: verified({ exp: SECONDS - 60 }),
+        nameless: verified({ sub: undefined }),
+        other: { kind: 'unverified', reason: 'otherIssuer' },
+        otherClient: verified({ azp: 'portal' }),
+      },
+    });
+
+    const answers = await Promise.all(
+      [null, 'expired', 'nameless', 'other', 'otherClient'].map((token) =>
+        post(stand, { token }),
+      ),
+    );
+
+    const shown = answers.map(({ body, headers, statusCode }) => ({
+      authenticate: headers['www-authenticate'],
+      body,
+      statusCode,
+    }));
+    shown.forEach((answer) => assert.deepEqual(answer, shown[0]));
+  });
+
+  test('records a revoked principal, a platform revocation or a session signed out as managementToken.refusal naming the subject, and answers a store that cannot say 503 with a line', async (context) => {
+    const refusals: (StoredRefusal | Error)[] = [
+      'revokedPrincipal',
+      'revokedPlatform',
+      'signedOutSession',
+      Object.assign(new Error('the store is down'), { code: 'ECONNREFUSED' }),
+    ];
+    const stand = await standUp(context, {
+      standing: async () => {
+        const next = refusals.shift();
+        if (next instanceof Error) {
+          throw next;
+        }
+        return next;
+      },
+      verifications: ADMIN,
+    });
+
+    const answers = [
+      await post(stand),
+      await post(stand),
+      await post(stand),
+      await post(stand),
+    ];
+
+    assert.deepEqual(
+      answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+      [
+        [401, 'credentialRefused'],
+        [401, 'credentialRefused'],
+        [401, 'credentialRefused'],
+        [503, 'storeUnavailable'],
+      ],
+    );
+    assert.deepEqual(
+      stand.recorded.map(({ actor, event }) => [
+        actor,
+        event.type,
+        event.data['reason'],
+        event.data['refusedSubject'],
+      ]),
+      [
+        [
+          { type: 'anonymous' },
+          'managementToken.refusal',
+          'revokedPrincipal',
+          'subject-ana',
+        ],
+        [
+          { type: 'anonymous' },
+          'managementToken.refusal',
+          'revokedPlatform',
+          'subject-ana',
+        ],
+        [
+          { type: 'anonymous' },
+          'managementToken.refusal',
+          'signedOutSession',
+          'subject-ana',
+        ],
+      ],
+    );
+    assert.deepEqual(stand.lines, [
+      {
+        fields: { code: 'ECONNREFUSED', method: 'POST', route: ROUTE },
+        message: STORE_FAILED,
+      },
+    ]);
+    assert.deepEqual(stand.ran, []);
+  });
+
+  test("answers 503 while the identity provider's keys cannot be fetched, recording, counting and writing nothing per request", async (context) => {
+    const stand = await standUp(context, {
+      verifications: { admin: { kind: 'keysUnavailable' } },
+    });
+
+    const answers = [await post(stand), await post(stand)];
+
+    answers.forEach((answer) => {
+      assert.equal(answer.statusCode, 503);
+      assert.equal(codeOf(answer), 'identityProviderUnavailable');
+    });
+    assert.deepEqual(
+      [stand.lines, stand.recorded, stand.counted, stand.ran],
+      [[], [], [], []],
+    );
+  });
+
+  test('refuses a subject or session holding text that cannot be stored 400, recording managementToken.refusal for unrepresentableSubject, naming no subject', async (context) => {
+    const stand = await standUp(context, {
+      verifications: {
+        nul: verified({ sub: 'ana\u0000' }),
+        surrogate: verified({ sid: '\uD800' }),
+      },
+    });
+
+    const answers = [
+      await post(stand, { token: 'nul' }),
+      await post(stand, { token: 'surrogate' }),
+    ];
+
+    answers.forEach((answer) => {
+      assert.equal(answer.statusCode, 400);
+      assert.equal(codeOf(answer), 'unrepresentableText');
+    });
+    assert.deepEqual(
+      stand.recorded,
+      answers.map(() => ({
+        actor: { type: 'anonymous' },
+        event: {
+          data: {
+            method: 'POST',
+            reason: 'unrepresentableSubject',
+            result: 'denied',
+            route: ROUTE,
+            sourceIp: '127.0.0.1',
+          },
+          severity: 'warning',
+          type: 'managementToken.refusal',
+        },
+      })),
+    );
+    assert.deepEqual([stand.counted, stand.ran], [[], []]);
+  });
+});
+
+suite(
+  "a management operation's refusals, as its own event records them",
+  () => {
+    const deniedFor = (
+      stand: Stand,
+    ): readonly { actor: Actor; data: Readonly<Record<string, unknown>> }[] =>
+      stand.recorded.map(({ actor, event }) => {
+        assert.equal(event.type, 'application.registration');
+        return { actor, data: event.data };
+      });
+
+    test('refuses a service account, the administrator role notwithstanding, and anyone else not an administrator 403, recording each denied under its actor and naming the shelf', async (context) => {
+      const stand = await standUp(context, {
+        verifications: {
+          reader: verified({ realm_access: { roles: [] } }),
+          service: verified({ client_id: 'lyric-svc', sub: 'service-1' }),
+        },
+      });
+
+      const answers = [
+        await post(stand, { token: 'service' }),
+        await post(stand, { token: 'reader' }),
+      ];
+
+      assert.deepEqual(
+        answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+        [
+          [403, 'serviceAccountNotPermitted'],
+          [403, 'administratorOnly'],
+        ],
+      );
+      assert.deepEqual(deniedFor(stand), [
+        {
+          actor: { id: 'service-1', type: 'serviceAccount' },
+          data: {
+            reason: 'serviceAccountNotPermitted',
+            result: 'denied',
+            shelfId: 'shelf-1',
+            sourceIp: '127.0.0.1',
+          },
+        },
+        {
+          actor: { id: 'subject-ana', type: 'human' },
+          data: {
+            reason: 'administratorOnly',
+            result: 'denied',
+            shelfId: 'shelf-1',
+            sourceIp: '127.0.0.1',
+          },
+        },
+      ]);
+      assert.equal(stand.recorded[0]?.event.severity, 'warning');
+      assert.deepEqual(stand.ran, []);
+    });
+
+    test('refuses a body too large, in another media type, unreadable, holding a member twice, or holding text that cannot be stored, and a query, each recorded denied with the code answered', async (context) => {
+      const stand = await standUp(context, { verifications: ADMIN });
+
+      const answers = [
+        await post(stand, {
+          body: `{"title":"${'x'.repeat(BODY_LIMIT_BYTES)}"}`,
+        }),
+        await post(stand, { headers: { 'content-type': 'text/plain' } }),
+        await post(stand, { body: '{"title":' }),
+        await post(stand, { body: '{"title":"a","title":"b"}' }),
+        await post(stand, { body: '{"title":"a\\u0000"}' }),
+        await post(stand, { url: '/admin/shelves/shelf-1/books?page=2' }),
+        await post(stand, { body: '{}' }),
+        await post(stand, { body: '' }),
+      ];
+
+      assert.deepEqual(
+        answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+        [
+          [413, 'bodyTooLarge'],
+          [415, 'unsupportedMediaType'],
+          [400, 'unreadableBody'],
+          [400, 'unreadableBody'],
+          [400, 'unrepresentableText'],
+          [400, 'unreadableQuery'],
+          [400, 'unreadableBody'],
+          [400, 'unreadableBody'],
+        ],
+      );
+      assert.match(
+        String(JSON.parse(answers[0]?.body ?? '{}').detail),
+        /65536/u,
+      );
+      assert.deepEqual(
+        deniedFor(stand).map(({ data }) => data['reason']),
+        answers.map(codeOf),
+      );
+      assert.deepEqual(stand.ran, []);
+    });
+
+    test('records a refusal the operation answers as denied, naming only what exists', async (context) => {
+      const stand = await standUp(context, {
+        outcome: async () => ({ kind: 'refused', problem: SHELF_LIMIT }),
+        verifications: ADMIN,
+      });
+
+      const answers = [
+        await post(stand),
+        await post(stand, { url: '/admin/shelves/shelf-2/books' }),
+      ];
+
+      answers.forEach((answer) => {
+        assert.equal(answer.statusCode, 409);
+        assert.equal(codeOf(answer), 'shelfFull');
+      });
+      assert.deepEqual(
+        deniedFor(stand).map(({ data }) => data),
+        [
+          {
+            reason: 'shelfFull',
+            result: 'denied',
+            shelfId: 'shelf-1',
+            sourceIp: '127.0.0.1',
+          },
+          { reason: 'shelfFull', result: 'denied', sourceIp: '127.0.0.1' },
+        ],
+      );
+    });
+
+    test('answers a failure the operation throws 503 storeUnavailable, with a line naming its code and the event recorded failed at error', async (context) => {
+      const stand = await standUp(context, {
+        outcome: async () => {
+          throw Object.assign(new Error('permission denied for table'), {
+            code: '42501',
+          });
+        },
+        verifications: ADMIN,
+      });
+
+      const answer = await post(stand);
+
+      assert.equal(answer.statusCode, 503);
+      assert.equal(codeOf(answer), 'storeUnavailable');
+      assert.equal(answer.body.includes('permission'), false);
+      assert.deepEqual(stand.lines, [
+        {
+          fields: { code: '42501', method: 'POST', route: ROUTE },
+          message: STORE_FAILED,
+        },
+      ]);
+      assert.deepEqual(
+        stand.recorded.map(({ event }) => ({
+          data: event.data,
+          severity: event.severity,
+        })),
+        [
+          {
+            data: {
+              reason: 'storeUnavailable',
+              result: 'failed',
+              shelfId: 'shelf-1',
+              sourceIp: '127.0.0.1',
+            },
+            severity: 'error',
+          },
+        ],
+      );
+    });
+
+    test('serves the operation at its method alone, every other method answering 404 as an unserved path does', async (context) => {
+      const stand = await standUp(context, { verifications: ADMIN });
+
+      const answers = await Promise.all(
+        (['GET', 'HEAD', 'PUT'] as const).map((method) =>
+          stand.server.inject({
+            headers: { authorization: 'Bearer admin' },
+            method,
+            url: '/admin/shelves/shelf-1/books',
+          }),
+        ),
+      );
+
+      answers.forEach((answer) => {
+        assert.equal(answer.statusCode, 404);
+        assert.equal(answer.body, '');
+      });
+    });
+  },
+);

@@ -164,11 +164,23 @@
         "content": {
           "application/problem+json": {
             "schema": {
-              "$ref": "#/components/schemas/ProblemDetails"
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "enum": ["credentialRefused"]
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
             }
           }
         },
-        "description": "No `Authorization` header, or a `Bearer` access token that is refused. Every refused credential receives this one answer. An `Authorization` header in any other form is refused with `400`.",
+        "description": "No `Authorization` header, or a `Bearer` access token that is refused; `credentialRefused`. Every refused credential receives this one answer. An `Authorization` header in any other form is refused with `400`.",
         "headers": {
           "WWW-Authenticate": {
             "$ref": "#/components/headers/WwwAuthenticateBearer"
@@ -177,6 +189,28 @@
       },
       "CursorGone": {
         "description": "The cursor can no longer be answered: history it needs is trimmed, it belongs to another epoch, it is ahead of the newest notice, or it cannot be read. Answered before any byte of a stream. The bridge drops every cached entry and polls from head."
+      },
+      "InternalError": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "enum": ["internalError"]
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
+            }
+          }
+        },
+        "description": "The controller failed to answer the request, and nothing of it was written; `internalError`."
       },
       "JsonOnly": {
         "content": {
@@ -229,11 +263,29 @@
         "content": {
           "application/problem+json": {
             "schema": {
-              "$ref": "#/components/schemas/ProblemDetails"
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "malformedCredential",
+                        "unreadableBody",
+                        "unreadablePath",
+                        "unreadableQuery",
+                        "unrepresentableText"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
             }
           }
         },
-        "description": "The request is unreadable by its shape: an `Authorization` header holding other than exactly one `Bearer` credential, or a credential in the query; a query parameter not taken by the operation, or a value of one it cannot read; or a body that is not one JSON object, names a member twice, holds a `__proto__` member, lacks a required member, holds a member of the wrong type, or holds a member not taken by the operation, other than those named in its `422`."
+        "description": "The request is unreadable by its shape. `malformedCredential`: an `Authorization` header holding other than exactly one `Bearer` credential, or a credential in the query. `unreadablePath`: a path holding a percent-encoding that is not UTF-8. `unreadableQuery`: a query parameter not taken by the operation, or a value of one it cannot read. `unreadableBody`: a body that is not one JSON object, names a member twice, holds a `__proto__` member, lacks a required member, holds a member of the wrong type, or holds a member not taken by the operation, other than those named in its `422`. `unrepresentableText`: text in the body, or the access token's `sub` or `sid`, holding a NUL character or an unpaired surrogate, neither of which can be stored."
       }
     },
     "schemas": {
@@ -1784,21 +1836,51 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["displayNameBlank", "displayNameTooLong"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`displayName` is empty once trimmed, or longer than 128 characters once normalized to NFC."
+            "description": "`displayNameBlank`: `displayName` is empty once trimmed. `displayNameTooLong`: `displayName` is longer than 128 characters once normalized to NFC."
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           },
           "503": {
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "identityProviderUnavailable",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
           }
         },
         "security": [
@@ -1883,15 +1965,33 @@
             },
             "description": "The id names no registered application, or is malformed; `applicationNotFound` for both."
           },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
           "503": {
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "identityProviderUnavailable",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `storeUnavailable`: the policy store cannot be read."
           }
         },
         "security": [
@@ -2003,15 +2103,39 @@
             },
             "description": "The application holds two live keys already; `applicationKeyLimit`."
           },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/JsonOnly"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
           "503": {
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "identityProviderUnavailable",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
           }
         },
         "security": [
@@ -2145,21 +2269,51 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["unknownRevocationReason"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "The reason is not `rotated`, `compromised` or `retired`."
+            "description": "The reason is not `rotated`, `compromised` or `retired`; `unknownRevocationReason`."
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           },
           "503": {
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "identityProviderUnavailable",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
           }
         },
         "security": [
@@ -2463,7 +2617,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -2561,7 +2715,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The category is updated."
@@ -2693,7 +2847,7 @@
                 }
               }
             },
-            "description": "`directoryUnavailable`: a holder named by address while the directory cannot answer. `storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: a holder named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -2831,7 +2985,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -2970,7 +3124,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -3107,7 +3261,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The grant is changed."
@@ -3239,7 +3393,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The answer is recorded."
@@ -3672,7 +3826,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The principal is revoked."
@@ -3748,7 +3902,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The revocation is lifted."
@@ -3885,7 +4039,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource field is defined."
@@ -4079,7 +4233,7 @@
                 }
               }
             },
-            "description": "`directoryUnavailable`: an owner named by address while the directory cannot answer. `storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: an owner named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -4194,7 +4348,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The registration is deleted."
@@ -4393,7 +4547,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource is updated."
@@ -4482,7 +4636,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The application no longer serves the resource."
@@ -4569,7 +4723,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The application serves the resource."
@@ -4795,7 +4949,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource is restored."
@@ -4903,7 +5057,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource is retired."
@@ -5016,7 +5170,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "Access to the resource is revoked."
@@ -5151,7 +5305,7 @@
                 }
               }
             },
-            "description": "`directoryUnavailable`: the directory cannot answer. `storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The submitter is removed."
@@ -5264,7 +5418,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource is suppressed."
@@ -5350,7 +5504,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The instance is revoked."
@@ -5441,7 +5595,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the operation would write on an instance whose database role may only read, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The role's capabilities are replaced."

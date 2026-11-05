@@ -579,3 +579,81 @@ suite('the audit trail', () => {
     );
   });
 });
+
+suite('an event recorded alone', () => {
+  const REFUSAL: AuditEvent = Object.freeze({
+    data: { reason: 'administratorOnly', result: 'denied' },
+    severity: 'warning',
+    type: 'application.registration',
+  });
+
+  test('commits its row in a transaction of its own under the actor given, then writes its line', async () => {
+    const { lines, store, trail } = trailOver();
+
+    const id = await trail.recordEvent(ANA, REFUSAL);
+
+    assert.deepEqual(
+      store.statements.map(({ text }) => text.split(' ')[0]),
+      ['BEGIN', 'SELECT', 'INSERT', 'COMMIT'],
+    );
+    assert.deepEqual(store.statements[1]?.values, ['human', 'subject-ana']);
+    assert.equal(lines()[0]?.['id'], id);
+    assert.equal(dataOf(lines()[0])['reason'], 'administratorOnly');
+  });
+
+  test("writes a line at error naming the event's type and the store's code, never its data, when its row cannot be written", async () => {
+    const failing = fakeStore((text) => ROW_INSERT.test(text));
+    const refused = Object.assign(new Error('the store refused it'), {
+      code: '42501',
+    });
+    const store = {
+      ...failing,
+      connect: async (): Promise<TrailConnection> => {
+        const connection = await failing.connect();
+        return {
+          query: (text, values) =>
+            ROW_INSERT.test(text)
+              ? Promise.reject(refused)
+              : connection.query(text, values),
+          release: (destroy) => connection.release(destroy),
+        };
+      },
+    };
+    const { lines, trail } = trailOver(store);
+
+    const id = await trail.recordEvent(ANA, REFUSAL);
+
+    assert.equal(id, undefined);
+    assert.deepEqual(lines(), [
+      {
+        code: '42501',
+        eventType: 'bio.overture.application.registration',
+        level: 50,
+        message: 'audit.eventUnrecorded',
+        time: '2026-11-04T12:30:05.120Z',
+      },
+    ]);
+  });
+
+  test('writes the line with no code for a failure carrying none, and throws nothing', async () => {
+    const { lines, trail } = trailOver(fakeStore((text) => text === 'BEGIN'));
+
+    const id = await trail.recordEvent(SYSTEM, REFUSAL);
+
+    assert.equal(id, undefined);
+    assert.deepEqual(
+      lines().map(({ code, eventType, message }) => ({
+        code,
+        eventType,
+        message,
+      })),
+      [
+        {
+          code: undefined,
+          eventType: 'bio.overture.application.registration',
+          message: 'audit.eventUnrecorded',
+        },
+      ],
+    );
+  });
+});

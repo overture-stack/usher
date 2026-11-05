@@ -5,7 +5,7 @@ import { createServer, HEALTH_PATHS } from './createServer.js';
 
 suite("the controller's health endpoints", () => {
   test('answers liveness 200 with nothing in the body, whether or not the controller can serve', async (context) => {
-    const server = createServer({ isReady: () => false });
+    const server = createServer({ isReady: () => false, trustedProxies: [] });
     context.after(() => server.close());
 
     const answer = await server.inject({
@@ -19,7 +19,10 @@ suite("the controller's health endpoints", () => {
 
   test('answers readiness 200 while the controller can serve and 503 while it cannot, asking at each request, with nothing in either body', async (context) => {
     const state = { ready: true };
-    const server = createServer({ isReady: () => state.ready });
+    const server = createServer({
+      isReady: () => state.ready,
+      trustedProxies: [],
+    });
     context.after(() => server.close());
 
     const ready = await server.inject({
@@ -42,7 +45,7 @@ suite("the controller's health endpoints", () => {
   });
 
   test('answers a path it does not serve 404 with nothing in the body, repeating nothing the request sent', async (context) => {
-    const server = createServer({ isReady: () => true });
+    const server = createServer({ isReady: () => true, trustedProxies: [] });
     context.after(() => server.close());
 
     const answer = await server.inject({
@@ -52,5 +55,87 @@ suite("the controller's health endpoints", () => {
 
     assert.equal(answer.statusCode, 404);
     assert.equal(answer.body, '');
+  });
+
+  test('answers a path that cannot be decoded 400 in problem details naming the rule, repeating nothing of the path', async (context) => {
+    const server = createServer({ isReady: () => true, trustedProxies: [] });
+    context.after(() => server.close());
+
+    const answer = await server.inject({
+      method: 'GET',
+      url: '/admin/applications/sent-%E0%A4%A',
+    });
+
+    assert.equal(answer.statusCode, 400);
+    assert.match(
+      String(answer.headers['content-type']),
+      /^application\/problem\+json(?:;|$)/u,
+    );
+    assert.equal(JSON.parse(answer.body).code, 'unreadablePath');
+    assert.equal(answer.body.includes('sent-'), false);
+  });
+});
+
+suite("the controller's requests", () => {
+  const addressOf = async (
+    trustedProxies: readonly string[],
+    forwarded: string,
+  ): Promise<string> => {
+    const server = createServer({ isReady: () => true, trustedProxies });
+    server.get('/address', async (request) => request.ip);
+    try {
+      const answer = await server.inject({
+        headers: { 'x-forwarded-for': forwarded },
+        method: 'GET',
+        remoteAddress: '127.0.0.1',
+        url: '/address',
+      });
+      return answer.body;
+    } finally {
+      await server.close();
+    }
+  };
+
+  test("take the peer's address whatever an X-Forwarded-For names, with no trusted proxy", async () => {
+    assert.equal(await addressOf([], '203.0.113.7'), '127.0.0.1');
+  });
+
+  test('take the nearest address their trusted proxies did not add', async () => {
+    assert.equal(
+      await addressOf(['127.0.0.1'], '198.51.100.4, 203.0.113.7'),
+      '203.0.113.7',
+    );
+    assert.equal(
+      await addressOf(
+        ['127.0.0.1', '203.0.113.7'],
+        '198.51.100.4, 203.0.113.7',
+      ),
+      '198.51.100.4',
+    );
+  });
+
+  test('reach a route with their body as bytes, whatever its media type', async (context) => {
+    const server = createServer({ isReady: () => true, trustedProxies: [] });
+    server.post('/body', async (request) =>
+      request.body instanceof Uint8Array ? request.body.length : 'none',
+    );
+    context.after(() => server.close());
+
+    const answers = await Promise.all(
+      ['application/json', 'text/plain', undefined].map((contentType) =>
+        server.inject({
+          headers:
+            contentType === undefined ? {} : { 'content-type': contentType },
+          method: 'POST',
+          payload: '{"a":1}',
+          url: '/body',
+        }),
+      ),
+    );
+
+    assert.deepEqual(
+      answers.map(({ body }) => body),
+      ['7', '7', '7'],
+    );
   });
 });

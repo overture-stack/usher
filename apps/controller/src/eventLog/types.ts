@@ -200,12 +200,24 @@ export interface AuditTrail<Connection> {
     actor: Actor,
     work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
   ): Promise<Result>;
+
+  /**
+   * Records an event that accompanies no change, such as a refusal, in a transaction of its own
+   * declaring the actor given. Nothing it meets is thrown: when the row cannot be written, as with
+   * the store down, it writes an operational line at error naming the event's type and the store's
+   * code, never the event's data, and resolves to `undefined`.
+   *
+   * @param actor who acts.
+   * @param event the event.
+   * @returns the event's id once its row has committed.
+   */
+  recordEvent(actor: Actor, event: AuditEvent): Promise<string | undefined>;
 }
 
 /** What the audit trail is created from. */
 export interface AuditTrailSettings<Connection extends TrailConnection> {
-  /** Where each committed event's line is written. */
-  eventLog: Pick<EventLog, 'writeEvent'>;
+  /** Where each committed event's line is written, and the line naming an event whose row was not. */
+  eventLog: Pick<EventLog, 'error' | 'writeEvent'>;
 
   /** The clock events' times are read from, the store's schema, the event source and the instance's name. */
   settings: Pick<

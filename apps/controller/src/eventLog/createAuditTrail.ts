@@ -22,8 +22,21 @@ const TYPE_PREFIX = 'bio.overture.';
 const DECLARE_ACTOR =
   "SELECT set_config('usher.actor_type', $1, true), set_config('usher.actor_id', $2, true)";
 
+/** The line naming an event whose row could not be written. */
+export const EVENT_UNRECORDED = 'audit.eventUnrecorded';
+
 const actorIdOf = (actor: Actor): string | null =>
   'id' in actor ? actor.id : null;
+
+// The failure by its code alone, a SQLSTATE or a system error's, where it carries one, since a store's
+// message may quote a value.
+const failureCodeOf = (failure: unknown): Readonly<Record<string, string>> => {
+  const code: unknown =
+    typeof failure === 'object' && failure !== null && 'code' in failure
+      ? failure.code
+      : undefined;
+  return typeof code === 'string' ? { code } : {};
+};
 
 const rowValues = ({
   data,
@@ -47,10 +60,11 @@ const rowValues = ({
 
 /**
  * Creates the audit trail, which writes each event twice: as a row of `audit_log`, in the transaction
- * of the change it records, and as a line of the log stream once that transaction has committed. The
- * row and the line carry the same envelope: a fresh uuid as `id`, the configured `source`, CloudEvents
- * 1.0, the type with the `bio.overture.` prefix, `time` read from the clock as RFC 3339 in UTC, the
- * severity, and `data` naming the actor and the instance. The row keeps `time` in `occurred_at`.
+ * of the change it records, or in one of its own for an event recording no change, and as a line of
+ * the log stream once that transaction has committed. The row and the line carry the same envelope: a
+ * fresh uuid as `id`, the configured `source`, CloudEvents 1.0, the type with the `bio.overture.`
+ * prefix, `time` read from the clock as RFC 3339 in UTC, the severity, and `data` naming the actor and
+ * the instance. The row keeps `time` in `occurred_at`.
  *
  * @param options the store, the log stream, and the settings naming the schema, the event source
  *   and the instance.
@@ -145,5 +159,20 @@ export const createAuditTrail = <Connection extends TrailConnection>({
     return result;
   };
 
-  return { inTransaction };
+  const recordEvent = async (
+    actor: Actor,
+    event: AuditEvent,
+  ): Promise<string | undefined> => {
+    try {
+      return await inTransaction(actor, ({ record }) => record(event));
+    } catch (failure) {
+      eventLog.error(EVENT_UNRECORDED, {
+        ...failureCodeOf(failure),
+        eventType: `${TYPE_PREFIX}${event.type}`,
+      });
+      return undefined;
+    }
+  };
+
+  return { inTransaction, recordEvent };
 };
