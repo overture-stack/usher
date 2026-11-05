@@ -203,6 +203,9 @@ catalogs:
     pg-connection-string:
       specifier: ^2.14.1
       version: 2.14.1
+    pino:
+      specifier: ^10.4.0
+      version: 10.4.0
     prettier:
       specifier: ^3.9.10
       version: 3.9.10
@@ -253,6 +256,9 @@ importers:
       pg-connection-string:
         specifier: 'catalog:'
         version: 2.14.1
+      pino:
+        specifier: 'catalog:'
+        version: 10.4.0
     devDependencies:
       '@overture-stack/usher-express-bridge':
         specifier: workspace:^

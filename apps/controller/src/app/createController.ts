@@ -1,6 +1,7 @@
 import type { AddressInfo } from 'node:net';
 
 import type { ControllerConfiguration } from '../configuration/index.js';
+import { createEventLog } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import { openStore, prepareStore } from '../store/index.js';
 import type { Controller } from './types.js';
@@ -26,7 +27,8 @@ const urlOf = (address: unknown): URL => {
 /**
  * Creates a controller from its configuration, connecting to nothing until it starts. Its start
  * checks the store before anything listens, so a refused start never accepts a connection; its stop
- * closes the server, letting requests in flight finish, then the store's connections.
+ * closes the server, letting requests in flight finish, then the store's connections, and lets go of
+ * the log stream. It reports itself ready while it is started and its log stream takes its lines.
  *
  * @param configuration the controller's configuration.
  */
@@ -38,11 +40,14 @@ export const createController = (
     started: undefined,
     stopped: undefined,
   };
-  const store = openStore(configuration);
-  const server = createServer({ isReady: () => lifecycle.ready });
+  const eventLog = createEventLog(configuration);
+  const store = openStore(configuration, eventLog);
+  const server = createServer({
+    isReady: () => lifecycle.ready && eventLog.isWritable(),
+  });
 
   const startOnce = async (): Promise<{ url: URL }> => {
-    await prepareStore(store, configuration);
+    await prepareStore(store, configuration, eventLog);
     await server.listen({ host: configuration.host, port: configuration.port });
     lifecycle.ready = lifecycle.stopped === undefined;
     return { url: urlOf(server.server.address()) };
@@ -54,7 +59,11 @@ export const createController = (
     try {
       await server.close();
     } finally {
-      await store.end();
+      try {
+        await store.end();
+      } finally {
+        eventLog.close();
+      }
     }
   };
 

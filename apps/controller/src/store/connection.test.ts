@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import { storeConnection } from './connection.js';
+import pg from 'pg';
+
+import {
+  IDLE_CONNECTION_LOST,
+  openStore,
+  storeConnection,
+} from './connection.js';
+import type { StoreLineFields } from './types.js';
 
 suite('connecting to the store', () => {
   test("connects as the URL's role to its host, port and database, with the password from its own variable", () => {
@@ -39,5 +46,63 @@ suite('connecting to the store', () => {
 
     assert.equal(connection.connectionString, undefined);
     assert.equal(connection.password, 'given');
+  });
+});
+
+suite("the store's idle connections", () => {
+  const PASSWORD = 'a password/@:% only the store knows';
+  const URL = 'postgres://usher_controller@db.example.org:6432/usher';
+
+  const losses = async (
+    errors: readonly Error[],
+  ): Promise<readonly [string, StoreLineFields][]> => {
+    const written: [string, StoreLineFields][] = [];
+    const pool = openStore(
+      { databasePassword: PASSWORD, databaseUrl: URL },
+      {
+        error: (message, fields) => {
+          written.push([message, fields]);
+        },
+      },
+    );
+    errors.forEach((error) => pool.emit('error', error));
+    await pool.end();
+    return written;
+  };
+
+  test('writes each one lost at error, naming the failure by its code alone, never its message', async () => {
+    const terminated = Object.assign(
+      new pg.DatabaseError(
+        'terminating connection due to administrator command',
+        0,
+        'error',
+      ),
+      { code: '57P01', detail: 'a detail naming a value' },
+    );
+    const reset = Object.assign(new Error('read ECONNRESET'), {
+      code: 'ECONNRESET',
+    });
+    const ended = new Error('Connection terminated unexpectedly');
+
+    const written = await losses([terminated, reset, ended]);
+
+    assert.deepEqual(written, [
+      [IDLE_CONNECTION_LOST, { code: '57P01' }],
+      [IDLE_CONNECTION_LOST, { code: 'ECONNRESET' }],
+      [IDLE_CONNECTION_LOST, {}],
+    ]);
+  });
+
+  test("adds neither the store's password nor its URL to the line", async () => {
+    const written = await losses([
+      Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:6432'), {
+        code: 'ECONNREFUSED',
+      }),
+    ]);
+    const text = JSON.stringify(written);
+
+    assert.equal(written.length, 1);
+    assert.equal(text.includes(PASSWORD), false);
+    assert.equal(text.includes(URL), false);
   });
 });

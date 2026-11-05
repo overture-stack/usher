@@ -83,3 +83,15 @@ export type StoreSettings = Pick<
   ControllerConfiguration,
   'clock' | 'databaseSchema' | 'keyEncryptionKey'
 >;
+
+/** An operational line's fields, as the store writes them: each a name and its text. */
+export type StoreLineFields = Readonly<Record<string, string>>;
+
+/** What the store writes its operational lines through, each named by its message. */
+export interface StoreLog {
+  /** Writes a line at error: a failure the store met outside any request. */
+  error(message: string, fields: StoreLineFields): void;
+
+  /** Writes a line at warning: something the store tolerates that is worth reviewing. */
+  warning(message: string, fields: StoreLineFields): void;
+}

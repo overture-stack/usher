@@ -2,7 +2,8 @@
   "dependencies": {
     "fastify": "catalog:",
     "pg": "catalog:",
-    "pg-connection-string": "catalog:"
+    "pg-connection-string": "catalog:",
+    "pino": "catalog:"
   },
   "devDependencies": {
     "@overture-stack/usher-express-bridge": "workspace:^",

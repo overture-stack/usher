@@ -1,0 +1,217 @@
+import type { ControllerConfiguration } from '../configuration/index.js';
+
+/** A value JSON can hold, as a line's field or an event's data carries it. */
+export type JsonValue =
+  | boolean
+  | number
+  | string
+  | null
+  | readonly JsonValue[]
+  | { readonly [member: string]: JsonValue };
+
+/**
+ * An operational line's fields. The log writes `level`, `message` and `time` itself, and a field of
+ * one of those names is left out rather than written twice.
+ */
+export type LineFields = Readonly<Record<string, JsonValue>>;
+
+/** How serious an event is, as the Severity column of `audit-events.md` names it. */
+export type Severity = 'critical' | 'error' | 'info' | 'warning';
+
+/**
+ * One event as its line and its row hold it: the CloudEvents envelope, with the severity as an
+ * extension attribute beside the standard's own.
+ */
+export interface EventEnvelope {
+  data: { readonly [member: string]: JsonValue };
+
+  /** Which definition of `data` applies, where one is published; absent otherwise. */
+  dataschema?: string;
+
+  /** Unique per event: the row's key, and how a line and its row are matched. */
+  id: string;
+
+  severity: Severity;
+
+  /** Where it was emitted from: the same on every instance sharing the store, never one per instance. */
+  source: string;
+
+  specversion: string;
+
+  /** When it happened: RFC 3339 in UTC, with the `Z` designator. */
+  time: string;
+
+  /** What happened, with the `bio.overture.` prefix. */
+  type: string;
+}
+
+/**
+ * The controller's log stream: one JSON object per line, each member once, an event's line holding
+ * its envelope and any other line operational. Every line carries the logger's numeric level in
+ * `level`. Nothing written throws: a line the stream cannot take is dropped, and the log reports
+ * itself unwritable from then on, since a stream that has failed a write takes nothing more.
+ */
+export interface EventLog {
+  /**
+   * Stops writing, dropping any line given after, and lets go of the stream once the lines already
+   * written have settled. The stream itself is never ended, since it is the configuration's.
+   */
+  close(): void;
+
+  /** Writes an operational line at the logger's error level. */
+  error(message: string, fields?: LineFields): void;
+
+  /** Writes an operational line at the logger's info level. */
+  info(message: string, fields?: LineFields): void;
+
+  /** Whether every line so far has reached the stream: true until one fails, and false after. */
+  isWritable(): boolean;
+
+  /** Writes an operational line at the logger's warn level. */
+  warning(message: string, fields?: LineFields): void;
+
+  /**
+   * Writes an event's line: its envelope, at the level its severity maps to, a critical event at the
+   * logger's error level.
+   */
+  writeEvent(envelope: EventEnvelope): void;
+}
+
+/** What the log is created from: the clock its lines' times are read from, and the stream they go to. */
+export type EventLogSettings = Pick<
+  ControllerConfiguration,
+  'clock' | 'logStream'
+>;
+
+/**
+ * Who acts, by the kinds `audit-events.md` names: a person or a service account by the identity
+ * provider's subject, which is never empty; a system or anonymous actor names nobody.
+ */
+export type Actor =
+  | { id: string; type: 'human' | 'serviceAccount' }
+  | { type: 'anonymous' | 'system' };
+
+/**
+ * Every event the controller records: the controller's rows of the Events table in
+ * `audit-events.md`, each without the `bio.overture.` prefix its line and row carry.
+ */
+export type AuditEventType =
+  | 'admin.override'
+  | 'application.registration'
+  | 'application.servedResourcesChange'
+  | 'applicationKey.confirmation'
+  | 'applicationKey.issuance'
+  | 'applicationKey.revocation'
+  | 'applicationKey.unreadable'
+  | 'audit.read'
+  | 'category.creation'
+  | 'channelAssertion.rejection'
+  | 'grant.creation'
+  | 'grant.decision'
+  | 'grant.extension'
+  | 'grant.rateExceeded'
+  | 'grant.reduction'
+  | 'grant.revocation'
+  | 'grant.selfCreation'
+  | 'identity.revocation'
+  | 'identity.revocationLift'
+  | 'identity.signOut'
+  | 'invitation.claim'
+  | 'invitation.creation'
+  | 'invitation.lapse'
+  | 'managementToken.refusal'
+  | 'managementToken.refusalTally'
+  | 'migration.run'
+  | 'ownership.transfer'
+  | 'platform.revocation'
+  | 'resource.deletion'
+  | 'resource.detailsUpdate'
+  | 'resource.orphaned'
+  | 'resource.registration'
+  | 'resource.restoration'
+  | 'resource.retirement'
+  | 'resource.revocation'
+  | 'resource.suppression'
+  | 'token.exchange';
+
+/** One audit event, as it is recorded in a transaction. */
+export interface AuditEvent {
+  /** Whom the event names as its actor: the transaction's actor unless given. */
+  actor?: Actor;
+
+  /**
+   * The event's own members. The trail writes `actorId` and `actorType` from the actor and
+   * `instance` from the configuration over any given here.
+   */
+  data: { readonly [member: string]: JsonValue };
+
+  /** Which definition of `data` applies, where one is published. */
+  dataschema?: string;
+
+  severity: Severity;
+  type: AuditEventType;
+}
+
+/** A transaction in progress, its actor declared. */
+export interface AuditTransaction<Connection> {
+  /** The transaction's connection, for the change's own statements. */
+  connection: Connection;
+
+  /**
+   * Writes an event's row in the transaction, resolving to the event's id once it is written. Its
+   * line is written once the transaction commits, and never when it rolls back.
+   *
+   * @throws once the transaction has ended.
+   */
+  record(event: AuditEvent): Promise<string>;
+}
+
+/** One connection the audit trail runs a transaction on, released once the transaction ends. */
+export interface TrailConnection {
+  /** Runs a statement, resolving to the command the store answered it with, such as `COMMIT`. */
+  query(
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<{ readonly command: string }>;
+
+  /** Returns the connection to its pool, or discards it when `destroy` is true. */
+  release(destroy?: boolean): void;
+}
+
+/** Where the audit trail takes each transaction's connection from: the controller's store. */
+export interface TrailStore<Connection extends TrailConnection> {
+  connect(): Promise<Connection>;
+}
+
+/** The audit trail: each event's row written in the transaction of the change it records. */
+export interface AuditTrail<Connection> {
+  /**
+   * Runs work in one transaction that declares its actor before anything else, so the policy
+   * tables' triggers record each change under it. The rows of the events the work records commit
+   * with the change, and their lines are written once it has committed, in the order recorded.
+   * When the work, a row or the commit fails, the transaction rolls back, no line is written, and
+   * the failure is thrown. A line the log stream cannot take changes nothing of what committed.
+   *
+   * @param actor who acts in the transaction.
+   * @param work the change's statements, run on the transaction's connection.
+   * @throws when the actor names an empty subject, before anything runs.
+   */
+  inTransaction<Result>(
+    actor: Actor,
+    work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
+  ): Promise<Result>;
+}
+
+/** What the audit trail is created from. */
+export interface AuditTrailSettings<Connection extends TrailConnection> {
+  /** Where each committed event's line is written. */
+  eventLog: Pick<EventLog, 'writeEvent'>;
+
+  /** The clock events' times are read from, the store's schema, the event source and the instance's name. */
+  settings: Pick<
+    ControllerConfiguration,
+    'clock' | 'databaseSchema' | 'eventSource' | 'instanceName'
+  >;
+
+  store: TrailStore<Connection>;
+}
