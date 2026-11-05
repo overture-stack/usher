@@ -78,11 +78,24 @@ export interface HeldPrivileges {
   schema: HeldSchema | undefined;
 }
 
-/** What the start needs of the controller's configuration to check and prepare the store. */
-export type StoreSettings = Pick<
+/** The rules conferring record actions on whole classes of principals: the baseline and the signed-in rule. */
+export type RecordRules = Pick<
   ControllerConfiguration,
-  'clock' | 'databaseSchema' | 'keyEncryptionKey'
+  'baseline' | 'signedInRule'
 >;
+
+/**
+ * What writing the policy a start seeds needs of the controller's configuration: the rules whose
+ * digest it records, the schema, and the clock the recording time is read from.
+ */
+export type SeededPolicySettings = Pick<
+  ControllerConfiguration,
+  'baseline' | 'clock' | 'databaseSchema' | 'signedInRule'
+>;
+
+/** What the start needs of the controller's configuration to check and prepare the store. */
+export type StoreSettings = SeededPolicySettings &
+  Pick<ControllerConfiguration, 'keyEncryptionKey'>;
 
 /** An operational line's fields, as the store writes them: each a name and its text. */
 export type StoreLineFields = Readonly<Record<string, string>>;

@@ -104,6 +104,7 @@ export type AuditEventType =
   | 'applicationKey.revocation'
   | 'applicationKey.unreadable'
   | 'audit.read'
+  | 'baseline.change'
   | 'category.creation'
   | 'channelAssertion.rejection'
   | 'grant.creation'

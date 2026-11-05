@@ -51,6 +51,7 @@ import {
   type SeededPolicy,
   seedPolicy,
   setEpoch,
+  STARTED_STORE_TEMPLATE,
   type StoreSnapshot,
   takeStoreSnapshot,
 } from './policy.js';
@@ -122,7 +123,11 @@ export interface HarnessOptions {
    */
   startsController?: boolean;
 
-  /** The template the test file's database is cloned from: the controller's own by default. Another is for the harness's own tests. */
+  /**
+   * The template the test file's database is cloned from: the controller's own by default, and for a
+   * harness starting no controller {@link STARTED_STORE_TEMPLATE}, so a fixture seeded before any start
+   * finds the roles a start writes. Another is for the harness's own tests.
+   */
   template?: DatabaseTemplate;
 }
 
@@ -889,7 +894,10 @@ export const startHarness = async (
   options: HarnessOptions = {},
 ): Promise<Harness> => {
   const database = await createTestDatabase(
-    options.template ?? USHER_TEMPLATE,
+    options.template ??
+      (options.startsController === false
+        ? STARTED_STORE_TEMPLATE
+        : USHER_TEMPLATE),
     {
       retentionFloorSeconds: retentionFloorSeconds({
         ...RETENTION_DEFAULTS,

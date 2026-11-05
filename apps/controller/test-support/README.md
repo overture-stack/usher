@@ -13,17 +13,19 @@ leaves them out, since they need Docker.
 ## The modules
 
 - `controller.ts`: the seam, the only place a test reaches the controller. It states the contract
-  the implementation must meet (`readConfiguration`, `createController`, `migrate`, and the process
-  entry `src/main.ts`) as types, and loads the app's modules at run time. Until a module exists,
-  every call through it fails with "the Usher Controller is not implemented yet: <module> is
-  missing". `environmentFor` is the one place the controller's environment variable names live, and
-  `ENVIRONMENT_VARIABLES` exports them, so a test names a variable without spelling it; the clock and
-  the log stream never have one. `spawnController` runs the process entry as a child given exactly
-  one environment, for R1's one process-level test, and reports its exit, its output and whether it
-  ever accepted a connection. For refusal tests, `readRefusal` and `startOutcome` give what reading a
-  configuration or starting threw, the seam's own message thrown on rather than taken for a refusal;
-  `refusalText` shows all a refusal carries; `changedVariables` names the variables two environments
-  differ in; and `captureLog` records the lines written to a `logStream`.
+  the implementation must meet (`readConfiguration`, `createController`, `migrate`,
+  `writeSeededPolicy`, and the process entry `src/main.ts`) as types, and loads the app's modules at
+  run time. Until a module exists, every call through it fails with "the Usher Controller is not
+  implemented yet: <module> is missing". `writeSeededPolicy` writes the policy a start seeds through
+  the controller's own audit trail and store export, for `STARTED_STORE_TEMPLATE`. `environmentFor`
+  is the one place the controller's environment variable names live, and `ENVIRONMENT_VARIABLES`
+  exports them, so a test names a variable without spelling it; the clock and the log stream never
+  have one. `spawnController` runs the process entry as a child given exactly one environment, for
+  R1's one process-level test, and reports its exit, its output and whether it ever accepted a
+  connection. For refusal tests, `readRefusal` and `startOutcome` give what reading a configuration
+  or starting threw, the seam's own message thrown on rather than taken for a refusal; `refusalText`
+  shows all a refusal carries; `changedVariables` names the variables two environments differ in;
+  and `captureLog` records the lines written to a `logStream`.
 - `containers.ts`: the only module that starts and stops containers, with the exact image tags. It
   also starts a PostgreSQL, with server settings when asked, or a Valkey of a test file's own, which
   pauses, unpauses, stops and restarts at one URL, for an outage test or one needing many
@@ -102,12 +104,15 @@ leaves them out, since they need Docker.
   user triggers disabled while it runs; `tablesOf` and `rowsIn` read a snapshot.
   `DECISION_ORIGIN_COLUMN` names the decision row's mark of a migrated acceptance. `SEEDED_ROLES` is
   permissions-model.md's seeded matrix, every role's capabilities and plane, the one source for what a
-  person answering a grant is shown; `STARTED_STORE_TEMPLATE` is the controller's template with those
-  roles written, as the controller writes them at its start, for a test seeding a fixture that names
-  them while starting no controller. `storedGrants` reads the store's grants by holder, id, resource
-  and role, and `rowCountOf` and `rowCounts` (with `GRANT_WRITTEN_TABLES`) count rows.
-  `failNthInsert` fails the Nth insert into a table of a test's own database, through a test-only
-  trigger it creates and drops.
+  person answering a grant is shown; `STARTED_STORE_TEMPLATE` is the controller's template with the
+  policy a start seeds written by the controller's own code, through the seam's `writeSeededPolicy`
+  under `STARTED_STORE_SETTINGS` (the harness's default rules, event source and instance): the
+  vocabulary, the seeded roles, and the rules digest with the first start's `baseline.change` row,
+  all a started store holds but the key-encryption key's check value, for a test seeding a fixture
+  that names those roles while starting no controller. `storedGrants` reads the store's grants by
+  holder, id, resource and role, and `rowCountOf` and `rowCounts` (with `GRANT_WRITTEN_TABLES`)
+  count rows. `failNthInsert` fails the Nth insert into a table of a test's own database, through a
+  test-only trigger it creates and drops.
 - `identityProvider.ts`: an OpenID Connect stand-in for a Keycloak realm on loopback: discovery, a
   JWKS, Keycloak-shaped access tokens, key rotation, and each failure mode a test can ask for. A
   second realm on the same host and port, from `addRealm`, signs with keys of its own, its tokens

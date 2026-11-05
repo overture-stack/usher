@@ -99,7 +99,7 @@ export const createController = (
   });
 
   const startOnce = async (): Promise<{ url: URL }> => {
-    await prepareStore(store, configuration, eventLog);
+    await prepareStore(trail, configuration, eventLog);
     await server.listen({ host: configuration.host, port: configuration.port });
     refusalTally.start();
     lifecycle.ready = lifecycle.stopped === undefined;

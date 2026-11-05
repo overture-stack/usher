@@ -290,6 +290,55 @@ export interface MigrationOptions {
  */
 export type Migrate = (options: MigrationOptions) => Promise<void>;
 
+/**
+ * The rules and settings the policy a controller's start seeds is written under: the baseline and the
+ * signed-in rule whose digest it records, the schema, the clock its recording time is read from, and
+ * the event source and instance its `baseline.change` event names.
+ */
+export interface SeededPolicySettings {
+  baseline: readonly RecordAction[];
+  clock: Clock;
+  databaseSchema: string;
+  eventSource: string;
+  instanceName: string;
+  signedInRule: readonly RecordAction[];
+}
+
+/** A connection the seeded policy is written on, such as a `pg.Client` under the migration role. */
+export interface SeedingConnection {
+  query(text: string, values?: unknown[]): Promise<{ command: string }>;
+}
+
+// The controller's audit trail and one of its transactions, as far as writing the seeded policy uses
+// them: the trail is created over one connection, and holds the transaction as the system.
+interface SeedingTransaction {
+  connection: unknown;
+  record(event: unknown): Promise<string>;
+}
+
+type CreateAuditTrail = (options: {
+  eventLog: { error(): void; writeEvent(): void };
+  settings: Omit<SeededPolicySettings, 'baseline' | 'signedInRule'>;
+  store: {
+    connect(): Promise<SeedingConnection & { release(): void }>;
+  };
+}) => {
+  inTransaction<Result>(
+    actor: { type: 'system' },
+    work: (transaction: SeedingTransaction) => Promise<Result>,
+  ): Promise<Result>;
+};
+
+/**
+ * The store module's export writing the policy a start seeds, in a transaction the audit trail holds:
+ * the capability vocabulary and the seeded roles a store lacks, and the digest of the rules with its
+ * `baseline.change` event when it differs from the one recorded.
+ */
+export type WriteSeededPolicy = (
+  transaction: SeedingTransaction,
+  settings: SeededPolicySettings,
+) => Promise<void>;
+
 /** A running controller, as a test holds it. */
 export interface RunningController {
   /** Stops the controller, settling only once its work has ended. */
@@ -340,12 +389,14 @@ interface ControllerExport extends ControllerModule {
 
 const CONTROLLER_MODULES = {
   app: { exportName: 'createController', path: 'src/app/index.ts' },
+  auditTrail: { exportName: 'createAuditTrail', path: 'src/eventLog/index.ts' },
   configuration: {
     exportName: 'readConfiguration',
     path: 'src/configuration/index.ts',
   },
   main: { path: 'src/main.ts' },
   migrations: { exportName: 'migrate', path: 'src/migrations/index.ts' },
+  seededPolicy: { exportName: 'writeSeededPolicy', path: 'src/store/index.ts' },
 } as const satisfies Record<string, ControllerExport | ControllerModule>;
 
 /** The least a stream's maximum lifetime may be configured to, in seconds; a lower one is refused. */
@@ -625,6 +676,41 @@ export const startController = async (
 export const migrate = async (options: MigrationOptions): Promise<void> => {
   const apply = await loadExport<Migrate>(CONTROLLER_MODULES.migrations);
   await apply(options);
+};
+
+/**
+ * Writes the policy a controller's start seeds, through the controller's own code, on the connection
+ * given: in one transaction its audit trail holds as the system, the capability vocabulary and the
+ * seeded roles the store lacks, and the digest of the rules with its `baseline.change` event's row
+ * when it differs from the one recorded. The event's line goes nowhere, since there is no log stream.
+ * A store already holding all of it is written nothing, so it can run again on the same store. No
+ * privilege or key-encryption key is checked: that is the start's alone.
+ *
+ * @param connection the connection, holding no transaction; it is left open.
+ * @param settings the rules, the schema, the clock, and the source and instance the event names.
+ * @throws until the modules exist, the seam's message that one is missing.
+ */
+export const writeSeededPolicy = async (
+  connection: SeedingConnection,
+  settings: SeededPolicySettings,
+): Promise<void> => {
+  const [createAuditTrail, write] = await Promise.all([
+    loadExport<CreateAuditTrail>(CONTROLLER_MODULES.auditTrail),
+    loadExport<WriteSeededPolicy>(CONTROLLER_MODULES.seededPolicy),
+  ]);
+  const trail = createAuditTrail({
+    eventLog: { error: () => undefined, writeEvent: () => undefined },
+    settings,
+    store: {
+      connect: async () => ({
+        query: (text, values) => connection.query(text, values),
+        release: () => undefined,
+      }),
+    },
+  });
+  await trail.inTransaction({ type: 'system' }, (transaction) =>
+    write(transaction, settings),
+  );
 };
 
 const isPort = (value: number): boolean =>

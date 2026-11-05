@@ -2,7 +2,11 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import pg from 'pg';
 
-import type { MigrationOptions } from './controller.js';
+import {
+  type MigrationOptions,
+  type SeededPolicySettings,
+  writeSeededPolicy,
+} from './controller.js';
 import {
   type DatabaseTemplate,
   USHER_SCHEMA,
@@ -1488,10 +1492,29 @@ export const seedPolicy = (
   inTransactionAs(client, SYSTEM_ACTOR, () => seedWithin(client, fixture));
 
 /**
- * The controller's template with {@link SEEDED_ROLES} written as the controller writes them at its
- * start (#207 Q11): a store as a started controller leaves it, for a test seeding a fixture that names
- * those roles while starting no controller. Run again on a clone, it sets the retention floor alone,
- * as the migrations do, since the roles are written only to a store holding none.
+ * What the template seeds the policy under: the rules a harness's controller starts under unless a test
+ * sets its own, count, view and export for each, so a controller started on a store cloned from the
+ * template under the harness's configuration finds them recorded; and the harness's event source and
+ * instance, which the template's `baseline.change` event names. The clock is the system's.
+ */
+export const STARTED_STORE_SETTINGS: Readonly<
+  Omit<SeededPolicySettings, 'databaseSchema'>
+> = Object.freeze({
+  baseline: Object.freeze(['count', 'view', 'export'] as const),
+  clock: Object.freeze({ now: () => Date.now() }),
+  eventSource: 'https://usher.example.org/controller',
+  instanceName: 'usher-test-1',
+  signedInRule: Object.freeze(['count', 'view', 'export'] as const),
+});
+
+/**
+ * The controller's template with the policy a start seeds written by the controller's own code
+ * (#207 Q11), under {@link STARTED_STORE_SETTINGS}: the capability vocabulary, {@link SEEDED_ROLES}
+ * with their capabilities, and the digest of the rules with the first start's `baseline.change` row.
+ * It is a store as a started controller leaves it, but for the key-encryption key's check value, which
+ * the first start under a key records: for a test seeding a fixture that names the seeded roles while
+ * starting no controller. Run again on a clone, it sets the retention floor alone, as the migrations
+ * do, since the controller's writes leave a store holding them untouched.
  */
 export const STARTED_STORE_TEMPLATE: DatabaseTemplate = Object.freeze({
   migrate: async (options: MigrationOptions) => {
@@ -1499,12 +1522,10 @@ export const STARTED_STORE_TEMPLATE: DatabaseTemplate = Object.freeze({
     const client = new pg.Client({ connectionString: options.databaseUrl });
     await client.connect();
     try {
-      const { rows } = await client.query<{ held: boolean }>(
-        `SELECT EXISTS (SELECT 1 FROM ${qualified(roles)}) AS held`,
-      );
-      if (rows[0]?.held !== true) {
-        await seedPolicy(client, { roles: SEEDED_ROLES });
-      }
+      await writeSeededPolicy(client, {
+        ...STARTED_STORE_SETTINGS,
+        databaseSchema: options.schema,
+      });
     } finally {
       await client.end();
     }

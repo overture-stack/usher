@@ -4,7 +4,9 @@ import { suite, type TestContext, test } from 'node:test';
 
 import pg from 'pg';
 
+import { AUDIT_EVENT_TYPES, auditRows, emittedType } from './auditEvents.js';
 import { createTestDatabase, DATABASE_ROLES } from './database.js';
+import { startHarness, takeSnapshot } from './harness.js';
 import {
   ACTOR_SETTINGS,
   addAcceptedOwner,
@@ -1489,12 +1491,8 @@ suite('reading the store', () => {
     assert.deepEqual(
       await storedCapabilities(client, ['artifact.create', 'record.view']),
       [
-        {
-          description: null,
-          displayName: 'artifact.create',
-          name: 'artifact.create',
-        },
-        { description: null, displayName: 'record.view', name: 'record.view' },
+        { description: null, displayName: 'create', name: 'artifact.create' },
+        { description: null, displayName: 'view', name: 'record.view' },
       ],
     );
   });
@@ -1575,6 +1573,66 @@ suite('a snapshot of the store, and its restore', () => {
     ]);
     await restoreStoreSnapshot(client, snapshot);
     assert.deepEqual(await policySnapshot(client), policyBefore);
+  });
+});
+
+suite("the started store's template", () => {
+  test("holds what a controller's first start writes under the harness's configuration, so a start on it writes nothing but the key-encryption key's check value", async (context) => {
+    const scope = cleanupFor(context);
+    const harness = await startHarness({
+      applications: [],
+      startsController: false,
+      template: STARTED_STORE_TEMPLATE,
+    });
+    scope.defer(() => harness.stop());
+    const { keyEncryptionKeyCheck } = POLICY_TABLES;
+    const before = await takeSnapshot(harness);
+
+    await harness.startController();
+
+    const after = await takeSnapshot(harness);
+    assert.deepEqual(
+      tablesOf(after, [keyEncryptionKeyCheck]),
+      tablesOf(before, [keyEncryptionKeyCheck]),
+    );
+    assert.equal(rowsIn(after, keyEncryptionKeyCheck).length, 1);
+  });
+
+  test("records the first start's baseline.change at info, naming the harness's rules, event source and instance", async (context) => {
+    const scope = cleanupFor(context);
+    const harness = await startHarness({
+      applications: [],
+      startsController: false,
+      template: STARTED_STORE_TEMPLATE,
+    });
+    scope.defer(() => harness.stop());
+    const { baseline, eventSource, instanceName, signedInRule } =
+      harness.configuration;
+
+    const rows = await auditRows(harness.clients.migration);
+
+    assert.deepEqual(
+      rows.map(({ data, severity, source, type }) => ({
+        data,
+        severity,
+        source,
+        type,
+      })),
+      [
+        {
+          data: {
+            actorId: null,
+            actorType: 'system',
+            baseline: baseline.toSorted(),
+            instance: instanceName,
+            signedInRule: signedInRule.toSorted(),
+          },
+          severity: 'info',
+          source: eventSource,
+          type: emittedType(AUDIT_EVENT_TYPES.baselineChange),
+        },
+      ],
+    );
   });
 });
 
