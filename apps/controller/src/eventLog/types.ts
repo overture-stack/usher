@@ -179,9 +179,20 @@ export interface TrailConnection {
   release(destroy?: boolean): void;
 }
 
-/** Where the audit trail takes each transaction's connection from: the controller's store. */
+/** Where the audit trail takes each transaction's connection from: the controller's pool. */
 export interface TrailStore<Connection extends TrailConnection> {
   connect(): Promise<Connection>;
+}
+
+/** How one transaction is run, where it differs from the configured store timeout. */
+export interface TransactionOptions {
+  /**
+   * The transaction's own timeout, in milliseconds, set where the unit is defined, as its design
+   * gives it: it takes the place of the store timeout for the whole transaction, and both limits the
+   * store applies to a session are raised to it inside the transaction alone. A transaction naming
+   * none runs within the store timeout.
+   */
+  timeoutMilliseconds?: number;
 }
 
 /** The audit trail: each event's row written in the transaction of the change it records. */
@@ -192,21 +203,32 @@ export interface AuditTrail<Connection> {
    * with the change, and their lines are written once it has committed, in the order recorded.
    * When the work, a row or the commit fails, the transaction rolls back, no line is written, and
    * the failure is thrown. A line the log stream cannot take changes nothing of what committed.
+   * Taking the connection and the work run within the store timeout, or the transaction's own; past
+   * it, the transaction is abandoned, its connection discarded, and no line is written. The `COMMIT`
+   * is given one more timeout for its answer; past that, no line is written either, and one line at
+   * error names the `id` and `type` of each event recorded, whose rows may or may not have committed.
    *
    * @param actor who acts in the transaction.
    * @param work the change's statements, run on the transaction's connection.
+   * @param options the transaction's own timeout, for a unit whose design gives it one.
    * @throws when the actor names an empty subject, before anything runs.
+   * @throws {StoreTimeout} when the store does not answer the transaction before its `COMMIT` in time.
+   * @throws {CommitUnconfirmed} when the store does not answer the `COMMIT` within one more timeout.
    */
   inTransaction<Result>(
     actor: Actor,
     work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
+    options?: TransactionOptions,
   ): Promise<Result>;
 
   /**
    * Records an event that accompanies no change, such as a refusal, in a transaction of its own
-   * declaring the actor given. Nothing it meets is thrown: when the row cannot be written, as with
-   * the store down, it writes an operational line at error naming the event's type and the store's
-   * code, never the event's data, and resolves to `undefined`.
+   * declaring the actor given, within the store timeout. Nothing it meets is thrown: when the row
+   * cannot be written, as with the store down or not answering in time, it writes an operational
+   * line at error naming the event's type and the failure's code, never the event's data, and
+   * resolves to `undefined`. When its `COMMIT` goes unconfirmed, the row may have committed: it is
+   * never written again, and the one line naming it is the transaction's, so it resolves to
+   * `undefined` writing nothing more.
    *
    * @param actor who acts.
    * @param event the event.
@@ -220,10 +242,17 @@ export interface AuditTrailSettings<Connection extends TrailConnection> {
   /** Where each committed event's line is written, and the line naming an event whose row was not. */
   eventLog: Pick<EventLog, 'error' | 'writeEvent'>;
 
-  /** The clock events' times are read from, the store's schema, the event source and the instance's name. */
+  /**
+   * The clock events' times are read from, the store's schema, the event source, the instance's name,
+   * and the store timeout each transaction runs within.
+   */
   settings: Pick<
     ControllerConfiguration,
-    'clock' | 'databaseSchema' | 'eventSource' | 'instanceName'
+    | 'clock'
+    | 'databaseSchema'
+    | 'eventSource'
+    | 'instanceName'
+    | 'storeTimeoutMilliseconds'
   >;
 
   store: TrailStore<Connection>;

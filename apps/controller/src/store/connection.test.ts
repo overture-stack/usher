@@ -16,6 +16,7 @@ suite('connecting to the store', () => {
       databasePassword: ' a password/@:% ',
       databaseUrl:
         'postgres://usher_controller@db.example.org:6432/usher?sslmode=disable',
+      storeTimeoutMilliseconds: 5000,
     });
 
     assert.deepEqual(
@@ -42,10 +43,33 @@ suite('connecting to the store', () => {
     const connection = storeConnection({
       databasePassword: 'given',
       databaseUrl: 'postgres://usher_controller@127.0.0.1/usher',
+      storeTimeoutMilliseconds: 5000,
     });
 
     assert.equal(connection.connectionString, undefined);
     assert.equal(connection.password, 'given');
+  });
+
+  test("limits the pool's wait for a connection, and on the server each statement and each wait inside a transaction, to the store timeout, over any the URL sets", () => {
+    const connection = storeConnection({
+      databasePassword: 'given',
+      databaseUrl:
+        'postgres://usher_controller@127.0.0.1/usher?connectionTimeoutMillis=0&statement_timeout=0&idle_in_transaction_session_timeout=0',
+      storeTimeoutMilliseconds: 250,
+    });
+
+    assert.deepEqual(
+      {
+        connectionTimeoutMillis: connection.connectionTimeoutMillis,
+        idleInTransaction: connection.idle_in_transaction_session_timeout,
+        statement: connection.statement_timeout,
+      },
+      {
+        connectionTimeoutMillis: 250,
+        idleInTransaction: 250,
+        statement: 250,
+      },
+    );
   });
 });
 
@@ -58,7 +82,11 @@ suite("the store's idle connections", () => {
   ): Promise<readonly [string, StoreLineFields][]> => {
     const written: [string, StoreLineFields][] = [];
     const pool = openStore(
-      { databasePassword: PASSWORD, databaseUrl: URL },
+      {
+        databasePassword: PASSWORD,
+        databaseUrl: URL,
+        storeTimeoutMilliseconds: 5000,
+      },
       {
         error: (message, fields) => {
           written.push([message, fields]);

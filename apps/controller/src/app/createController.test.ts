@@ -80,14 +80,38 @@ suite('a controller', () => {
     });
   });
 
-  test('fails a start on a store it cannot reach before anything listens, and stops after it', async () => {
+  test('refuses a start where nothing accepts connections at its store, naming the database URL, before anything listens, and stops after it', async () => {
     const configuration = await unreachableStore();
     const controller = createController(configuration);
 
-    await assert.rejects(controller.start());
+    await assert.rejects(controller.start(), {
+      message:
+        'the controller refuses to start: USHER_DATABASE_URL names an address at which no store accepts connections',
+      name: 'StartRefusal',
+      variables: ['USHER_DATABASE_URL'],
+    });
     const listening = await acceptsConnection(configuration.port);
     await controller.stop();
 
     assert.equal(listening, false);
+  });
+
+  test('refuses a start on a store whose host does not resolve, naming the database URL and not the host', async () => {
+    const configuration = {
+      ...(await unreachableStore()),
+      databaseUrl: 'postgres://usher_controller@usher-store.invalid/usher',
+    };
+    const controller = createController(configuration);
+
+    const refusal = await controller
+      .start()
+      .catch((failure: unknown) => failure);
+    await controller.stop();
+
+    assert.ok(refusal instanceof Error);
+    assert.equal(
+      refusal.message,
+      'the controller refuses to start: USHER_DATABASE_URL names a host that does not resolve',
+    );
   });
 });

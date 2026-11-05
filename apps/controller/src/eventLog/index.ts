@@ -16,4 +16,5 @@ export type {
   Severity,
   TrailConnection,
   TrailStore,
+  TransactionOptions,
 } from './types.js';

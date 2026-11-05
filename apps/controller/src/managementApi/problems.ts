@@ -62,6 +62,12 @@ export const PROBLEMS = Object.freeze({
     'Credential unreadable',
     'Send exactly one Authorization header holding one Bearer credential, and no credential in the query.',
   ),
+  outcomeUnknown: problem(
+    'outcomeUnknown',
+    503,
+    'Outcome unknown',
+    'The store did not confirm whether this change was made. Read what it changes before trying again.',
+  ),
   serviceAccountNotPermitted: problem(
     'serviceAccountNotPermitted',
     403,

@@ -1870,6 +1870,7 @@
                         "code": {
                           "enum": [
                             "identityProviderUnavailable",
+                            "outcomeUnknown",
                             "storeUnavailable"
                           ]
                         }
@@ -1880,7 +1881,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
           }
         },
         "security": [
@@ -2125,6 +2126,7 @@
                         "code": {
                           "enum": [
                             "identityProviderUnavailable",
+                            "outcomeUnknown",
                             "storeUnavailable"
                           ]
                         }
@@ -2135,7 +2137,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
           }
         },
         "security": [
@@ -2303,6 +2305,7 @@
                         "code": {
                           "enum": [
                             "identityProviderUnavailable",
+                            "outcomeUnknown",
                             "storeUnavailable"
                           ]
                         }
@@ -2313,7 +2316,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
           }
         },
         "security": [
@@ -2617,7 +2620,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -2715,7 +2718,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The category is updated."
@@ -2847,7 +2850,7 @@
                 }
               }
             },
-            "description": "`directoryUnavailable`: a holder named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: a holder named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -2985,7 +2988,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -3124,7 +3127,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -3261,7 +3264,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The grant is changed."
@@ -3393,7 +3396,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The answer is recorded."
@@ -3617,7 +3620,7 @@
                 }
               }
             },
-            "description": "`migrationNotConfigured`: a setting read by the migration from the instance's configuration is missing, checked before the export is read. `directoryUnavailable`: the directory cannot answer a lookup during the run. `storeUnavailable`: the store cannot complete the run, and nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`migrationNotConfigured`: a setting read by the migration from the instance's configuration is missing, checked before the export is read. `directoryUnavailable`: the directory cannot answer a lookup during the run. `storeUnavailable`: the store cannot complete the run, and nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           }
         },
         "security": [
@@ -3826,7 +3829,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The principal is revoked."
@@ -3902,7 +3905,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The revocation is lifted."
@@ -4039,7 +4042,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource field is defined."
@@ -4233,7 +4236,7 @@
                 }
               }
             },
-            "description": "`directoryUnavailable`: an owner named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: an owner named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "content": {
@@ -4348,7 +4351,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The registration is deleted."
@@ -4547,7 +4550,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource is updated."
@@ -4636,7 +4639,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The application no longer serves the resource."
@@ -4723,7 +4726,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The application serves the resource."
@@ -4949,7 +4952,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource is restored."
@@ -5057,7 +5060,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource is retired."
@@ -5170,7 +5173,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "Access to the resource is revoked."
@@ -5305,7 +5308,7 @@
                 }
               }
             },
-            "description": "`directoryUnavailable`: the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The submitter is removed."
@@ -5418,7 +5421,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The resource is suppressed."
@@ -5504,7 +5507,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The instance is revoked."
@@ -5595,7 +5598,7 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
           },
           "2XX": {
             "description": "The role's capabilities are replaced."

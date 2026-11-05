@@ -6,6 +6,7 @@ import type {
 } from 'fastify';
 
 import type { Actor, AuditEvent, Severity } from '../eventLog/index.js';
+import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import { queryNamesOf, readCredential } from './credential.js';
 import { readManagementClaims } from './managementClaims.js';
 import {
@@ -103,9 +104,10 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * administrator for an operation of theirs alone. Then the query, which no operation takes, and the
  * body are read, and the operation run. A refusal from admission on records the operation's own
  * event, `denied`, at warning, its reason the code answered, naming the existing entities the request
- * named; a failure of the store answers 503 and records it `failed`, at error. Text that cannot be
- * stored, in the token's subject or session or anywhere in the body, is refused 400 before any
- * transaction begins.
+ * named; a failure of the store answers 503 and records it `failed`, at error. A change whose
+ * `COMMIT` the store did not confirm answers 503 `outcomeUnknown` and records nothing more, since it may
+ * have been made. Text that cannot be stored, in the token's subject or session or anywhere in the
+ * body, is refused 400 before any transaction begins.
  *
  * @param operation the operation.
  * @param dependencies the verifier, the tally, the store's reading of a principal's standing, the
@@ -298,12 +300,17 @@ export const managementRoute = <Input>(
       })
       .send(JSON.stringify(outcome.body));
 
+  // A change whose commit went unconfirmed may have been made: recording it failed could be false,
+  // and the trail's line already names its events.
   const failed = async (
     request: FastifyRequest,
     reply: FastifyReply,
     principal: Principal,
     failure: unknown,
   ): Promise<FastifyReply> => {
+    if (failure instanceof CommitUnconfirmed) {
+      return sendProblem(reply, PROBLEMS.outcomeUnknown);
+    }
     eventLog.error(STORE_FAILED, {
       ...codeOf(failure),
       method: operation.method,

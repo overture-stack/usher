@@ -414,6 +414,15 @@ const writes = (relation: HeldRelation): boolean =>
   (relation.updatable.length > 0 ||
     relation.privileges.some((privilege) => WRITES.has(privilege)));
 
+/**
+ * Whether a role may write to some table of the controller's schema, so an instance under it serves
+ * writes; one that may only read serves none.
+ *
+ * @param held what the role holds.
+ */
+export const writesTables = ({ relations }: HeldPrivileges): boolean =>
+  relations.some(writes);
+
 const recordsChanges = ({ kind, name, privileges }: HeldRelation): boolean =>
   kind === 'table' && name === AUDIT_LOG && privileges.includes('INSERT');
 
@@ -423,8 +432,8 @@ const recordsChanges = ({ kind, name, privileges }: HeldRelation): boolean =>
  *
  * @param held what the role holds.
  */
-export const writesUnrecorded = ({ relations }: HeldPrivileges): boolean =>
-  relations.some(writes) && !relations.some(recordsChanges);
+export const writesUnrecorded = (held: HeldPrivileges): boolean =>
+  writesTables(held) && !held.relations.some(recordsChanges);
 
 const schemaProblems = (
   schema: HeldSchema | undefined,

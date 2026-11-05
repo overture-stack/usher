@@ -54,7 +54,7 @@ export const createServer = ({
     reply.code(200).send(),
   );
   server.get(HEALTH_PATHS.readiness, async (_request, reply) =>
-    reply.code(isReady() ? 200 : 503).send(),
+    reply.code((await isReady()) ? 200 : 503).send(),
   );
   server.setNotFoundHandler(async (_request, reply) => reply.code(404).send());
   return server;

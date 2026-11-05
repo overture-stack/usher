@@ -127,14 +127,25 @@ suite("the controller's process", () => {
     assert.equal('message' in line && typeof line.message === 'string', true);
   });
 
-  test('exits non-zero when it cannot reach its store, writing one structured line naming no password', async () => {
+  test('refuses to start when nothing accepts connections where its store should be, writing one structured line naming the database URL and no secret', async () => {
     const environment = await validEnvironment();
 
     const exit = await runEntry(environment);
 
     assert.equal(exit.code, 1);
-    assert.equal(linesOf(exit.stderr).length, 1);
-    assert.match(exit.stderr, /the controller failed to start/u);
+    assert.deepEqual(
+      linesOf(exit.stderr).map((line) =>
+        typeof line === 'object' && line !== null && 'variables' in line
+          ? line.variables
+          : line,
+      ),
+      [['USHER_DATABASE_URL']],
+    );
+    assert.match(exit.stderr, /the controller refuses to start/u);
+    assert.equal(
+      exit.stderr.includes(environment['USHER_DATABASE_URL'] ?? ''),
+      false,
+    );
     [
       environment['USHER_DATABASE_PASSWORD'] ?? '',
       environment['USHER_CACHE_PASSWORD'] ?? '',

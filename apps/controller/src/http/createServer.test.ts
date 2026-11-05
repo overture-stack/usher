@@ -5,7 +5,10 @@ import { createServer, HEALTH_PATHS } from './createServer.js';
 
 suite("the controller's health endpoints", () => {
   test('answers liveness 200 with nothing in the body, whether or not the controller can serve', async (context) => {
-    const server = createServer({ isReady: () => false, trustedProxies: [] });
+    const server = createServer({
+      isReady: async () => false,
+      trustedProxies: [],
+    });
     context.after(() => server.close());
 
     const answer = await server.inject({
@@ -20,7 +23,7 @@ suite("the controller's health endpoints", () => {
   test('answers readiness 200 while the controller can serve and 503 while it cannot, asking at each request, with nothing in either body', async (context) => {
     const state = { ready: true };
     const server = createServer({
-      isReady: () => state.ready,
+      isReady: async () => state.ready,
       trustedProxies: [],
     });
     context.after(() => server.close());
@@ -45,7 +48,10 @@ suite("the controller's health endpoints", () => {
   });
 
   test('answers a path it does not serve 404 with nothing in the body, repeating nothing the request sent', async (context) => {
-    const server = createServer({ isReady: () => true, trustedProxies: [] });
+    const server = createServer({
+      isReady: async () => true,
+      trustedProxies: [],
+    });
     context.after(() => server.close());
 
     const answer = await server.inject({
@@ -58,7 +64,10 @@ suite("the controller's health endpoints", () => {
   });
 
   test('answers a path that cannot be decoded 400 in problem details naming the rule, repeating nothing of the path', async (context) => {
-    const server = createServer({ isReady: () => true, trustedProxies: [] });
+    const server = createServer({
+      isReady: async () => true,
+      trustedProxies: [],
+    });
     context.after(() => server.close());
 
     const answer = await server.inject({
@@ -81,7 +90,7 @@ suite("the controller's requests", () => {
     trustedProxies: readonly string[],
     forwarded: string,
   ): Promise<string> => {
-    const server = createServer({ isReady: () => true, trustedProxies });
+    const server = createServer({ isReady: async () => true, trustedProxies });
     server.get('/address', async (request) => request.ip);
     try {
       const answer = await server.inject({
@@ -115,7 +124,10 @@ suite("the controller's requests", () => {
   });
 
   test('reach a route with their body as bytes, whatever its media type', async (context) => {
-    const server = createServer({ isReady: () => true, trustedProxies: [] });
+    const server = createServer({
+      isReady: async () => true,
+      trustedProxies: [],
+    });
     server.post('/body', async (request) =>
       request.body instanceof Uint8Array ? request.body.length : 'none',
     );

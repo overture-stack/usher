@@ -318,7 +318,9 @@ interface SeedingTransaction {
 
 type CreateAuditTrail = (options: {
   eventLog: { error(): void; writeEvent(): void };
-  settings: Omit<SeededPolicySettings, 'baseline' | 'signedInRule'>;
+  settings: Omit<SeededPolicySettings, 'baseline' | 'signedInRule'> & {
+    storeTimeoutMilliseconds: number;
+  };
   store: {
     connect(): Promise<SeedingConnection & { release(): void }>;
   };
@@ -678,13 +680,17 @@ export const migrate = async (options: MigrationOptions): Promise<void> => {
   await apply(options);
 };
 
+// The store timeout the seeding transaction runs within: the controller's default.
+const SEEDING_STORE_TIMEOUT_MILLISECONDS = 5000;
+
 /**
  * Writes the policy a controller's start seeds, through the controller's own code, on the connection
- * given: in one transaction its audit trail holds as the system, the capability vocabulary and the
- * seeded roles the store lacks, and the digest of the rules with its `baseline.change` event's row
- * when it differs from the one recorded. The event's line goes nowhere, since there is no log stream.
- * A store already holding all of it is written nothing, so it can run again on the same store. No
- * privilege or key-encryption key is checked: that is the start's alone.
+ * given: in one transaction its audit trail holds as the system, within the controller's default store
+ * timeout, the capability vocabulary and the seeded roles the store lacks, and the digest of the rules
+ * with its `baseline.change` event's row when it differs from the one recorded. The event's line goes
+ * nowhere, since there is no log stream. A store already holding all of it is written nothing, so it
+ * can run again on the same store. No privilege or key-encryption key is checked: that is the start's
+ * alone.
  *
  * @param connection the connection, holding no transaction; it is left open.
  * @param settings the rules, the schema, the clock, and the source and instance the event names.
@@ -700,7 +706,10 @@ export const writeSeededPolicy = async (
   ]);
   const trail = createAuditTrail({
     eventLog: { error: () => undefined, writeEvent: () => undefined },
-    settings,
+    settings: {
+      ...settings,
+      storeTimeoutMilliseconds: SEEDING_STORE_TIMEOUT_MILLISECONDS,
+    },
     store: {
       connect: async () => ({
         query: (text, values) => connection.query(text, values),

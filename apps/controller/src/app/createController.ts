@@ -1,4 +1,5 @@
 import type { AddressInfo } from 'node:net';
+import { performance } from 'node:perf_hooks';
 
 import type pg from 'pg';
 
@@ -15,13 +16,18 @@ import {
   type ManagementDependencies,
   readStoredRefusal,
 } from '../managementApi/index.js';
+import { createReadiness } from '../readiness/index.js';
 import { openStore, prepareStore } from '../store/index.js';
+import { createStoreReader } from '../storeTimeout/index.js';
 import type { Controller } from './types.js';
 
 interface Lifecycle {
   ready: boolean;
   started: Promise<{ url: URL }> | undefined;
   stopped: Promise<void> | undefined;
+
+  /** Whether the database role writes, as the start found it. */
+  writes: boolean;
 }
 
 const isAddress = (address: unknown): address is AddressInfo =>
@@ -36,13 +42,20 @@ const urlOf = (address: unknown): URL => {
   throw new Error('the controller listens on no TCP address');
 };
 
+// What readiness asks the store: whether it reads as read-only, a statement reading no table.
+const STORE_PROBE =
+  'SELECT current_setting(\'transaction_read_only\') AS "readOnly"';
+
 /**
  * Creates a controller from its configuration, connecting to nothing until it starts. Its start
  * checks the store before anything listens, so a refused start never accepts a connection, and then
  * serves the Management API's application operations, each event they record written to the audit
- * log and the log stream. Its stop closes the server, letting requests in flight finish, records the
- * refusal tally's counts, then closes the store's connections and lets go of the log stream. It
- * reports itself ready while it is started and its log stream takes its lines.
+ * log and the log stream. Every unit of its store work, a request's statement or transaction, a
+ * recorded event or the start's transaction, runs within the store timeout. Its stop closes the
+ * server, letting requests in flight finish, records the refusal tally's counts, then closes the
+ * store's connections and lets go of the log stream. It reports itself ready while it is started,
+ * its log stream takes its lines, and its store answers within the store timeout, not reading as
+ * read-only when its database role writes, as `createReadiness` judges it, writing each change.
  *
  * @param configuration the controller's configuration.
  */
@@ -53,9 +66,14 @@ export const createController = (
     ready: false,
     started: undefined,
     stopped: undefined,
+    writes: false,
   };
   const eventLog = createEventLog(configuration);
   const store = openStore(configuration, eventLog);
+  const reader = createStoreReader(
+    store,
+    configuration.storeTimeoutMilliseconds,
+  );
   const trail = createAuditTrail<pg.PoolClient>({
     eventLog,
     settings: configuration,
@@ -78,19 +96,32 @@ export const createController = (
     refusalTally,
     settings: configuration,
     storedRefusal: (question) =>
-      readStoredRefusal(store, configuration.databaseSchema, question),
+      readStoredRefusal(reader, configuration.databaseSchema, question),
     tokenVerifier: createTokenVerifier(configuration, eventLog),
     trail,
   };
+  const readiness = createReadiness({
+    isLogWritable: () => eventLog.isWritable(),
+    isServing: () => lifecycle.ready,
+    log: eventLog,
+    monotonicNow: () => performance.now(),
+    // Any answer but off reads as read-only, so a store whose answer cannot be read never passes.
+    probeStore: async () => ({
+      readOnly:
+        (await reader.query<{ readOnly: string }>(STORE_PROBE)).rows[0]
+          ?.readOnly !== 'off',
+    }),
+    writesStore: () => lifecycle.writes,
+  });
   const server = createServer({
-    isReady: () => lifecycle.ready && eventLog.isWritable(),
+    isReady: readiness.isReady,
     trustedProxies: configuration.trustedProxies,
   });
   createApplicationRoutes(
     {
       cipher: createApplicationKeyCipher(configuration.keyEncryptionKey),
       settings: configuration,
-      store,
+      store: reader,
       trail,
     },
     management,
@@ -99,7 +130,8 @@ export const createController = (
   });
 
   const startOnce = async (): Promise<{ url: URL }> => {
-    await prepareStore(trail, configuration, eventLog);
+    const { writes } = await prepareStore(trail, configuration, eventLog);
+    lifecycle.writes = writes;
     await server.listen({ host: configuration.host, port: configuration.port });
     refusalTally.start();
     lifecycle.ready = lifecycle.stopped === undefined;

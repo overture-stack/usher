@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 
 import type { Actor, AuditEvent, LineFields } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
+import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import type {
   TokenClaims,
   TokenVerification,
@@ -141,7 +142,10 @@ const standUp = async (
     ran: [],
     recorded: [],
   };
-  const server = createServer({ isReady: () => true, trustedProxies: [] });
+  const server = createServer({
+    isReady: async () => true,
+    trustedProxies: [],
+  });
   server.route(
     managementRoute(shelving(stand.ran, outcome), {
       eventLog: {
@@ -721,6 +725,28 @@ suite(
           },
         ],
       );
+    });
+
+    test('answers an operation whose COMMIT the store did not confirm 503 outcomeUnknown, recording no event and writing no line of its own', async (context) => {
+      const stand = await standUp(context, {
+        outcome: async () => {
+          throw new CommitUnconfirmed();
+        },
+        verifications: ADMIN,
+      });
+
+      const answer = await post(stand);
+
+      assert.equal(answer.statusCode, 503);
+      assert.deepEqual(JSON.parse(answer.body), {
+        code: 'outcomeUnknown',
+        detail:
+          'The store did not confirm whether this change was made. Read what it changes before trying again.',
+        status: 503,
+        title: 'Outcome unknown',
+      });
+      assert.deepEqual(stand.lines, []);
+      assert.deepEqual(stand.recorded, []);
     });
 
     test('serves the operation at its method alone, every other method answering 404 as an unserved path does', async (context) => {

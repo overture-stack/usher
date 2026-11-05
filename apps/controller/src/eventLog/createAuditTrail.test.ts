@@ -3,6 +3,7 @@ import { Writable } from 'node:stream';
 import { suite, test } from 'node:test';
 
 import type { Clock } from '../configuration/index.js';
+import { CommitUnconfirmed, StoreTimeout } from '../storeTimeout/index.js';
 import { createAuditTrail } from './createAuditTrail.js';
 import { createEventLog } from './createEventLog.js';
 import type {
@@ -17,11 +18,14 @@ const NOW = Date.UTC(2026, 10, 4, 12, 30, 5, 120);
 
 const FIXED_CLOCK: Clock = Object.freeze({ now: () => NOW });
 
+const STORE_TIMEOUT_MILLISECONDS = 250;
+
 const SETTINGS = Object.freeze({
   clock: FIXED_CLOCK,
   databaseSchema: 'usher',
   eventSource: 'https://usher.example.org/controller',
   instanceName: 'usher-test-1',
+  storeTimeoutMilliseconds: STORE_TIMEOUT_MILLISECONDS,
 });
 
 const ANA: Actor = Object.freeze({ id: 'subject-ana', type: 'human' });
@@ -83,6 +87,62 @@ const fakeStore = (
     },
     release: (destroy) => {
       store.releases.push(destroy);
+    },
+  };
+  return store;
+};
+
+interface StallingStore extends FakeStore {
+  /** Answers every statement left unanswered so far, as the store would have. */
+  answerStalled(): void;
+}
+
+// A store whose connection leaves each statement a test names unanswered, as a store that stopped
+// answering does, until the test answers it or the connection is discarded, which fails it. A
+// discarded connection fails every statement after without sending it, as the driver's does.
+const stallingStore = (stalls: (text: string) => boolean): StallingStore => {
+  const held: {
+    discarded: boolean;
+    stalled: { answer: () => void; fail: () => void }[];
+  } = { discarded: false, stalled: [] };
+  const store: StallingStore = {
+    answerStalled: () => {
+      const { stalled } = held;
+      held.stalled = [];
+      stalled.forEach(({ answer }) => answer());
+    },
+    connect: async () => {
+      store.connections += 1;
+      return connection;
+    },
+    connections: 0,
+    releases: [],
+    statements: [],
+  };
+  const connection: TrailConnection = {
+    query: (text, values) => {
+      if (held.discarded) {
+        return Promise.reject(
+          new Error('Client was closed and is not queryable'),
+        );
+      }
+      store.statements.push({ text, values });
+      const command = text.split(' ')[0] ?? text;
+      return stalls(text)
+        ? new Promise((resolve, reject) => {
+            held.stalled.push({
+              answer: () => resolve({ command }),
+              fail: () => reject(new Error('Connection terminated')),
+            });
+          })
+        : Promise.resolve({ command });
+    },
+    release: (destroy) => {
+      store.releases.push(destroy);
+      if (destroy === true) {
+        held.discarded = true;
+        held.stalled.forEach(({ fail }) => fail());
+      }
     },
   };
   return store;
@@ -559,6 +619,192 @@ suite('the audit trail', () => {
     assert.equal(lines()[0]?.['dataschema'], dataschema);
   });
 
+  test('abandons a transaction the store does not answer within the store timeout, discarding its connection, committing nothing and writing no line', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const { lines, store, trail } = trailOver(
+      stallingStore((text) => text.startsWith('UPDATE')),
+    );
+    const outcome = trail
+      .inTransaction(ANA, async ({ connection, record }) => {
+        await record(GRANT_CREATION);
+        await connection.query('UPDATE grants SET revoked_at = now()');
+      })
+      .then(
+        () => 'committed',
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS);
+    const failure = await outcome;
+    await settled();
+
+    assert.ok(failure instanceof StoreTimeout);
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(
+      store.statements.map(({ text }) => text.split(' ')[0]),
+      ['BEGIN', 'SELECT', 'INSERT', 'UPDATE'],
+    );
+    assert.deepEqual(lines(), []);
+  });
+
+  test('sends the store nothing more once a transaction is abandoned, each statement the work makes after failing at its discarded connection', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const { lines, store, trail } = trailOver(stallingStore(() => false));
+    const waiting: { resume: () => void } = { resume: () => undefined };
+    const after: unknown[] = [];
+    const outcome = trail
+      .inTransaction(ANA, async ({ connection, record }) => {
+        await new Promise<void>((resolve) => {
+          waiting.resume = resolve;
+        });
+        await connection
+          .query('UPDATE grants SET revoked_at = now()')
+          .catch((failure: unknown) => {
+            after.push(failure);
+          });
+        await record(GRANT_CREATION).catch((failure: unknown) => {
+          after.push(failure);
+        });
+        return 'finished';
+      })
+      .then(
+        () => 'committed',
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS);
+    waiting.resume();
+    const failure = await outcome;
+    await settled();
+
+    assert.ok(failure instanceof StoreTimeout);
+    assert.equal(after.length, 2);
+    assert.deepEqual(
+      store.statements.map(({ text }) => text.split(' ')[0]),
+      ['BEGIN', 'SELECT'],
+    );
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(lines(), []);
+  });
+
+  test('gives the COMMIT one more store timeout, committing and writing its lines when the answer comes within it', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const store = stallingStore(
+      (text) => text === 'COMMIT' || text.startsWith('UPDATE'),
+    );
+    const { lines, trail } = trailOver(store);
+    const outcome = trail
+      .inTransaction(ANA, async ({ connection, record }) => {
+        await record(GRANT_CREATION);
+        await connection.query('UPDATE grants SET revoked_at = now()');
+        return 'committed';
+      })
+      .then(
+        (result) => result,
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS - 1);
+    store.answerStalled();
+    await settled();
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS - 1);
+    store.answerStalled();
+
+    assert.equal(await outcome, 'committed');
+    assert.deepEqual(store.releases, [undefined]);
+    assert.deepEqual(
+      lines().map(({ type }) => type),
+      ['bio.overture.grant.creation'],
+    );
+  });
+
+  test("fails with CommitUnconfirmed when the COMMIT goes unanswered within one more store timeout, writing one line at error naming each event's id and type and never its data, and no event's line", async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const store = stallingStore(
+      (text) => text === 'COMMIT' || text.startsWith('UPDATE'),
+    );
+    const { lines, trail } = trailOver(store);
+    const ids: string[] = [];
+    const outcome = trail
+      .inTransaction(ANA, async ({ connection, record }) => {
+        ids.push(await record(GRANT_CREATION));
+        ids.push(await record({ ...GRANT_CREATION, type: 'grant.decision' }));
+        await connection.query('UPDATE grants SET revoked_at = now()');
+      })
+      .then(
+        () => 'committed',
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS - 1);
+    store.answerStalled();
+    await settled();
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS - 1);
+    await settled();
+    const pending = { lines: lines().length, releases: [...store.releases] };
+    context.mock.timers.tick(1);
+    const failure = await outcome;
+    await settled();
+
+    assert.deepEqual(pending, { lines: 0, releases: [] });
+    assert.ok(failure instanceof CommitUnconfirmed);
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(lines(), [
+      {
+        events: [
+          { id: ids[0], type: 'bio.overture.grant.creation' },
+          { id: ids[1], type: 'bio.overture.grant.decision' },
+        ],
+        level: 50,
+        message: 'audit.commitUnconfirmed',
+        time: '2026-11-04T12:30:05.120Z',
+      },
+    ]);
+    assert.equal(JSON.stringify(lines()).includes('global.controlled'), false);
+  });
+
+  test("runs a transaction naming its own timeout within it, raising both of the store's limits to it in the statement declaring its actor", async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const ownTimeout = 4 * STORE_TIMEOUT_MILLISECONDS;
+    const store = stallingStore((text) => text.startsWith('UPDATE'));
+    const { trail } = trailOver(store);
+    const outcome = trail
+      .inTransaction(
+        ANA,
+        async ({ connection }) => {
+          await connection.query('UPDATE grants SET revoked_at = now()');
+        },
+        { timeoutMilliseconds: ownTimeout },
+      )
+      .then(
+        () => 'committed',
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(ownTimeout - 1);
+    await settled();
+    const releasedWithinItsOwn = [...store.releases];
+    context.mock.timers.tick(1);
+    const failure = await outcome;
+
+    assert.deepEqual(releasedWithinItsOwn, []);
+    assert.ok(failure instanceof StoreTimeout);
+    assert.deepEqual(store.statements[1]?.values, [
+      'human',
+      'subject-ana',
+      String(ownTimeout),
+    ]);
+    assert.match(
+      store.statements[1]?.text ?? '',
+      /set_config\('usher\.actor_id', \$2, true\), set_config\('statement_timeout', \$3, true\), set_config\('idle_in_transaction_session_timeout', \$3, true\)$/u,
+    );
+  });
+
   test("writes each row to the configured schema's audit log, its name quoted", async () => {
     const store = fakeStore();
     const { stream } = capture();
@@ -633,6 +879,57 @@ suite('an event recorded alone', () => {
         time: '2026-11-04T12:30:05.120Z',
       },
     ]);
+  });
+
+  test("writes the line naming the store timeout's code when the store does not answer the event's transaction in time, and throws nothing", async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const { lines, store, trail } = trailOver(
+      stallingStore((text) => ROW_INSERT.test(text)),
+    );
+    const recording = trail.recordEvent(ANA, REFUSAL);
+    await settled();
+
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS);
+    const id = await recording;
+
+    assert.equal(id, undefined);
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(
+      lines().map(({ code, eventType, message }) => ({
+        code,
+        eventType,
+        message,
+      })),
+      [
+        {
+          code: 'storeTimeout',
+          eventType: 'bio.overture.application.registration',
+          message: 'audit.eventUnrecorded',
+        },
+      ],
+    );
+  });
+
+  test("writes no line saying the event went unrecorded when its COMMIT goes unconfirmed, the one line naming it being the transaction's, and throws nothing", async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const { lines, trail } = trailOver(
+      stallingStore((text) => text === 'COMMIT'),
+    );
+    const recording = trail.recordEvent(ANA, REFUSAL);
+    await settled();
+
+    context.mock.timers.tick(2 * STORE_TIMEOUT_MILLISECONDS);
+    const id = await recording;
+
+    const [line, ...more] = lines();
+
+    assert.equal(id, undefined);
+    assert.deepEqual(more, []);
+    assert.equal(line?.['message'], 'audit.commitUnconfirmed');
+    assert.match(
+      JSON.stringify(line?.['events']),
+      /^\[\{"id":"[0-9a-f-]{36}","type":"bio\.overture\.application\.registration"\}\]$/u,
+    );
   });
 
   test('writes the line with no code for a failure carrying none, and throws nothing', async () => {

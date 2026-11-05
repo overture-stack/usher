@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import pg from 'pg';
 
+import {
+  CommitUnconfirmed,
+  type Lease,
+  withinStoreTimeout,
+} from '../storeTimeout/index.js';
 import { eventInstant } from './eventInstant.js';
 import type {
   Actor,
@@ -11,6 +16,7 @@ import type {
   AuditTransaction,
   EventEnvelope,
   TrailConnection,
+  TransactionOptions,
 } from './types.js';
 
 const SPECVERSION = '1.0';
@@ -22,8 +28,15 @@ const TYPE_PREFIX = 'bio.overture.';
 const DECLARE_ACTOR =
   "SELECT set_config('usher.actor_type', $1, true), set_config('usher.actor_id', $2, true)";
 
+// The same, raising for the transaction alone both limits the store applies to a session, to a unit's
+// own timeout in milliseconds, in the same round trip.
+const DECLARE_ACTOR_AND_LIMITS = `${DECLARE_ACTOR}, set_config('statement_timeout', $3, true), set_config('idle_in_transaction_session_timeout', $3, true)`;
+
 /** The line naming an event whose row could not be written. */
 export const EVENT_UNRECORDED = 'audit.eventUnrecorded';
+
+/** The line naming the events of a transaction whose commit the store did not confirm. */
+export const COMMIT_UNCONFIRMED = 'audit.commitUnconfirmed';
 
 const actorIdOf = (actor: Actor): string | null =>
   'id' in actor ? actor.id : null;
@@ -64,10 +77,15 @@ const rowValues = ({
  * the log stream once that transaction has committed. The row and the line carry the same envelope: a
  * fresh uuid as `id`, the configured `source`, CloudEvents 1.0, the type with the `bio.overture.`
  * prefix, `time` read from the clock as RFC 3339 in UTC, the severity, and `data` naming the actor and
- * the instance. The row keeps `time` in `occurred_at`.
+ * the instance. The row keeps `time` in `occurred_at`. Each transaction, from taking its connection to
+ * its commit, runs within the store timeout, or a unit's own, as `withinStoreTimeout` runs a unit of
+ * store work: one the store does not answer in time is abandoned and fails, and none of its lines is
+ * written. One whose `COMMIT` goes unanswered within one more timeout is written instead as one line
+ * at error, {@link COMMIT_UNCONFIRMED}, naming the `id` and `type` of each event it recorded and never
+ * their data, so its rows can be looked for in `audit_log`.
  *
- * @param options the store, the log stream, and the settings naming the schema, the event source
- *   and the instance.
+ * @param options the store, the log stream, and the settings naming the schema, the event source,
+ *   the instance and the store timeout.
  */
 export const createAuditTrail = <Connection extends TrailConnection>({
   eventLog,
@@ -102,38 +120,52 @@ export const createAuditTrail = <Connection extends TrailConnection>({
   const inTransaction = async <Result>(
     actor: Actor,
     work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
+    { timeoutMilliseconds }: TransactionOptions = {},
   ): Promise<Result> => {
     if (actorIdOf(actor) === '') {
       throw new TypeError(
         'an actor who is a person or a service account names their subject',
       );
     }
-    const connection = await store.connect();
     const transaction = { open: true };
     const recorded: EventEnvelope[] = [];
-    const record = async (event: AuditEvent): Promise<string> => {
-      if (transaction.open) {
-        const envelope = envelopeOf(event, actor);
-        await connection.query(insertRow, rowValues(envelope));
-        recorded.push(envelope);
-        return envelope.id;
-      }
-      throw new Error(
-        'an event is recorded only while its transaction is open',
-      );
-    };
-    const committed = async (): Promise<Result> => {
+    const declaration =
+      timeoutMilliseconds === undefined
+        ? { text: DECLARE_ACTOR, values: [] }
+        : {
+            text: DECLARE_ACTOR_AND_LIMITS,
+            values: [String(timeoutMilliseconds)],
+          };
+    const committed = async ({
+      connection,
+      release,
+      sendingCommit,
+    }: Lease<Connection>): Promise<Result> => {
+      const record = async (event: AuditEvent): Promise<string> => {
+        if (transaction.open) {
+          const envelope = envelopeOf(event, actor);
+          await connection.query(insertRow, rowValues(envelope));
+          recorded.push(envelope);
+          return envelope.id;
+        }
+        throw new Error(
+          'an event is recorded only while its transaction is open',
+        );
+      };
       try {
         await connection.query('BEGIN');
-        await connection.query(DECLARE_ACTOR, [
+        await connection.query(declaration.text, [
           actor.type,
           actorIdOf(actor) ?? '',
+          ...declaration.values,
         ]);
         const result = await work({ connection, record });
         // A transaction in which a statement failed rolls back when told to commit, and says so only
         // in its answer, so a failure the work caught still leaves nothing committed and no line.
+        sendingCommit();
         const { command } = await connection.query('COMMIT');
         if (command === 'COMMIT') {
+          transaction.open = false;
           return result;
         }
         throw new Error(
@@ -146,13 +178,22 @@ export const createAuditTrail = <Connection extends TrailConnection>({
           () => true,
           () => false,
         );
-        connection.release(!rolledBack);
+        release(!rolledBack);
         throw error;
       }
     };
-    const result = await committed();
-    transaction.open = false;
-    connection.release();
+    const result = await withinStoreTimeout(
+      store,
+      timeoutMilliseconds ?? settings.storeTimeoutMilliseconds,
+      committed,
+    ).catch((failure: unknown) => {
+      if (failure instanceof CommitUnconfirmed) {
+        eventLog.error(COMMIT_UNCONFIRMED, {
+          events: recorded.map(({ id, type }) => ({ id, type })),
+        });
+      }
+      throw failure;
+    });
     recorded.forEach((envelope) => {
       eventLog.writeEvent(envelope);
     });
@@ -166,6 +207,10 @@ export const createAuditTrail = <Connection extends TrailConnection>({
     try {
       return await inTransaction(actor, ({ record }) => record(event));
     } catch (failure) {
+      // An event whose commit went unconfirmed may be recorded, and its line already names it.
+      if (failure instanceof CommitUnconfirmed) {
+        return undefined;
+      }
       eventLog.error(EVENT_UNRECORDED, {
         ...failureCodeOf(failure),
         eventType: `${TYPE_PREFIX}${event.type}`,

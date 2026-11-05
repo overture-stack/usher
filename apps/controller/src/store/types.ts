@@ -93,9 +93,24 @@ export type SeededPolicySettings = Pick<
   'baseline' | 'clock' | 'databaseSchema' | 'signedInRule'
 >;
 
+/** What connecting to the store needs of the controller's configuration. */
+export type StoreConnectionSettings = Pick<
+  ControllerConfiguration,
+  'databasePassword' | 'databaseUrl' | 'storeTimeoutMilliseconds'
+>;
+
 /** What the start needs of the controller's configuration to check and prepare the store. */
 export type StoreSettings = SeededPolicySettings &
-  Pick<ControllerConfiguration, 'keyEncryptionKey'>;
+  Pick<
+    ControllerConfiguration,
+    'keyEncryptionKey' | 'storeTimeoutMilliseconds'
+  >;
+
+/** What the start learned of the store it prepared. */
+export interface PreparedStore {
+  /** Whether the database role may write to some table, so the instance serves writes. */
+  writes: boolean;
+}
 
 /** An operational line's fields, as the store writes them: each a name and its text. */
 export type StoreLineFields = Readonly<Record<string, string>>;

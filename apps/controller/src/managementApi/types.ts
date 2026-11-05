@@ -1,5 +1,3 @@
-import type pg from 'pg';
-
 import type { Clock, ControllerConfiguration } from '../configuration/index.js';
 import type {
   AuditEventType,
@@ -12,6 +10,7 @@ import type {
   TokenVerifier,
   UnverifiedReason,
 } from '../identityProvider/index.js';
+import type { StoreReader as TimedStoreReader } from '../storeTimeout/index.js';
 
 /** RFC 9457 problem details as the management API answers a refusal, carrying a code. */
 export interface Problem {
@@ -69,8 +68,11 @@ export type ClaimsReading =
   | { kind: 'unreadable' }
   | { kind: 'unrepresentable' };
 
-/** Where the management API reads the store outside any transaction. */
-export type StoreReader = Pick<pg.Pool, 'query'>;
+/**
+ * Where the management API reads the store outside any transaction, each statement within the store
+ * timeout.
+ */
+export type StoreReader = TimedStoreReader;
 
 /**
  * Why a management credential is counted rather than recorded: it could not be verified, for an
