@@ -10,12 +10,8 @@ import {
   ENVIRONMENT_VARIABLES,
   environmentFor,
   type FieldWithVariable,
-  readConfiguration,
   readRefusal,
   refusalText,
-  spawnController,
-  startController,
-  startOutcome,
 } from './controller.js';
 
 const discarding = (): Writable =>
@@ -207,32 +203,6 @@ suite('the environment a configuration is expressed as', () => {
   });
 });
 
-suite('while the Usher Controller is not implemented', () => {
-  test('names the missing config module when a configuration is read', async () => {
-    await assert.rejects(readConfiguration(environmentFor(CONFIGURATION)), {
-      message:
-        'the Usher Controller is not implemented yet: src/configuration.ts is missing',
-    });
-  });
-
-  test('names the missing app module when a controller is started', async () => {
-    await assert.rejects(startController(CONFIGURATION), {
-      message:
-        'the Usher Controller is not implemented yet: src/app.ts is missing',
-    });
-  });
-
-  test('names the missing process entry when the controller is run as a process', async () => {
-    await assert.rejects(
-      spawnController(environmentFor({ ...CONFIGURATION, port: 8443 })),
-      {
-        message:
-          'the Usher Controller is not implemented yet: src/main.ts is missing',
-      },
-    );
-  });
-});
-
 suite('the helpers for a refusal test', () => {
   test('names the variables two environments differ in, sorted', () => {
     assert.deepEqual(
@@ -247,14 +217,18 @@ suite('the helpers for a refusal test', () => {
     );
   });
 
-  test("throws the seam's message on, rather than taking it for a refusal", async () => {
-    await assert.rejects(readRefusal(environmentFor(CONFIGURATION)), {
-      message:
-        'the Usher Controller is not implemented yet: src/configuration.ts is missing',
+  test('gives what reading a refused configuration threw, and throws when the configuration is read', async () => {
+    const refused = environmentFor({
+      ...CONFIGURATION,
+      keyEncryptionKey: CONFIGURATION.keyEncryptionKey.slice(0, 42),
     });
-    await assert.rejects(startOutcome(CONFIGURATION), {
-      message:
-        'the Usher Controller is not implemented yet: src/app.ts is missing',
+
+    const refusal = await readRefusal(refused);
+
+    assert.ok(refusal instanceof Error);
+    assert.match(refusalText(refusal), /USHER_KEY_ENCRYPTION_KEY/u);
+    await assert.rejects(readRefusal(environmentFor(CONFIGURATION)), {
+      message: 'the configuration was read, where a refusal was expected',
     });
   });
 

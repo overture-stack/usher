@@ -64,3 +64,18 @@ give the functions `bridgeWire.ts` reproduces an import the suites can use, in t
 test-only export, so neither copy remains.
 standalone: no
 context: the evaluator waits on that package.
+
+At start the controller tolerates a write or a call its database role holds beyond what the
+release's migrations grant, so an instance of one release keeps running once a later release's
+migration grants more, but nothing records the tolerated grant.
+fix: once the controller has a logger, log each grant `grantsBeyondUse` finds at warning when the
+controller starts, naming the privilege and the table, never a value.
+standalone: no
+context: waits on the controller's logger.
+
+`openStore` ignores errors raised on the pool's idle connections, so a connection dropped between
+queries leaves no trace.
+fix: log each such error with the controller's logger, naming the failure but never the connection
+string.
+standalone: no
+context: waits on the controller's logger.

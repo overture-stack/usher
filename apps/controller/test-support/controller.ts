@@ -339,10 +339,10 @@ interface ControllerExport extends ControllerModule {
 }
 
 const CONTROLLER_MODULES = {
-  app: { exportName: 'createController', path: 'src/app.ts' },
+  app: { exportName: 'createController', path: 'src/app/index.ts' },
   configuration: {
     exportName: 'readConfiguration',
-    path: 'src/configuration.ts',
+    path: 'src/configuration/index.ts',
   },
   main: { path: 'src/main.ts' },
   migrations: { exportName: 'migrate', path: 'src/migrations/index.ts' },

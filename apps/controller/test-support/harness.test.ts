@@ -6,7 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { decodeJwt } from 'jose';
 import pg from 'pg';
 
-import { managementClaims } from './admin.js';
+import { managementClaims, readReadiness } from './admin.js';
 import { runningContainers } from './containerEnvironment.js';
 import {
   type KeycloakPerson,
@@ -73,8 +73,8 @@ const isCanonicalKey = (key: string): boolean =>
   /^[\w-]{43}$/u.test(key) &&
   Buffer.from(key, 'base64url').toString('base64url') === key;
 
-// The controller's migrations do not exist yet, so the start past the database is proven on a
-// stand-in migration building only the schema.
+// A stand-in migration building only the schema, which the controller's runtime role may not use, so
+// the controller refuses its start once the harness is past its database.
 const schemaOnly: DatabaseTemplate = {
   migrate: async ({ databaseUrl, schema }) => {
     const postgres = new pg.Client({ connectionString: databaseUrl });
@@ -87,6 +87,24 @@ const schemaOnly: DatabaseTemplate = {
   },
   name: `harness_schema_${randomBytes(6).toString('hex')}`,
   schema: USHER_SCHEMA,
+};
+
+// What a start the controller refuses rejects with: its refusal, naming the variable at fault.
+const refusalNaming = (variable: string): { message: RegExp } => ({
+  message: new RegExp(`\\b${variable}\\b`, 'u'),
+});
+
+// A check value no key the harness makes derives, recorded as a first start records one, so every
+// later start on the store is refused, naming the key-encryption key's variable.
+const recordForeignCheckValue = async (
+  client: pg.ClientBase,
+): Promise<void> => {
+  const { keyEncryptionKeyCheck } = POLICY_TABLES;
+  const { checkValue, recordedAt } = keyEncryptionKeyCheck.columns;
+  await client.query(
+    `INSERT INTO ${qualified(keyEncryptionKeyCheck)} (${pg.escapeIdentifier(checkValue)}, ${pg.escapeIdentifier(recordedAt)}) VALUES ($1, now())`,
+    [randomBytes(32)],
+  );
 };
 
 const openHandles = (): Readonly<Record<string, number>> =>
@@ -303,14 +321,14 @@ const clusterState = async (
   }
 };
 
-suite('while the Usher Controller is not implemented', () => {
-  test("fails with the seam's message for the missing app once past its database, leaving nothing it started running", async () => {
+suite('a harness whose controller refuses to start', () => {
+  test("fails with the controller's refusal once past its database, leaving nothing it started running", async () => {
     const before = openHandles();
 
-    await assert.rejects(startHarness({ template: schemaOnly }), {
-      message:
-        'the Usher Controller is not implemented yet: src/app.ts is missing',
-    });
+    await assert.rejects(
+      startHarness({ template: schemaOnly }),
+      refusalNaming(ENVIRONMENT_VARIABLES.databaseSchema),
+    );
 
     assert.deepEqual(await settledHandles(before), before);
   });
@@ -328,10 +346,7 @@ suite('while the Usher Controller is not implemented', () => {
         postgresql: dedicated,
         template,
       }),
-      {
-        message:
-          'the Usher Controller is not implemented yet: src/app.ts is missing',
-      },
+      refusalNaming(ENVIRONMENT_VARIABLES.databaseSchema),
     );
 
     assert.deepEqual(
@@ -588,7 +603,7 @@ suite("a harness's applications", () => {
 });
 
 suite('a harness starting no controller', () => {
-  test("seeds the whole fixture, its applications under the fixture's ids, reads no URL, and refuses a restart with the seam's message", async () => {
+  test("seeds the whole fixture, its applications under the fixture's ids, reads no URL, and fails a restart its controller refuses", async () => {
     const harness = await startHarness({
       fixture: FIXTURE,
       startsController: false,
@@ -627,10 +642,11 @@ suite('a harness starting no controller', () => {
           message: 'the harness registered no application to sign in to',
         },
       );
-      await assert.rejects(harness.restart({ autoAccept: true }), {
-        message:
-          'the Usher Controller is not implemented yet: src/app.ts is missing',
-      });
+      await recordForeignCheckValue(harness.clients.migration);
+      await assert.rejects(
+        harness.restart({ autoAccept: true }),
+        refusalNaming(ENVIRONMENT_VARIABLES.keyEncryptionKey),
+      );
       assert.equal(harness.configuration.autoAccept, true);
     } finally {
       await harness.stop();
@@ -781,21 +797,21 @@ suite('a shared harness whose start fails', () => {
   const attempts = { count: 0 };
   const shared = suiteHarness(() => {
     attempts.count += 1;
-    return {};
+    return { template: schemaOnly };
   });
 
   test('reports the failure to the test asking', async () => {
-    await assert.rejects(shared(), {
-      message:
-        'the Usher Controller is not implemented yet: src/app.ts is missing',
-    });
+    await assert.rejects(
+      shared(),
+      refusalNaming(ENVIRONMENT_VARIABLES.databaseSchema),
+    );
   });
 
   test('tries the start again for the next test asking', async () => {
-    await assert.rejects(shared(), {
-      message:
-        'the Usher Controller is not implemented yet: src/app.ts is missing',
-    });
+    await assert.rejects(
+      shared(),
+      refusalNaming(ENVIRONMENT_VARIABLES.databaseSchema),
+    );
 
     assert.equal(attempts.count, 2);
   });
@@ -850,22 +866,24 @@ suite("batch 2's configuration defaults", () => {
 });
 
 suite('a second controller instance beside the harness', () => {
-  test("starts through the seam on the harness's configuration, failing with the seam's message while the app is missing", async (context) => {
+  test("starts through the seam on the harness's configuration and the overrides, answering readiness at its own URL", async (context) => {
     const harness = await startHarness({
       startsController: false,
       template: STARTED_STORE_TEMPLATE,
     });
     context.after(() => harness.stop());
 
-    await assert.rejects(
-      startInstance(cleanupFor(context), harness, {
-        instanceName: 'usher-test-2',
-      }),
-      {
-        message:
-          'the Usher Controller is not implemented yet: src/app.ts is missing',
-      },
+    const instance = await startInstance(cleanupFor(context), harness, {
+      instanceName: 'usher-test-2',
+    });
+    const readiness = await readReadiness(instance.url);
+
+    assert.equal(instance.configuration.instanceName, 'usher-test-2');
+    assert.equal(
+      instance.configuration.keyEncryptionKey,
+      harness.configuration.keyEncryptionKey,
     );
+    assert.equal(readiness.status, 200);
   });
 });
 
@@ -933,19 +951,20 @@ const NOTICES_TABLE_FIXTURE: PolicyFixture = {
 };
 
 suite("a harness's controller, stopped and started apart", () => {
-  test("stops none when none runs, and fails a start with the seam's message, leaving none running", async (context) => {
+  test('stops none when none runs, and fails a start its controller refuses, leaving none running', async (context) => {
     const harness = await startHarness({
       startsController: false,
       template: STARTED_STORE_TEMPLATE,
     });
     context.after(() => harness.stop());
+    await recordForeignCheckValue(harness.clients.migration);
 
     await harness.stopController();
 
-    await assert.rejects(harness.startController({ autoAccept: true }), {
-      message:
-        'the Usher Controller is not implemented yet: src/app.ts is missing',
-    });
+    await assert.rejects(
+      harness.startController({ autoAccept: true }),
+      refusalNaming(ENVIRONMENT_VARIABLES.keyEncryptionKey),
+    );
     assert.equal(harness.configuration.autoAccept, true);
     assert.throws(() => harness.url, {
       message: 'the harness runs no controller now',
@@ -954,7 +973,7 @@ suite("a harness's controller, stopped and started apart", () => {
 });
 
 suite('a snapshot of a running harness, restored', () => {
-  test("restores the store, writes a new epoch, and starts a controller after, which fails with the seam's message", async (context) => {
+  test('restores the store, writes a new epoch, and starts a controller after, which the restored check value refuses', async (context) => {
     const harness = await startHarness({
       fixture: NOTICES_TABLE_FIXTURE,
       startsController: false,
@@ -962,6 +981,7 @@ suite('a snapshot of a running harness, restored', () => {
     });
     context.after(() => harness.stop());
     const { migration } = harness.clients;
+    await recordForeignCheckValue(migration);
     await insertNotices(migration, [{ kind: 'baseline' }]);
     const positions = await noticePositions(migration);
     const stream = await readNoticeStream(migration);
@@ -971,10 +991,10 @@ suite('a snapshot of a running harness, restored', () => {
     });
     await insertNotices(migration, [{ kind: 'global' }, { kind: 'global' }]);
 
-    await assert.rejects(restoreSnapshot(harness, snapshot), {
-      message:
-        'the Usher Controller is not implemented yet: src/app.ts is missing',
-    });
+    await assert.rejects(
+      restoreSnapshot(harness, snapshot),
+      refusalNaming(ENVIRONMENT_VARIABLES.keyEncryptionKey),
+    );
 
     assert.deepEqual(await storedExternalIds(migration), ['STUDY-A1']);
     assert.deepEqual(await noticePositions(migration), positions);
@@ -988,16 +1008,14 @@ suite('a snapshot of a running harness, restored', () => {
     });
     context.after(() => harness.stop());
     const { migration } = harness.clients;
+    await recordForeignCheckValue(migration);
     const stream = await readNoticeStream(migration);
     const snapshot = await takeSnapshot(harness);
     await insertNotices(migration, [{ kind: 'baseline' }]);
 
     await assert.rejects(
       restoreSnapshot(harness, snapshot, { epoch: 'kept' }),
-      {
-        message:
-          'the Usher Controller is not implemented yet: src/app.ts is missing',
-      },
+      refusalNaming(ENVIRONMENT_VARIABLES.keyEncryptionKey),
     );
 
     assert.equal((await readNoticeStream(migration)).epoch, stream.epoch);
@@ -1006,7 +1024,7 @@ suite('a snapshot of a running harness, restored', () => {
 });
 
 suite('the read-only role', () => {
-  test("reads the store and writes nothing, and starts an instance on it through the seam, failing with the seam's message", async (context) => {
+  test('reads the store and writes nothing, refuses an instance on it whose start would record the check value, and starts one writing nothing once a start under the runtime role has recorded it', async (context) => {
     const scope = cleanupFor(context);
     const harness = await startHarness({
       fixture: NOTICES_TABLE_FIXTURE,
@@ -1033,11 +1051,24 @@ suite('the read-only role', () => {
           error instanceof Error ? error.message : String(error),
       );
 
+    const refused = await startReadOnlyInstance(scope, harness).then(
+      () => 'started',
+      (refusal: unknown) =>
+        refusal instanceof Error ? refusal.message : String(refusal),
+    );
+    const recording = await startInstance(scope, harness);
+    await recording.stop();
+    const recorded = await takeSnapshot(harness);
+    const readOnly = await startReadOnlyInstance(scope, harness);
+    const readiness = await readReadiness(readOnly.url);
+
     assert.deepEqual(rows, [{ external_id: 'STUDY-A1' }]);
     assert.match(written, /permission denied/u);
-    await assert.rejects(startReadOnlyInstance(scope, harness), {
-      message:
-        'the Usher Controller is not implemented yet: src/app.ts is missing',
-    });
+    assert.match(
+      refused,
+      refusalNaming(ENVIRONMENT_VARIABLES.keyEncryptionKey).message,
+    );
+    assert.equal(readiness.status, 200);
+    assert.deepEqual(await takeSnapshot(harness), recorded);
   });
 });

@@ -1,0 +1,348 @@
+import { isIP } from 'node:net';
+
+import type { StartProblem } from '../startRefusal.js';
+
+/** One environment variable as an environment gives it: its name, and its value or none. */
+export interface Variable {
+  name: string;
+  value: string | undefined;
+}
+
+/**
+ * What reading one variable gave: its value, or the rule its value broke. A refused reading names the
+ * variable and the rule alone, never the value.
+ */
+export type Reading<Value> =
+  { kind: 'read'; value: Value } | { kind: 'refused'; problem: StartProblem };
+
+/** What reading a JSON variable is told: what it may hold, the rule naming that, and its default. */
+export interface JsonReading<Value> {
+  /** The value when the variable is unset; without one, an unset variable is refused as missing. */
+  fallback?: Value;
+
+  /** Whether a parsed value is one the variable may hold. */
+  isValue: (parsed: unknown) => parsed is Value;
+
+  /** The rule a value outside it breaks, worded to follow the variable's name. */
+  rule: string;
+}
+
+const MISSING = 'is missing';
+
+// The form of every key the controller reads: 32 bytes, in the one encoding that gives them back.
+const CANONICAL_KEY = /^[A-Za-z0-9_-]{43}$/u;
+
+const WHOLE_NUMBER = /^\d+$/u;
+
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set([
+  '127.0.0.1',
+  '[::1]',
+  'localhost',
+]);
+
+const BOOLEANS: ReadonlyMap<string, boolean> = new Map([
+  ['false', false],
+  ['true', true],
+]);
+
+/**
+ * A reading of a value.
+ *
+ * @param value the value read.
+ */
+export const read = <Value>(value: Value): Reading<Value> => ({
+  kind: 'read',
+  value,
+});
+
+/**
+ * A refused reading, naming the variable and the rule its value broke.
+ *
+ * @param variable the variable read.
+ * @param rule the rule, worded to follow the variable's name.
+ */
+export const refused = <Value>(
+  { name }: Variable,
+  rule: string,
+): Reading<Value> => ({ kind: 'refused', problem: { rule, variable: name } });
+
+/**
+ * Reads on from a reading's value, passing a refusal through as it is.
+ *
+ * @param reading the reading so far.
+ * @param next what reads on from its value.
+ */
+export const then = <From, To>(
+  reading: Reading<From>,
+  next: (value: From) => Reading<To>,
+): Reading<To> => (reading.kind === 'read' ? next(reading.value) : reading);
+
+/**
+ * Reads text, as given: the default when the variable is unset, and an empty value refused unless
+ * allowed.
+ *
+ * @param variable the variable.
+ * @param options whether an empty value is allowed, and the default, without which an unset variable
+ *   is refused.
+ */
+export const readText = (
+  variable: Variable,
+  {
+    emptyAllowed = false,
+    fallback,
+  }: { emptyAllowed?: boolean; fallback?: string } = {},
+): Reading<string> => {
+  const { value } = variable;
+  if (value === undefined) {
+    return fallback === undefined ? refused(variable, MISSING) : read(fallback);
+  }
+  return value === '' && !emptyAllowed
+    ? refused(variable, 'is empty')
+    : read(value);
+};
+
+const isCanonicalKey = (text: string): boolean => {
+  const bytes = Buffer.from(text, 'base64url');
+  try {
+    return (
+      CANONICAL_KEY.test(text) &&
+      bytes.length === 32 &&
+      bytes.toString('base64url') === text
+    );
+  } finally {
+    bytes.fill(0);
+  }
+};
+
+/**
+ * Reads a key: 32 bytes as 43 base64url characters in canonical form, the form of an application
+ * key. Whitespace around it is left out, since it is never part of a key and a pasted value often
+ * carries it; whitespace inside it is refused.
+ *
+ * @param variable the variable.
+ */
+export const readKey = (variable: Variable): Reading<string> =>
+  then(readText(variable, { emptyAllowed: true }), (text) => {
+    const key = text.trim();
+    return isCanonicalKey(key)
+      ? read(key)
+      : refused(
+          variable,
+          'is not 32 bytes as 43 base64url characters in canonical form',
+        );
+  });
+
+/**
+ * Reads a whole number within bounds.
+ *
+ * @param variable the variable.
+ * @param bounds the least and the greatest number allowed, the greatest none by default, and the
+ *   default, without which an unset variable is refused.
+ */
+export const readInteger = (
+  variable: Variable,
+  {
+    fallback,
+    maximum = Number.MAX_SAFE_INTEGER,
+    minimum,
+  }: { fallback?: number; maximum?: number; minimum: number },
+): Reading<number> => {
+  const { value } = variable;
+  if (value === undefined) {
+    return fallback === undefined ? refused(variable, MISSING) : read(fallback);
+  }
+  const number = WHOLE_NUMBER.test(value) ? Number(value) : Number.NaN;
+  if (Number.isSafeInteger(number) && number >= minimum && number <= maximum) {
+    return read(number);
+  }
+  return refused(
+    variable,
+    maximum === Number.MAX_SAFE_INTEGER
+      ? `is not a whole number of at least ${minimum}`
+      : `is not a whole number from ${minimum} to ${maximum}`,
+  );
+};
+
+/**
+ * Reads `true` or `false`.
+ *
+ * @param variable the variable.
+ * @param fallback the value when the variable is unset.
+ */
+export const readBoolean = (
+  variable: Variable,
+  fallback: boolean,
+): Reading<boolean> => {
+  const { value } = variable;
+  if (value === undefined) {
+    return read(fallback);
+  }
+  const flag = BOOLEANS.get(value);
+  return flag === undefined
+    ? refused(variable, 'is neither true nor false')
+    : read(flag);
+};
+
+/**
+ * Reads one of a fixed set of words.
+ *
+ * @param variable the variable.
+ * @param choices the words allowed.
+ * @param fallback the value when the variable is unset; without one, an unset variable is refused.
+ */
+export const readChoice = <Choice extends string>(
+  variable: Variable,
+  choices: readonly Choice[],
+  fallback?: Choice,
+): Reading<Choice> =>
+  then(
+    readText(variable, fallback === undefined ? {} : { fallback }),
+    (text) => {
+      const chosen = choices.find((choice) => choice === text);
+      return chosen === undefined
+        ? refused(variable, `is not one of ${choices.join(', ')}`)
+        : read(chosen);
+    },
+  );
+
+/**
+ * Reads a comma-separated list, each entry with the whitespace around it left out: an empty value is
+ * an empty list, and an empty entry is refused.
+ *
+ * @param variable the variable.
+ * @param fallback the list when the variable is unset; without one, an unset variable is refused.
+ */
+export const readList = (
+  variable: Variable,
+  fallback?: readonly string[],
+): Reading<readonly string[]> => {
+  const { value } = variable;
+  if (value === undefined) {
+    return fallback === undefined ? refused(variable, MISSING) : read(fallback);
+  }
+  if (value === '') {
+    return read([]);
+  }
+  const entries = value.split(',').map((entry) => entry.trim());
+  return entries.includes('')
+    ? refused(variable, 'holds an empty entry between its commas')
+    : read(entries);
+};
+
+/**
+ * Reads a comma-separated list of IP addresses; none by default.
+ *
+ * @param variable the variable.
+ */
+export const readAddresses = (variable: Variable): Reading<readonly string[]> =>
+  then(readList(variable, []), (entries) =>
+    entries.every((entry) => isIP(entry) !== 0)
+      ? read(entries)
+      : refused(variable, 'holds an entry that is not an IP address'),
+  );
+
+// A parse failure is undefined, which JSON never yields; the parser's own message quotes its input.
+const parsedJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Reads a JSON value of the shape given.
+ *
+ * @param variable the variable.
+ * @param reading what the value may hold, the rule naming that, and the default.
+ */
+export const readJson = <Value>(
+  variable: Variable,
+  { fallback, isValue, rule }: JsonReading<Value>,
+): Reading<Value> => {
+  const { value } = variable;
+  if (value === undefined) {
+    return fallback === undefined ? refused(variable, MISSING) : read(fallback);
+  }
+  const parsed = parsedJson(value);
+  return isValue(parsed) ? read(parsed) : refused(variable, rule);
+};
+
+/**
+ * Whether a URL carries a password, in its user information or as a `password` parameter, either of
+ * which a PostgreSQL or Valkey client would use.
+ *
+ * @param url the URL.
+ */
+const carriesPassword = (url: URL): boolean =>
+  url.password !== '' || url.searchParams.has('password');
+
+/**
+ * Reads a store's connection URL, which never carries the store's password: a URL is the kind of
+ * value that ends up in a log or an error, so the password is read from a variable of its own.
+ *
+ * @param variable the variable.
+ * @param rules the variable the password is read from, and the protocols allowed, any by default.
+ */
+export const readStoreUrl = (
+  variable: Variable,
+  {
+    passwordVariable,
+    protocols,
+  }: { passwordVariable: string; protocols?: readonly string[] },
+): Reading<string> =>
+  then(readText(variable), (text) => {
+    const url = URL.parse(text);
+    if (url === null) {
+      return refused(variable, 'is not a URL');
+    }
+    if (carriesPassword(url)) {
+      return refused(
+        variable,
+        `carries a password, which is read from ${passwordVariable} alone`,
+      );
+    }
+    return protocols === undefined || protocols.includes(url.protocol)
+      ? read(text)
+      : refused(
+          variable,
+          `is not a URL whose protocol is one of ${protocols.join(', ')}`,
+        );
+  });
+
+/**
+ * Reads the URL of something the controller trusts or sends a secret to: https, or http to a loopback
+ * host, where nothing it carries crosses a network in the clear, and carrying no password, as no URL
+ * the controller holds does.
+ *
+ * @param variable the variable.
+ * @param fallback the value when the variable is unset, which may be empty for none; without one, an
+ *   unset variable is refused.
+ */
+export const readSecureUrl = (
+  variable: Variable,
+  fallback?: '',
+): Reading<string> =>
+  then(
+    readText(
+      variable,
+      fallback === undefined ? {} : { emptyAllowed: true, fallback },
+    ),
+    (text) => {
+      if (text === '') {
+        return read(text);
+      }
+      const url = URL.parse(text);
+      if (url !== null && carriesPassword(url)) {
+        return refused(variable, 'carries a password');
+      }
+      return url !== null &&
+        (url.protocol === 'https:' ||
+          (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname)))
+        ? read(text)
+        : refused(
+            variable,
+            'is not an https URL, or an http URL to a loopback host',
+          );
+    },
+  );

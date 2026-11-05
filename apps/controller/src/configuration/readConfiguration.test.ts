@@ -1,0 +1,696 @@
+import assert from 'node:assert/strict';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { suite, test } from 'node:test';
+
+import { StartRefusal } from '../startRefusal.js';
+import { ENVIRONMENT_VARIABLES } from './environmentVariables.js';
+import { readConfiguration } from './readConfiguration.js';
+import type {
+  ConfigurationEnvironment,
+  ControllerConfiguration,
+  FieldWithVariable,
+} from './types.js';
+
+type FieldValues = Partial<Record<FieldWithVariable, string | undefined>>;
+
+const freshKey = (): string => randomBytes(32).toString('base64url');
+
+const KEY_ENCRYPTION_KEY = freshKey();
+
+const CURSOR_KEY = freshKey();
+
+// Passwords holding characters a URL escapes, and whitespace kept as given.
+const DATABASE_PASSWORD = ` ${randomBytes(12).toString('base64url')}/@:% `;
+
+const CACHE_PASSWORD = randomBytes(12).toString('base64url');
+
+const DIRECTORY_SECRET = randomBytes(12).toString('base64url');
+
+// Every variable the controller requires, and no other.
+const REQUIRED: Readonly<Record<string, string>> = {
+  backChannelLogoutAudiences: 'portal-test',
+  cachePassword: CACHE_PASSWORD,
+  cacheUrl: 'redis://127.0.0.1:6379',
+  cursorKey: CURSOR_KEY,
+  databasePassword: DATABASE_PASSWORD,
+  databaseSchema: 'usher',
+  databaseUrl: 'postgres://usher_controller@127.0.0.1:5432/usher',
+  eventSource: 'https://usher.example.org/controller',
+  grantRateThreshold: '{"operationCount":100,"windowSeconds":60}',
+  host: '127.0.0.1',
+  identityProviderIssuer: 'https://auth.example.org/realms/usher',
+  instanceName: 'usher-1',
+  issuer: 'https://usher.example.org',
+  keyEncryptionKey: KEY_ENCRYPTION_KEY,
+  managementAudience: 'usher-management',
+  managementClients: 'usher-ui',
+  port: '8443',
+  signInTokenMaximumLifetimeSeconds: '3600',
+} satisfies FieldValues;
+
+const BASE64URL =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+// 32 bytes leave two bits of the last character unused, which canonical form keeps zero.
+const withTrailingBitSet = (key: string): string =>
+  `${key.slice(0, -1)}${BASE64URL[BASE64URL.indexOf(key.slice(-1)) | 1] ?? ''}`;
+
+const environmentOf = (values: FieldValues): ConfigurationEnvironment =>
+  Object.fromEntries(
+    Object.entries(values).map(([field, value]) => [
+      ENVIRONMENT_VARIABLES[field as FieldWithVariable],
+      value,
+    ]),
+  );
+
+const environmentWith = (values: FieldValues): ConfigurationEnvironment =>
+  environmentOf({ ...REQUIRED, ...values });
+
+const refusalOf = (environment: ConfigurationEnvironment): StartRefusal => {
+  try {
+    readConfiguration(environment);
+  } catch (refusal) {
+    if (refusal instanceof StartRefusal) {
+      return refusal;
+    }
+    throw refusal;
+  }
+  return assert.fail(
+    'the configuration was read, where a refusal was expected',
+  );
+};
+
+// Everything a refusal shows a reader, as a test searching it for a value would read it.
+const shownBy = (refusal: StartRefusal): string =>
+  [
+    refusal.message,
+    String(refusal.stack),
+    JSON.stringify(refusal, Object.getOwnPropertyNames(refusal)),
+  ].join('\n');
+
+const fieldsOf = (
+  configuration: ControllerConfiguration,
+): Omit<ControllerConfiguration, 'clock' | 'logStream'> => {
+  const { clock: _clock, logStream: _logStream, ...fields } = configuration;
+  return fields;
+};
+
+suite('reading the configuration from an environment', () => {
+  test('reads every variable into its field', () => {
+    const configuration = readConfiguration(
+      environmentWith({
+        administratorRole: 'ims-usher-admin',
+        allowedCharactersExtra: ' :*/Éé',
+        autoAccept: 'true',
+        backChannelLogoutAudiences: 'portal-test, submission-test',
+        baseline: 'view',
+        directoryClientId: 'usher-directory',
+        directoryClientSecret: DIRECTORY_SECRET,
+        directoryRealm: 'overture',
+        directoryUrl: 'https://auth.example.org',
+        egoMigrationAllStudyPolicies: '["ENVIRONMENTAL","ALL, STUDIES"]',
+        egoMigrationBaseTier: 'grant',
+        egoMigrationPrefixes: '["PX-","PX-FILES-"]',
+        grantRateThreshold: '{"windowSeconds":5,"operationCount":3}',
+        heartbeatMilliseconds: '500',
+        noticePageLimit: '20',
+        noticeRereadMilliseconds: '250',
+        platformDefaultAccessLevel: 'open',
+        retentionGraceSeconds: '0',
+        retentionMarginSeconds: '45',
+        selfGrantMaximumSeconds: '14400',
+        signedInRule: 'count,view',
+        storeTimeoutMilliseconds: '250',
+        streamLimitPerAudience: '2',
+        streamMaximumLifetimeSeconds: '60',
+        streamQueueLimit: '10',
+        submitterCategory: 'global.controlled',
+        tokenLifetimeSeconds: '120',
+        trustedProxies: '127.0.0.1,::1',
+      }),
+    );
+
+    assert.deepEqual(fieldsOf(configuration), {
+      administratorRole: 'ims-usher-admin',
+      allowedCharactersExtra: ' :*/Éé',
+      autoAccept: true,
+      backChannelLogoutAudiences: ['portal-test', 'submission-test'],
+      baseline: ['view'],
+      cachePassword: CACHE_PASSWORD,
+      cacheUrl: 'redis://127.0.0.1:6379',
+      cursorKey: CURSOR_KEY,
+      databasePassword: DATABASE_PASSWORD,
+      databaseSchema: 'usher',
+      databaseUrl: 'postgres://usher_controller@127.0.0.1:5432/usher',
+      directoryClientId: 'usher-directory',
+      directoryClientSecret: DIRECTORY_SECRET,
+      directoryRealm: 'overture',
+      directoryUrl: 'https://auth.example.org',
+      egoMigrationAllStudyPolicies: ['ENVIRONMENTAL', 'ALL, STUDIES'],
+      egoMigrationBaseTier: 'grant',
+      egoMigrationPrefixes: ['PX-', 'PX-FILES-'],
+      eventSource: 'https://usher.example.org/controller',
+      grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
+      heartbeatMilliseconds: 500,
+      host: '127.0.0.1',
+      identityProviderIssuer: 'https://auth.example.org/realms/usher',
+      instanceName: 'usher-1',
+      issuer: 'https://usher.example.org',
+      keyEncryptionKey: KEY_ENCRYPTION_KEY,
+      managementAudience: 'usher-management',
+      managementClients: ['usher-ui'],
+      noticePageLimit: 20,
+      noticeRereadMilliseconds: 250,
+      platformDefaultAccessLevel: 'open',
+      port: 8443,
+      retentionGraceSeconds: 0,
+      retentionMarginSeconds: 45,
+      selfGrantMaximumSeconds: 14_400,
+      signInTokenMaximumLifetimeSeconds: 3600,
+      signedInRule: ['count', 'view'],
+      storeTimeoutMilliseconds: 250,
+      streamLimitPerAudience: 2,
+      streamMaximumLifetimeSeconds: 60,
+      streamQueueLimit: 10,
+      submitterCategory: 'global.controlled',
+      tokenLifetimeSeconds: 120,
+      trustedProxies: ['127.0.0.1', '::1'],
+    });
+  });
+
+  test('takes the default named for each variable left unset', () => {
+    const configuration = readConfiguration(environmentWith({}));
+
+    assert.deepEqual(
+      {
+        administratorRole: configuration.administratorRole,
+        allowedCharactersExtra: configuration.allowedCharactersExtra,
+        autoAccept: configuration.autoAccept,
+        baseline: configuration.baseline,
+        directoryClientId: configuration.directoryClientId,
+        directoryClientSecret: configuration.directoryClientSecret,
+        directoryRealm: configuration.directoryRealm,
+        directoryUrl: configuration.directoryUrl,
+        egoMigrationAllStudyPolicies:
+          configuration.egoMigrationAllStudyPolicies,
+        egoMigrationBaseTier: configuration.egoMigrationBaseTier,
+        egoMigrationPrefixes: configuration.egoMigrationPrefixes,
+        heartbeatMilliseconds: configuration.heartbeatMilliseconds,
+        noticePageLimit: configuration.noticePageLimit,
+        noticeRereadMilliseconds: configuration.noticeRereadMilliseconds,
+        platformDefaultAccessLevel: configuration.platformDefaultAccessLevel,
+        retentionGraceSeconds: configuration.retentionGraceSeconds,
+        retentionMarginSeconds: configuration.retentionMarginSeconds,
+        selfGrantMaximumSeconds: configuration.selfGrantMaximumSeconds,
+        signedInRule: configuration.signedInRule,
+        storeTimeoutMilliseconds: configuration.storeTimeoutMilliseconds,
+        streamLimitPerAudience: configuration.streamLimitPerAudience,
+        streamMaximumLifetimeSeconds:
+          configuration.streamMaximumLifetimeSeconds,
+        streamQueueLimit: configuration.streamQueueLimit,
+        submitterCategory: configuration.submitterCategory,
+        tokenLifetimeSeconds: configuration.tokenLifetimeSeconds,
+        trustedProxies: configuration.trustedProxies,
+      },
+      {
+        administratorRole: 'usher-platform-admin',
+        allowedCharactersExtra: '',
+        autoAccept: false,
+        baseline: ['count', 'view', 'export'],
+        directoryClientId: '',
+        directoryClientSecret: '',
+        directoryRealm: '',
+        directoryUrl: '',
+        egoMigrationAllStudyPolicies: [],
+        egoMigrationBaseTier: null,
+        egoMigrationPrefixes: [],
+        heartbeatMilliseconds: 10_000,
+        noticePageLimit: 500,
+        noticeRereadMilliseconds: 2000,
+        platformDefaultAccessLevel: 'registered',
+        retentionGraceSeconds: 60,
+        retentionMarginSeconds: 30,
+        selfGrantMaximumSeconds: 86_400,
+        signedInRule: ['count', 'view', 'export'],
+        storeTimeoutMilliseconds: 5000,
+        streamLimitPerAudience: 64,
+        streamMaximumLifetimeSeconds: 900,
+        streamQueueLimit: 1000,
+        submitterCategory: 'global.unmarked',
+        tokenLifetimeSeconds: 300,
+        trustedProxies: [],
+      },
+    );
+  });
+
+  test('gives the system clock and the process standard output, which no variable sets', () => {
+    const before = Date.now();
+
+    const configuration = readConfiguration(environmentWith({}));
+
+    assert.ok(configuration.clock.now() >= before);
+    assert.ok(configuration.clock.now() <= Date.now());
+    assert.equal(configuration.logStream, process.stdout);
+  });
+
+  test('refuses each required variable left unset, naming every one in one refusal', () => {
+    const refusal = refusalOf({});
+
+    assert.deepEqual(
+      refusal.variables,
+      Object.keys(REQUIRED).map(
+        (field) => ENVIRONMENT_VARIABLES[field as FieldWithVariable],
+      ),
+    );
+  });
+
+  test('refuses a required variable set empty', () => {
+    const refusal = refusalOf(environmentWith({ host: '', issuer: '' }));
+
+    assert.deepEqual(refusal.variables, [
+      ENVIRONMENT_VARIABLES.host,
+      ENVIRONMENT_VARIABLES.issuer,
+    ]);
+    assert.match(refusal.message, /USHER_ISSUER is empty/u);
+  });
+});
+
+suite('reading the keys', () => {
+  test('reads a key with whitespace around it as the key alone', () => {
+    const configuration = readConfiguration(
+      environmentWith({
+        cursorKey: `\t${CURSOR_KEY}\r\n`,
+        keyEncryptionKey: ` ${KEY_ENCRYPTION_KEY}\n`,
+      }),
+    );
+
+    assert.equal(configuration.keyEncryptionKey, KEY_ENCRYPTION_KEY);
+    assert.equal(configuration.cursorKey, CURSOR_KEY);
+  });
+
+  test('refuses a key in any form but 32 bytes as 43 base64url characters in canonical form, naming its variable and never the key', () => {
+    const bytes = Buffer.from(KEY_ENCRYPTION_KEY, 'base64url');
+    const forms = [
+      bytes.toString('base64'),
+      Buffer.alloc(32, 0xfb).toString('base64').replace(/=+$/u, ''),
+      bytes.toString('hex'),
+      KEY_ENCRYPTION_KEY.slice(0, 42),
+      withTrailingBitSet(KEY_ENCRYPTION_KEY),
+      `${KEY_ENCRYPTION_KEY.slice(0, 21)} ${KEY_ENCRYPTION_KEY.slice(21)}`,
+      `${KEY_ENCRYPTION_KEY}${KEY_ENCRYPTION_KEY.slice(0, 1)}`,
+      '',
+      '   ',
+    ];
+
+    const refusals = forms.map((form) =>
+      refusalOf(environmentWith({ keyEncryptionKey: form })),
+    );
+
+    refusals.forEach((refusal, index) => {
+      assert.deepEqual(refusal.variables, [
+        ENVIRONMENT_VARIABLES.keyEncryptionKey,
+      ]);
+      const shown = shownBy(refusal);
+      [KEY_ENCRYPTION_KEY, forms[index] ?? '', bytes.toString('hex')]
+        .filter((secret) => secret.trim().length > 0)
+        .forEach((secret) =>
+          assert.equal(shown.includes(secret.trim()), false, `form ${index}`),
+        );
+    });
+  });
+});
+
+suite("reading each store's connection", () => {
+  test('reads each password as given, whitespace included, from its own variable', () => {
+    const configuration = readConfiguration(environmentWith({}));
+
+    assert.equal(configuration.databasePassword, DATABASE_PASSWORD);
+    assert.equal(configuration.cachePassword, CACHE_PASSWORD);
+  });
+
+  test('refuses a store URL carrying a password, in its user information or as a parameter, naming the variable holding the URL and never the password', () => {
+    const marker = randomUUID();
+    const cases: readonly FieldValues[] = [
+      { databaseUrl: `postgres://usher_controller:${marker}@127.0.0.1/usher` },
+      {
+        databaseUrl: `postgres://usher_controller@127.0.0.1/usher?password=${marker}`,
+      },
+      { cacheUrl: `redis://:${marker}@127.0.0.1:6379` },
+      { cacheUrl: `redis://127.0.0.1:6379?password=${marker}` },
+    ];
+
+    const refusals = cases.map((values) => refusalOf(environmentWith(values)));
+
+    refusals.forEach((refusal, index) => {
+      const [field] = Object.keys(cases[index] ?? {});
+      assert.deepEqual(refusal.variables, [
+        ENVIRONMENT_VARIABLES[field as FieldWithVariable],
+      ]);
+      assert.equal(shownBy(refusal).includes(marker), false);
+    });
+    assert.match(refusals[0]?.message ?? '', /USHER_DATABASE_PASSWORD/u);
+    assert.match(refusals[2]?.message ?? '', /USHER_CACHE_PASSWORD/u);
+  });
+
+  test("refuses a database URL that is not PostgreSQL's, or no URL at all", () => {
+    const refusals = ['mysql://usher@127.0.0.1/usher', 'not a url'].map(
+      (databaseUrl) => refusalOf(environmentWith({ databaseUrl })),
+    );
+
+    refusals.forEach((refusal) =>
+      assert.deepEqual(refusal.variables, [ENVIRONMENT_VARIABLES.databaseUrl]),
+    );
+  });
+
+  test('reads a postgresql: URL and its parameters as given', () => {
+    const databaseUrl =
+      'postgresql://usher_controller@db.example.org:6432/usher?sslmode=verify-full';
+
+    assert.equal(
+      readConfiguration(environmentWith({ databaseUrl })).databaseUrl,
+      databaseUrl,
+    );
+  });
+});
+
+suite('reading the rules conferring record actions on everyone', () => {
+  test('reads a rule within read as given, an empty one conferring nothing', () => {
+    const rules = ['view', 'count,view', 'export, count', ''];
+
+    const read = rules.map((rule) =>
+      readConfiguration(
+        environmentWith({ baseline: rule, signedInRule: rule }),
+      ),
+    );
+
+    assert.deepEqual(
+      read.map(({ baseline, signedInRule }) => [baseline, signedInRule]),
+      [
+        [['view'], ['view']],
+        [
+          ['count', 'view'],
+          ['count', 'view'],
+        ],
+        [
+          ['export', 'count'],
+          ['export', 'count'],
+        ],
+        [[], []],
+      ],
+    );
+  });
+
+  test('refuses a rule naming an action outside the record vocabulary, one twice, or one beyond read', () => {
+    const rules = [
+      { rule: 'veiw', said: /outside the record vocabulary/u },
+      { rule: 'record.read', said: /outside the record vocabulary/u },
+      { rule: 'read', said: /outside the record vocabulary/u },
+      { rule: 'view,view', said: /twice/u },
+      { rule: 'count,view,export,update', said: /more than read/u },
+      { rule: 'delete', said: /more than read/u },
+      { rule: 'create', said: /more than read/u },
+      { rule: 'view,,count', said: /empty entry/u },
+    ];
+
+    rules.forEach(({ rule, said }) => {
+      const baseline = refusalOf(environmentWith({ baseline: rule }));
+      const signedIn = refusalOf(environmentWith({ signedInRule: rule }));
+
+      assert.deepEqual(baseline.variables, [ENVIRONMENT_VARIABLES.baseline]);
+      assert.deepEqual(signedIn.variables, [
+        ENVIRONMENT_VARIABLES.signedInRule,
+      ]);
+      assert.match(baseline.message, said, rule);
+    });
+  });
+});
+
+suite('reading the identity provider and the directory', () => {
+  test('reads an issuer over https, or over http to a loopback host', () => {
+    const issuers = [
+      'https://auth.example.org/realms/usher',
+      'http://127.0.0.1:8080/realms/usher',
+      'http://localhost:8080/realms/usher',
+      'http://[::1]:8080/realms/usher',
+    ];
+
+    const read = issuers.map(
+      (identityProviderIssuer) =>
+        readConfiguration(environmentWith({ identityProviderIssuer }))
+          .identityProviderIssuer,
+    );
+
+    assert.deepEqual(read, issuers);
+  });
+
+  test('refuses an issuer over http to any other host, or no URL at all', () => {
+    const issuers = [
+      'http://auth.example.org/realms/usher',
+      'http://10.0.0.5/realms/usher',
+      'ftp://auth.example.org/realms/usher',
+      'auth.example.org/realms/usher',
+    ];
+
+    issuers.forEach((identityProviderIssuer) =>
+      assert.deepEqual(
+        refusalOf(environmentWith({ identityProviderIssuer })).variables,
+        [ENVIRONMENT_VARIABLES.identityProviderIssuer],
+      ),
+    );
+  });
+
+  test('needs every part of the directory once its URL names one, and never shows its secret', () => {
+    const refusal = refusalOf(
+      environmentWith({
+        directoryClientSecret: DIRECTORY_SECRET,
+        directoryRealm: '',
+        directoryUrl: 'https://auth.example.org',
+      }),
+    );
+
+    assert.deepEqual(refusal.variables, [
+      ENVIRONMENT_VARIABLES.directoryClientId,
+      ENVIRONMENT_VARIABLES.directoryRealm,
+    ]);
+    assert.equal(shownBy(refusal).includes(DIRECTORY_SECRET), false);
+  });
+
+  test('refuses an issuer or a directory URL carrying a password, never showing it', () => {
+    const marker = randomUUID();
+    const refusals = [
+      refusalOf(
+        environmentWith({
+          identityProviderIssuer: `https://usher:${marker}@auth.example.org/realms/usher`,
+        }),
+      ),
+      refusalOf(
+        environmentWith({
+          directoryClientId: 'usher-directory',
+          directoryClientSecret: DIRECTORY_SECRET,
+          directoryRealm: 'overture',
+          directoryUrl: `https://auth.example.org?password=${marker}`,
+        }),
+      ),
+    ];
+
+    assert.deepEqual(
+      refusals.map(({ variables }) => variables),
+      [
+        [ENVIRONMENT_VARIABLES.identityProviderIssuer],
+        [ENVIRONMENT_VARIABLES.directoryUrl],
+      ],
+    );
+    refusals.forEach((refusal) =>
+      assert.equal(shownBy(refusal).includes(marker), false),
+    );
+  });
+
+  test('refuses a directory URL over http to a host other than a loopback one', () => {
+    assert.deepEqual(
+      refusalOf(
+        environmentWith({
+          directoryClientId: 'usher-directory',
+          directoryClientSecret: DIRECTORY_SECRET,
+          directoryRealm: 'overture',
+          directoryUrl: 'http://auth.example.org',
+        }),
+      ).variables,
+      [ENVIRONMENT_VARIABLES.directoryUrl],
+    );
+  });
+});
+
+suite('reading numbers, flags, lists and choices', () => {
+  test('refuses anything but a whole number written in digits', () => {
+    const values = ['1.5', '-1', '1e3', ' 5', '0x10', '', 'ten'];
+
+    values.forEach((value) =>
+      assert.deepEqual(
+        refusalOf(environmentWith({ streamQueueLimit: value })).variables,
+        [ENVIRONMENT_VARIABLES.streamQueueLimit],
+        value,
+      ),
+    );
+  });
+
+  test('refuses a number outside its bounds, naming them', () => {
+    const cases = [
+      { said: /from 0 to 65535/u, values: { port: '65536' } },
+      { said: /at least 1/u, values: { tokenLifetimeSeconds: '0' } },
+      { said: /at least 60/u, values: { streamMaximumLifetimeSeconds: '59' } },
+      {
+        said: /from 1 to 2147483647/u,
+        values: { heartbeatMilliseconds: '2147483648' },
+      },
+      {
+        said: /at least 1/u,
+        values: { noticePageLimit: '9007199254740993' },
+      },
+    ];
+
+    cases.forEach(({ said, values }) =>
+      assert.match(refusalOf(environmentWith(values)).message, said),
+    );
+  });
+
+  test('reads port 0, asking for any free port, and the longest timer a millisecond setting may hold', () => {
+    const configuration = readConfiguration(
+      environmentWith({ port: '0', storeTimeoutMilliseconds: '2147483647' }),
+    );
+
+    assert.equal(configuration.port, 0);
+    assert.equal(configuration.storeTimeoutMilliseconds, 2_147_483_647);
+  });
+
+  test('reads a flag as true or false alone', () => {
+    assert.equal(
+      readConfiguration(environmentWith({ autoAccept: 'false' })).autoAccept,
+      false,
+    );
+    assert.deepEqual(
+      refusalOf(environmentWith({ autoAccept: 'yes' })).variables,
+      [ENVIRONMENT_VARIABLES.autoAccept],
+    );
+  });
+
+  test('reads a list empty for an empty value, and refuses an empty entry between its commas', () => {
+    assert.deepEqual(
+      readConfiguration(environmentWith({ managementClients: '' }))
+        .managementClients,
+      [],
+    );
+    assert.deepEqual(
+      refusalOf(environmentWith({ managementClients: 'usher-ui,' })).variables,
+      [ENVIRONMENT_VARIABLES.managementClients],
+    );
+  });
+
+  test('refuses a trusted proxy that is not an IP address', () => {
+    assert.deepEqual(
+      refusalOf(environmentWith({ trustedProxies: '127.0.0.1,proxy.local' }))
+        .variables,
+      [ENVIRONMENT_VARIABLES.trustedProxies],
+    );
+  });
+
+  test('refuses an access level outside open, registered and grant, and reads an empty base tier as none', () => {
+    assert.deepEqual(
+      refusalOf(environmentWith({ platformDefaultAccessLevel: 'public' }))
+        .variables,
+      [ENVIRONMENT_VARIABLES.platformDefaultAccessLevel],
+    );
+    assert.deepEqual(
+      refusalOf(environmentWith({ egoMigrationBaseTier: 'public' })).variables,
+      [ENVIRONMENT_VARIABLES.egoMigrationBaseTier],
+    );
+    assert.equal(
+      readConfiguration(environmentWith({ egoMigrationBaseTier: '' }))
+        .egoMigrationBaseTier,
+      null,
+    );
+  });
+});
+
+suite('reading the JSON settings', () => {
+  test('refuses an empty EGO migration prefix, or one listed twice, and reads an empty list as none', () => {
+    const refused = ['[""]', '["PX-","PX-"]', '"PX-"', 'PX-', '[1]'].map(
+      (egoMigrationPrefixes) =>
+        refusalOf(environmentWith({ egoMigrationPrefixes })).variables,
+    );
+
+    refused.forEach((variables) =>
+      assert.deepEqual(variables, [ENVIRONMENT_VARIABLES.egoMigrationPrefixes]),
+    );
+    assert.deepEqual(
+      readConfiguration(environmentWith({ egoMigrationPrefixes: '[]' }))
+        .egoMigrationPrefixes,
+      [],
+    );
+  });
+
+  test('refuses an all-study policy list that is not JSON naming each policy', () => {
+    ['ENVIRONMENTAL', '[""]', '{}'].forEach((egoMigrationAllStudyPolicies) =>
+      assert.deepEqual(
+        refusalOf(environmentWith({ egoMigrationAllStudyPolicies })).variables,
+        [ENVIRONMENT_VARIABLES.egoMigrationAllStudyPolicies],
+      ),
+    );
+  });
+
+  test('refuses a grant rate threshold holding anything but a whole operation count and window, each at least 1', () => {
+    const thresholds = [
+      '{"operationCount":0,"windowSeconds":60}',
+      '{"operationCount":100}',
+      '{"operationCount":100,"windowSeconds":60,"burst":5}',
+      '{"operationCount":1.5,"windowSeconds":60}',
+      '{"operationCount":"100","windowSeconds":60}',
+      '[100,60]',
+      '100',
+    ];
+
+    thresholds.forEach((grantRateThreshold) =>
+      assert.deepEqual(
+        refusalOf(environmentWith({ grantRateThreshold })).variables,
+        [ENVIRONMENT_VARIABLES.grantRateThreshold],
+        grantRateThreshold,
+      ),
+    );
+  });
+});
+
+suite('a refusal of the configuration', () => {
+  test('names each variable at fault and never the value it refused', () => {
+    const marker = `refused-${randomUUID()}`;
+    const fields: readonly FieldWithVariable[] = [
+      'autoAccept',
+      'baseline',
+      'cacheUrl',
+      'cursorKey',
+      'databaseUrl',
+      'directoryUrl',
+      'egoMigrationAllStudyPolicies',
+      'egoMigrationBaseTier',
+      'egoMigrationPrefixes',
+      'grantRateThreshold',
+      'heartbeatMilliseconds',
+      'identityProviderIssuer',
+      'keyEncryptionKey',
+      'platformDefaultAccessLevel',
+      'port',
+      'signedInRule',
+      'trustedProxies',
+    ];
+
+    const refusal = refusalOf(
+      environmentWith(
+        Object.fromEntries(fields.map((field) => [field, marker])),
+      ),
+    );
+
+    assert.deepEqual(
+      refusal.variables,
+      fields.map((field) => ENVIRONMENT_VARIABLES[field]),
+    );
+    assert.equal(shownBy(refusal).includes(marker), false);
+  });
+});

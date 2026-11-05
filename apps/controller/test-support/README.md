@@ -288,9 +288,6 @@ leaves them out, since they need Docker.
   clocks, `untilMonotonicTime` (`performance.now()`, as the bridge's recordings are timed) and
   `untilWallTime` (`Date.now()`, as tokens and rows are dated), named apart.
 
-The suites named "while the Usher Controller is not implemented" pin the seam's message. The first
-implementation ticket removes them.
-
 `pnpm test` finds tests the way Node's runner does: every `*.test.ts`, every file named `test-*`, and
 every file anywhere under a directory named `test`. A helper module belongs here in `test-support/`,
 under any other name, or it runs as a test file.

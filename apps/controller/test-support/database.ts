@@ -251,8 +251,8 @@ const withFloor = async (
  * migrated once per run there when first asked for; then a fresh database cloned from it with
  * `CREATE DATABASE ... TEMPLATE`, and a retention floor other than the template's set by running the
  * migrations again on the clone. A template whose migration fails is dropped, and the failure is this
- * call's alone, so a test file asking while the controller is not implemented gets the seam's plain
- * message and every other file runs on. The superuser does this work and is never handed out.
+ * call's alone, so the test file asking gets that failure and every other file runs on. The
+ * superuser does this work and is never handed out.
  *
  * @param template the template to clone; the controller's own by default. Another is for the harness's
  *   own tests.
