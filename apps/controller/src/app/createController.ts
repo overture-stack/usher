@@ -3,10 +3,16 @@ import { performance } from 'node:perf_hooks';
 
 import type pg from 'pg';
 
+import { createApplicationKeyRing } from '../applicationKeyRing/index.js';
 import {
   createApplicationKeyCipher,
   createApplicationRoutes,
 } from '../applications/index.js';
+import {
+  createChannelAssertionVerifier,
+  createRejectionTally,
+  rejectionTallyEvent,
+} from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
@@ -16,9 +22,18 @@ import {
   type ManagementDependencies,
   readStoredRefusal,
 } from '../managementApi/index.js';
+import {
+  createNoticeChannel,
+  createUsedAssertions,
+} from '../noticeChannel/index.js';
+import {
+  createCursorCipher,
+  createNoticeReader,
+} from '../noticeStream/index.js';
 import { createReadiness } from '../readiness/index.js';
 import { openStore, prepareStore } from '../store/index.js';
 import { createStoreReader } from '../storeTimeout/index.js';
+import { afterCommitTrail } from './afterCommitTrail.js';
 import type { Controller } from './types.js';
 
 interface Lifecycle {
@@ -48,14 +63,19 @@ const STORE_PROBE =
 
 /**
  * Creates a controller from its configuration, connecting to nothing until it starts. Its start
- * checks the store before anything listens, so a refused start never accepts a connection, and then
- * serves the Management API's application operations, each event they record written to the audit
- * log and the log stream. Every unit of its store work, a request's statement or transaction, a
- * recorded event or the start's transaction, runs within the store timeout. Its stop closes the
- * server, letting requests in flight finish, records the refusal tally's counts, then closes the
- * store's connections and lets go of the log stream. It reports itself ready while it is started,
- * its log stream takes its lines, and its store answers within the store timeout, not reading as
- * read-only when its database role writes, as `createReadiness` judges it, writing each change.
+ * checks the store before anything listens, so a refused start never accepts a connection, reads the
+ * live application keys into memory, and then serves the Management API's application operations,
+ * each event they record written to the audit log and the log stream, and the revocation channel's
+ * poll and push. A change committed through an operation is held by the instance before it is
+ * answered: the live keys are read again, and the instance's streams are woken to its notices; a
+ * failure in either is written to the log and never changes the answer. Every unit of its store
+ * work, a request's statement or transaction, a recorded event, a read of the keys or the notices, or
+ * the start's transaction, runs within the store timeout. Its stop ends every stream, then closes the
+ * server, letting requests in flight finish, records the counts its two refusal tallies hold, stops
+ * reading the keys, then closes the store's connections and lets go of the log stream. It reports itself ready
+ * while it is started, its log stream takes its lines, and its store answers within the store
+ * timeout, not reading as read-only when its database role writes, as `createReadiness` judges it,
+ * writing each change.
  *
  * @param configuration the controller's configuration.
  */
@@ -91,6 +111,46 @@ export const createController = (
         },
       ),
   });
+  const assertionRejections = createRejectionTally({
+    clock: configuration.clock,
+    record: (reason, applicationId, count) =>
+      trail.recordEvent(
+        { type: 'system' },
+        rejectionTallyEvent(reason, applicationId, count),
+      ),
+  });
+  const cipher = createApplicationKeyCipher(configuration.keyEncryptionKey);
+  const keyRing = createApplicationKeyRing({
+    changed: () => {
+      channel.keysChanged();
+    },
+    cipher,
+    log: eventLog,
+    schema: configuration.databaseSchema,
+    store: reader,
+  });
+  const channel = createNoticeChannel({
+    cursors: createCursorCipher(configuration.cursorKey),
+    eventLog,
+    keyRing,
+    reader: createNoticeReader(reader, configuration.databaseSchema),
+    rejections: assertionRejections,
+    settings: configuration,
+    trail,
+    usedAssertions: createUsedAssertions(configuration.clock),
+    verifier: createChannelAssertionVerifier({
+      clock: configuration.clock,
+      keyRing,
+    }),
+  });
+  const operationTrail = afterCommitTrail({
+    log: eventLog,
+    steps: [
+      { name: 'noticeWake', run: () => channel.wake() },
+      { name: 'keyReload', run: () => keyRing.reload() },
+    ],
+    trail,
+  });
   const management: ManagementDependencies = {
     eventLog,
     refusalTally,
@@ -98,7 +158,7 @@ export const createController = (
     storedRefusal: (question) =>
       readStoredRefusal(reader, configuration.databaseSchema, question),
     tokenVerifier: createTokenVerifier(configuration, eventLog),
-    trail,
+    trail: operationTrail,
   };
   const readiness = createReadiness({
     isLogWritable: () => eventLog.isWritable(),
@@ -117,23 +177,28 @@ export const createController = (
     isReady: readiness.isReady,
     trustedProxies: configuration.trustedProxies,
   });
-  createApplicationRoutes(
-    {
-      cipher: createApplicationKeyCipher(configuration.keyEncryptionKey),
-      settings: configuration,
-      store: reader,
-      trail,
-    },
-    management,
-  ).forEach((route) => {
+  [
+    ...createApplicationRoutes(
+      {
+        cipher,
+        settings: configuration,
+        store: reader,
+        trail: operationTrail,
+      },
+      management,
+    ),
+    ...channel.routes,
+  ].forEach((route) => {
     server.route(route);
   });
 
   const startOnce = async (): Promise<{ url: URL }> => {
     const { writes } = await prepareStore(trail, configuration, eventLog);
     lifecycle.writes = writes;
+    await keyRing.start();
     await server.listen({ host: configuration.host, port: configuration.port });
     refusalTally.start();
+    assertionRejections.start();
     lifecycle.ready = lifecycle.stopped === undefined;
     return { url: urlOf(server.server.address()) };
   };
@@ -143,9 +208,14 @@ export const createController = (
     await lifecycle.started?.catch(() => undefined);
     try {
       try {
+        await channel.stop();
         await server.close();
       } finally {
-        await refusalTally.stop();
+        await Promise.all([
+          refusalTally.stop(),
+          assertionRejections.stop(),
+          keyRing.stop(),
+        ]);
       }
     } finally {
       try {

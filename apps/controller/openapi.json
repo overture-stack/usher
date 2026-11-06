@@ -158,7 +158,31 @@
         "description": "The body is larger than 64 KiB; `bodyTooLarge`, its detail naming the limit."
       },
       "ChannelAssertionRefused": {
-        "description": "The channel assertion is missing or refused. An unknown application, an application holding no live key, and an assertion verified by no live key receive this one answer."
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "enum": ["channelAssertionRefused"]
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
+            }
+          }
+        },
+        "description": "The channel assertion is missing or refused. An unknown application, an application holding no live key, and an assertion verified by no live key receive this one answer; `channelAssertionRefused`.",
+        "headers": {
+          "WWW-Authenticate": {
+            "$ref": "#/components/headers/WwwAuthenticateBearer"
+          }
+        }
       },
       "CredentialRefused": {
         "content": {
@@ -188,7 +212,26 @@
         }
       },
       "CursorGone": {
-        "description": "The cursor can no longer be answered: history it needs is trimmed, it belongs to another epoch, it is ahead of the newest notice, or it cannot be read. Answered before any byte of a stream. The bridge drops every cached entry and polls from head."
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "enum": ["cursorGone"]
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
+            }
+          }
+        },
+        "description": "The cursor can no longer be answered, `cursorGone`: history it needs is trimmed, it belongs to another epoch, it is ahead of the newest notice, its position now holds a notice other than the one it was issued for, as after a restore, or it cannot be read. Answered before any byte of a stream. The bridge drops every cached entry and polls from head."
       },
       "InternalError": {
         "content": {
@@ -257,7 +300,26 @@
         "description": "The body is in a media type other than `application/merge-patch+json`, or in none; `unsupportedMediaType`."
       },
       "NoticeVersionUnserved": {
-        "description": "The notice versions header is missing or lists no version served by the controller."
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "enum": ["noticeVersionUnserved"]
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
+            }
+          }
+        },
+        "description": "The notice versions header is missing or lists no version served by the controller; `noticeVersionUnserved`."
       },
       "Unreadable": {
         "content": {
@@ -1745,7 +1807,7 @@
     "securitySchemes": {
       "channelAssertion": {
         "bearerFormat": "JWT",
-        "description": "A channel assertion: a JWT signed by the bridge with HS256 under the channel-assertion subkey of its application key, typed `usher-channel+jwt`, naming its application's id in `iss` and `usher:controller` in `aud`, living at most 60 seconds, with a `jti`. One assertion serves every exchange made within its lifetime, and opens one stream at most. When an application holds two live keys, the controller checks the assertion against each and answers under the key that verified it, for tokens and notices alike.",
+        "description": "A channel assertion: a JWT signed by the bridge with HS256 under the channel-assertion subkey of its application key, typed `usher-channel+jwt`, naming its application's id in `iss` and `usher:controller` in `aud`, living at most 60 seconds, with a `jti`. One assertion serves every exchange and every poll made within its lifetime, and is presented to the stream route once at most: a second presentation there is refused `401`, whatever else the request carries. When an application holds two live keys, the controller checks the assertion against each and answers under the key that verified it, for tokens and notices alike.",
         "scheme": "bearer",
         "type": "http"
       },
@@ -5798,7 +5860,26 @@
             }
           },
           "400": {
-            "description": "The query names no starting point or both, repeats a parameter, holds a `head` other than `true` or an empty `after`, or carries no nonce of 16 to 128 base64url characters."
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["unreadableQuery"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The query names no starting point or both, repeats a parameter, holds a `head` other than `true` or an empty `after`, carries no nonce of 16 to 128 base64url characters, or holds a parameter other than `head`, `after` and `nonce`; `unreadableQuery`."
           },
           "401": {
             "$ref": "#/components/responses/ChannelAssertionRefused"
@@ -5809,8 +5890,30 @@
           "410": {
             "$ref": "#/components/responses/CursorGone"
           },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
           "503": {
-            "description": "The policy store cannot be reached."
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["storeUnavailable"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The policy store cannot be reached; `storeUnavailable`."
           }
         },
         "security": [
@@ -5824,7 +5927,7 @@
     },
     "/notices/stream": {
       "get": {
-        "description": "An event stream of the notices of the channel assertion's application, starting after the cursor in `Last-Event-ID`: every notice committed after it, in position order, then each new one as it commits. The poll and the stream deliver one application's notices in the same order.\n\nEach notice is one event named `notice`, whose `id` is its cursor and whose `data` is a compact JWE typed `usher-notice+jwt`, encrypted under the notice subkey of the application key that verified the channel assertion. Comment lines, which carry no notice, keep the connection open.\n\nThe headers and a first byte are sent at once, uncompressed. A stream ends within the instance's configured maximum lifetime, and one channel assertion opens one stream.",
+        "description": "An event stream of the notices of the channel assertion's application, starting after the cursor in `Last-Event-ID`: every notice committed after it, in position order, then each new one as it commits. The poll and the stream deliver one application's notices in the same order.\n\nEach notice is one event named `notice`, whose `id` is its cursor and whose `data` is a compact JWE typed `usher-notice+jwt`, encrypted under the notice subkey of the application key that verified the channel assertion. Comment lines, which carry no notice, keep the connection open.\n\nThe headers and a first byte are sent at once, uncompressed. A stream ends within the instance's configured maximum lifetime, and one channel assertion is presented to it once at most.",
         "operationId": "streamNotices",
         "parameters": [
           {
@@ -5866,10 +5969,53 @@
             }
           },
           "400": {
-            "description": "`Last-Event-ID` is missing or empty."
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["cursorMissing"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`Last-Event-ID` is missing or empty; `cursorMissing`."
           },
           "401": {
-            "description": "The channel assertion is missing or refused, or has opened a stream already."
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["channelAssertionRefused"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The channel assertion is missing or refused, or has been presented to the stream route already, whatever else the request carries; `channelAssertionRefused`, the one answer every refused assertion receives.",
+            "headers": {
+              "WWW-Authenticate": {
+                "$ref": "#/components/headers/WwwAuthenticateBearer"
+              }
+            }
           },
           "406": {
             "$ref": "#/components/responses/NoticeVersionUnserved"
@@ -5877,8 +6023,34 @@
           "410": {
             "$ref": "#/components/responses/CursorGone"
           },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
           "503": {
-            "description": "The application holds as many open streams on this instance as it may, or the instance cannot record the channel assertion as used."
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "instanceStopping",
+                            "storeUnavailable",
+                            "streamLimitReached"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`streamLimitReached`: the application holds as many open streams on this instance as it may. `storeUnavailable`: the policy store cannot be reached. `instanceStopping`: the instance is stopping. A stream is also refused when the instance cannot record the channel assertion as used."
           }
         },
         "security": [

@@ -107,6 +107,7 @@ export type AuditEventType =
   | 'baseline.change'
   | 'category.creation'
   | 'channelAssertion.rejection'
+  | 'channelAssertion.rejectionTally'
   | 'grant.creation'
   | 'grant.decision'
   | 'grant.extension'

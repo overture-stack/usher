@@ -1,3 +1,4 @@
+export { CLOCK_TOLERANCE_MILLISECONDS } from './managementClaims.js';
 export { managementRoute } from './managementRoute.js';
 export { problem } from './problems.js';
 export { createRefusalTally } from './refusalTally.js';
