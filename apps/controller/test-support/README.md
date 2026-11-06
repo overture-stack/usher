@@ -21,7 +21,8 @@ leaves them out, since they need Docker.
   is the one place the controller's environment variable names live, and `ENVIRONMENT_VARIABLES`
   exports them, so a test names a variable without spelling it; the clock and the log stream never
   have one. `spawnController` runs the process entry as a child given exactly one environment, for
-  R1's one process-level test, and reports its exit, its output and whether it ever accepted a
+  R1's one process-level test, or a built entry under Node alone, for the build's test beside
+  `tsdown.config.ts`, and reports its exit, its output and whether it ever accepted a
   connection. For refusal tests, `readRefusal` and `startOutcome` give what reading a configuration
   or starting threw, the seam's own message thrown on rather than taken for a refusal; `refusalText`
   shows all a refusal carries; `changedVariables` names the variables two environments differ in;

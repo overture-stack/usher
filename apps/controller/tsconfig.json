@@ -4,5 +4,11 @@
     "isolatedDeclarations": false
   },
   "extends": "../../tsconfig.base.json",
-  "include": ["src", "test", "test-support"]
+  "include": [
+    "src",
+    "test",
+    "test-support",
+    "tsdown.config.ts",
+    "tsdown.config.test.ts"
+  ]
 }

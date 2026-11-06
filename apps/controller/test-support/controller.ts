@@ -370,6 +370,9 @@ export interface ControllerExit {
 
 /** What {@link spawnController} is told beyond the environment. */
 export interface SpawnOptions {
+  /** A built entry, such as `dist/main.js`, run under Node alone in place of the app's process entry `src/main.ts`. */
+  builtEntry?: URL;
+
   /** The host probed for a listener: the environment's host, or `127.0.0.1` when it names none. */
   host?: string;
 
@@ -762,25 +765,34 @@ const acceptedWhile = async (
   return false;
 };
 
+// A built entry runs under Node alone, as it is run outside the tests, so nothing tsx resolves or
+// transforms passes for the build's own; the source entry runs through tsx.
+const nodeArgumentsFor = async (
+  builtEntry: URL | undefined,
+): Promise<readonly string[]> =>
+  builtEntry
+    ? [fileURLToPath(builtEntry)]
+    : [
+        '--import',
+        import.meta.resolve('tsx'),
+        fileURLToPath(await presentModule(CONTROLLER_MODULES.main)),
+      ];
+
 const runEntry = async (
-  entry: URL,
+  nodeArguments: readonly string[],
   environment: ControllerEnvironment,
-  { host, port, timeoutMs }: Required<SpawnOptions>,
+  { host, port, timeoutMs }: Required<Omit<SpawnOptions, 'builtEntry'>>,
 ): Promise<ControllerExit> => {
   const output: { stderr: Buffer[]; stdout: Buffer[] } = {
     stderr: [],
     stdout: [],
   };
   const state = { running: true, timedOut: false };
-  const child = spawn(
-    process.execPath,
-    ['--import', import.meta.resolve('tsx'), fileURLToPath(entry)],
-    {
-      cwd: fileURLToPath(APP_ROOT),
-      env: definedVariables(environment),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
+  const child = spawn(process.execPath, nodeArguments, {
+    cwd: fileURLToPath(APP_ROOT),
+    env: definedVariables(environment),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   child.stderr.on('data', (chunk: Buffer) => output.stderr.push(chunk));
   child.stdout.on('data', (chunk: Buffer) => output.stdout.push(chunk));
   const timer = setTimeout(() => {
@@ -816,27 +828,33 @@ const runEntry = async (
 };
 
 /**
- * Runs the app's process entry, `src/main.ts`, through tsx as a child process given exactly the
- * environment passed, nothing inherited: tsx and Node need no variable of their own to run it. While
- * it runs, the port it was given is probed for a listener every 25 ms, so a listener that comes and
- * goes between two probes can be missed. A process still running at the timeout is killed.
+ * Runs the app's process entry, `src/main.ts`, through tsx, or a built entry under Node alone, as a
+ * child process given exactly the environment passed, nothing inherited: tsx and Node need no
+ * variable of their own to run it. While it runs, the port it was given is probed for a listener
+ * every 25 ms, so a listener that comes and goes between two probes can be missed. A process still
+ * running at the timeout is killed.
  *
  * @param environment the environment variables, such as {@link environmentFor} gives; its port is
  *   the one probed unless the options name another.
- * @param options the host and port probed, and the timeout.
+ * @param options the built entry run, if any; the host and port probed; and the timeout.
  * @returns the exit code or signal, the output, whether the port ever accepted a connection, and
  *   whether the timeout ended the process.
- * @throws the seam's message while `src/main.ts` is missing; a `RangeError` when no port other
- *   than 0 is given to probe.
+ * @throws the seam's message while `src/main.ts` is missing and no built entry is given; a
+ *   `RangeError` when no port other than 0 is given to probe.
  */
 export const spawnController = async (
   environment: ControllerEnvironment,
-  { host, port, timeoutMs = DEFAULT_SPAWN_TIMEOUT_MS }: SpawnOptions = {},
+  {
+    builtEntry,
+    host,
+    port,
+    timeoutMs = DEFAULT_SPAWN_TIMEOUT_MS,
+  }: SpawnOptions = {},
 ): Promise<ControllerExit> => {
-  const entry = await presentModule(CONTROLLER_MODULES.main);
+  const nodeArguments = await nodeArgumentsFor(builtEntry);
   const probedPort = port ?? Number(environment[VARIABLE_NAMES.port]);
   if (isPort(probedPort)) {
-    return runEntry(entry, environment, {
+    return runEntry(nodeArguments, environment, {
       host: host ?? environment[VARIABLE_NAMES.host] ?? LOOPBACK,
       port: probedPort,
       timeoutMs,

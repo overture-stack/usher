@@ -19,6 +19,7 @@
     "fast-check": "catalog:",
     "prettier": "catalog:",
     "testcontainers": "catalog:",
+    "tsdown": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   },
@@ -28,8 +29,7 @@
   "name": "@overture-stack/usher-controller",
   "private": true,
   "scripts": {
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "build": "tsdown",
     "test": "tsx --conditions=@overture-stack/source --test --test-global-setup=test-support/globalSetup.ts",
     "test:newest": "USHER_TEST_POSTGRESQL=newest tsx --conditions=@overture-stack/source --test --test-global-setup=test-support/globalSetup.ts",
     "typecheck": "tsc --noEmit"
