@@ -585,11 +585,51 @@ suite('reading numbers, flags, lists and choices', () => {
     );
   });
 
-  test('refuses a trusted proxy that is not an IP address', () => {
-    assert.deepEqual(
-      refusalOf(environmentWith({ trustedProxies: '127.0.0.1,proxy.local' }))
-        .variables,
-      [ENVIRONMENT_VARIABLES.trustedProxies],
+  test('reads trusted proxies as IP addresses and CIDR ranges of either version', () => {
+    const configuration = readConfiguration(
+      environmentWith({
+        trustedProxies:
+          '10.42.0.0/16, 192.0.2.7, fd00::/8, ::1, 192.0.2.7/32, ::ffff:10.0.0.0/104',
+      }),
+    );
+
+    assert.deepEqual(configuration.trustedProxies, [
+      '10.42.0.0/16',
+      '192.0.2.7',
+      'fd00::/8',
+      '::1',
+      '192.0.2.7/32',
+      '::ffff:10.0.0.0/104',
+    ]);
+  });
+
+  test('refuses a trusted proxy that is neither an IP address nor a CIDR range, and a range of every address of an IP version', () => {
+    const refused = [
+      '127.0.0.1,proxy.local',
+      '10.0.0.0/33',
+      'fd00::/129',
+      '10.0.0.0/',
+      '10.0.0.0/08',
+      '10.0.0.0/+8',
+      '10.0.0.0/8/8',
+      'proxy.local/8',
+      '0.0.0.0/0',
+      '::/0',
+      '::ffff:0:0/96',
+      '::ffff:0.0.0.0/96',
+      '::ffff:10.0.0.0/96',
+      '::/80',
+    ].map((trustedProxies) => ({
+      trustedProxies,
+      variables: refusalOf(environmentWith({ trustedProxies })).variables,
+    }));
+
+    refused.forEach(({ trustedProxies, variables }) =>
+      assert.deepEqual(
+        variables,
+        [ENVIRONMENT_VARIABLES.trustedProxies],
+        trustedProxies,
+      ),
     );
   });
 

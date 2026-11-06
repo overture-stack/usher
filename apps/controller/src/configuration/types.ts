@@ -174,7 +174,7 @@ export interface ControllerConfiguration {
   /** How long an Usher token lives, in seconds; 300 by default. */
   tokenLifetimeSeconds: number;
 
-  /** The addresses whose `X-Forwarded-For` the controller believes; none by default. */
+  /** The addresses and CIDR ranges whose `X-Forwarded-For` the controller believes; none by default. */
   trustedProxies: readonly string[];
 }
 

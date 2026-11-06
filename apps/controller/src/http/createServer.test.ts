@@ -89,6 +89,7 @@ suite("the controller's requests", () => {
   const addressOf = async (
     trustedProxies: readonly string[],
     forwarded: string,
+    peer = '127.0.0.1',
   ): Promise<string> => {
     const server = createServer({ isReady: async () => true, trustedProxies });
     server.get('/address', async (request) => request.ip);
@@ -96,7 +97,7 @@ suite("the controller's requests", () => {
       const answer = await server.inject({
         headers: { 'x-forwarded-for': forwarded },
         method: 'GET',
-        remoteAddress: '127.0.0.1',
+        remoteAddress: peer,
         url: '/address',
       });
       return answer.body;
@@ -120,6 +121,36 @@ suite("the controller's requests", () => {
         '198.51.100.4, 203.0.113.7',
       ),
       '198.51.100.4',
+    );
+  });
+
+  // What the configuration's refusal of such a range guards against, as the server's proxy matching
+  // does it.
+  test('take every IPv4 peer for a proxy under an IPv6 range holding every IPv4 address in its IPv6 form, and only those within one holding part', async () => {
+    const seen = await Promise.all([
+      addressOf(['::ffff:0:0/96'], '6.6.6.6', '198.51.100.9'),
+      addressOf(['::ffff:0:0/96'], '6.6.6.6', '::ffff:198.51.100.9'),
+      addressOf(['::ffff:10.0.0.0/104'], '6.6.6.6', '198.51.100.9'),
+      addressOf(['::ffff:10.0.0.0/104'], '6.6.6.6', '10.1.2.3'),
+    ]);
+
+    assert.deepEqual(seen, ['6.6.6.6', '6.6.6.6', '198.51.100.9', '6.6.6.6']);
+  });
+
+  test('take a proxy within a trusted CIDR range as trusted, and one outside it as the client', async () => {
+    assert.equal(
+      await addressOf(
+        ['127.0.0.0/8', '203.0.113.0/24'],
+        '198.51.100.4, 203.0.113.7',
+      ),
+      '198.51.100.4',
+    );
+    assert.equal(
+      await addressOf(
+        ['127.0.0.0/8', '203.0.112.0/24'],
+        '198.51.100.4, 203.0.113.7',
+      ),
+      '203.0.113.7',
     );
   });
 

@@ -1,4 +1,4 @@
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 
 import type { StartProblem } from '../startRefusal.js';
 
@@ -229,17 +229,80 @@ export const readList = (
     : read(entries);
 };
 
+// A CIDR prefix length: a whole number with no sign and no leading zero.
+const PREFIX_LENGTH = /^(?:0|[1-9]\d{0,2})$/u;
+
+// The bits an address of each IP version holds, by the version `isIP` names.
+const ADDRESS_BITS: Readonly<Record<number, number>> = { 4: 32, 6: 128 };
+
+// The first and last IPv4 addresses in their IPv6 form, which an IPv4 client is matched in against
+// an IPv6 range.
+const MAPPED_IPV4_BOUNDS: readonly string[] = [
+  '::ffff:0.0.0.0',
+  '::ffff:255.255.255.255',
+];
+
+interface AddressRange {
+  address: string;
+  prefix: number;
+  version: number;
+}
+
+// An entry written as a CIDR range, or undefined for one that is not.
+const rangeOf = (entry: string): AddressRange | undefined => {
+  const [address = '', prefix = '', ...rest] = entry.split('/');
+  const version = isIP(address);
+  const bits = ADDRESS_BITS[version];
+  return rest.length === 0 &&
+    bits !== undefined &&
+    PREFIX_LENGTH.test(prefix) &&
+    Number(prefix) <= bits
+    ? { address, prefix: Number(prefix), version }
+    : undefined;
+};
+
+// Whether a range holds every address of an IP version: prefix length 0, or an IPv6 range holding
+// every IPv4 address in its IPv6 form, which `::ffff:0:0/96` does.
+const holdsAVersion = ({ address, prefix, version }: AddressRange): boolean => {
+  if (prefix === 0) {
+    return true;
+  }
+  if (version !== 6) {
+    return false;
+  }
+  const range = new BlockList();
+  range.addSubnet(address, prefix, 'ipv6');
+  return MAPPED_IPV4_BOUNDS.every((bound) => range.check(bound, 'ipv6'));
+};
+
 /**
- * Reads a comma-separated list of IP addresses; none by default.
+ * Reads a comma-separated list of IP addresses and CIDR ranges, such as `10.42.0.0/16`; none by
+ * default. A range holding every address of an IP version, of prefix length 0 or an IPv6 range
+ * holding every IPv4 address in its IPv6 form, such as `::ffff:0:0/96`, would take every client of
+ * that version for a proxy, letting any of them name its own address, so it is refused.
  *
  * @param variable the variable.
  */
 export const readAddresses = (variable: Variable): Reading<readonly string[]> =>
-  then(readList(variable, []), (entries) =>
-    entries.every((entry) => isIP(entry) !== 0)
-      ? read(entries)
-      : refused(variable, 'holds an entry that is not an IP address'),
-  );
+  then(readList(variable, []), (entries) => {
+    const ranges = entries.map(rangeOf);
+    if (
+      !entries.every(
+        (entry, index) => isIP(entry) !== 0 || ranges[index] !== undefined,
+      )
+    ) {
+      return refused(
+        variable,
+        'holds an entry that is neither an IP address nor a CIDR range',
+      );
+    }
+    return ranges.some((range) => range !== undefined && holdsAVersion(range))
+      ? refused(
+          variable,
+          'holds a range of every address of an IP version, which would let any client name its own address',
+        )
+      : read(entries);
+  });
 
 // A parse failure is undefined, which JSON never yields; the parser's own message quotes its input.
 const parsedJson = (text: string): unknown => {
