@@ -133,7 +133,8 @@ developer.
 
 ## Security
 
-Usher may handle personal health information. The design is calibrated to OWASP Top 10:2025 and
+Usher is built so that the systems relying on it can handle sensitive data such as personal health
+information (PHI). The design is calibrated to OWASP Top 10:2025 and
 documented in `.dev/design/security-threat-model.md`. Security concerns are treated as first-class
 design requirements, not afterthoughts.
 

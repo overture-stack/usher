@@ -92,8 +92,9 @@ against the rows that point into this directory. A bare total is not the check: 
 outside, as the `concepts.md` row does, offsets a file with no row and the two agree while something
 is missing.
 
-**Security standard:** OWASP Top 10:2025. Usher may handle personal health information; the
-threat model and design are calibrated accordingly. See
+**Security standard:** OWASP Top 10:2025. Usher is built so that the systems relying on it can
+handle sensitive data such as personal health information (PHI), and the threat model and design
+are calibrated to that. See
 [security-threat-model.md](security-threat-model.md) for the full analysis, including gaps.
 
 ## What is and is not specced
