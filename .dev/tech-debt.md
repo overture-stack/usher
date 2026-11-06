@@ -8,12 +8,6 @@ Open design questions are tracked in `.dev/design/` and the OWASP gap analysis i
 
 ---
 
-tsdown 0.23.0's toolchain pulls in 24 platform bindings of `@yuku-codegen` and `@yuku-parser` 0.10.2
-that their publisher has deprecated, and pnpm warns on every install.
-fix: move tsdown to the first release that drops or replaces them, checking its declaration output
-against the packed tarballs as the packaging note's CI checks do.
-standalone: yes
-
 The packaging checks the bridge's packaging note requires run by hand only: that the packed
 declarations name neither `jose` nor `CryptoKey` and import only names they use, that the
 packed JavaScript imports `jose` and `@overture-stack/usher-types` rather than inlining them, and
