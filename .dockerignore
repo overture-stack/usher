@@ -1,0 +1,22 @@
+# The build context holds only what an image build reads: the workspace's manifests and lockfile, the
+# base TypeScript settings, and the controller's own folder. Anything else, such as .git, .dev,
+# .claude and its worktrees, and the libraries' sources, never enters it.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!apps/controller/
+!modules/*/package.json
+
+# Within what is let in: installed dependencies, build output, test builds, logs, coverage, packed
+# packages and every environment file.
+**/node_modules
+**/dist
+**/*.tmp
+**/*.log
+**/coverage
+**/*.tgz
+**/*.tsbuildinfo
+**/.env*
+**/.DS_Store
