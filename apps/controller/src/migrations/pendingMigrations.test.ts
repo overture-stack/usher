@@ -61,7 +61,7 @@ suite('the migrations a run applies', () => {
   test('refuses a target naming no migration of the release', () => {
     assert.throws(() => pendingMigrations(KNOWN, [], '0004_fourth'), {
       message:
-        'the migrations refuse to run: the target 0004_fourth names no migration of this release',
+        'the schema migrations refuse to run: target names no migration of this release',
     });
   });
 
@@ -73,7 +73,7 @@ suite('the migrations a run applies', () => {
 
     assert.throws(() => pendingMigrations(KNOWN, applied), {
       message:
-        'the migrations refuse to run: the database records 0004_fourth as applied, and this release holds no migration by that name',
+        'the schema migrations refuse to run: the database records 0004_fourth as applied, and this release holds no migration by that name',
     });
   });
 
@@ -85,7 +85,7 @@ suite('the migrations a run applies', () => {
 
     assert.throws(() => pendingMigrations(KNOWN, applied), {
       message:
-        'the migrations refuse to run: 0002_second has changed since it was applied; a correction is a new migration',
+        'the schema migrations refuse to run: 0002_second has changed since it was applied; a correction is a new migration',
     });
   });
 
@@ -96,7 +96,7 @@ suite('the migrations a run applies', () => {
 
     assert.throws(() => pendingMigrations(KNOWN, applied), {
       message:
-        'the migrations refuse to run: 0002_second comes before 0003_third, which is applied, and is not applied itself',
+        'the schema migrations refuse to run: 0002_second comes before 0003_third, which is applied, and is not applied itself',
     });
   });
 });

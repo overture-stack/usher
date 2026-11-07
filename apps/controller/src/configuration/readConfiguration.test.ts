@@ -3,8 +3,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { suite, test } from 'node:test';
 
 import { StartRefusal } from '../startRefusal.js';
-import { ENVIRONMENT_VARIABLES } from './environmentVariables.js';
+import {
+  ENVIRONMENT_VARIABLES,
+  SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,
+} from './environmentVariables.js';
 import { readConfiguration } from './readConfiguration.js';
+import { readSchemaMigrationConfiguration } from './readSchemaMigrationConfiguration.js';
 import type {
   ConfigurationEnvironment,
   ControllerConfiguration,
@@ -371,6 +375,36 @@ suite("reading each store's connection", () => {
       databaseUrl,
     );
   });
+
+  test('reads a database URL naming its role as a user parameter, which the driver also uses', () => {
+    const databaseUrl = 'postgres://127.0.0.1:5432/usher?user=usher_controller';
+
+    assert.equal(
+      readConfiguration(environmentWith({ databaseUrl })).databaseUrl,
+      databaseUrl,
+    );
+  });
+
+  test('refuses a database URL naming no database role, in its user information or as a user parameter, and never quotes the URL', () => {
+    const urls = [
+      'postgres://127.0.0.1:5432/usher',
+      'postgres://@127.0.0.1:5432/usher',
+      'postgres://127.0.0.1:5432/usher?user=',
+    ];
+
+    const refusals = urls.map((databaseUrl) =>
+      refusalOf(environmentWith({ databaseUrl })),
+    );
+
+    refusals.forEach((refusal) => {
+      assert.deepEqual(refusal.variables, [ENVIRONMENT_VARIABLES.databaseUrl]);
+      assert.equal(
+        refusal.message,
+        `the controller refuses to start: ${ENVIRONMENT_VARIABLES.databaseUrl} names no database role; it must name the role the controller connects as`,
+      );
+      assert.equal(shownBy(refusal).includes('127.0.0.1'), false);
+    });
+  });
 });
 
 suite('reading the rules conferring record actions on everyone', () => {
@@ -732,5 +766,162 @@ suite('a refusal of the configuration', () => {
       fields.map((field) => ENVIRONMENT_VARIABLES[field]),
     );
     assert.equal(shownBy(refusal).includes(marker), false);
+  });
+});
+
+// The rule a refusal gives for one variable, as its message words it after the variable's name.
+const ruleFor = (refusal: StartRefusal, variable: string): string | undefined =>
+  refusal.message
+    .slice(refusal.message.indexOf(': ') + 2)
+    .split('; ')
+    .find((problem) => problem.startsWith(`${variable} `))
+    ?.slice(variable.length + 1);
+
+// Every variable the schema migration command requires, and no other.
+const SCHEMA_MIGRATION_REQUIRED: ConfigurationEnvironment = {
+  [ENVIRONMENT_VARIABLES.databaseSchema]: 'usher',
+  [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databasePassword]: DATABASE_PASSWORD,
+  [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databaseUrl]:
+    'postgres://usher_migration@127.0.0.1:5432/usher',
+  [ENVIRONMENT_VARIABLES.databaseUrl]: REQUIRED.databaseUrl,
+};
+
+const schemaMigrationRefusalOf = (
+  environment: ConfigurationEnvironment,
+): StartRefusal => {
+  try {
+    readSchemaMigrationConfiguration(environment);
+  } catch (refusal) {
+    if (refusal instanceof StartRefusal) {
+      return refusal;
+    }
+    throw refusal;
+  }
+  return assert.fail(
+    'the configuration was read, where a refusal was expected',
+  );
+};
+
+suite("the retention floor's durations", () => {
+  test('are read as the schema migration command reads them, so the floor it stores is the sum of what the controller reads', () => {
+    const cases: readonly FieldValues[] = [
+      {},
+      {
+        retentionGraceSeconds: '10',
+        retentionMarginSeconds: '0',
+        tokenLifetimeSeconds: '45',
+      },
+    ];
+
+    const floors = cases.map((values) => {
+      const controller = readConfiguration(environmentWith(values));
+      return {
+        controller:
+          controller.tokenLifetimeSeconds +
+          controller.retentionGraceSeconds +
+          controller.retentionMarginSeconds,
+        migration: readSchemaMigrationConfiguration({
+          ...SCHEMA_MIGRATION_REQUIRED,
+          ...environmentOf(values),
+        }).retentionFloorSeconds,
+      };
+    });
+
+    assert.deepEqual(floors, [
+      { controller: 390, migration: 390 },
+      { controller: 55, migration: 55 },
+    ]);
+  });
+
+  test('are refused by the schema migration command as the controller refuses them, by the same rule', () => {
+    const values: FieldValues = {
+      retentionGraceSeconds: '-1',
+      retentionMarginSeconds: '1.5',
+      tokenLifetimeSeconds: '0',
+    };
+    const variables = [
+      ENVIRONMENT_VARIABLES.retentionGraceSeconds,
+      ENVIRONMENT_VARIABLES.retentionMarginSeconds,
+      ENVIRONMENT_VARIABLES.tokenLifetimeSeconds,
+    ];
+
+    const controller = refusalOf(environmentWith(values));
+    const migration = schemaMigrationRefusalOf({
+      ...SCHEMA_MIGRATION_REQUIRED,
+      ...environmentOf(values),
+    });
+
+    assert.deepEqual(migration.variables, variables);
+    assert.deepEqual(
+      variables.map((variable) => ruleFor(migration, variable)),
+      variables.map((variable) => ruleFor(controller, variable)),
+    );
+    assert.equal(
+      variables.every(
+        (variable) => ruleFor(controller, variable) !== undefined,
+      ),
+      true,
+    );
+  });
+});
+
+// A refusal's problems, without what opens its message.
+const problemsOf = ({ message }: StartRefusal): string =>
+  message.slice(message.indexOf(': ') + 2);
+
+suite("the controller's database URL", () => {
+  test('is refused by the schema migration command as the controller refuses it, when it names no database role or carries a password', () => {
+    const databaseUrls = [
+      'postgres://127.0.0.1:5432/usher',
+      `postgres://usher_controller:${randomUUID()}@127.0.0.1:5432/usher`,
+    ];
+
+    const refusals = databaseUrls.map((databaseUrl) => ({
+      controller: refusalOf(environmentWith({ databaseUrl })),
+      migration: schemaMigrationRefusalOf({
+        ...SCHEMA_MIGRATION_REQUIRED,
+        [ENVIRONMENT_VARIABLES.databaseUrl]: databaseUrl,
+      }),
+    }));
+
+    refusals.forEach(({ controller, migration }) => {
+      assert.deepEqual(migration.variables, [
+        ENVIRONMENT_VARIABLES.databaseUrl,
+      ]);
+      assert.deepEqual(migration.variables, controller.variables);
+      assert.equal(problemsOf(migration), problemsOf(controller));
+    });
+  });
+});
+
+suite("the controller's configuration", () => {
+  test("reads none of the schema migration command's own variables, so a controller never holds the schema migration role's password", () => {
+    const asked = new Set<string>();
+    const environment = new Proxy(
+      {
+        ...environmentWith({}),
+        ...Object.fromEntries(
+          Object.values(SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES).map(
+            (variable) => [variable, 'set'],
+          ),
+        ),
+      },
+      {
+        get: (target, name, receiver): unknown => {
+          asked.add(String(name));
+          return Reflect.get(target, name, receiver);
+        },
+      },
+    );
+
+    readConfiguration(environment);
+
+    assert.equal(asked.has(ENVIRONMENT_VARIABLES.databaseUrl), true);
+    assert.deepEqual(
+      Object.values(SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES).filter((variable) =>
+        asked.has(variable),
+      ),
+      [],
+    );
   });
 });

@@ -91,6 +91,29 @@ suite("a start's failure to reach or sign in to the store", () => {
     });
   });
 
+  test('names the variables the connection was read from, when given others', () => {
+    const variables = {
+      passwordVariable: 'USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD',
+      urlVariable: 'USHER_SCHEMA_MIGRATION_DATABASE_URL',
+    };
+
+    assert.deepEqual(
+      ['ECONNREFUSED', '28P01'].map((code) =>
+        connectionProblemOf(failing(code), variables),
+      ),
+      [
+        {
+          rule: 'names an address at which no store accepts connections',
+          variable: 'USHER_SCHEMA_MIGRATION_DATABASE_URL',
+        },
+        {
+          rule: 'is not the password of the database role USHER_SCHEMA_MIGRATION_DATABASE_URL names, or that role does not exist',
+          variable: 'USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD',
+        },
+      ],
+    );
+  });
+
   test('names nothing for a failure that is no fault of a variable, or carries no code', () => {
     assert.deepEqual(
       [

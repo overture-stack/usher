@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 import type { RecordAction } from '@overture-stack/usher-types';
 
+import { builtEntry } from './build.js';
+
 /** A source of the current time, in milliseconds since the Unix epoch. */
 export interface Clock {
   now(): number;
@@ -262,7 +264,10 @@ export type CreateController = (
   configuration: ControllerConfiguration,
 ) => Controller;
 
-/** What the migrations are told: the in-process form of the deployment command's arguments. */
+/**
+ * What the migrations are told: the in-process form of the deployment command's arguments, and a
+ * target, which the command never takes.
+ */
 export interface MigrationOptions {
   /** A connection URL under the migration role, which owns the database and the schema. */
   databaseUrl: string;
@@ -367,6 +372,9 @@ export interface ControllerExit {
   /** Whether the process outran its timeout and was killed. */
   timedOut: boolean;
 }
+
+/** How a run of the schema migration command ended, as {@link spawnSchemaMigrationCommand} saw it. */
+export type CommandExit = Omit<ControllerExit, 'acceptedConnection'>;
 
 /** What {@link spawnController} is told beyond the environment. */
 export interface SpawnOptions {
@@ -674,7 +682,7 @@ export const startController = async (
 
 /**
  * Applies the controller's migrations up to a target, all of them by default: the in-process form
- * of the deployment command.
+ * of the deployment command, for a step-by-step run the command never makes.
  *
  * @param options the migration role's connection URL, the runtime role, the schema and the target.
  */
@@ -778,10 +786,20 @@ const nodeArgumentsFor = async (
         fileURLToPath(await presentModule(CONTROLLER_MODULES.main)),
       ];
 
+interface RunOptions {
+  /** Where a listener is probed for while the process runs; nowhere when absent. */
+  probe?: { host: string; port: number };
+
+  /** The signal sent to the process once this settles with one, if it is still running then. */
+  stopWith?: Promise<NodeJS.Signals>;
+
+  timeoutMs: number;
+}
+
 const runEntry = async (
   nodeArguments: readonly string[],
   environment: ControllerEnvironment,
-  { host, port, timeoutMs }: Required<Omit<SpawnOptions, 'builtEntry'>>,
+  { probe, stopWith, timeoutMs }: RunOptions,
 ): Promise<ControllerExit> => {
   const output: { stderr: Buffer[]; stdout: Buffer[] } = {
     stderr: [],
@@ -799,6 +817,14 @@ const runEntry = async (
     state.timedOut = true;
     child.kill('SIGKILL');
   }, timeoutMs);
+  stopWith?.then(
+    (signal) => {
+      if (state.running) {
+        child.kill(signal);
+      }
+    },
+    () => undefined,
+  );
   const ended = new Promise<Pick<ControllerExit, 'exitCode' | 'signal'>>(
     (resolve, reject) => {
       child.once('error', (error) => {
@@ -815,7 +841,9 @@ const runEntry = async (
   );
   const [{ exitCode, signal }, acceptedConnection] = await Promise.all([
     ended,
-    acceptedWhile(() => state.running, host, port),
+    probe === undefined
+      ? false
+      : acceptedWhile(() => state.running, probe.host, probe.port),
   ]);
   return {
     acceptedConnection,
@@ -855,8 +883,10 @@ export const spawnController = async (
   const probedPort = port ?? Number(environment[VARIABLE_NAMES.port]);
   if (isPort(probedPort)) {
     return runEntry(nodeArguments, environment, {
-      host: host ?? environment[VARIABLE_NAMES.host] ?? LOOPBACK,
-      port: probedPort,
+      probe: {
+        host: host ?? environment[VARIABLE_NAMES.host] ?? LOOPBACK,
+        port: probedPort,
+      },
       timeoutMs,
     });
   }
@@ -880,6 +910,120 @@ export const unusedPort = (host: string = LOOPBACK): Promise<number> =>
       server.close(() => resolve(port));
     });
   });
+
+const SCHEMA_MIGRATION_VARIABLE_NAMES = {
+  databasePassword: 'USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD',
+  databaseUrl: 'USHER_SCHEMA_MIGRATION_DATABASE_URL',
+} as const;
+
+/**
+ * The environment variables of the schema migration command's own, by field: names only, so a test
+ * names one through this map rather than spelling it. The command also reads the runtime role, the
+ * database role `USHER_DATABASE_URL` names, and the schema and the durations the retention floor is
+ * made of from the controller's own variables, in {@link ENVIRONMENT_VARIABLES}.
+ */
+export const SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES: Readonly<
+  Record<keyof typeof SCHEMA_MIGRATION_VARIABLE_NAMES, string>
+> = Object.freeze({ ...SCHEMA_MIGRATION_VARIABLE_NAMES });
+
+// A run on a database under the suite's load takes far less; a hung one is ended.
+const SCHEMA_MIGRATION_TIMEOUT_MS = 30_000;
+
+/**
+ * What a run of the schema migration command is told: every option of the in-process `migrate` but
+ * a target, since the command applies every migration.
+ */
+export type SchemaMigrationCommandOptions = Omit<MigrationOptions, 'target'>;
+
+/**
+ * The environment the schema migration command reads for a run's options. The URL's password, which
+ * the command refuses inside a URL, travels in its own variable; the runtime role as the user of
+ * the controller's own URL, `USHER_DATABASE_URL`, which is the schema migration role's URL under
+ * that role, carrying no password; and the retention floor as a token lifetime with no grace period
+ * or margin, which the command sums back to the floor.
+ *
+ * @param options the run's options, such as the in-process `migrate` takes, but a target.
+ */
+export const schemaMigrationEnvironmentFor = ({
+  databaseUrl,
+  retentionFloorSeconds,
+  runtimeRole,
+  schema,
+}: SchemaMigrationCommandOptions): Readonly<Record<string, string>> => {
+  const url = new URL(databaseUrl);
+  const password = decodeURIComponent(url.password);
+  url.password = '';
+  const runtimeUrl = new URL(url);
+  runtimeUrl.username = runtimeRole;
+  return {
+    [VARIABLE_NAMES.databaseSchema]: schema,
+    [VARIABLE_NAMES.databaseUrl]: runtimeUrl.href,
+    [VARIABLE_NAMES.retentionGraceSeconds]: '0',
+    [VARIABLE_NAMES.retentionMarginSeconds]: '0',
+    [VARIABLE_NAMES.tokenLifetimeSeconds]: String(retentionFloorSeconds),
+    [SCHEMA_MIGRATION_VARIABLE_NAMES.databasePassword]: password,
+    [SCHEMA_MIGRATION_VARIABLE_NAMES.databaseUrl]: url.href,
+  };
+};
+
+/** What {@link spawnSchemaMigrationCommand} is told beyond the environment. */
+export interface SchemaMigrationCommandSpawn {
+  /** The signal sent to the command once this settles with one, if it is still running then; none when absent. */
+  stopWith?: Promise<NodeJS.Signals>;
+
+  /** How long the command may run before it is killed: 30 s by default. */
+  timeoutMs?: number;
+}
+
+/**
+ * Runs the run's build of the schema migration command, `migrate.js`, under Node alone as a child
+ * process given exactly the environment passed, nothing inherited. A signal is sent to it when the
+ * test asks for one, and a process still running at the timeout is killed.
+ *
+ * @param environment the environment variables, such as {@link schemaMigrationEnvironmentFor} gives.
+ * @param options the signal to send and when, and the timeout.
+ * @returns the exit code or signal, the output, and whether the timeout ended the process.
+ * @throws while the run has no build, as when a test file runs without the global setup.
+ */
+export const spawnSchemaMigrationCommand = async (
+  environment: ControllerEnvironment,
+  {
+    stopWith,
+    timeoutMs = SCHEMA_MIGRATION_TIMEOUT_MS,
+  }: SchemaMigrationCommandSpawn = {},
+): Promise<CommandExit> => {
+  const { acceptedConnection: _acceptedConnection, ...exit } = await runEntry(
+    [fileURLToPath(builtEntry('migrate'))],
+    environment,
+    { ...(stopWith === undefined ? {} : { stopWith }), timeoutMs },
+  );
+  return exit;
+};
+
+/**
+ * Applies every one of the controller's migrations through the run's build of the schema migration
+ * command, run as a deployment runs it.
+ *
+ * @param options the schema migration role's connection URL, the retention floor, the runtime role
+ *   and the schema.
+ * @returns each line the command wrote to standard output, parsed.
+ * @throws {Error} carrying what the command wrote, when it ends other than with exit code 0.
+ */
+export const migrateThroughCommand = async (
+  options: SchemaMigrationCommandOptions,
+): Promise<readonly unknown[]> => {
+  const { exitCode, signal, stderr, stdout } =
+    await spawnSchemaMigrationCommand(schemaMigrationEnvironmentFor(options));
+  if (exitCode === 0) {
+    return stdout
+      .split('\n')
+      .filter((line) => line !== '')
+      .map((line): unknown => JSON.parse(line));
+  }
+  throw new Error(
+    `the schema migration command ended with ${exitCode ?? signal}: ${stderr.trim()}`,
+  );
+};
 
 /**
  * The names of the environment variables whose values differ between two environments, sorted: how

@@ -1,6 +1,7 @@
 import { StartRefusal } from '../startRefusal.js';
 import { ENVIRONMENT_VARIABLES } from './environmentVariables.js';
 import { readRecordRule } from './recordRule.js';
+import { readRetentionDurations } from './retention.js';
 import type {
   AccessLevel,
   Clock,
@@ -10,10 +11,12 @@ import type {
   GrantRateThreshold,
 } from './types.js';
 import {
+  CONTROLLER_ROLE_DESCRIPTION,
   read,
   readAddresses,
   readBoolean,
   readChoice,
+  readDatabaseUrl,
   readInteger,
   readJson,
   readKey,
@@ -26,8 +29,6 @@ import {
 } from './variableReaders.js';
 
 const ACCESS_LEVELS: readonly AccessLevel[] = ['grant', 'open', 'registered'];
-
-const DATABASE_PROTOCOLS = ['postgres:', 'postgresql:'];
 
 // The greatest delay a Node timer keeps; a longer one fires at once.
 const LONGEST_TIMER_MILLISECONDS = 2_147_483_647;
@@ -83,8 +84,8 @@ const valueOf = <Value>(reading: Reading<Value>): Value => {
  * used: a refusal lists every rule broken, each naming the variable at fault and never its value.
  * The keys are 32 bytes as 43 base64url characters in canonical form, any whitespace around them left
  * out; each store's password is read from its own variable, as given, and a store URL carrying one is
- * refused. The clock is the system's and the log stream the process's standard output; neither is
- * read from the environment.
+ * refused, as is a database URL naming no database role. The clock is the system's and the log stream
+ * the process's standard output; neither is read from the environment.
  *
  * @param environment the environment variables, such as `process.env`.
  * @throws {StartRefusal} naming each variable at fault.
@@ -97,6 +98,7 @@ export const readConfiguration = (
     value: environment[ENVIRONMENT_VARIABLES[field]],
   });
   const directoryUrl = readSecureUrl(variable('directoryUrl'), '');
+  const retention = readRetentionDurations(variable);
   const directoryNamed =
     directoryUrl.kind === 'read' && directoryUrl.value !== '';
   const readings = {
@@ -119,9 +121,9 @@ export const readConfiguration = (
     cursorKey: readKey(variable('cursorKey')),
     databasePassword: readText(variable('databasePassword')),
     databaseSchema: readText(variable('databaseSchema')),
-    databaseUrl: readStoreUrl(variable('databaseUrl'), {
+    databaseUrl: readDatabaseUrl(variable('databaseUrl'), {
       passwordVariable: ENVIRONMENT_VARIABLES.databasePassword,
-      protocols: DATABASE_PROTOCOLS,
+      roleDescription: CONTROLLER_ROLE_DESCRIPTION,
     }),
     directoryClientId: readDirectoryPart(
       variable('directoryClientId'),
@@ -181,14 +183,8 @@ export const readConfiguration = (
       'registered',
     ),
     port: readInteger(variable('port'), { maximum: 65_535, minimum: 0 }),
-    retentionGraceSeconds: readInteger(variable('retentionGraceSeconds'), {
-      fallback: 60,
-      minimum: 0,
-    }),
-    retentionMarginSeconds: readInteger(variable('retentionMarginSeconds'), {
-      fallback: 30,
-      minimum: 0,
-    }),
+    retentionGraceSeconds: retention.retentionGraceSeconds,
+    retentionMarginSeconds: retention.retentionMarginSeconds,
     selfGrantMaximumSeconds: readInteger(variable('selfGrantMaximumSeconds'), {
       fallback: 86_400,
       minimum: 1,
@@ -217,10 +213,7 @@ export const readConfiguration = (
     submitterCategory: readText(variable('submitterCategory'), {
       fallback: 'global.unmarked',
     }),
-    tokenLifetimeSeconds: readInteger(variable('tokenLifetimeSeconds'), {
-      fallback: 300,
-      minimum: 1,
-    }),
+    tokenLifetimeSeconds: retention.tokenLifetimeSeconds,
     trustedProxies: readAddresses(variable('trustedProxies')),
   } satisfies Record<FieldWithVariable, Reading<unknown>>;
   const problems = Object.values(readings).flatMap((reading) =>

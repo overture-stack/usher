@@ -1,30 +1,19 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { mkdir, rm } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { suite, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 
-import { build } from 'tsdown';
-
+import { builtEntry } from './test-support/build.js';
 import {
+  ENVIRONMENT_VARIABLES,
+  SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,
   readRefusal,
   spawnController,
+  spawnSchemaMigrationCommand,
   unusedPort,
 } from './test-support/controller.js';
-import config from './tsdown.config.js';
-
-const APP_ROOT = new URL('./', import.meta.url);
 
 // The log stream's numbering of fatal, which a refusal to start is written at.
 const FATAL_LEVEL = 60;
-
-// Inside the app, as `dist/` is, so the app's package type and its dependencies apply to what is
-// built; a name ending in `.tmp` is one the repository ignores.
-const outputFolder = async (): Promise<URL> => {
-  const folder = new URL(`build-${randomUUID()}.tmp/`, APP_ROOT);
-  await mkdir(folder);
-  return folder;
-};
 
 const linesOf = (text: string): readonly unknown[] =>
   text
@@ -32,38 +21,77 @@ const linesOf = (text: string): readonly unknown[] =>
     .filter((line) => line.length > 0)
     .map((line): unknown => JSON.parse(line));
 
+// The one line a refused process writes, the time aside, which is the line's own.
+const refusalLine = (stderr: string): unknown => {
+  const [line, ...laterLines] = linesOf(stderr);
+  assert.deepEqual(laterLines, []);
+  assert.ok(typeof line === 'object' && line !== null && 'time' in line);
+  const { time: _time, ...rest } = line;
+  return rest;
+};
+
+// The run's global setup builds the controller once, with its committed configuration, into a folder
+// of the run's own, which every test of a built entry reads.
 suite("the controller's build", () => {
-  test('gives a main entry that runs under Node alone and refuses an empty environment as the source does', async (context) => {
-    const outDir = await outputFolder();
-    context.after(() => rm(outDir, { force: true, recursive: true }));
-    await build({
-      ...config,
-      config: false,
-      cwd: fileURLToPath(APP_ROOT),
-      logLevel: 'warn',
-      outDir: fileURLToPath(outDir),
-    });
+  test('gives a main entry that runs under Node alone and refuses an empty environment as the source does', async () => {
     const refusal = await readRefusal({});
     assert.ok(refusal instanceof Error && 'variables' in refusal);
 
     // An empty environment names no port, so one nothing listens on is probed.
     const exit = await spawnController(
       {},
-      { builtEntry: new URL('main.js', outDir), port: await unusedPort() },
+      { builtEntry: builtEntry('main'), port: await unusedPort() },
     );
-    const [line, ...laterLines] = linesOf(exit.stderr);
 
     assert.equal(exit.timedOut, false);
     assert.equal(exit.exitCode, 1);
     assert.equal(exit.stdout, '');
-    assert.deepEqual(laterLines, []);
-    assert.ok(typeof line === 'object' && line !== null);
-    // The time is the line's own, so the comparison holds it present at any value.
-    assert.deepEqual(line, {
+    assert.deepEqual(refusalLine(exit.stderr), {
       level: FATAL_LEVEL,
       variables: refusal.variables,
       message: refusal.message,
-      time: 'time' in line ? line.time : undefined,
     });
+  });
+
+  test('gives a migrate entry that runs under Node alone and refuses an empty environment, naming each variable it requires', async () => {
+    const required = [
+      SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databasePassword,
+      SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databaseUrl,
+      ENVIRONMENT_VARIABLES.databaseUrl,
+      ENVIRONMENT_VARIABLES.databaseSchema,
+    ];
+
+    const exit = await spawnSchemaMigrationCommand({});
+
+    assert.equal(exit.timedOut, false);
+    assert.equal(exit.exitCode, 1);
+    assert.equal(exit.stdout, '');
+    assert.deepEqual(refusalLine(exit.stderr), {
+      level: FATAL_LEVEL,
+      variables: required,
+      message: `the schema migrations refuse to run: ${required.map((variable) => `${variable} is missing`).join('; ')}`,
+    });
+  });
+
+  test("gives a migrate entry that refuses a store it cannot reach, naming its URL's variable and never the URL or the password", async () => {
+    const password = randomBytes(12).toString('base64url');
+    const url = `postgres://usher_migration@127.0.0.1:${await unusedPort()}/usher`;
+
+    const exit = await spawnSchemaMigrationCommand({
+      [ENVIRONMENT_VARIABLES.databaseSchema]: 'usher',
+      [ENVIRONMENT_VARIABLES.databaseUrl]:
+        'postgres://usher_controller@127.0.0.1:5432/usher',
+      [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databasePassword]: password,
+      [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databaseUrl]: url,
+    });
+
+    assert.equal(exit.exitCode, 1);
+    assert.deepEqual(refusalLine(exit.stderr), {
+      level: FATAL_LEVEL,
+      variables: [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databaseUrl],
+      message: `the schema migrations refuse to run: ${SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databaseUrl} names an address at which no store accepts connections`,
+    });
+    assert.equal(exit.stderr.includes(url), false);
+    assert.equal(exit.stderr.includes(password), false);
   });
 });

@@ -63,7 +63,7 @@ export interface ControllerConfiguration {
   /** The schema the controller's tables live in. */
   databaseSchema: string;
 
-  /** A connection URL under the controller's runtime role, carrying no password. */
+  /** A connection URL under the controller's runtime role, which it names, carrying no password. */
   databaseUrl: string;
 
   /** The client id of the service account the controller resolves addresses through. */
@@ -182,4 +182,40 @@ export interface ControllerConfiguration {
 export type FieldWithVariable = Exclude<
   keyof ControllerConfiguration,
   'clock' | 'logStream'
+>;
+
+/**
+ * The schema migration command's configuration: what a migration run is given. Its connection is
+ * read from variables of its own, which the controller never reads; the runtime role it grants to,
+ * the schema and the durations the retention floor is made of are read from the controller's own
+ * variables, alike, so the two never disagree.
+ */
+export interface SchemaMigrationConfiguration {
+  /** The schema migration role's PostgreSQL password, read from a variable of its own and never shown. */
+  databasePassword: string;
+
+  /** A connection URL under the schema migration role, which owns the database and the schema, carrying no password. */
+  databaseUrl: string;
+
+  /** The notice retention floor, in seconds: the token lifetime plus the grace period and the margin. */
+  retentionFloorSeconds: number;
+
+  /**
+   * The controller's runtime role, created before the run, to which the migrations grant: the
+   * database role the controller's own URL names.
+   */
+  runtimeRole: string;
+
+  /** The schema the controller's tables live in. */
+  schema: string;
+}
+
+/** A field of the schema migration command's configuration read from a variable of the command's own. */
+export type SchemaMigrationFieldWithVariable =
+  'databasePassword' | 'databaseUrl';
+
+/** The durations the notice retention floor is made of, read alike by the controller and its schema migration command. */
+export type RetentionDurations = Pick<
+  ControllerConfiguration,
+  'retentionGraceSeconds' | 'retentionMarginSeconds' | 'tokenLifetimeSeconds'
 >;

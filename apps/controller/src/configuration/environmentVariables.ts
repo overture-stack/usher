@@ -1,4 +1,7 @@
-import type { FieldWithVariable } from './types.js';
+import type {
+  FieldWithVariable,
+  SchemaMigrationFieldWithVariable,
+} from './types.js';
 
 /**
  * The environment variable each configuration field is read from, by field: the one place the
@@ -52,4 +55,18 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   submitterCategory: 'USHER_SUBMITTER_CATEGORY',
   tokenLifetimeSeconds: 'USHER_TOKEN_LIFETIME_SECONDS',
   trustedProxies: 'USHER_TRUSTED_PROXIES',
+});
+
+/**
+ * The environment variable each of the schema migration command's own fields is read from, by
+ * field: the schema migration role's connection. The controller never reads them, so its processes
+ * never hold the schema migration role's password. The command reads the runtime role it grants to,
+ * the database role `USHER_DATABASE_URL` names, and the schema and the retention floor's durations
+ * from the controller's own variables, in {@link ENVIRONMENT_VARIABLES}.
+ */
+export const SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES: Readonly<
+  Record<SchemaMigrationFieldWithVariable, string>
+> = Object.freeze({
+  databasePassword: 'USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD',
+  databaseUrl: 'USHER_SCHEMA_MIGRATION_DATABASE_URL',
 });

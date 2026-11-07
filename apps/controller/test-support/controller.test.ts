@@ -10,6 +10,8 @@ import {
   ENVIRONMENT_VARIABLES,
   environmentFor,
   type FieldWithVariable,
+  SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,
+  schemaMigrationEnvironmentFor,
   readRefusal,
   refusalText,
 } from './controller.js';
@@ -262,5 +264,30 @@ suite('the helpers for a refusal test', () => {
       '{"type":"first"}',
       '{"type":"second"}',
     ]);
+  });
+});
+
+suite('the environment a migration run is expressed as', () => {
+  test("moves the URL's password to its own variable, names the runtime role as the user of the controller's URL, which carries no password, and gives the floor as a token lifetime with no grace period or margin", () => {
+    const password = randomBytes(12).toString('base64url');
+
+    const environment = schemaMigrationEnvironmentFor({
+      databaseUrl: `postgres://usher_migration:${password}@127.0.0.1:5432/usher_test`,
+      retentionFloorSeconds: 777,
+      runtimeRole: 'usher_controller',
+      schema: 'usher',
+    });
+
+    assert.deepEqual(environment, {
+      [ENVIRONMENT_VARIABLES.databaseSchema]: 'usher',
+      [ENVIRONMENT_VARIABLES.databaseUrl]:
+        'postgres://usher_controller@127.0.0.1:5432/usher_test',
+      [ENVIRONMENT_VARIABLES.retentionGraceSeconds]: '0',
+      [ENVIRONMENT_VARIABLES.retentionMarginSeconds]: '0',
+      [ENVIRONMENT_VARIABLES.tokenLifetimeSeconds]: '777',
+      [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databasePassword]: password,
+      [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databaseUrl]:
+        'postgres://usher_migration@127.0.0.1:5432/usher_test',
+    });
   });
 });

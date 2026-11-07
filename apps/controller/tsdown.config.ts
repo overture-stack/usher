@@ -6,7 +6,7 @@ import type { UserConfig } from 'tsdown';
 // folder is copied there, to `<outDir>/sql/`, whichever chunk holds that module.
 const config: UserConfig = {
   copy: ['src/migrations/sql'],
-  entry: { main: 'src/main.ts' },
+  entry: { main: 'src/main.ts', migrate: 'src/migrate.ts' },
   fixedExtension: false,
   format: 'esm',
 };

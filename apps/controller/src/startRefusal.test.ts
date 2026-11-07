@@ -18,4 +18,19 @@ suite('a refusal to start', () => {
     assert.deepEqual(refusal.variables, ['USHER_ISSUER', 'USHER_CACHE_URL']);
     assert.ok(refusal instanceof Error);
   });
+
+  test('opens its message with what refuses, when given', () => {
+    const refusal = new StartRefusal(
+      [{ rule: 'is missing', variable: 'USHER_SCHEMA_MIGRATION_DATABASE_URL' }],
+      'the schema migrations refuse to run',
+    );
+
+    assert.equal(
+      refusal.message,
+      'the schema migrations refuse to run: USHER_SCHEMA_MIGRATION_DATABASE_URL is missing',
+    );
+    assert.deepEqual(refusal.variables, [
+      'USHER_SCHEMA_MIGRATION_DATABASE_URL',
+    ]);
+  });
 });

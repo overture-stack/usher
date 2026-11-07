@@ -1,7 +1,8 @@
+import { MIGRATIONS_REFUSE_TO_RUN } from './migrationRefusal.js';
 import type { AppliedMigration, Migration } from './types.js';
 
 const describedRefusal = (rule: string): Error =>
-  new Error(`the migrations refuse to run: ${rule}`);
+  new Error(`${MIGRATIONS_REFUSE_TO_RUN}: ${rule}`);
 
 // The record must be this release's migrations from the first, in order, each unchanged: anything
 // else means a migration was edited, removed or slipped in below one already applied, and applying
@@ -43,7 +44,8 @@ const refusalOfRecord = (
  * @param applied the migrations the database records as applied, in order.
  * @param target the last migration to apply, by name; every one when absent.
  * @throws naming the rule broken, when the target names no migration of this release, or when the
- *   record departs from `known`: a migration it holds is absent or changed, or one is missing below it.
+ *   record departs from `known`: a migration it holds is absent or changed, or one is missing below
+ *   it.
  */
 export const pendingMigrations = (
   known: readonly Migration[],
@@ -56,9 +58,7 @@ export const pendingMigrations = (
       : known.findIndex(({ name }) => name === target);
   const refusal =
     through < 0 && target !== undefined
-      ? describedRefusal(
-          `the target ${target} names no migration of this release`,
-        )
+      ? describedRefusal('target names no migration of this release')
       : refusalOfRecord(known, applied);
   if (refusal === undefined) {
     return known.slice(applied.length, through + 1);

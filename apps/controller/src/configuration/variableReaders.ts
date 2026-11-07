@@ -27,6 +27,9 @@ export interface JsonReading<Value> {
   rule: string;
 }
 
+/** The protocols a PostgreSQL connection URL may name. */
+const DATABASE_PROTOCOLS: readonly string[] = ['postgres:', 'postgresql:'];
+
 const MISSING = 'is missing';
 
 // The form of every key the controller reads: 32 bytes, in the one encoding that gives them back.
@@ -372,6 +375,84 @@ export const readStoreUrl = (
           `is not a URL whose protocol is one of ${protocols.join(', ')}`,
         );
   });
+
+// The user information as the driver decodes it; one that does not decode names no role it can read.
+const decodedUser = (username: string): string => {
+  try {
+    return decodeURIComponent(username);
+  } catch {
+    return '';
+  }
+};
+
+// The role a PostgreSQL URL names as the driver reads it: its last `user` parameter, else its user
+// information, an empty value counting as none in either, so empty when it names none.
+const roleNamedBy = (url: URL): string =>
+  url.searchParams.getAll('user').at(-1) || decodedUser(url.username);
+
+/** How the role the controller connects as is named by the refusal of a URL naming no role. */
+export const CONTROLLER_ROLE_DESCRIPTION =
+  'the role the controller connects as';
+
+/** What reading a PostgreSQL connection URL is told: the variable its password is read from, and the role it must name. */
+export interface DatabaseUrlRules {
+  /** The variable the role's password is read from, which the refusal of a URL carrying one names. */
+  passwordVariable: string;
+
+  /** The role the URL must name, as the refusal of a URL naming none words it, such as `the schema migration role`. */
+  roleDescription: string;
+}
+
+interface DatabaseConnection {
+  role: string;
+  url: string;
+}
+
+// The URL was read by readStoreUrl, which takes only text that parses as a URL.
+const readDatabaseConnection = (
+  variable: Variable,
+  { passwordVariable, roleDescription }: DatabaseUrlRules,
+): Reading<DatabaseConnection> =>
+  then(
+    readStoreUrl(variable, { passwordVariable, protocols: DATABASE_PROTOCOLS }),
+    (url) => {
+      const role = roleNamedBy(new URL(url));
+      return role === ''
+        ? refused(
+            variable,
+            `names no database role; it must name ${roleDescription}`,
+          )
+        : read({ role, url });
+    },
+  );
+
+/**
+ * Reads a PostgreSQL connection URL as {@link readStoreUrl} reads a store's, which must name the
+ * database role it connects as, in its user information or as a `user` parameter, either of which
+ * the driver uses. Left to the driver, a URL naming none connects as `PGUSER` or as the process's own
+ * user, neither of which a deployment states.
+ *
+ * @param variable the variable.
+ * @param rules the variable the password is read from, and the role the URL must name.
+ */
+export const readDatabaseUrl = (
+  variable: Variable,
+  rules: DatabaseUrlRules,
+): Reading<string> =>
+  then(readDatabaseConnection(variable, rules), ({ url }) => read(url));
+
+/**
+ * Reads the database role a PostgreSQL connection URL names, as the driver reads it, the URL refused
+ * as {@link readDatabaseUrl} refuses it. Nothing else of the URL is kept.
+ *
+ * @param variable the variable.
+ * @param rules the variable the password is read from, and the role the URL must name.
+ */
+export const readDatabaseRole = (
+  variable: Variable,
+  rules: DatabaseUrlRules,
+): Reading<string> =>
+  then(readDatabaseConnection(variable, rules), ({ role }) => read(role));
 
 /**
  * Reads the URL of something the controller trusts or sends a secret to: https, or http to a loopback

@@ -1,5 +1,14 @@
 import type { ControllerConfiguration } from '../configuration/index.js';
 
+/** The environment variables a connection to the store is read from, which a failure to connect names. */
+export interface ConnectionVariables {
+  /** The variable the role's password is read from. */
+  passwordVariable: string;
+
+  /** The variable the connection URL is read from. */
+  urlVariable: string;
+}
+
 /** What the database role may do with one function of the controller's schema. */
 export interface HeldFunction {
   /** Whether it may call the function. */

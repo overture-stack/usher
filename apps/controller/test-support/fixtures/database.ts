@@ -5,7 +5,11 @@ import { isDeepStrictEqual } from 'node:util';
 
 import pg from 'pg';
 
-import { migrate } from '../controller.js';
+import {
+  migrate,
+  migrateThroughCommand,
+  type MigrationOptions,
+} from '../controller.js';
 import {
   createTestDatabase,
   type DatabaseRole,
@@ -235,32 +239,54 @@ export interface MigrationRun {
   /** The runtime role the migrations grant to: the controller's, which the deployment creates, by default. */
   runtimeRole?: string;
 
-  /** The last migration to apply; every migration when absent. */
+  /** The last migration to apply; every migration when absent. Only a run in-process takes one. */
   target?: string;
 }
 
-/**
- * Runs the controller's migrations on a database through the seam, as the deployment command does:
- * under the migration role, granting to the runtime role, in the schema named for Usher.
- *
- * @param database the database to migrate.
- * @param run the retention floor and the target.
- */
-export const migrateDatabase = (
+const migrationOptionsFor = (
   database: TestDatabase,
   {
     retentionFloorSeconds = TEMPLATE_RETENTION_FLOOR_SECONDS,
     runtimeRole = DATABASE_ROLES.runtime,
     target,
-  }: MigrationRun = {},
-): Promise<void> =>
-  migrate({
-    databaseUrl: database.urlFor('migration'),
-    retentionFloorSeconds,
-    runtimeRole,
-    schema: database.schema,
-    ...(target === undefined ? {} : { target }),
-  });
+  }: MigrationRun,
+): MigrationOptions => ({
+  databaseUrl: database.urlFor('migration'),
+  retentionFloorSeconds,
+  runtimeRole,
+  schema: database.schema,
+  ...(target === undefined ? {} : { target }),
+});
+
+/**
+ * Runs every one of the controller's migrations on a database through the run's build of the schema
+ * migration command, as a deployment runs it: under the schema migration role, granting to the
+ * runtime role, in the schema named for Usher.
+ *
+ * @param database the database to migrate.
+ * @param run the retention floor and the runtime role.
+ * @returns each line the command wrote to standard output, parsed.
+ * @throws {Error} carrying what the command wrote, when the run fails or is refused.
+ */
+export const migrateDatabase = (
+  database: TestDatabase,
+  run: Omit<MigrationRun, 'target'> = {},
+): Promise<readonly unknown[]> =>
+  migrateThroughCommand(migrationOptionsFor(database, run));
+
+/**
+ * Runs the controller's migrations on a database in-process, through the seam's `migrate`, as
+ * {@link migrateDatabase} does through the command but for one thing: a target, for a step-by-step
+ * run the command never makes.
+ *
+ * @param database the database to migrate.
+ * @param run the retention floor, the runtime role and the target.
+ * @throws {Error} the run's own failure or refusal.
+ */
+export const migrateDatabaseInProcess = (
+  database: TestDatabase,
+  run: MigrationRun = {},
+): Promise<void> => migrate(migrationOptionsFor(database, run));
 
 /**
  * Opens a connection under a role whose session reads and writes times in the given zone.
