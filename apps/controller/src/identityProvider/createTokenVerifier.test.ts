@@ -215,17 +215,21 @@ const failedFetch = (cause: KeySetFetchFailure): Line => ({
 });
 
 suite('verifying a token from the trusted identity provider', () => {
-  test('verifies a token signed by a published key, giving its claims, its keys found through the discovery document', async (context) => {
+  test('verifies a token signed by a published key, giving its claims and its protected header, its keys found through the discovery document', async (context) => {
     const standIn = await startStandIn(context);
     const key = await signingKey();
     standIn.published = [key.jwk];
     const claims = claimsFor(standIn.issuer);
 
     const verification = await verifierFor(standIn).verify(
-      await signed(key, claims),
+      await signed(key, claims, { typ: 'logout+jwt' }),
     );
 
-    assert.deepEqual(verification, { claims, kind: 'verified' });
+    assert.deepEqual(verification, {
+      claims,
+      header: { alg: key.jwk.alg, kid: key.kid, typ: 'logout+jwt' },
+      kind: 'verified',
+    });
     assert.deepEqual(standIn.asked, [DISCOVERY_PATH, KEY_SET_PATH]);
   });
 

@@ -273,6 +273,7 @@ const routeThrough = (
               iss: ISSUER,
               sub: 'subject-ana',
             },
+            header: { alg: 'RS256', typ: 'JWT' },
             kind: 'verified',
           }),
         },

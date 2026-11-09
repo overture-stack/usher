@@ -7,6 +7,7 @@ suite("the management API's module", () => {
   test('exports at run time exactly the values its surface names', () => {
     assert.deepEqual(Object.keys(managementApi).toSorted(), [
       'REFUSAL_TALLY_INTERVAL_MILLISECONDS',
+      'isStorableText',
       'managementRoute',
       'readStoredRefusal',
       'readTextMembers',

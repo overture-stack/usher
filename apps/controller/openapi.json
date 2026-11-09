@@ -5708,7 +5708,7 @@
     },
     "/backchannel-logout": {
       "post": {
-        "description": "The identity provider's OpenID Connect back-channel logout endpoint. The body is form-encoded and holds one `logout_token`: a current logout token issued by the configured identity provider for one of the instance's back-channel logout clients, naming a session in `sid`, a subject in `sub`, or both. The header `typ` is `logout+jwt`, `JWT`, or left out.\n\nThe controller commits the sign-out as a principal notice to every application before it answers. The exchange then refuses every sign-in token of a session named by the logout token, whenever it was issued. For a logout token naming a subject alone, the exchange refuses each of that subject's sign-in tokens issued before the sign-out.\n\nA logout token delivered twice writes one notice. A logout naming a session unseen at any exchange writes no notice, and the sign-in tokens of that session are refused all the same.",
+        "description": "The identity provider's OpenID Connect back-channel logout endpoint. The body is form-encoded and holds one `logout_token`: a current logout token issued by the configured identity provider for the instance's back-channel logout clients alone, naming a session in `sid`, a subject in `sub`, or both. The header `typ` is `logout+jwt` or `JWT`, in any letter case and with or without the `application/` prefix, or left out.\n\nThe controller commits the sign-out, with a principal notice to every application where the subject is known, before it answers. The exchange then refuses every sign-in token of a session named by the logout token, whenever it was issued. For a logout token naming a subject alone, the exchange refuses each of that subject's sign-in tokens issued before the sign-out.\n\nA logout token delivered twice writes one notice. A logout naming a session unseen at any exchange writes no notice, and the sign-in tokens of that session are refused all the same.",
         "operationId": "relayBackChannelLogout",
         "requestBody": {
           "content": {
@@ -5731,13 +5731,36 @@
             }
           },
           "400": {
-            "description": "The body holds no single form-encoded `logout_token`, or the token is not a current logout token issued by the configured identity provider for a configured client."
-          },
-          "413": {
-            "description": "The body is larger than 64 KiB."
-          },
-          "503": {
-            "description": "The token's signing key is not among the keys fetched by the controller, while the identity provider cannot be reached."
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "bodyTooLarge",
+                            "identityProviderUnavailable",
+                            "internalError",
+                            "logoutTokenRefused",
+                            "outcomeUnknown",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable",
+                            "unreadableBody",
+                            "unreadableQuery"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The logout is not taken, and its code names why, as Back-Channel Logout 1.0 §2.8 has every logout not taken answered `400`. `unreadableQuery`: the request carries a query, so a logout token is never read from a URL. `bodyTooLarge`: the body is larger than 64 KiB. `unreadableBody`: the body is not `application/x-www-form-urlencoded` in UTF-8 holding exactly one non-empty `logout_token`. `logoutTokenRefused`: the token is not a current logout token issued by the configured identity provider, signed by one of its published keys, for the instance's back-channel logout clients alone, naming a session in `sid`, a subject in `sub`, or both. A logout token carries `events` holding the back-channel logout member as a JSON object, and no `nonce`, whatever its `typ`. Its `aud` names at least one configured back-channel logout client and no other audience. It is current when its `iat` is ahead of the controller's clock by less than the clock tolerance and no older than the longest sign-in token lifetime the instance accepts, and its `exp` has not passed. Every refusal of a token is answered alike. `identityProviderUnavailable`: the token's signing key is not among the keys fetched by the controller, while the identity provider cannot be reached. `signingKeyUnconfirmed`: the token's signing key is not among the keys fetched by the controller, and the refetch cooldown since a fetch that succeeded forbids fetching them again yet; a key the provider published since, as by a rotation, is found by the next fetch, so the logout token may be sent again later. `storeUnavailable`: the policy store cannot take the sign-out now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the sign-out was recorded; the logout token may be sent again, since a sign-out recorded already writes nothing more. `internalError`: the controller failed to take the logout, and nothing of it was written."
           }
         },
         "security": [],

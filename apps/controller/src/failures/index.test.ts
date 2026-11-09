@@ -8,6 +8,8 @@ suite("the controller's failures module", () => {
     assert.deepEqual(Object.keys(failures).toSorted(), [
       'ControllerError',
       'StartRefusal',
+      'failureCodeOf',
+      'failureNameOf',
       'reportFailure',
       'reportUncaughtFailure',
     ]);

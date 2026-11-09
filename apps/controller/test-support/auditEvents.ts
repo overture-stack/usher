@@ -47,6 +47,8 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
   invitationClaim: 'invitation.claim',
   invitationCreation: 'invitation.creation',
   invitationLapse: 'invitation.lapse',
+  logoutTokenRefusal: 'logoutToken.refusal',
+  logoutTokenRefusalTally: 'logoutToken.refusalTally',
   managementTokenRefusal: 'managementToken.refusal',
   managementTokenRefusalTally: 'managementToken.refusalTally',
   migrationRun: 'migration.run',

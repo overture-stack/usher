@@ -121,6 +121,8 @@ export type AuditEventType =
   | 'invitation.claim'
   | 'invitation.creation'
   | 'invitation.lapse'
+  | 'logoutToken.refusal'
+  | 'logoutToken.refusalTally'
   | 'managementToken.refusal'
   | 'managementToken.refusalTally'
   | 'migration.run'

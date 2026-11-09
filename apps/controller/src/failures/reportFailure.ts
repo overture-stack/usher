@@ -14,14 +14,26 @@ const IDENTIFIER = /^[A-Za-z0-9_]{1,64}$/u;
 const identifierOf = (value: unknown): string | undefined =>
   typeof value === 'string' && IDENTIFIER.test(value) ? value : undefined;
 
-const codeOf = (failure: unknown): string | undefined =>
+/**
+ * A failure's code, a SQLSTATE or a system error's code, as a failure line may write it: only when it
+ * is an identifier, `undefined` otherwise or for a failure carrying none.
+ *
+ * @param failure what failed.
+ */
+export const failureCodeOf = (failure: unknown): string | undefined =>
   identifierOf(
     typeof failure === 'object' && failure !== null && 'code' in failure
       ? failure.code
       : undefined,
   );
 
-const nameOf = (failure: unknown): string =>
+/**
+ * A failure's name as a failure line may write it: an error's name when it is an identifier, else
+ * `Error`, and for anything thrown that is no error, its type.
+ *
+ * @param failure what failed.
+ */
+export const failureNameOf = (failure: unknown): string =>
   failure instanceof Error
     ? (identifierOf(failure.name) ?? 'Error')
     : typeof failure;
@@ -40,16 +52,16 @@ const failureFields = (
     return { variables: failure.variables, message: failure.message };
   }
   if (failure instanceof ControllerError) {
-    const causeCode = codeOf(failure.cause);
+    const causeCode = failureCodeOf(failure.cause);
     return {
       error: failure.name,
       ...(causeCode === undefined ? {} : { code: causeCode }),
       message: `${failed}: ${failure.message}`,
     };
   }
-  const code = codeOf(failure);
+  const code = failureCodeOf(failure);
   return code === undefined
-    ? { error: nameOf(failure), message: failed }
+    ? { error: failureNameOf(failure), message: failed }
     : { code, message: failed };
 };
 

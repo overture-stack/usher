@@ -63,7 +63,11 @@ const claimsOf = (
 
 const verified = (
   departures?: Readonly<Record<string, unknown>>,
-): TokenVerification => ({ claims: claimsOf(departures), kind: 'verified' });
+): TokenVerification => ({
+  claims: claimsOf(departures),
+  header: { alg: 'RS256', typ: 'JWT' },
+  kind: 'verified',
+});
 
 interface Recorded {
   actor: Actor;

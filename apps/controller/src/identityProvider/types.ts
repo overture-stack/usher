@@ -14,17 +14,20 @@ export type UnverifiedReason =
 /** A verified token's claims: its payload, as the identity provider signed it. */
 export type TokenClaims = Readonly<Record<string, unknown>>;
 
+/** A verified token's protected header, as the identity provider signed it, by which its type is judged. */
+export type TokenHeader = Readonly<Record<string, unknown>>;
+
 /**
- * What verifying a token found: its claims, once its signature verifies under the trusted issuer; why
- * it was not verified; that the trusted issuer's keys could not be fetched to verify it, none being
- * held, or its key being none of those held while the latest fetch of them failed; or that its key is
- * not confirmed yet, being none of those held while the refetch cooldown since a fetch that succeeded
- * forbids fetching them again, with the whole seconds until a fetch may start, at least 1. A key not
- * confirmed yet is no fault of the token's: a key the provider published since that fetch, as by a
- * rotation, is found by the next fetch.
+ * What verifying a token found: its claims and its protected header, once its signature verifies under
+ * the trusted issuer; why it was not verified; that the trusted issuer's keys could not be fetched to
+ * verify it, none being held, or its key being none of those held while the latest fetch of them
+ * failed; or that its key is not confirmed yet, being none of those held while the refetch cooldown
+ * since a fetch that succeeded forbids fetching them again, with the whole seconds until a fetch may
+ * start, at least 1. A key not confirmed yet is no fault of the token's: a key the provider published
+ * since that fetch, as by a rotation, is found by the next fetch.
  */
 export type TokenVerification =
-  | { claims: TokenClaims; kind: 'verified' }
+  | { claims: TokenClaims; header: TokenHeader; kind: 'verified' }
   | { kind: 'keysUnavailable' }
   | { kind: 'signingKeyUnconfirmed'; retryAfterSeconds: number }
   | { kind: 'unverified'; reason: UnverifiedReason };

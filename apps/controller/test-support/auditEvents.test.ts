@@ -572,7 +572,7 @@ suite("the controller's events, as the document registers them", () => {
     ]);
   });
 
-  test("reads a sign-out relayed by the identity provider as the system's, naming the person signed out and its result, and a served resource's change as added or removed", () => {
+  test("reads a sign-out relayed by the identity provider as the system's, naming its result and the person signed out when known, and a served resource's change as added or removed", () => {
     const signOut = registered(AUDIT_EVENT_TYPES.identitySignOut);
     const served = registered(
       AUDIT_EVENT_TYPES.applicationServedResourcesChange,
@@ -587,8 +587,8 @@ suite("the controller's events, as the document registers them", () => {
       {
         actor: { kind: 'system' },
         fields: {
-          always: ['signedOutUserId', 'result'],
-          conditional: [],
+          always: ['result'],
+          conditional: ['signedOutUserId'],
           onRefusal: [],
           onSuccess: [],
         },

@@ -38,14 +38,6 @@ report the throw as a defect, adding that cause to the exchange's failure causes
 list of events.
 standalone: yes
 
-The audit table records no refused back-channel logout token: `identity.signOut` covers an accepted
-sign-out only.
-fix: record a refused logout token as a refused management credential is recorded, one event for a
-token that verifies under the trusted issuer and is refused anyway, and a tally per reason for one
-that does not.
-standalone: no
-context: waits on the controller's back-channel logout endpoint.
-
 `pnpm-workspace.yaml` overrides the glob archiver-utils resolves to `^14.0.3`, outside the
 `glob ^10` range archiver-utils requires, since that range carries GHSA-3g3m-2fjr-6pw4 and, through
 its minimatch, GHSA-g3hv-75wg-m249. archiver-utils reaches the workspace only under testcontainers'

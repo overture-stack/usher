@@ -35,6 +35,12 @@ import {
   createNoticeReader,
 } from '../noticeStream/index.js';
 import { createReadiness } from '../readiness/index.js';
+import {
+  createSignOutRoute,
+  LOGOUT_TOKEN_TALLY_INTERVAL_MILLISECONDS,
+  logoutTokenRefusalTallyEvent,
+  type LogoutTokenTallyReason,
+} from '../signOuts/index.js';
 import { openStore, prepareStore } from '../store/index.js';
 import { createStoreReader } from '../storeTimeout/index.js';
 import { createTally } from '../tally/index.js';
@@ -77,13 +83,15 @@ const STORE_PROBE =
  * Creates a controller from its configuration, connecting to nothing until it starts. Its start
  * checks the store before anything listens, so a refused start never accepts a connection, reads the
  * live application keys into memory, and then serves the Management API's application operations,
- * each event they record written to the audit log and the log stream, and the revocation channel's
- * poll and push. A change committed through an operation is held by the instance before it is
- * answered: the live keys are read again, and the instance's streams are woken to its notices; a
- * failure in either is written to the log and never changes the answer. Every unit of its store
+ * each event they record written to the audit log and the log stream, the revocation channel's poll
+ * and push, and the identity provider's back-channel logout. A change committed through an operation
+ * is held by the instance before it is answered: the live keys are read again, and the instance's
+ * streams are woken to its notices; a sign-out committed wakes the streams alike. A failure in either
+ * step is written to the log and never changes the answer. The Management API and the back-channel
+ * logout verify the identity provider's tokens through one verifier. Every unit of its store
  * work, a request's statement or transaction, a recorded event, a read of the keys or the notices, or
  * the start's transaction, runs within the store timeout. Its stop ends every stream, then closes the
- * server, letting requests in flight finish, records the counts its two refusal tallies hold, stops
+ * server, letting requests in flight finish, records the counts its three refusal tallies hold, stops
  * reading the keys, then closes the store's connections and lets go of the log stream. It reports itself ready
  * while it is started, its log stream takes its lines, and its store answers within the store
  * timeout, not reading as read-only when its database role writes, as `createReadiness` judges it,
@@ -116,6 +124,13 @@ export const createController = (
     clock: configuration.clock,
     eventOf: refusalTallyEvent,
     intervalMilliseconds: REFUSAL_TALLY_INTERVAL_MILLISECONDS,
+    partsOf: (reason) => [reason],
+    trail,
+  });
+  const logoutTokenRefusals = createTally<LogoutTokenTallyReason>({
+    clock: configuration.clock,
+    eventOf: logoutTokenRefusalTallyEvent,
+    intervalMilliseconds: LOGOUT_TOKEN_TALLY_INTERVAL_MILLISECONDS,
     partsOf: (reason) => [reason],
     trail,
   });
@@ -156,21 +171,22 @@ export const createController = (
       keyRing,
     }),
   });
+  const noticeWake = { name: 'noticeWake', run: () => channel.wake() };
   const operationTrail = afterCommitTrail({
     log: eventLog,
-    steps: [
-      { name: 'noticeWake', run: () => channel.wake() },
-      { name: 'keyReload', run: () => keyRing.reload() },
-    ],
+    steps: [noticeWake, { name: 'keyReload', run: () => keyRing.reload() }],
     trail,
   });
+  // One verifier for every route verifying the identity provider's tokens, so the keys fetched for
+  // one are held for all, and their fetches share one cooldown.
+  const tokenVerifier = createTokenVerifier(configuration, eventLog);
   const management: ManagementDependencies = {
     eventLog,
     refusalTally,
     settings: configuration,
     storedRefusal: (question) =>
       readStoredRefusal(reader, configuration.databaseSchema, question),
-    tokenVerifier: createTokenVerifier(configuration, eventLog),
+    tokenVerifier,
     trail: operationTrail,
   };
   const readiness = createReadiness({
@@ -205,6 +221,13 @@ export const createController = (
       management,
     ),
     ...channel.routes,
+    createSignOutRoute({
+      eventLog,
+      refusalTally: logoutTokenRefusals,
+      settings: configuration,
+      tokenVerifier,
+      trail: afterCommitTrail({ log: eventLog, steps: [noticeWake], trail }),
+    }),
   ].forEach((route) => {
     server.route(route);
   });
@@ -215,6 +238,7 @@ export const createController = (
     await keyRing.start();
     await server.listen({ host: configuration.host, port: configuration.port });
     refusalTally.start();
+    logoutTokenRefusals.start();
     assertionRejections.start();
     lifecycle.ready = lifecycle.stopped === undefined;
     return { url: urlOf(server.server.address()) };
@@ -230,6 +254,7 @@ export const createController = (
       } finally {
         await Promise.all([
           refusalTally.stop(),
+          logoutTokenRefusals.stop(),
           assertionRejections.stop(),
           keyRing.stop(),
         ]);

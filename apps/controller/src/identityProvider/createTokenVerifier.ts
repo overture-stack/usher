@@ -11,6 +11,7 @@ import {
 import { createSigningKeys } from './createSigningKeys.js';
 import type {
   TokenClaims,
+  TokenHeader,
   TokenVerification,
   TokenVerifierLog,
   TokenVerifierSettings,
@@ -75,7 +76,7 @@ const claimsOf = (payload: Uint8Array): TokenClaims | undefined => {
 };
 
 type Attempt =
-  | { claims: TokenClaims | undefined; kind: 'verified' }
+  | { claims: TokenClaims | undefined; header: TokenHeader; kind: 'verified' }
   | { kind: 'noMatchingKey' }
   | { kind: 'refused' };
 
@@ -88,8 +89,9 @@ const verifiedByAny = async (
     const attempt = await compactVerify(token, key, {
       algorithms: [...ALGORITHMS],
     }).then(
-      ({ payload }): Attempt => ({
+      ({ payload, protectedHeader }): Attempt => ({
         claims: claimsOf(payload),
+        header: protectedHeader,
         kind: 'verified',
       }),
       (): Attempt => ({ kind: 'refused' }),
@@ -106,12 +108,16 @@ const verifiedUnder = async (
   keys: readonly JWK[],
 ): Promise<Attempt> => {
   try {
-    const { payload } = await compactVerify(
+    const { payload, protectedHeader } = await compactVerify(
       token,
       createLocalJWKSet({ keys: [...keys] }),
       { algorithms: [...ALGORITHMS] },
     );
-    return { claims: claimsOf(payload), kind: 'verified' };
+    return {
+      claims: claimsOf(payload),
+      header: protectedHeader,
+      kind: 'verified',
+    };
   } catch (error) {
     if (error instanceof errors.JWKSNoMatchingKey) {
       return { kind: 'noMatchingKey' };
@@ -132,7 +138,7 @@ const verificationOf = (
       return unverified('unreadableToken');
     }
     return attempt.claims['iss'] === issuer
-      ? { claims: attempt.claims, kind: 'verified' }
+      ? { claims: attempt.claims, header: attempt.header, kind: 'verified' }
       : unverified('otherIssuer');
   }
   return unverified('invalidSignature');
