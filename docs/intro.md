@@ -104,6 +104,12 @@ PDP/PEP/PAP) before Usher-specific vocabulary.
 - [Security model](https://github.com/overture-stack/usher/blob/main/.dev/design/security-threat-model.md): OWASP Top 10 mapping and security design decisions
 - [Glossary](https://github.com/overture-stack/usher/blob/main/.dev/design/glossary.md): quick-reference definitions
 
+**Deploying the controller** (operator)
+
+- [Deploying the controller](deployment.md): every variable it reads, its two database roles, the
+  schema migration before each rollout, readiness and liveness, and the identity provider's
+  requirements
+
 **Any of the above may become a Custodian or Admin.** Custodians govern category access for a
 specific community or data type; Admins manage the platform authorization model. Both are covered
 in [Concepts](concepts.md) and the [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md).

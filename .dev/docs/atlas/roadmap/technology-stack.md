@@ -17,7 +17,11 @@
 Versions as of 2026-09-29, checked against the registry; each is taken at its latest when a package
 is created, rather than copied from here.
 
-- **Node 24**, the version Arranger's images build on.
+- **Node 24 for the libraries**, the version Arranger's images build on, since Arranger imports
+  them.
+- **Node 26 in the controller's image** (developer decision, 2026-11-06). The controller is a
+  deployed service that nothing imports, so it does not wait on Arranger's version. Node 26 is
+  supported until 2029-04-30, by the Node.js release schedule as checked on 2026-11-09.
 - **pnpm** workspaces, at version 12 or later (developer decision, 2026-10-05). A pnpm 11 older than
   11.28.4 crashes when it switches to a 12 pin and damages its store, so a machine's own pnpm is
   brought to 11.28.4 or later, or to 12, before it runs anything in this repository.
