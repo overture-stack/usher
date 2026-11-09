@@ -7,6 +7,8 @@ suite("the store's module", () => {
   test('exports at run time exactly the values its surface names', () => {
     assert.deepEqual(Object.keys(store).toSorted(), [
       'connectionProblemOf',
+      'holdsUnstorableText',
+      'isStorableText',
       'openStore',
       'prepareStore',
       'writeSeededPolicy',

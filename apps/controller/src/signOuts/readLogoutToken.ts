@@ -1,6 +1,6 @@
 import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import type { TokenClaims } from '../identityProvider/index.js';
-import { isStorableText } from '../managementApi/index.js';
+import { isStorableText } from '../store/index.js';
 import type {
   LogoutTokenReading,
   LogoutTokenRefusal,

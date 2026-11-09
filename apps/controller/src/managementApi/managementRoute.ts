@@ -8,6 +8,7 @@ import type {
 import type { Actor, AuditEvent, Severity } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import type { UnverifiedReason } from '../identityProvider/index.js';
+import { holdsUnstorableText } from '../store/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import { queryNamesOf, readCredential } from './credential.js';
 import {
@@ -18,7 +19,6 @@ import {
 } from './problems.js';
 import { readManagementClaims } from './readManagementClaims.js';
 import { readJsonBody } from './requestBody.js';
-import { holdsUnstorableText } from './storableText.js';
 import type {
   EventMembers,
   InputReading,
