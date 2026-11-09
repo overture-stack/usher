@@ -58,6 +58,12 @@ export const PROBLEMS = Object.freeze({
     'Not for service accounts',
     'A service account may not call this operation.',
   ),
+  signingKeyUnconfirmed: problem(
+    'signingKeyUnconfirmed',
+    503,
+    'Signing key not confirmed yet',
+    "The access token's signing key is not confirmed yet. Try again once the seconds in Retry-After have passed.",
+  ),
   storeUnavailable: problem(
     'storeUnavailable',
     503,
@@ -93,20 +99,26 @@ export const unreadableBody = (rule: string): Problem =>
   problem('unreadableBody', 400, 'Body unreadable', `The body ${rule}.`);
 
 /**
- * Answers a refusal: its status, its problem details as JSON, and for a refused credential the
- * `WWW-Authenticate` naming the Bearer scheme alone, so every refused credential is answered alike.
+ * Answers a refusal: its status, its problem details as JSON, for a refused credential the
+ * `WWW-Authenticate` naming the Bearer scheme alone, so every refused credential is answered alike,
+ * and `Retry-After` when the refusal names a time to wait.
  *
  * @param reply the reply.
  * @param refusal the problem.
+ * @param retryAfterSeconds the whole seconds to wait before trying again, for a refusal naming them.
  */
 export const sendProblem = (
   reply: FastifyReply,
   refusal: Problem,
+  retryAfterSeconds?: number,
 ): FastifyReply =>
   reply
     .code(refusal.status)
     .headers({
       'content-type': PROBLEM_MEDIA_TYPE,
+      ...(retryAfterSeconds === undefined
+        ? {}
+        : { 'retry-after': String(retryAfterSeconds) }),
       ...(refusal.status === 401 ? { 'www-authenticate': 'Bearer' } : {}),
     })
     .send(JSON.stringify(refusal));

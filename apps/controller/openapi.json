@@ -7,6 +7,13 @@
           "type": "string"
         }
       },
+      "RetryAfter": {
+        "description": "The whole seconds to wait before trying again, at least 1. Sent with `signingKeyUnconfirmed`.",
+        "schema": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
       "WwwAuthenticateBearer": {
         "description": "Names the `Bearer` scheme.",
         "schema": {
@@ -1933,6 +1940,7 @@
                           "enum": [
                             "identityProviderUnavailable",
                             "outcomeUnknown",
+                            "signingKeyUnconfirmed",
                             "storeUnavailable"
                           ]
                         }
@@ -1943,7 +1951,12 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           }
         },
         "security": [
@@ -2044,6 +2057,7 @@
                         "code": {
                           "enum": [
                             "identityProviderUnavailable",
+                            "signingKeyUnconfirmed",
                             "storeUnavailable"
                           ]
                         }
@@ -2054,7 +2068,12 @@
                 }
               }
             },
-            "description": "`identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `storeUnavailable`: the policy store cannot be read."
+            "description": "`identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           }
         },
         "security": [
@@ -2189,6 +2208,7 @@
                           "enum": [
                             "identityProviderUnavailable",
                             "outcomeUnknown",
+                            "signingKeyUnconfirmed",
                             "storeUnavailable"
                           ]
                         }
@@ -2199,7 +2219,12 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           }
         },
         "security": [
@@ -2368,6 +2393,7 @@
                           "enum": [
                             "identityProviderUnavailable",
                             "outcomeUnknown",
+                            "signingKeyUnconfirmed",
                             "storeUnavailable"
                           ]
                         }
@@ -2378,7 +2404,12 @@
                 }
               }
             },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed."
+            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           }
         },
         "security": [

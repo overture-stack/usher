@@ -54,11 +54,21 @@ const TALLY_REASONS = {
 
 type Admission =
   | { kind: 'admitted'; principal: Principal }
-  | { kind: 'refused'; problem: Problem };
+  | {
+      kind: 'refused';
+      problem: Problem;
 
-const refusedWith = (problem: Problem): Admission => ({
+      /** The whole seconds to wait before trying again, for a refusal naming them in `Retry-After`. */
+      retryAfterSeconds?: number;
+    };
+
+const refusedWith = (
+  problem: Problem,
+  retryAfterSeconds?: number,
+): Admission => ({
   kind: 'refused',
   problem,
+  ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
 });
 
 const actorOf = ({ subject, type }: Principal): Actor => ({
@@ -108,7 +118,9 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * its credential must be exactly one Bearer token, else it is refused 400 and counted in the refusal
  * tally as `malformedCredential`; a missing one is refused 401 and recorded nowhere; a token that
  * cannot be verified is refused 401 and counted in the refusal tally by reason; a token whose keys
- * cannot be fetched is refused 503; a verified token refused for its claims, or by a revocation of
+ * cannot be fetched is refused 503, and one whose signing key is not confirmed yet is refused 503
+ * `signingKeyUnconfirmed` with `Retry-After` naming the seconds to wait, neither counted nor recorded;
+ * a verified token refused for its claims, or by a revocation of
  * the person or the platform or a sign-out in the store, is refused 401, or 400 for a subject or
  * session that cannot be stored, and recorded as `managementToken.refusal`, its actor anonymous,
  * before the operation begins; a service account is refused 403, and so is anyone but a platform
@@ -213,6 +225,13 @@ export const managementRoute = <Input>(
     const verification = await tokenVerifier.verify(credential.token);
     if (verification.kind === 'keysUnavailable') {
       return refusedWith(PROBLEMS.identityProviderUnavailable);
+    }
+    // No fault of the token's, so neither counted nor recorded, as for keys that cannot be fetched.
+    if (verification.kind === 'signingKeyUnconfirmed') {
+      return refusedWith(
+        PROBLEMS.signingKeyUnconfirmed,
+        verification.retryAfterSeconds,
+      );
     }
     if (verification.kind === 'unverified') {
       refusalTally.count(TALLY_REASONS[verification.reason]);
@@ -379,7 +398,11 @@ export const managementRoute = <Input>(
     onRequest: async (request, reply) => {
       const admission = await authenticate(request);
       if (admission.kind === 'refused') {
-        return sendProblem(reply, admission.problem);
+        return sendProblem(
+          reply,
+          admission.problem,
+          admission.retryAfterSeconds,
+        );
       }
       const problem = authorityProblem(admission.principal);
       if (problem !== undefined) {

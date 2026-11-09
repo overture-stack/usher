@@ -45,7 +45,9 @@ export type ManagementTokenSettings = Pick<
 export interface TokenVerifier {
   /**
    * Verifies a compact signed token, giving its claims once its signature and issuer verify, why it
-   * was not verified, or that the trusted issuer's keys could not be had to verify it.
+   * was not verified, that the trusted issuer's keys could not be had to verify it, or that its
+   * signing key is not confirmed yet, with the whole seconds the caller is told to wait before trying
+   * again.
    *
    * @param token the token carried by a request's Bearer credential.
    */

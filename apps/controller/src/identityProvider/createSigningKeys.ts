@@ -141,7 +141,9 @@ interface KeyCache {
  * share one fetch. A failed fetch keeps what is held, and keys grown too old are never given. Each
  * failed fetch writes {@link KEY_SET_FETCH_FAILED} at error naming its fixed cause alone, never a URL
  * or anything the provider answered, so the cooldown bounds the lines as it bounds the fetches. A
- * reading of the keys held says whether the latest fetch failed.
+ * reading of the keys says whether it fetched them, by a fetch it started or joined, and whether the
+ * latest fetch failed; the time left in the cooldown is read apart, for an answer telling a caller
+ * when a key absent from those held can be looked for again.
  *
  * @param settings the clock, and the trusted issuer.
  * @param eventLog where a failed fetch is written.
@@ -157,19 +159,25 @@ export const createSigningKeys = (
     keys: undefined,
     latestFetchFailed: false,
   };
-  const held = (): KeySetReading =>
+  const held = (fetched: boolean): KeySetReading =>
     cache.keys !== undefined &&
     cache.fetchedAt !== undefined &&
     clock.now() - cache.fetchedAt < KEY_SET_MAXIMUM_AGE_MILLISECONDS
       ? {
+          fetched,
           keys: cache.keys,
           kind: 'held',
           latestFetchFailed: cache.latestFetchFailed,
         }
       : UNAVAILABLE;
-  const coolingDown = (): boolean =>
-    cache.attemptedAt !== undefined &&
-    clock.now() - cache.attemptedAt < KEY_REFETCH_COOLDOWN_MILLISECONDS;
+  const refetchInMilliseconds = (): number =>
+    cache.attemptedAt === undefined
+      ? 0
+      : Math.max(
+          0,
+          cache.attemptedAt + KEY_REFETCH_COOLDOWN_MILLISECONDS - clock.now(),
+        );
+  const coolingDown = (): boolean => refetchInMilliseconds() > 0;
   const fetchOnce = async (): Promise<KeySetReading> => {
     cache.attemptedAt = clock.now();
     // The fetch leaves flight however it ends, so no later asker joins one that rejected.
@@ -189,7 +197,7 @@ export const createSigningKeys = (
     } finally {
       cache.inFlight = undefined;
     }
-    return held();
+    return held(true);
   };
   const fetched = (): Promise<KeySetReading> => {
     cache.inFlight ??= fetchOnce();
@@ -200,12 +208,13 @@ export const createSigningKeys = (
     cache.inFlight !== undefined || !coolingDown();
   return {
     current: async () => {
-      const reading = held();
+      const reading = held(false);
       if (reading.kind === 'held') {
         return reading;
       }
       return mayFetch() ? fetched() : UNAVAILABLE;
     },
-    refreshed: async () => (mayFetch() ? fetched() : held()),
+    refetchInMilliseconds,
+    refreshed: async () => (mayFetch() ? fetched() : held(false)),
   };
 };

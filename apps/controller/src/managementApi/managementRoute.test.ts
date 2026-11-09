@@ -532,6 +532,24 @@ suite('admitting a request to a management operation', () => {
     );
   });
 
+  test('answers 503 signingKeyUnconfirmed with Retry-After for a signing key not confirmed yet, recording, counting and writing nothing', async (context) => {
+    const stand = await standUp(context, {
+      verifications: {
+        admin: { kind: 'signingKeyUnconfirmed', retryAfterSeconds: 17 },
+      },
+    });
+
+    const answer = await post(stand);
+
+    assert.equal(answer.statusCode, 503);
+    assert.equal(answer.headers['retry-after'], '17');
+    assert.equal(codeOf(answer), 'signingKeyUnconfirmed');
+    assert.deepEqual(
+      [stand.lines, stand.recorded, stand.counted, stand.ran],
+      [[], [], [], []],
+    );
+  });
+
   test('refuses a subject or session holding text that cannot be stored 400, recording managementToken.refusal for unrepresentableSubject, naming no subject', async (context) => {
     const stand = await standUp(context, {
       verifications: {

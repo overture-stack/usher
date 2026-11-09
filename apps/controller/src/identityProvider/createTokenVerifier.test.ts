@@ -79,6 +79,17 @@ const adjustableClock = (): AdjustableClock => {
   };
 };
 
+// A clock that stands still between a test's moves, so a time left in the cooldown is exact.
+const controlledClock = (): AdjustableClock => {
+  const state = { now: Date.now() };
+  return {
+    advance: (milliseconds) => {
+      state.now += milliseconds;
+    },
+    now: () => state.now,
+  };
+};
+
 const signingKey = async (
   algorithm: 'ES256' | 'RS256' = 'RS256',
 ): Promise<SigningKey> => {
@@ -303,7 +314,7 @@ suite('verifying a token from the trusted identity provider', () => {
     const first = await signingKey();
     const rotated = await signingKey();
     standIn.published = [first.jwk];
-    const clock = adjustableClock();
+    const clock = controlledClock();
     const verifier = verifierFor(standIn, clock);
     await verifier.verify(await signed(first, claimsFor(standIn.issuer)));
     clock.advance(KEY_REFETCH_COOLDOWN_MILLISECONDS);
@@ -319,8 +330,8 @@ suite('verifying a token from the trusted identity provider', () => {
 
     assert.equal(afterRotation.kind, 'verified');
     assert.deepEqual(withinCooldown, {
-      kind: 'unverified',
-      reason: 'invalidSignature',
+      kind: 'signingKeyUnconfirmed',
+      retryAfterSeconds: 30,
     });
     assert.equal(standIn.asked.length, 4);
   });
@@ -428,20 +439,136 @@ suite(
       assert.equal(standIn.asked.length, 5);
     });
 
-    test('refuses it as invalidSignature within the cooldown after a fetch that succeeded, a key published since among them', async (context) => {
+    test('answers signingKeyUnconfirmed within the cooldown after a fetch that succeeded, a key published since among them, with the seconds left in the cooldown rounded up, fetching nothing', async (context) => {
       const standIn = await startStandIn(context);
       const first = await signingKey();
       const rotated = await signingKey();
       standIn.published = [first.jwk];
-      const verifier = verifierFor(standIn);
+      const clock = controlledClock();
+      const verifier = verifierFor(standIn, clock);
       await verifier.verify(await signed(first, claimsFor(standIn.issuer)));
       standIn.published = [first.jwk, rotated.jwk];
+      const token = await signed(rotated, claimsFor(standIn.issuer));
+
+      clock.advance(12_345);
+      const early = await verifier.verify(token);
+      clock.advance(KEY_REFETCH_COOLDOWN_MILLISECONDS - 12_345 - 1);
+      const last = await verifier.verify(token);
+
+      assert.deepEqual(early, {
+        kind: 'signingKeyUnconfirmed',
+        retryAfterSeconds: 18,
+      });
+      assert.deepEqual(last, {
+        kind: 'signingKeyUnconfirmed',
+        retryAfterSeconds: 1,
+      });
+      assert.equal(standIn.asked.length, 2);
+    });
+
+    test('looks for it again once the cooldown has passed: verifies it once published, refuses it as invalidSignature while still absent, and answers keysUnavailable when that fetch fails', async (context) => {
+      const standIn = await startStandIn(context);
+      const first = await signingKey();
+      const rotated = await signingKey();
+      standIn.published = [first.jwk];
+      const clock = controlledClock();
+      const verifier = verifierFor(standIn, clock);
+      await verifier.verify(await signed(first, claimsFor(standIn.issuer)));
+      standIn.published = [first.jwk, rotated.jwk];
+      const absent = (kid: string): Promise<string> =>
+        signed(first, claimsFor(standIn.issuer), { kid });
 
       const withinCooldown = await verifier.verify(
         await signed(rotated, claimsFor(standIn.issuer)),
       );
+      clock.advance(KEY_REFETCH_COOLDOWN_MILLISECONDS);
+      const published = await verifier.verify(
+        await signed(rotated, claimsFor(standIn.issuer)),
+      );
+      clock.advance(KEY_REFETCH_COOLDOWN_MILLISECONDS);
+      const stillAbsent = await verifier.verify(
+        await absent('never-published'),
+      );
+      clock.advance(KEY_REFETCH_COOLDOWN_MILLISECONDS);
+      standIn.refusing = true;
+      const fetchFailed = await verifier.verify(await absent('during-outage'));
 
-      assert.deepEqual(withinCooldown, {
+      assert.equal(withinCooldown.kind, 'signingKeyUnconfirmed');
+      assert.equal(published.kind, 'verified');
+      assert.deepEqual(stillAbsent, {
+        kind: 'unverified',
+        reason: 'invalidSignature',
+      });
+      assert.deepEqual(fetchFailed, { kind: 'keysUnavailable' });
+      assert.deepEqual(standIn.asked, [
+        DISCOVERY_PATH,
+        KEY_SET_PATH,
+        DISCOVERY_PATH,
+        KEY_SET_PATH,
+        DISCOVERY_PATH,
+        KEY_SET_PATH,
+        DISCOVERY_PATH,
+      ]);
+    });
+
+    test('fetches at most once in a cooldown however many made-up key ids arrive, answering each signingKeyUnconfirmed but the one whose fetch refuses it', async (context) => {
+      const standIn = await startStandIn(context);
+      const key = await signingKey();
+      standIn.published = [key.jwk];
+      const clock = controlledClock();
+      const verifier = verifierFor(standIn, clock);
+      await verifier.verify(await signed(key, claimsFor(standIn.issuer)));
+      const madeUp = (prefix: string): Promise<string[]> =>
+        Promise.all(
+          Array.from({ length: 50 }, (_, index) =>
+            signed(key, claimsFor(standIn.issuer), {
+              kid: `${prefix}-${index}`,
+            }),
+          ),
+        );
+      const [within, after] = await Promise.all([
+        madeUp('within'),
+        madeUp('after'),
+      ]);
+
+      const atOnce = await Promise.all(
+        within.map((token) => verifier.verify(token)),
+      );
+      const askedWithin = standIn.asked.length;
+      clock.advance(KEY_REFETCH_COOLDOWN_MILLISECONDS);
+      const oneByOne = await after.reduce<Promise<readonly string[]>>(
+        async (kinds, token) => [
+          ...(await kinds),
+          (await verifier.verify(token)).kind,
+        ],
+        Promise.resolve([]),
+      );
+
+      assert.deepEqual(
+        atOnce.map(({ kind }) => kind),
+        within.map(() => 'signingKeyUnconfirmed'),
+      );
+      assert.equal(askedWithin, 2);
+      assert.deepEqual(oneByOne, [
+        'unverified',
+        ...after.slice(1).map(() => 'signingKeyUnconfirmed'),
+      ]);
+      assert.equal(standIn.asked.length, 4);
+    });
+
+    test('refuses it as invalidSignature when the keys were fetched for the token itself, none being held before', async (context) => {
+      const standIn = await startStandIn(context);
+      const key = await signingKey();
+      standIn.published = [key.jwk];
+      const verifier = verifierFor(standIn, controlledClock());
+
+      const verification = await verifier.verify(
+        await signed(key, claimsFor(standIn.issuer), {
+          kid: 'never-published',
+        }),
+      );
+
+      assert.deepEqual(verification, {
         kind: 'unverified',
         reason: 'invalidSignature',
       });

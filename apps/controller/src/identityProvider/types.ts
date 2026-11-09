@@ -16,12 +16,17 @@ export type TokenClaims = Readonly<Record<string, unknown>>;
 
 /**
  * What verifying a token found: its claims, once its signature verifies under the trusted issuer; why
- * it was not verified; or that the trusted issuer's keys could not be fetched to verify it, none being
- * held, or its key being none of those held while the latest fetch of them failed.
+ * it was not verified; that the trusted issuer's keys could not be fetched to verify it, none being
+ * held, or its key being none of those held while the latest fetch of them failed; or that its key is
+ * not confirmed yet, being none of those held while the refetch cooldown since a fetch that succeeded
+ * forbids fetching them again, with the whole seconds until a fetch may start, at least 1. A key not
+ * confirmed yet is no fault of the token's: a key the provider published since that fetch, as by a
+ * rotation, is found by the next fetch.
  */
 export type TokenVerification =
   | { claims: TokenClaims; kind: 'verified' }
   | { kind: 'keysUnavailable' }
+  | { kind: 'signingKeyUnconfirmed'; retryAfterSeconds: number }
   | { kind: 'unverified'; reason: UnverifiedReason };
 
 /** What the verifier is created from: the clock the key set's age is measured on, and the trusted issuer. */
@@ -48,11 +53,18 @@ export type KeySetFetchFailure =
   | 'unreachable';
 
 /**
- * The trusted issuer's signing keys as a reading of them gave them, with whether the latest attempt
- * to fetch them failed, or that none could be had.
+ * The trusted issuer's signing keys as a reading of them gave them, with whether the reading fetched
+ * them and whether the latest attempt to fetch them failed, or that none could be had.
  */
 export type KeySetReading =
-  | { keys: readonly JWK[]; kind: 'held'; latestFetchFailed: boolean }
+  | {
+      /** Whether the keys come from a fetch the reading started or joined, rather than from those already held. */
+      fetched: boolean;
+
+      keys: readonly JWK[];
+      kind: 'held';
+      latestFetchFailed: boolean;
+    }
   | { kind: 'unavailable' };
 
 /**
@@ -65,4 +77,7 @@ export interface SigningKeys {
 
   /** The keys fetched anew, for a token whose key is not among those held, unless a fetch was tried too recently. */
   refreshed(): Promise<KeySetReading>;
+
+  /** How long until the refetch cooldown lets a fetch start, in milliseconds of the configured clock: 0 once it does. */
+  refetchInMilliseconds(): number;
 }
