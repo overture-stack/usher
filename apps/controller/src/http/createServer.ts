@@ -19,16 +19,18 @@ const UNREADABLE_PATH = JSON.stringify({
 
 /**
  * Creates the controller's HTTP server, not yet listening, with its health endpoints: liveness
- * answers 200 for as long as the process runs, and readiness 200 while the controller can serve and
- * 503 while it cannot. Neither carries any detail in its body, and a path the server does not serve
- * is answered 404 with none either, so no answer repeats what a request sent; a path that cannot be
- * decoded is answered 400 in problem details naming that rule alone. A route is given each request
- * body as its bytes, whatever its media type, to read as it rules. A request's address is the
- * nearest its trusted proxies did not add.
+ * answers 200 while the controller is live and 503 once it is not, whatever readiness answers, and
+ * readiness 200 while the controller can serve and 503 while it cannot. Each asks at every request.
+ * Neither carries any detail in its body, and a path the server does not serve is answered 404 with
+ * none either, so no answer repeats what a request sent; a path that cannot be decoded is answered
+ * 400 in problem details naming that rule alone. A route is given each request body as its bytes,
+ * whatever its media type, to read as it rules. A request's address is the nearest its trusted
+ * proxies did not add.
  *
- * @param settings whether the controller can serve now, and the trusted proxies.
+ * @param settings whether the controller is live, whether it can serve now, and the trusted proxies.
  */
 export const createServer = ({
+  isLive,
   isReady,
   trustedProxies,
 }: ServerSettings): FastifyInstance => {
@@ -51,7 +53,7 @@ export const createServer = ({
     },
   );
   server.get(HEALTH_PATHS.liveness, async (_request, reply) =>
-    reply.code(200).send(),
+    reply.code(isLive() ? 200 : 503).send(),
   );
   server.get(HEALTH_PATHS.readiness, async (_request, reply) =>
     reply.code((await isReady()) ? 200 : 503).send(),

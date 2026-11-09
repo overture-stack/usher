@@ -76,7 +76,8 @@ const STORE_PROBE =
  * reading the keys, then closes the store's connections and lets go of the log stream. It reports itself ready
  * while it is started, its log stream takes its lines, and its store answers within the store
  * timeout, not reading as read-only when its database role writes, as `createReadiness` judges it,
- * writing each change.
+ * writing each change. It reports itself live until its log stream fails to take a line, which only
+ * a restart recovers from, and writes nothing as it stops being live.
  *
  * @param configuration the controller's configuration.
  */
@@ -175,6 +176,10 @@ export const createController = (
     writesStore: () => lifecycle.writes,
   });
   const server = createServer({
+    // A log stream that has failed a write takes nothing more until the process restarts, so the
+    // instance is not live from then on. Unlike readiness, liveness writes no line as it changes:
+    // the line would go to the stream that failed.
+    isLive: () => eventLog.isWritable(),
     isReady: readiness.isReady,
     trustedProxies: configuration.trustedProxies,
   });

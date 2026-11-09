@@ -143,6 +143,7 @@ const standUp = async (
     recorded: [],
   };
   const server = createServer({
+    isLive: () => true,
     isReady: async () => true,
     trustedProxies: [],
   });

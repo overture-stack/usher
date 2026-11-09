@@ -4,8 +4,9 @@ import { suite, test } from 'node:test';
 import { createServer, HEALTH_PATHS } from './createServer.js';
 
 suite("the controller's health endpoints", () => {
-  test('answers liveness 200 with nothing in the body, whether or not the controller can serve', async (context) => {
+  test('answers liveness 200 with nothing in the body while the controller is live, whether or not it can serve', async (context) => {
     const server = createServer({
+      isLive: () => true,
       isReady: async () => false,
       trustedProxies: [],
     });
@@ -20,9 +21,38 @@ suite("the controller's health endpoints", () => {
     assert.equal(answer.body, '');
   });
 
+  test('answers liveness 503 with nothing in the body once the controller is not live, even while it can serve, asking at each request', async (context) => {
+    const state = { live: true };
+    const server = createServer({
+      isLive: () => state.live,
+      isReady: async () => true,
+      trustedProxies: [],
+    });
+    context.after(() => server.close());
+
+    const live = await server.inject({
+      method: 'GET',
+      url: HEALTH_PATHS.liveness,
+    });
+    state.live = false;
+    const notLive = await server.inject({
+      method: 'GET',
+      url: HEALTH_PATHS.liveness,
+    });
+
+    assert.deepEqual(
+      [live, notLive].map(({ body, statusCode }) => ({ body, statusCode })),
+      [
+        { body: '', statusCode: 200 },
+        { body: '', statusCode: 503 },
+      ],
+    );
+  });
+
   test('answers readiness 200 while the controller can serve and 503 while it cannot, asking at each request, with nothing in either body', async (context) => {
     const state = { ready: true };
     const server = createServer({
+      isLive: () => true,
       isReady: async () => state.ready,
       trustedProxies: [],
     });
@@ -49,6 +79,7 @@ suite("the controller's health endpoints", () => {
 
   test('answers a path it does not serve 404 with nothing in the body, repeating nothing the request sent', async (context) => {
     const server = createServer({
+      isLive: () => true,
       isReady: async () => true,
       trustedProxies: [],
     });
@@ -65,6 +96,7 @@ suite("the controller's health endpoints", () => {
 
   test('answers a path that cannot be decoded 400 in problem details naming the rule, repeating nothing of the path', async (context) => {
     const server = createServer({
+      isLive: () => true,
       isReady: async () => true,
       trustedProxies: [],
     });
@@ -91,7 +123,11 @@ suite("the controller's requests", () => {
     forwarded: string,
     peer = '127.0.0.1',
   ): Promise<string> => {
-    const server = createServer({ isReady: async () => true, trustedProxies });
+    const server = createServer({
+      isLive: () => true,
+      isReady: async () => true,
+      trustedProxies,
+    });
     server.get('/address', async (request) => request.ip);
     try {
       const answer = await server.inject({
@@ -156,6 +192,7 @@ suite("the controller's requests", () => {
 
   test('reach a route with their body as bytes, whatever its media type', async (context) => {
     const server = createServer({
+      isLive: () => true,
       isReady: async () => true,
       trustedProxies: [],
     });

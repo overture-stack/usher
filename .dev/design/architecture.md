@@ -161,11 +161,16 @@ Registering an application, or issuing or revoking its key, is a database write,
 changes the environment or restarts the controller, whether it runs as one process on a host or as
 many replicas.
 
-**Liveness and readiness are two answers.** `/health/live` says the process runs. `/health/ready`
-says an instance can answer an exchange correctly: it has started and is not stopping, its store
-answers within a bound and, on an instance whose role writes, is not read-only, and its audit log
-takes a write. Valkey is not part of readiness, since an instance without it still answers correctly
-and picks up new keys through its 30-second reload. Neither answer carries a body, so neither says
+**Liveness and readiness are two answers.** `/health/live` says the process runs and its log stream
+has never failed a write. A stream that has failed a write takes nothing more, and only a restart
+gives the instance a writable one, so liveness fails with it: an instance left live would sit
+unready, out of rotation, for good, and an alert on `readiness.lost` cannot be relied on, since that
+line goes to the stream that failed. For the same reason, nothing is written as liveness fails. A
+sink that stays broken shows as a restart loop, which the orchestrator reports. `/health/ready` says
+an instance can answer an exchange correctly: it has started and is not stopping, its store answers
+within a bound and, on an instance whose role writes, is not read-only, and its audit log takes a
+write. Valkey is not part of readiness, since an instance without it still answers correctly and
+picks up new keys through its 30-second reload. Neither answer carries a body, so neither says
 anything about the instance to whoever asks.
 
 **The controller connects to its store directly, or through a pooler in session mode.** Each

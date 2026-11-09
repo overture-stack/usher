@@ -227,6 +227,7 @@ const routeThrough = (
   trail: AuditTrail<string>,
 ): ReturnType<typeof createServer> => {
   const server = createServer({
+    isLive: () => true,
     isReady: async () => true,
     trustedProxies: [],
   });

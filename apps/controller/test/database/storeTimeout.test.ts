@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { type AddressInfo, connect, createServer, type Socket } from 'node:net';
 import { performance } from 'node:perf_hooks';
+import { Writable } from 'node:stream';
 import { suite, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -19,7 +20,9 @@ import {
   AUDIT_EVENT_TYPES,
   auditRows,
   awaitEventsOfType,
+  cloudEventsIn,
   dataOf,
+  emittedType,
   eventsIn,
   jsonObjectOf,
   SEVERITY_ATTRIBUTE,
@@ -143,6 +146,46 @@ const eventsNamedBy = (
           : { id: undefined, type: undefined },
       )
     : [];
+};
+
+/** A log stream that takes every line until told to refuse, and fails every write after. */
+interface FailingLog extends LogCapture {
+  /** Has the stream fail every write from now on, as a sink that has broken does. */
+  refuse(): void;
+
+  /** Each line the stream refused, in order, empty lines left out. */
+  refused(): readonly string[];
+}
+
+const nonEmptyLines = (chunks: readonly string[]): readonly string[] =>
+  chunks
+    .join('')
+    .split('\n')
+    .filter((line) => line.length > 0);
+
+const failingLog = (): FailingLog => {
+  const state = { refusing: false };
+  const refused: string[] = [];
+  const taken: string[] = [];
+  const stream = new Writable({
+    write: (chunk: unknown, _encoding, callback) => {
+      if (state.refusing) {
+        refused.push(String(chunk));
+        callback(new Error('the sink refused a write'));
+      } else {
+        taken.push(String(chunk));
+        callback();
+      }
+    },
+  });
+  return {
+    lines: () => nonEmptyLines(taken),
+    refuse: () => {
+      state.refusing = true;
+    },
+    refused: () => nonEmptyLines(refused),
+    stream,
+  };
 };
 
 // The lines a controller wrote as its readiness changed, in order.
@@ -739,6 +782,51 @@ suite("the controller's start", () => {
             variables: [ENVIRONMENT_VARIABLES.databaseUrl],
           },
         ]);
+      },
+      context,
+    );
+  });
+});
+
+suite("the controller's liveness", () => {
+  test('answers liveness 503, and readiness 503, with no body, once its log stream has failed to take a line, having answered both 200 before', async (context) => {
+    const log = failingLog();
+
+    await withHarness(
+      compressed(log),
+      async (harness) => {
+        const administrator = await administratorCaller(harness);
+        const before = [
+          await readLiveness(harness.url),
+          await readReadiness(harness.url),
+        ];
+
+        log.refuse();
+        const registration = await registerApplication(administrator, {
+          displayName: 'Registered as the log stream fails',
+        });
+        const after = [
+          await readLiveness(harness.url),
+          await readReadiness(harness.url),
+        ];
+
+        assertSucceeded(
+          registration,
+          'the registration as the log stream fails',
+        );
+        assert.deepEqual(
+          cloudEventsIn(log.refused().slice(0, 1)).map(({ type }) => type),
+          [emittedType(applicationRegistration)],
+        );
+        assert.deepEqual(
+          [...before, ...after].map(({ status, text }) => ({ status, text })),
+          [
+            { status: 200, text: '' },
+            { status: 200, text: '' },
+            { status: 503, text: '' },
+            { status: 503, text: '' },
+          ],
+        );
       },
       context,
     );

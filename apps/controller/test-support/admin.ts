@@ -1376,8 +1376,9 @@ export const readReadiness = (
   unauthenticatedGet(controllerUrl, PATHS.readiness, overrides);
 
 /**
- * Asks whether the controller's process is alive (#214 Q18): `GET /health/live`, unauthenticated,
- * answered 200 for as long as the process runs.
+ * Asks whether the controller's process should go on running (#214 Q18): `GET /health/live`,
+ * unauthenticated, answered 200 until the controller's log stream fails a write and 503 after, with
+ * no detail in the body.
  *
  * @param controllerUrl the controller's URL, ending in `/`.
  * @param overrides departures from the request.

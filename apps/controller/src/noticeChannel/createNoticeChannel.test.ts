@@ -134,6 +134,7 @@ const standUp = (
     },
   });
   const server = createServer({
+    isLive: () => true,
     isReady: async () => true,
     trustedProxies: [],
   });
