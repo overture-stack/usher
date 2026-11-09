@@ -4,8 +4,7 @@ import { suite, test } from 'node:test';
 import {
   DISPLAY_NAME_MAXIMUM_LENGTH,
   readDisplayName,
-  storedDescription,
-} from './displayName.js';
+} from './readDisplayName.js';
 
 const DECOMPOSED = 'é'.normalize('NFD');
 
@@ -39,14 +38,5 @@ suite("reading an application's display name", () => {
       kind: 'refused',
       rule: 'tooLong',
     });
-  });
-});
-
-suite("storing an application's description", () => {
-  test('trims it, and stores none for one empty once trimmed or not sent', () => {
-    assert.equal(storedDescription('  What it is for \n'), 'What it is for');
-    assert.equal(storedDescription(' \t '), null);
-    assert.equal(storedDescription(''), null);
-    assert.equal(storedDescription(undefined), null);
   });
 });

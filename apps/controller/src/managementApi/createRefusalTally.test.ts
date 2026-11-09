@@ -4,7 +4,7 @@ import { suite, test } from 'node:test';
 import {
   createRefusalTally,
   REFUSAL_TALLY_INTERVAL_MILLISECONDS,
-} from './refusalTally.js';
+} from './createRefusalTally.js';
 import type { TallyReason } from './types.js';
 
 const INTERVAL = REFUSAL_TALLY_INTERVAL_MILLISECONDS;

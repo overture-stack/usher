@@ -3,7 +3,7 @@ import { suite, test } from 'node:test';
 
 import pg from 'pg';
 
-import { readStoredRefusal } from './storedRefusal.js';
+import { readStoredRefusal } from './readStoredRefusal.js';
 import type { StoreReader } from './types.js';
 
 const ISSUER = 'https://auth.example.org/realms/usher';

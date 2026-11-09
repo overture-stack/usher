@@ -1,5 +1,5 @@
 export { openStore } from './connection.js';
-export { connectionProblemOf } from './connectionProblems.js';
+export { connectionProblemOf } from './connectionProblemOf.js';
 export { prepareStore } from './prepareStore.js';
 export type {
   ConnectionVariables,

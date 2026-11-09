@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import { readStrictJson } from './strictJson.js';
+import { readStrictJson } from './readStrictJson.js';
 
 suite('reading JSON strictly', () => {
   test('reads JSON whose objects name each member once, at every depth', () => {

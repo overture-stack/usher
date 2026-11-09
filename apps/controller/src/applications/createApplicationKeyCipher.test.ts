@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { suite, test } from 'node:test';
 
-import { createApplicationKeyCipher } from './applicationKeyCipher.js';
+import { createApplicationKeyCipher } from './createApplicationKeyCipher.js';
 
 const freshKey = (): string => randomBytes(32).toString('base64url');
 

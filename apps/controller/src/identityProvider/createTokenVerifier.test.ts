@@ -14,12 +14,12 @@ import {
 
 import type { Clock } from '../configuration/index.js';
 import type { LineFields } from '../eventLog/index.js';
-import { createTokenVerifier } from './createTokenVerifier.js';
 import {
   KEY_REFETCH_COOLDOWN_MILLISECONDS,
   KEY_SET_FETCH_FAILED,
   KEY_SET_MAXIMUM_AGE_MILLISECONDS,
-} from './signingKeys.js';
+} from './createSigningKeys.js';
+import { createTokenVerifier } from './createTokenVerifier.js';
 import type { KeySetFetchFailure, TokenVerifier } from './types.js';
 
 interface SigningKey {

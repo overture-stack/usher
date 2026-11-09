@@ -9,13 +9,13 @@ import type { Actor, AuditEvent, Severity } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import { queryNamesOf, readCredential } from './credential.js';
-import { readManagementClaims } from './managementClaims.js';
 import {
   BODY_LIMIT_BYTES,
   PROBLEMS,
   sendProblem,
   unreadableBody,
 } from './problems.js';
+import { readManagementClaims } from './readManagementClaims.js';
 import { readJsonBody } from './requestBody.js';
 import { holdsUnstorableText } from './storableText.js';
 import type {

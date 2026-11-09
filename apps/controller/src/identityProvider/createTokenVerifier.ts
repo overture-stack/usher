@@ -8,7 +8,7 @@ import {
   type JWK,
 } from 'jose';
 
-import { createSigningKeys } from './signingKeys.js';
+import { createSigningKeys } from './createSigningKeys.js';
 import type {
   TokenClaims,
   TokenVerification,

@@ -4,7 +4,7 @@ import pg from 'pg';
 
 import { ControllerError } from '../controllerError.js';
 import type { StoreReader } from '../managementApi/index.js';
-import { APPLICATION_KEY_BYTES } from './applicationKeyCipher.js';
+import { APPLICATION_KEY_BYTES } from './createApplicationKeyCipher.js';
 import type {
   ApplicationKeyCipher,
   IssuedApplicationKey,

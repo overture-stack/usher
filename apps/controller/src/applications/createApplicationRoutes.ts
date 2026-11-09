@@ -29,8 +29,8 @@ import {
 import {
   DISPLAY_NAME_MAXIMUM_LENGTH,
   readDisplayName,
-  storedDescription,
-} from './displayName.js';
+} from './readDisplayName.js';
+import { storedDescription } from './storedDescription.js';
 import type {
   ApplicationOperationsSettings,
   IssuedApplicationKey,
