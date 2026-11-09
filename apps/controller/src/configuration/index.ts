@@ -1,3 +1,4 @@
+export { CLOCK_TOLERANCE_MILLISECONDS } from './clockToleranceMilliseconds.js';
 export {
   ENVIRONMENT_VARIABLES,
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,

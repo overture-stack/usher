@@ -6,6 +6,7 @@ import type {
 } from 'fastify';
 
 import type { Actor, AuditEvent, Severity } from '../eventLog/index.js';
+import type { Problem } from '../http/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import { queryNamesOf, readCredential } from './credential.js';
 import { readManagementClaims } from './managementClaims.js';
@@ -24,7 +25,6 @@ import type {
   ManagementOperation,
   OperationOutcome,
   Principal,
-  Problem,
 } from './types.js';
 
 /** The line naming a failure of the store while an operation, or the standing of its caller, was read. */

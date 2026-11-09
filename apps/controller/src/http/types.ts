@@ -1,3 +1,17 @@
+/** RFC 9457 problem details as the controller answers a refusal, carrying a code. */
+export interface Problem {
+  /** Names the refusal, for a caller to act on. */
+  code: string;
+
+  /** What was wrong, and what to do about it; never a value the request carried. */
+  detail: string;
+
+  status: number;
+
+  /** The rule broken, in a few words. */
+  title: string;
+}
+
 /** What the server asks to answer whether the controller can serve. */
 export interface Readiness {
   /** Whether the controller can serve now; it never rejects. */

@@ -1,3 +1,4 @@
+import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import type { TokenClaims } from '../identityProvider/index.js';
 import { isStorableText } from './storableText.js';
 import type {
@@ -5,14 +6,6 @@ import type {
   ManagementTokenSettings,
   Principal,
 } from './types.js';
-
-/**
- * How far the controller's clock and the identity provider's may disagree before a token's `exp` or
- * `nbf` is judged against it, in milliseconds: the controller's tolerance on a channel assertion's
- * times, and below the bridge's local refusal tolerance, so the bridge never refuses a token the
- * controller would accept.
- */
-export const CLOCK_TOLERANCE_MILLISECONDS = 30_000;
 
 // Keycloak names a service account's user after its client, and gives its tokens the client's id.
 const SERVICE_ACCOUNT_USERNAME = 'service-account-';

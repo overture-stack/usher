@@ -1,7 +1,9 @@
 import { compactVerify, decodeJwt, decodeProtectedHeader } from 'jose';
 
-import type { Clock } from '../configuration/index.js';
-import { CLOCK_TOLERANCE_MILLISECONDS } from '../managementApi/index.js';
+import {
+  type Clock,
+  CLOCK_TOLERANCE_MILLISECONDS,
+} from '../configuration/index.js';
 import type {
   AssertionKey,
   ChannelAssertionCheck,

@@ -6,25 +6,12 @@ import type {
   JsonValue,
   TrailConnection,
 } from '../eventLog/index.js';
+import type { Problem } from '../http/index.js';
 import type {
   TokenVerifier,
   UnverifiedReason,
 } from '../identityProvider/index.js';
 import type { StoreReader as TimedStoreReader } from '../storeTimeout/index.js';
-
-/** RFC 9457 problem details as the management API answers a refusal, carrying a code. */
-export interface Problem {
-  /** Names the refusal, for a caller to act on. */
-  code: string;
-
-  /** What was wrong, and what to do about it; never a value the request carried. */
-  detail: string;
-
-  status: number;
-
-  /** The rule broken, in a few words. */
-  title: string;
-}
 
 /** Who an accepted management token speaks for. */
 export interface Principal {

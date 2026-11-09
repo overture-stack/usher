@@ -10,7 +10,7 @@ import {
   rejectionEvent,
   type VerifiedAssertion,
 } from '../channelAssertion/index.js';
-import type { Problem } from '../managementApi/index.js';
+import type { Problem } from '../http/index.js';
 import { CHANNEL_PROBLEMS, sendChannelProblem } from './channelProblems.js';
 import { createNoticeStreams } from './createNoticeStreams.js';
 import { createNoticeTail } from './createNoticeTail.js';

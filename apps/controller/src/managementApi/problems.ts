@@ -1,28 +1,12 @@
 import type { FastifyReply } from 'fastify';
 
-import type { Problem } from './types.js';
+import { problem, type Problem } from '../http/index.js';
 
 /** The largest request body the management API reads, in bytes: 64 KiB. */
 export const BODY_LIMIT_BYTES = 65_536;
 
 // The media type every refusal is answered in: RFC 9457's problem details.
 const PROBLEM_MEDIA_TYPE = 'application/problem+json';
-
-/**
- * A refusal's problem details: its code, the status it comes with, a title naming the rule broken, and
- * a detail saying what the caller can do. Neither text ever holds a value the request carried.
- *
- * @param code the problem's code.
- * @param status the HTTP status.
- * @param title the rule broken, in a few words.
- * @param detail what was wrong, and what to do about it.
- */
-export const problem = (
-  code: string,
-  status: number,
-  title: string,
-  detail: string,
-): Problem => Object.freeze({ code, detail, status, title });
 
 /** The refusals the management API answers whatever the operation. */
 export const PROBLEMS = Object.freeze({

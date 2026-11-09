@@ -1,6 +1,6 @@
+import type { Problem } from '../http/index.js';
 import { PROBLEMS, unreadableBody } from './problems.js';
 import { readStrictJson } from './strictJson.js';
-import type { Problem } from './types.js';
 
 /** What reading a request's body gave: none, one JSON object, or the refusal it earned. */
 export type BodyReading =

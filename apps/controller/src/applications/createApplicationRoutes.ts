@@ -3,6 +3,7 @@ import type pg from 'pg';
 
 import { type Actor, eventInstant, type JsonValue } from '../eventLog/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
+import { type Problem, problem } from '../http/index.js';
 import {
   type EventMembers,
   type InputReading,
@@ -11,8 +12,6 @@ import {
   managementRoute,
   type OperationOutcome,
   type Principal,
-  type Problem,
-  problem,
   readTextMembers,
 } from '../managementApi/index.js';
 import {

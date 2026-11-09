@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import {
-  CLOCK_TOLERANCE_MILLISECONDS,
-  readManagementClaims,
-} from './managementClaims.js';
+import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
+import { readManagementClaims } from './managementClaims.js';
 
 const NOW = Date.UTC(2026, 10, 4, 12, 0, 0);
 

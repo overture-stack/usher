@@ -1,2 +1,3 @@
 export { createServer } from './createServer.js';
-export type { Readiness, ServerSettings } from './types.js';
+export { problem } from './problem.js';
+export type { Problem, Readiness, ServerSettings } from './types.js';

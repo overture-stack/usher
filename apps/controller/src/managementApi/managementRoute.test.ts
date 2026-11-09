@@ -5,7 +5,7 @@ import { suite, test, type TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 
 import type { Actor, AuditEvent, LineFields } from '../eventLog/index.js';
-import { createServer } from '../http/index.js';
+import { createServer, problem } from '../http/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import type {
   TokenClaims,
@@ -16,7 +16,7 @@ import {
   REFUSED_SUBJECT_MAXIMUM_LENGTH,
   STORE_FAILED,
 } from './managementRoute.js';
-import { BODY_LIMIT_BYTES, problem } from './problems.js';
+import { BODY_LIMIT_BYTES } from './problems.js';
 import { readTextMembers } from './requestBody.js';
 import type {
   ManagementOperation,

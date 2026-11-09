@@ -1,6 +1,6 @@
 import type { FastifyReply } from 'fastify';
 
-import { problem, type Problem } from '../managementApi/index.js';
+import { problem, type Problem } from '../http/index.js';
 
 /** The refusals the revocation channel answers, each naming the rule broken and no value sent. */
 export const CHANNEL_PROBLEMS = Object.freeze({
