@@ -1,3 +1,5 @@
+import { ControllerError } from './controllerError.js';
+
 /** One rule a start broke, and the environment variable whose value broke it. */
 export interface StartProblem {
   /** What is wrong, worded to follow the variable's name, and never quoting its value. */
@@ -12,7 +14,7 @@ export interface StartProblem {
  * environment variable at fault and the rule its value broke, never the value, so a refusal is safe
  * to print wherever the start's output goes, whatever the variable holds.
  */
-export class StartRefusal extends Error {
+export class StartRefusal extends ControllerError {
   override readonly name = 'StartRefusal';
 
   /** The environment variables at fault, in the order their problems were found. */

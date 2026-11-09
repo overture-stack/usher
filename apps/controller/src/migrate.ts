@@ -3,7 +3,7 @@
 // refusal writes one structured line naming the variables at fault to standard error, as the
 // controller's start does, and ends the process with a non-zero code; a run that applies its
 // migrations writes one line at info naming them to standard output, where the controller writes
-// its own, and ends with zero.
+// its own, and ends with zero. A failure nothing caught writes its line and ends the process at once.
 import { constants } from 'node:os';
 
 import {
@@ -18,7 +18,7 @@ import {
   type MigrationOutcome,
   type RefusedOption,
 } from './migrations/index.js';
-import { reportFailure } from './reportFailure.js';
+import { reportFailure, reportUncaughtFailure } from './reportFailure.js';
 import { StartRefusal } from './startRefusal.js';
 import { connectionProblemOf } from './store/index.js';
 
@@ -70,6 +70,11 @@ const reportApplied = ({
   };
   process.stdout.write(`${JSON.stringify(line)}\n`);
 };
+
+process.on(
+  'uncaughtException',
+  reportUncaughtFailure('the schema migration command failed'),
+);
 
 // The first stop signal stops the run: its connection ends, which rolls back the migration in flight,
 // and the run fails saying it was stopped. The process then exits as one the signal ended does, with

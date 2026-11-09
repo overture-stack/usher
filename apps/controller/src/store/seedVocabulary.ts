@@ -7,6 +7,7 @@ import {
   type SeededRole,
 } from '../capabilities/index.js';
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
+import { ControllerError } from '../controllerError.js';
 import type { StartProblem } from '../startRefusal.js';
 import { writeOrRefuse } from './writeOrRefuse.js';
 
@@ -90,7 +91,9 @@ const insertPermissions = async (
   if (rowCount === permissions.length) {
     return;
   }
-  throw new Error('a seeded role names a capability the store does not hold');
+  throw new ControllerError(
+    'a seeded role names a capability the store does not hold',
+  );
 };
 
 /**

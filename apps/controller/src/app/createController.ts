@@ -14,6 +14,7 @@ import {
   rejectionTallyEvent,
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
+import { ControllerError } from '../controllerError.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
@@ -54,7 +55,7 @@ const urlOf = (address: unknown): URL => {
       address.family === 'IPv6' ? `[${address.address}]` : address.address;
     return new URL(`http://${host}:${address.port}/`);
   }
-  throw new Error('the controller listens on no TCP address');
+  throw new ControllerError('the controller listens on no TCP address');
 };
 
 // What readiness asks the store: whether it reads as read-only, a statement reading no table.
@@ -233,7 +234,7 @@ export const createController = (
         return lifecycle.started;
       }
       return Promise.reject(
-        new Error('a controller starts once, and never once stopped'),
+        new ControllerError('a controller starts once, and never once stopped'),
       );
     },
     stop: () => {

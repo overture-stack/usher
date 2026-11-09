@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import pg from 'pg';
 
+import { ControllerError } from '../controllerError.js';
 import type { StoreReader } from '../managementApi/index.js';
 import { APPLICATION_KEY_BYTES } from './applicationKeyCipher.js';
 import type {
@@ -79,7 +80,7 @@ export const insertApplication = async (
   if (application !== undefined) {
     return application.id;
   }
-  throw new Error('the store answered the insert with no row');
+  throw new ControllerError('the store answered the insert with no row');
 };
 
 /**
@@ -106,7 +107,7 @@ export const insertKey = async (
     await connection.query<IdRow>('SELECT gen_random_uuid()::text AS id')
   ).rows;
   if (generated === undefined) {
-    throw new Error('the store generated no id');
+    throw new ControllerError('the store generated no id');
   }
   const key = randomBytes(APPLICATION_KEY_BYTES);
   try {

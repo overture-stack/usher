@@ -1,3 +1,4 @@
+import { ControllerError } from '../controllerError.js';
 import type { RefusedOption } from './types.js';
 
 /** What the message of every refusal a migration run gives opens with. */
@@ -8,7 +9,7 @@ export const MIGRATIONS_REFUSE_TO_RUN = 'the schema migrations refuse to run';
  * the rule its value broke, worded to follow the option's name and never quoting the value, so a
  * caller that read the option from a variable can name the variable instead.
  */
-export class MigrationRefusal extends Error {
+export class MigrationRefusal extends ControllerError {
   override readonly name = 'MigrationRefusal';
 
   /** The option at fault. */

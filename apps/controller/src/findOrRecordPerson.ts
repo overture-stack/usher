@@ -1,5 +1,7 @@
 import pg from 'pg';
 
+import { ControllerError } from './controllerError.js';
+
 /** The identity a person is found by: the identity provider's issuer and its subject for them. */
 export interface PersonIdentity {
   /** The issuer, exactly as its tokens name it. */
@@ -61,7 +63,7 @@ export const findOrRecordPerson = async (
     );
     const [person] = rows;
     if (person === undefined) {
-      throw new Error('the store recorded no person');
+      throw new ControllerError('the store recorded no person');
     }
     await connection.query(
       `INSERT INTO ${table('user_identities')} (user_id, idp_issuer, idp_subject_id, added_at) VALUES ($1, $2, $3, $4)`,

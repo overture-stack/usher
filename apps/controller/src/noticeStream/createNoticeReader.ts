@@ -1,5 +1,6 @@
 import pg from 'pg';
 
+import { ControllerError } from '../controllerError.js';
 import type {
   NoticePage,
   NoticeReader,
@@ -34,7 +35,7 @@ interface PageRow extends HeadRow {
  * The stream's one row is missing, so no read can say what history reaches. Its `code` names it on a
  * log line.
  */
-export class NoticeStreamMissing extends Error {
+export class NoticeStreamMissing extends ControllerError {
   readonly code = 'noticeStreamMissing';
   override readonly name = 'NoticeStreamMissing';
   constructor() {

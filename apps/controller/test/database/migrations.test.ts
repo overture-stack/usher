@@ -519,7 +519,7 @@ suite('migrations', () => {
     );
     assert.deepEqual(onlyLine(linesOf(exit.stderr)), {
       level: FATAL_LEVEL,
-      error: 'Error',
+      error: 'ControllerError',
       message:
         'the schema migration command failed: the run was stopped, and every migration it committed before the stop stays applied',
     });

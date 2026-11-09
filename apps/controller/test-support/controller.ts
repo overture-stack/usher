@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { RecordAction } from '@overture-stack/usher-types';
 
-import { builtEntry } from './build.js';
+import { type BuiltEntry, builtEntry } from './build.js';
 
 /** A source of the current time, in milliseconds since the Unix epoch. */
 export interface Clock {
@@ -910,6 +910,70 @@ export const unusedPort = (host: string = LOOPBACK): Promise<number> =>
       server.close(() => resolve(port));
     });
   });
+
+/** How a failure nothing catches is raised in a built entry's process: thrown, or a promise rejected with nobody handling it. */
+export type UncaughtFailure = 'exception' | 'rejection';
+
+/** What {@link spawnWithUncaughtFailure} is told beyond the entry and the environment. */
+export interface UncaughtFailureSpawn {
+  /** How the failure is raised. */
+  failure: UncaughtFailure;
+
+  /** The failure's message, which a test searches the output for. */
+  message: string;
+
+  /** How long the process may run before it is killed: 10 s by default. */
+  timeoutMs?: number;
+}
+
+// Loads a built entry, then raises an error nothing catches once the entry's own code has run, so
+// whatever the entry installed for such a failure is in place: plain JavaScript, run under Node
+// alone, given the entry's URL, how to raise the error and its message.
+const UNCAUGHT_FAILURE_SCRIPT = `const [entry, failure, message] = process.argv.slice(1);
+await import(entry);
+const error = new Error(message);
+setImmediate(() => {
+  if (failure === 'rejection') {
+    Promise.reject(error);
+  } else {
+    throw error;
+  }
+});`;
+
+/**
+ * Runs a built entry under Node alone as a child process given exactly the environment passed, and
+ * raises an error nothing catches in it once the entry's own code has run: thrown, or as a promise
+ * rejected with nobody handling it. A process still running at the timeout is killed.
+ *
+ * @param entry the entry, by the name of the file it builds.
+ * @param environment the environment variables, such as {@link schemaMigrationEnvironmentFor} gives.
+ * @param options how the error is raised, its message, and the timeout.
+ * @returns the exit code or signal, the output, and whether the timeout ended the process.
+ * @throws while the run has no build, as when a test file runs without the global setup.
+ */
+export const spawnWithUncaughtFailure = async (
+  entry: BuiltEntry,
+  environment: ControllerEnvironment,
+  {
+    failure,
+    message,
+    timeoutMs = DEFAULT_SPAWN_TIMEOUT_MS,
+  }: UncaughtFailureSpawn,
+): Promise<CommandExit> => {
+  const { acceptedConnection: _acceptedConnection, ...exit } = await runEntry(
+    [
+      '--input-type=module',
+      '--eval',
+      UNCAUGHT_FAILURE_SCRIPT,
+      builtEntry(entry).href,
+      failure,
+      message,
+    ],
+    environment,
+    { timeoutMs },
+  );
+  return exit;
+};
 
 const SCHEMA_MIGRATION_VARIABLE_NAMES = {
   databasePassword: 'USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD',

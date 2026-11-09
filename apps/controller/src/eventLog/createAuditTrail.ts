@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import pg from 'pg';
 
+import { ControllerError } from '../controllerError.js';
 import {
   CommitUnconfirmed,
   type Lease,
@@ -148,7 +149,7 @@ export const createAuditTrail = <Connection extends TrailConnection>({
           recorded.push(envelope);
           return envelope.id;
         }
-        throw new Error(
+        throw new ControllerError(
           'an event is recorded only while its transaction is open',
         );
       };
@@ -168,7 +169,7 @@ export const createAuditTrail = <Connection extends TrailConnection>({
           transaction.open = false;
           return result;
         }
-        throw new Error(
+        throw new ControllerError(
           'the transaction rolled back at its commit, a statement in it having failed',
         );
       } catch (error) {

@@ -1,16 +1,18 @@
+import { ControllerError } from '../controllerError.js';
 import { MIGRATIONS_REFUSE_TO_RUN } from './migrationRefusal.js';
 import type { AppliedMigration, Migration } from './types.js';
 
-const describedRefusal = (rule: string): Error =>
-  new Error(`${MIGRATIONS_REFUSE_TO_RUN}: ${rule}`);
+const describedRefusal = (rule: string): ControllerError =>
+  new ControllerError(`${MIGRATIONS_REFUSE_TO_RUN}: ${rule}`);
 
 // The record must be this release's migrations from the first, in order, each unchanged: anything
 // else means a migration was edited, removed or slipped in below one already applied, and applying
-// the rest on top of that history could leave a schema no release describes.
+// the rest on top of that history could leave a schema no release describes. A refusal names only
+// this release's own migrations, never a name the record holds.
 const refusalOfRecord = (
   known: readonly Migration[],
   applied: readonly AppliedMigration[],
-): Error | undefined => {
+): ControllerError | undefined => {
   const departure = applied.findIndex(
     ({ checksum, name }, index) =>
       known[index]?.name !== name || known[index]?.checksum !== checksum,
@@ -20,18 +22,19 @@ const refusalOfRecord = (
     return undefined;
   }
   const held = known.find(({ name }) => name === record.name);
-  if (held === undefined) {
+  const missing = known[departure];
+  if (held === undefined || missing === undefined) {
     return describedRefusal(
-      `the database records ${record.name} as applied, and this release holds no migration by that name`,
+      'the database records a migration as applied that this release does not hold',
     );
   }
   if (held.checksum !== record.checksum) {
     return describedRefusal(
-      `${record.name} has changed since it was applied; a correction is a new migration`,
+      `${held.name} has changed since it was applied; a correction is a new migration`,
     );
   }
   return describedRefusal(
-    `${known[departure]?.name ?? record.name} comes before ${record.name}, which is applied, and is not applied itself`,
+    `${missing.name} comes before ${held.name}, which is applied, and is not applied itself`,
   );
 };
 

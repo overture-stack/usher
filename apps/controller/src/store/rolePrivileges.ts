@@ -1,6 +1,7 @@
 import type pg from 'pg';
 
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
+import { ControllerError } from '../controllerError.js';
 import type { StartProblem } from '../startRefusal.js';
 import type {
   HeldFunction,
@@ -275,7 +276,9 @@ export const readHeldPrivileges = async (
       schema: schemas.rows[0],
     };
   }
-  throw new Error('the catalogue holds no row for the connected role');
+  throw new ControllerError(
+    'the catalogue holds no row for the connected role',
+  );
 };
 
 const permittedPrivileges = (

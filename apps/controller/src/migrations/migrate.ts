@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { parseIntoClientConfig } from 'pg-connection-string';
 
+import { ControllerError } from '../controllerError.js';
 import {
   MIGRATIONS_REFUSE_TO_RUN,
   MigrationRefusal,
@@ -35,11 +36,11 @@ const RECORD_TABLE = 'schema_migrations';
 
 const RETENTION_TABLE = 'notice_retention';
 
-const refusal = (rule: string): Error =>
-  new Error(`${MIGRATIONS_REFUSE_TO_RUN}: ${rule}`);
+const refusal = (rule: string): ControllerError =>
+  new ControllerError(`${MIGRATIONS_REFUSE_TO_RUN}: ${rule}`);
 
-const stoppedRun = (cause: unknown): Error =>
-  new Error(
+const stoppedRun = (cause: unknown): ControllerError =>
+  new ControllerError(
     'the run was stopped, and every migration it committed before the stop stays applied',
     { cause },
   );
@@ -188,7 +189,7 @@ const applyMigration = async (
   } catch (error) {
     // A rollback failing too means the connection is gone, which ends the transaction anyway.
     await client.query('ROLLBACK').catch(() => undefined);
-    throw new Error(
+    throw new ControllerError(
       `the migration ${migration.name} failed, and none of it was applied`,
       { cause: error },
     );

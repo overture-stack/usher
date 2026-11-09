@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 
+import { ControllerError } from '../controllerError.js';
 import type { Migration } from './types.js';
 
 /** The folder holding the controller's migrations, one SQL file each. */
@@ -42,7 +43,7 @@ export const readMigrations = async (
     (fileName) => numberOf(fileName) === undefined,
   );
   if (misnamed !== undefined) {
-    throw new Error(
+    throw new ControllerError(
       `the migrations folder holds ${misnamed}, which is not named as a migration: four digits, then lower-case words joined by underscores, then .sql`,
     );
   }
@@ -51,7 +52,7 @@ export const readMigrations = async (
     (fileName, index) => numbers.indexOf(numberOf(fileName)) !== index,
   );
   if (repeated !== undefined) {
-    throw new Error(
+    throw new ControllerError(
       `the migrations folder holds ${repeated}, whose number another migration already has`,
     );
   }

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { suite, test } from 'node:test';
 
 import { pendingMigrations } from './pendingMigrations.js';
@@ -73,8 +74,39 @@ suite('the migrations a run applies', () => {
 
     assert.throws(() => pendingMigrations(KNOWN, applied), {
       message:
-        'the schema migrations refuse to run: the database records 0004_fourth as applied, and this release holds no migration by that name',
+        'the schema migrations refuse to run: the database records a migration as applied that this release does not hold',
     });
+  });
+
+  test('refuses a record departing from the release without naming anything the record holds, only what the release holds', () => {
+    const marker = `marker_${randomUUID().replaceAll('-', '')}`;
+    const records: readonly (readonly AppliedMigration[])[] = [
+      [...KNOWN.map(recordOf), { checksum: marker, name: `0004_${marker}` }],
+      [{ checksum: marker, name: marker }],
+      [
+        recordOf(migration('0001_first')),
+        { checksum: marker, name: '0002_second' },
+      ],
+    ];
+
+    const messages = records.map((applied) => {
+      try {
+        pendingMigrations(KNOWN, applied);
+      } catch (refusal) {
+        return refusal instanceof Error ? refusal.message : String(refusal);
+      }
+      return assert.fail('the record was taken, where a refusal was expected');
+    });
+
+    assert.deepEqual(messages, [
+      'the schema migrations refuse to run: the database records a migration as applied that this release does not hold',
+      'the schema migrations refuse to run: the database records a migration as applied that this release does not hold',
+      'the schema migrations refuse to run: 0002_second has changed since it was applied; a correction is a new migration',
+    ]);
+    assert.equal(
+      messages.some((message) => message.includes(marker)),
+      false,
+    );
   });
 
   test('refuses a record whose checksum differs from the migration of that name', () => {

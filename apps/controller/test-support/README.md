@@ -24,7 +24,9 @@ leaves them out, since they need Docker.
   R1's one process-level test, or a built entry under Node alone, for the build's test beside
   `tsdown.config.ts`, and reports its exit, its output and whether it ever accepted a
   connection. `spawnSchemaMigrationCommand` runs the run's build of the schema migration command,
-  `migrate.js`, the same way, sending it a signal on cue (`stopWith`) for a test of its stop;
+  `migrate.js`, the same way, sending it a signal on cue (`stopWith`) for a test of its stop, and
+  `spawnWithUncaughtFailure` runs either built entry and, once the entry's own code has run, raises
+  an error nothing catches in it, thrown or as a rejection nobody handles;
   `migrateThroughCommand` applies every migration through it, resolving with the lines it wrote to
   standard output and rejecting with what it wrote when it fails, and
   `schemaMigrationEnvironmentFor` expresses a run's options but a target as its environment, the
