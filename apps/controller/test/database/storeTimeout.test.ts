@@ -54,6 +54,11 @@ const { applicationRegistration } = AUDIT_EVENT_TYPES;
 const { storeTimeoutMilliseconds: STORE_TIMEOUT_MS } =
   COMPRESSED_CONTROLLER_TIMING;
 
+// The store timeout of an instance reaching the store through the test's proxy, whose every round
+// trip crosses the proxy as well: wider than the run's, so the instance's start finishes within it on
+// a loaded machine, and what a test times is measured from it.
+const PROXIED_STORE_TIMEOUT_MS = 4 * STORE_TIMEOUT_MS;
+
 /** How long the controller reuses one answer of the store's to readiness: a constant of its own. */
 const STORE_PROBE_INTERVAL_MS = 1000;
 
@@ -535,6 +540,7 @@ suite('a Management API request on a store not answering in time', () => {
         const instance = await startInstance(scope, harness, {
           databaseUrl: proxy.databaseUrl,
           logStream: instanceLog.stream,
+          storeTimeoutMilliseconds: PROXIED_STORE_TIMEOUT_MS,
         });
         const administrator = await administratorCaller(harness, {
           url: instance.url,
@@ -585,8 +591,9 @@ suite('a Management API request on a store not answering in time', () => {
           OUTCOME_UNKNOWN,
         );
         assert.ok(
-          unconfirmed.elapsedMs >= STORE_TIMEOUT_MS &&
-            unconfirmed.elapsedMs < 2 * STORE_TIMEOUT_MS + SCHEDULING_SLACK_MS,
+          unconfirmed.elapsedMs >= PROXIED_STORE_TIMEOUT_MS &&
+            unconfirmed.elapsedMs <
+              2 * PROXIED_STORE_TIMEOUT_MS + SCHEDULING_SLACK_MS,
           `answered in ${Math.round(unconfirmed.elapsedMs)} ms`,
         );
         assert.deepEqual(moreLines, []);
@@ -677,7 +684,10 @@ suite("the controller's start", () => {
         );
 
         await assert.rejects(
-          startInstance(scope, harness, { databaseUrl: proxy.databaseUrl }),
+          startInstance(scope, harness, {
+            databaseUrl: proxy.databaseUrl,
+            storeTimeoutMilliseconds: PROXIED_STORE_TIMEOUT_MS,
+          }),
           {
             message:
               "the controller refuses to start: USHER_DATABASE_URL names a connection on which the store does not apply the controller's statement limits, as a connection pooler that drops startup parameters does",
