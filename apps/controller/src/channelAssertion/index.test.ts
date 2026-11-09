@@ -11,7 +11,6 @@ suite("the channel assertion's module", () => {
       'CHANNEL_ASSERTION_TYPE',
       'REJECTION_TALLY_INTERVAL_MILLISECONDS',
       'createChannelAssertionVerifier',
-      'createRejectionTally',
       'rejectionEvent',
       'rejectionTallyEvent',
     ]);

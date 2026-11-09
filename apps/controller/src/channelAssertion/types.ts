@@ -1,7 +1,5 @@
 import type { KeyObject } from 'node:crypto';
 
-import type { Clock } from '../configuration/index.js';
-
 /**
  * Why an assertion the controller could not verify was refused. One costs nothing to send, so it is
  * counted, as `channelAssertion.rejectionTally`, rather than recorded one by one.
@@ -80,37 +78,4 @@ export interface ChannelAssertionVerifier<Key> {
    * @param rawHeaders the request's header names and values, alternating, as Node gives them.
    */
   verify(rawHeaders: readonly string[]): Promise<ChannelAssertionCheck<Key>>;
-}
-
-/** The tally of channel assertions refused unverified, counted per reason and application. */
-export interface RejectionTally {
-  /**
-   * Counts one refusal.
-   *
-   * @param reason why it was refused.
-   * @param applicationId the registered application the assertion names, or `undefined` for none.
-   */
-  count(reason: UnverifiedRejectionReason, applicationId?: string): void;
-
-  /** Starts reading the clock for each interval's end; a second call does nothing. */
-  start(): void;
-
-  /** Records the counts it holds, whatever the interval, settling once every recording has. */
-  stop(): Promise<void>;
-}
-
-/** What the tally is created from. */
-export interface RejectionTallySettings {
-  /** The clock each interval runs on. */
-  clock: Clock;
-
-  /**
-   * Records one count: a reason, the registered application named or `undefined` for none, and how
-   * many refusals the interval held. A failure it meets ends with it.
-   */
-  record(
-    reason: UnverifiedRejectionReason,
-    applicationId: string | undefined,
-    count: number,
-  ): Promise<unknown>;
 }

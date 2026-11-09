@@ -1,6 +1,6 @@
 import type pg from 'pg';
 
-import type { Clock, ControllerConfiguration } from '../configuration/index.js';
+import type { ControllerConfiguration } from '../configuration/index.js';
 import type {
   AuditEventType,
   AuditTrail,
@@ -103,25 +103,10 @@ export type TallyReason =
   | 'otherIssuer'
   | 'unreadableToken';
 
-/** The tally of management credentials that could not be read or verified. */
+/** Where the management API counts each credential it could not read or verify. */
 export interface RefusalTally {
   /** Counts one credential refused for the reason given. */
   count(reason: TallyReason): void;
-
-  /** Starts reading the clock for each interval's end. */
-  start(): void;
-
-  /** Stops reading the clock, records the counts held, and settles once every recording has. */
-  stop(): Promise<void>;
-}
-
-/** What the tally is created from. */
-export interface RefusalTallySettings {
-  /** The clock the intervals are measured on. */
-  clock: Clock;
-
-  /** Records one reason's count over an interval; a failure to is the recorder's to report. */
-  record(reason: TallyReason, count: number): Promise<unknown>;
 }
 
 /** An event's members, as an operation names them. */
@@ -214,7 +199,7 @@ export interface ManagementDependencies {
   /** Where an operational line is written. */
   eventLog: Pick<EventLog, 'error'>;
 
-  refusalTally: Pick<RefusalTally, 'count'>;
+  refusalTally: RefusalTally;
 
   settings: ManagementTokenSettings &
     Pick<ControllerConfiguration, 'clock' | 'identityProviderIssuer'>;

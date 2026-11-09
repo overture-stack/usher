@@ -10,8 +10,9 @@ import {
 } from '../applications/index.js';
 import {
   createChannelAssertionVerifier,
-  createRejectionTally,
+  REJECTION_TALLY_INTERVAL_MILLISECONDS,
   rejectionTallyEvent,
+  type UnverifiedRejectionReason,
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
@@ -19,9 +20,11 @@ import { ControllerError } from '../failures/index.js';
 import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
 import {
-  createRefusalTally,
   type ManagementDependencies,
   readStoredRefusal,
+  REFUSAL_TALLY_INTERVAL_MILLISECONDS,
+  refusalTallyEvent,
+  type TallyReason,
 } from '../managementApi/index.js';
 import {
   createNoticeChannel,
@@ -34,8 +37,16 @@ import {
 import { createReadiness } from '../readiness/index.js';
 import { openStore, prepareStore } from '../store/index.js';
 import { createStoreReader } from '../storeTimeout/index.js';
+import { createTally } from '../tally/index.js';
 import { afterCommitTrail } from './afterCommitTrail.js';
 import type { Controller } from './types.js';
+
+// A channel assertion refused unverified, as its tally counts it: by reason, and by the registered
+// application it names, or none.
+interface RejectionCounted {
+  applicationId: string | undefined;
+  reason: UnverifiedRejectionReason;
+}
 
 interface Lifecycle {
   ready: boolean;
@@ -101,25 +112,21 @@ export const createController = (
     settings: configuration,
     store,
   });
-  const refusalTally = createRefusalTally({
+  const refusalTally = createTally<TallyReason>({
     clock: configuration.clock,
-    record: (reason, count) =>
-      trail.recordEvent(
-        { type: 'system' },
-        {
-          data: { count, reason },
-          severity: 'warning',
-          type: 'managementToken.refusalTally',
-        },
-      ),
+    eventOf: refusalTallyEvent,
+    intervalMilliseconds: REFUSAL_TALLY_INTERVAL_MILLISECONDS,
+    partsOf: (reason) => [reason],
+    trail,
   });
-  const assertionRejections = createRejectionTally({
+  const assertionRejections = createTally<RejectionCounted>({
     clock: configuration.clock,
-    record: (reason, applicationId, count) =>
-      trail.recordEvent(
-        { type: 'system' },
-        rejectionTallyEvent(reason, applicationId, count),
-      ),
+    eventOf: ({ applicationId, reason }, count) =>
+      rejectionTallyEvent(reason, applicationId, count),
+    intervalMilliseconds: REJECTION_TALLY_INTERVAL_MILLISECONDS,
+    // By reason, then by application, a count naming none first.
+    partsOf: ({ applicationId, reason }) => [reason, applicationId ?? ''],
+    trail,
   });
   const cipher = createApplicationKeyCipher(configuration.keyEncryptionKey);
   const keyRing = createApplicationKeyRing({
@@ -136,7 +143,11 @@ export const createController = (
     eventLog,
     keyRing,
     reader: createNoticeReader(reader, configuration.databaseSchema),
-    rejections: assertionRejections,
+    rejections: {
+      count: (reason, applicationId) => {
+        assertionRejections.count({ applicationId, reason });
+      },
+    },
     settings: configuration,
     trail,
     usedAssertions: createUsedAssertions(configuration.clock),
