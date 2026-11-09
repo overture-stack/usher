@@ -5,7 +5,6 @@ import { suite, test } from 'node:test';
 import type pg from 'pg';
 
 import { createApplicationKeyCipher } from '../applications/index.js';
-import type { StoreReader } from '../storeTimeout/index.js';
 import {
   createApplicationKeyRing,
   KEY_CHANGE_FAILED,
@@ -13,7 +12,7 @@ import {
   KEY_RELOAD_INTERVAL_MILLISECONDS,
   KEY_UNREADABLE,
 } from './createApplicationKeyRing.js';
-import type { LiveApplicationKey } from './types.js';
+import type { KeyStore, LiveApplicationKey } from './types.js';
 
 interface KeyRow {
   applicationId: string;
@@ -50,7 +49,7 @@ const fakeStore = (
 ): {
   reads: () => number;
   setRows: (rows: readonly KeyRow[] | Error) => void;
-  store: StoreReader;
+  store: KeyStore;
 } => {
   const state: { answer: readonly KeyRow[] | Error; reads: number } = {
     answer: initial,

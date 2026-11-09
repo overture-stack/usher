@@ -20,7 +20,7 @@ import {
   KEY_SET_MAXIMUM_AGE_MILLISECONDS,
 } from './createSigningKeys.js';
 import { createTokenVerifier } from './createTokenVerifier.js';
-import type { KeySetFetchFailure, TokenVerifier } from './types.js';
+import type { KeySetFetchFailure } from './types.js';
 
 interface SigningKey {
   jwk: JWK;
@@ -188,7 +188,7 @@ const verifierFor = (
   standIn: StandIn,
   clock: Clock = adjustableClock(),
   lines: Line[] = [],
-): TokenVerifier =>
+): ReturnType<typeof createTokenVerifier> =>
   createTokenVerifier(
     { clock, identityProviderIssuer: standIn.issuer },
     {

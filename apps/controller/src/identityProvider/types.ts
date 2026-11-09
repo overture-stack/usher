@@ -24,16 +24,6 @@ export type TokenVerification =
   | { kind: 'keysUnavailable' }
   | { kind: 'unverified'; reason: UnverifiedReason };
 
-/** Verifies tokens signed by the trusted identity provider. */
-export interface TokenVerifier {
-  /**
-   * Verifies a compact signed token: its issuer, read unverified only to route it, is checked against
-   * the trusted one before any key is fetched; its signature against the trusted issuer's published
-   * keys alone; and its issuer again once verified. No claim but `iss` is judged here.
-   */
-  verify(token: string): Promise<TokenVerification>;
-}
-
 /** What the verifier is created from: the clock the key set's age is measured on, and the trusted issuer. */
 export type TokenVerifierSettings = Pick<
   ControllerConfiguration,

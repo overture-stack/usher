@@ -311,16 +311,22 @@ suite('admitting a request to a management operation', () => {
       verifications: {
         forged: { kind: 'unverified', reason: 'invalidSignature' },
         other: { kind: 'unverified', reason: 'otherIssuer' },
+        unreadable: { kind: 'unverified', reason: 'unreadableToken' },
       },
     });
 
     const answers = [
       await post(stand, { token: 'other' }),
       await post(stand, { token: 'forged' }),
+      await post(stand, { token: 'unreadable' }),
     ];
 
     answers.forEach((answer) => assert.equal(answer.statusCode, 401));
-    assert.deepEqual(stand.counted, ['otherIssuer', 'invalidSignature']);
+    assert.deepEqual(stand.counted, [
+      'otherIssuer',
+      'invalidSignature',
+      'unreadableToken',
+    ]);
     assert.deepEqual(stand.recorded, []);
   });
 

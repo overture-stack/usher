@@ -1,3 +1,5 @@
+import type pg from 'pg';
+
 import type { Clock, ControllerConfiguration } from '../configuration/index.js';
 import type {
   AuditEventType,
@@ -7,11 +9,7 @@ import type {
   TrailConnection,
 } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
-import type {
-  TokenVerifier,
-  UnverifiedReason,
-} from '../identityProvider/index.js';
-import type { StoreReader as TimedStoreReader } from '../storeTimeout/index.js';
+import type { TokenVerification } from '../identityProvider/index.js';
 
 /** Who an accepted management token speaks for. */
 export interface Principal {
@@ -40,6 +38,21 @@ export type ManagementTokenSettings = Pick<
 >;
 
 /**
+ * Where the management API verifies a management token: its signature, under the trusted issuer's
+ * published keys alone, and its `iss`. A verifier judges no other claim, since the management API
+ * judges each one itself and records a refusal by its reason.
+ */
+export interface TokenVerifier {
+  /**
+   * Verifies a compact signed token, giving its claims once its signature and issuer verify, why it
+   * was not verified, or that the trusted issuer's keys could not be had to verify it.
+   *
+   * @param token the token carried by a request's Bearer credential.
+   */
+  verify(token: string): Promise<TokenVerification>;
+}
+
+/**
  * What a verified management token's claims gave: a principal; a refusal naming its reason and the
  * token's subject; a token naming no subject to act for; or one whose subject or session cannot be
  * stored.
@@ -56,16 +69,37 @@ export type ClaimsReading =
   | { kind: 'unrepresentable' };
 
 /**
- * Where the management API reads the store outside any transaction, each statement within the store
- * timeout.
+ * Where the management API, and each operation built on it, reads the store outside any transaction:
+ * one statement at a time, each within the store timeout, so a request is refused rather than held
+ * open when the store stops answering.
  */
-export type StoreReader = TimedStoreReader;
+export interface StoreReader {
+  /**
+   * Runs one statement on a connection of its own, within the store timeout.
+   *
+   * @param text the statement, every value bound.
+   * @param values the values bound to it.
+   */
+  query<Row extends pg.QueryResultRow>(
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<pg.QueryResult<Row>>;
+}
 
 /**
- * Why a management credential is counted rather than recorded: it could not be verified, for an
- * {@link UnverifiedReason}, or it could not be read as exactly one Bearer credential.
+ * Why a management credential is counted rather than recorded, each the `reason` of a
+ * `managementToken.refusalTally` event: it could not be read as exactly one Bearer credential
+ * (`malformedCredential`), or its token could not be verified, being unreadable as a signed token
+ * (`unreadableToken`), naming an issuer other than the trusted one (`otherIssuer`), or verifying under
+ * none of the trusted issuer's published keys (`invalidSignature`). The management API lists these
+ * itself, since they are its audit trail's vocabulary: a reason the verifier adds is mapped onto one
+ * of them, or added here, by a decision made in this module.
  */
-export type TallyReason = UnverifiedReason | 'malformedCredential';
+export type TallyReason =
+  | 'invalidSignature'
+  | 'malformedCredential'
+  | 'otherIssuer'
+  | 'unreadableToken';
 
 /** The tally of management credentials that could not be read or verified. */
 export interface RefusalTally {

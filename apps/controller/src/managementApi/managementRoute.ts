@@ -7,6 +7,7 @@ import type {
 
 import type { Actor, AuditEvent, Severity } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
+import type { UnverifiedReason } from '../identityProvider/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import { queryNamesOf, readCredential } from './credential.js';
 import {
@@ -25,6 +26,7 @@ import type {
   ManagementOperation,
   OperationOutcome,
   Principal,
+  TallyReason,
 } from './types.js';
 
 /** The line naming a failure of the store while an operation, or the standing of its caller, was read. */
@@ -40,6 +42,15 @@ const BODY_TOO_LARGE = 'FST_ERR_CTP_BODY_TOO_LARGE';
 
 // The framework's codes for a body it could not read, each answered as the request's fault.
 const CONTENT_PARSING = 'FST_ERR_CTP_';
+
+// The tally reason each of the verifier's reasons is counted under. It covers every reason the
+// verifier gives, so a reason added there fails to compile here rather than reaching the audit trail
+// unlisted.
+const TALLY_REASONS = {
+  invalidSignature: 'invalidSignature',
+  otherIssuer: 'otherIssuer',
+  unreadableToken: 'unreadableToken',
+} as const satisfies Readonly<Record<UnverifiedReason, TallyReason>>;
 
 type Admission =
   | { kind: 'admitted'; principal: Principal }
@@ -204,7 +215,7 @@ export const managementRoute = <Input>(
       return refusedWith(PROBLEMS.identityProviderUnavailable);
     }
     if (verification.kind === 'unverified') {
-      refusalTally.count(verification.reason);
+      refusalTally.count(TALLY_REASONS[verification.reason]);
       return refusedWith(PROBLEMS.credentialRefused);
     }
     const claims = readManagementClaims(

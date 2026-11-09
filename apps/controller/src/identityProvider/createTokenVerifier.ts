@@ -12,7 +12,6 @@ import { createSigningKeys } from './createSigningKeys.js';
 import type {
   TokenClaims,
   TokenVerification,
-  TokenVerifier,
   TokenVerifierLog,
   TokenVerifierSettings,
   UnverifiedReason,
@@ -132,7 +131,10 @@ const verificationOf = (
 
 /**
  * Creates the verifier of tokens from the trusted identity provider, the configured issuer, whose keys
- * it fetches through the issuer's discovery document no sooner than a token needs them. A token whose
+ * it fetches through the issuer's discovery document no sooner than a token needs them. It verifies a
+ * compact signed token: its issuer, read unverified only to route it, is checked against the trusted
+ * one before any key is fetched; its signature, against the trusted issuer's published keys alone; and
+ * its issuer again once verified. No claim but `iss` is judged here. A token whose
  * key is not among those held fetches the key set again, at most once in the refetch cooldown, before
  * it is refused as `invalidSignature`; while the latest fetch has failed, it is answered
  * `keysUnavailable` instead, since a key the provider published during its outage cannot be told from
@@ -147,7 +149,7 @@ const verificationOf = (
 export const createTokenVerifier = (
   settings: TokenVerifierSettings,
   eventLog: TokenVerifierLog,
-): TokenVerifier => {
+): { verify(token: string): Promise<TokenVerification> } => {
   const signingKeys = createSigningKeys(settings, eventLog);
   return {
     verify: async (token) => {
