@@ -12,7 +12,7 @@ export type {
   ControllerConfiguration,
   FieldWithVariable,
   GrantRateThreshold,
+  RetentionDurations,
   SchemaMigrationConfiguration,
   SchemaMigrationFieldWithVariable,
-  RetentionDurations,
 } from './types.js';

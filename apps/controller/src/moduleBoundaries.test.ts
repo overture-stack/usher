@@ -5,8 +5,10 @@ import { suite, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 // Each folder under src/ holding TypeScript is a module. From outside a module, which takes in its
-// own subfolders, the only way in is its index.ts. These checks read the source as text, so a
-// specifier written inside a comment counts too, which errs towards refusing.
+// own subfolders, the only way in is its index.ts. From inside, a file other than a test never
+// imports that index, since the index re-exports it and the import would close a cycle. These
+// checks read the source as text, so a specifier written inside a comment counts too, which errs
+// towards refusing.
 
 const SOURCE_ROOT = dirname(fileURLToPath(import.meta.url));
 
@@ -45,6 +47,11 @@ const folderOf = (path: string): string => {
   const folder = dirname(path);
   return folder === '.' ? '' : folder;
 };
+
+const topLevelFolderOf = (path: string): string =>
+  folderOf(path).split('/')[0] ?? '';
+
+const isTest = (path: string): boolean => path.endsWith('.test.ts');
 
 // src/ itself is no module: its files are entered by path.
 const isWithin = (folder: string, module: string): boolean =>
@@ -86,7 +93,7 @@ suite("the controller's modules", () => {
     const crossings = files.flatMap(({ path, text }) =>
       relativeSpecifiers(text).flatMap((specifier) => {
         const target = targetOf(path, specifier);
-        const module = folderOf(target);
+        const module = topLevelFolderOf(target);
         return isWithin(folderOf(path), module) ||
           target === `${module}/index.ts`
           ? []
@@ -96,6 +103,25 @@ suite("the controller's modules", () => {
 
     assert.ok(files.some(({ path }) => isNamed(path, 'index.ts')));
     assert.deepEqual(crossings, []);
+  });
+
+  test('import their own index only from tests', async () => {
+    const sources = (await sourceFiles()).filter(({ path }) => !isTest(path));
+
+    const ownIndexImports = sources.flatMap(({ path, text }) =>
+      relativeSpecifiers(text).flatMap((specifier) => {
+        const target = targetOf(path, specifier);
+        const module = folderOf(target);
+        return module !== '' &&
+          target === `${module}/index.ts` &&
+          isWithin(folderOf(path), module)
+          ? [`${path} imports ${specifier}, its own module's index`]
+          : [];
+      }),
+    );
+
+    assert.ok(sources.length > 0);
+    assert.deepEqual(ownIndexImports, []);
   });
 
   test('re-export by name in each index, and hold nothing else there', async () => {
@@ -127,5 +153,19 @@ suite("the controller's modules", () => {
 
     assert.ok(typeFiles.length > 0);
     assert.deepEqual(departures, []);
+  });
+
+  test('each have an index test, one per top-level folder', async () => {
+    const paths = (await sourceFiles()).map(({ path }) => path);
+    const modules = [...new Set(paths.map(topLevelFolderOf))].filter(
+      (module) => module !== '',
+    );
+
+    const untested = modules
+      .filter((module) => !paths.includes(`${module}/index.test.ts`))
+      .map((module) => `${module} has no index.test.ts`);
+
+    assert.ok(modules.length > 0);
+    assert.deepEqual(untested, []);
   });
 });
