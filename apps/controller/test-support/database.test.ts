@@ -408,10 +408,12 @@ suite('a writer held part way through its writes', () => {
       return {
         marker: await writerIsWaiting(observer, marker),
         other: await writerIsWaiting(observer, other),
+        reading,
         whileReading,
         writing,
       };
     });
+    await seen.reading;
     await seen.writing;
     await writer.query('COMMIT');
     const afterRelease = await writerIsWaiting(observer, marker);
