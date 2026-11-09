@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import {
   createServer as createHttpServer,
   type IncomingMessage,
@@ -151,17 +151,48 @@ export const startContainers = async (
   );
 };
 
-// A dedicated container binds one host port for its whole life, so its URL survives a restart,
-// where Docker would otherwise assign a new ephemeral port.
-const unusedHostPort = (): Promise<number> =>
+// A dedicated container is published on one host port for its whole life, so its URL survives a
+// restart, where Docker would otherwise assign a new port at each start. Docker releases that port
+// while the container is stopped, so it is drawn from below both systems' ephemeral ranges, Linux's
+// default from 32768 and macOS's from 49152: a port in them can be taken meanwhile as the source port
+// of an outbound connection, and the restart then fails to bind it. The range starts at 10000, above
+// the ports development services such as PostgreSQL (5432) and Valkey (6379) listen on.
+const HOST_PORTS = { first: 10_000, last: 32_767 };
+
+// How many candidates are tried before giving up, each found in use by another listener.
+const HOST_PORT_ATTEMPTS = 20;
+
+// Whether a port can be bound on every interface, as Docker publishes it, by binding it and letting
+// it go.
+const isFree = (port: number): Promise<boolean> =>
   new Promise((resolve, reject) => {
     const server = createServer();
-    server.once('error', reject);
-    server.listen(0, () => {
-      const { port } = server.address() as AddressInfo;
-      server.close(() => resolve(port));
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE') {
+        resolve(false);
+      } else {
+        reject(error);
+      }
+    });
+    server.listen(port, () => {
+      server.close(() => resolve(true));
     });
   });
+
+const unusedHostPort = async (
+  attempts: number = HOST_PORT_ATTEMPTS,
+): Promise<number> => {
+  const port = randomInt(HOST_PORTS.first, HOST_PORTS.last + 1);
+  if (await isFree(port)) {
+    return port;
+  }
+  if (attempts > 1) {
+    return unusedHostPort(attempts - 1);
+  }
+  throw new Error(
+    `no free host port in ${HOST_PORTS.first} to ${HOST_PORTS.last} after ${HOST_PORT_ATTEMPTS} attempts`,
+  );
+};
 
 type RuntimeContainer = ReturnType<
   ContainerRuntimeClient['container']['getById']
