@@ -164,6 +164,38 @@
         },
         "description": "The body is larger than 64 KiB; `bodyTooLarge`, its detail naming the limit."
       },
+      "ChangeUnavailable": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "identityProviderUnavailable",
+                        "outcomeUnknown",
+                        "signingKeyUnconfirmed",
+                        "storeUnavailable"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
+            }
+          }
+        },
+        "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        }
+      },
       "ChannelAssertionRefused": {
         "content": {
           "application/problem+json": {
@@ -327,6 +359,37 @@
           }
         },
         "description": "The notice versions header is missing or lists no version served by the controller; `noticeVersionUnserved`."
+      },
+      "ReadUnavailable": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "identityProviderUnavailable",
+                        "signingKeyUnconfirmed",
+                        "storeUnavailable"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
+            }
+          }
+        },
+        "description": "`identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        }
       },
       "Unreadable": {
         "content": {
@@ -1927,36 +1990,7 @@
             "$ref": "#/components/responses/InternalError"
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "identityProviderUnavailable",
-                            "outcomeUnknown",
-                            "signingKeyUnconfirmed",
-                            "storeUnavailable"
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
-            "headers": {
-              "Retry-After": {
-                "$ref": "#/components/headers/RetryAfter"
-              }
-            }
+            "$ref": "#/components/responses/ChangeUnavailable"
           }
         },
         "security": [
@@ -2045,35 +2079,7 @@
             "$ref": "#/components/responses/InternalError"
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "identityProviderUnavailable",
-                            "signingKeyUnconfirmed",
-                            "storeUnavailable"
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "`identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
-            "headers": {
-              "Retry-After": {
-                "$ref": "#/components/headers/RetryAfter"
-              }
-            }
+            "$ref": "#/components/responses/ReadUnavailable"
           }
         },
         "security": [
@@ -2195,36 +2201,7 @@
             "$ref": "#/components/responses/InternalError"
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "identityProviderUnavailable",
-                            "outcomeUnknown",
-                            "signingKeyUnconfirmed",
-                            "storeUnavailable"
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
-            "headers": {
-              "Retry-After": {
-                "$ref": "#/components/headers/RetryAfter"
-              }
-            }
+            "$ref": "#/components/responses/ChangeUnavailable"
           }
         },
         "security": [
@@ -2380,36 +2357,7 @@
             "$ref": "#/components/responses/InternalError"
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "identityProviderUnavailable",
-                            "outcomeUnknown",
-                            "signingKeyUnconfirmed",
-                            "storeUnavailable"
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
-            "headers": {
-              "Retry-After": {
-                "$ref": "#/components/headers/RetryAfter"
-              }
-            }
+            "$ref": "#/components/responses/ChangeUnavailable"
           }
         },
         "security": [
@@ -2537,14 +2485,7 @@
             "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ReadUnavailable"
           }
         },
         "security": [
@@ -2593,14 +2534,7 @@
             "description": "The principal neither administers the platform nor owns a resource; `ownersAndAdministratorsOnly`. A service account receives `serviceAccountNotPermitted`."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ReadUnavailable"
           },
           "2XX": {
             "content": {
@@ -2706,14 +2640,7 @@
             "description": "The name is empty, holds a character outside letters, digits, underscores and hyphens, or is not admitted by the payload contract."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "content": {
@@ -2804,14 +2731,7 @@
             "description": "The update names a member it may not set, such as `name`."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The category is updated."
@@ -2939,11 +2859,34 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "outcomeUnknown",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`directoryUnavailable`: a holder named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: a holder named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           },
           "2XX": {
             "content": {
@@ -3074,14 +3017,7 @@
             "description": "A rule is broken: an expiry in the past or past the longest self-grant life, a control-plane role, or a member naming a holder."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "content": {
@@ -3213,14 +3149,7 @@
             "description": "The reason is outside the grant revocation reasons open to a principal."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "content": {
@@ -3350,14 +3279,7 @@
             "description": "A rule is broken. `ownerGrantsDoNotExpire` names an expiry on an owner grant. An expiry that is no RFC 3339 instant with an offset, or one in the past, and a role not defined by the instance carry unnamed codes."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The grant is changed."
@@ -3482,14 +3404,7 @@
             "description": "The decision is neither `accepted` nor `rejected`, or the capabilities differ from those conferred by the role."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The answer is recorded."
@@ -3565,11 +3480,33 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a granter. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a granter. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           },
           "2XX": {
             "content": {
@@ -3709,11 +3646,35 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "migrationNotConfigured",
+                            "outcomeUnknown",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`migrationNotConfigured`: a setting read by the migration from the instance's configuration is missing, checked before the export is read. `directoryUnavailable`: the directory cannot answer a lookup during the run. `storeUnavailable`: the store cannot complete the run, and nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`migrationNotConfigured`: a setting read by the migration from the instance's configuration is missing, checked before the export is read. `directoryUnavailable`: the directory cannot answer a lookup during the run. `storeUnavailable`: the store cannot complete the run, and nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           }
         },
         "security": [
@@ -3825,11 +3786,33 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`directoryUnavailable`: the directory cannot answer. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: the directory cannot answer. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           },
           "2XX": {
             "content": {
@@ -3915,14 +3898,7 @@
             "description": "The reason is not one of the identity revocation reasons."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The principal is revoked."
@@ -3991,14 +3967,7 @@
             "$ref": "#/components/responses/JsonOnly"
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The revocation is lifted."
@@ -4047,14 +4016,7 @@
             "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ReadUnavailable"
           },
           "2XX": {
             "content": {
@@ -4128,14 +4090,7 @@
             "$ref": "#/components/responses/JsonOnly"
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The resource field is defined."
@@ -4211,11 +4166,33 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a holder by address. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a holder by address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           },
           "2XX": {
             "content": {
@@ -4325,11 +4302,34 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "outcomeUnknown",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`directoryUnavailable`: an owner named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: an owner named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           },
           "2XX": {
             "content": {
@@ -4437,14 +4437,7 @@
             "description": "The registration ever held a grant or an invitation; `registrationHasHistory`, its text saying to retire it instead."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The registration is deleted."
@@ -4521,11 +4514,33 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`directoryUnavailable`: the directory cannot answer, for a resource whose answer names a holder by address. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: the directory cannot answer, for a resource whose answer names a holder by address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           },
           "2XX": {
             "content": {
@@ -4636,14 +4651,7 @@
             "description": "A rule applied at registration is broken, a display name is cleared, or the update names a member it may not set, such as `externalId`."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The resource is updated."
@@ -4725,14 +4733,7 @@
             "description": "`resourceNotFound` for the resource, and `applicationNotFound` for an application that is not registered."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The application no longer serves the resource."
@@ -4812,14 +4813,7 @@
             "description": "`resourceNotFound` for the resource, and `applicationNotFound` for an application that is not registered."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The application serves the resource."
@@ -4921,11 +4915,33 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a holder by address or a granter by name. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a holder by address or a granter by name. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           },
           "2XX": {
             "content": {
@@ -5038,14 +5054,7 @@
             "description": "The reason is not one of the restoration reasons."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The resource is restored."
@@ -5146,14 +5155,7 @@
             "description": "A live grant other than an owner's, or a pending invitation, names the resource; `grantsOrInvitationsRemain`, its text saying to revoke them first."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The resource is retired."
@@ -5259,14 +5261,7 @@
             "description": "The reason is not one of the resource revocation reasons."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "Access to the resource is revoked."
@@ -5397,11 +5392,34 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "directoryUnavailable",
+                            "identityProviderUnavailable",
+                            "outcomeUnknown",
+                            "signingKeyUnconfirmed",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
                 }
               }
             },
-            "description": "`directoryUnavailable`: the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "description": "`directoryUnavailable`: the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           },
           "2XX": {
             "description": "The submitter is removed."
@@ -5507,14 +5525,7 @@
             "description": "The reason is not one of the suppression reasons."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The resource is suppressed."
@@ -5593,14 +5604,7 @@
             "description": "`confirm` is other than `true`, or the reason is not one of the global revocation reasons."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The instance is revoked."
@@ -5684,14 +5688,7 @@
             "description": "A capability not defined by the instance."
           },
           "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "`storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. An unnamed code: the identity provider's signing keys cannot be fetched to verify the access token."
+            "$ref": "#/components/responses/ChangeUnavailable"
           },
           "2XX": {
             "description": "The role's capabilities are replaced."
