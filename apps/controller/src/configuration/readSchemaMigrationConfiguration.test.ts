@@ -4,7 +4,7 @@ import { suite, test } from 'node:test';
 
 import { parseIntoClientConfig } from 'pg-connection-string';
 
-import { StartRefusal } from '../startRefusal.js';
+import { StartRefusal } from '../failures/index.js';
 import {
   ENVIRONMENT_VARIABLES,
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,

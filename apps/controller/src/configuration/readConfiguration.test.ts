@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { suite, test } from 'node:test';
 
-import { StartRefusal } from '../startRefusal.js';
+import { StartRefusal } from '../failures/index.js';
 import {
   ENVIRONMENT_VARIABLES,
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,

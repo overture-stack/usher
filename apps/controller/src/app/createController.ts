@@ -14,8 +14,8 @@ import {
   rejectionTallyEvent,
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
-import { ControllerError } from '../controllerError.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
+import { ControllerError } from '../failures/index.js';
 import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
 import {

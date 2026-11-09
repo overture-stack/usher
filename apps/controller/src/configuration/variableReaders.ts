@@ -1,6 +1,6 @@
 import { BlockList, isIP } from 'node:net';
 
-import type { StartProblem } from '../startRefusal.js';
+import type { StartProblem } from '../failures/index.js';
 
 /** One environment variable as an environment gives it: its name, and its value or none. */
 export interface Variable {

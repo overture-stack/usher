@@ -1,8 +1,8 @@
+import { type StartProblem, StartRefusal } from '../failures/index.js';
 import {
   LARGEST_RETENTION_FLOOR_SECONDS,
   MIGRATIONS_REFUSE_TO_RUN,
 } from '../migrations/index.js';
-import { type StartProblem, StartRefusal } from '../startRefusal.js';
 import {
   ENVIRONMENT_VARIABLES,
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,

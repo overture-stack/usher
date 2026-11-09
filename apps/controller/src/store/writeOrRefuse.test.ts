@@ -3,7 +3,7 @@ import { suite, test } from 'node:test';
 
 import pg from 'pg';
 
-import { StartRefusal } from '../startRefusal.js';
+import { StartRefusal } from '../failures/index.js';
 import { writeOrRefuse } from './writeOrRefuse.js';
 
 const PROBLEM = Object.freeze({

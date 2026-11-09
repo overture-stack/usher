@@ -4,7 +4,7 @@ import { suite, test } from 'node:test';
 import type pg from 'pg';
 
 import type { AuditTrail } from '../eventLog/index.js';
-import { StartRefusal } from '../startRefusal.js';
+import { StartRefusal } from '../failures/index.js';
 import { CommitUnconfirmed, StoreTimeout } from '../storeTimeout/index.js';
 import { prepareStore } from './prepareStore.js';
 import type { StoreSettings } from './types.js';

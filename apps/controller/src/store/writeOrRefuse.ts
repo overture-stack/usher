@@ -1,6 +1,6 @@
 import pg from 'pg';
 
-import { type StartProblem, StartRefusal } from '../startRefusal.js';
+import { type StartProblem, StartRefusal } from '../failures/index.js';
 
 const INSUFFICIENT_PRIVILEGE = '42501';
 

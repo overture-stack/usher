@@ -1,4 +1,4 @@
-import { ControllerError } from '../controllerError.js';
+import { ControllerError } from '../failures/index.js';
 import type { RefusedOption } from './types.js';
 
 /** What the message of every refusal a migration run gives opens with. */

@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { parseIntoClientConfig } from 'pg-connection-string';
 
-import { ControllerError } from '../controllerError.js';
+import { ControllerError } from '../failures/index.js';
 import {
   MIGRATIONS_REFUSE_TO_RUN,
   MigrationRefusal,

@@ -12,14 +12,17 @@ import {
   readSchemaMigrationConfiguration,
 } from './configuration/index.js';
 import {
+  reportFailure,
+  reportUncaughtFailure,
+  StartRefusal,
+} from './failures/index.js';
+import {
   migrate,
   MIGRATIONS_REFUSE_TO_RUN,
   MigrationRefusal,
   type MigrationOutcome,
   type RefusedOption,
 } from './migrations/index.js';
-import { reportFailure, reportUncaughtFailure } from './reportFailure.js';
-import { StartRefusal } from './startRefusal.js';
 import { connectionProblemOf } from './store/index.js';
 
 // The log stream's numbering of info.

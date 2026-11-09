@@ -1,6 +1,6 @@
 import pg from 'pg';
 
-import { ControllerError } from './controllerError.js';
+import { ControllerError } from './failures/index.js';
 
 /** The identity a person is found by: the identity provider's issuer and its subject for them. */
 export interface PersonIdentity {

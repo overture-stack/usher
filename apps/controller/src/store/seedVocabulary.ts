@@ -7,8 +7,7 @@ import {
   type SeededRole,
 } from '../capabilities/index.js';
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
-import { ControllerError } from '../controllerError.js';
-import type { StartProblem } from '../startRefusal.js';
+import { ControllerError, type StartProblem } from '../failures/index.js';
 import { writeOrRefuse } from './writeOrRefuse.js';
 
 const UNWRITABLE: StartProblem = {

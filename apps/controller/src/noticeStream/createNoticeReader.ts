@@ -1,6 +1,6 @@
 import pg from 'pg';
 
-import { ControllerError } from '../controllerError.js';
+import { ControllerError } from '../failures/index.js';
 import type {
   NoticePage,
   NoticeReader,

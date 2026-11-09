@@ -1,7 +1,7 @@
 import type pg from 'pg';
 
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
-import type { StartProblem } from '../startRefusal.js';
+import type { StartProblem } from '../failures/index.js';
 
 /** The limits the store applies to a session, each of which the controller sets to its store timeout. */
 export const STATEMENT_LIMITS: readonly string[] = Object.freeze([

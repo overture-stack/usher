@@ -1,4 +1,4 @@
-import { ControllerError } from '../controllerError.js';
+import { ControllerError } from '../failures/index.js';
 
 /**
  * The store did not answer one unit of work within the store timeout, and the unit was abandoned. Its

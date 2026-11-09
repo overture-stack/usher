@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import pg from 'pg';
 
-import { ControllerError } from '../controllerError.js';
+import { ControllerError } from '../failures/index.js';
 import type { StoreReader } from '../managementApi/index.js';
 import { APPLICATION_KEY_BYTES } from './createApplicationKeyCipher.js';
 import type {

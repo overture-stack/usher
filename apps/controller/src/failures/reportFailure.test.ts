@@ -6,12 +6,12 @@ import { suite, test } from 'node:test';
 
 import pg from 'pg';
 
+import { migrate, MigrationRefusal } from '../migrations/index.js';
+import { NoticeStreamMissing } from '../noticeStream/index.js';
+import { CommitUnconfirmed, StoreTimeout } from '../storeTimeout/index.js';
 import { ControllerError } from './controllerError.js';
-import { migrate, MigrationRefusal } from './migrations/index.js';
-import { NoticeStreamMissing } from './noticeStream/index.js';
 import { failureRecord } from './reportFailure.js';
 import { StartRefusal } from './startRefusal.js';
-import { CommitUnconfirmed, StoreTimeout } from './storeTimeout/index.js';
 
 const FATAL_LEVEL = 60;
 

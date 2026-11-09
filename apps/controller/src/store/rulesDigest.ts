@@ -4,7 +4,7 @@ import pg from 'pg';
 
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
 import type { AuditEvent, AuditTransaction } from '../eventLog/index.js';
-import type { StartProblem } from '../startRefusal.js';
+import type { StartProblem } from '../failures/index.js';
 import type { RecordRules, SeededPolicySettings } from './types.js';
 import { writeOrRefuse } from './writeOrRefuse.js';
 

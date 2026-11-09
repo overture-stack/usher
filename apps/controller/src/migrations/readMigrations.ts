@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 
-import { ControllerError } from '../controllerError.js';
+import { ControllerError } from '../failures/index.js';
 import type { Migration } from './types.js';
 
 /** The folder holding the controller's migrations, one SQL file each. */

@@ -3,7 +3,7 @@ import { hkdfSync, timingSafeEqual } from 'node:crypto';
 import pg from 'pg';
 
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
-import { StartRefusal } from '../startRefusal.js';
+import { StartRefusal } from '../failures/index.js';
 import type { StoreSettings } from './types.js';
 
 // The HKDF label of the subkey the check value is, apart from every other use of the key.

@@ -1,4 +1,4 @@
-import { StartRefusal } from '../startRefusal.js';
+import { StartRefusal } from '../failures/index.js';
 import { ENVIRONMENT_VARIABLES } from './environmentVariables.js';
 import { readRecordRule } from './readRecordRule.js';
 import { readRetentionDurations } from './retention.js';

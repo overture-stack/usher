@@ -1,5 +1,5 @@
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
-import type { StartProblem } from '../startRefusal.js';
+import type { StartProblem } from '../failures/index.js';
 import type { ConnectionVariables } from './types.js';
 
 // The controller's own: its runtime role's URL and password.

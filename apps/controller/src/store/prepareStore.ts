@@ -2,7 +2,7 @@ import type pg from 'pg';
 
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
 import type { Actor, AuditTrail, AuditTransaction } from '../eventLog/index.js';
-import { type StartProblem, StartRefusal } from '../startRefusal.js';
+import { type StartProblem, StartRefusal } from '../failures/index.js';
 import { CommitUnconfirmed, StoreTimeout } from '../storeTimeout/index.js';
 import { connectionProblemOf } from './connectionProblemOf.js';
 import { checkKeyEncryptionKey } from './keyEncryptionKeyCheck.js';

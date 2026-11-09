@@ -4,7 +4,7 @@
 // A failure nothing caught writes its line and ends the process at once.
 import { createController } from './app/index.js';
 import { readConfiguration } from './configuration/index.js';
-import { reportFailure, reportUncaughtFailure } from './reportFailure.js';
+import { reportFailure, reportUncaughtFailure } from './failures/index.js';
 
 const STOP_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 

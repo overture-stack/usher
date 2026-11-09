@@ -1,4 +1,4 @@
-import { ControllerError } from '../controllerError.js';
+import { ControllerError } from '../failures/index.js';
 
 /**
  * A unit of store work sent its `COMMIT`, and the store did not answer it within one more store
