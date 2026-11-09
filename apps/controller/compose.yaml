@@ -1,0 +1,159 @@
+# Usher's services for local development. From this folder, with Docker running:
+#
+#     node scripts/generate-compose-secrets.ts
+#     docker compose up --detach
+#
+# Plain `up` starts PostgreSQL, Valkey and Keycloak, for a controller run on this machine with
+# compose/host-settings. The `image` profile adds the controller's image, built from the
+# repository's root: its schema migration command runs once, and the controller starts once that
+# has succeeded. Every secret is read from .env beside this file, written by the script and ignored
+# by git; a secret left unset stops compose before anything starts. Stop with
+# `docker compose --profile image down`, since a plain `down` leaves the profile's containers behind.
+name: usher
+
+# Variables read alike by the controller and its schema migration command. The command stores a
+# notice retention floor made of the three durations, so the two must read the same ones.
+x-shared-environment: &shared-environment
+  USHER_DATABASE_SCHEMA: usher
+  USHER_DATABASE_URL: postgres://usher_controller@postgres:5432/usher
+  USHER_RETENTION_GRACE_SECONDS: '60'
+  USHER_RETENTION_MARGIN_SECONDS: '30'
+  USHER_TOKEN_LIFETIME_SECONDS: '300'
+
+services:
+  # The controller's service builds the image, and the migrate service runs the same one, so one
+  # build serves both commands.
+  controller:
+    build:
+      context: ../..
+      dockerfile: apps/controller/Dockerfile
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    environment:
+      <<: *shared-environment
+      USHER_BACK_CHANNEL_LOGOUT_AUDIENCES: ''
+      USHER_CACHE_PASSWORD: ${USHER_CACHE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+      USHER_CACHE_URL: redis://valkey:6379
+      USHER_CURSOR_KEY: ${USHER_CURSOR_KEY:?run node scripts/generate-compose-secrets.ts}
+      USHER_DATABASE_PASSWORD: ${USHER_DATABASE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+      USHER_DIRECTORY_CLIENT_ID: usher-directory
+      USHER_DIRECTORY_CLIENT_SECRET: ${USHER_DIRECTORY_CLIENT_SECRET:?run node scripts/generate-compose-secrets.ts}
+      USHER_DIRECTORY_REALM: overture
+      USHER_DIRECTORY_URL: http://127.0.0.1:8080
+      USHER_EVENT_SOURCE: https://usher.localhost/controller
+      USHER_GRANT_RATE_THRESHOLD: '{"operationCount":100,"windowSeconds":60}'
+      USHER_HOST: 0.0.0.0
+      USHER_IDENTITY_PROVIDER_ISSUER: http://127.0.0.1:8080/realms/overture
+      USHER_INSTANCE_NAME: usher-image-1
+      USHER_ISSUER: https://usher.localhost
+      USHER_KEY_ENCRYPTION_KEY: ${USHER_KEY_ENCRYPTION_KEY:?run node scripts/generate-compose-secrets.ts}
+      USHER_MANAGEMENT_AUDIENCE: usher-management
+      USHER_MANAGEMENT_CLIENTS: usher-ui
+      USHER_PORT: '3001'
+      USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS: '3600'
+    # The image holds no shell and no curl, so Node itself asks.
+    healthcheck:
+      interval: 5s
+      retries: 3
+      start_period: 30s
+      test:
+        - CMD
+        - /nodejs/bin/node
+        - --eval
+        - "fetch('http://127.0.0.1:3001/health/ready', { signal: AbortSignal.timeout(2000) }).then((response) => process.exit(response.ok ? 0 : 1), () => process.exit(1))"
+      timeout: 5s
+    image: usher-controller:local
+    # The controller takes the identity provider's URLs over http only on a loopback host, so it
+    # joins Keycloak's network namespace, where Keycloak is 127.0.0.1:8080 as it is on this machine
+    # and in the issuer carried by its tokens. The keycloak service publishes the controller's port
+    # for that reason.
+    network_mode: service:keycloak
+    profiles: [image]
+
+  keycloak:
+    command: [start-dev, --import-realm]
+    environment:
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+      KC_BOOTSTRAP_ADMIN_USERNAME: usher-dev-admin
+      # The issuer carried by every token, whatever address a request reaches Keycloak at.
+      KC_HOSTNAME: http://127.0.0.1:8080
+      # The realm export holds a placeholder for the directory client's secret, replaced by Keycloak
+      # from this variable as it imports the realm.
+      USHER_DIRECTORY_CLIENT_SECRET: ${USHER_DIRECTORY_CLIENT_SECRET:?run node scripts/generate-compose-secrets.ts}
+    # Ready once the realm is imported and its discovery document is served. The image holds no
+    # curl, so bash asks.
+    healthcheck:
+      interval: 5s
+      retries: 3
+      start_period: 3m
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /realms/overture/.well-known/openid-configuration HTTP/1.0\r\n\r\n' >&3 && head -n 1 <&3 | grep -q ' 200 '
+      timeout: 5s
+    image: quay.io/keycloak/keycloak:26.8.0
+    ports:
+      - 127.0.0.1:8080:8080
+      # The controller's, under the image profile, since it shares this service's network namespace.
+      - 127.0.0.1:3001:3001
+    volumes:
+      - ./compose/overture-realm.json:/opt/keycloak/data/import/overture-realm.json:ro
+
+  migrate:
+    command: [dist/migrate.js]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *shared-environment
+      USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD: ${USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+      USHER_SCHEMA_MIGRATION_DATABASE_URL: postgres://usher_migration@postgres:5432/usher
+    image: usher-controller:local
+    profiles: [image]
+    # Built by the controller's service, and held by no registry.
+    pull_policy: never
+    restart: 'no'
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+      RUNTIME_ROLE_PASSWORD: ${USHER_DATABASE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+      SCHEMA_MIGRATION_ROLE_PASSWORD: ${USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+    # Asked over TCP: during initialization the server listens on its socket alone, so TCP answers
+    # only once the init script has run.
+    healthcheck:
+      interval: 2s
+      retries: 30
+      test: [CMD, pg_isready, --host=127.0.0.1, --username=postgres]
+      timeout: 5s
+    image: postgres:15.19
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./compose/postgres-init.sh:/docker-entrypoint-initdb.d/usher.sh:ro
+
+  valkey:
+    command:
+      - valkey-server
+      - --requirepass
+      - ${USHER_CACHE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+    environment:
+      VALKEYCLI_AUTH: ${USHER_CACHE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
+    healthcheck:
+      interval: 2s
+      retries: 30
+      test: [CMD-SHELL, valkey-cli ping | grep -q PONG]
+      timeout: 5s
+    image: valkey/valkey:9.1.2
+    ports:
+      - 127.0.0.1:6379:6379
+
+volumes:
+  postgres-data:

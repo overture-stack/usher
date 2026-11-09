@@ -44,3 +44,55 @@ each release rather than with every run:
 
 `test-support/README.md` describes the shared support code, and how every test reaches the
 controller through `test-support/controller.ts` alone.
+
+## Running it locally
+
+`compose.yaml` starts what the controller needs on this machine: PostgreSQL 15, Valkey and Keycloak,
+at the tests' versions, each published on 127.0.0.1 alone. From `apps/controller`, with Docker
+running:
+
+    node scripts/generate-compose-secrets.ts   # every secret, into .env, which git ignores
+    docker compose up --detach --wait          # PostgreSQL on 5432, Valkey on 6379, Keycloak on 8080
+
+The script replaces an existing `.env` only when given `--force`. PostgreSQL keeps the passwords it
+was created with, so run `docker compose --profile image down --volumes` before replacing the file.
+
+**To run the controller on this machine**, build it, apply the schema migrations, then start it on
+port 3000. `compose/host-settings` holds the settings, none of them secret:
+
+    pnpm build
+    node --env-file=compose/host-settings --env-file=.env dist/migrate.js
+    node --env-file=compose/host-settings --env-file=.env dist/main.js
+
+Both commands load every secret in `.env`, the schema migration role's password included, since the
+account running them can read the file anyway. Under compose, the controller never receives that
+password.
+
+**To run the controller's image**, add the `image` profile. It builds the image from the
+repository's root, runs the schema migration command once, then starts the controller on port 3001
+once the migrations have succeeded:
+
+    docker compose --profile image up --build --detach --wait
+    curl --fail http://127.0.0.1:3001/health/ready
+
+The controller takes the identity provider's URLs over http only on a loopback host, so this
+controller shares Keycloak's network namespace, and the keycloak service publishes the controller's
+port. These two commands are also the check that the image builds and reaches ready. The check runs
+by hand rather than under `pnpm test`, since it needs Docker, an image build and the fixed ports
+above.
+
+**Keycloak** serves the realm `overture` at http://127.0.0.1:8080, imported from
+`compose/overture-realm.json` each time its container is created. The realm is for local
+development only. It holds the `usher-platform-admin` role, `usher-ui`, a management client issuing
+tokens for the audience `usher-management`, and `usher-directory`, a confidential client allowed to
+query and view the realm's users, for the controller's directory. That client's secret is a
+placeholder in the export, filled by Keycloak from `.env` as it imports the realm. The realm holds
+no people: add them in the admin console at http://127.0.0.1:8080/admin, signing in as
+`usher-dev-admin` with `KEYCLOAK_ADMIN_PASSWORD` from `.env`. People added there last until
+Keycloak's container is removed. A person's management token comes from `usher-ui` through the
+password grant. `usher-ui` is a public client using that grant, which suits minting tokens on this
+machine and nothing else.
+
+To stop everything and delete the database:
+
+    docker compose --profile image down --volumes

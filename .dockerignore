@@ -20,3 +20,8 @@
 **/*.tsbuildinfo
 **/.env*
 **/.DS_Store
+
+# The controller's local development setup, which no image build reads.
+apps/controller/compose.yaml
+apps/controller/compose/
+apps/controller/scripts/

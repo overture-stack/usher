@@ -5,6 +5,7 @@
   },
   "extends": "../../tsconfig.base.json",
   "include": [
+    "scripts",
     "src",
     "test",
     "test-support",
