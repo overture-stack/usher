@@ -41,20 +41,15 @@ const acceptsConnection = (port: number): Promise<boolean> =>
 const unreachableStore = async (): Promise<ControllerConfiguration> =>
   readConfiguration({
     [ENVIRONMENT_VARIABLES.backChannelLogoutAudiences]: 'portal-test',
-    [ENVIRONMENT_VARIABLES.cachePassword]: randomBytes(12).toString('hex'),
-    [ENVIRONMENT_VARIABLES.cacheUrl]: 'redis://127.0.0.1:6379',
     [ENVIRONMENT_VARIABLES.cursorKey]: randomBytes(32).toString('base64url'),
     [ENVIRONMENT_VARIABLES.databasePassword]: randomBytes(12).toString('hex'),
     [ENVIRONMENT_VARIABLES.databaseSchema]: 'usher',
     [ENVIRONMENT_VARIABLES.databaseUrl]: `postgres://usher_controller@${LOOPBACK}:${await unusedPort()}/usher`,
     [ENVIRONMENT_VARIABLES.eventSource]: 'https://usher.example.org/controller',
-    [ENVIRONMENT_VARIABLES.grantRateThreshold]:
-      '{"operationCount":100,"windowSeconds":60}',
     [ENVIRONMENT_VARIABLES.host]: LOOPBACK,
     [ENVIRONMENT_VARIABLES.identityProviderIssuer]:
       'http://127.0.0.1:8080/realms/usher-test',
     [ENVIRONMENT_VARIABLES.instanceName]: 'usher-test-1',
-    [ENVIRONMENT_VARIABLES.issuer]: 'https://usher.example.org',
     [ENVIRONMENT_VARIABLES.keyEncryptionKey]:
       randomBytes(32).toString('base64url'),
     [ENVIRONMENT_VARIABLES.managementAudience]: 'usher-management-test',

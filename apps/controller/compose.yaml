@@ -3,7 +3,7 @@
 #     node scripts/generate-compose-secrets.ts
 #     docker compose up --detach
 #
-# Plain `up` starts PostgreSQL, Valkey and Keycloak, for a controller run on this machine with
+# Plain `up` starts PostgreSQL and Keycloak, for a controller run on this machine with
 # compose/host-settings. The `image` profile adds the controller's image, built from the
 # repository's root: its schema migration command runs once, and the controller starts once that
 # has succeeded. Every secret is read from .env beside this file, written by the script and ignored
@@ -32,25 +32,15 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      valkey:
-        condition: service_healthy
     environment:
       <<: *shared-environment
       USHER_BACK_CHANNEL_LOGOUT_AUDIENCES: ''
-      USHER_CACHE_PASSWORD: ${USHER_CACHE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
-      USHER_CACHE_URL: redis://valkey:6379
       USHER_CURSOR_KEY: ${USHER_CURSOR_KEY:?run node scripts/generate-compose-secrets.ts}
       USHER_DATABASE_PASSWORD: ${USHER_DATABASE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
-      USHER_DIRECTORY_CLIENT_ID: usher-directory
-      USHER_DIRECTORY_CLIENT_SECRET: ${USHER_DIRECTORY_CLIENT_SECRET:?run node scripts/generate-compose-secrets.ts}
-      USHER_DIRECTORY_REALM: overture
-      USHER_DIRECTORY_URL: http://127.0.0.1:8080
       USHER_EVENT_SOURCE: https://usher.localhost/controller
-      USHER_GRANT_RATE_THRESHOLD: '{"operationCount":100,"windowSeconds":60}'
       USHER_HOST: 0.0.0.0
       USHER_IDENTITY_PROVIDER_ISSUER: http://127.0.0.1:8080/realms/overture
       USHER_INSTANCE_NAME: usher-image-1
-      USHER_ISSUER: https://usher.localhost
       USHER_KEY_ENCRYPTION_KEY: ${USHER_KEY_ENCRYPTION_KEY:?run node scripts/generate-compose-secrets.ts}
       USHER_MANAGEMENT_AUDIENCE: usher-management
       USHER_MANAGEMENT_CLIENTS: usher-ui
@@ -82,9 +72,6 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: usher-dev-admin
       # The issuer carried by every token, whatever address a request reaches Keycloak at.
       KC_HOSTNAME: http://127.0.0.1:8080
-      # The realm export holds a placeholder for the directory client's secret, replaced by Keycloak
-      # from this variable as it imports the realm.
-      USHER_DIRECTORY_CLIENT_SECRET: ${USHER_DIRECTORY_CLIENT_SECRET:?run node scripts/generate-compose-secrets.ts}
     # Ready once the realm is imported and its discovery document is served. The image holds no
     # curl, so bash asks.
     healthcheck:
@@ -138,22 +125,6 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./compose/postgres-init.sh:/docker-entrypoint-initdb.d/usher.sh:ro
-
-  valkey:
-    command:
-      - valkey-server
-      - --requirepass
-      - ${USHER_CACHE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
-    environment:
-      VALKEYCLI_AUTH: ${USHER_CACHE_PASSWORD:?run node scripts/generate-compose-secrets.ts}
-    healthcheck:
-      interval: 2s
-      retries: 30
-      test: [CMD-SHELL, valkey-cli ping | grep -q PONG]
-      timeout: 5s
-    image: valkey/valkey:9.1.2
-    ports:
-      - 127.0.0.1:6379:6379
 
 volumes:
   postgres-data:

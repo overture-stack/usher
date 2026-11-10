@@ -1,8 +1,8 @@
 // Writes every secret read by compose.yaml into .env beside it, each made fresh: the database
-// passwords, the cache password, the controller's key-encryption key and cursor key, Keycloak's
-// administrator password and the directory client's secret. Git ignores the file, and only its
-// owner may read it. An existing file is replaced only when --force is given, since the database
-// volume keeps the passwords it was created with. Nothing written to the terminal holds a value.
+// passwords, the controller's key-encryption key and cursor key, and Keycloak's administrator
+// password. Git ignores the file, and only its owner may read it. An existing file is replaced only
+// when --force is given, since the database volume keeps the passwords it was created with. Nothing
+// written to the terminal holds a value.
 //
 //     node scripts/generate-compose-secrets.ts [--force]
 import { randomBytes } from 'node:crypto';
@@ -15,10 +15,8 @@ const SECRETS_FILE = resolve(import.meta.dirname, '..', '.env');
 const SECRET_NAMES: readonly string[] = [
   'KEYCLOAK_ADMIN_PASSWORD',
   'POSTGRES_SUPERUSER_PASSWORD',
-  'USHER_CACHE_PASSWORD',
   'USHER_CURSOR_KEY',
   'USHER_DATABASE_PASSWORD',
-  'USHER_DIRECTORY_CLIENT_SECRET',
   'USHER_KEY_ENCRYPTION_KEY',
   'USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD',
 ];

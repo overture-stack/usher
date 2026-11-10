@@ -47,12 +47,12 @@ controller through `test-support/controller.ts` alone.
 
 ## Running it locally
 
-`compose.yaml` starts what the controller needs on this machine: PostgreSQL 15, Valkey and Keycloak,
-at the tests' versions, each published on 127.0.0.1 alone. From `apps/controller`, with Docker
+`compose.yaml` starts what the controller needs on this machine: PostgreSQL 15 and Keycloak, at
+the tests' versions, each published on 127.0.0.1 alone. From `apps/controller`, with Docker
 running:
 
     node scripts/generate-compose-secrets.ts   # every secret, into .env, which git ignores
-    docker compose up --detach --wait          # PostgreSQL on 5432, Valkey on 6379, Keycloak on 8080
+    docker compose up --detach --wait          # PostgreSQL on 5432, Keycloak on 8080
 
 The script replaces an existing `.env` only when given `--force`. PostgreSQL keeps the passwords it
 was created with, so run `docker compose --profile image down --volumes` before replacing the file.
@@ -82,16 +82,13 @@ by hand rather than under `pnpm test`, since it needs Docker, an image build and
 above.
 
 **Keycloak** serves the realm `overture` at http://127.0.0.1:8080, imported from
-`compose/overture-realm.json` each time its container is created. The realm is for local
-development only. It holds the `usher-platform-admin` role, `usher-ui`, a management client issuing
-tokens for the audience `usher-management`, and `usher-directory`, a confidential client allowed to
-query and view the realm's users, for the controller's directory. That client's secret is a
-placeholder in the export, filled by Keycloak from `.env` as it imports the realm. The realm holds
-no people: add them in the admin console at http://127.0.0.1:8080/admin, signing in as
-`usher-dev-admin` with `KEYCLOAK_ADMIN_PASSWORD` from `.env`. People added there last until
-Keycloak's container is removed. A person's management token comes from `usher-ui` through the
-password grant. `usher-ui` is a public client using that grant, which suits minting tokens on this
-machine and nothing else.
+`compose/overture-realm.json` each time its container is created. The realm is for local development
+only. It holds the `usher-platform-admin` role and `usher-ui`, a management client issuing tokens
+for the audience `usher-management`. The realm holds no people: add them in the admin console at
+http://127.0.0.1:8080/admin, signing in as `usher-dev-admin` with `KEYCLOAK_ADMIN_PASSWORD` from
+`.env`. People added there last until Keycloak's container is removed. A person's management token
+comes from `usher-ui` through the password grant. `usher-ui` is a public client using that grant,
+which suits minting tokens on this machine and nothing else.
 
 To stop everything and delete the database:
 

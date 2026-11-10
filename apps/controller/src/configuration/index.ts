@@ -6,12 +6,10 @@ export {
 export { readConfiguration } from './readConfiguration.js';
 export { readSchemaMigrationConfiguration } from './readSchemaMigrationConfiguration.js';
 export type {
-  AccessLevel,
   Clock,
   ConfigurationEnvironment,
   ControllerConfiguration,
   FieldWithVariable,
-  GrantRateThreshold,
   RetentionDurations,
   SchemaMigrationConfiguration,
   SchemaMigrationFieldWithVariable,

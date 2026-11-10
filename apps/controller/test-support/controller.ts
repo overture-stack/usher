@@ -28,38 +28,20 @@ export interface ControllerApplication {
 }
 
 /**
- * The controller's configuration, typed: what the config module reads from an environment and what
- * the controller is created from. A default named below is the controller's when the environment
+ * The settings the controller reads, as the harness gives them: each field but the clock and the log
+ * stream travels in an environment variable of its own, written by {@link environmentFor}, and the
+ * config module reads it from there. A default named below is the controller's when the environment
  * leaves that variable unset.
  */
-export interface ControllerConfiguration {
+export interface ControllerSettings {
   /** The identity provider realm role that makes its holder a platform administrator; `usher-platform-admin` by default. */
   administratorRole: string;
-
-  /**
-   * The characters an instance adds to the default set an externalId may hold (ASCII letters, digits,
-   * dot, underscore and hyphen, #211 Q1); none by default. Letters beyond ASCII are compared by Unicode
-   * case folding after NFC.
-   */
-  allowedCharactersExtra: string;
-
-  /** Whether a grant is accepted at creation without its recipient answering it (auto-accept); off by default. */
-  autoAccept: boolean;
 
   /** The `aud` values a back-channel logout token may carry: the platform's client identifiers. */
   backChannelLogoutAudiences: readonly string[];
 
   /** The record actions the baseline confers on everyone, anonymous visitors included; count, view and export by default. */
   baseline: readonly RecordAction[];
-
-  /**
-   * The cache's (Valkey) password, in a variable of its own: a missing one refuses the start, naming
-   * the variable and never its value.
-   */
-  cachePassword: string;
-
-  /** The cache's (Valkey) URL, carrying no password: one carrying a password refuses the start. */
-  cacheUrl: string;
 
   /**
    * The controller's wall clock. Set only through the configuration, never from the environment, so a
@@ -86,6 +68,127 @@ export interface ControllerConfiguration {
    * password refuses the start.
    */
   databaseUrl: string;
+
+  /** The CloudEvents `source` every event carries: one per deployment, the same on every instance (#214). */
+  eventSource: string;
+
+  /**
+   * How long an open notice stream may stay silent before the controller writes a heartbeat comment,
+   * in milliseconds: 10,000 by default (#210 Q15), short enough for the bridge's 25 s idle timer.
+   * Configurable so a test can run the bridge's compressed profile (#215 Q10, #217 Q2).
+   */
+  heartbeatMilliseconds: number;
+
+  /** The host the controller listens on; a loopback address in tests. */
+  host: string;
+
+  /** The identity provider's issuer, exactly as its discovery document and tokens carry it: https, or http to a loopback host only. */
+  identityProviderIssuer: string;
+
+  /** This instance's name, the `instance` every event it emits carries (#214 Q17); unique among the deployment's instances. */
+  instanceName: string;
+
+  /**
+   * The key-encryption key encrypting every stored application key, shared by every instance:
+   * 32 bytes as 43 base64url characters in canonical form, an application key's format. Whitespace
+   * around it is ignored. A missing or malformed one refuses the start, and so does one failing the
+   * check value recorded in the database at the first start; each refusal names the variable and
+   * never its value.
+   */
+  keyEncryptionKey: string;
+
+  /**
+   * Where the controller writes its structured log lines: the process's standard output by default.
+   * Set only through the configuration, never from the environment, so a test can read what is
+   * logged.
+   */
+  logStream: Writable;
+
+  /** The `aud` a management token must name: the Policy Management API's identifier at the identity provider. */
+  managementAudience: string;
+
+  /** The clients a management token's `azp` may name: the management screens' client identifiers. */
+  managementClients: readonly string[];
+
+  /** The most notices one poll answer carries before it names a next page: 500 by default (#210 Q13). */
+  noticePageLimit: number;
+
+  /**
+   * How often each instance reads the notice stream again when no wake-up has arrived through the
+   * cache, in milliseconds: 2,000 by default (#210 Q14), so a lost wake-up costs at most that.
+   */
+  noticeRereadMilliseconds: number;
+
+  /** The port the controller listens on; 0 asks for any free port. */
+  port: number;
+
+  /** The grace period, in seconds, that the notice retention floor counts beyond the token lifetime. */
+  retentionGraceSeconds: number;
+
+  /** The margin, in seconds, that the notice retention floor adds beyond the token lifetime and the grace period. */
+  retentionMarginSeconds: number;
+
+  /**
+   * The longest lifetime, in seconds, of a sign-in token the deployment accepts: how long a relayed
+   * sign-out naming a subject alone is kept (R7).
+   */
+  signInTokenMaximumLifetimeSeconds: number;
+
+  /** The record actions the signed-in rule confers on every signed-in principal; count, view and export by default. */
+  signedInRule: readonly RecordAction[];
+
+  /**
+   * How long the controller waits on the store for one request before it answers it unavailable, in
+   * milliseconds: half the bridge's poll deadline D, 5,000 by default against the bridge's 10 s
+   * (#210 Q13), so a poll waiting on a stalled store is answered 503 within the bridge's deadline.
+   */
+  storeTimeoutMilliseconds: number;
+
+  /** The push streams one audience may hold open on one instance; 64 by default, a stream past it answered 503 and logged. */
+  streamLimitPerAudience: number;
+
+  /**
+   * The longest a notice stream stays open, in seconds, before the controller ends it. A value below
+   * {@link STREAM_MAXIMUM_LIFETIME_FLOOR_SECONDS} is refused.
+   */
+  streamMaximumLifetimeSeconds: number;
+
+  /** The notices queued for one stream before the controller closes a stream whose reader has stopped reading; 1,000 by default. */
+  streamQueueLimit: number;
+
+  /** How long an Usher token lives, in seconds; 300 by default. */
+  tokenLifetimeSeconds: number;
+
+  /** The addresses and CIDR ranges whose `X-Forwarded-For` the controller believes when it records `sourceIp` (#214 Q15); none by default. */
+  trustedProxies: readonly string[];
+}
+
+/**
+ * The settings the design names that the controller does not read yet. The harness holds them so the
+ * fixtures and tests written against the design keep their values, and puts none of them in the
+ * controller's environment: {@link environmentFor} writes no variable for them, since the controller
+ * reads a setting only once code uses it. Each moves to {@link ControllerSettings}, with its variable,
+ * in the unit whose code reads it.
+ */
+export interface PendingSettings {
+  /**
+   * The characters an instance adds to the default set an externalId may hold (ASCII letters, digits,
+   * dot, underscore and hyphen, #211 Q1); none by default. Letters beyond ASCII are compared by Unicode
+   * case folding after NFC.
+   */
+  allowedCharactersExtra: string;
+
+  /** Whether a grant is accepted at creation without its recipient answering it (auto-accept); off by default. */
+  autoAccept: boolean;
+
+  /**
+   * The cache's (Valkey) password, in a variable of its own: a missing one refuses the start, naming
+   * the variable and never its value.
+   */
+  cachePassword: string;
+
+  /** The cache's (Valkey) URL, carrying no password: one carrying a password refuses the start. */
+  cacheUrl: string;
 
   /** The client id of the service account the controller resolves addresses through (#212, #213 Q1). */
   directoryClientId: string;
@@ -125,117 +228,28 @@ export interface ControllerConfiguration {
    */
   egoMigrationPrefixes: readonly string[];
 
-  /** The CloudEvents `source` every event carries: one per deployment, the same on every instance (#214). */
-  eventSource: string;
-
   /**
    * When `grant.rateExceeded` fires: more grant operations by one actor than `operationCount` within
    * `windowSeconds` (#214 Q19), as `audit-events.md` names the setting.
    */
   grantRateThreshold: { operationCount: number; windowSeconds: number };
 
-  /**
-   * How long an open notice stream may stay silent before the controller writes a heartbeat comment,
-   * in milliseconds: 10,000 by default (#210 Q15), short enough for the bridge's 25 s idle timer.
-   * Configurable so a test can run the bridge's compressed profile (#215 Q10, #217 Q2).
-   */
-  heartbeatMilliseconds: number;
-
-  /** The host the controller listens on; a loopback address in tests. */
-  host: string;
-
-  /** The identity provider's issuer, exactly as its discovery document and tokens carry it: https, or http to a loopback host only. */
-  identityProviderIssuer: string;
-
-  /** This instance's name, the `instance` every event it emits carries (#214 Q17); unique among the deployment's instances. */
-  instanceName: string;
-
   /** The controller's own issuer: every Usher token's `iss`. */
   issuer: string;
-
-  /**
-   * The key-encryption key encrypting every stored application key, shared by every instance:
-   * 32 bytes as 43 base64url characters in canonical form, an application key's format. Whitespace
-   * around it is ignored. A missing or malformed one refuses the start, and so does one failing the
-   * check value recorded in the database at the first start; each refusal names the variable and
-   * never its value.
-   */
-  keyEncryptionKey: string;
-
-  /**
-   * Where the controller writes its structured log lines: the process's standard output by default.
-   * Set only through the configuration, never from the environment, so a test can read what is
-   * logged.
-   */
-  logStream: Writable;
-
-  /** The `aud` a management token must name: the Policy Management API's identifier at the identity provider. */
-  managementAudience: string;
-
-  /** The clients a management token's `azp` may name: the management screens' client identifiers. */
-  managementClients: readonly string[];
-
-  /** The most notices one poll answer carries before it names a next page: 500 by default (#210 Q13). */
-  noticePageLimit: number;
-
-  /**
-   * How often each instance reads the notice stream again when no wake-up has arrived through the
-   * cache, in milliseconds: 2,000 by default (#210 Q14), so a lost wake-up costs at most that.
-   */
-  noticeRereadMilliseconds: number;
 
   /** The access level a resource registered naming none takes: `registered` by default (#211). */
   platformDefaultAccessLevel: 'grant' | 'open' | 'registered';
 
-  /** The port the controller listens on; 0 asks for any free port. */
-  port: number;
-
-  /** The grace period, in seconds, that the notice retention floor counts beyond the token lifetime. */
-  retentionGraceSeconds: number;
-
-  /** The margin, in seconds, that the notice retention floor adds beyond the token lifetime and the grace period. */
-  retentionMarginSeconds: number;
-
   /** The longest an administrator's self-grant may last, in seconds: 86,400 by default (#212). */
   selfGrantMaximumSeconds: number;
 
-  /**
-   * The longest lifetime, in seconds, of a sign-in token the deployment accepts: how long a relayed
-   * sign-out naming a subject alone is kept (R7).
-   */
-  signInTokenMaximumLifetimeSeconds: number;
-
-  /** The record actions the signed-in rule confers on every signed-in principal; count, view and export by default. */
-  signedInRule: readonly RecordAction[];
-
-  /**
-   * How long the controller waits on the store for one request before it answers it unavailable, in
-   * milliseconds: half the bridge's poll deadline D, 5,000 by default against the bridge's 10 s
-   * (#210 Q13), so a poll waiting on a stalled store is answered 503 within the bridge's deadline.
-   */
-  storeTimeoutMilliseconds: number;
-
-  /** The push streams one audience may hold open on one instance; 64 by default, a stream past it answered 503 and logged. */
-  streamLimitPerAudience: number;
-
-  /**
-   * The longest a notice stream stays open, in seconds, before the controller ends it. A value below
-   * {@link STREAM_MAXIMUM_LIFETIME_FLOOR_SECONDS} is refused.
-   */
-  streamMaximumLifetimeSeconds: number;
-
-  /** The notices queued for one stream before the controller closes a stream whose reader has stopped reading; 1,000 by default. */
-  streamQueueLimit: number;
-
   /** The category a submitter grant names, as the payload names it: `global.unmarked` by default (#212 Q6). */
   submitterCategory: string;
-
-  /** How long an Usher token lives, in seconds; 300 by default. */
-  tokenLifetimeSeconds: number;
-
-  /** The addresses and CIDR ranges whose `X-Forwarded-For` the controller believes when it records `sourceIp` (#214 Q15); none by default. */
-  trustedProxies: readonly string[];
 }
+
+/** The controller's configuration as the harness holds it: the settings the controller reads, and those it does not read yet. */
+export interface ControllerConfiguration
+  extends ControllerSettings, PendingSettings {}
 
 /** A plain record of environment variables, as `process.env` holds them. */
 export type ControllerEnvironment = Readonly<
@@ -415,48 +429,33 @@ const CONTROLLER_MODULES = {
 /** The least a stream's maximum lifetime may be configured to, in seconds; a lower one is refused. */
 export const STREAM_MAXIMUM_LIFETIME_FLOOR_SECONDS = 60;
 
-/** A configuration field the environment can set: every one but the clock and the log stream. */
+/** A setting the controller reads from an environment variable of its own: every one but the clock and the log stream. */
 export type FieldWithVariable = Exclude<
-  keyof ControllerConfiguration,
+  keyof ControllerSettings,
   'clock' | 'logStream'
 >;
 
 const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   administratorRole: 'USHER_ADMINISTRATOR_ROLE',
-  allowedCharactersExtra: 'USHER_ALLOWED_CHARACTERS_EXTRA',
-  autoAccept: 'USHER_AUTO_ACCEPT',
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
-  cachePassword: 'USHER_CACHE_PASSWORD',
-  cacheUrl: 'USHER_CACHE_URL',
   cursorKey: 'USHER_CURSOR_KEY',
   databasePassword: 'USHER_DATABASE_PASSWORD',
   databaseSchema: 'USHER_DATABASE_SCHEMA',
   databaseUrl: 'USHER_DATABASE_URL',
-  directoryClientId: 'USHER_DIRECTORY_CLIENT_ID',
-  directoryClientSecret: 'USHER_DIRECTORY_CLIENT_SECRET',
-  directoryRealm: 'USHER_DIRECTORY_REALM',
-  directoryUrl: 'USHER_DIRECTORY_URL',
-  egoMigrationAllStudyPolicies: 'USHER_EGO_MIGRATION_ALL_STUDY_POLICIES',
-  egoMigrationBaseTier: 'USHER_EGO_MIGRATION_BASE_TIER',
-  egoMigrationPrefixes: 'USHER_EGO_MIGRATION_PREFIXES',
   eventSource: 'USHER_EVENT_SOURCE',
-  grantRateThreshold: 'USHER_GRANT_RATE_THRESHOLD',
   heartbeatMilliseconds: 'USHER_HEARTBEAT_MILLISECONDS',
   host: 'USHER_HOST',
   identityProviderIssuer: 'USHER_IDENTITY_PROVIDER_ISSUER',
   instanceName: 'USHER_INSTANCE_NAME',
-  issuer: 'USHER_ISSUER',
   keyEncryptionKey: 'USHER_KEY_ENCRYPTION_KEY',
   managementAudience: 'USHER_MANAGEMENT_AUDIENCE',
   managementClients: 'USHER_MANAGEMENT_CLIENTS',
   noticePageLimit: 'USHER_NOTICE_PAGE_LIMIT',
   noticeRereadMilliseconds: 'USHER_NOTICE_REREAD_MILLISECONDS',
-  platformDefaultAccessLevel: 'USHER_PLATFORM_DEFAULT_ACCESS_LEVEL',
   port: 'USHER_PORT',
   retentionGraceSeconds: 'USHER_RETENTION_GRACE_SECONDS',
   retentionMarginSeconds: 'USHER_RETENTION_MARGIN_SECONDS',
-  selfGrantMaximumSeconds: 'USHER_SELF_GRANT_MAXIMUM_SECONDS',
   signInTokenMaximumLifetimeSeconds:
     'USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS',
   signedInRule: 'USHER_SIGNED_IN_RULE',
@@ -464,7 +463,6 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   streamLimitPerAudience: 'USHER_STREAM_LIMIT_PER_AUDIENCE',
   streamMaximumLifetimeSeconds: 'USHER_STREAM_MAXIMUM_LIFETIME_SECONDS',
   streamQueueLimit: 'USHER_STREAM_QUEUE_LIMIT',
-  submitterCategory: 'USHER_SUBMITTER_CATEGORY',
   tokenLifetimeSeconds: 'USHER_TOKEN_LIFETIME_SECONDS',
   trustedProxies: 'USHER_TRUSTED_PROXIES',
 };
@@ -527,101 +525,64 @@ const loadExport = async <Exported>(
 
 /**
  * The environment the config module reads for a configuration: the one place the controller's
- * environment variable names live. Every field but `clock` and `logStream` has a variable; a list is
- * comma-separated, empty for an empty list; the EGO migration's prefixes and its all-study policies
- * are JSON lists, since a prefix list must tell an empty prefix from none and a policy's name may hold
- * a comma, and the grant rate threshold a JSON object; the EGO migration's base tier is empty for
- * none. The key-encryption key and each store's password travel as given, each in its own variable.
+ * environment variable names live. Every setting the controller reads but `clock` and `logStream` has
+ * a variable; a list is comma-separated, empty for an empty list. The key-encryption key and the
+ * database password travel as given, each in its own variable. The {@link PendingSettings}, which the
+ * controller does not read yet, travel in none.
  *
  * @param configuration the configuration to express.
  */
 export const environmentFor = ({
   administratorRole,
-  allowedCharactersExtra,
-  autoAccept,
   backChannelLogoutAudiences,
   baseline,
-  cachePassword,
-  cacheUrl,
   cursorKey,
   databasePassword,
   databaseSchema,
   databaseUrl,
-  directoryClientId,
-  directoryClientSecret,
-  directoryRealm,
-  directoryUrl,
-  egoMigrationAllStudyPolicies,
-  egoMigrationBaseTier,
-  egoMigrationPrefixes,
   eventSource,
-  grantRateThreshold,
   heartbeatMilliseconds,
   host,
   identityProviderIssuer,
   instanceName,
-  issuer,
   keyEncryptionKey,
   managementAudience,
   managementClients,
   noticePageLimit,
   noticeRereadMilliseconds,
-  platformDefaultAccessLevel,
   port,
   retentionGraceSeconds,
   retentionMarginSeconds,
-  selfGrantMaximumSeconds,
   signInTokenMaximumLifetimeSeconds,
   signedInRule,
   storeTimeoutMilliseconds,
   streamLimitPerAudience,
   streamMaximumLifetimeSeconds,
   streamQueueLimit,
-  submitterCategory,
   tokenLifetimeSeconds,
   trustedProxies,
-}: ControllerConfiguration): Readonly<Record<string, string>> => ({
+}: ControllerSettings): Readonly<Record<string, string>> => ({
   [VARIABLE_NAMES.administratorRole]: administratorRole,
-  [VARIABLE_NAMES.allowedCharactersExtra]: allowedCharactersExtra,
-  [VARIABLE_NAMES.autoAccept]: String(autoAccept),
   [VARIABLE_NAMES.backChannelLogoutAudiences]:
     backChannelLogoutAudiences.join(','),
   [VARIABLE_NAMES.baseline]: baseline.join(','),
-  [VARIABLE_NAMES.cachePassword]: cachePassword,
-  [VARIABLE_NAMES.cacheUrl]: cacheUrl,
   [VARIABLE_NAMES.cursorKey]: cursorKey,
   [VARIABLE_NAMES.databasePassword]: databasePassword,
   [VARIABLE_NAMES.databaseSchema]: databaseSchema,
   [VARIABLE_NAMES.databaseUrl]: databaseUrl,
-  [VARIABLE_NAMES.directoryClientId]: directoryClientId,
-  [VARIABLE_NAMES.directoryClientSecret]: directoryClientSecret,
-  [VARIABLE_NAMES.directoryRealm]: directoryRealm,
-  [VARIABLE_NAMES.directoryUrl]: directoryUrl,
-  [VARIABLE_NAMES.egoMigrationAllStudyPolicies]: JSON.stringify(
-    egoMigrationAllStudyPolicies,
-  ),
-  [VARIABLE_NAMES.egoMigrationBaseTier]: egoMigrationBaseTier ?? '',
-  [VARIABLE_NAMES.egoMigrationPrefixes]: JSON.stringify(egoMigrationPrefixes),
   [VARIABLE_NAMES.eventSource]: eventSource,
-  [VARIABLE_NAMES.grantRateThreshold]: JSON.stringify({
-    operationCount: grantRateThreshold.operationCount,
-    windowSeconds: grantRateThreshold.windowSeconds,
-  }),
   [VARIABLE_NAMES.heartbeatMilliseconds]: String(heartbeatMilliseconds),
   [VARIABLE_NAMES.host]: host,
   [VARIABLE_NAMES.identityProviderIssuer]: identityProviderIssuer,
   [VARIABLE_NAMES.instanceName]: instanceName,
-  [VARIABLE_NAMES.issuer]: issuer,
   [VARIABLE_NAMES.keyEncryptionKey]: keyEncryptionKey,
   [VARIABLE_NAMES.managementAudience]: managementAudience,
   [VARIABLE_NAMES.managementClients]: managementClients.join(','),
   [VARIABLE_NAMES.noticePageLimit]: String(noticePageLimit),
   [VARIABLE_NAMES.noticeRereadMilliseconds]: String(noticeRereadMilliseconds),
-  [VARIABLE_NAMES.platformDefaultAccessLevel]: platformDefaultAccessLevel,
   [VARIABLE_NAMES.port]: String(port),
   [VARIABLE_NAMES.retentionGraceSeconds]: String(retentionGraceSeconds),
   [VARIABLE_NAMES.retentionMarginSeconds]: String(retentionMarginSeconds),
-  [VARIABLE_NAMES.selfGrantMaximumSeconds]: String(selfGrantMaximumSeconds),
   [VARIABLE_NAMES.signInTokenMaximumLifetimeSeconds]: String(
     signInTokenMaximumLifetimeSeconds,
   ),
@@ -632,7 +593,6 @@ export const environmentFor = ({
     streamMaximumLifetimeSeconds,
   ),
   [VARIABLE_NAMES.streamQueueLimit]: String(streamQueueLimit),
-  [VARIABLE_NAMES.submitterCategory]: submitterCategory,
   [VARIABLE_NAMES.tokenLifetimeSeconds]: String(tokenLifetimeSeconds),
   [VARIABLE_NAMES.trustedProxies]: trustedProxies.join(','),
 });

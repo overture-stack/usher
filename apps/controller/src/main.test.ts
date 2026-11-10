@@ -55,18 +55,14 @@ const runEntry = (
 
 const validEnvironment = async (): Promise<Record<string, string>> => ({
   USHER_BACK_CHANNEL_LOGOUT_AUDIENCES: 'portal-test',
-  USHER_CACHE_PASSWORD: randomBytes(12).toString('hex'),
-  USHER_CACHE_URL: 'redis://127.0.0.1:6379',
   USHER_CURSOR_KEY: randomBytes(32).toString('base64url'),
   USHER_DATABASE_PASSWORD: randomBytes(12).toString('hex'),
   USHER_DATABASE_SCHEMA: 'usher',
   USHER_DATABASE_URL: `postgres://usher_controller@${LOOPBACK}:${await unusedPort()}/usher`,
   USHER_EVENT_SOURCE: 'https://usher.example.org/controller',
-  USHER_GRANT_RATE_THRESHOLD: '{"operationCount":100,"windowSeconds":60}',
   USHER_HOST: LOOPBACK,
   USHER_IDENTITY_PROVIDER_ISSUER: 'http://127.0.0.1:8080/realms/usher-test',
   USHER_INSTANCE_NAME: 'usher-test-1',
-  USHER_ISSUER: 'https://usher.example.org',
   USHER_KEY_ENCRYPTION_KEY: randomBytes(32).toString('base64url'),
   USHER_MANAGEMENT_AUDIENCE: 'usher-management-test',
   USHER_MANAGEMENT_CLIENTS: 'usher-ui-test',
@@ -148,7 +144,6 @@ suite("the controller's process", () => {
     );
     [
       environment['USHER_DATABASE_PASSWORD'] ?? '',
-      environment['USHER_CACHE_PASSWORD'] ?? '',
       environment['USHER_KEY_ENCRYPTION_KEY'] ?? '',
     ].forEach((secret) => assert.equal(exit.stderr.includes(secret), false));
   });

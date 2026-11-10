@@ -7,18 +7,12 @@
 # The services publish their ports on 127.0.0.1 alone. Both commands read this one file, so they
 # always read the same retention durations; left unset, both take the defaults.
 USHER_BACK_CHANNEL_LOGOUT_AUDIENCES=
-USHER_CACHE_URL=redis://127.0.0.1:6379
 USHER_DATABASE_SCHEMA=usher
 USHER_DATABASE_URL=postgres://usher_controller@127.0.0.1:5432/usher
-USHER_DIRECTORY_CLIENT_ID=usher-directory
-USHER_DIRECTORY_REALM=overture
-USHER_DIRECTORY_URL=http://127.0.0.1:8080
 USHER_EVENT_SOURCE=https://usher.localhost/controller
-USHER_GRANT_RATE_THRESHOLD='{"operationCount":100,"windowSeconds":60}'
 USHER_HOST=127.0.0.1
 USHER_IDENTITY_PROVIDER_ISSUER=http://127.0.0.1:8080/realms/overture
 USHER_INSTANCE_NAME=usher-host-1
-USHER_ISSUER=https://usher.localhost
 USHER_MANAGEMENT_AUDIENCE=usher-management
 USHER_MANAGEMENT_CLIENTS=usher-ui
 USHER_PORT=3000

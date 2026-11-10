@@ -7,19 +7,10 @@ export interface Clock {
   now(): number;
 }
 
-/** The least access a resource's records take: open to everyone, to everyone signed in, or by grant alone. */
-export type AccessLevel = 'grant' | 'open' | 'registered';
-
 /** The environment a configuration is read from: a plain record of variables, as `process.env` holds them. */
 export type ConfigurationEnvironment = Readonly<
   Record<string, string | undefined>
 >;
-
-/** When `grant.rateExceeded` fires: more grant operations by one actor than the count within the window. */
-export interface GrantRateThreshold {
-  operationCount: number;
-  windowSeconds: number;
-}
 
 /**
  * The controller's configuration: what it is created from. Every field but the clock and the log
@@ -30,26 +21,11 @@ export interface ControllerConfiguration {
   /** The identity provider realm role making its holder a platform administrator; `usher-platform-admin` by default. */
   administratorRole: string;
 
-  /**
-   * The characters an instance adds to the default set an externalId may hold, ASCII letters, digits,
-   * dot, underscore and hyphen; none by default.
-   */
-  allowedCharactersExtra: string;
-
-  /** Whether a grant is accepted at creation without its recipient answering it; off by default. */
-  autoAccept: boolean;
-
   /** The `aud` values a back-channel logout token may carry: the platform's client identifiers. */
   backChannelLogoutAudiences: readonly string[];
 
   /** The record actions the baseline confers on everyone, anonymous visitors included; count, view and export by default. */
   baseline: readonly RecordAction[];
-
-  /** The cache's password, read from a variable of its own and never shown. */
-  cachePassword: string;
-
-  /** The cache's URL, carrying no password. */
-  cacheUrl: string;
 
   /** The controller's wall clock, which every duration it measures runs on; never read from the environment. */
   clock: Clock;
@@ -66,38 +42,8 @@ export interface ControllerConfiguration {
   /** A connection URL under the controller's runtime role, which it names, carrying no password. */
   databaseUrl: string;
 
-  /** The client id of the service account the controller resolves addresses through. */
-  directoryClientId: string;
-
-  /** That service account's secret, which no refusal, log line or answer ever shows. */
-  directoryClientSecret: string;
-
-  /** The identity provider realm the directory looks people up in. */
-  directoryRealm: string;
-
-  /**
-   * The identity provider's base URL, whose admin API the directory reads; empty for none, by default,
-   * which answers every operation needing an address as the directory unavailable.
-   */
-  directoryUrl: string;
-
-  /** The EGO policies granting every study, each by its name, matched as literal text; none by default. */
-  egoMigrationAllStudyPolicies: readonly string[];
-
-  /** The base tier of each resource the EGO migration registers; `null`, none, by default. */
-  egoMigrationBaseTier: AccessLevel | null;
-
-  /**
-   * The prefixes the EGO migration reads a study id after in a policy's name, matched as literal text
-   * in their configured letter case; none by default, and never an empty one or one listed twice.
-   */
-  egoMigrationPrefixes: readonly string[];
-
   /** The CloudEvents `source` every event carries: the same on every instance sharing the store, never one per instance. */
   eventSource: string;
-
-  /** When `grant.rateExceeded` fires. */
-  grantRateThreshold: GrantRateThreshold;
 
   /** How long an open notice stream may stay silent before a heartbeat, in milliseconds; 10,000 by default. */
   heartbeatMilliseconds: number;
@@ -110,9 +56,6 @@ export interface ControllerConfiguration {
 
   /** This instance's name, carried by every event it emits; unique among the instances sharing the store. */
   instanceName: string;
-
-  /** The controller's own issuer: every Usher token's `iss`. */
-  issuer: string;
 
   /**
    * The key-encryption key encrypting every stored application key, shared by every instance: 32 bytes
@@ -135,9 +78,6 @@ export interface ControllerConfiguration {
   /** How often each instance reads the notice stream again with no wake-up, in milliseconds; 2,000 by default. */
   noticeRereadMilliseconds: number;
 
-  /** The access level a resource registered naming none takes; `registered` by default. */
-  platformDefaultAccessLevel: AccessLevel;
-
   /** The port the controller listens on; 0 asks for any free port. */
   port: number;
 
@@ -146,9 +86,6 @@ export interface ControllerConfiguration {
 
   /** The margin the notice retention floor adds beyond the token lifetime and the grace period, in seconds; 30 by default. */
   retentionMarginSeconds: number;
-
-  /** The longest an administrator's self-grant may last, in seconds; 86,400 by default. */
-  selfGrantMaximumSeconds: number;
 
   /** The longest lifetime of a sign-in token the controller accepts, in seconds. */
   signInTokenMaximumLifetimeSeconds: number;
@@ -167,9 +104,6 @@ export interface ControllerConfiguration {
 
   /** The notices queued for one stream before a stream whose reader stopped reading is closed; 1,000 by default. */
   streamQueueLimit: number;
-
-  /** The category a submitter grant names, as the payload names it; `global.unmarked` by default. */
-  submitterCategory: string;
 
   /** How long an Usher token lives, in seconds; 300 by default. */
   tokenLifetimeSeconds: number;

@@ -1,16 +1,6 @@
 {
   "clients": [
     {
-      "clientId": "usher-directory",
-      "directAccessGrantsEnabled": false,
-      "enabled": true,
-      "protocol": "openid-connect",
-      "publicClient": false,
-      "secret": "${USHER_DIRECTORY_CLIENT_SECRET}",
-      "serviceAccountsEnabled": true,
-      "standardFlowEnabled": false
-    },
-    {
       "clientId": "usher-ui",
       "directAccessGrantsEnabled": true,
       "enabled": true,
@@ -35,15 +25,5 @@
   "realm": "overture",
   "roles": {
     "realm": [{ "name": "usher-platform-admin" }]
-  },
-  "users": [
-    {
-      "clientRoles": {
-        "realm-management": ["query-users", "view-users"]
-      },
-      "enabled": true,
-      "serviceAccountClientId": "usher-directory",
-      "username": "service-account-usher-directory"
-    }
-  ]
+  }
 }

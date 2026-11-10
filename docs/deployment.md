@@ -11,8 +11,7 @@
 | Controller instances         | One or more processes from the controller's image, sharing one store                       |
 | The schema migration command | The same image, run once before each rollout to bring the store's schema up to the release |
 | PostgreSQL 15 or later       | The store: the policy, the audit log, and the notices read by bridges                      |
-| Valkey                       | One Valkey server, shared by every instance                                                |
-| An identity provider         | The realm issuing the tokens trusted by the controller, and holding the users it looks up  |
+| An identity provider         | The realm issuing the tokens trusted by the controller                                     |
 
 ---
 
@@ -64,7 +63,6 @@ A whole number is written in digits alone, with no sign, decimal point or unit. 
 | --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `USHER_INSTANCE_NAME` | Required | **Per instance.** This instance's name, carried as `data.instance` by every event it records. Give each instance sharing the store its own, such as its host or pod name. |
 | `USHER_EVENT_SOURCE`  | Required | The CloudEvents `source` carried by every event, such as `https://usher.example.org/controller`. It names the deployment, never one instance.                             |
-| `USHER_ISSUER`        | Required | The controller's own issuer: the `iss` of every Usher token.                                                                                                              |
 
 ### The database
 
@@ -91,13 +89,6 @@ The controller never reads these two, so give them to the schema migration comma
 | `USHER_KEY_ENCRYPTION_KEY` | Secret | The key-encryption key, encrypting every stored application key. See [Keys](#keys). |
 | `USHER_CURSOR_KEY`         | Secret | The key encrypting every notice stream cursor. See [Keys](#keys).                   |
 
-### The cache
-
-| Variable               | Kind     | What it is, and its rule                                                                                                                      |
-| ---------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_CACHE_URL`      | Required | The URL of the Valkey server shared by every instance. It never carries a password, whether as user information or as a `password` parameter. |
-| `USHER_CACHE_PASSWORD` | Secret   | The Valkey server's password.                                                                                                                 |
-
 ### The identity provider
 
 | Variable                                       | Kind                             | What it is, and its rule                                                                                                                                                                                                                            |
@@ -108,19 +99,6 @@ The controller never reads these two, so give them to the schema migration comma
 | `USHER_MANAGEMENT_CLIENTS`                     | Required                         | The client identifiers the management UI signs in through, as a comma-separated list. A management token's `azp` must be one of them. An empty value is an empty list, accepting no management token.                                               |
 | `USHER_BACK_CHANNEL_LOGOUT_AUDIENCES`          | Required                         | The audiences allowed in a back-channel logout token's `aud`, as a comma-separated list: the platform's client identifiers. An empty value is an empty list.                                                                                        |
 | `USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS` | Required                         | The longest lifetime of a sign-in token accepted by the controller, in seconds: a whole number of at least 1.                                                                                                                                       |
-
-### The directory
-
-The directory is how the controller looks up the realm's users, through the identity provider's admin API.
-
-| Variable                        | Kind                                       | What it is, and its rule                                                                                                                                                                                                                                                             |
-| ------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `USHER_DIRECTORY_URL`           | Optional: none                             | The identity provider's base URL, such as `https://idp.example.org`. It is an https URL, or an http URL to a loopback host alone, and it never carries a password. Empty or unset, there is no directory, and every operation needing one answers that the directory is unavailable. |
-| `USHER_DIRECTORY_REALM`         | Required once `USHER_DIRECTORY_URL` is set | The realm searched by the directory.                                                                                                                                                                                                                                                 |
-| `USHER_DIRECTORY_CLIENT_ID`     | Required once `USHER_DIRECTORY_URL` is set | The client id of the directory's service account.                                                                                                                                                                                                                                    |
-| `USHER_DIRECTORY_CLIENT_SECRET` | Secret once `USHER_DIRECTORY_URL` is set   | That client's secret.                                                                                                                                                                                                                                                                |
-
-While `USHER_DIRECTORY_URL` is empty or unset, the other three may be empty or unset too.
 
 ### Token lifetime and notice retention
 
@@ -145,28 +123,12 @@ The sum of these three durations is the notice retention floor: how long each no
 
 ### Access policy
 
-| Variable                              | Kind                          | What it is, and its rule                                                                                                                                                                                                                                                   |
-| ------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_BASELINE`                      | Optional: `count,view,export` | The record actions conferred on everyone, anonymous visitors included, as a comma-separated list drawn from `count`, `view` and `export`, each named once. An empty value confers none. Any other action is refused.                                                       |
-| `USHER_SIGNED_IN_RULE`                | Optional: `count,view,export` | The record actions conferred on every signed-in principal, under the rules of `USHER_BASELINE`.                                                                                                                                                                            |
-| `USHER_PLATFORM_DEFAULT_ACCESS_LEVEL` | Optional: `registered`        | The access level taken by a resource registered without one: `open`, `registered` or `grant`.                                                                                                                                                                              |
-| `USHER_SUBMITTER_CATEGORY`            | Optional: `global.unmarked`   | The category named by a submitter grant.                                                                                                                                                                                                                                   |
-| `USHER_AUTO_ACCEPT`                   | Optional: `false`             | Whether a grant is accepted at creation, without its recipient answering it: `true` or `false`.                                                                                                                                                                            |
-| `USHER_SELF_GRANT_MAXIMUM_SECONDS`    | Optional: 86400               | How long an administrator's self-grant may last at most, in seconds: a whole number of at least 1.                                                                                                                                                                         |
-| `USHER_ALLOWED_CHARACTERS_EXTRA`      | Optional: none                | Characters allowed in an externalId beyond the default ones: ASCII letters, digits, dot, underscore and hyphen. An empty value adds none.                                                                                                                                  |
-| `USHER_GRANT_RATE_THRESHOLD`          | Required                      | When the `grant.rateExceeded` event fires: once one actor makes more grant operations than `operationCount` within `windowSeconds`. A JSON object holding those two members alone, each a whole number of at least 1, such as `{"operationCount":100,"windowSeconds":60}`. |
+| Variable               | Kind                          | What it is, and its rule                                                                                                                                                                                             |
+| ---------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USHER_BASELINE`       | Optional: `count,view,export` | The record actions conferred on everyone, anonymous visitors included, as a comma-separated list drawn from `count`, `view` and `export`, each named once. An empty value confers none. Any other action is refused. |
+| `USHER_SIGNED_IN_RULE` | Optional: `count,view,export` | The record actions conferred on every signed-in principal, under the rules of `USHER_BASELINE`.                                                                                                                      |
 
 A start under a baseline or signed-in rule differing from those recorded in the store records the new rules, with a `baseline.change` event at warning, since every principal's reach changes with them.
-
-### Migration from EGO
-
-These shape the migration of EGO's study groups into Usher.
-
-| Variable                                 | Kind           | What it is, and its rule                                                                                                                                              |
-| ---------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_EGO_MIGRATION_ALL_STUDY_POLICIES` | Optional: none | The EGO policies granting every study, as a JSON list of names, none of them empty, each matched as literal text.                                                     |
-| `USHER_EGO_MIGRATION_BASE_TIER`          | Optional: none | The base tier of each resource registered by the migration: `open`, `registered` or `grant`. An empty value is none.                                                  |
-| `USHER_EGO_MIGRATION_PREFIXES`           | Optional: none | The prefixes preceding a study id in an EGO policy's name, as a JSON list, each one non-empty and listed once, matched as literal text in its configured letter case. |
 
 ---
 
@@ -191,7 +153,7 @@ The same commands make passwords needing no quoting in a shell or an environment
 
 ## PostgreSQL
 
-- **PostgreSQL 15 or later.** The schema migration command refuses an older server before writing anything, naming `USHER_SCHEMA_MIGRATION_DATABASE_URL`.
+- **PostgreSQL 15 or later.** Its schema needs 15, and the controller is tested against 15 and 18. The schema migration command refuses an older server before writing anything, naming `USHER_SCHEMA_MIGRATION_DATABASE_URL`.
 - **The address accepting writes.** Point both database URLs at the primary, never at a read replica or a standby. An instance with a role allowed to write reports itself unready, with the cause `readOnly`, while its store answers as read-only.
 
 ### Connections and poolers
@@ -295,14 +257,7 @@ The controller trusts one realm of one identity provider. Its requirements, in K
 - **Tokens signed with an asymmetric algorithm**: RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384 or ES512. The controller accepts no symmetric algorithm.
 - **The platform administrator role.** A realm role named as in `USHER_ADMINISTRATOR_ROLE`, carried in each access token's `realm_access.roles`.
 - **A client for the management UI.** Its access tokens carry the audience in `USHER_MANAGEMENT_AUDIENCE` in their `aud`, which in Keycloak takes an audience mapper. Its client id is listed in `USHER_MANAGEMENT_CLIENTS`, since the controller checks each management token's `azp` against that list. The management UI signs people in through the authorization code flow with PKCE, as a public client. Every management token carries `sub` and `exp`.
-- **A directory client**, when `USHER_DIRECTORY_URL` is set. It is a confidential client with a service account allowed to query and view the realm's users: in Keycloak, the `query-users` and `view-users` roles of the `realm-management` client. Its id and secret go in `USHER_DIRECTORY_CLIENT_ID` and `USHER_DIRECTORY_CLIENT_SECRET`, and the realm's name in `USHER_DIRECTORY_REALM`.
 - **Access tokens living 15 minutes or less.** The controller reads the administrator role from each token, never from a cache, so removing the role takes effect only as the tokens issued before its removal expire.
-
----
-
-## Valkey
-
-Every instance shares one Valkey server, named in `USHER_CACHE_URL`, with its password in `USHER_CACHE_PASSWORD`. Both are required, and each start checks them: the URL never carries a password, whether as user information or as a `password` parameter. An instance answers correctly without Valkey, so readiness does not depend on it.
 
 ---
 

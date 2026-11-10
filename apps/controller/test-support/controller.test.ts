@@ -10,6 +10,7 @@ import {
   ENVIRONMENT_VARIABLES,
   environmentFor,
   type FieldWithVariable,
+  type PendingSettings,
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,
   schemaMigrationEnvironmentFor,
   readRefusal,
@@ -81,16 +82,43 @@ const OTHER_VALUES: {
   [Field in FieldWithVariable]: ControllerConfiguration[Field];
 } = {
   administratorRole: 'ims-usher-admin',
-  allowedCharactersExtra: ' :*/Éé',
-  autoAccept: true,
   backChannelLogoutAudiences: ['portal-test', 'submission-test'],
   baseline: [],
-  cachePassword: freshSecret(),
-  cacheUrl: 'redis://127.0.0.1:6380',
   cursorKey: syntheticKey(5),
   databasePassword: freshSecret(),
   databaseSchema: 'usher_other',
   databaseUrl: 'postgres://usher_controller@127.0.0.1:5433/usher_test',
+  eventSource: 'https://usher-two.example.org/controller',
+  heartbeatMilliseconds: 500,
+  host: '::1',
+  identityProviderIssuer: 'https://auth.example.org/realms/usher',
+  instanceName: 'usher-test-2',
+  keyEncryptionKey: freshSecret(),
+  managementAudience: 'usher-management-other',
+  managementClients: ['usher-ui-test', 'usher-cli-test'],
+  noticePageLimit: 20,
+  noticeRereadMilliseconds: 250,
+  port: 8443,
+  retentionGraceSeconds: 90,
+  retentionMarginSeconds: 45,
+  signInTokenMaximumLifetimeSeconds: 900,
+  signedInRule: ['view'],
+  storeTimeoutMilliseconds: 250,
+  streamLimitPerAudience: 2,
+  streamMaximumLifetimeSeconds: 60,
+  streamQueueLimit: 10,
+  tokenLifetimeSeconds: 120,
+  trustedProxies: ['127.0.0.1', '::1'],
+};
+
+// A value other than the configuration's for each setting the controller does not read yet.
+const PENDING_VALUES: {
+  [Field in keyof PendingSettings]: PendingSettings[Field];
+} = {
+  allowedCharactersExtra: ' :*/Éé',
+  autoAccept: true,
+  cachePassword: freshSecret(),
+  cacheUrl: 'redis://127.0.0.1:6380',
   directoryClientId: 'usher-directory-other',
   directoryClientSecret: syntheticKey(7),
   directoryRealm: 'overture',
@@ -98,32 +126,11 @@ const OTHER_VALUES: {
   egoMigrationAllStudyPolicies: ['ENVIRONMENTAL', 'ALL, STUDIES'],
   egoMigrationBaseTier: 'grant',
   egoMigrationPrefixes: [''],
-  eventSource: 'https://usher-two.example.org/controller',
   grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
-  heartbeatMilliseconds: 500,
-  host: '::1',
-  identityProviderIssuer: 'https://auth.example.org/realms/usher',
-  instanceName: 'usher-test-2',
   issuer: 'https://usher-two.example.org',
-  keyEncryptionKey: freshSecret(),
-  managementAudience: 'usher-management-other',
-  managementClients: ['usher-ui-test', 'usher-cli-test'],
-  noticePageLimit: 20,
-  noticeRereadMilliseconds: 250,
   platformDefaultAccessLevel: 'open',
-  port: 8443,
-  retentionGraceSeconds: 90,
-  retentionMarginSeconds: 45,
   selfGrantMaximumSeconds: 14_400,
-  signInTokenMaximumLifetimeSeconds: 900,
-  signedInRule: ['view'],
-  storeTimeoutMilliseconds: 250,
-  streamLimitPerAudience: 2,
-  streamMaximumLifetimeSeconds: 60,
-  streamQueueLimit: 10,
   submitterCategory: 'global.controlled',
-  tokenLifetimeSeconds: 120,
-  trustedProxies: ['127.0.0.1', '::1'],
 };
 
 suite('the environment a configuration is expressed as', () => {
@@ -141,7 +148,9 @@ suite('the environment a configuration is expressed as', () => {
     assert.deepEqual(atEpoch, later);
     assert.equal(
       Object.keys(atEpoch).length,
-      Object.keys(CONFIGURATION).length - 2,
+      Object.keys(CONFIGURATION).length -
+        2 -
+        Object.keys(PENDING_VALUES).length,
     );
   });
 
@@ -159,32 +168,22 @@ suite('the environment a configuration is expressed as', () => {
     );
   });
 
-  test("carries the key-encryption key and each store's password as given, each in a variable of its own", () => {
+  test('carries the key-encryption key and the database password as given, each in a variable of its own', () => {
     const environment = environmentFor(CONFIGURATION);
 
     assert.deepEqual(
       [
         environment[ENVIRONMENT_VARIABLES.keyEncryptionKey],
         environment[ENVIRONMENT_VARIABLES.databasePassword],
-        environment[ENVIRONMENT_VARIABLES.cachePassword],
       ],
-      [
-        CONFIGURATION.keyEncryptionKey,
-        CONFIGURATION.databasePassword,
-        CONFIGURATION.cachePassword,
-      ],
+      [CONFIGURATION.keyEncryptionKey, CONFIGURATION.databasePassword],
     );
     assert.deepEqual(
       [
         ENVIRONMENT_VARIABLES.keyEncryptionKey,
         ENVIRONMENT_VARIABLES.databasePassword,
-        ENVIRONMENT_VARIABLES.cachePassword,
       ],
-      [
-        'USHER_KEY_ENCRYPTION_KEY',
-        'USHER_DATABASE_PASSWORD',
-        'USHER_CACHE_PASSWORD',
-      ],
+      ['USHER_KEY_ENCRYPTION_KEY', 'USHER_DATABASE_PASSWORD'],
     );
   });
 
@@ -202,6 +201,20 @@ suite('the environment a configuration is expressed as', () => {
       new Set(changedByField.flat()).size,
       Object.keys(OTHER_VALUES).length,
     );
+  });
+
+  test('gives the controller none of the settings it does not read yet', () => {
+    const base = environmentFor(CONFIGURATION);
+
+    const changedByField = Object.entries(PENDING_VALUES).map(
+      ([field, value]) =>
+        changedVariables(
+          base,
+          environmentFor({ ...CONFIGURATION, [field]: value }),
+        ),
+    );
+
+    assert.ok(changedByField.every((changed) => changed.length === 0));
   });
 });
 
