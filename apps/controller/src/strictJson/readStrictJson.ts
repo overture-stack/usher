@@ -1,6 +1,4 @@
-/** What reading JSON text strictly gave: its value, or the rule the text broke. */
-export type JsonReading =
-  { kind: 'read'; value: unknown } | { kind: 'refused'; rule: string };
+import type { JsonReading } from './types.js';
 
 // A string token, or one of the characters that open, close or separate a structure: once the text
 // has parsed, these are the only tokens that tell a member's name from a value, since no number or
