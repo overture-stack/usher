@@ -487,12 +487,12 @@ narrower units carry most configuration, and naming the wrong one has produced e
 documents twice. All four are correct statements about different things, so the wrong one reads as
 fluent and no mechanical check catches it.
 
-| Thing                 | Its actual scope   | Because                                      |
-| --------------------- | ------------------ | -------------------------------------------- |
-| resource field name   | per catalogue      | a field name only resolves inside one schema |
-| Usher token           | per application    | it is wrapped to that application's key      |
-| category              | per Usher instance | it is a row in Usher's own database          |
-| the baseline's grants | per instance       | nothing narrower owns it                     |
+| Thing                 | Its actual scope   | Because                                                  |
+| --------------------- | ------------------ | -------------------------------------------------------- |
+| resource field name   | per catalogue      | a field name only resolves inside one schema             |
+| Usher token           | per application    | it is encrypted under a subkey of that application's key |
+| category              | per Usher instance | it is a row in Usher's own database                      |
+| the baseline's grants | per instance       | nothing narrower owns it                                 |
 
 ## Choosing among filter, predicate and clause
 

@@ -99,7 +99,7 @@ export interface TokenReaderOptions {
   /** The payload versions accepted; a token of any other version is rejected. */
   payloadVersions: NonEmpty<number>;
 
-  /** The application key, imported for decryption alone. */
+  /** The application key's token subkey, derived for decryption alone. */
   tokenKey: CryptoKey;
 
   /** The clock for checking a token's time claims. */

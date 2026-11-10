@@ -216,9 +216,10 @@ proposed. The sections after them give the evidence.
 - Poll answers are not padded in the first release. A record's length can show an observer on the
   path that a notice exists, which is reasoned rather than measured, but holding back that answer
   already means holding back every answer, so padding would not change the delay bound.
-- The application key is used directly only for Usher tokens, and every other use derives an HKDF
-  subkey with its own label ([adapter-integration.md](../../../design/adapter-integration.md)
-  "Category dictionary introspection").
+- The application key is only ever the HKDF input: every use, the Usher token included, derives an
+  HKDF subkey with its own label, so no key serves two uses
+  ([adapter-integration.md](../../../design/adapter-integration.md) "Category dictionary
+  introspection").
 
 ### The controller and the bridge's caches
 
@@ -862,7 +863,7 @@ built from the application key it already holds.
 There is no `kid`. As for the Usher token, a `kid` and the key versions it names arrive together with
 key rotation, which is open in [jose for the Usher token](jose-usher-token.md#open-questions).
 
-The derivation keeps the encryption key from ever being used as an HMAC key. With an empty salt,
+The derivation keeps the application key from ever being used directly as a key. With an empty salt,
 HKDF's extract step passes the application key to HMAC as its message, not its key (reasoned from
 RFC 5869).
 
@@ -897,17 +898,16 @@ the key already reaches, across clusters included.
 | notice decryption      | `usher/v1/notice-encryption`                             | AES-GCM     | `decrypt` |
 | poll-answer decryption | `usher/v1/poll-answer`                                   | AES-GCM     | `decrypt` |
 | subject tag            | its own label, such as `usher/v1/subject-tag` (proposed) | HMAC-SHA256 | `sign`    |
+| Usher token decryption | `usher/v1/token-encryption`                              | AES-GCM     | `decrypt` |
 
-The token key described in [jose for the Usher token](jose-usher-token.md) cannot feed HKDF. It is a
-non-extractable AES-GCM `CryptoKey` whose only usage is decrypt, and WebCrypto refused HKDF on it:
-`deriveBits` and `deriveKey` both threw `InvalidAccessError`. So at start the bridge imports the raw
-bytes twice:
+The application key itself decrypts and signs nothing: the token key described in
+[jose for the Usher token](jose-usher-token.md) is one more subkey in the table above. So at start
+the bridge imports the raw bytes once, as an HKDF base key, non-extractable, with usage `deriveKey`
+only. A decrypt-only AES-GCM key could not serve as that base, since WebCrypto refused HKDF on one:
+`deriveBits` and `deriveKey` both threw `InvalidAccessError`.
 
-1. once as the AES-GCM key for the Usher token, non-extractable, usage `decrypt` only;
-2. once as an HKDF base key, non-extractable, with usages `deriveBits` or `deriveKey` only.
-
-It derives every subkey from the second at start, as non-extractable `CryptoKey`s. Then it
-zero-fills the bytes, and keeps neither them nor the base key.
+It derives every subkey from the base key at start, the token key included, as non-extractable
+`CryptoKey`s. Then it zero-fills the bytes, and keeps neither them nor the base key.
 
 What was run on Node 24.16:
 

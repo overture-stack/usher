@@ -40,8 +40,8 @@ The case table's principal, Ana, has accepted a grant on HEART_STUDY's `controll
 2. Its cache holds no Usher token for her, so it calls the controller mock's exchange with the
    sign-in token, the application's audience, and the payload versions it can read.
 3. The mock answers with an encrypted token holding case 5's payload from `principals.json`.
-4. The bridge decrypts it with the application's key and checks its type, audience and expiry, and
-   that its payload version is one it listed.
+4. The bridge decrypts it with the token subkey of the application's key and checks its type,
+   audience and expiry, and that its payload version is one it listed.
 5. It validates the payload against that version's schema.
 6. For each key the adapter registered, it renders an enforcement result from the payload and that
    key's mapping, checks a record narrowing against that payload and the clause limit, and checks

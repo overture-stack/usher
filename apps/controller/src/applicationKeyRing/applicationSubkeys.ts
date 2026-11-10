@@ -9,6 +9,7 @@ export const SUBKEY_LABELS: Readonly<Record<keyof ApplicationSubkeys, string>> =
     notice: 'usher/v1/notice-encryption',
     pollAnswer: 'usher/v1/poll-answer',
     subjectTag: 'usher/v1/subject-tag',
+    token: 'usher/v1/token-encryption',
   });
 
 const NO_SALT = Buffer.alloc(0);
@@ -18,7 +19,8 @@ const SUBKEY_BYTES = 32;
 /**
  * Derives the subkeys of an application key: for each label in {@link SUBKEY_LABELS}, 32 bytes of
  * HKDF-SHA256 over the key with an empty salt and the label as info. Each derived byte is zero-filled
- * once held as a key object.
+ * once held as a key object. The application key is only ever this HKDF input: it encrypts and
+ * signs nothing itself, Usher tokens included, so no key serves two uses.
  *
  * @param key the application key's bytes.
  */
@@ -36,5 +38,6 @@ export const applicationSubkeys = (key: Uint8Array): ApplicationSubkeys => {
     notice: derived(SUBKEY_LABELS.notice),
     pollAnswer: derived(SUBKEY_LABELS.pollAnswer),
     subjectTag: derived(SUBKEY_LABELS.subjectTag),
+    token: derived(SUBKEY_LABELS.token),
   };
 };

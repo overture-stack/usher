@@ -15,6 +15,9 @@ export interface ApplicationSubkeys {
 
   /** Tags a subject as principal notices name it: HMAC-SHA256. */
   subjectTag: KeyObject;
+
+  /** Encrypts Usher tokens: AES-256-GCM. */
+  token: KeyObject;
 }
 
 /** One live application key, as its subkeys alone. */

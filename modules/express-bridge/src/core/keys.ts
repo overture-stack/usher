@@ -9,14 +9,16 @@ export const SUBKEY_LABELS: Readonly<{
   notice: string;
   pollAnswer: string;
   subjectTag: string;
+  token: string;
 }> = Object.freeze({
   channelAssertion: 'usher/v1/channel-assertion',
   notice: 'usher/v1/notice-encryption',
   pollAnswer: 'usher/v1/poll-answer',
   subjectTag: 'usher/v1/subject-tag',
+  token: 'usher/v1/token-encryption',
 });
 
-/** The application key and its subkeys as non-extractable keys, holding no raw bytes. */
+/** The subkeys of the application key as non-extractable keys, holding no raw bytes. */
 export interface ApplicationKeys {
   /** Signs the channel assertion: HMAC-SHA256. */
   channelAssertionKey: CryptoKey;
@@ -30,7 +32,7 @@ export interface ApplicationKeys {
   /** Tags a subject as named in principal notices: HMAC-SHA256. */
   subjectTagKey: CryptoKey;
 
-  /** Decrypts the Usher token: the application key itself, as AES-GCM for decryption alone. */
+  /** Decrypts the Usher token: AES-GCM. */
   tokenKey: CryptoKey;
 }
 
@@ -66,11 +68,11 @@ const HMAC_SHA256: webcrypto.HmacImportParams = {
 };
 
 /**
- * Imports the application key as non-extractable keys, each limited to one usage:
- *
- * - `tokenKey`, the application key itself as AES-GCM, for decryption only;
- * - one HKDF-SHA256 subkey for each label in {@link SUBKEY_LABELS}, either HMAC-SHA256 for signing
- *   only or AES-GCM for decryption only.
+ * Imports the application key as non-extractable keys, each limited to one usage: one HKDF-SHA256
+ * subkey for each label in {@link SUBKEY_LABELS}, either HMAC-SHA256 for signing only or AES-GCM
+ * for decryption only, `tokenKey` among them as AES-GCM for decryption. The application key itself
+ * is imported only as the HKDF base, so it decrypts and signs nothing, Usher tokens included, and
+ * no key serves two uses.
  *
  * The bytes decoded from `key` are zero-filled before the returned promise settles, whether it
  * resolves or rejects.
@@ -83,11 +85,9 @@ export const importApplicationKey = async (
 ): Promise<ApplicationKeys> => {
   const bytes = keyBytes(key);
   try {
-    // Imported twice: as the token key, and as the HKDF base for every other subkey, each derived
-    // as the controller derives it.
-    const [tokenKey, base] = await Promise.all([
-      webcrypto.subtle.importKey('raw', bytes, AES_GCM, false, ['decrypt']),
-      webcrypto.subtle.importKey('raw', bytes, 'HKDF', false, ['deriveKey']),
+    // Imported once, as the HKDF base for every subkey, each derived as the controller derives it.
+    const base = await webcrypto.subtle.importKey('raw', bytes, 'HKDF', false, [
+      'deriveKey',
     ]);
     const derive = (
       label: string,
@@ -95,13 +95,19 @@ export const importApplicationKey = async (
       usage: webcrypto.KeyUsage,
     ): Promise<CryptoKey> =>
       webcrypto.subtle.deriveKey(hkdf(label), base, algorithm, false, [usage]);
-    const [channelAssertionKey, noticeKey, pollAnswerKey, subjectTagKey] =
-      await Promise.all([
-        derive(SUBKEY_LABELS.channelAssertion, HMAC_SHA256, 'sign'),
-        derive(SUBKEY_LABELS.notice, AES_GCM, 'decrypt'),
-        derive(SUBKEY_LABELS.pollAnswer, AES_GCM, 'decrypt'),
-        derive(SUBKEY_LABELS.subjectTag, HMAC_SHA256, 'sign'),
-      ]);
+    const [
+      channelAssertionKey,
+      noticeKey,
+      pollAnswerKey,
+      subjectTagKey,
+      tokenKey,
+    ] = await Promise.all([
+      derive(SUBKEY_LABELS.channelAssertion, HMAC_SHA256, 'sign'),
+      derive(SUBKEY_LABELS.notice, AES_GCM, 'decrypt'),
+      derive(SUBKEY_LABELS.pollAnswer, AES_GCM, 'decrypt'),
+      derive(SUBKEY_LABELS.subjectTag, HMAC_SHA256, 'sign'),
+      derive(SUBKEY_LABELS.token, AES_GCM, 'decrypt'),
+    ]);
 
     return {
       channelAssertionKey,

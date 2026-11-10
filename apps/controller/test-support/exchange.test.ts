@@ -67,10 +67,14 @@ const assertionClaims = async (
   return payload;
 };
 
+const TOKEN_SUBKEY = new Uint8Array(
+  hkdfSync('sha256', KEY_BYTES, new Uint8Array(0), SUBKEY_LABELS.token, 32),
+);
+
 const usherToken = (payload: object): Promise<string> =>
   new CompactEncrypt(new TextEncoder().encode(JSON.stringify(payload)))
     .setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ: 'usher+jwt' })
-    .encrypt(KEY_BYTES);
+    .encrypt(TOKEN_SUBKEY);
 
 suite('the exchange client', () => {
   test('posts a sign-in token as the bridge does: its three headers, a fresh channel assertion and { credential, payloadVersions }', async (context) => {
@@ -163,7 +167,7 @@ suite('the exchange client', () => {
     assert.equal(server.requests.length, 1);
   });
 
-  test('reads an Usher token from the answer as the bridge reads one, trimmed, under the application key', async (context) => {
+  test("reads an Usher token from the answer as the bridge reads one, trimmed, under the application key's token subkey", async (context) => {
     const issuedAt = Math.floor(Date.now() / 1000);
     const payload = {
       aud: APPLICATION.id,
@@ -261,7 +265,7 @@ suite('the people the tests name', () => {
 });
 
 suite("reading a token under a key of the test's choosing", () => {
-  test("opens a token under its application's key, and refuses it under another's", async () => {
+  test("opens a token under its application's token subkey, and refuses it under the application key itself and under another application's", async () => {
     const issuedAt = Math.floor(Date.now() / 1000);
     const token = await usherToken({
       aud: APPLICATION.id,
@@ -280,16 +284,24 @@ suite("reading a token under a key of the test's choosing", () => {
     const own = await readUnderKey(token, {
       audience: APPLICATION.id,
       issuer: ISSUER,
-      tokenKey: await decryptionKey(applicationKeyBytes(APPLICATION)),
+      tokenKey: await decryptionKey(TOKEN_SUBKEY),
     });
-    const other = await readUnderKey(token, {
-      audience: APPLICATION.id,
-      issuer: ISSUER,
-      tokenKey: await decryptionKey(new Uint8Array(randomBytes(32))),
-    });
+    const others = await Promise.all(
+      [applicationKeyBytes(APPLICATION), new Uint8Array(randomBytes(32))].map(
+        async (bytes) =>
+          readUnderKey(token, {
+            audience: APPLICATION.id,
+            issuer: ISSUER,
+            tokenKey: await decryptionKey(bytes),
+          }),
+      ),
+    );
 
     assert.equal(own.kind, 'payload');
-    assert.deepEqual(other, { kind: 'rejected', reason: 'decryptionFailed' });
+    assert.deepEqual(others, [
+      { kind: 'rejected', reason: 'decryptionFailed' },
+      { kind: 'rejected', reason: 'decryptionFailed' },
+    ]);
   });
 });
 

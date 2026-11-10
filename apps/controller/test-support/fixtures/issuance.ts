@@ -26,7 +26,6 @@ import {
 } from '../controller.js';
 import { USHER_SCHEMA } from '../database.js';
 import {
-  applicationKeyBytes,
   exchange,
   type ExchangeRequest,
   PEOPLE,
@@ -366,8 +365,9 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * The token's claims exactly as the controller wrote them, decrypted under the application key and
- * parsed, before any validator copies them: for the tests that search what the token holds.
+ * The token's claims exactly as the controller wrote them, decrypted under the application key's
+ * token subkey and parsed, before any validator copies them: for the tests that search what the
+ * token holds.
  *
  * @param body the exchange's answer body.
  * @param application the application the token was issued for.
@@ -377,7 +377,10 @@ export const rawClaims = async (
   application: ControllerApplication,
 ): Promise<Readonly<Record<string, unknown>>> => {
   const claims: unknown = JSON.parse(
-    await plaintextOf(body.trim(), applicationKeyBytes(application)),
+    await plaintextOf(
+      body.trim(),
+      subkeyBytes(application.key, SUBKEY_LABELS.token),
+    ),
   );
   if (isRecord(claims)) {
     return claims;

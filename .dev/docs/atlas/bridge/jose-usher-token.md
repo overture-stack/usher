@@ -37,9 +37,11 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 - After import the bridge holds the key only as `CryptoKey`s and keeps no reference to the raw bytes.
 - The key that decrypts the Usher token is a non-extractable AES-GCM `CryptoKey` whose only usage is
   decrypt.
-- The application key is used directly only for Usher tokens, and every other use gets an HKDF
-  subkey, as [Revocation notice stream](revocation-notice-stream.md) sets out.
-- The bridge therefore imports the same bytes a second time, as a non-extractable HKDF key.
+- The application key is only ever the HKDF input: every use, the Usher token included, gets an
+  HKDF subkey of its own, as [Revocation notice stream](revocation-notice-stream.md) sets out. The
+  token key is the subkey with info `usher/v1/token-encryption`.
+- The bridge therefore imports the bytes once, as a non-extractable HKDF key, and derives the token
+  key from it.
 - The anonymous exchange at startup is the key's self-test.
 
 **Validating**
@@ -189,14 +191,14 @@ belong to [Packaging the bridge](packaging-and-toolchain.md), which covers both.
 
 Each row was shown by decrypting a token with the option left out.
 
-| Option                        | jose's default                                  | What the default admits                                                                                           | Setting                      |
-| ----------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `keyManagementAlgorithms`     | every algorithm that fits the key, except PBES2 | `A256KW` and `A256GCMKW` tokens that use the application key as the wrapping key, even under the decrypt-only key | `['dir']`                    |
-| `contentEncryptionAlgorithms` | every content encryption algorithm              | `A256CBC-HS512` under `dir` with a 64-byte key                                                                    | `['A256GCM']`                |
-| `maxDecompressedLength`       | 250,000 bytes                                   | a token with `zip: "DEF"`, decompressed after decryption                                                          | `0`, which rejects any `zip` |
-| `requiredClaims`              | none                                            | a token with no `exp`, which then never expires                                                                   | every payload member         |
-| `typ`                         | not checked                                     | `typ: "JWT"`                                                                                                      | `'usher+jwt'`, as a backstop |
-| `crit`                        | no extension recognized                         | nothing: any `crit` header is rejected before the resolver runs                                                   | leave unset                  |
+| Option                        | jose's default                                  | What the default admits                                                                                     | Setting                      |
+| ----------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `keyManagementAlgorithms`     | every algorithm that fits the key, except PBES2 | `A256KW` and `A256GCMKW` tokens that use the token key as the wrapping key, even under the decrypt-only key | `['dir']`                    |
+| `contentEncryptionAlgorithms` | every content encryption algorithm              | `A256CBC-HS512` under `dir` with a 64-byte key                                                              | `['A256GCM']`                |
+| `maxDecompressedLength`       | 250,000 bytes                                   | a token with `zip: "DEF"`, decompressed after decryption                                                    | `0`, which rejects any `zip` |
+| `requiredClaims`              | none                                            | a token with no `exp`, which then never expires                                                             | every payload member         |
+| `typ`                         | not checked                                     | `typ: "JWT"`                                                                                                | `'usher+jwt'`, as a backstop |
+| `crit`                        | no extension recognized                         | nothing: any `crit` header is rejected before the resolver runs                                             | leave unset                  |
 
 `audience` is the application's audience, `issuer` the controller's, and `clockTolerance` is 0.
 
@@ -258,7 +260,7 @@ const readProtectedHeader = (usherToken: string) => {
 };
 
 // With key rotation, the key comes from a resolver selecting from a Map keyed by kid instead.
-const tokenKey = applicationKey; // non-extractable AES-GCM CryptoKey, usage ['decrypt']
+const tokenKey = tokenSubkey; // derived under 'usher/v1/token-encryption': non-extractable AES-GCM, usage ['decrypt']
 
 const readUsherToken = async (usherToken: string) => {
 	const protectedHeader = readProtectedHeader(usherToken);
@@ -348,7 +350,10 @@ Neither library guarantees a 32-byte key, so the bridge checks it itself.
    configured value unambiguous and turns away no 32-byte key, since each has exactly one canonical
    string.
 3. Check that the decoded length is 32, as defence in depth.
-4. Import with `crypto.subtle.importKey('raw', bytes, { name: 'AES-GCM' }, false, ['decrypt'])`.
+4. Import with `crypto.subtle.importKey('raw', bytes, 'HKDF', false, ['deriveKey'])`, then derive
+   the token key from it with `crypto.subtle.deriveKey`, an empty salt and info
+   `usher/v1/token-encryption`, as `{ name: 'AES-GCM', length: 256 }`, non-extractable, with
+   `['decrypt']` alone.
 
 **The bridge does not lean on a decoder's strictness.** jose's base64url decoder throws on invalid
 characters but tolerates padding and whitespace. On Node 24.16 that tolerance comes from a fallback
@@ -369,10 +374,11 @@ on the runtime. Node's `Buffer` base64url decoding silently drops an invalid cha
 - It is the fastest form on the corpus-sized token: 21 µs per decrypt, against 26 µs for a
   `Uint8Array`, which jose imports again on every call, and 28 µs for a `KeyObject` created once.
 
-### The second import, as an HKDF key
+### The import, as an HKDF key
 
-- The decrypt-only key cannot feed HKDF: `deriveBits` and `deriveKey` with it throw
-  `InvalidAccessError`, because its only usage is decrypt.
+- A decrypt-only AES-GCM key cannot feed HKDF: `deriveBits` and `deriveKey` with it throw
+  `InvalidAccessError`, because its only usage is decrypt. So the bytes are imported as the HKDF key
+  alone, and the token key is derived from it like every other subkey.
 - WebCrypto keeps an HKDF key non-extractable by rule. Importing one marked extractable throws, and
   `exportKey` on one throws.
 - An HMAC key derived from the HKDF key with `deriveKey` came back non-extractable, with only the
@@ -605,7 +611,7 @@ tokens a second, one key reaches 2^32 in about 1.36 years; at 10 a second, in ab
 ```ts
 const usherToken = await new EncryptJWT(payload) // the whole corpus payload, sub, iat and exp rewritten
 	.setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ: 'usher+jwt' })
-	.encrypt(applicationKeyBytes);
+	.encrypt(tokenSubkeyBytes); // HKDF-SHA256 of the application key, info 'usher/v1/token-encryption'
 ```
 
 - **Pass the payload whole.** `setSubject(null)` throws a `TypeError`, because jose's claim setters

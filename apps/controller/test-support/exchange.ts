@@ -293,7 +293,7 @@ export const comparableWireRefusal = (
 
 /**
  * Reads an exchange's answer as the bridge reads the Usher token in it: trimmed, then through the
- * reproduced token reader in `bridgeWire.ts`, under the application key.
+ * reproduced token reader in `bridgeWire.ts`, under the application key's token subkey.
  *
  * @param body the answer's body.
  * @param options the application, the controller's issuer, and the reader's versions and clock.
@@ -363,7 +363,8 @@ export const applicationKeyBytes = (
 ): Uint8Array => new Uint8Array(Buffer.from(application.key, 'base64url'));
 
 /**
- * Imports 32 bytes as an AES-GCM key for decryption alone, as the bridge imports its token key.
+ * Imports 32 bytes as an AES-GCM key for decryption alone, the form in which the bridge holds its
+ * token key.
  *
  * @param bytes the key's bytes.
  */
@@ -380,7 +381,8 @@ export const decryptionKey = (
 
 /**
  * Reads an exchange's answer through the bridge's token reader under a key of the test's choosing,
- * such as another application's, to show a token opens under its own application's key alone.
+ * such as another application's, to show a token opens under its own application's token subkey
+ * alone.
  *
  * @param body the answer's body.
  * @param options the audience and issuer pinned, and the key.

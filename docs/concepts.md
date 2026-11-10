@@ -514,9 +514,9 @@ ushered service that holds the bridge. The bridge decrypts it there.
 **Why encrypt a token that never reaches a browser?** Two reasons.
 
 **Each application gets its own key.** An Usher token is issued for one application. Encrypting it
-to that application's key means no other application can read it. If Usher ever computed a token
-for the wrong recipient, that recipient would fail to decrypt it rather than quietly honour it. The
-mistake becomes a visible error instead of a silent leak.
+under a key derived from that application's own key means no other application can read it. If
+Usher ever computed a token for the wrong recipient, that recipient would fail to decrypt it rather
+than quietly honour it. The mistake becomes a visible error instead of a silent leak.
 
 **Grant contents stay out of places they might otherwise land.** Logs, error reports, crash dumps
 and tracing spans all collect whatever passes through them. An encrypted payload in any of those
