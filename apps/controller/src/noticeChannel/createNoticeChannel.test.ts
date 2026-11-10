@@ -278,12 +278,19 @@ suite('the poll', () => {
           data: {
             applicationId: KEY.applicationId,
             reason: 'expiredAssertion',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
           },
           type: 'channelAssertion.rejection',
         },
         {
           actor: { type: 'system' },
-          data: { applicationId: KEY.applicationId, reason: 'notYetValid' },
+          data: {
+            applicationId: KEY.applicationId,
+            reason: 'notYetValid',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
+          },
           type: 'channelAssertion.rejection',
         },
       ],
@@ -615,7 +622,12 @@ suite('the push', () => {
       })),
       presentations.map(() => ({
         actor: { type: 'system' },
-        data: { applicationId: KEY.applicationId, reason: 'reusedAssertion' },
+        data: {
+          applicationId: KEY.applicationId,
+          reason: 'reusedAssertion',
+          result: 'denied',
+          sourceIp: '127.0.0.1',
+        },
         type: 'channelAssertion.rejection',
       })),
     );

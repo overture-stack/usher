@@ -62,12 +62,12 @@ const headerOf = (
  * `GET /notices/stream`, each answering one application's notices alone. Every request's channel
  * assertion is checked first, from memory, and refused `401`: an assertion that could not be verified
  * is counted, for `channelAssertion.rejectionTally`, and one that verified and is refused anyway is
- * recorded as a `channelAssertion.rejection` naming its application. Then its notice versions,
- * refused `406` unless version 1 is listed; then its starting point, refused `400` when absent or
- * malformed; then its cursor, read from the store, refused `410` when history no longer reaches it.
- * A store that cannot answer within the store timeout is answered `503`. Every answer is `no-store`,
- * and every notice and poll answer is encrypted under the subkeys of the key the assertion verified
- * under.
+ * recorded as a `channelAssertion.rejection` naming its application and the request's address. Then
+ * its notice versions, refused `406` unless version 1 is listed; then its starting point, refused
+ * `400` when absent or malformed; then its cursor, read from the store, refused `410` when history no
+ * longer reaches it. A store that cannot answer within the store timeout is answered `503`. Every
+ * answer is `no-store`, and every notice and poll answer is encrypted under the subkeys of the key
+ * the assertion verified under.
  *
  * - A poll is answered at once, from the store alone: a head poll with no notices and a cursor for the
  *   newest place; a poll after a cursor with the audience's notices after it, a page at a time, and a
@@ -124,7 +124,11 @@ export const createNoticeChannel = ({
     }
     await trail.recordEvent(
       { type: 'system' },
-      rejectionEvent(check.reason, check.applicationId),
+      rejectionEvent({
+        applicationId: check.applicationId,
+        reason: check.reason,
+        sourceIp: request.ip,
+      }),
     );
     return undefined;
   };
@@ -149,7 +153,11 @@ export const createNoticeChannel = ({
     ) {
       await trail.recordEvent(
         { type: 'system' },
-        rejectionEvent('reusedAssertion', key.applicationId),
+        rejectionEvent({
+          applicationId: key.applicationId,
+          reason: 'reusedAssertion',
+          sourceIp: request.ip,
+        }),
       );
       return { problem: CHANNEL_PROBLEMS.channelAssertionRefused };
     }

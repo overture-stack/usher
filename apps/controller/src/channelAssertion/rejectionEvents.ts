@@ -6,16 +6,22 @@ import type {
 
 /**
  * The `channelAssertion.rejection` recording one refusal of an assertion that verified under its
- * application's key: its reason and that application, nothing else the assertion carried.
+ * application's key: `denied`, its reason, that application and the request's address, nothing else
+ * the assertion carried.
  *
- * @param reason why it was refused.
- * @param applicationId the application whose key it verified under.
+ * @param rejection why it was refused, the application whose key it verified under, and the
+ *   request's address.
  */
-export const rejectionEvent = (
-  reason: VerifiedRejectionReason,
-  applicationId: string,
-): AuditEvent => ({
-  data: { applicationId, reason },
+export const rejectionEvent = ({
+  applicationId,
+  reason,
+  sourceIp,
+}: {
+  applicationId: string;
+  reason: VerifiedRejectionReason;
+  sourceIp: string;
+}): AuditEvent => ({
+  data: { applicationId, reason, result: 'denied', sourceIp },
   severity: 'warning',
   type: 'channelAssertion.rejection',
 });

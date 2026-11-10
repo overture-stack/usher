@@ -292,7 +292,7 @@ suite('the revocation channel, against the store', () => {
     assert.deepEqual(kept.notices.map(describeNotice), ['global']);
   });
 
-  test('records a refused channel assertion as channelAssertion.rejection by the system, naming its reason and its application', async (context) => {
+  test("records a refused channel assertion as channelAssertion.rejection by the system, denied, naming its reason, its application and the request's address", async (context) => {
     const scope = cleanupFor(context);
     const harness = await startChannelHarness(scope);
     const application = harness.application(search);
@@ -319,6 +319,8 @@ suite('the revocation channel, against the store', () => {
             applicationId: application.id,
             instance: harness.configuration.instanceName,
             reason: 'expiredAssertion',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
           },
           severity: 'warning',
         },
@@ -417,6 +419,8 @@ suite('the revocation channel, against the store', () => {
         ...system,
         applicationId: searchApplication.id,
         reason: 'reusedAssertion',
+        result: 'denied',
+        sourceIp: '127.0.0.1',
       },
     ]);
   });
