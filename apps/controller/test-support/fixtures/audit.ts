@@ -137,7 +137,9 @@ export const RECURRING_PROPERTIES = Object.freeze({
 export const OBSERVATION_TYPES: readonly AuditEventType[] = Object.freeze([
   'applicationKey.confirmation',
   'applicationKey.unreadable',
+  'channelAssertion.rejectionTally',
   'grant.rateExceeded',
+  'logoutToken.refusalTally',
   'managementToken.refusalTally',
   'resource.orphaned',
 ]);
