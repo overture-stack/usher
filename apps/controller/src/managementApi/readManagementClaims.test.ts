@@ -155,4 +155,10 @@ suite("reading a verified management token's claims", () => {
       assert.deepEqual(reading, { kind: 'unrepresentable' }),
     );
   });
+
+  test('reads a sid that is not text as unrepresentable, since a session it cannot name cannot be matched against a sign-out of it', () => {
+    [42, null, true, ['session-1'], { id: 'session-1' }].forEach((sid) =>
+      assert.deepEqual(read({ sid }), { kind: 'unrepresentable' }),
+    );
+  });
 });

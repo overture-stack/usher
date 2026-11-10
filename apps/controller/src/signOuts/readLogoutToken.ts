@@ -1,4 +1,5 @@
 import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
+import { REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import type { TokenClaims } from '../identityProvider/index.js';
 import { isStorableText } from '../store/index.js';
 import type {
@@ -11,9 +12,6 @@ import type {
 /** The member of a logout token's `events` claim declaring it a logout token. */
 export const BACK_CHANNEL_LOGOUT_EVENT =
   'http://schemas.openid.net/event/backchannel-logout';
-
-/** The longest subject a refusal names: OpenID Connect's longest; a longer one is left out, never cut short. */
-export const REFUSED_SUBJECT_MAXIMUM_LENGTH = 255;
 
 // The header types a logout token may carry beside none: the explicit type Back-Channel Logout 1.0
 // recommends, and the generic one, each compared as RFC 7515 compares a media type, in any letter

@@ -21,7 +21,6 @@ import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
 import {
   type ManagementDependencies,
-  readStoredRefusal,
   REFUSAL_TALLY_INTERVAL_MILLISECONDS,
   refusalTallyEvent,
   type TallyReason,
@@ -35,6 +34,7 @@ import {
   createNoticeReader,
 } from '../noticeStream/index.js';
 import { createReadiness } from '../readiness/index.js';
+import { readStoredRefusal } from '../signInTokens/index.js';
 import {
   createSignOutRoute,
   LOGOUT_TOKEN_TALLY_INTERVAL_MILLISECONDS,

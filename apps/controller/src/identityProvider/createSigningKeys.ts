@@ -214,6 +214,7 @@ export const createSigningKeys = (
       }
       return mayFetch() ? fetched() : UNAVAILABLE;
     },
+    held: () => held(false),
     refetchInMilliseconds,
     refreshed: async () => (mayFetch() ? fetched() : held(false)),
   };

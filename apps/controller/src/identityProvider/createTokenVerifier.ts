@@ -10,6 +10,7 @@ import {
 
 import { createSigningKeys } from './createSigningKeys.js';
 import type {
+  HeldKeyVerification,
   TokenClaims,
   TokenHeader,
   TokenVerification,
@@ -32,13 +33,20 @@ const ALGORITHMS: readonly string[] = Object.freeze([
   'RS512',
 ]);
 
-const unverified = (reason: UnverifiedReason): TokenVerification => ({
+// What checking a token's signature can find without regard to which keys could be had.
+type Checked = Extract<TokenVerification, { kind: 'unverified' | 'verified' }>;
+
+const unverified = (reason: UnverifiedReason): Checked => ({
   kind: 'unverified',
   reason,
 });
 
 const KEYS_UNAVAILABLE: TokenVerification = Object.freeze({
   kind: 'keysUnavailable',
+});
+
+const KEY_NOT_HELD: HeldKeyVerification = Object.freeze({
+  kind: 'keyNotHeld',
 });
 
 // A key not confirmed yet, answered with the cooldown's time left in whole seconds, rounded up and
@@ -129,10 +137,7 @@ const verifiedUnder = async (
   }
 };
 
-const verificationOf = (
-  attempt: Attempt,
-  issuer: string,
-): TokenVerification => {
+const verificationOf = (attempt: Attempt, issuer: string): Checked => {
   if (attempt.kind === 'verified') {
     if (attempt.claims === undefined) {
       return unverified('unreadableToken');
@@ -161,7 +166,10 @@ const verificationOf = (
  * `invalidSignature`. A token whose key is held and whose signature fails under it is refused
  * whatever became of the latest fetch. It accepts the asymmetric algorithms RS, PS and ES at 256, 384
  * and 512 bits, each under a key whose own `alg`, where the key names one, is the token's. Each failed
- * fetch of the key set is written to the event log at error, naming its cause.
+ * fetch of the key set is written to the event log at error, naming its cause. A token can also be
+ * verified under the keys already held alone, for a caller that may not wait on the provider: that
+ * fetches nothing, neither the discovery document nor the key set, whatever the cooldown, and answers
+ * `keyNotHeld` for a token whose key is not among keys held and not grown too old.
  *
  * @param settings the clock the key set's age is measured on, and the trusted issuer.
  * @param eventLog where a failed fetch of the key set is written.
@@ -169,16 +177,26 @@ const verificationOf = (
 export const createTokenVerifier = (
   settings: TokenVerifierSettings,
   eventLog: TokenVerifierLog,
-): { verify(token: string): Promise<TokenVerification> } => {
+): {
+  verify(token: string): Promise<TokenVerification>;
+  verifyHeld(token: string): Promise<HeldKeyVerification>;
+} => {
   const signingKeys = createSigningKeys(settings, eventLog);
+  // The issuer is judged before any key is looked for, among those held or by a fetch.
+  const routingRefusal = (token: string): Checked | undefined => {
+    const routed = unverifiedIssuer(token);
+    if (routed === undefined) {
+      return unverified('unreadableToken');
+    }
+    return routed.issuer === settings.identityProviderIssuer
+      ? undefined
+      : unverified('otherIssuer');
+  };
   return {
     verify: async (token) => {
-      const routed = unverifiedIssuer(token);
-      if (routed === undefined) {
-        return unverified('unreadableToken');
-      }
-      if (routed.issuer !== settings.identityProviderIssuer) {
-        return unverified('otherIssuer');
+      const refusal = routingRefusal(token);
+      if (refusal !== undefined) {
+        return refusal;
       }
       const held = await signingKeys.current();
       if (held.kind === 'unavailable') {
@@ -204,6 +222,20 @@ export const createTokenVerifier = (
       return held.fetched || refreshed.fetched
         ? unverified('invalidSignature')
         : signingKeyUnconfirmed(signingKeys.refetchInMilliseconds());
+    },
+    verifyHeld: async (token) => {
+      const refusal = routingRefusal(token);
+      if (refusal !== undefined) {
+        return refusal;
+      }
+      const held = signingKeys.held();
+      if (held.kind === 'unavailable') {
+        return KEY_NOT_HELD;
+      }
+      const attempt = await verifiedUnder(token, held.keys);
+      return attempt.kind === 'noMatchingKey'
+        ? KEY_NOT_HELD
+        : verificationOf(attempt, settings.identityProviderIssuer);
     },
   };
 };

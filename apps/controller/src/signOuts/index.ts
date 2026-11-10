@@ -5,6 +5,7 @@ export {
   SIGN_OUT_UNEXPECTED_FAILURE,
 } from './createSignOutRoute.js';
 export { LOGOUT_TOKEN_TALLY_INTERVAL_MILLISECONDS } from './logoutTokenTallyIntervalMilliseconds.js';
+export { BACK_CHANNEL_LOGOUT_EVENT } from './readLogoutToken.js';
 export { logoutTokenRefusalTallyEvent } from './refusalEvents.js';
 export type {
   LogoutTokenRefusal,

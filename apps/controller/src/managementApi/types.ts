@@ -10,6 +10,11 @@ import type {
 } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import type { TokenVerification } from '../identityProvider/index.js';
+import type {
+  Session,
+  StandingQuestion,
+  StoredRefusal,
+} from '../signInTokens/index.js';
 
 /** Who an accepted management token speaks for. */
 export interface Principal {
@@ -20,15 +25,6 @@ export interface Principal {
   subject: string;
 
   type: 'human' | 'serviceAccount';
-}
-
-/** The session an accepted token belongs to, as far as it names one. */
-export interface Session {
-  /** The token's `iat`, in seconds since the Unix epoch. */
-  issuedAt?: number;
-
-  /** The token's `sid`. */
-  sid?: string;
 }
 
 /** What the management API reads of the configuration to judge a management token. */
@@ -153,17 +149,6 @@ export interface OperationEvent {
   named(params: Readonly<Record<string, string>>): Promise<EventMembers>;
 
   type: AuditEventType;
-}
-
-/** Why the store refuses a principal whose token is otherwise accepted. */
-export type StoredRefusal =
-  'revokedPlatform' | 'revokedPrincipal' | 'signedOutSession';
-
-/** Whose standing the store is asked about: the trusted issuer, the token's subject, and its session. */
-export interface StandingQuestion {
-  issuer: string;
-  session: Session;
-  subject: string;
 }
 
 /** One Management API operation, as its route and its reading of a request define it. */

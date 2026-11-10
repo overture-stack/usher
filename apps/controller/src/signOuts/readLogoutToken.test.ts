@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
 import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
+import { REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import type { TokenClaims, TokenHeader } from '../identityProvider/index.js';
 import {
   BACK_CHANNEL_LOGOUT_EVENT,
   readLogoutToken,
-  REFUSED_SUBJECT_MAXIMUM_LENGTH,
 } from './readLogoutToken.js';
 import type { LogoutTokenReading, VerifiedLogoutToken } from './types.js';
 

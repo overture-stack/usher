@@ -417,7 +417,7 @@
             }
           }
         },
-        "description": "The request is unreadable by its shape. `malformedCredential`: an `Authorization` header holding other than exactly one `Bearer` credential, or a credential in the query. `unreadablePath`: a path holding a percent-encoding that is not UTF-8. `unreadableQuery`: a query parameter not taken by the operation, or a value of one it cannot read. `unreadableBody`: a body that is not one JSON object, names a member twice, holds a `__proto__` member, lacks a required member, holds a member of the wrong type, or holds a member not taken by the operation, other than those named in its `422`. `unrepresentableText`: text in the body, or the access token's `sub` or `sid`, holding a NUL character or an unpaired surrogate, neither of which can be stored."
+        "description": "The request is unreadable by its shape. `malformedCredential`: an `Authorization` header holding other than exactly one `Bearer` credential, or a credential in the query. `unreadablePath`: a path holding a percent-encoding that is not UTF-8. `unreadableQuery`: a query parameter not taken by the operation, or a value of one it cannot read. `unreadableBody`: a body that is not one JSON object, names a member twice, holds a `__proto__` member, lacks a required member, holds a member of the wrong type, or holds a member not taken by the operation, other than those named in its `422`. `unrepresentableText`: text in the body, or the access token's `sub` or `sid`, holding a NUL character or an unpaired surrogate, neither of which can be stored, or a `sid` that is not text."
       }
     },
     "schemas": {

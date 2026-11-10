@@ -8,7 +8,6 @@ suite("the management API's module", () => {
     assert.deepEqual(Object.keys(managementApi).toSorted(), [
       'REFUSAL_TALLY_INTERVAL_MILLISECONDS',
       'managementRoute',
-      'readStoredRefusal',
       'readTextMembers',
       'refusalTallyEvent',
     ]);

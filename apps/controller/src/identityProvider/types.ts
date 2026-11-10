@@ -32,6 +32,15 @@ export type TokenVerification =
   | { kind: 'signingKeyUnconfirmed'; retryAfterSeconds: number }
   | { kind: 'unverified'; reason: UnverifiedReason };
 
+/**
+ * What verifying a token under the keys already held found, nothing fetched: its claims and protected
+ * header, or why it was not verified, as {@link TokenVerification} gives them; or that its key is not
+ * held, none being held, those held having grown too old, or none of them being its key.
+ */
+export type HeldKeyVerification =
+  | Extract<TokenVerification, { kind: 'unverified' | 'verified' }>
+  | { kind: 'keyNotHeld' };
+
 /** What the verifier is created from: the clock the key set's age is measured on, and the trusted issuer. */
 export type TokenVerifierSettings = Pick<
   ControllerConfiguration,
@@ -77,6 +86,9 @@ export type KeySetReading =
 export interface SigningKeys {
   /** The keys held, fetched when none are held or they have grown too old, unless a fetch was tried too recently. */
   current(): Promise<KeySetReading>;
+
+  /** The keys held, never fetched: unavailable when none are held or they have grown too old. */
+  held(): KeySetReading;
 
   /** The keys fetched anew, for a token whose key is not among those held, unless a fetch was tried too recently. */
   refreshed(): Promise<KeySetReading>;

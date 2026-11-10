@@ -581,6 +581,102 @@ suite(
   },
 );
 
+suite('verifying a token under the keys already held, fetching nothing', () => {
+  test('reads a token as keyNotHeld while no keys are held, asking the provider for nothing', async (context) => {
+    const standIn = await startStandIn(context);
+    const key = await signingKey();
+    standIn.published = [key.jwk];
+
+    const verification = await verifierFor(standIn).verifyHeld(
+      await signed(key, claimsFor(standIn.issuer)),
+    );
+
+    assert.deepEqual(verification, { kind: 'keyNotHeld' });
+    assert.deepEqual(standIn.asked, []);
+  });
+
+  test('verifies a token under a key held, giving its claims and its protected header, asking the provider for nothing more', async (context) => {
+    const standIn = await startStandIn(context);
+    const key = await signingKey();
+    standIn.published = [key.jwk];
+    const verifier = verifierFor(standIn);
+    await verifier.verify(await signed(key, claimsFor(standIn.issuer)));
+    const claims = claimsFor(standIn.issuer, { sub: 'subject-bo' });
+
+    const verification = await verifier.verifyHeld(await signed(key, claims));
+
+    assert.deepEqual(verification, {
+      claims,
+      header: { alg: key.jwk.alg, kid: key.kid, typ: 'JWT' },
+      kind: 'verified',
+    });
+    assert.deepEqual(standIn.asked, [DISCOVERY_PATH, KEY_SET_PATH]);
+  });
+
+  test('reads a token under a key published since the keys were fetched as keyNotHeld, asking the provider for nothing within the cooldown or after it', async (context) => {
+    const standIn = await startStandIn(context);
+    const first = await signingKey();
+    const rotated = await signingKey();
+    standIn.published = [first.jwk];
+    const clock = controlledClock();
+    const verifier = verifierFor(standIn, clock);
+    await verifier.verify(await signed(first, claimsFor(standIn.issuer)));
+    standIn.published = [first.jwk, rotated.jwk];
+    const token = await signed(rotated, claimsFor(standIn.issuer));
+
+    const withinCooldown = await verifier.verifyHeld(token);
+    clock.advance(KEY_REFETCH_COOLDOWN_MILLISECONDS);
+    const afterCooldown = await verifier.verifyHeld(token);
+
+    assert.deepEqual(
+      [withinCooldown, afterCooldown],
+      [{ kind: 'keyNotHeld' }, { kind: 'keyNotHeld' }],
+    );
+    assert.deepEqual(standIn.asked, [DISCOVERY_PATH, KEY_SET_PATH]);
+  });
+
+  test('reads a token as keyNotHeld once the keys held pass their maximum age, asking the provider for nothing', async (context) => {
+    const standIn = await startStandIn(context);
+    const key = await signingKey();
+    standIn.published = [key.jwk];
+    const clock = adjustableClock();
+    const verifier = verifierFor(standIn, clock);
+    const token = await signed(key, claimsFor(standIn.issuer));
+    await verifier.verify(token);
+    clock.advance(KEY_SET_MAXIMUM_AGE_MILLISECONDS);
+
+    const verification = await verifier.verifyHeld(token);
+
+    assert.deepEqual(verification, { kind: 'keyNotHeld' });
+    assert.deepEqual(standIn.asked, [DISCOVERY_PATH, KEY_SET_PATH]);
+  });
+
+  test("refuses what is no compact signed token as unreadableToken, and another issuer's token as otherIssuer, before looking for any key", async (context) => {
+    const standIn = await startStandIn(context);
+    const key = await signingKey();
+    standIn.published = [key.jwk];
+    const verifier = verifierFor(standIn);
+
+    const verifications = [
+      await verifier.verifyHeld('not-a-token'),
+      await verifier.verifyHeld('a.b.c'),
+      await verifier.verifyHeld(
+        await signed(
+          key,
+          claimsFor(standIn.issuer, { iss: 'http://127.0.0.1:1/realms/test' }),
+        ),
+      ),
+    ];
+
+    assert.deepEqual(verifications, [
+      { kind: 'unverified', reason: 'unreadableToken' },
+      { kind: 'unverified', reason: 'unreadableToken' },
+      { kind: 'unverified', reason: 'otherIssuer' },
+    ]);
+    assert.deepEqual(standIn.asked, []);
+  });
+});
+
 // The developer writes these cases by hand: a token unsigned, signed HS256 with a published key as the
 // secret, signed by a key the provider never published or has replaced under the same kid, or signed
 // by an algorithm other than its key's own. Each must be refused as invalidSignature, a token whose

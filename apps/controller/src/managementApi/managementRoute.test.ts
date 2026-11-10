@@ -4,25 +4,23 @@ import { suite, test, type TestContext } from 'node:test';
 
 import type { FastifyInstance } from 'fastify';
 
-import type { Actor, AuditEvent, LineFields } from '../eventLog/index.js';
+import {
+  type Actor,
+  type AuditEvent,
+  type LineFields,
+  REFUSED_SUBJECT_MAXIMUM_LENGTH,
+} from '../eventLog/index.js';
 import { createServer, problem } from '../http/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import type {
   TokenClaims,
   TokenVerification,
 } from '../identityProvider/index.js';
-import {
-  managementRoute,
-  REFUSED_SUBJECT_MAXIMUM_LENGTH,
-  STORE_FAILED,
-} from './managementRoute.js';
+import type { StoredRefusal } from '../signInTokens/index.js';
+import { managementRoute, STORE_FAILED } from './managementRoute.js';
 import { BODY_LIMIT_BYTES } from './problems.js';
 import { readTextMembers } from './requestBody.js';
-import type {
-  ManagementOperation,
-  OperationOutcome,
-  StoredRefusal,
-} from './types.js';
+import type { ManagementOperation, OperationOutcome } from './types.js';
 
 const NOW = Date.UTC(2026, 10, 4, 12, 0, 0);
 
@@ -554,10 +552,11 @@ suite('admitting a request to a management operation', () => {
     );
   });
 
-  test('refuses a subject or session holding text that cannot be stored 400, recording managementToken.refusal for unrepresentableSubject, naming no subject', async (context) => {
+  test('refuses a subject or session holding text that cannot be stored, or a session that is not text, 400, recording managementToken.refusal for unrepresentableSubject, naming no subject', async (context) => {
     const stand = await standUp(context, {
       verifications: {
         nul: verified({ sub: 'ana\u0000' }),
+        number: verified({ sid: 42 }),
         surrogate: verified({ sid: '\uD800' }),
       },
     });
@@ -565,6 +564,7 @@ suite('admitting a request to a management operation', () => {
     const answers = [
       await post(stand, { token: 'nul' }),
       await post(stand, { token: 'surrogate' }),
+      await post(stand, { token: 'number' }),
     ];
 
     answers.forEach((answer) => {

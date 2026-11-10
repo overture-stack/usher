@@ -5,7 +5,12 @@ import type {
   RouteOptions,
 } from 'fastify';
 
-import type { Actor, AuditEvent, Severity } from '../eventLog/index.js';
+import {
+  type Actor,
+  type AuditEvent,
+  REFUSED_SUBJECT_MAXIMUM_LENGTH,
+  type Severity,
+} from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import type { UnverifiedReason } from '../identityProvider/index.js';
 import { holdsUnstorableText } from '../store/index.js';
@@ -34,9 +39,6 @@ export const STORE_FAILED = 'managementApi.storeFailed';
 
 /** The line naming a failure the controller did not expect, answered 500. */
 export const UNEXPECTED_FAILURE = 'managementApi.unexpectedFailure';
-
-/** The longest `sub` a `managementToken.refusal` names, in characters; a longer one is left out, never cut short. */
-export const REFUSED_SUBJECT_MAXIMUM_LENGTH = 255;
 
 const BODY_TOO_LARGE = 'FST_ERR_CTP_BODY_TOO_LARGE';
 
