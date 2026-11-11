@@ -366,6 +366,23 @@ cannot be reached, record nothing. Every refusal answers the identity provider t
 `400 logoutTokenRefused`, while the reasons tell an operator a misconfigured client from a drifting
 clock.
 
+**A credential refused at the exchange is recorded under the code another route gives the same
+cause, wherever one does.** Each is a `token.exchange` `denied`, its `reason` that code. A
+`credential` holding empty text is `missingCredential`. No other route records an empty credential,
+so this code is the exchange's own. A logout token, by its `events` or its header's type, is
+`otherType`, as the logout endpoint refuses a token of another type. A token naming no `sub` is
+`missingSubject`, and one whose `sub` or `sid` holds text that cannot be stored is
+`unrepresentableSubject`, as at the Management API. The exchange reads these three from the token's
+contents without checking its signature, so each is recorded whether or not the token verifies, and
+none names a `refusedSubject`.
+
+**A token the exchange cannot judge yet is recorded as failed only when a fault kept it from being
+judged.** One whose signing key is not confirmed yet is a `token.exchange` `denied` at `warning`, as
+`signingKeyUnconfirmed`, and answered `503` with `Retry-After`: a made-up key id produces it, and so
+does a routine key rotation, and neither is a fault in the controller. One that cannot be judged
+because the identity provider cannot be reached is `failed` at `error`, as
+`identityProviderUnavailable`, since that is a fault.
+
 **`migration.run` records each real run, and a dry run only when it is refused for authority.** A
 real run that succeeds records it at `info`, its actor the administrator, with `studiesReported`,
 `studiesRegistered`, `studiesSkipped`, `grantsWritten`, `allStudyHoldings`, `dataWithoutPolicy` and
