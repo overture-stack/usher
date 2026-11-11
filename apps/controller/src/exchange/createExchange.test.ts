@@ -40,6 +40,7 @@ const KEY_SUBKEYS = applicationSubkeys(randomBytes(32));
 
 const KEY: ExchangeKey = {
   applicationId: APPLICATION,
+  keyId: '6a1e9c3b-2f4d-4b8a-9c7e-1d5f3a8b2e90',
   token: KEY_SUBKEYS.token,
 };
 
@@ -201,6 +202,9 @@ interface Transaction {
 }
 
 interface Stand {
+  /** Each key the exchange asked to confirm, as its confirmation settled. */
+  confirmed: { applicationId: string; keyId: string }[];
+
   counted: { applicationId: string | undefined; reason: string }[];
   judged: { audience: string; credential: string; now: number }[];
   lines: Line[];
@@ -219,6 +223,9 @@ interface StandOptions {
   /** What the transaction throws once its work has run, as a store failing at its commit does. */
   commitFailure?: unknown;
 
+  /** Settles when a key's confirmation does: at once by default. */
+  confirmationSettled?: Promise<void>;
+
   /** Settles when an event recorded outside any transaction is written: at once by default. */
   outsideRecorded?: Promise<void>;
 
@@ -230,11 +237,13 @@ const standUp = (
   context: TestContext,
   {
     commitFailure,
+    confirmationSettled = Promise.resolve(),
     outsideRecorded = Promise.resolve(),
     readFailure,
   }: StandOptions = {},
 ): Stand => {
   const stand: Omit<Stand, 'server' | 'stop'> = {
+    confirmed: [],
     counted: [],
     judged: [],
     lines: [],
@@ -278,6 +287,12 @@ const standUp = (
         throw new TypeError('the stand holds no judgement for the credential');
       }
       return judgement;
+    },
+    keyConfirmations: {
+      confirm: async ({ applicationId, keyId }) => {
+        await confirmationSettled;
+        stand.confirmed.push({ applicationId, keyId });
+      },
     },
     settings: SETTINGS,
     trail: {
@@ -643,6 +658,69 @@ suite('the token exchange', () => {
         status: 503,
       });
       assert.deepEqual(stand.lines, []);
+    });
+  });
+
+  suite("its key's confirmation", () => {
+    test('confirms the key the assertion verified under for every exchange it answers: issued, refused for its credential, for its body or for its size, or kept from its store', async (context) => {
+      const stand = standUp(context);
+      const failing = standUp(context, { readFailure: storeFailure('57P01') });
+
+      const answers = await Promise.all([
+        post(stand),
+        post(stand, withCredential('credential-expired')),
+        post(stand, { body: '[1]' }),
+        post(stand, { body: '{"payloadVersions":[2]}' }),
+        post(stand, {
+          body: JSON.stringify({ padding: 'x'.repeat(65_536) }),
+        }),
+        post(failing),
+      ]);
+
+      assert.deepEqual(
+        answers.map(({ statusCode }) => statusCode),
+        [200, 403, 400, 406, 413, 503],
+      );
+      assert.deepEqual(
+        [...stand.confirmed, ...failing.confirmed],
+        answers.map(() => ({
+          applicationId: APPLICATION,
+          keyId: KEY.keyId,
+        })),
+      );
+    });
+
+    test('confirms nothing for an exchange refused for its channel assertion', async (context) => {
+      const stand = standUp(context);
+
+      await Promise.all([
+        post(stand, { assertion: null }),
+        post(stand, { assertion: 'Bearer assertion-expired' }),
+        post(stand, {
+          assertion: 'Bearer assertion-of-a-keyless-application',
+        }),
+      ]);
+
+      assert.deepEqual(stand.confirmed, []);
+    });
+
+    test("answers only once the key's confirmation has settled, so the key reads as confirmed when the first exchange is answered", async (context) => {
+      const confirmation = deferred();
+      const stand = standUp(context, {
+        confirmationSettled: confirmation.promise,
+      });
+
+      const answering = post(stand);
+      const answeredFirst = await Promise.race([
+        answering.then(() => true),
+        delay(ANSWER_WITHIN_MS).then(() => false),
+      ]);
+      confirmation.release();
+      const answer = await answering;
+
+      assert.equal(answeredFirst, false);
+      assert.equal(answer.statusCode, 200);
+      assert.equal(stand.confirmed.length, 1);
     });
   });
 

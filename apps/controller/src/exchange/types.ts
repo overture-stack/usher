@@ -14,9 +14,10 @@ import type {
   SignInJudgementContext,
 } from '../signInTokens/index.js';
 
-/** An application's live key as the exchange answers with it: its application, and its token subkey. */
+/** An application's live key as the exchange answers with it: its application, its id, and its token subkey. */
 export interface ExchangeKey {
   applicationId: string;
+  keyId: string;
 
   /** Seals Usher tokens: AES-256-GCM. */
   token: KeyObject;
@@ -63,6 +64,30 @@ export interface ExchangeLog {
   error(message: string, fields?: Readonly<Record<string, string>>): void;
 }
 
+/** The keys an instance confirms, each at the first exchange verified with it. */
+export interface KeyConfirmations {
+  /**
+   * Confirms a key an exchange's channel assertion verified under, unless the instance knows it
+   * confirmed already; exchanges racing on one key share one write. It never rejects: a confirmation
+   * that cannot be written is written to the log, and tried again at the key's next exchange.
+   *
+   * @param key the application and the key the assertion verified under.
+   */
+  confirm(key: Pick<ExchangeKey, 'applicationId' | 'keyId'>): Promise<void>;
+}
+
+/** What the confirmations are created from. */
+export interface KeyConfirmationSettings {
+  /** Where a confirmation that cannot be written is written. */
+  eventLog: ExchangeLog;
+
+  /** The clock a confirmation's time is read from, and the schema. */
+  settings: Pick<ControllerConfiguration, 'clock' | 'databaseSchema'>;
+
+  /** Where each confirmation and its `applicationKey.confirmation` are written, in a transaction of their own. */
+  trail: Pick<AuditTrail<pg.ClientBase>, 'inTransaction'>;
+}
+
 /** What the exchange is created from. */
 export interface ExchangeSettings {
   /** Where each refusal of an assertion that could not be verified is counted. */
@@ -76,6 +101,9 @@ export interface ExchangeSettings {
 
   /** Judges each credential presented. */
   judgeCredential: CredentialJudge;
+
+  /** Confirms each key an exchange's channel assertion verifies under. */
+  keyConfirmations: KeyConfirmations;
 
   /** The baseline, the clock, the schema, the issuer and the token lifetime. */
   settings: Pick<

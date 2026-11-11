@@ -135,10 +135,12 @@ const credentialRefusalOf = (
  * whose application holds no live key among them, is counted by reason and named application in the
  * shared tally, and one that verified and is refused anyway is recorded as a
  * `channelAssertion.rejection` naming its application, the answer never waiting on that recording.
- * Each is answered one identical `401 channelAssertionRefused`. One assertion serves every exchange
- * within its lifetime. Then the body is read, as `readExchangeRequest` reads it: `400 unreadableBody`
- * for one unreadable by its shape, `406 payloadVersionUnserved` for one listing no version served, and
- * `413 bodyTooLarge` past 64 KiB.
+ * Each is answered one identical `401 channelAssertionRefused`, and confirms nothing. One assertion
+ * serves every exchange within its lifetime. An assertion that verifies confirms the key it verified
+ * under, as the confirmations given confirm it, beside the exchange's own work, every answer waiting
+ * for that confirmation whatever the body and the credential then earn. Then the body is read, as
+ * `readExchangeRequest` reads it: `400 unreadableBody` for one unreadable by its shape,
+ * `406 payloadVersionUnserved` for one listing no version served, and `413 bodyTooLarge` past 64 KiB.
  *
  * A body carrying no credential is the anonymous visitor's exchange. In one transaction the audience's
  * policy is read in one statement, so from one snapshot, the anonymous calculation is run, its version
@@ -165,18 +167,20 @@ const credentialRefusalOf = (
  * answered `403` unrecorded. A failure the route did not expect is answered `500 internalError`. Every
  * answer is `no-store`. Its stop settles once every assertion's rejection still being recorded has been.
  *
- * @param settings the assertion verifier and its tally, the credential judge, the trail, the log, and
- *   the configuration the exchange reads.
+ * @param settings the assertion verifier and its tally, the credential judge, the key confirmations,
+ *   the trail, the log, and the configuration the exchange reads.
  */
 export const createExchange = ({
   assertionRejections,
   assertions,
   eventLog,
   judgeCredential,
+  keyConfirmations,
   settings,
   trail,
 }: ExchangeSettings): Exchange => {
   const admitted = new WeakMap<FastifyRequest, ExchangeKey>();
+  const confirming = new WeakMap<FastifyRequest, Promise<void>>();
   const recordings = new Set<Promise<void>>();
 
   // The refusal is answered from memory, so the store's state never delays it: its rejection is
@@ -198,7 +202,9 @@ export const createExchange = ({
   ): Promise<FastifyReply | undefined> => {
     const check = await assertions.verify(request.raw.rawHeaders);
     if (check.kind === 'verified') {
-      admitted.set(request, check.assertion.key);
+      const { key } = check.assertion;
+      admitted.set(request, key);
+      confirming.set(request, keyConfirmations.confirm(key));
       return undefined;
     }
     if (check.kind === 'unverified') {
@@ -276,6 +282,27 @@ export const createExchange = ({
     );
   };
 
+  // The key's confirmation runs beside the exchange's own work, and every answer waits for it, so a
+  // key is confirmed once the first exchange verified with it is answered.
+  const confirmationOf = (request: FastifyRequest): Promise<void> =>
+    confirming.get(request) ?? Promise.resolve();
+
+  const outcomeOf = async (
+    request: FastifyRequest,
+    key: ExchangeKey,
+  ): Promise<Outcome> => {
+    const reading = readExchangeRequest({
+      body: request.body instanceof Uint8Array ? request.body : undefined,
+      contentType: request.headers['content-type'],
+    });
+    if (reading.kind === 'refused') {
+      return { kind: 'refused', problem: reading.problem };
+    }
+    return reading.credential === undefined
+      ? committed(issueAnonymous(key, request.ip))
+      : refuseCredential(reading.credential, key, request.ip);
+  };
+
   // A commit the store did not confirm may have taken effect, and the trail's own line names its event.
   const answer = (reply: FastifyReply, outcome: Outcome): FastifyReply => {
     if (outcome.kind === 'issued') {
@@ -306,7 +333,8 @@ export const createExchange = ({
 
   const route: RouteOptions = {
     bodyLimit: BODY_LIMIT_BYTES,
-    errorHandler: (error: FastifyError, _request, reply) => {
+    errorHandler: async (error: FastifyError, request, reply) => {
+      await confirmationOf(request);
       const code = failureCodeOf(error);
       if (code === BODY_TOO_LARGE) {
         return sendExchangeProblem(reply, EXCHANGE_PROBLEMS.bodyTooLarge);
@@ -331,19 +359,9 @@ export const createExchange = ({
       if (key === undefined) {
         return sendExchangeProblem(reply, EXCHANGE_PROBLEMS.internalError);
       }
-      const reading = readExchangeRequest({
-        body: request.body instanceof Uint8Array ? request.body : undefined,
-        contentType: request.headers['content-type'],
-      });
-      if (reading.kind === 'refused') {
-        return sendExchangeProblem(reply, reading.problem);
-      }
-      return answer(
-        reply,
-        reading.credential === undefined
-          ? await committed(issueAnonymous(key, request.ip))
-          : await refuseCredential(reading.credential, key, request.ip),
-      );
+      const outcome = await outcomeOf(request, key);
+      await confirmationOf(request);
+      return answer(reply, outcome);
     },
     method: 'POST',
     onRequest: admit,

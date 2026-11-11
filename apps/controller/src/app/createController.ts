@@ -16,7 +16,11 @@ import {
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
-import { createExchange, type RejectionCounter } from '../exchange/index.js';
+import {
+  createExchange,
+  createKeyConfirmations,
+  type RejectionCounter,
+} from '../exchange/index.js';
 import { ControllerError } from '../failures/index.js';
 import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
@@ -198,6 +202,11 @@ export const createController = (
         ...context,
         verifier: tokenVerifier,
       }),
+    keyConfirmations: createKeyConfirmations({
+      eventLog,
+      settings: configuration,
+      trail,
+    }),
     settings: configuration,
     trail,
   });

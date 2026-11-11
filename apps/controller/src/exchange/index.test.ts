@@ -9,7 +9,9 @@ suite("the exchange's module", () => {
       'EXCHANGE_PATH',
       'EXCHANGE_STORE_FAILED',
       'EXCHANGE_UNEXPECTED_FAILURE',
+      'KEY_CONFIRMATION_FAILED',
       'createExchange',
+      'createKeyConfirmations',
     ]);
   });
 });
