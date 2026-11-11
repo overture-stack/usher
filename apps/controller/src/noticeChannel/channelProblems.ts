@@ -1,15 +1,11 @@
 import type { FastifyReply } from 'fastify';
 
+import { CHANNEL_ASSERTION_REFUSED } from '../channelAssertion/index.js';
 import { problem, type Problem } from '../http/index.js';
 
 /** The refusals the revocation channel answers, each naming the rule broken and no value sent. */
 export const CHANNEL_PROBLEMS = Object.freeze({
-  channelAssertionRefused: problem(
-    'channelAssertionRefused',
-    401,
-    'Channel assertion refused',
-    'Send one Bearer channel assertion: HS256 under the channel-assertion subkey of a live key of the application it names in iss, typed usher-channel+jwt, for usher:controller, living at most 60 seconds, current, and with a jti never presented to the stream route before.',
-  ),
+  channelAssertionRefused: CHANNEL_ASSERTION_REFUSED,
   cursorGone: problem(
     'cursorGone',
     410,

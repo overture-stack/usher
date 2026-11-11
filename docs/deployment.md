@@ -63,6 +63,7 @@ A whole number is written in digits alone, with no sign, decimal point or unit. 
 | --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `USHER_INSTANCE_NAME` | Required | **Per instance.** This instance's name, carried as `data.instance` by every event it records. Give each instance sharing the store its own, such as its host or pod name. |
 | `USHER_EVENT_SOURCE`  | Required | The CloudEvents `source` carried by every event, such as `https://usher.example.org/controller`. It names the deployment, never one instance.                             |
+| `USHER_ISSUER`        | Required | The controller's own issuer: the `iss` of every Usher token.                                                                                                              |
 
 ### The database
 

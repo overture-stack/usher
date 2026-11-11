@@ -41,6 +41,7 @@ services:
       USHER_HOST: 0.0.0.0
       USHER_IDENTITY_PROVIDER_ISSUER: http://127.0.0.1:8080/realms/overture
       USHER_INSTANCE_NAME: usher-image-1
+      USHER_ISSUER: https://usher.localhost
       USHER_KEY_ENCRYPTION_KEY: ${USHER_KEY_ENCRYPTION_KEY:?run node scripts/generate-compose-secrets.ts}
       USHER_MANAGEMENT_AUDIENCE: usher-management
       USHER_MANAGEMENT_CLIENTS: usher-ui

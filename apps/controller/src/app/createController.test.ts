@@ -50,6 +50,7 @@ const unreachableStore = async (): Promise<ControllerConfiguration> =>
     [ENVIRONMENT_VARIABLES.identityProviderIssuer]:
       'http://127.0.0.1:8080/realms/usher-test',
     [ENVIRONMENT_VARIABLES.instanceName]: 'usher-test-1',
+    [ENVIRONMENT_VARIABLES.issuer]: 'https://usher.example.org',
     [ENVIRONMENT_VARIABLES.keyEncryptionKey]:
       randomBytes(32).toString('base64url'),
     [ENVIRONMENT_VARIABLES.managementAudience]: 'usher-management-test',

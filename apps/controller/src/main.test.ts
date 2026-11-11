@@ -63,6 +63,7 @@ const validEnvironment = async (): Promise<Record<string, string>> => ({
   USHER_HOST: LOOPBACK,
   USHER_IDENTITY_PROVIDER_ISSUER: 'http://127.0.0.1:8080/realms/usher-test',
   USHER_INSTANCE_NAME: 'usher-test-1',
+  USHER_ISSUER: 'https://usher.example.org',
   USHER_KEY_ENCRYPTION_KEY: randomBytes(32).toString('base64url'),
   USHER_MANAGEMENT_AUDIENCE: 'usher-management-test',
   USHER_MANAGEMENT_CLIENTS: 'usher-ui-test',

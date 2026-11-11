@@ -88,6 +88,9 @@ export interface ControllerSettings {
   /** This instance's name, the `instance` every event it emits carries (#214 Q17); unique among the deployment's instances. */
   instanceName: string;
 
+  /** The controller's own issuer: every Usher token's `iss`. */
+  issuer: string;
+
   /**
    * The key-encryption key encrypting every stored application key, shared by every instance:
    * 32 bytes as 43 base64url characters in canonical form, an application key's format. Whitespace
@@ -233,9 +236,6 @@ export interface PendingSettings {
    * `windowSeconds` (#214 Q19), as `audit-events.md` names the setting.
    */
   grantRateThreshold: { operationCount: number; windowSeconds: number };
-
-  /** The controller's own issuer: every Usher token's `iss`. */
-  issuer: string;
 
   /** The access level a resource registered naming none takes: `registered` by default (#211). */
   platformDefaultAccessLevel: 'grant' | 'open' | 'registered';
@@ -448,6 +448,7 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   host: 'USHER_HOST',
   identityProviderIssuer: 'USHER_IDENTITY_PROVIDER_ISSUER',
   instanceName: 'USHER_INSTANCE_NAME',
+  issuer: 'USHER_ISSUER',
   keyEncryptionKey: 'USHER_KEY_ENCRYPTION_KEY',
   managementAudience: 'USHER_MANAGEMENT_AUDIENCE',
   managementClients: 'USHER_MANAGEMENT_CLIENTS',
@@ -545,6 +546,7 @@ export const environmentFor = ({
   host,
   identityProviderIssuer,
   instanceName,
+  issuer,
   keyEncryptionKey,
   managementAudience,
   managementClients,
@@ -575,6 +577,7 @@ export const environmentFor = ({
   [VARIABLE_NAMES.host]: host,
   [VARIABLE_NAMES.identityProviderIssuer]: identityProviderIssuer,
   [VARIABLE_NAMES.instanceName]: instanceName,
+  [VARIABLE_NAMES.issuer]: issuer,
   [VARIABLE_NAMES.keyEncryptionKey]: keyEncryptionKey,
   [VARIABLE_NAMES.managementAudience]: managementAudience,
   [VARIABLE_NAMES.managementClients]: managementClients.join(','),

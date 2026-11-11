@@ -22,6 +22,7 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   host: 'USHER_HOST',
   identityProviderIssuer: 'USHER_IDENTITY_PROVIDER_ISSUER',
   instanceName: 'USHER_INSTANCE_NAME',
+  issuer: 'USHER_ISSUER',
   keyEncryptionKey: 'USHER_KEY_ENCRYPTION_KEY',
   managementAudience: 'USHER_MANAGEMENT_AUDIENCE',
   managementClients: 'USHER_MANAGEMENT_CLIENTS',

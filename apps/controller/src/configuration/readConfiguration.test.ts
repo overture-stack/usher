@@ -37,6 +37,7 @@ const REQUIRED: Readonly<Record<string, string>> = {
   host: '127.0.0.1',
   identityProviderIssuer: 'https://auth.example.org/realms/usher',
   instanceName: 'usher-1',
+  issuer: 'https://usher.example.org',
   keyEncryptionKey: KEY_ENCRYPTION_KEY,
   managementAudience: 'usher-management',
   managementClients: 'usher-ui',
@@ -126,6 +127,7 @@ suite('reading the configuration from an environment', () => {
       host: '127.0.0.1',
       identityProviderIssuer: 'https://auth.example.org/realms/usher',
       instanceName: 'usher-1',
+      issuer: 'https://usher.example.org',
       keyEncryptionKey: KEY_ENCRYPTION_KEY,
       managementAudience: 'usher-management',
       managementClients: ['usher-ui'],
@@ -207,13 +209,13 @@ suite('reading the configuration from an environment', () => {
   });
 
   test('refuses a required variable set empty', () => {
-    const refusal = refusalOf(environmentWith({ host: '', instanceName: '' }));
+    const refusal = refusalOf(environmentWith({ host: '', issuer: '' }));
 
     assert.deepEqual(refusal.variables, [
       ENVIRONMENT_VARIABLES.host,
-      ENVIRONMENT_VARIABLES.instanceName,
+      ENVIRONMENT_VARIABLES.issuer,
     ]);
-    assert.match(refusal.message, /USHER_INSTANCE_NAME is empty/u);
+    assert.match(refusal.message, /USHER_ISSUER is empty/u);
   });
 });
 

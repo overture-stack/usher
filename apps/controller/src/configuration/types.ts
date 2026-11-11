@@ -57,6 +57,9 @@ export interface ControllerConfiguration {
   /** This instance's name, carried by every event it emits; unique among the instances sharing the store. */
   instanceName: string;
 
+  /** The controller's own issuer: every Usher token's `iss`. */
+  issuer: string;
+
   /**
    * The key-encryption key encrypting every stored application key, shared by every instance: 32 bytes
    * as 43 base64url characters in canonical form, read with any whitespace around it left out.
