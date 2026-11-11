@@ -11,7 +11,12 @@ import type {
 import { createServer } from '../http/index.js';
 import { managementRoute } from '../managementApi/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
-import { AFTER_COMMIT_FAILED, afterCommitTrail } from './afterCommitTrail.js';
+import {
+  AFTER_COMMIT_FAILED,
+  afterCommitTrail,
+  runAfterCommit,
+} from './afterCommitTrail.js';
+import type { AfterCommitLog } from './types.js';
 
 const ACTOR: Actor = { id: 'subject-ana', type: 'human' };
 
@@ -165,8 +170,10 @@ suite('a trail running steps after each commit', () => {
   });
 
   test('runs no step for a transaction that fails, throwing its failure as the trail threw it', async () => {
-    const unconfirmed = new CommitUnconfirmed();
-    const { trail } = fakeTrail(unconfirmed);
+    const timedOut = Object.assign(new Error('the store did not answer'), {
+      code: 'storeTimeout',
+    });
+    const { trail } = fakeTrail(timedOut);
     const ran: string[] = [];
     const wrapped = afterCommitTrail({
       log: collectingLog(),
@@ -183,9 +190,43 @@ suite('a trail running steps after each commit', () => {
 
     await assert.rejects(
       wrapped.inTransaction(ACTOR, async () => 'made'),
-      (thrown) => thrown === unconfirmed,
+      (thrown) => thrown === timedOut,
     );
     assert.deepEqual(ran, []);
+  });
+
+  test("runs every step in turn for a transaction whose COMMIT went unconfirmed, then throws its failure as the trail threw it, a step's failure written as for a commit", async () => {
+    const unconfirmed = new CommitUnconfirmed();
+    const { trail } = fakeTrail(unconfirmed);
+    const log = collectingLog();
+    const ran: string[] = [];
+    const wrapped = afterCommitTrail({
+      log,
+      steps: [
+        {
+          name: 'noticeWake',
+          run: () => {
+            throw new Error('the wake failed');
+          },
+        },
+        {
+          name: 'last',
+          run: () => {
+            ran.push('last');
+          },
+        },
+      ],
+      trail,
+    });
+
+    await assert.rejects(
+      wrapped.inTransaction(ACTOR, async () => 'made'),
+      (thrown) => thrown === unconfirmed,
+    );
+    assert.deepEqual(ran, ['last']);
+    assert.deepEqual(log.lines, [
+      { fields: { step: 'noticeWake' }, message: AFTER_COMMIT_FAILED },
+    ]);
   });
 
   test('records an event accompanying no change as the trail records it, running no step', async () => {
@@ -219,12 +260,13 @@ const NOW = Date.UTC(2026, 10, 5, 12, 0, 0);
 
 const ISSUER = 'https://auth.example.org/realms/usher';
 
-// A Management API route whose one operation makes its change through the trail given, and answers
-// 201 once the trail gives back the change's result; the token verifier is a stand-in accepting the
-// one token it is shown.
+// A Management API route whose one operation makes its change through the trail given, names the
+// key reload to run after its commit, and answers 201 once the trail gives back the change's result;
+// the token verifier is a stand-in accepting the one token it is shown, and the key reload rejects.
 const routeThrough = (
   context: TestContext,
   trail: AuditTrail<string>,
+  log: AfterCommitLog,
 ): ReturnType<typeof createServer> => {
   const server = createServer({
     isLive: () => true,
@@ -235,6 +277,7 @@ const routeThrough = (
     managementRoute(
       {
         administratorOnly: false,
+        afterCommit: ['keyReload'],
         body: 'none',
         method: 'POST',
         readInput: () => ({ input: {}, kind: 'read' }),
@@ -255,6 +298,14 @@ const routeThrough = (
       {
         eventLog: { error: () => undefined },
         refusalTally: { count: () => undefined },
+        runAfterCommit: (names) =>
+          runAfterCommit({
+            log,
+            steps: names.map((name) => ({
+              name,
+              run: () => Promise.reject(new Error('the reload failed')),
+            })),
+          }),
         settings: {
           administratorRole: 'usher-platform-admin',
           clock: { now: () => NOW },
@@ -286,7 +337,7 @@ const routeThrough = (
 };
 
 suite('a change committed through the trail, answered by its route', () => {
-  test('answers its success when every step after its commit fails', async (context) => {
+  test("answers its success when every step after its commit fails, the trail's and those the operation names alike", async (context) => {
     const { happened, trail } = fakeTrail();
     const log = collectingLog();
     const server = routeThrough(
@@ -300,13 +351,10 @@ suite('a change committed through the trail, answered by its route', () => {
               throw new Error('the wake failed');
             },
           },
-          {
-            name: 'keyReload',
-            run: () => Promise.reject(new Error('the reload failed')),
-          },
         ],
         trail,
       }),
+      log,
     );
 
     const answer = await server.inject({

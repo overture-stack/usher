@@ -151,10 +151,26 @@ export interface OperationEvent {
   type: AuditEventType;
 }
 
+/**
+ * A step an operation may name, to be run once its change has committed and before it is answered, so
+ * the instance answering holds what the change made: `keyReload` reads the live application keys
+ * again. A step also runs for a change whose `COMMIT` the store did not confirm, so it runs whether or
+ * not the commit took effect and must be safe either way, as a step that only reads is; every step
+ * added here is held to that.
+ */
+export type AfterCommitStepName = 'keyReload';
+
 /** One Management API operation, as its route and its reading of a request define it. */
 export interface ManagementOperation<Input> {
   /** Whether it is for platform administrators alone, refusing everyone else before any lookup. */
   administratorOnly: boolean;
+
+  /**
+   * The steps its change needs, run in turn once it has answered a change it committed, or once its
+   * change's `COMMIT` went unconfirmed, and before the answer is sent; none for an operation naming
+   * none, and none for a refusal or any other failure.
+   */
+  afterCommit?: readonly AfterCommitStepName[];
 
   /** Whether it takes a body: never, when the request sends one, or always. */
   body: 'none' | 'optional' | 'required';
@@ -185,6 +201,12 @@ export interface ManagementDependencies {
   eventLog: Pick<EventLog, 'error'>;
 
   refusalTally: RefusalTally;
+
+  /**
+   * Runs the steps an operation names, in turn, once its change has committed or may have. It never
+   * rejects: a step that fails is written to the log, since the answer must say what the commit did.
+   */
+  runAfterCommit(steps: readonly AfterCommitStepName[]): Promise<void>;
 
   settings: ManagementTokenSettings &
     Pick<ControllerConfiguration, 'clock' | 'identityProviderIssuer'>;

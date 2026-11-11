@@ -1,5 +1,8 @@
 import pg from 'pg';
 
+import type { Actor, AuditEvent } from '../eventLog/index.js';
+import { failureCodeOf } from '../failures/index.js';
+import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import { applicationSubkeys } from './applicationSubkeys.js';
 import type {
   ApplicationKeyRing,
@@ -7,17 +10,31 @@ import type {
   LiveApplicationKey,
 } from './types.js';
 
-/** How often the ring reads the live keys again beside the reloads asked for, in milliseconds: 30 s. */
+/**
+ * How long after its last read the ring reads the live keys again, beside the reloads asked for, in
+ * milliseconds of the configured clock: 30 s.
+ */
 export const KEY_RELOAD_INTERVAL_MILLISECONDS = 30_000;
 
-/** The line naming a stored key that does not open, written once while it stays so. */
-export const KEY_UNREADABLE = 'applicationKeyRing.keyUnreadable';
+// How often the clock is read for the reload interval's end, in real time: the configured clock may be
+// moved past the interval at any moment, and the reload is due soon after. A reload is due one reading
+// early, so one paced by a clock running in real time begins before the interval has passed.
+const CLOCK_READING_MILLISECONDS = 1000;
+
+const SYSTEM: Actor = Object.freeze({ type: 'system' });
 
 /** The line naming a read of the live keys that failed, the keys held before kept. */
 export const KEY_READ_FAILED = 'applicationKeyRing.readFailed';
 
 /** The line naming a failure of what a change to the live keys calls; the keys read are held. */
 export const KEY_CHANGE_FAILED = 'applicationKeyRing.changeFailed';
+
+/**
+ * The line naming a key found unreadable whose `applicationKey.unreadable` the store did not take; the
+ * next read finding it unreadable records it.
+ */
+export const KEY_UNREADABLE_UNRECORDED =
+  'applicationKeyRing.unreadableUnrecorded';
 
 interface KeyRow {
   applicationId: string;
@@ -49,6 +66,15 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
   return typeof code === 'string' ? { code } : {};
 };
 
+const unreadableEvent = ({
+  applicationId,
+  keyId,
+}: UnreadableKey): AuditEvent => ({
+  data: { applicationId, keyId },
+  severity: 'critical',
+  type: 'applicationKey.unreadable',
+});
+
 // Which keys are live, as one text, to tell whether a read changed them.
 const liveKeysText = ({ byApplication }: Held): string =>
   [...byApplication.values()]
@@ -60,22 +86,31 @@ const liveKeysText = ({ byApplication }: Held): string =>
 /**
  * Creates the ring of live application keys an instance holds in memory, so a channel assertion is
  * verified with no read of the store. Each read takes every registered application and its keys not
- * revoked, opens each sealed key, derives its subkeys and zero-fills its bytes; a key that does not
- * open is left out, so its application is refused as one holding no other live key would be, and its
- * ids are written to the log once while it stays so. The ring reads at its start and every
- * {@link KEY_RELOAD_INTERVAL_MILLISECONDS} after, and whenever a reload is asked for: reloads asked
- * for while a read is in flight share the one read begun after it. A read that changes which keys are
- * live calls `changed`, whose failure is written to the log by its code and never undoes the read;
- * one that fails keeps the keys held and is written to the log by its code.
+ * revoked, opens each sealed key, derives its subkeys and zero-fills its bytes. A key that does not
+ * open is left out at once, so its application is refused as one holding no other live key would be,
+ * and is then recorded as `applicationKey.unreadable`, critical, naming its application and itself,
+ * as the system, in a transaction of its own: once while it stays unreadable, again should it open or
+ * be revoked and then stop opening, and at the next read should its recording not commit. A recording
+ * that fails is written to the log naming the application, the key and the failure's code alone; one
+ * whose commit went unconfirmed is named by the trail's own line. The ring reads at its start, then
+ * whenever its configured clock reads within one second of {@link KEY_RELOAD_INTERVAL_MILLISECONDS}
+ * past the start of its last read, or earlier than it, reading the clock every second of real time,
+ * so a read the clock paces begins within the interval; and whenever a reload is asked for, reloads
+ * asked for while a read is in flight sharing the one read begun after it. A read that changes which keys are live calls `changed`, whose failure is written to the log by
+ * its code and never undoes the read; one that fails keeps the keys held and is written to the log by
+ * its code.
  *
- * @param settings the store, the schema, the cipher, the log, and what to call on a change.
+ * @param settings the store, the schema, the cipher, the clock, the trail, the log, and what to call
+ *   on a change.
  */
 export const createApplicationKeyRing = ({
   changed,
   cipher,
+  clock,
   log,
   schema,
   store,
+  trail,
 }: ApplicationKeyRingSettings): ApplicationKeyRing => {
   const table = (name: string): string =>
     `${pg.escapeIdentifier(schema)}.${name}`;
@@ -89,13 +124,23 @@ export const createApplicationKeyRing = ({
   const state: {
     held: Held;
     queued: Promise<void> | undefined;
+
+    /** The clock's instant as the last read began. */
+    readAt: number;
+
     reading: Promise<void> | undefined;
+
+    /** The ids of the keys recorded unreadable, each unreadable at every read since. */
+    recorded: ReadonlySet<string>;
+
     stopped: boolean;
     timer: ReturnType<typeof setInterval> | undefined;
   } = {
     held: NOTHING_HELD,
     queued: undefined,
+    readAt: clock.now(),
     reading: undefined,
+    recorded: new Set(),
     stopped: false,
     timer: undefined,
   };
@@ -145,17 +190,36 @@ export const createApplicationKeyRing = ({
     };
   };
 
-  const hold = (next: Held): void => {
+  // Records each key in turn, giving the ids of those whose recording committed; one that did not is
+  // recorded at the next read finding the key unreadable.
+  const recordUnreadable = (
+    keys: readonly UnreadableKey[],
+  ): Promise<readonly string[]> =>
+    keys.reduce<Promise<readonly string[]>>(async (earlier, key) => {
+      const committed = await earlier;
+      try {
+        await trail.inTransaction(SYSTEM, ({ record }) =>
+          record(unreadableEvent(key)),
+        );
+        return [...committed, key.keyId];
+      } catch (failure) {
+        if (failure instanceof CommitUnconfirmed) {
+          return committed;
+        }
+        const code = failureCodeOf(failure);
+        log.error(KEY_UNREADABLE_UNRECORDED, {
+          applicationId: key.applicationId,
+          ...(code === undefined ? {} : { code }),
+          keyId: key.keyId,
+        });
+        return committed;
+      }
+    }, Promise.resolve([]));
+
+  // The keys are held before any is recorded, so a key that does not open is refused at once.
+  const hold = async (next: Held): Promise<void> => {
     const before = state.held;
     state.held = next;
-    next.unreadable
-      .filter(
-        ({ keyId }) =>
-          !before.unreadable.some((unreadable) => unreadable.keyId === keyId),
-      )
-      .forEach((unreadable) => {
-        log.error(KEY_UNREADABLE, { ...unreadable });
-      });
     if (liveKeysText(before) !== liveKeysText(next)) {
       try {
         changed();
@@ -163,17 +227,39 @@ export const createApplicationKeyRing = ({
         log.error(KEY_CHANGE_FAILED, codeOf(failure));
       }
     }
+    const stillRecorded = new Set(
+      next.unreadable
+        .map(({ keyId }) => keyId)
+        .filter((keyId) => state.recorded.has(keyId)),
+    );
+    const committed = await recordUnreadable(
+      next.unreadable.filter(({ keyId }) => !stillRecorded.has(keyId)),
+    );
+    state.recorded = new Set([...stillRecorded, ...committed]);
   };
 
-  const read = async (): Promise<Held> =>
-    heldFrom((await store.query<KeyRow>(statement)).rows);
+  const read = async (): Promise<Held> => {
+    state.readAt = clock.now();
+    return heldFrom((await store.query<KeyRow>(statement)).rows);
+  };
+
+  // Due once the interval since the last read began would pass before the next reading of the clock,
+  // or once the clock reads earlier than that instant, since a clock moved back would otherwise hold
+  // off every read until it caught up.
+  const isDue = (): boolean => {
+    const elapsed = clock.now() - state.readAt;
+    return (
+      elapsed + CLOCK_READING_MILLISECONDS >=
+        KEY_RELOAD_INTERVAL_MILLISECONDS || elapsed < 0
+    );
+  };
 
   const readOnce = (): Promise<void> => {
     const reading = read()
       .then(
-        (next) => {
+        async (next) => {
           if (!state.stopped) {
-            hold(next);
+            await hold(next);
           }
         },
         (failure: unknown) => {
@@ -218,10 +304,12 @@ export const createApplicationKeyRing = ({
     reload,
 
     start: async () => {
-      hold(await read());
+      await hold(await read());
       state.timer = setInterval(() => {
-        void reload();
-      }, KEY_RELOAD_INTERVAL_MILLISECONDS);
+        if (isDue()) {
+          void reload();
+        }
+      }, CLOCK_READING_MILLISECONDS);
       state.timer.unref();
     },
 

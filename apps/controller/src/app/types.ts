@@ -12,7 +12,11 @@ export interface Controller {
   stop(): Promise<void>;
 }
 
-/** One step run after each committed transaction, before its result is given back. */
+/**
+ * One step run after each committed transaction, before its result is given back, and after one whose
+ * `COMMIT` went unconfirmed, before its failure is thrown: it runs whether or not the change was made,
+ * so it must be safe either way, as reading what the store holds is.
+ */
 export interface AfterCommitStep {
   /** Names the step on the line written when it fails. */
   name: string;

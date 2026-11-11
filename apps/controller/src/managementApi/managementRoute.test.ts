@@ -20,7 +20,12 @@ import type { StoredRefusal } from '../signInTokens/index.js';
 import { managementRoute, STORE_FAILED } from './managementRoute.js';
 import { BODY_LIMIT_BYTES } from './problems.js';
 import { readTextMembers } from './requestBody.js';
-import type { ManagementOperation, OperationOutcome } from './types.js';
+import type {
+  AfterCommitStepName,
+  ManagementDependencies,
+  ManagementOperation,
+  OperationOutcome,
+} from './types.js';
 
 const NOW = Date.UTC(2026, 10, 4, 12, 0, 0);
 
@@ -78,6 +83,9 @@ interface Line {
 }
 
 interface Stand {
+  /** What each request asked to run after its commit, by the names given. */
+  afterCommit: (readonly AfterCommitStepName[])[];
+
   counted: string[];
   lines: Line[];
   ran: { input: unknown; params: Readonly<Record<string, string>> }[];
@@ -86,8 +94,14 @@ interface Stand {
 }
 
 interface StandOptions {
+  /** The steps the operation names to run after its commit. */
+  afterCommit?: readonly AfterCommitStepName[];
+
   /** What the operation answers. */
   outcome?: () => Promise<OperationOutcome>;
+
+  /** How the steps after a commit run, once they are kept as asked. */
+  runAfterCommit?: ManagementDependencies['runAfterCommit'];
 
   /** What the store says of the principal's standing, or a failure to say. */
   standing?: () => Promise<StoredRefusal | undefined>;
@@ -103,8 +117,10 @@ const ROUTE = '/admin/shelves/{id}/books';
 const shelving = (
   ran: Stand['ran'],
   outcome: () => Promise<OperationOutcome>,
+  afterCommit: readonly AfterCommitStepName[] | undefined,
 ): ManagementOperation<{ title: string }> => ({
   administratorOnly: true,
+  ...(afterCommit === undefined ? {} : { afterCommit }),
   body: 'required',
   event: {
     named: async (params) =>
@@ -128,17 +144,20 @@ const shelving = (
 const standUp = async (
   context: TestContext,
   {
+    afterCommit,
     outcome = async () => ({
       body: { shelved: true },
       forbidsStoring: true,
       kind: 'answered',
       status: 201,
     }),
+    runAfterCommit = async () => undefined,
     standing = async () => undefined,
     verifications = {},
   }: StandOptions = {},
 ): Promise<Stand> => {
   const stand: Omit<Stand, 'server'> = {
+    afterCommit: [],
     counted: [],
     lines: [],
     ran: [],
@@ -150,7 +169,7 @@ const standUp = async (
     trustedProxies: [],
   });
   server.route(
-    managementRoute(shelving(stand.ran, outcome), {
+    managementRoute(shelving(stand.ran, outcome, afterCommit), {
       eventLog: {
         error: (message, fields) => {
           stand.lines.push({ fields, message });
@@ -160,6 +179,10 @@ const standUp = async (
         count: (reason) => {
           stand.counted.push(reason);
         },
+      },
+      runAfterCommit: (steps) => {
+        stand.afterCommit.push(steps);
+        return runAfterCommit(steps);
       },
       settings: SETTINGS,
       storedRefusal: standing,
@@ -798,3 +821,127 @@ suite(
     });
   },
 );
+
+// Settles once a condition holds, checking it again after each turn of the event loop, or once it has
+// checked for as many turns as it was given, so a condition never met fails the test that awaits it
+// rather than holding it open.
+const turnsUntil = async (
+  condition: () => boolean,
+  turns = 1000,
+): Promise<void> => {
+  if (condition() || turns === 0) {
+    return;
+  }
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  await turnsUntil(condition, turns - 1);
+};
+
+suite('the steps a management operation names to run after its commit', () => {
+  test('are run once the operation has answered its change, the answer sent only once they have', async (context) => {
+    const release: { steps: (() => void) | undefined } = { steps: undefined };
+    const stand = await standUp(context, {
+      afterCommit: ['keyReload'],
+      runAfterCommit: () =>
+        new Promise((resolve) => {
+          release.steps = () => {
+            resolve();
+          };
+        }),
+      verifications: ADMIN,
+    });
+    const sent = { answered: false };
+
+    const answering = post(stand).then((answer) => {
+      sent.answered = true;
+      return answer;
+    });
+    await turnsUntil(() => release.steps !== undefined);
+    const answeredWhileRunning = sent.answered;
+    release.steps?.();
+    const answer = await answering;
+
+    assert.equal(answeredWhileRunning, false);
+    assert.equal(answer.statusCode, 201);
+    assert.equal(stand.ran.length, 1);
+    assert.deepEqual(stand.afterCommit, [['keyReload']]);
+  });
+
+  test('are none for an operation naming none', async (context) => {
+    const stand = await standUp(context, { verifications: ADMIN });
+
+    const answer = await post(stand);
+
+    assert.equal(answer.statusCode, 201);
+    assert.deepEqual(stand.afterCommit.flat(), []);
+  });
+
+  test('are run for a change whose COMMIT went unconfirmed, before it is answered 503 outcomeUnknown', async (context) => {
+    const release: { steps: (() => void) | undefined } = { steps: undefined };
+    const stand = await standUp(context, {
+      afterCommit: ['keyReload'],
+      outcome: async () => {
+        throw new CommitUnconfirmed();
+      },
+      runAfterCommit: () =>
+        new Promise((resolve) => {
+          release.steps = () => {
+            resolve();
+          };
+        }),
+      verifications: ADMIN,
+    });
+    const sent = { answered: false };
+
+    const answering = post(stand).then((answer) => {
+      sent.answered = true;
+      return answer;
+    });
+    await turnsUntil(() => release.steps !== undefined);
+    const answeredWhileRunning = sent.answered;
+    release.steps?.();
+    const answer = await answering;
+
+    assert.equal(answeredWhileRunning, false);
+    assert.equal(answer.statusCode, 503);
+    assert.equal(codeOf(answer), 'outcomeUnknown');
+    assert.deepEqual(stand.afterCommit, [['keyReload']]);
+    assert.deepEqual(stand.recorded, []);
+  });
+
+  test('are never run for a request refused before the operation runs, a refusal it answers, or any failure it throws but an unconfirmed COMMIT', async (context) => {
+    const outcomes: readonly (() => Promise<OperationOutcome>)[] = [
+      async () => ({ kind: 'refused', problem: SHELF_LIMIT }),
+      async () => {
+        throw Object.assign(new Error('the store went away'), {
+          code: '57P01',
+        });
+      },
+    ];
+    const stands = await Promise.all(
+      outcomes.map((outcome) =>
+        standUp(context, {
+          afterCommit: ['keyReload'],
+          outcome,
+          verifications: ADMIN,
+        }),
+      ),
+    );
+    const unread = stands[0] ?? assert.fail('no stand');
+
+    const answers = [
+      await post(unread, { body: '{"title":7}' }),
+      ...(await Promise.all(stands.map((stand) => post(stand)))),
+    ];
+
+    assert.deepEqual(
+      answers.map(({ statusCode }) => statusCode),
+      [400, 409, 503],
+    );
+    assert.deepEqual(
+      stands.map(({ afterCommit }) => afterCommit),
+      [[], []],
+    );
+  });
+});

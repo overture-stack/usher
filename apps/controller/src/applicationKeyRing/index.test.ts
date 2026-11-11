@@ -9,7 +9,7 @@ suite("the application key ring's module", () => {
       'KEY_CHANGE_FAILED',
       'KEY_READ_FAILED',
       'KEY_RELOAD_INTERVAL_MILLISECONDS',
-      'KEY_UNREADABLE',
+      'KEY_UNREADABLE_UNRECORDED',
       'SUBKEY_LABELS',
       'applicationSubkeys',
       'createApplicationKeyRing',

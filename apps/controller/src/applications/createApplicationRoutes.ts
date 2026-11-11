@@ -5,6 +5,7 @@ import { type Actor, eventInstant, type JsonValue } from '../eventLog/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
 import { type Problem, problem } from '../http/index.js';
 import {
+  type AfterCommitStepName,
   type EventMembers,
   type InputReading,
   type ManagementDependencies,
@@ -42,6 +43,11 @@ const KEY_REVOCATION_REASONS: readonly string[] = Object.freeze([
   'compromised',
   'retired',
   'rotated',
+]);
+
+/** What a change to an application's keys runs once it has committed: the live keys read again. */
+const KEY_CHANGE_STEPS: readonly AfterCommitStepName[] = Object.freeze([
+  'keyReload',
 ]);
 
 /** The refusals the application operations answer, beside those every operation may. */
@@ -170,7 +176,8 @@ const outcomeOf = <Value>(
  * under the key-encryption key, and shown once, in the answer issuing it, which forbids storing it.
  * The store generates every id. An application holds at most {@link LIVE_KEY_LIMIT} live keys, and a
  * key revoked keeps its first revocation. Each change commits together with its events,
- * `application.registration`, `applicationKey.issuance` or `applicationKey.revocation`.
+ * `application.registration`, `applicationKey.issuance` or `applicationKey.revocation`, and each
+ * changes the live keys, so each names `keyReload` to run once it has committed.
  *
  * @param settings the cipher, the clock, the schema, the trusted issuer, the store and the trail.
  * @param dependencies what every Management API operation's route is built on.
@@ -207,6 +214,7 @@ export const createApplicationRoutes = (
 
   const registration: ManagementOperation<Registration> = {
     administratorOnly: true,
+    afterCommit: KEY_CHANGE_STEPS,
     body: 'required',
     event: { named: async () => ({}), type: 'application.registration' },
     method: 'POST',
@@ -313,6 +321,7 @@ export const createApplicationRoutes = (
 
   const issue: ManagementOperation<undefined> = {
     administratorOnly: true,
+    afterCommit: KEY_CHANGE_STEPS,
     body: 'none',
     event: {
       named: (params) => namedApplication(params, false),
@@ -369,6 +378,7 @@ export const createApplicationRoutes = (
 
   const revocation: ManagementOperation<Revocation> = {
     administratorOnly: true,
+    afterCommit: KEY_CHANGE_STEPS,
     body: 'optional',
     event: {
       named: (params) => namedApplication(params, true),

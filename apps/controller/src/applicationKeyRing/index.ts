@@ -4,7 +4,7 @@ export {
   KEY_CHANGE_FAILED,
   KEY_READ_FAILED,
   KEY_RELOAD_INTERVAL_MILLISECONDS,
-  KEY_UNREADABLE,
+  KEY_UNREADABLE_UNRECORDED,
 } from './createApplicationKeyRing.js';
 export type {
   ApplicationKeyRing,

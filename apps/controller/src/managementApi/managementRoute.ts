@@ -127,16 +127,19 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * session that cannot be stored, and recorded as `managementToken.refusal`, its actor anonymous,
  * before the operation begins; a service account is refused 403, and so is anyone but a platform
  * administrator for an operation of theirs alone. Then the query, which no operation takes, and the
- * body are read, and the operation run. A refusal from admission on records the operation's own
- * event, `denied`, at warning, its reason the code answered, naming the existing entities the request
- * named; a failure of the store answers 503 and records it `failed`, at error. A change whose
+ * body are read, and the operation run. What the operation answers is sent once the steps it names
+ * to run after its commit have run, as is the answer to a change whose `COMMIT` went unconfirmed; a
+ * refusal or any other failure runs none. A refusal from admission on
+ * records the operation's own event, `denied`, at warning, its reason the code answered, naming the
+ * existing entities the request named; a failure of the store answers 503 and records it `failed`, at
+ * error. A change whose
  * `COMMIT` the store did not confirm answers 503 `outcomeUnknown` and records nothing more, since it may
  * have been made. Text that cannot be stored, in the token's subject or session or anywhere in the
  * body, is refused 400 before any transaction begins.
  *
  * @param operation the operation.
  * @param dependencies the verifier, the tally, the store's reading of a principal's standing, the
- *   trail, the log and the settings every operation shares.
+ *   trail, the runner of the steps after a commit, the log and the settings every operation shares.
  */
 export const managementRoute = <Input>(
   operation: ManagementOperation<Input>,
@@ -145,6 +148,7 @@ export const managementRoute = <Input>(
   const {
     eventLog,
     refusalTally,
+    runAfterCommit,
     settings,
     storedRefusal,
     tokenVerifier,
@@ -333,7 +337,7 @@ export const managementRoute = <Input>(
       .send(JSON.stringify(outcome.body));
 
   // A change whose commit went unconfirmed may have been made: recording it failed could be false,
-  // and the trail's line already names its events.
+  // and the trail's line already names its events. Its steps run, each being safe either way.
   const failed = async (
     request: FastifyRequest,
     reply: FastifyReply,
@@ -341,6 +345,7 @@ export const managementRoute = <Input>(
     failure: unknown,
   ): Promise<FastifyReply> => {
     if (failure instanceof CommitUnconfirmed) {
+      await runAfterCommit(operation.afterCommit ?? []);
       return sendProblem(reply, PROBLEMS.outcomeUnknown);
     }
     eventLog.error(STORE_FAILED, {
@@ -392,9 +397,11 @@ export const managementRoute = <Input>(
       if (outcome.kind === 'failed') {
         return failed(request, reply, principal, outcome.failure);
       }
-      return outcome.kind === 'answered'
-        ? answer(reply, outcome)
-        : refuse(request, reply, principal, outcome.problem);
+      if (outcome.kind === 'answered') {
+        await runAfterCommit(operation.afterCommit ?? []);
+        return answer(reply, outcome);
+      }
+      return refuse(request, reply, principal, outcome.problem);
     },
     method: operation.method,
     onRequest: async (request, reply) => {

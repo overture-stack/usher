@@ -25,6 +25,7 @@ import { ControllerError } from '../failures/index.js';
 import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
 import {
+  type AfterCommitStepName,
   type ManagementDependencies,
   REFUSAL_TALLY_INTERVAL_MILLISECONDS,
   refusalTallyEvent,
@@ -52,8 +53,8 @@ import {
 import { openStore, prepareStore } from '../store/index.js';
 import { createStoreReader } from '../storeTimeout/index.js';
 import { createTally } from '../tally/index.js';
-import { afterCommitTrail } from './afterCommitTrail.js';
-import type { Controller } from './types.js';
+import { afterCommitTrail, runAfterCommit } from './afterCommitTrail.js';
+import type { AfterCommitStep, Controller } from './types.js';
 
 // A channel assertion refused unverified, as its tally counts it: by reason, and by the registered
 // application it names, or none.
@@ -93,9 +94,12 @@ const STORE_PROBE =
  * live application keys into memory, and then serves the Management API's application operations,
  * each event they record written to the audit log and the log stream, the revocation channel's poll
  * and push, the token exchange, and the identity provider's back-channel logout. A change committed
- * through an operation is held by the instance before it is answered: the live keys are read again,
- * and the instance's streams are woken to its notices; a sign-out committed wakes the streams alike.
- * A failure in either step is written to the log and never changes the answer. The Management API,
+ * through an operation is held by the instance before it is answered: the instance's streams are
+ * woken to its notices, as for a sign-out committed, and the live keys are read again for an
+ * operation naming that step, as registering an application, issuing a key and revoking one do. A
+ * failure in either step is written to the log and never changes the answer. The live keys are read
+ * again too each time the configured clock passes the reload interval, and a stored key that does not
+ * open is recorded as `applicationKey.unreadable`. The Management API,
  * the exchange and the back-channel logout verify the identity provider's tokens through one verifier,
  * and the revocation channel and the exchange check channel assertions through one verifier, counting
  * those they cannot verify in one tally. Every unit of its store work, a request's statement or
@@ -164,9 +168,11 @@ export const createController = (
       channel.keysChanged();
     },
     cipher,
+    clock: configuration.clock,
     log: eventLog,
     schema: configuration.databaseSchema,
     store: reader,
+    trail,
   });
   // One verifier for every route reading a channel assertion, checking each against the keys in memory.
   const assertionVerifier = createChannelAssertionVerifier({
@@ -185,11 +191,16 @@ export const createController = (
     verifier: assertionVerifier,
   });
   const noticeWake = { name: 'noticeWake', run: () => channel.wake() };
-  const operationTrail = afterCommitTrail({
+  // Every change committed through it wakes the streams to its notices before it is answered.
+  const wakingTrail = afterCommitTrail({
     log: eventLog,
-    steps: [noticeWake, { name: 'keyReload', run: () => keyRing.reload() }],
+    steps: [noticeWake],
     trail,
   });
+  // What each step a Management API operation may name runs.
+  const namedSteps: Readonly<
+    Record<AfterCommitStepName, AfterCommitStep['run']>
+  > = { keyReload: () => keyRing.reload() };
   // One verifier for every route verifying the identity provider's tokens, so the keys fetched for
   // one are held for all, and their fetches share one cooldown.
   const tokenVerifier = createTokenVerifier(configuration, eventLog);
@@ -213,11 +224,16 @@ export const createController = (
   const management: ManagementDependencies = {
     eventLog,
     refusalTally,
+    runAfterCommit: (names) =>
+      runAfterCommit({
+        log: eventLog,
+        steps: names.map((name) => ({ name, run: namedSteps[name] })),
+      }),
     settings: configuration,
     storedRefusal: (question) =>
       readStoredRefusal(reader, configuration.databaseSchema, question),
     tokenVerifier,
-    trail: operationTrail,
+    trail: wakingTrail,
   };
   const readiness = createReadiness({
     isLogWritable: () => eventLog.isWritable(),
@@ -246,7 +262,7 @@ export const createController = (
         cipher,
         settings: configuration,
         store: reader,
-        trail: operationTrail,
+        trail: wakingTrail,
       },
       management,
     ),
@@ -257,7 +273,7 @@ export const createController = (
       refusalTally: logoutTokenRefusals,
       settings: configuration,
       tokenVerifier,
-      trail: afterCommitTrail({ log: eventLog, steps: [noticeWake], trail }),
+      trail: wakingTrail,
     }),
   ].forEach((route) => {
     server.route(route);

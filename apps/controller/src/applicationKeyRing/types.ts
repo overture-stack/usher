@@ -2,6 +2,9 @@ import type { KeyObject } from 'node:crypto';
 
 import type pg from 'pg';
 
+import type { Clock } from '../configuration/index.js';
+import type { AuditTrail, TrailConnection } from '../eventLog/index.js';
+
 /** The subkeys derived from one application key, each for one use, as the bridge derives them. */
 export interface ApplicationSubkeys {
   /** Verifies the channel assertion: HMAC-SHA256. */
@@ -38,20 +41,22 @@ export interface ApplicationKeyRing {
   liveKeysOf(applicationId: string): readonly LiveApplicationKey[] | undefined;
 
   /**
-   * Reads the live keys again, resolving once a read begun after the call has ended. It never
-   * rejects: a read that fails keeps the keys held, and is written to the log.
+   * Reads the live keys again, resolving once a read begun after the call has ended, the events it
+   * records included. It never rejects: a read that fails keeps the keys held, and is written to the
+   * log.
    */
   reload(): Promise<void>;
 
   /**
-   * Reads the live keys a first time, then reads them again at every reload interval until stopped.
+   * Reads the live keys a first time, recording each key that does not open, then reads them again
+   * whenever the clock has passed the reload interval since the last read began, until stopped.
    *
    * @throws {StoreTimeout} when the store does not answer the first read within the store timeout;
    *   otherwise whatever the store throws.
    */
   start(): Promise<void>;
 
-  /** Stops reading, settling once a read in flight has ended. */
+  /** Stops reading, settling once a read in flight has ended, the events it records included. */
   stop(): Promise<void>;
 }
 
@@ -97,7 +102,10 @@ export interface ApplicationKeyRingSettings {
   /** Opens each sealed key. */
   cipher: SealedKeyOpener;
 
-  /** Where a stored key that does not open, and a read that fails, are written. */
+  /** The configured clock, which the reload interval is measured on. */
+  clock: Clock;
+
+  /** Where a read that fails, a failure of what a change calls, and a recording that fails are written. */
   log: KeyRingLog;
 
   /** The controller's schema. */
@@ -105,4 +113,7 @@ export interface ApplicationKeyRingSettings {
 
   /** Where the keys are read, within the store timeout. */
   store: KeyStore;
+
+  /** Where each `applicationKey.unreadable` is recorded, as the system, in a transaction of its own. */
+  trail: Pick<AuditTrail<TrailConnection>, 'inTransaction'>;
 }
