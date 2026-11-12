@@ -3,8 +3,11 @@ import { suite, test } from 'node:test';
 
 import { CommitUnconfirmed } from './commitUnconfirmed.js';
 import { StoreTimeout } from './storeTimeout.js';
-import type { Lease, PooledConnection } from './types.js';
-import { withinStoreTimeout } from './withinStoreTimeout.js';
+import type { Deadline, Lease, PooledConnection } from './types.js';
+import {
+  COMMIT_WINDOW_MILLISECONDS,
+  withinStoreTimeout,
+} from './withinStoreTimeout.js';
 
 const TIMEOUT_MILLISECONDS = 250;
 
@@ -48,6 +51,12 @@ const settled = (): Promise<void> =>
   new Promise((resolve) => {
     setImmediate(resolve);
   });
+
+// A deadline falling the milliseconds given after the mocked clock's start, read on that clock, which
+// the mocked timers move.
+const deadlineAt = (milliseconds: number): Deadline => ({
+  remainingMilliseconds: () => milliseconds - Date.now(),
+});
 
 // Work that runs until the test ends it.
 const heldWork = (): {
@@ -291,5 +300,246 @@ suite('a unit of store work', () => {
       withinStoreTimeout(pool, TIMEOUT_MILLISECONDS, async () => 'never run'),
       (thrown) => thrown === refused,
     );
+  });
+});
+
+suite('a unit of store work given a deadline', () => {
+  const DEADLINE_MILLISECONDS = 300;
+
+  // Work that records its lease, then runs until the test ends it.
+  const leasedWork = (): {
+    end(result: string): void;
+    leases: Lease<PooledConnection>[];
+    work: (lease: Lease<PooledConnection>) => Promise<string>;
+  } => {
+    const held = heldWork();
+    const leases: Lease<PooledConnection>[] = [];
+    return {
+      end: (result) => held.end(result),
+      leases,
+      work: (lease) => {
+        leases.push(lease);
+        return held.work();
+      },
+    };
+  };
+
+  test('bounds its work by the time left to its deadline where that is shorter than its timeout, giving its lease that bound in whole milliseconds', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const pool = fakePool();
+    const unit = leasedWork();
+    const outcome = withinStoreTimeout(
+      pool,
+      TIMEOUT_MILLISECONDS,
+      unit.work,
+      deadlineAt(100.5),
+    ).then(
+      () => 'resolved',
+      (failure: unknown) => failure,
+    );
+    await settled();
+
+    context.mock.timers.tick(99);
+    await settled();
+    const releasedBefore = [...pool.releases];
+    context.mock.timers.tick(1);
+    const failure = await outcome;
+
+    assert.equal(unit.leases[0]?.boundMilliseconds, 100);
+    assert.deepEqual(releasedBefore, []);
+    assert.ok(failure instanceof StoreTimeout);
+    assert.deepEqual(pool.releases, [true]);
+  });
+
+  test('bounds its work by its timeout where its deadline is further', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const pool = fakePool();
+    const unit = leasedWork();
+    const outcome = withinStoreTimeout(
+      pool,
+      TIMEOUT_MILLISECONDS,
+      unit.work,
+      deadlineAt(4000),
+    ).then(
+      () => 'resolved',
+      (failure: unknown) => failure,
+    );
+    await settled();
+
+    context.mock.timers.tick(TIMEOUT_MILLISECONDS - 1);
+    await settled();
+    const releasedBefore = [...pool.releases];
+    context.mock.timers.tick(1);
+
+    assert.equal(unit.leases[0]?.boundMilliseconds, TIMEOUT_MILLISECONDS);
+    assert.deepEqual(releasedBefore, []);
+    assert.ok((await outcome) instanceof StoreTimeout);
+  });
+
+  test('gives its COMMIT what is left of the deadline where that is shorter than its timeout, never a fresh timeout', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const pool = fakePool();
+    const unit = leasedWork();
+    const outcome = withinStoreTimeout(
+      pool,
+      TIMEOUT_MILLISECONDS,
+      unit.work,
+      deadlineAt(DEADLINE_MILLISECONDS),
+    ).then(
+      () => 'committed',
+      (failure: unknown) => failure,
+    );
+    await settled();
+
+    context.mock.timers.tick(150);
+    unit.leases[0]?.sendingCommit();
+    context.mock.timers.tick(149);
+    await settled();
+    const releasedBefore = [...pool.releases];
+    context.mock.timers.tick(1);
+    const failure = await outcome;
+
+    assert.deepEqual(releasedBefore, []);
+    assert.ok(failure instanceof CommitUnconfirmed);
+    assert.deepEqual(pool.releases, [true]);
+  });
+
+  test('gives its COMMIT one more timeout where its deadline is further, so a COMMIT left unanswered is abandoned within the timeout rather than at the deadline', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const pool = fakePool();
+    const unit = leasedWork();
+    const outcome = withinStoreTimeout(
+      pool,
+      TIMEOUT_MILLISECONDS,
+      unit.work,
+      deadlineAt(4000),
+    ).then(
+      () => 'committed',
+      (failure: unknown) => failure,
+    );
+    await settled();
+
+    context.mock.timers.tick(100);
+    unit.leases[0]?.sendingCommit();
+    context.mock.timers.tick(TIMEOUT_MILLISECONDS - 1);
+    await settled();
+    const releasedBefore = [...pool.releases];
+    context.mock.timers.tick(1);
+    const failure = await outcome;
+
+    assert.deepEqual(releasedBefore, []);
+    assert.ok(failure instanceof CommitUnconfirmed);
+    assert.equal(Date.now(), 100 + TIMEOUT_MILLISECONDS);
+  });
+
+  test('sends no COMMIT with less than the commit window left to its deadline: its lease throws StoreTimeout, the unit fails with it, and its connection is destroyed rather than returned to the pool', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const pool = fakePool();
+    const unit = leasedWork();
+    const outcome = withinStoreTimeout(
+      pool,
+      5000,
+      unit.work,
+      deadlineAt(DEADLINE_MILLISECONDS),
+    ).then(
+      () => 'committed',
+      (failure: unknown) => failure,
+    );
+    await settled();
+
+    context.mock.timers.tick(
+      DEADLINE_MILLISECONDS - COMMIT_WINDOW_MILLISECONDS + 1,
+    );
+    const thrown = ((): unknown => {
+      try {
+        unit.leases[0]?.sendingCommit();
+        return undefined;
+      } catch (failure) {
+        return failure;
+      }
+    })();
+    const failure = await outcome;
+    unit.end('committed late');
+    await settled();
+
+    assert.ok(thrown instanceof StoreTimeout);
+    assert.equal(failure, thrown);
+    assert.deepEqual(pool.releases, [true]);
+  });
+
+  test('still sends its COMMIT with the commit window exactly left, given that much for the answer', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const pool = fakePool();
+    const unit = leasedWork();
+    const outcome = withinStoreTimeout(
+      pool,
+      5000,
+      unit.work,
+      deadlineAt(DEADLINE_MILLISECONDS),
+    ).then(
+      (result) => result,
+      (failure: unknown) => failure,
+    );
+    await settled();
+
+    context.mock.timers.tick(
+      DEADLINE_MILLISECONDS - COMMIT_WINDOW_MILLISECONDS,
+    );
+    assert.doesNotThrow(() => unit.leases[0]?.sendingCommit());
+    context.mock.timers.tick(COMMIT_WINDOW_MILLISECONDS - 1);
+    unit.end('committed');
+
+    assert.equal(await outcome, 'committed');
+    assert.deepEqual(pool.releases, [undefined]);
+  });
+
+  test('fails with StoreTimeout at once, taking no connection and running no work, with not one whole millisecond left to its deadline', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const connects: string[] = [];
+    const pool = {
+      connect: async (): Promise<PooledConnection> => {
+        connects.push('connect');
+        return fakePool().connection;
+      },
+    };
+    const unit = leasedWork();
+
+    const failure = await withinStoreTimeout(
+      pool,
+      TIMEOUT_MILLISECONDS,
+      unit.work,
+      deadlineAt(0.5),
+    ).then(
+      () => 'resolved',
+      (thrown: unknown) => thrown,
+    );
+
+    assert.ok(failure instanceof StoreTimeout);
+    assert.deepEqual(connects, []);
+    assert.deepEqual(unit.leases, []);
+  });
+
+  test('runs a unit with no deadline as before: its timeout is its bound, and a COMMIT sent with less than the commit window left of it is sent, given one more full timeout', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const pool = fakePool();
+    const unit = leasedWork();
+    const outcome = withinStoreTimeout(
+      pool,
+      TIMEOUT_MILLISECONDS,
+      unit.work,
+    ).then(
+      (result) => result,
+      (failure: unknown) => failure,
+    );
+    await settled();
+
+    context.mock.timers.tick(TIMEOUT_MILLISECONDS - 1);
+    assert.doesNotThrow(() => unit.leases[0]?.sendingCommit());
+    context.mock.timers.tick(TIMEOUT_MILLISECONDS - 1);
+    unit.end('committed');
+
+    assert.equal(unit.leases[0]?.boundMilliseconds, TIMEOUT_MILLISECONDS);
+    assert.equal(await outcome, 'committed');
+    assert.deepEqual(pool.releases, [undefined]);
   });
 });

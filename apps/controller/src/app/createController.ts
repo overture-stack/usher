@@ -1,6 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { performance } from 'node:perf_hooks';
 
+import type { CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS } from '@overture-stack/usher-types';
 import type pg from 'pg';
 
 import { createApplicationKeyRing } from '../applicationKeyRing/index.js';
@@ -19,6 +20,7 @@ import { createAuditTrail, createEventLog } from '../eventLog/index.js';
 import {
   createExchange,
   createKeyConfirmations,
+  LATE_REQUEST_THRESHOLD_MILLISECONDS,
   type RejectionCounter,
 } from '../exchange/index.js';
 import { ControllerError } from '../failures/index.js';
@@ -84,6 +86,15 @@ const urlOf = (address: unknown): URL => {
   throw new ControllerError('the controller listens on no TCP address');
 };
 
+// The exchange's deadline, from which every bridge's default timeout is built, shared through
+// usher-types. It is typed as that constant's own literal, so the two cannot drift apart: changing
+// either alone fails the type check, while the constant keeps its literal type, which usher-types'
+// own tests assert. The value is written here rather than imported, since the controller takes only
+// types from the libraries, and its build and image carry none of their code. Once the controller
+// first needs a value from usher-types at run time, its build bundles usher-types, and this literal
+// gives way to an import.
+const EXCHANGE_DEADLINE_MILLISECONDS: typeof CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS = 4000;
+
 // What readiness asks the store: whether it reads as read-only, a statement reading no table.
 const STORE_PROBE =
   'SELECT current_setting(\'transaction_read_only\') AS "readOnly"';
@@ -104,7 +115,10 @@ const STORE_PROBE =
  * and the revocation channel and the exchange check channel assertions through one verifier, counting
  * those they cannot verify in one tally. Every unit of its store work, a request's statement or
  * transaction, a recorded event, a read of the keys or the notices, or the start's transaction, runs
- * within the store timeout. Its stop ends every stream, then closes the server, letting requests in
+ * within the store timeout. The token exchange answers every exchange by its deadline,
+ * `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` from the request's arrival on the monotonic clock, which
+ * every bridge's default timeout waits out with a margin to spare, so its store work runs within that
+ * deadline too. Its stop ends every stream, then closes the server, letting requests in
  * flight finish, waits for the exchange's refusals still being recorded, records the counts its three
  * refusal tallies hold, stops reading the keys, then closes the store's connections and lets go of the
  * log stream. It reports itself ready while it is started, its log stream takes its lines, and its
@@ -207,6 +221,7 @@ export const createController = (
   const exchange = createExchange({
     assertionRejections: rejections,
     assertions: assertionVerifier,
+    deadlineMilliseconds: EXCHANGE_DEADLINE_MILLISECONDS,
     eventLog,
     judgeCredential: (credential, context) =>
       judgeSignInCredential(credential, {
@@ -218,6 +233,8 @@ export const createController = (
       settings: configuration,
       trail,
     }),
+    lateRequestThresholdMilliseconds: LATE_REQUEST_THRESHOLD_MILLISECONDS,
+    monotonicNow: () => performance.now(),
     settings: configuration,
     trail,
   });

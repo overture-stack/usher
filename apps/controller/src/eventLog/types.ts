@@ -1,4 +1,5 @@
 import type { ControllerConfiguration } from '../configuration/index.js';
+import type { Deadline } from '../storeTimeout/index.js';
 
 /** A value JSON can hold, as a line's field or an event's data carries it. */
 export type JsonValue =
@@ -190,6 +191,17 @@ export interface TrailStore<Connection extends TrailConnection> {
 /** How one transaction is run, where it differs from the configured store timeout. */
 export interface TransactionOptions {
   /**
+   * When the request the transaction runs for must have been answered, for a transaction one deadline
+   * bounds with the rest of its request, as the exchange's are. The transaction's work is bounded by
+   * its timeout or the time left to the deadline as it begins, whichever is shorter, and both limits
+   * the store applies to a session are set to that bound inside the transaction alone. Its `COMMIT`
+   * is given its timeout or the time left as it is about to be sent, whichever is shorter, and is not
+   * sent at all with too little left, the transaction then abandoned as one the store did not answer
+   * in time. A transaction naming none is bounded by its timeout alone.
+   */
+  deadline?: Deadline;
+
+  /**
    * The transaction's own timeout, in milliseconds, set where the unit is defined, as its design
    * gives it: it takes the place of the store timeout for the whole transaction, and both limits the
    * store applies to a session are raised to it inside the transaction alone. A transaction naming
@@ -210,13 +222,17 @@ export interface AuditTrail<Connection> {
    * it, the transaction is abandoned, its connection discarded, and no line is written. The `COMMIT`
    * is given one more timeout for its answer; past that, no line is written either, and one line at
    * error names the `id` and `type` of each event recorded, whose rows may or may not have committed.
+   * A transaction given a deadline is bounded by it as well, as {@link TransactionOptions.deadline}
+   * says, and never runs past it.
    *
    * @param actor who acts in the transaction.
    * @param work the change's statements, run on the transaction's connection.
-   * @param options the transaction's own timeout, for a unit whose design gives it one.
+   * @param options the transaction's own timeout, for a unit whose design gives it one, and the
+   *   deadline, for a unit one deadline bounds with the rest of its request.
    * @throws when the actor names an empty subject, before anything runs.
-   * @throws {StoreTimeout} when the store does not answer the transaction before its `COMMIT` in time.
-   * @throws {CommitUnconfirmed} when the store does not answer the `COMMIT` within one more timeout.
+   * @throws {StoreTimeout} when the store does not answer the transaction before its `COMMIT` in time,
+   *   or too little is left to its deadline to send the `COMMIT`.
+   * @throws {CommitUnconfirmed} when the store does not answer the `COMMIT` within its bound.
    */
   inTransaction<Result>(
     actor: Actor,

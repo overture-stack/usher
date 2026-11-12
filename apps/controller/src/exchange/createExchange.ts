@@ -10,7 +10,7 @@ import type { Actor, AuditEvent } from '../eventLog/index.js';
 import { failureCodeOf, failureNameOf } from '../failures/index.js';
 import type { Problem } from '../http/index.js';
 import type { SignInJudgement } from '../signInTokens/index.js';
-import { CommitUnconfirmed } from '../storeTimeout/index.js';
+import { CommitUnconfirmed, type Deadline } from '../storeTimeout/index.js';
 import {
   anonymousCalculation,
   readAudiencePolicy,
@@ -40,6 +40,35 @@ export const EXCHANGE_STORE_FAILED = 'exchange.storeFailed';
 /** The line naming a failure the controller did not expect, answered `500 internalError`. */
 export const EXCHANGE_UNEXPECTED_FAILURE = 'exchange.unexpectedFailure';
 
+/** The line naming a request that arrived too late to be answered by its deadline, answered `408 requestTimeout`. */
+export const EXCHANGE_REQUEST_TIMEOUT = 'exchange.requestTimeout';
+
+/**
+ * The time an exchange keeps back from its deadline for recording a credential's refusal, in
+ * milliseconds. The judgement is waited for until the deadline less this, so the refusal's own
+ * transaction, which a judgement past its budget still needs, has this long to commit before the
+ * deadline.
+ */
+export const RECORDING_RESERVE_MILLISECONDS = 1000;
+
+/**
+ * The least time a judgement is given, in milliseconds. Judging a sign-in token under keys already
+ * held takes well under one millisecond, and one fetch of the identity provider's keys from a
+ * provider that answers takes a fraction of a second, so a judgement given this long and still not
+ * given was kept from being given by the identity provider: only then is the exchange recorded as the
+ * provider's failure.
+ */
+export const MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS = 1000;
+
+/**
+ * The least time left to its deadline, in milliseconds, for a request whose body has arrived to be
+ * answered as anything but late: the recording reserve and the least judgement budget together. A
+ * request with less left is answered `408 requestTimeout`, its lateness the request's own, so nothing
+ * it causes is recorded as the identity provider's or the store's failure.
+ */
+export const LATE_REQUEST_THRESHOLD_MILLISECONDS =
+  RECORDING_RESERVE_MILLISECONDS + MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS;
+
 const BODY_TOO_LARGE = 'FST_ERR_CTP_BODY_TOO_LARGE';
 
 // The framework's codes for a body it could not read, each answered as the request's fault.
@@ -51,6 +80,17 @@ const ANONYMOUS: Actor = Object.freeze({ type: 'anonymous' });
 
 const SYSTEM: Actor = Object.freeze({ type: 'system' });
 
+// A judgement not given within its budget, answered and recorded as keys that cannot be had are.
+const KEYS_UNAVAILABLE: SignInJudgement = Object.freeze({
+  kind: 'keysUnavailable',
+});
+
+/** What the exchange holds for a request its channel assertion admitted: its deadline, and its key. */
+interface Admission {
+  deadline: Deadline;
+  key: ExchangeKey;
+}
+
 /** A refusal as the exchange answers it, with the whole seconds to wait where it names them. */
 interface Refusal {
   problem: Problem;
@@ -61,8 +101,14 @@ interface Refusal {
 type Answer =
   { kind: 'issued'; token: string } | (Refusal & { kind: 'refused' });
 
-/** What an exchange's own transaction gave: its answer, or the failure that kept it from committing. */
-type Outcome = Answer | { failure: unknown; kind: 'failed' };
+/**
+ * What an exchange's own work gave: its answer, the failure that kept its transaction from committing,
+ * or, for a credential with too little of its deadline left to be given the least judgement budget,
+ * that the request arrived too late, so nothing was judged or recorded.
+ */
+type Outcome = Answer | { failure: unknown; kind: 'failed' } | { kind: 'late' };
+
+const LATE: Outcome = Object.freeze({ kind: 'late' });
 
 /** A credential's refusal, and the `token.exchange` recording it. */
 interface CredentialRefusal extends Refusal {
@@ -88,6 +134,33 @@ const acceptedCredentialRefusal = (sourceIp: string): CredentialRefusal => ({
   }),
   problem: EXCHANGE_PROBLEMS.credentialRefused,
 });
+
+// What the work gives within the milliseconds given, or the fallback once they have passed. The work
+// is never cancelled, since what it waits on may be shared with other requests still waiting on it, and
+// its late result or failure is dropped, so a rejection after the fallback is never left unhandled.
+const withinOr = <Value>(
+  work: Promise<Value>,
+  milliseconds: number,
+  fallback: Value,
+): Promise<Value> =>
+  new Promise<Value>((resolve, reject) => {
+    const timer = setTimeout(
+      () => {
+        resolve(fallback);
+      },
+      Math.max(0, milliseconds),
+    );
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (failure: unknown) => {
+        clearTimeout(timer);
+        reject(failure);
+      },
+    );
+  });
 
 // What a judged credential is answered, and how its exchange is recorded: refused alike and denied
 // under its own reason; denied too while its signing key is not confirmed yet, since a made-up key id
@@ -130,6 +203,11 @@ const credentialRefusalOf = (
 /**
  * Creates the token exchange, `POST /exchange`, the one call every bridge makes for an Usher token.
  *
+ * Every exchange is answered by its deadline, `deadlineMilliseconds` from the moment its request
+ * arrives, read on the monotonic clock given. The bridge's timeout is that deadline plus a margin for
+ * the network and for writing the answer, so the controller always answers before the bridge gives up.
+ * Each step below that runs out of time is answered as its paragraph says, never past the deadline.
+ *
  * Each request's channel assertion is checked first, from memory, so a caller it does not authenticate
  * is given no other work: an assertion that could not be verified, an unknown application's and one
  * whose application holds no live key among them, is counted by reason and named application in the
@@ -137,10 +215,22 @@ const credentialRefusalOf = (
  * `channelAssertion.rejection` naming its application, the answer never waiting on that recording.
  * Each is answered one identical `401 channelAssertionRefused`, and confirms nothing. One assertion
  * serves every exchange within its lifetime. An assertion that verifies confirms the key it verified
- * under, as the confirmations given confirm it, beside the exchange's own work, every answer waiting
- * for that confirmation whatever the body and the credential then earn. Then the body is read, as
- * `readExchangeRequest` reads it: `400 unreadableBody` for one unreadable by its shape,
- * `406 payloadVersionUnserved` for one listing no version served, and `413 bodyTooLarge` past 64 KiB.
+ * under, as the confirmations given confirm it, beside the exchange's own work and bounded by the
+ * exchange's deadline, every answer waiting for that confirmation until the deadline at most, whatever
+ * the body and the credential then earn. A read straight after the answer therefore shows the key's
+ * `confirmedAt` only when the store took the confirmation by the deadline; one it did not take by then
+ * changes no answer, is written to the log as a failed confirmation is, and is tried again at the
+ * key's next exchange.
+ *
+ * Then the body is read, as `readExchangeRequest` reads it: `400 unreadableBody` for one unreadable by
+ * its shape, `406 payloadVersionUnserved` for one listing no version served, and `413 bodyTooLarge`
+ * past 64 KiB. The time the body takes to arrive counts against the deadline, and is not cut short: a
+ * request whose body arrives whole with less than the late-request threshold left to its deadline,
+ * {@link LATE_REQUEST_THRESHOLD_MILLISECONDS} as the controller passes it, arrived too late to be
+ * answered by its deadline. It is answered at once `408 requestTimeout`, with `Connection: close`,
+ * judging nothing, recording nothing and writing one line at warning, {@link EXCHANGE_REQUEST_TIMEOUT},
+ * naming the route alone, so a request's own lateness is never recorded as the identity provider's or
+ * the store's failure.
  *
  * A body carrying no credential is the anonymous visitor's exchange. In one transaction the audience's
  * policy is read in one statement, so from one snapshot, the anonymous calculation is run, its version
@@ -157,31 +247,52 @@ const credentialRefusalOf = (
  * recorded `failed` under that code. A signing key not confirmed yet is answered
  * `503 signingKeyUnconfirmed` with its seconds in `Retry-After` and recorded `denied` under that code,
  * since a made-up key id or a routine key rotation produces it and neither is a fault in the
- * controller. Every such event's actor is anonymous.
+ * controller. Every such event's actor is anonymous. The judgement is waited for until the deadline
+ * less {@link RECORDING_RESERVE_MILLISECONDS}, which is kept for recording the refusal, a budget of at
+ * least {@link MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS} for any request not answered as late; a judgement
+ * not given by then is answered and recorded exactly as keys that cannot be had are. It is never cancelled,
+ * since the fetch of the identity provider's keys it may wait on is shared with other requests, and
+ * its late result is dropped.
  *
  * A refused exchange follows the same rule as an issued one: every exchange that reaches the judgement
  * is answered only once its `token.exchange` has committed, in a transaction of its own within the
- * store timeout, so no exchange goes unrecorded while looking answered. One whose transaction the store
- * cannot take is answered `503 storeUnavailable`, its failure written by its code alone, and one whose
- * commit the store did not confirm `503 outcomeUnknown`; neither issues a token, and a refusal is never
- * answered `403` unrecorded. A failure the route did not expect is answered `500 internalError`. Every
- * answer is `no-store`. Its stop settles once every assertion's rejection still being recorded has been.
+ * store timeout and the deadline, so no exchange goes unrecorded while looking answered. One whose
+ * transaction the store cannot take is answered `503 storeUnavailable`, its failure written by its
+ * code alone, and one whose commit the store did not confirm `503 outcomeUnknown`; neither issues a
+ * token, and a refusal is never answered `403` unrecorded. Bounded by the deadline, that transaction's
+ * work runs for the store timeout or the time left to the deadline, whichever is shorter, and is
+ * answered `503 storeUnavailable` with nothing recorded once that has passed; it sends no `COMMIT`
+ * with too little left to the deadline for an answer, and is answered the same; and a `COMMIT` not
+ * answered within the store timeout or the time left to the deadline, whichever is shorter, is
+ * answered `503 outcomeUnknown`, the trail's own line naming its event. A failure the route did not
+ * expect is answered `500 internalError`. Every answer is `no-store`. Its stop settles once every
+ * assertion's rejection still being recorded has been.
  *
- * @param settings the assertion verifier and its tally, the credential judge, the key confirmations,
- *   the trail, the log, and the configuration the exchange reads.
+ * @param settings the assertion verifier and its tally, the deadline and the monotonic clock it is
+ *   read on, the credential judge, the key confirmations, the trail, the log, and the configuration
+ *   the exchange reads.
  */
 export const createExchange = ({
   assertionRejections,
   assertions,
+  deadlineMilliseconds,
   eventLog,
   judgeCredential,
   keyConfirmations,
+  lateRequestThresholdMilliseconds,
+  monotonicNow,
   settings,
   trail,
 }: ExchangeSettings): Exchange => {
-  const admitted = new WeakMap<FastifyRequest, ExchangeKey>();
+  const admitted = new WeakMap<FastifyRequest, Admission>();
   const confirming = new WeakMap<FastifyRequest, Promise<void>>();
   const recordings = new Set<Promise<void>>();
+
+  // A request's deadline, fixed when it arrives.
+  const deadlineFromNow = (): Deadline => {
+    const dueAt = monotonicNow() + deadlineMilliseconds;
+    return { remainingMilliseconds: () => dueAt - monotonicNow() };
+  };
 
   // The refusal is answered from memory, so the store's state never delays it: its rejection is
   // recorded beside the answer, and the exchange's stop waits for the recording.
@@ -200,11 +311,12 @@ export const createExchange = ({
     request: FastifyRequest,
     reply: FastifyReply,
   ): Promise<FastifyReply | undefined> => {
+    const deadline = deadlineFromNow();
     const check = await assertions.verify(request.raw.rawHeaders);
     if (check.kind === 'verified') {
       const { key } = check.assertion;
-      admitted.set(request, key);
-      confirming.set(request, keyConfirmations.confirm(key));
+      admitted.set(request, { deadline, key });
+      confirming.set(request, keyConfirmations.confirm(key, deadline));
       return undefined;
     }
     if (check.kind === 'unverified') {
@@ -233,63 +345,108 @@ export const createExchange = ({
     }));
 
   const issueAnonymous = (
-    key: ExchangeKey,
+    { deadline, key }: Admission,
     sourceIp: string,
   ): Promise<Answer> =>
-    trail.inTransaction(ANONYMOUS, async ({ connection, record }) => {
-      const policy = await readAudiencePolicy(
-        connection,
-        settings.databaseSchema,
-        key.applicationId,
-      );
-      const calculation = anonymousCalculation(policy, settings.baseline);
-      const payload = anonymousPayload(calculation, {
-        audience: key.applicationId,
-        issuedAt: Math.floor(settings.clock.now() / 1000),
-        issuer: settings.issuer,
-        lifetimeSeconds: settings.tokenLifetimeSeconds,
-      });
-      const token = await sealUsherToken(payload, key);
-      await record(
-        issuedExchangeEvent({
-          audience: payload.aud,
-          generatedAt: payload.generatedAt,
-          grantCount: calculation.grantCount,
-          rules: calculation.rules,
-          sourceIp,
-          subject: payload.sub,
-          tokenTtl: payload.exp - payload.iat,
-        }),
-      );
-      return { kind: 'issued', token };
-    });
+    trail.inTransaction(
+      ANONYMOUS,
+      async ({ connection, record }) => {
+        const policy = await readAudiencePolicy(
+          connection,
+          settings.databaseSchema,
+          key.applicationId,
+        );
+        const calculation = anonymousCalculation(policy, settings.baseline);
+        const payload = anonymousPayload(calculation, {
+          audience: key.applicationId,
+          issuedAt: Math.floor(settings.clock.now() / 1000),
+          issuer: settings.issuer,
+          lifetimeSeconds: settings.tokenLifetimeSeconds,
+        });
+        const token = await sealUsherToken(payload, key);
+        await record(
+          issuedExchangeEvent({
+            audience: payload.aud,
+            generatedAt: payload.generatedAt,
+            grantCount: calculation.grantCount,
+            rules: calculation.rules,
+            sourceIp,
+            subject: payload.sub,
+            tokenTtl: payload.exp - payload.iat,
+          }),
+        );
+        return { kind: 'issued', token };
+      },
+      { deadline },
+    );
 
+  // The credential's judgement, waited for through its budget, the deadline less the recording
+  // reserve, so its refusal can still be recorded in time, and taken past that as keys that cannot be
+  // had: a budget of at least the least judgement budget, so only a judge that overran a real budget
+  // names the identity provider.
+  const judgedWithin = (
+    credential: string,
+    { key }: Admission,
+    budgetMilliseconds: number,
+  ): Promise<SignInJudgement> =>
+    withinOr(
+      judgeCredential(credential, {
+        audience: key.applicationId,
+        now: settings.clock.now(),
+      }),
+      budgetMilliseconds,
+      KEYS_UNAVAILABLE,
+    );
+
+  // A credential with too little of its deadline left for the least judgement budget arrived too late:
+  // it is answered as late, judging and recording nothing, whatever threshold the handler was given.
   const refuseCredential = async (
     credential: string,
-    key: ExchangeKey,
+    admission: Admission,
     sourceIp: string,
   ): Promise<Outcome> => {
-    const judgement = await judgeCredential(credential, {
-      audience: key.applicationId,
-      now: settings.clock.now(),
-    });
+    const budgetMilliseconds =
+      admission.deadline.remainingMilliseconds() -
+      RECORDING_RESERVE_MILLISECONDS;
+    if (budgetMilliseconds < MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS) {
+      return LATE;
+    }
+    const judgement = await judgedWithin(
+      credential,
+      admission,
+      budgetMilliseconds,
+    );
     const { event, ...refusal } = credentialRefusalOf(judgement, sourceIp);
     return committed(
-      trail.inTransaction(ANONYMOUS, async ({ record }) => {
-        await record(event);
-        return { kind: 'refused', ...refusal };
-      }),
+      trail.inTransaction(
+        ANONYMOUS,
+        async ({ record }) => {
+          await record(event);
+          return { kind: 'refused', ...refusal };
+        },
+        { deadline: admission.deadline },
+      ),
     );
   };
 
-  // The key's confirmation runs beside the exchange's own work, and every answer waits for it, so a
-  // key is confirmed once the first exchange verified with it is answered.
-  const confirmationOf = (request: FastifyRequest): Promise<void> =>
-    confirming.get(request) ?? Promise.resolve();
+  // The key's confirmation runs beside the exchange's own work, and every answer waits for it until the
+  // deadline at most, so a key is confirmed once the first exchange verified with it is answered
+  // whenever the store takes the confirmation by then.
+  const confirmationOf = (request: FastifyRequest): Promise<void> => {
+    const confirmation = confirming.get(request);
+    const admission = admitted.get(request);
+    return confirmation === undefined || admission === undefined
+      ? Promise.resolve()
+      : withinOr(
+          confirmation,
+          admission.deadline.remainingMilliseconds(),
+          undefined,
+        );
+  };
 
   const outcomeOf = async (
     request: FastifyRequest,
-    key: ExchangeKey,
+    admission: Admission,
   ): Promise<Outcome> => {
     const reading = readExchangeRequest({
       body: request.body instanceof Uint8Array ? request.body : undefined,
@@ -299,12 +456,15 @@ export const createExchange = ({
       return { kind: 'refused', problem: reading.problem };
     }
     return reading.credential === undefined
-      ? committed(issueAnonymous(key, request.ip))
-      : refuseCredential(reading.credential, key, request.ip);
+      ? committed(issueAnonymous(admission, request.ip))
+      : refuseCredential(reading.credential, admission, request.ip);
   };
 
   // A commit the store did not confirm may have taken effect, and the trail's own line names its event.
   const answer = (reply: FastifyReply, outcome: Outcome): FastifyReply => {
+    if (outcome.kind === 'late') {
+      return answerRequestTimeout(reply);
+    }
     if (outcome.kind === 'issued') {
       return reply
         .code(200)
@@ -331,6 +491,17 @@ export const createExchange = ({
     return sendExchangeProblem(reply, EXCHANGE_PROBLEMS.storeUnavailable);
   };
 
+  // A request whose body arrived with too little of its deadline left is answered at once as late, and
+  // its connection closed, so a client that slow holds no connection open for another request, and its
+  // lateness is never taken for the identity provider's or the store's failure.
+  const answerRequestTimeout = (reply: FastifyReply): FastifyReply => {
+    eventLog.warning(EXCHANGE_REQUEST_TIMEOUT, { route: EXCHANGE_PATH });
+    return sendExchangeProblem(
+      reply.header('connection', 'close'),
+      EXCHANGE_PROBLEMS.requestTimeout,
+    );
+  };
+
   const route: RouteOptions = {
     bodyLimit: BODY_LIMIT_BYTES,
     errorHandler: async (error: FastifyError, request, reply) => {
@@ -355,11 +526,17 @@ export const createExchange = ({
     },
     exposeHeadRoute: false,
     handler: async (request, reply) => {
-      const key = admitted.get(request);
-      if (key === undefined) {
+      const admission = admitted.get(request);
+      if (admission === undefined) {
         return sendExchangeProblem(reply, EXCHANGE_PROBLEMS.internalError);
       }
-      const outcome = await outcomeOf(request, key);
+      if (
+        admission.deadline.remainingMilliseconds() <
+        lateRequestThresholdMilliseconds
+      ) {
+        return answerRequestTimeout(reply);
+      }
+      const outcome = await outcomeOf(request, admission);
       await confirmationOf(request);
       return answer(reply, outcome);
     },

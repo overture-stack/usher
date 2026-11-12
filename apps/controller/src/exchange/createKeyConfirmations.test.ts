@@ -9,8 +9,13 @@ import type {
   AuditEvent,
   AuditTransaction,
   LineFields,
+  TransactionOptions,
 } from '../eventLog/index.js';
-import { CommitUnconfirmed } from '../storeTimeout/index.js';
+import {
+  CommitUnconfirmed,
+  type Deadline,
+  StoreTimeout,
+} from '../storeTimeout/index.js';
 import {
   createKeyConfirmations,
   KEY_CONFIRMATION_FAILED,
@@ -34,9 +39,10 @@ interface Statement {
   values: readonly unknown[] | undefined;
 }
 
-/** One transaction the stand ran: its actor, its statements, and the events recorded in it. */
+/** One transaction the stand ran: its actor, its options, its statements, and the events recorded in it. */
 interface Transaction {
   actor: Actor;
+  options: TransactionOptions | undefined;
   recorded: AuditEvent[];
   statements: Statement[];
 }
@@ -72,10 +78,11 @@ const standUp = ({
     },
     settings: { clock: { now: () => NOW }, databaseSchema: 'usher' },
     trail: {
-      inTransaction: async (actor, work) => {
+      inTransaction: async (actor, work, options) => {
         const turn = stand.transactions.length;
         const transaction: Transaction = {
           actor,
+          options,
           recorded: [],
           statements: [],
         };
@@ -224,5 +231,37 @@ suite("an application key's confirmation", () => {
     assert.deepEqual(stand.lines, []);
     assert.equal(stand.transactions.length, 2);
     assert.deepEqual(stand.transactions[1]?.recorded, []);
+  });
+
+  test('bounds its write by the deadline of the exchange that began it, and by the store timeout alone for a confirmation given none', async () => {
+    const deadline: Deadline = { remainingMilliseconds: () => 4000 };
+    const stand = standUp();
+
+    await stand.confirmations.confirm(KEY, deadline);
+    await stand.confirmations.confirm(OTHER_KEY);
+
+    assert.equal(stand.transactions[0]?.options?.deadline, deadline);
+    assert.equal(stand.transactions[1]?.options?.deadline, undefined);
+  });
+
+  test("settles when the store does not finish its write by the deadline, writing the line naming the store timeout's code and remembering nothing, so the key's next exchange writes it again", async () => {
+    const deadline: Deadline = { remainingMilliseconds: () => 4000 };
+    const stand = standUp({ failures: [new StoreTimeout()] });
+
+    await stand.confirmations.confirm(KEY, deadline);
+    await stand.confirmations.confirm(KEY, deadline);
+
+    assert.deepEqual(stand.lines, [
+      {
+        fields: {
+          applicationId: KEY.applicationId,
+          code: 'storeTimeout',
+          keyId: KEY.keyId,
+        },
+        message: KEY_CONFIRMATION_FAILED,
+      },
+    ]);
+    assert.equal(stand.transactions.length, 2);
+    assert.equal(stand.transactions[1]?.recorded.length, 1);
   });
 });

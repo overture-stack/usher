@@ -141,6 +141,39 @@ suite('the package root', () => {
     assert.equal(Object.isFrozen(wire.challengeErrors), true);
   });
 
+  test("exports the controller's exchange deadline, the margin, and the bridge's exchange timeout as the deadline plus the margin", () => {
+    const timing = {
+      bridgeTimeout: usherTypes.BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+      controllerDeadline: usherTypes.CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS,
+      margin: usherTypes.EXCHANGE_DEADLINE_MARGIN_MILLISECONDS,
+    };
+
+    assert.deepEqual(timing, {
+      bridgeTimeout: 5000,
+      controllerDeadline: 4000,
+      margin: 1000,
+    });
+    assert.equal(
+      timing.bridgeTimeout,
+      timing.controllerDeadline + timing.margin,
+    );
+  });
+
+  test("keeps the controller's exchange deadline a literal type, which the controller's own copy of it is typed by", () => {
+    // True for a number literal type alone: widened to `number`, the deadline would let the
+    // controller's copy hold any value, so the assignment below fails to compile.
+    type IsNumberLiteral<Type> = number extends Type
+      ? false
+      : Type extends number
+        ? true
+        : false;
+    const deadlineIsLiteral: IsNumberLiteral<
+      typeof usherTypes.CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS
+    > = true;
+
+    assert.equal(deadlineIsLiteral, true);
+  });
+
   test('exports the markers read specially in a value, frozen so no caller can narrow what is refused', () => {
     const markers = usherTypes.SPECIAL_VALUE_MARKERS;
 

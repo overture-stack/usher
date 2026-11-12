@@ -78,6 +78,22 @@ Each route mounted after the middleware reads its request's access from `res.loc
 `readAccess` from `@overture-stack/usher-types`. On shutdown, `await bridge.stop()`, which settles
 once every exchange in flight has ended.
 
+## The exchange timeout
+
+Three terms name the timing of an exchange with the controller:
+
+- the **deadline**: when the controller must have answered an exchange, measured from the
+  request's arrival, `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` (4 s);
+- the **timeout**: how long the bridge waits for that answer, its `exchangeTimeoutMs`;
+- the **margin**: the difference between them, left for the network and for writing the answer,
+  `EXCHANGE_DEADLINE_MARGIN_MILLISECONDS` (1 s).
+
+`exchangeTimeoutMs` defaults to `BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS`, the deadline plus the
+margin (5 s), each exported by `@overture-stack/usher-types`. Keep it at least that: the controller
+answers every exchange by its deadline, so a bridge waiting the deadline plus the margin always
+receives the answer. A shorter timeout is accepted, since the bridge cannot see the controller's
+deadline, but the bridge may then give up on an exchange the controller answers in time.
+
 ## Design
 
 - [Architecture: the bridge](https://github.com/overture-stack/usher/blob/main/.dev/design/architecture.md#bridge-overture-stackusher-express-bridge):

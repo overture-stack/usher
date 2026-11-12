@@ -48,6 +48,12 @@ export const EXCHANGE_PROBLEMS = Object.freeze({
     'Payload version unserved',
     'List payload version 1 in payloadVersions.',
   ),
+  requestTimeout: problem(
+    'requestTimeout',
+    408,
+    'Request timeout',
+    'The request arrived too late to be answered by its deadline, and no token was issued. Send the whole request at once, then try again.',
+  ),
   signingKeyUnconfirmed: problem(
     'signingKeyUnconfirmed',
     503,

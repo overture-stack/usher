@@ -29,8 +29,9 @@ const TYPE_PREFIX = 'bio.overture.';
 const DECLARE_ACTOR =
   "SELECT set_config('usher.actor_type', $1, true), set_config('usher.actor_id', $2, true)";
 
-// The same, raising for the transaction alone both limits the store applies to a session, to a unit's
-// own timeout in milliseconds, in the same round trip.
+// The same, setting for the transaction alone both limits the store applies to a session to a unit's
+// bound in milliseconds, in the same round trip: raised to a longer timeout of its own, or lowered to
+// what is left of the deadline of the request it runs for.
 const DECLARE_ACTOR_AND_LIMITS = `${DECLARE_ACTOR}, set_config('statement_timeout', $3, true), set_config('idle_in_transaction_session_timeout', $3, true)`;
 
 /** The line naming an event whose row could not be written. */
@@ -83,7 +84,9 @@ const rowValues = ({
  * store work: one the store does not answer in time is abandoned and fails, and none of its lines is
  * written. One whose `COMMIT` goes unanswered within one more timeout is written instead as one line
  * at error, {@link COMMIT_UNCONFIRMED}, naming the `id` and `type` of each event it recorded and never
- * their data, so its rows can be looked for in `audit_log`.
+ * their data, so its rows can be looked for in `audit_log`. A transaction given a deadline is bounded
+ * by it as well, as `withinStoreTimeout` bounds a unit by one, and sets both limits the store applies
+ * to a session to its bound inside the transaction alone.
  *
  * @param options the store, the log stream, and the settings naming the schema, the event source,
  *   the instance and the store timeout.
@@ -121,7 +124,7 @@ export const createAuditTrail = <Connection extends TrailConnection>({
   const inTransaction = async <Result>(
     actor: Actor,
     work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
-    { timeoutMilliseconds }: TransactionOptions = {},
+    { deadline, timeoutMilliseconds }: TransactionOptions = {},
   ): Promise<Result> => {
     if (actorIdOf(actor) === '') {
       throw new TypeError(
@@ -130,18 +133,23 @@ export const createAuditTrail = <Connection extends TrailConnection>({
     }
     const transaction = { open: true };
     const recorded: EventEnvelope[] = [];
-    const declaration =
-      timeoutMilliseconds === undefined
+    // A transaction bounded by the store timeout alone keeps the limits its session was opened with.
+    const declarationOf = (
+      boundMilliseconds: number,
+    ): { text: string; values: readonly string[] } =>
+      deadline === undefined && timeoutMilliseconds === undefined
         ? { text: DECLARE_ACTOR, values: [] }
         : {
             text: DECLARE_ACTOR_AND_LIMITS,
-            values: [String(timeoutMilliseconds)],
+            values: [String(boundMilliseconds)],
           };
     const committed = async ({
+      boundMilliseconds,
       connection,
       release,
       sendingCommit,
     }: Lease<Connection>): Promise<Result> => {
+      const declaration = declarationOf(boundMilliseconds);
       const record = async (event: AuditEvent): Promise<string> => {
         if (transaction.open) {
           const envelope = envelopeOf(event, actor);
@@ -163,6 +171,8 @@ export const createAuditTrail = <Connection extends TrailConnection>({
         const result = await work({ connection, record });
         // A transaction in which a statement failed rolls back when told to commit, and says so only
         // in its answer, so a failure the work caught still leaves nothing committed and no line.
+        // With too little left to its deadline, the lease throws instead and has discarded the
+        // connection, so no COMMIT is sent and the ROLLBACK below fails at the discarded connection.
         sendingCommit();
         const { command } = await connection.query('COMMIT');
         if (command === 'COMMIT') {
@@ -187,6 +197,7 @@ export const createAuditTrail = <Connection extends TrailConnection>({
       store,
       timeoutMilliseconds ?? settings.storeTimeoutMilliseconds,
       committed,
+      deadline,
     ).catch((failure: unknown) => {
       if (failure instanceof CommitUnconfirmed) {
         eventLog.error(COMMIT_UNCONFIRMED, {

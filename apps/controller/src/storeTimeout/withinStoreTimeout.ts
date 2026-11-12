@@ -1,6 +1,31 @@
 import { CommitUnconfirmed } from './commitUnconfirmed.js';
 import { StoreTimeout } from './storeTimeout.js';
-import type { ConnectionPool, Lease, PooledConnection } from './types.js';
+import type {
+  ConnectionPool,
+  Deadline,
+  Lease,
+  PooledConnection,
+} from './types.js';
+
+/**
+ * The least time left to a unit's deadline, in milliseconds, for its `COMMIT` to be sent. With less
+ * left, the store's answer could not arrive before the deadline, and a `COMMIT` sent anyway would leave
+ * the outcome unknown at the very moment the request must be answered; abandoning the unit instead
+ * leaves nothing committed, so the request's answer is certain.
+ */
+export const COMMIT_WINDOW_MILLISECONDS = 100;
+
+// The unit's work bound: its timeout, or the time left to its deadline when shorter, in whole
+// milliseconds, so both limits the store applies to a session can be set to it exactly.
+const workBoundOf = (
+  timeoutMilliseconds: number,
+  deadline: Deadline | undefined,
+): number =>
+  deadline === undefined
+    ? timeoutMilliseconds
+    : Math.floor(
+        Math.min(timeoutMilliseconds, deadline.remainingMilliseconds()),
+      );
 
 /**
  * Runs one unit of store work on a connection of its own, within the store timeout counted from the
@@ -20,19 +45,36 @@ import type { ConnectionPool, Lease, PooledConnection } from './types.js';
  * `COMMIT` may or may not have taken effect: the unit is abandoned as above, and fails with
  * {@link CommitUnconfirmed} rather than {@link StoreTimeout}.
  *
+ * A unit given a deadline is bounded by it as well, so it never runs past it. Its work is bounded by
+ * its timeout or the time left to the deadline as it begins, whichever is shorter, and its `COMMIT` by
+ * its timeout or the time left as it is about to be sent, whichever is shorter, never by a fresh
+ * timeout. With less than {@link COMMIT_WINDOW_MILLISECONDS} left by then, its `COMMIT` is not sent:
+ * the unit is abandoned with {@link StoreTimeout} and its connection discarded, so its open
+ * transaction cannot outlive the request. With not one whole millisecond left as it begins, it fails
+ * with {@link StoreTimeout} at once, taking no connection.
+ *
  * @param pool where the connection is taken from.
  * @param timeoutMilliseconds the unit's timeout: the configured store timeout, or the unit's own.
- * @param work the unit's statements, given the connection, its one release and its commit's timeout.
- * @throws {StoreTimeout} when the timeout runs out before the work ends or sends its `COMMIT`.
- * @throws {CommitUnconfirmed} when the `COMMIT`'s answer does not come within one more timeout.
+ * @param work the unit's statements, given the connection, its bound, its one release and its
+ *   commit's timeout.
+ * @param deadline when the request the unit runs for must have been answered, for a unit bounded by
+ *   one; none by default.
+ * @throws {StoreTimeout} when the bound runs out before the work ends or sends its `COMMIT`, or too
+ *   little is left to a deadline to send it.
+ * @throws {CommitUnconfirmed} when the `COMMIT`'s answer does not come within its bound.
  * @throws whatever the pool or the work throws otherwise.
  */
 export const withinStoreTimeout = <Connection extends PooledConnection, Result>(
   pool: ConnectionPool<Connection>,
   timeoutMilliseconds: number,
   work: (lease: Lease<Connection>) => Promise<Result>,
-): Promise<Result> =>
-  new Promise<Result>((resolve, reject) => {
+  deadline?: Deadline,
+): Promise<Result> => {
+  const boundMilliseconds = workBoundOf(timeoutMilliseconds, deadline);
+  if (deadline !== undefined && boundMilliseconds < 1) {
+    return Promise.reject(new StoreTimeout());
+  }
+  return new Promise<Result>((resolve, reject) => {
     const unit: {
       held: Connection | undefined;
       phase: 'abandoned' | 'committing' | 'working';
@@ -43,24 +85,32 @@ export const withinStoreTimeout = <Connection extends PooledConnection, Result>(
       unit.held = undefined;
       held?.release(destroy);
     };
-    const abandonWith =
-      (failure: () => Error): (() => void) =>
-      (): void => {
-        unit.phase = 'abandoned';
-        release(true);
-        reject(failure());
-      };
-    unit.timer = setTimeout(
-      abandonWith(() => new StoreTimeout()),
-      timeoutMilliseconds,
-    );
+    const abandon = (failure: Error): void => {
+      unit.phase = 'abandoned';
+      clearTimeout(unit.timer);
+      release(true);
+      reject(failure);
+    };
+    unit.timer = setTimeout(() => {
+      abandon(new StoreTimeout());
+    }, boundMilliseconds);
     const sendingCommit = (): void => {
       if (unit.phase === 'working') {
+        const remaining = deadline?.remainingMilliseconds();
+        if (remaining !== undefined && remaining < COMMIT_WINDOW_MILLISECONDS) {
+          const failure = new StoreTimeout();
+          abandon(failure);
+          throw failure;
+        }
         unit.phase = 'committing';
         clearTimeout(unit.timer);
         unit.timer = setTimeout(
-          abandonWith(() => new CommitUnconfirmed()),
-          timeoutMilliseconds,
+          () => {
+            abandon(new CommitUnconfirmed());
+          },
+          remaining === undefined
+            ? timeoutMilliseconds
+            : Math.min(timeoutMilliseconds, remaining),
         );
       }
     };
@@ -71,10 +121,10 @@ export const withinStoreTimeout = <Connection extends PooledConnection, Result>(
         throw new StoreTimeout();
       }
       unit.held = connection;
-      return work({ connection, release, sendingCommit });
+      return work({ boundMilliseconds, connection, release, sendingCommit });
     };
-    // Once the timeout has run out, the unit's promise is settled, and the work's own end changes
-    // nothing of it.
+    // Once the unit is abandoned, its promise is settled, and the work's own end changes nothing of
+    // it.
     run().then(
       (result) => {
         clearTimeout(unit.timer);
@@ -88,3 +138,4 @@ export const withinStoreTimeout = <Connection extends PooledConnection, Result>(
       },
     );
   });
+};

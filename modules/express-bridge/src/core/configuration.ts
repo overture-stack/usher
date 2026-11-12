@@ -1,4 +1,8 @@
-import type { NonEmpty, ValidationProblem } from '@overture-stack/usher-types';
+import {
+  BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+  type NonEmpty,
+  type ValidationProblem,
+} from '@overture-stack/usher-types';
 
 import type { Clock, Clocks } from './clocks.js';
 import type { BridgeLogger, START_REFUSAL_REASONS } from './events.js';
@@ -41,7 +45,15 @@ export interface BridgeConfiguration {
    */
   eventSource: string;
 
-  /** How long an exchange with the controller may run before it is abandoned as a timeout; 5 s by default. */
+  /**
+   * The bridge's timeout for an exchange: how long an exchange with the controller may run before it
+   * is abandoned as a timeout. By default `BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS` from
+   * `@overture-stack/usher-types`, 5 s, which is also its minimum: the controller's deadline for an
+   * exchange plus the margin. The controller answers every exchange by its deadline, and the margin
+   * leaves time for the network and for writing the answer. Below the minimum, the bridge may give up
+   * on an answer the controller gives in time, and its start logs `bridge.exchangeTimeoutShort` at
+   * warning. A shorter value is not refused, since the bridge cannot see the controller's deadline.
+   */
   exchangeTimeoutMs?: number;
 
   /**
@@ -196,7 +208,7 @@ export const CONFIGURATION_DEFAULTS: Readonly<{
   stores: Readonly<StoreBounds>;
   tokenTtlMs: number;
 }> = Object.freeze({
-  exchangeTimeoutMs: 5_000,
+  exchangeTimeoutMs: BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
   filterClauseLimit: 1_024,
   graceMs: 60_000,
   inFlightMax: 64,

@@ -9,6 +9,7 @@ import type {
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
+import type { Deadline } from '../storeTimeout/index.js';
 import type {
   SignInJudgement,
   SignInJudgementContext,
@@ -62,24 +63,33 @@ export type CredentialJudge = (
 export interface ExchangeLog {
   /** Writes a line at error. */
   error(message: string, fields?: Readonly<Record<string, string>>): void;
+
+  /** Writes a line at warning. */
+  warning(message: string, fields?: Readonly<Record<string, string>>): void;
 }
 
 /** The keys an instance confirms, each at the first exchange verified with it. */
 export interface KeyConfirmations {
   /**
    * Confirms a key an exchange's channel assertion verified under, unless the instance knows it
-   * confirmed already; exchanges racing on one key share one write. It never rejects: a confirmation
-   * that cannot be written is written to the log, and tried again at the key's next exchange.
+   * confirmed already; exchanges racing on one key share one write, bounded by the deadline of the
+   * exchange that began it. It never rejects: a confirmation that cannot be written, or is not
+   * written by that deadline, is written to the log, and tried again at the key's next exchange.
    *
    * @param key the application and the key the assertion verified under.
+   * @param deadline the exchange's deadline, which bounds the write it begins; none bounds it by the
+   *   store timeout alone.
    */
-  confirm(key: Pick<ExchangeKey, 'applicationId' | 'keyId'>): Promise<void>;
+  confirm(
+    key: Pick<ExchangeKey, 'applicationId' | 'keyId'>,
+    deadline?: Deadline,
+  ): Promise<void>;
 }
 
 /** What the confirmations are created from. */
 export interface KeyConfirmationSettings {
   /** Where a confirmation that cannot be written is written. */
-  eventLog: ExchangeLog;
+  eventLog: Pick<ExchangeLog, 'error'>;
 
   /** The clock a confirmation's time is read from, and the schema. */
   settings: Pick<ControllerConfiguration, 'clock' | 'databaseSchema'>;
@@ -96,6 +106,15 @@ export interface ExchangeSettings {
   /** Checks each request's channel assertion. */
   assertions: ExchangeAssertionVerifier;
 
+  /**
+   * The exchange's deadline, in milliseconds: when the controller must have answered an exchange,
+   * measured from the request's arrival. Shorter than the bridge's timeout, how long the bridge waits
+   * for the answer, by the margin left for the network and for writing the answer, so the controller
+   * always answers before the bridge gives up; the controller passes the value of
+   * `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` from `@overture-stack/usher-types`.
+   */
+  deadlineMilliseconds: number;
+
   /** Where the exchange writes its operational lines. */
   eventLog: ExchangeLog;
 
@@ -104,6 +123,19 @@ export interface ExchangeSettings {
 
   /** Confirms each key an exchange's channel assertion verifies under. */
   keyConfirmations: KeyConfirmations;
+
+  /**
+   * The least time left to its deadline, in milliseconds, for a request whose body has arrived to be
+   * served rather than answered `408 requestTimeout` as late: the controller passes
+   * `LATE_REQUEST_THRESHOLD_MILLISECONDS`, the recording reserve and the least judgement budget.
+   */
+  lateRequestThresholdMilliseconds: number;
+
+  /**
+   * The monotonic clock every reading of a deadline is made on, in milliseconds, such as
+   * `performance.now`: never the configured clock, which a test may hold still or move by hand.
+   */
+  monotonicNow(): number;
 
   /** The baseline, the clock, the schema, the issuer and the token lifetime. */
   settings: Pick<

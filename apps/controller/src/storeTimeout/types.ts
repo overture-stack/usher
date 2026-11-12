@@ -11,8 +11,26 @@ export interface ConnectionPool<Connection extends PooledConnection> {
   connect(): Promise<Connection>;
 }
 
-/** The connection one unit of store work holds, its one release, and its commit's timeout. */
+/**
+ * When a request must have been answered, as the time left until then on a monotonic clock, so a unit
+ * of store work run for the request can be bounded by it as well as by its timeout. It is fixed for
+ * the request: every reading counts down from the same instant, however late the unit begins.
+ */
+export interface Deadline {
+  /** The milliseconds left until the deadline, read now: zero or less once it has passed. */
+  remainingMilliseconds(): number;
+}
+
+/** The connection one unit of store work holds, its bound, its one release, and its commit's timeout. */
 export interface Lease<Connection> {
+  /**
+   * How long the unit's work may run, in milliseconds, from when the unit asked for its connection:
+   * its timeout, or, for a unit with a deadline, the time then left to the deadline where that is
+   * shorter, in whole milliseconds. Both limits the store applies to a session are set to it where the
+   * unit sets its own.
+   */
+  boundMilliseconds: number;
+
   connection: Connection;
 
   /**
@@ -23,8 +41,13 @@ export interface Lease<Connection> {
 
   /**
    * Marks the unit's `COMMIT` as about to be sent: the unit is given one more of its timeout from now
-   * for the answer, and the answer arriving within it decides the outcome. Past it, the unit fails
-   * with {@link CommitUnconfirmed}. Only the first call counts, and none once the unit is abandoned.
+   * for the answer, or, for a unit with a deadline, the time left to the deadline where that is
+   * shorter, and the answer arriving within it decides the outcome. Past it, the unit fails with
+   * {@link CommitUnconfirmed}. Only the first call counts, and none once the unit is abandoned.
+   *
+   * @throws {StoreTimeout} for a unit with a deadline when less than the commit window is left to it:
+   *   the unit is abandoned with that failure and its connection discarded, and the `COMMIT` must not
+   *   be sent.
    */
   sendingCommit(): void;
 }

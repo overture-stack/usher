@@ -3,7 +3,12 @@ import { Writable } from 'node:stream';
 import { suite, test } from 'node:test';
 
 import type { Clock } from '../configuration/index.js';
-import { CommitUnconfirmed, StoreTimeout } from '../storeTimeout/index.js';
+import {
+  COMMIT_WINDOW_MILLISECONDS,
+  CommitUnconfirmed,
+  type Deadline,
+  StoreTimeout,
+} from '../storeTimeout/index.js';
 import { createAuditTrail } from './createAuditTrail.js';
 import { createEventLog } from './createEventLog.js';
 import type {
@@ -823,6 +828,197 @@ suite('the audit trail', () => {
         '',
       /^INSERT INTO "usher ""test"""\.audit_log /u,
     );
+  });
+});
+
+suite('a transaction given a deadline', () => {
+  // A deadline falling the milliseconds given after the mocked clock's start, read on that clock, which
+  // the mocked timers move.
+  const deadlineAt = (milliseconds: number): Deadline => ({
+    remainingMilliseconds: () => milliseconds - Date.now(),
+  });
+
+  const DECLARING_LIMITS =
+    /set_config\('usher\.actor_id', \$2, true\), set_config\('statement_timeout', \$3, true\), set_config\('idle_in_transaction_session_timeout', \$3, true\)$/u;
+
+  test("sets both of the store's limits to its bound, the time left to its deadline where that is shorter than the store timeout, in the statement declaring its actor, and abandons it at that bound", async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const store = stallingStore((text) => text.startsWith('UPDATE'));
+    const { lines, trail } = trailOver(store);
+    const outcome = trail
+      .inTransaction(
+        ANA,
+        async ({ connection }) => {
+          await connection.query('UPDATE grants SET revoked_at = now()');
+        },
+        { deadline: deadlineAt(100) },
+      )
+      .then(
+        () => 'committed',
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(99);
+    await settled();
+    const releasedWithinItsBound = [...store.releases];
+    context.mock.timers.tick(1);
+    const failure = await outcome;
+
+    assert.deepEqual(store.statements[1]?.values, [
+      'human',
+      'subject-ana',
+      '100',
+    ]);
+    assert.match(store.statements[1]?.text ?? '', DECLARING_LIMITS);
+    assert.deepEqual(releasedWithinItsBound, []);
+    assert.ok(failure instanceof StoreTimeout);
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(lines(), []);
+  });
+
+  test("sets both of the store's limits to the store timeout where its deadline is further", async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const { store, trail } = trailOver();
+
+    await trail.inTransaction(
+      ANA,
+      async ({ record }) => {
+        await record(GRANT_CREATION);
+      },
+      { deadline: deadlineAt(4000) },
+    );
+
+    assert.deepEqual(store.statements[1]?.values, [
+      'human',
+      'subject-ana',
+      String(STORE_TIMEOUT_MILLISECONDS),
+    ]);
+    assert.match(store.statements[1]?.text ?? '', DECLARING_LIMITS);
+  });
+
+  test('sends no COMMIT when less than the commit window is left to its deadline as its work ends, failing with StoreTimeout, discarding its connection and writing no line', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const deadlineMilliseconds = 200;
+    const store = stallingStore((text) => text.startsWith('UPDATE'));
+    const { lines, trail } = trailOver(store);
+    const outcome = trail
+      .inTransaction(
+        ANA,
+        async ({ connection, record }) => {
+          await record(GRANT_CREATION);
+          await connection.query('UPDATE grants SET revoked_at = now()');
+        },
+        { deadline: deadlineAt(deadlineMilliseconds) },
+      )
+      .then(
+        () => 'committed',
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(
+      deadlineMilliseconds - COMMIT_WINDOW_MILLISECONDS + 1,
+    );
+    store.answerStalled();
+    const failure = await outcome;
+    await settled();
+
+    assert.ok(failure instanceof StoreTimeout);
+    assert.deepEqual(
+      store.statements.map(({ text }) => text.split(' ')[0]),
+      ['BEGIN', 'SELECT', 'INSERT', 'UPDATE'],
+    );
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(lines(), []);
+  });
+
+  test('gives its COMMIT what is left of the deadline where that is shorter than the store timeout, then fails with CommitUnconfirmed, writing the line naming its events', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const deadlineMilliseconds = 300;
+    const store = stallingStore(
+      (text) => text === 'COMMIT' || text.startsWith('UPDATE'),
+    );
+    const { lines, trail } = trailOver(store);
+    const ids: string[] = [];
+    const outcome = trail
+      .inTransaction(
+        ANA,
+        async ({ connection, record }) => {
+          ids.push(await record(GRANT_CREATION));
+          await connection.query('UPDATE grants SET revoked_at = now()');
+        },
+        { deadline: deadlineAt(deadlineMilliseconds) },
+      )
+      .then(
+        () => 'committed',
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(150);
+    store.answerStalled();
+    await settled();
+    context.mock.timers.tick(deadlineMilliseconds - 150 - 1);
+    await settled();
+    const pending = { lines: lines().length, releases: [...store.releases] };
+    context.mock.timers.tick(1);
+    const failure = await outcome;
+
+    assert.deepEqual(pending, { lines: 0, releases: [] });
+    assert.ok(failure instanceof CommitUnconfirmed);
+    assert.equal(store.statements.at(-1)?.text, 'COMMIT');
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(
+      lines().map(({ events, message }) => ({ events, message })),
+      [
+        {
+          events: [{ id: ids[0], type: 'bio.overture.grant.creation' }],
+          message: 'audit.commitUnconfirmed',
+        },
+      ],
+    );
+  });
+
+  test('gives its COMMIT one more store timeout where its deadline is further, so a COMMIT left unanswered fails within the store timeout rather than at the deadline', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const store = stallingStore((text) => text === 'COMMIT');
+    const { lines, trail } = trailOver(store);
+    const outcome = trail
+      .inTransaction(
+        ANA,
+        async ({ record }) => {
+          await record(GRANT_CREATION);
+        },
+        { deadline: deadlineAt(4000) },
+      )
+      .then(
+        () => 'committed',
+        (failure: unknown) => failure,
+      );
+    await settled();
+
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS - 1);
+    await settled();
+    const pending = [...store.releases];
+    context.mock.timers.tick(1);
+    const failure = await outcome;
+
+    assert.deepEqual(pending, []);
+    assert.ok(failure instanceof CommitUnconfirmed);
+    assert.equal(Date.now(), STORE_TIMEOUT_MILLISECONDS);
+    assert.equal(lines()[0]?.['message'], 'audit.commitUnconfirmed');
+  });
+
+  test('declares its actor alone, keeping the limits its session was opened with, where it names neither a deadline nor a timeout of its own', async () => {
+    const { store, trail } = trailOver();
+
+    await trail.inTransaction(ANA, async ({ record }) => {
+      await record(GRANT_CREATION);
+    });
+
+    assert.deepEqual(store.statements[1]?.values, ['human', 'subject-ana']);
+    assert.doesNotMatch(store.statements[1]?.text ?? '', /statement_timeout/u);
   });
 });
 

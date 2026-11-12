@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import type { ValidationProblem } from '@overture-stack/usher-types';
+import {
+  BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+  type ValidationProblem,
+} from '@overture-stack/usher-types';
 
 import {
   type BridgeConfiguration,
@@ -92,6 +95,19 @@ suite('checkConfiguration', () => {
     assert.equal(
       CONFIGURATION_DEFAULTS.filterClauseLimit,
       configuration?.filterClauseLimit,
+    );
+  });
+
+  test("takes the bridge's exchange timeout shared through usher-types as its default, the controller's deadline plus the margin", () => {
+    const check = checkConfiguration(minimal());
+
+    assert.equal(
+      CONFIGURATION_DEFAULTS.exchangeTimeoutMs,
+      BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+    );
+    assert.equal(
+      check.ok ? check.configuration.exchangeTimeoutMs : undefined,
+      BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
     );
   });
 
