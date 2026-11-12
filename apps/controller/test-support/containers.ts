@@ -58,8 +58,9 @@ export interface StartedContainers {
 
 /**
  * A container one test file started for itself, so that an outage it causes reaches no other file.
- * Its URL stays the same across a pause, a stop and a restart, since it holds one host port for its
- * whole life. Only the outage tests start one; every other test uses the run's shared containers.
+ * Its URL stays the same across a pause, a stop and a restart, since it holds one port on the Docker
+ * host, from 30000 to 32767, for its whole life. Only the outage tests start one; every other test
+ * uses the run's shared containers.
  */
 export interface DedicatedContainer {
   container: RunningContainer;
@@ -153,46 +154,65 @@ export const startContainers = async (
 
 // A dedicated container is published on one host port for its whole life, so its URL survives a
 // restart, where Docker would otherwise assign a new port at each start. Docker releases that port
-// while the container is stopped, so it is drawn from below both systems' ephemeral ranges, Linux's
-// default from 32768 and macOS's from 49152: a port in them can be taken meanwhile as the source port
-// of an outbound connection, and the restart then fails to bind it. The range starts at 10000, above
-// the ports development services such as PostgreSQL (5432) and Valkey (6379) listen on.
-const HOST_PORTS = { first: 10_000, last: 32_767 };
+// while the container is stopped, so it is drawn from below 32768, where a Linux daemon's assigned
+// ports and Linux's default ephemeral range begin (macOS's begins at 49152): a port in them can be
+// taken meanwhile, by another container or as the source port of an outbound connection, and the
+// restart then fails to bind it. The range is the part below 32768 that the shared CI Docker host
+// admits from the Jenkins agents.
+const HOST_PORTS = { first: 30_000, last: 32_767 };
 
-// How many candidates are tried before giving up, each found in use by another listener.
+// How many ports are drawn before giving up, each reported taken by the daemon.
 const HOST_PORT_ATTEMPTS = 20;
 
-// Whether a port can be bound on every interface, as Docker publishes it, by binding it and letting
-// it go.
-const isFree = (port: number): Promise<boolean> =>
-  new Promise((resolve, reject) => {
-    const server = createServer();
-    server.once('error', (error: NodeJS.ErrnoException) => {
-      if (error.code === 'EADDRINUSE') {
-        resolve(false);
-      } else {
-        reject(error);
-      }
-    });
-    server.listen(port, () => {
-      server.close(() => resolve(true));
-    });
-  });
+// "port is already allocated": a Linux daemon, the port held by another of its containers
+// (daemon/libnetwork/portallocator/portallocator.go). "address already in use": a Linux daemon, the
+// port held by another process on its host (daemon/libnetwork/portallocator/osallocator_linux.go), and
+// Docker Desktop, the port held on this machine.
+const HOST_PORT_TAKEN = /port is already allocated|address already in use/u;
 
-const unusedHostPort = async (
-  attempts: number = HOST_PORT_ATTEMPTS,
-): Promise<number> => {
-  const port = randomInt(HOST_PORTS.first, HOST_PORTS.last + 1);
-  if (await isFree(port)) {
-    return port;
+/**
+ * Whether a container's start failed because the daemon reports the host port asked for taken, which
+ * a start on another port can get past. Every other failure says nothing a new port would change.
+ *
+ * @param error what the start threw.
+ */
+export const reportsHostPortTaken = (error: unknown): boolean =>
+  error instanceof Error && HOST_PORT_TAKEN.test(error.message);
+
+const startedWithin = async <Started>(
+  start: (hostPort: number) => Promise<Started>,
+  attempts: number,
+): Promise<Started> => {
+  try {
+    return await start(randomInt(HOST_PORTS.first, HOST_PORTS.last + 1));
+  } catch (error) {
+    if (reportsHostPortTaken(error)) {
+      if (attempts > 1) {
+        return startedWithin(start, attempts - 1);
+      }
+      throw new Error(
+        `no free host port in ${HOST_PORTS.first} to ${HOST_PORTS.last} after ${HOST_PORT_ATTEMPTS} attempts`,
+        { cause: error },
+      );
+    }
+    throw error;
   }
-  if (attempts > 1) {
-    return unusedHostPort(attempts - 1);
-  }
-  throw new Error(
-    `no free host port in ${HOST_PORTS.first} to ${HOST_PORTS.last} after ${HOST_PORT_ATTEMPTS} attempts`,
-  );
 };
+
+/**
+ * Starts a container published on a fixed host port drawn at random from 30000 to 32767, drawing
+ * another and starting again each time the daemon reports the port taken, up to 20 ports. The ports
+ * are on the daemon's host, which may be another machine, so the daemon alone can say whether one is
+ * free.
+ *
+ * @param start starts a container built afresh, published on the host port given: a builder's start
+ *   changes the builder, so none is started twice.
+ * @throws any failure but a port reported taken, at once; after the 20th port reported taken, an
+ *   error saying so, whose cause is the daemon's last report.
+ */
+export const startOnFreeHostPort = <Started>(
+  start: (hostPort: number) => Promise<Started>,
+): Promise<Started> => startedWithin(start, HOST_PORT_ATTEMPTS);
 
 type RuntimeContainer = ReturnType<
   ContainerRuntimeClient['container']['getById']
@@ -296,29 +316,30 @@ export const startDedicatedPostgresql = async (
     '-c',
     `${name}=${value}`,
   ]);
-  const container = new PostgreSqlContainer(image);
-  const started = await (
-    command.length > 0
-      ? container.withCommand(['postgres', ...command])
-      : container
-  )
-    .withExposedPorts({
-      container: POSTGRESQL_PORT,
-      host: await unusedHostPort(),
-    })
-    .withDatabase('postgres')
-    .withUsername(SUPERUSER)
-    .withPassword(randomPassword())
-    .start();
+  const started = await startOnFreeHostPort((hostPort) => {
+    const container = new PostgreSqlContainer(image);
+    return (
+      command.length > 0
+        ? container.withCommand(['postgres', ...command])
+        : container
+    )
+      .withExposedPorts({ container: POSTGRESQL_PORT, host: hostPort })
+      .withDatabase('postgres')
+      .withUsername(SUPERUSER)
+      .withPassword(randomPassword())
+      .start();
+  });
   return dedicated(started, { image, url: started.getConnectionUri() });
 };
 
 /** Starts a Valkey for one test file's outage tests, apart from the run's shared one, with a password of its own. */
 export const startDedicatedValkey = async (): Promise<DedicatedContainer> => {
-  const started = await new ValkeyContainer(VALKEY_IMAGE)
-    .withExposedPorts({ container: VALKEY_PORT, host: await unusedHostPort() })
-    .withPassword(randomPassword())
-    .start();
+  const started = await startOnFreeHostPort((hostPort) =>
+    new ValkeyContainer(VALKEY_IMAGE)
+      .withExposedPorts({ container: VALKEY_PORT, host: hostPort })
+      .withPassword(randomPassword())
+      .start(),
+  );
   return dedicated(started, {
     image: VALKEY_IMAGE,
     url: started.getConnectionUrl(),
@@ -1173,7 +1194,7 @@ export interface KeycloakRealm {
   /** The realm's issuer, an http URL on a loopback host, as its tokens carry it. */
   issuer: string;
 
-  /** Ends the container. */
+  /** Ends the container and the relay it is reached through, so its issuer refuses connections. */
   remove(): Promise<void>;
 
   /** A confidential client's service account token, through the client credentials grant. */
@@ -1417,10 +1438,17 @@ const text = (value: unknown, name: string): string => {
   throw new Error(`Keycloak's answer carries no ${name}`);
 };
 
+// A host as a URL names it: an IPv6 literal, such as a daemon's host given by address, in brackets.
+const hostInUrl = (host: string): string =>
+  host.includes(':') ? `[${host}]` : host;
+
 /**
  * Starts a current Keycloak in a container with one realm imported, reaching the host's loopback
- * through Testcontainers' host access, for the tests whose outcome is Keycloak's own behaviour. Its
- * issuer is `http://127.0.0.1:<port>/realms/<realm>`, which the loopback rule allows.
+ * through Testcontainers' host access, for the tests whose outcome is Keycloak's own behaviour.
+ * Keycloak names its issuer by the host it is asked on, and it is asked through a TCP relay
+ * ({@link startRelay}) listening on this machine's `127.0.0.1` alone, wherever the daemon publishes
+ * its port: so its issuer is `http://127.0.0.1:<relay port>/realms/<realm>`, which the loopback rule
+ * allows, and its `jwks_uri` sits under it. A failed relay start stops the container.
  *
  * @param options the realm, its clients and its people: {@link DEFAULT_KEYCLOAK_REALM} by default.
  */
@@ -1450,7 +1478,13 @@ export const startKeycloak = async (
     )
     .withStartupTimeout(180_000)
     .start();
-  const base = `http://127.0.0.1:${started.getMappedPort(KEYCLOAK_PORT)}`;
+  const relay = await startRelay(
+    `http://${hostInUrl(started.getHost())}:${started.getMappedPort(KEYCLOAK_PORT)}`,
+  ).catch(async (error: unknown) => {
+    await started.stop();
+    throw error;
+  });
+  const base = new URL(relay.url).origin;
   const issuer = `${base}/realms/${options.realm}`;
   const admin = `${base}/admin/realms/${options.realm}`;
   const secretOf = (clientId: string): Readonly<Record<string, string>> => {
@@ -1605,7 +1639,11 @@ export const startKeycloak = async (
     issuer,
 
     remove: async () => {
-      await started.stop();
+      try {
+        await started.stop();
+      } finally {
+        await relay.stop();
+      }
     },
 
     serviceAccountToken: async (clientId) =>

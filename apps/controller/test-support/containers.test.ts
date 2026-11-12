@@ -15,9 +15,11 @@ import {
   openCacheConnection,
   RELAYED_PATHS,
   type Relay,
+  reportsHostPortTaken,
   startDedicatedPostgresql,
   startDedicatedValkey,
   startKeycloak,
+  startOnFreeHostPort,
   startRelay,
   suiteFlushedCache,
   watchCache,
@@ -221,6 +223,123 @@ suite("a container of a test file's own, for its outage tests", () => {
       },
     );
     assert.equal(new URL(dedicated.container.url).port, url.port);
+  });
+});
+
+// A start the daemon refused, as the Docker client throws it: docker-modem's
+// `(HTTP code 500) server error - <the daemon's message> `.
+const refusedStart = (daemonMessage: string): Error =>
+  new Error(`(HTTP code 500) server error - ${daemonMessage} `);
+
+// A Linux daemon's report of a failed port binding, as Moby words it: daemon/container_operations.go,
+// then daemon/libnetwork/endpoint.go, around the cause.
+const linuxDaemonReport = (cause: string): string =>
+  `failed to set up container networking: driver failed programming external connectivity on endpoint exciting_elgamal (cbb19848e54f46acd3b40ab4f59a67469faf3b70082054f4b4f4d656e2df643a): ${cause}`;
+
+// A Linux daemon's report of a port another of its containers holds: the port allocator's own,
+// daemon/libnetwork/portallocator/portallocator.go.
+const portAllocatedReport = (port: number): Error =>
+  refusedStart(
+    linuxDaemonReport(
+      `Bind for 0.0.0.0:${port} failed: port is already allocated`,
+    ),
+  );
+
+suite('telling a host port reported taken from any other failed start', () => {
+  test("recognizes a Linux daemon's report of a port another of its containers holds", () => {
+    assert.equal(reportsHostPortTaken(portAllocatedReport(31_458)), true);
+  });
+
+  test("recognizes a Linux daemon's report of a port another process on its host holds", () => {
+    // daemon/libnetwork/portallocator/osallocator_linux.go, around the system's EADDRINUSE.
+    const report = refusedStart(
+      linuxDaemonReport(
+        'failed to bind host port 0.0.0.0:31457/tcp: address already in use',
+      ),
+    );
+
+    assert.equal(reportsHostPortTaken(report), true);
+  });
+
+  test("recognizes Docker Desktop's report of a port held on its machine", () => {
+    const report = refusedStart(
+      'ports are not available: exposing port TCP 0.0.0.0:31457 -> 127.0.0.1:0: listen tcp 0.0.0.0:31457: bind: address already in use\n',
+    );
+
+    assert.equal(reportsHostPortTaken(report), true);
+  });
+
+  test('recognizes no other failure, a binding refused for another reason and a port never bound included', () => {
+    const others: readonly unknown[] = [
+      refusedStart(
+        linuxDaemonReport(
+          'failed to bind host port 0.0.0.0:31457/tcp: permission denied',
+        ),
+      ),
+      new Error('Port 5432 not bound after 60000ms'),
+      undefined,
+    ];
+
+    assert.deepEqual(others.map(reportsHostPortTaken), [false, false, false]);
+  });
+});
+
+suite('starting a dedicated container on a free host port', () => {
+  test('draws another port from 30000 to 32767 each time the daemon reports the one drawn taken, and starts on the first it admits', async (context) => {
+    const taken = (hostPort: number): Promise<number> =>
+      Promise.reject(portAllocatedReport(hostPort));
+    const start = context.mock.fn((hostPort: number): Promise<number> =>
+      Promise.resolve(hostPort),
+    );
+    start.mock.mockImplementationOnce(taken, 0);
+    start.mock.mockImplementationOnce(taken, 1);
+
+    const startedOn = await startOnFreeHostPort(start);
+    const drawn = start.mock.calls.map(({ arguments: [port] }) => port);
+
+    assert.equal(drawn.length, 3);
+    assert.equal(startedOn, drawn[2]);
+    assert.ok(
+      drawn.every((port) => port >= 30_000 && port <= 32_767),
+      `every port drawn lies in 30000 to 32767: ${drawn.join(', ')}`,
+    );
+  });
+
+  test('throws any other failure at once, drawing no other port', async (context) => {
+    const notBound = new Error('Port 5432 not bound after 60000ms');
+    const start = context.mock.fn((): Promise<never> =>
+      Promise.reject(notBound),
+    );
+
+    await assert.rejects(
+      startOnFreeHostPort(start),
+      (error) => error === notBound,
+    );
+    assert.equal(start.mock.callCount(), 1);
+  });
+
+  test("gives up after the 20th port reported taken, with the daemon's last report as its cause", async (context) => {
+    const start = context.mock.fn((hostPort: number): Promise<never> =>
+      Promise.reject(portAllocatedReport(hostPort)),
+    );
+
+    const failure: unknown = await startOnFreeHostPort(start).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    const lastDrawn = start.mock.calls.at(-1)?.arguments[0];
+
+    assert.equal(start.mock.callCount(), 20);
+    assert.ok(failure instanceof Error);
+    assert.equal(
+      failure.message,
+      'no free host port in 30000 to 32767 after 20 attempts',
+    );
+    assert.ok(failure.cause instanceof Error);
+    assert.match(
+      failure.cause.message,
+      new RegExp(`:${lastDrawn} failed`, 'u'),
+    );
   });
 });
 
@@ -888,6 +1007,24 @@ suite('a real Keycloak', () => {
     assert.deepEqual(logoutToken['events'], {
       'http://schemas.openid.net/event/backchannel-logout': {},
     });
+  });
+
+  test('takes connections at its issuer on 127.0.0.1 until removed, and refuses them there once removed', async () => {
+    const keycloak = await startKeycloak();
+    const issuer = new URL(keycloak.issuer);
+
+    const whileRunning = await connection(issuer);
+    await keycloak.remove();
+    const onceRemoved = await connection(issuer);
+
+    assert.deepEqual(
+      { host: issuer.hostname, onceRemoved, whileRunning },
+      {
+        host: '127.0.0.1',
+        onceRemoved: 'ECONNREFUSED',
+        whileRunning: 'connected',
+      },
+    );
   });
 });
 

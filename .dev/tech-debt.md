@@ -56,3 +56,12 @@ give the functions `bridgeWire.ts` reproduces an import the suites can use, in t
 test-only export, so neither copy remains.
 standalone: no
 context: the evaluator waits on that package.
+
+The controller's dedicated test containers draw their fixed host ports (`HOST_PORTS` in
+`apps/controller/test-support/containers.ts`) from 30000 to 32767 alone, the part below the
+daemon's assigned ports that the shared CI Docker host admits from the Jenkins agents today, which
+leaves fewer ports to draw from when many test files start their own containers at once.
+fix: widen `HOST_PORTS` again to 10000 to 32767, and the range where the module's TSDoc, its tests
+and the test-support README name it.
+standalone: no
+context: waits on the shared CI Docker host admitting 10000 to 32767 from the Jenkins agents.
