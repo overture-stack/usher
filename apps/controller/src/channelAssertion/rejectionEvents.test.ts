@@ -45,12 +45,13 @@ suite("a refused channel assertion's events", () => {
     ]);
   });
 
-  test('records a count of unverified refusals as channelAssertion.rejectionTally by its reason and count, naming an application only when one is registered, at warning', () => {
+  test('records a count of refusals not recorded one by one as channelAssertion.rejectionTally by its reason and count, naming an application only when one is registered, at warning', () => {
     const applicationId = randomUUID();
 
     const events = [
       rejectionTallyEvent('noLiveKey', applicationId, 3),
       rejectionTallyEvent('missingAssertion', undefined, 1),
+      rejectionTallyEvent('expiredAssertion', applicationId, 2),
     ];
 
     assert.deepEqual(events, [
@@ -61,6 +62,11 @@ suite("a refused channel assertion's events", () => {
       },
       {
         data: { count: 1, reason: 'missingAssertion' },
+        severity: 'warning',
+        type: 'channelAssertion.rejectionTally',
+      },
+      {
+        data: { applicationId, count: 2, reason: 'expiredAssertion' },
         severity: 'warning',
         type: 'channelAssertion.rejectionTally',
       },

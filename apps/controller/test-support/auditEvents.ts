@@ -936,8 +936,9 @@ export const credentialRefusalsElsewhere = (
  * - `reusedAssertion`: an assertion presented a second time, which only a copy of it can be.
  *
  * Every such refusal is answered with one identical 401, so the code is in the controller's log
- * alone. {@link CHANNEL_ASSERTION_TALLY_REASONS} are counted and
- * {@link CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS} recorded one by one. `unknownApplication` and
+ * alone. {@link CHANNEL_ASSERTION_TALLY_REASONS} are always counted, and
+ * {@link CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS} recorded on each instance's first refusal of
+ * each assertion and counted on every later one. `unknownApplication` and
  * `invalidSignature` need a forged assertion, so their cases are the developer's own suites'.
  */
 export const CHANNEL_ASSERTION_REJECTION_REASONS = Object.freeze({
@@ -954,8 +955,10 @@ export const CHANNEL_ASSERTION_REJECTION_REASONS = Object.freeze({
 } as const);
 
 /**
- * The reasons a `channelAssertion.rejection` records, one event per refusal (ruled): an assertion
- * that verifies under its application's key and is refused anyway, so it names that application.
+ * The reasons a `channelAssertion.rejection` records (ruled): an assertion that verifies under its
+ * application's key and is refused anyway, so it names that application. Each instance records the
+ * first refusal of each assertion, and counts every later refusal of it in
+ * `channelAssertion.rejectionTally` under its own reason.
  */
 export const CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS: readonly string[] =
   Object.freeze([
@@ -967,9 +970,10 @@ export const CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS: readonly string[] =
   ]);
 
 /**
- * The reasons a `channelAssertion.rejectionTally` counts by (ruled): an assertion that cannot be
- * verified, which costs nothing to send, counted per reason and per registered application named and
- * recorded once each interval, as management credentials are.
+ * The reasons a `channelAssertion.rejectionTally` always counts by (ruled): an assertion that cannot
+ * be verified, which costs nothing to send, counted per reason and per registered application named
+ * and recorded once each interval, as management credentials are. The tally also counts the reasons
+ * of {@link CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS} for every refusal not recorded one by one.
  */
 export const CHANNEL_ASSERTION_TALLY_REASONS: readonly string[] = Object.freeze(
   [

@@ -305,10 +305,15 @@ suite('the revocation channel, against the store', () => {
       }),
     });
 
+    // The refusal is recorded beside the answer, so its row is waited for rather than read at once.
+    const rejectionRows = async () =>
+      (await auditRows(harness.clients.migration)).filter(
+        ({ type }) => type === 'bio.overture.channelAssertion.rejection',
+      );
+    await eventually(async () => (await rejectionRows()).length > 0, WAIT_MS);
+    const rejections = await rejectionRows();
+
     assert.equal(refused.status, 401);
-    const rejections = (await auditRows(harness.clients.migration)).filter(
-      ({ type }) => type === 'bio.overture.channelAssertion.rejection',
-    );
     assert.deepEqual(
       rejections.map(({ data, severity }) => ({ data, severity })),
       [

@@ -5,10 +5,10 @@ import type { RouteOptions } from 'fastify';
 
 import type {
   ChannelAssertionCheck,
+  RefusalRecorder,
   UnverifiedRejectionReason,
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
-import type { Actor, AuditEvent } from '../eventLog/index.js';
 
 /**
  * A place in the notice stream, as a cursor carries it: a position within an epoch, and the creation
@@ -169,12 +169,6 @@ export interface RejectionCounter {
   count(reason: UnverifiedRejectionReason, applicationId?: string): void;
 }
 
-/** Where the channel records an event accompanying no change, such as a refused assertion. */
-export interface EventRecorder {
-  /** Records an event, resolving once it is written or its failure is logged; it never rejects. */
-  recordEvent(actor: Actor, event: AuditEvent): Promise<string | undefined>;
-}
-
 /** Where the channel writes its operational lines, each named by its message. */
 export interface ChannelLog {
   /** Writes a line at error. */
@@ -245,6 +239,12 @@ export interface NoticeTail {
 
 /** What the revocation channel is created from. */
 export interface NoticeChannelSettings {
+  /**
+   * Takes each refusal of an assertion that verified, recording the instance's first refusal of each
+   * assertion and counting the rest, never holding up the answer.
+   */
+  assertionRefusals: RefusalRecorder;
+
   /** Seals and opens cursors. */
   cursors: CursorCipher;
 
@@ -270,9 +270,6 @@ export interface NoticeChannelSettings {
 
   /** Where each refusal of an assertion that could not be verified is counted. */
   rejections: RejectionCounter;
-
-  /** Where each refusal of an assertion that verified is recorded. */
-  trail: EventRecorder;
 
   /** Records the assertions presented to the stream. */
   usedAssertions: UsedAssertions;

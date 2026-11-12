@@ -5,6 +5,7 @@ import type pg from 'pg';
 
 import type {
   ChannelAssertionCheck,
+  RefusalRecorder,
   UnverifiedRejectionReason,
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
@@ -100,6 +101,12 @@ export interface KeyConfirmationSettings {
 
 /** What the exchange is created from. */
 export interface ExchangeSettings {
+  /**
+   * Takes each refusal of an assertion that verified, recording the instance's first refusal of each
+   * assertion and counting the rest, never holding up the answer.
+   */
+  assertionRefusals: RefusalRecorder;
+
   /** Where each refusal of an assertion that could not be verified is counted. */
   assertionRejections: RejectionCounter;
 
@@ -143,18 +150,12 @@ export interface ExchangeSettings {
     'baseline' | 'clock' | 'databaseSchema' | 'issuer' | 'tokenLifetimeSeconds'
   >;
 
-  /**
-   * Where each exchange's `token.exchange` is written, in the exchange's own transaction, and each
-   * refusal of an assertion that verified is recorded.
-   */
-  trail: Pick<AuditTrail<pg.ClientBase>, 'inTransaction' | 'recordEvent'>;
+  /** Where each exchange's `token.exchange` is written, in the exchange's own transaction. */
+  trail: Pick<AuditTrail<pg.ClientBase>, 'inTransaction'>;
 }
 
-/** The token exchange: its route, and what it still has in flight. */
+/** The token exchange: its route. */
 export interface Exchange {
   /** The route serving `POST /exchange`. */
   route: RouteOptions;
-
-  /** Settles once every refused assertion's `channelAssertion.rejection` still being recorded has been. */
-  stop(): Promise<void>;
 }

@@ -6,10 +6,7 @@ import type {
   RouteOptions,
 } from 'fastify';
 
-import {
-  rejectionEvent,
-  type VerifiedAssertion,
-} from '../channelAssertion/index.js';
+import type { VerifiedAssertion } from '../channelAssertion/index.js';
 import type { Problem } from '../http/index.js';
 import { CHANNEL_PROBLEMS, sendChannelProblem } from './channelProblems.js';
 import { createNoticeStreams } from './createNoticeStreams.js';
@@ -62,7 +59,9 @@ const headerOf = (
  * `GET /notices/stream`, each answering one application's notices alone. Every request's channel
  * assertion is checked first, from memory, and refused `401`: an assertion that could not be verified
  * is counted, for `channelAssertion.rejectionTally`, and one that verified and is refused anyway is
- * recorded as a `channelAssertion.rejection` naming its application and the request's address. Then
+ * handed to the instance's recorder of refused assertions, which records the instance's first refusal
+ * of each assertion as a `channelAssertion.rejection` naming its application and the request's
+ * address, and counts the rest; the answer never waits on it. Then
  * its notice versions, refused `406` unless version 1 is listed; then its starting point, refused
  * `400` when absent or malformed; then its cursor, read from the store, refused `410` when history no
  * longer reaches it. A store that cannot answer within the store timeout is answered `503`. Every
@@ -74,8 +73,8 @@ const headerOf = (
  *   `next` naming the last notice returned while more wait, or the newest place once none does. An
  *   assertion serves any number of polls within its lifetime.
  * - A stream's assertion is recorded as used as soon as it verifies, before anything else the request
- *   carries is read: one presented to the stream before is refused `401` and recorded as
- *   `reusedAssertion`. Once its cursor is read, the stream reserves its place under the audience's
+ *   carries is read: one presented to the stream before is refused `401` as `reusedAssertion`, and
+ *   handed to the recorder as any other refusal of an assertion that verified is. Once its cursor is read, the stream reserves its place under the audience's
  *   limit on the instance, refused `503` past it, and sends its headers and a first byte at once. It
  *   replays the notices after its cursor, then delivers each new one as the instance's tail reads it.
  * - A wake has the tail read at once, so a change this instance committed is pushed without waiting
@@ -85,13 +84,13 @@ const headerOf = (
  * @param settings what the channel reads, verifies, seals and records with, and its limits.
  */
 export const createNoticeChannel = ({
+  assertionRefusals,
   cursors,
   eventLog,
   keyRing,
   reader,
   rejections,
   settings,
-  trail,
   usedAssertions,
   verifier,
 }: NoticeChannelSettings): NoticeChannel => {
@@ -110,7 +109,8 @@ export const createNoticeChannel = ({
   });
 
   // An assertion that could not be verified costs nothing to send, so it is counted; one that verified
-  // and is refused anyway is recorded, naming its application.
+  // and is refused anyway goes to the recorder, which records its first refusal on the instance. The
+  // refusal is answered from memory, so the store's state never delays it.
   const admit = async (
     request: FastifyRequest,
   ): Promise<VerifiedAssertion<ChannelKey> | undefined> => {
@@ -122,20 +122,18 @@ export const createNoticeChannel = ({
       rejections.count(check.reason, check.applicationId);
       return undefined;
     }
-    await trail.recordEvent(
-      { type: 'system' },
-      rejectionEvent({
-        applicationId: check.applicationId,
-        reason: check.reason,
-        sourceIp: request.ip,
-      }),
-    );
+    assertionRefusals.refused({
+      applicationId: check.applicationId,
+      reason: check.reason,
+      signingInputDigest: check.signingInputDigest,
+      sourceIp: request.ip,
+    });
     return undefined;
   };
 
   // The refusal earned before any store read: the assertion's, then the notice versions'. An assertion
   // opening a stream is recorded as used once it verifies, so a second presentation to the stream is
-  // refused from memory, and recorded, whatever else its request carries.
+  // refused from memory, and handed to the recorder, whatever else its request carries.
   const admission = async (
     request: FastifyRequest,
     { opensStream }: { opensStream: boolean },
@@ -146,19 +144,17 @@ export const createNoticeChannel = ({
     if (assertion === undefined) {
       return { problem: CHANNEL_PROBLEMS.channelAssertionRefused };
     }
-    const { acceptedUntil, id, key } = assertion;
+    const { acceptedUntil, id, key, signingInputDigest } = assertion;
     if (
       opensStream &&
       !usedAssertions.record(key.applicationId, id, acceptedUntil)
     ) {
-      await trail.recordEvent(
-        { type: 'system' },
-        rejectionEvent({
-          applicationId: key.applicationId,
-          reason: 'reusedAssertion',
-          sourceIp: request.ip,
-        }),
-      );
+      assertionRefusals.refused({
+        applicationId: key.applicationId,
+        reason: 'reusedAssertion',
+        signingInputDigest,
+        sourceIp: request.ip,
+      });
       return { problem: CHANNEL_PROBLEMS.channelAssertionRefused };
     }
     return listsServedVersion(headerOf(request, NOTICE_VERSIONS_HEADER))

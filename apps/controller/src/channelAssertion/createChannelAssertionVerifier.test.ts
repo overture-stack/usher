@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { hkdfSync, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, hkdfSync, randomBytes, randomUUID } from 'node:crypto';
 import { suite, test } from 'node:test';
 
 import { CompactSign } from 'jose';
@@ -155,6 +155,60 @@ suite('the channel assertion verifier', () => {
       },
     );
   });
+
+  test('gives an assertion that verified, accepted or refused, the SHA-256 of its header and payload segments as presented, in base64url', async () => {
+    const application = applicationWith(1);
+    const verifier = verifierFor(application);
+    const accepted = await assertionOf(application);
+    const refused = await assertionOf(application, {
+      claims: { aud: 'usher:bridge' },
+    });
+    const signingInputDigest = (assertion: string): string =>
+      createHash('sha256')
+        .update(assertion.split('.').slice(0, 2).join('.'))
+        .digest('base64url');
+
+    const checks = await Promise.all(
+      [accepted, refused].map((assertion) =>
+        verifier.verify(bearer(assertion)),
+      ),
+    );
+
+    assert.deepEqual(
+      checks.map((check) =>
+        check.kind === 'verified'
+          ? check.assertion.signingInputDigest
+          : check.kind === 'refused'
+            ? check.signingInputDigest
+            : undefined,
+      ),
+      [signingInputDigest(accepted), signingInputDigest(refused)],
+    );
+  });
+
+  test('gives one assertion presented twice one digest, and two assertions two', async () => {
+    const application = applicationWith(1);
+    const verifier = verifierFor(application);
+    const first = await assertionOf(application);
+    const second = await assertionOf(application);
+
+    const digests = await Promise.all(
+      [first, first, second].map(async (assertion) => {
+        const check = await verifier.verify(bearer(assertion));
+        return check.kind === 'verified'
+          ? check.assertion.signingInputDigest
+          : undefined;
+      }),
+    );
+
+    assert.equal(digests[0], digests[1]);
+    assert.notEqual(digests[0], digests[2]);
+    assert.equal(digests.includes(undefined), false);
+  });
+
+  // The developer writes this case by hand, since it needs an assertion re-encoded after signing,
+  // which agents do not build.
+  test.todo('one assertion presented in two encodings is one assertion');
 
   test('verifies under either live key of an application holding two, answering with the one that verified', async () => {
     const application = applicationWith(2);

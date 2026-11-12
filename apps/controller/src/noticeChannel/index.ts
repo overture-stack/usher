@@ -12,7 +12,6 @@ export type {
   ChannelKey,
   ChannelLog,
   CursorCipher,
-  EventRecorder,
   KeyHolder,
   NoticeChannel,
   NoticeChannelSettings,

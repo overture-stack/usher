@@ -11,7 +11,11 @@ import { compactDecrypt, decodeProtectedHeader } from 'jose';
 import pg from 'pg';
 
 import { applicationSubkeys } from '../applicationKeyRing/index.js';
-import type { ChannelAssertionCheck } from '../channelAssertion/index.js';
+import {
+  type ChannelAssertionCheck,
+  createAssertionRefusals,
+  createRefusedAssertions,
+} from '../channelAssertion/index.js';
 import {
   type Actor,
   type AuditEvent,
@@ -77,11 +81,13 @@ const ASSERTIONS: Readonly<Record<string, ChannelAssertionCheck<ExchangeKey>>> =
       applicationId: APPLICATION,
       kind: 'refused',
       reason: 'expiredAssertion',
+      signingInputDigest: 'digest-of-the-expired-assertion',
     },
     'Bearer assertion-for-another-audience': {
       applicationId: APPLICATION,
       kind: 'refused',
       reason: 'otherAudience',
+      signingInputDigest: 'digest-of-the-assertion-for-another-audience',
     },
     'Bearer assertion-of-a-keyless-application': {
       applicationId: APPLICATION,
@@ -89,7 +95,12 @@ const ASSERTIONS: Readonly<Record<string, ChannelAssertionCheck<ExchangeKey>>> =
       reason: 'noLiveKey',
     },
     'Bearer assertion-verified': {
-      assertion: { acceptedUntil: NOW + 60_000, id: 'jti-1', key: KEY },
+      assertion: {
+        acceptedUntil: NOW + 60_000,
+        id: 'jti-1',
+        key: KEY,
+        signingInputDigest: 'digest-of-the-verified-assertion',
+      },
       kind: 'verified',
     },
   };
@@ -264,7 +275,7 @@ interface StandOptions {
   /** Judges each credential in place of the stand's own judgements. */
   judge?: CredentialJudge;
 
-  /** Settles when an event recorded outside any transaction is written: at once by default. */
+  /** Settles when a refused assertion's recording, outside any exchange's transaction, is written: at once by default. */
   outsideRecorded?: Promise<void>;
 
   /** What the store's read throws, as a store failing within the transaction does. */
@@ -298,12 +309,39 @@ const standUp = (
     isReady: async () => true,
     trustedProxies: [],
   });
-  const exchange = createExchange({
-    assertionRejections: {
-      count: (reason, applicationId) => {
-        stand.counted.push({ applicationId, reason });
+  const counter = {
+    count: (reason: string, applicationId?: string): void => {
+      stand.counted.push({ applicationId, reason });
+    },
+  };
+  // The instance's recorder of refused assertions, writing to a trail of its own, apart from the
+  // exchange's transactions.
+  const refusals = createAssertionRefusals({
+    clock: SETTINGS.clock,
+    log: {
+      warning: (message, fields) => {
+        stand.warnings.push({ fields, message });
       },
     },
+    refusedAssertions: createRefusedAssertions(SETTINGS.clock),
+    rejections: counter,
+  });
+  const exchange = createExchange({
+    assertionRefusals: refusals.forRoute({
+      pendingLimit: 5,
+      trail: {
+        inTransaction: async (actor, work) =>
+          work({
+            connection: undefined,
+            record: async (event) => {
+              await outsideRecorded;
+              stand.outside.push({ actor, event });
+              return 'event-id';
+            },
+          }),
+      },
+    }),
+    assertionRejections: counter,
     assertions: {
       verify: async (rawHeaders) => {
         const index = rawHeaders.findIndex(
@@ -378,19 +416,14 @@ const standUp = (
         }
         return result;
       },
-      recordEvent: async (actor, event) => {
-        await outsideRecorded;
-        stand.outside.push({ actor, event });
-        return 'event-id';
-      },
     },
   });
   server.route(exchange.route);
   context.after(async () => {
-    await exchange.stop();
+    await refusals.stop();
     await server.close();
   });
-  return { ...stand, server, stop: () => exchange.stop() };
+  return { ...stand, server, stop: () => refusals.stop() };
 };
 
 interface Sent {
@@ -565,6 +598,7 @@ const storeStandUp = (
     trustedProxies: [],
   });
   const exchange = createExchange({
+    assertionRefusals: { refused: () => undefined },
     assertionRejections: { count: () => undefined },
     assertions: {
       verify: async () => ASSERTIONS[VERIFIED] ?? assert.fail(),
@@ -581,7 +615,6 @@ const storeStandUp = (
   });
   server.route(exchange.route);
   context.after(async () => {
-    await exchange.stop();
     await server.close();
   });
   return {
@@ -719,6 +752,31 @@ suite('the token exchange', () => {
         },
       ]);
       assert.deepEqual(stand.counted, []);
+    });
+
+    test('records the first refusal of each assertion that verified and counts its repeats by reason and application, answering every one alike', async (context) => {
+      const stand = standUp(context);
+
+      const answers = [
+        await post(stand, { assertion: 'Bearer assertion-expired' }),
+        await post(stand, { assertion: 'Bearer assertion-expired' }),
+        await post(stand, {
+          assertion: 'Bearer assertion-for-another-audience',
+        }),
+      ];
+      await stand.stop();
+
+      const [first] = answers;
+      answers.forEach((answer) => {
+        assert.deepEqual(onTheWire(answer), first && onTheWire(first));
+      });
+      assert.deepEqual(
+        stand.outside.map(({ event }) => event.data['reason']),
+        ['expiredAssertion', 'otherAudience'],
+      );
+      assert.deepEqual(stand.counted, [
+        { applicationId: APPLICATION, reason: 'expiredAssertion' },
+      ]);
     });
 
     test('answers before the rejection is recorded, so the store never delays the answer, and its stop settles only once the recording has', async (context) => {

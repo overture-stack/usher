@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { compactVerify, decodeJwt, decodeProtectedHeader } from 'jose';
 
 import {
@@ -9,7 +11,9 @@ import type {
   ChannelAssertionCheck,
   ChannelAssertionVerifier,
   LiveKeys,
+  SigningInputDigest,
   UnverifiedRejectionReason,
+  VerifiedRejectionReason,
 } from './types.js';
 
 /** The `typ` every channel assertion carries, matched exactly. */
@@ -118,6 +122,13 @@ const verifyingKey = async <Key extends AssertionKey>(
   return outcomes.find((outcome) => outcome !== undefined);
 };
 
+// A verified compact JWS holds three segments, so its signing input is everything before the last dot:
+// the header and payload segments as presented, the bytes the signature covers.
+const signingInputDigestOf = (assertion: string): SigningInputDigest =>
+  createHash('sha256')
+    .update(assertion.slice(0, assertion.lastIndexOf('.')))
+    .digest('base64url');
+
 /**
  * Creates the verifier of channel assertions, refusing each at its cheapest failing check and reading
  * nothing from the store. Checks that need no key come first, and their refusals are `unverified`:
@@ -136,7 +147,8 @@ const verifyingKey = async <Key extends AssertionKey>(
  * an `aud` other than `usher:controller` is `otherAudience`; an `exp` more than 60 s after `iat` is
  * `excessiveLifetime`; an `exp` passed by the clock tolerance or more is `expiredAssertion`; and an
  * `iat` ahead by the tolerance or more is `notYetValid`. Every refusal past the application's lookup
- * names the application.
+ * names the application. An assertion that verifies, refused or accepted, carries the SHA-256 of its
+ * signing input, which tells one assertion from another.
  *
  * @param settings the clock times are judged on, and where the live keys are found.
  */
@@ -174,20 +186,32 @@ export const createChannelAssertionVerifier = <Key extends AssertionKey>({
       return unverified('invalidSignature', applicationId);
     }
     const { aud, exp, iat, jti } = judged;
+    const signingInputDigest = signingInputDigestOf(assertion);
+    const refusedFor = (
+      reason: Exclude<VerifiedRejectionReason, 'reusedAssertion'>,
+    ): ChannelAssertionCheck<Key> => ({
+      applicationId,
+      kind: 'refused',
+      reason,
+      signingInputDigest,
+    });
     if (aud !== CHANNEL_ASSERTION_AUDIENCE) {
-      return { applicationId, kind: 'refused', reason: 'otherAudience' };
+      return refusedFor('otherAudience');
     }
     if (exp - iat > CHANNEL_ASSERTION_MAXIMUM_LIFETIME_SECONDS) {
-      return { applicationId, kind: 'refused', reason: 'excessiveLifetime' };
+      return refusedFor('excessiveLifetime');
     }
     const now = clock.now();
     const acceptedUntil = exp * 1000 + CLOCK_TOLERANCE_MILLISECONDS;
     if (now >= acceptedUntil) {
-      return { applicationId, kind: 'refused', reason: 'expiredAssertion' };
+      return refusedFor('expiredAssertion');
     }
     if (iat * 1000 >= now + CLOCK_TOLERANCE_MILLISECONDS) {
-      return { applicationId, kind: 'refused', reason: 'notYetValid' };
+      return refusedFor('notYetValid');
     }
-    return { assertion: { acceptedUntil, id: jti, key }, kind: 'verified' };
+    return {
+      assertion: { acceptedUntil, id: jti, key, signingInputDigest },
+      kind: 'verified',
+    };
   },
 });

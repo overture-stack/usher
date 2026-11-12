@@ -10,10 +10,13 @@ import {
   createApplicationRoutes,
 } from '../applications/index.js';
 import {
+  createAssertionRefusals,
   createChannelAssertionVerifier,
+  createRefusedAssertions,
+  pendingRecordingLimit,
   REJECTION_TALLY_INTERVAL_MILLISECONDS,
+  type RejectionReason,
   rejectionTallyEvent,
-  type UnverifiedRejectionReason,
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
@@ -21,7 +24,6 @@ import {
   createExchange,
   createKeyConfirmations,
   LATE_REQUEST_THRESHOLD_MILLISECONDS,
-  type RejectionCounter,
 } from '../exchange/index.js';
 import { ControllerError } from '../failures/index.js';
 import { createServer } from '../http/index.js';
@@ -58,11 +60,11 @@ import { createTally } from '../tally/index.js';
 import { afterCommitTrail, runAfterCommit } from './afterCommitTrail.js';
 import type { AfterCommitStep, Controller } from './types.js';
 
-// A channel assertion refused unverified, as its tally counts it: by reason, and by the registered
-// application it names, or none.
+// A refused channel assertion, as its tally counts it: by reason, and by the registered application it
+// names, or none.
 interface RejectionCounted {
   applicationId: string | undefined;
-  reason: UnverifiedRejectionReason;
+  reason: RejectionReason;
 }
 
 interface Lifecycle {
@@ -115,16 +117,20 @@ const STORE_PROBE =
  * and the revocation channel and the exchange check channel assertions through one verifier, counting
  * those they cannot verify in one tally. Every unit of its store work, a request's statement or
  * transaction, a recorded event, a read of the keys or the notices, or the start's transaction, runs
- * within the store timeout. The token exchange answers every exchange by its deadline,
- * `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` from the request's arrival on the monotonic clock, which
- * every bridge's default timeout waits out with a margin to spare, so its store work runs within that
- * deadline too. Its stop ends every stream, then closes the server, letting requests in
- * flight finish, waits for the exchange's refusals still being recorded, records the counts its three
- * refusal tallies hold, stops reading the keys, then closes the store's connections and lets go of the
- * log stream. It reports itself ready while it is started, its log stream takes its lines, and its
- * store answers within the store timeout, not reading as read-only when its database role writes, as
- * `createReadiness` judges it, writing each change. It reports itself live until its log stream fails
- * to take a line, which only a restart recovers from, and writes nothing as it stops being live.
+ * within the store timeout. A channel assertion that verifies and is refused anyway, on either route,
+ * is recorded as a `channelAssertion.rejection` the first time the instance refuses it, and counted on
+ * every later refusal; every route shares one memory of refused assertions, and each holds at most
+ * half its pool's connections, at least one, in those recordings. The token exchange answers every
+ * exchange by its deadline, `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` from the request's arrival on
+ * the monotonic clock, which every bridge's default timeout waits out with a margin to spare, so its
+ * store work runs within that deadline too. Its stop ends every stream, then closes the server,
+ * letting requests in flight finish, waits for the refused channel assertions still being recorded,
+ * records the counts its three refusal tallies hold, stops reading the keys, then closes the store's
+ * connections and lets go of the log stream. It reports itself ready while it is started, its log
+ * stream takes its lines, and its store answers within the store timeout, not reading as read-only
+ * when its database role writes, as `createReadiness` judges it, writing each change. It reports
+ * itself live until its log stream fails to take a line, which only a restart recovers from, and
+ * writes nothing as it stops being live.
  *
  * @param configuration the controller's configuration.
  */
@@ -171,10 +177,25 @@ export const createController = (
     partsOf: ({ applicationId, reason }) => [reason, applicationId ?? ''],
     trail,
   });
-  const rejections: RejectionCounter = {
-    count: (reason, applicationId) => {
+  // Counts every refused channel assertion not recorded one by one, from either route.
+  const rejections = {
+    count: (reason: RejectionReason, applicationId?: string): void => {
       assertionRejections.count({ applicationId, reason });
     },
+  };
+  // One memory of refused assertions for the instance, shared by every route reading an assertion, its
+  // failed recordings written to the log on the configured clock.
+  const assertionRefusals = createAssertionRefusals({
+    clock: configuration.clock,
+    log: eventLog,
+    refusedAssertions: createRefusedAssertions(configuration.clock),
+    rejections,
+  });
+  // Each route holds at most half its pool in recordings of refused assertions waiting on the store. The
+  // pool resolves its size as it is created; none read leaves each route one recording at a time.
+  const refusalRoute = {
+    pendingLimit: pendingRecordingLimit(store.options.max ?? 0),
+    trail,
   };
   const cipher = createApplicationKeyCipher(configuration.keyEncryptionKey);
   const keyRing = createApplicationKeyRing({
@@ -194,13 +215,13 @@ export const createController = (
     keyRing,
   });
   const channel = createNoticeChannel({
+    assertionRefusals: assertionRefusals.forRoute(refusalRoute),
     cursors: createCursorCipher(configuration.cursorKey),
     eventLog,
     keyRing,
     reader: createNoticeReader(reader, configuration.databaseSchema),
     rejections,
     settings: configuration,
-    trail,
     usedAssertions: createUsedAssertions(configuration.clock),
     verifier: assertionVerifier,
   });
@@ -219,6 +240,7 @@ export const createController = (
   // one are held for all, and their fetches share one cooldown.
   const tokenVerifier = createTokenVerifier(configuration, eventLog);
   const exchange = createExchange({
+    assertionRefusals: assertionRefusals.forRoute(refusalRoute),
     assertionRejections: rejections,
     assertions: assertionVerifier,
     deadlineMilliseconds: EXCHANGE_DEADLINE_MILLISECONDS,
@@ -316,11 +338,12 @@ export const createController = (
         await channel.stop();
         await server.close();
       } finally {
+        // A refused assertion whose recording fails is counted, so the recordings end before the
+        // tally of refused assertions records what it holds.
         await Promise.all([
-          exchange.stop(),
           refusalTally.stop(),
           logoutTokenRefusals.stop(),
-          assertionRejections.stop(),
+          assertionRefusals.stop().then(() => assertionRejections.stop()),
           keyRing.stop(),
         ]);
       }

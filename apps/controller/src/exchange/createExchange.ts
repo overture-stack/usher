@@ -5,7 +5,6 @@ import type {
   RouteOptions,
 } from 'fastify';
 
-import { rejectionEvent } from '../channelAssertion/index.js';
 import type { Actor, AuditEvent } from '../eventLog/index.js';
 import { failureCodeOf, failureNameOf } from '../failures/index.js';
 import type { Problem } from '../http/index.js';
@@ -77,8 +76,6 @@ const CONTENT_PARSING = 'FST_ERR_CTP_';
 const TOKEN_MEDIA_TYPE = 'application/jwt';
 
 const ANONYMOUS: Actor = Object.freeze({ type: 'anonymous' });
-
-const SYSTEM: Actor = Object.freeze({ type: 'system' });
 
 // A judgement not given within its budget, answered and recorded as keys that cannot be had are.
 const KEYS_UNAVAILABLE: SignInJudgement = Object.freeze({
@@ -211,9 +208,10 @@ const credentialRefusalOf = (
  * Each request's channel assertion is checked first, from memory, so a caller it does not authenticate
  * is given no other work: an assertion that could not be verified, an unknown application's and one
  * whose application holds no live key among them, is counted by reason and named application in the
- * shared tally, and one that verified and is refused anyway is recorded as a
- * `channelAssertion.rejection` naming its application, the answer never waiting on that recording.
- * Each is answered one identical `401 channelAssertionRefused`, and confirms nothing. One assertion
+ * shared tally, and one that verified and is refused anyway is handed to the instance's recorder of
+ * refused assertions, which records the instance's first refusal of each assertion as a
+ * `channelAssertion.rejection` naming its application and counts the rest, the answer never waiting
+ * on it. Each is answered one identical `401 channelAssertionRefused`, and confirms nothing. One assertion
  * serves every exchange within its lifetime. An assertion that verifies confirms the key it verified
  * under, as the confirmations given confirm it, beside the exchange's own work and bounded by the
  * exchange's deadline, every answer waiting for that confirmation until the deadline at most, whatever
@@ -265,14 +263,14 @@ const credentialRefusalOf = (
  * with too little left to the deadline for an answer, and is answered the same; and a `COMMIT` not
  * answered within the store timeout or the time left to the deadline, whichever is shorter, is
  * answered `503 outcomeUnknown`, the trail's own line naming its event. A failure the route did not
- * expect is answered `500 internalError`. Every answer is `no-store`. Its stop settles once every
- * assertion's rejection still being recorded has been.
+ * expect is answered `500 internalError`. Every answer is `no-store`.
  *
- * @param settings the assertion verifier and its tally, the deadline and the monotonic clock it is
- *   read on, the credential judge, the key confirmations, the trail, the log, and the configuration
- *   the exchange reads.
+ * @param settings the assertion verifier, its tally and the recorder of refused assertions, the
+ *   deadline and the monotonic clock it is read on, the credential judge, the key confirmations, the
+ *   trail, the log, and the configuration the exchange reads.
  */
 export const createExchange = ({
+  assertionRefusals,
   assertionRejections,
   assertions,
   deadlineMilliseconds,
@@ -286,25 +284,11 @@ export const createExchange = ({
 }: ExchangeSettings): Exchange => {
   const admitted = new WeakMap<FastifyRequest, Admission>();
   const confirming = new WeakMap<FastifyRequest, Promise<void>>();
-  const recordings = new Set<Promise<void>>();
 
   // A request's deadline, fixed when it arrives.
   const deadlineFromNow = (): Deadline => {
     const dueAt = monotonicNow() + deadlineMilliseconds;
     return { remainingMilliseconds: () => dueAt - monotonicNow() };
-  };
-
-  // The refusal is answered from memory, so the store's state never delays it: its rejection is
-  // recorded beside the answer, and the exchange's stop waits for the recording.
-  const recordRejection = (event: AuditEvent): void => {
-    const recording = trail.recordEvent(SYSTEM, event).then(
-      () => undefined,
-      () => undefined,
-    );
-    recordings.add(recording);
-    void recording.then(() => {
-      recordings.delete(recording);
-    });
   };
 
   const admit = async (
@@ -319,16 +303,16 @@ export const createExchange = ({
       confirming.set(request, keyConfirmations.confirm(key, deadline));
       return undefined;
     }
+    // The refusal is answered from memory, so the store's state never delays it.
     if (check.kind === 'unverified') {
       assertionRejections.count(check.reason, check.applicationId);
     } else {
-      recordRejection(
-        rejectionEvent({
-          applicationId: check.applicationId,
-          reason: check.reason,
-          sourceIp: request.ip,
-        }),
-      );
+      assertionRefusals.refused({
+        applicationId: check.applicationId,
+        reason: check.reason,
+        signingInputDigest: check.signingInputDigest,
+        sourceIp: request.ip,
+      });
     }
     return sendExchangeProblem(
       reply,
@@ -545,10 +529,5 @@ export const createExchange = ({
     url: EXCHANGE_PATH,
   };
 
-  return {
-    route,
-    stop: async () => {
-      await Promise.all(recordings);
-    },
-  };
+  return { route };
 };

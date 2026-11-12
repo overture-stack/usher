@@ -10,10 +10,12 @@ import {
   applicationSubkeys,
   type LiveApplicationKey,
 } from '../applicationKeyRing/index.js';
-import type {
-  ChannelAssertionCheck,
-  UnverifiedRejectionReason,
-  VerifiedRejectionReason,
+import {
+  type ChannelAssertionCheck,
+  createAssertionRefusals,
+  createRefusedAssertions,
+  type UnverifiedRejectionReason,
+  type VerifiedRejectionReason,
 } from '../channelAssertion/index.js';
 import type { Actor, AuditEvent } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
@@ -64,10 +66,15 @@ const pageAfter = (
   trimmedThrough: 0n,
 });
 
-// An assertion that verified under the application's key, by its `jti`: a fresh one for each request
-// unless a test presents one again.
+// An assertion that verified under the application's key, by its `jti`, its digest following from it:
+// a fresh one for each request unless a test presents one again.
 const verifiedAs = (id: string): Check => ({
-  assertion: { acceptedUntil: Date.now() + 90_000, id, key: KEY },
+  assertion: {
+    acceptedUntil: Date.now() + 90_000,
+    id,
+    key: KEY,
+    signingInputDigest: `digest-of-${id}`,
+  },
   kind: 'verified',
 });
 
@@ -90,10 +97,15 @@ const standUp = (
       after: async (after) => pageAfter(after, []),
       head: async () => placeAt(9n),
     },
+    recordingWritten = Promise.resolve(),
     streamLimitPerAudience = 64,
   }: {
     check?: Check | (() => Check);
     reader?: NoticeReader;
+
+    /** Settles when a refused assertion's recording is written: at once by default. */
+    recordingWritten?: Promise<void>;
+
     streamLimitPerAudience?: number;
   } = {},
 ): Stand => {
@@ -104,16 +116,39 @@ const standUp = (
   const log = (message: string, fields?: unknown): void => {
     lines.push({ fields, message });
   };
+  const counter = {
+    count: (reason: string, applicationId?: string): void => {
+      counted.push({ applicationId, reason });
+    },
+  };
+  // The instance's recorder of refused assertions, its recordings written to a trail of the stand's.
+  const clock = { now: (): number => Date.now() };
+  const refusals = createAssertionRefusals({
+    clock,
+    log: { warning: log },
+    refusedAssertions: createRefusedAssertions(clock),
+    rejections: counter,
+  });
   const channel = createNoticeChannel({
+    assertionRefusals: refusals.forRoute({
+      pendingLimit: 5,
+      trail: {
+        inTransaction: async (actor, work) =>
+          work({
+            connection: undefined,
+            record: async (event) => {
+              await recordingWritten;
+              recorded.push({ actor, event });
+              return randomUUID();
+            },
+          }),
+      },
+    }),
     cursors,
     eventLog: { error: log, warning: log },
     keyRing: { holds: () => true },
     reader,
-    rejections: {
-      count: (reason, applicationId) => {
-        counted.push({ applicationId, reason });
-      },
-    },
+    rejections: counter,
     settings: {
       heartbeatMilliseconds: 10_000,
       noticePageLimit: 2,
@@ -121,12 +156,6 @@ const standUp = (
       streamLimitPerAudience,
       streamMaximumLifetimeSeconds: 900,
       streamQueueLimit: 1_000,
-    },
-    trail: {
-      recordEvent: async (actor, event) => {
-        recorded.push({ actor, event });
-        return randomUUID();
-      },
     },
     usedAssertions: createUsedAssertions({ now: () => Date.now() }),
     verifier: {
@@ -145,7 +174,10 @@ const standUp = (
     stopping: undefined,
   };
   const stop = (): Promise<void> => {
-    state.stopping ??= channel.stop().then(() => server.close());
+    state.stopping ??= channel
+      .stop()
+      .then(() => refusals.stop())
+      .then(() => server.close());
     return state.stopping;
   };
   context.after(stop);
@@ -163,7 +195,8 @@ const unverified = (
 const refused = (
   reason: Exclude<VerifiedRejectionReason, 'reusedAssertion'>,
   applicationId: string,
-): Check => ({ applicationId, kind: 'refused', reason });
+  signingInputDigest: string = randomUUID(),
+): Check => ({ applicationId, kind: 'refused', reason, signingInputDigest });
 
 const polled = (
   server: FastifyInstance,
@@ -295,6 +328,37 @@ suite('the poll', () => {
         },
       ],
     );
+  });
+
+  test('records the first refusal of an assertion that verified and counts its repeats by reason and application, answering each before its recording is written', async (context) => {
+    const written: { release: () => void } = { release: () => undefined };
+    const stand = standUp(context, {
+      check: refused('expiredAssertion', KEY.applicationId, 'digest-once'),
+      recordingWritten: new Promise<void>((resolve) => {
+        written.release = resolve;
+      }),
+    });
+
+    const answers = [
+      await polled(stand.server, `head=true&nonce=${NONCE}`),
+      await polled(stand.server, `head=true&nonce=${NONCE}`),
+    ];
+    const recordedWhileAnswered = stand.recorded.length;
+    written.release();
+    await stand.stop();
+
+    answers.forEach((answer) => {
+      assert.equal(answer.statusCode, 401);
+      assert.equal(codeOf(answer.body), 'channelAssertionRefused');
+    });
+    assert.equal(recordedWhileAnswered, 0);
+    assert.deepEqual(
+      stand.recorded.map(({ event }) => event.data['reason']),
+      ['expiredAssertion'],
+    );
+    assert.deepEqual(stand.counted, [
+      { applicationId: KEY.applicationId, reason: 'expiredAssertion' },
+    ]);
   });
 
   test('checks the assertion, then the notice versions, then the query, then the cursor, reading the store for the cursor alone', async (context) => {
@@ -530,6 +594,7 @@ suite('the push', () => {
             acceptedUntil: Date.now() + 90_000,
             id: `assertion-${state.next}`,
             key: KEY,
+            signingInputDigest: `digest-${state.next}`,
           },
           kind: 'verified',
         };
@@ -562,7 +627,7 @@ suite('the push', () => {
     );
   });
 
-  test('refuses an assertion presented to the stream a second time with the one 401, recording it as reusedAssertion from memory, whatever else its request carries', async (context) => {
+  test('refuses an assertion presented to the stream a second time with the one 401, from memory, whatever else its request carries, recording the first such refusal as reusedAssertion and counting its repeats', async (context) => {
     const reads: bigint[] = [];
     const stand = standUp(context, {
       check: verifiedAs('presented-once'),
@@ -620,15 +685,24 @@ suite('the push', () => {
         data: event.data,
         type: event.type,
       })),
-      presentations.map(() => ({
-        actor: { type: 'system' },
-        data: {
-          applicationId: KEY.applicationId,
-          reason: 'reusedAssertion',
-          result: 'denied',
-          sourceIp: '127.0.0.1',
+      [
+        {
+          actor: { type: 'system' },
+          data: {
+            applicationId: KEY.applicationId,
+            reason: 'reusedAssertion',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
+          },
+          type: 'channelAssertion.rejection',
         },
-        type: 'channelAssertion.rejection',
+      ],
+    );
+    assert.deepEqual(
+      stand.counted,
+      presentations.slice(1).map(() => ({
+        applicationId: KEY.applicationId,
+        reason: 'reusedAssertion',
       })),
     );
   });
@@ -660,6 +734,7 @@ suite('the push', () => {
           acceptedUntil: Date.now() + 90_000,
           id: randomUUID(),
           key: KEY,
+          signingInputDigest: randomUUID(),
         },
         kind: 'verified',
       }),
