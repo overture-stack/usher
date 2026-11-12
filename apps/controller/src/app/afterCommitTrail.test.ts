@@ -323,6 +323,7 @@ const routeThrough = (
               iat: NOW / 1000 - 10,
               iss: ISSUER,
               sub: 'subject-ana',
+              typ: 'Bearer',
             },
             header: { alg: 'RS256', typ: 'JWT' },
             kind: 'verified',

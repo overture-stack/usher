@@ -52,15 +52,19 @@ export interface TokenVerifier {
 
 /**
  * What a verified management token's claims gave: a principal; a refusal naming its reason and the
- * token's subject; a token naming no subject to act for; or one whose subject or session cannot be
- * stored.
+ * token's subject, `otherType` for a token not recognized as an access token; a token naming no
+ * subject to act for; or one whose subject or session cannot be stored.
  */
 export type ClaimsReading =
   | { kind: 'accepted'; principal: Principal; session: Session }
   | {
       kind: 'refused';
       reason:
-        'expiredToken' | 'missingExpiry' | 'notYetValid' | 'otherAudience';
+        | 'expiredToken'
+        | 'missingExpiry'
+        | 'notYetValid'
+        | 'otherAudience'
+        | 'otherType';
       subject: string;
     }
   | { kind: 'unreadable' }

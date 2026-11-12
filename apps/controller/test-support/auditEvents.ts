@@ -736,10 +736,12 @@ export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
 /**
  * The reasons a `managementToken.refusal` records (ruled), in the order the table lists them: a
  * management token that verifies under the trusted issuer and is still refused. Each is one of
- * {@link EXCHANGE_REFUSAL_REASONS} but `missingSubject`, a token naming no `sub`, and
- * `unrepresentableSubject`, one whose `sub` or `sid` holds text that cannot be stored, which the
- * Management API alone names. Those of {@link EXCHANGE_REFUSAL_REASONS} are also the reasons alone a
- * refused `token.exchange` names the token's subject for, in {@link REFUSED_SUBJECT_MEMBER}.
+ * {@link EXCHANGE_REFUSAL_REASONS} but three, which a refused `token.exchange` records too, naming no
+ * subject there: `missingSubject`, a token naming no `sub`; `otherType`, a token not marked as an
+ * access token by its identity provider's connector; and `unrepresentableSubject`, one whose `sub` or
+ * `sid` holds text that cannot be stored. Those of {@link EXCHANGE_REFUSAL_REASONS} are also the
+ * reasons alone a refused `token.exchange` names the token's subject for, in
+ * {@link REFUSED_SUBJECT_MEMBER}.
  */
 export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] =
   Object.freeze([
@@ -748,6 +750,7 @@ export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] =
     'missingSubject',
     EXCHANGE_REFUSAL_REASONS.notYetValid,
     EXCHANGE_REFUSAL_REASONS.otherAudience,
+    'otherType',
     EXCHANGE_REFUSAL_REASONS.revokedPlatform,
     EXCHANGE_REFUSAL_REASONS.revokedPrincipal,
     EXCHANGE_REFUSAL_REASONS.signedOutSession,

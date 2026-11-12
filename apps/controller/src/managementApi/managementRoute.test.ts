@@ -60,6 +60,7 @@ const claimsOf = (
       iss: ISSUER,
       realm_access: { roles: ['usher-platform-admin'] },
       sub: 'subject-ana',
+      typ: 'Bearer',
       ...departures,
     }).filter(([, value]) => value !== undefined),
   );
@@ -422,6 +423,35 @@ suite('admitting a request to a management operation', () => {
     assert.deepEqual(stand.ran, []);
   });
 
+  test('refuses a verified ID token 401 credentialRefused, recording one managementToken.refusal for otherType naming its subject, and counting nothing', async (context) => {
+    const stand = await standUp(context, {
+      verifications: { identity: verified({ typ: 'ID' }) },
+    });
+
+    const answer = await post(stand, { token: 'identity' });
+
+    assert.equal(answer.statusCode, 401);
+    assert.equal(codeOf(answer), 'credentialRefused');
+    assert.deepEqual(stand.recorded, [
+      {
+        actor: { type: 'anonymous' },
+        event: {
+          data: {
+            method: 'POST',
+            reason: 'otherType',
+            refusedSubject: 'subject-ana',
+            result: 'denied',
+            route: ROUTE,
+            sourceIp: '127.0.0.1',
+          },
+          severity: 'warning',
+          type: 'managementToken.refusal',
+        },
+      },
+    ]);
+    assert.deepEqual([stand.counted, stand.ran], [[], []]);
+  });
+
   test('names a refused subject of the maximum length whole, and leaves out a longer one', async (context) => {
     const atLimit = 'a'.repeat(REFUSED_SUBJECT_MAXIMUM_LENGTH);
     const pastLimit = 'b'.repeat(REFUSED_SUBJECT_MAXIMUM_LENGTH + 1);
@@ -449,6 +479,7 @@ suite('admitting a request to a management operation', () => {
     const stand = await standUp(context, {
       verifications: {
         expired: verified({ exp: SECONDS - 60 }),
+        identity: verified({ typ: 'ID' }),
         nameless: verified({ sub: undefined }),
         other: { kind: 'unverified', reason: 'otherIssuer' },
         otherClient: verified({ azp: 'portal' }),
@@ -456,8 +487,8 @@ suite('admitting a request to a management operation', () => {
     });
 
     const answers = await Promise.all(
-      [null, 'expired', 'nameless', 'other', 'otherClient'].map((token) =>
-        post(stand, { token }),
+      [null, 'expired', 'identity', 'nameless', 'other', 'otherClient'].map(
+        (token) => post(stand, { token }),
       ),
     );
 

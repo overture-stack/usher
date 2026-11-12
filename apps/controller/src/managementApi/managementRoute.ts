@@ -244,7 +244,7 @@ export const managementRoute = <Input>(
       return refusedWith(PROBLEMS.credentialRefused);
     }
     const claims = readManagementClaims(
-      verification.claims,
+      verification,
       settings,
       settings.clock.now(),
     );

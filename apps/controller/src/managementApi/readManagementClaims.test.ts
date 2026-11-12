@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
 import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
+import type { TokenClaims, TokenHeader } from '../identityProvider/index.js';
 import { readManagementClaims } from './readManagementClaims.js';
 
 const NOW = Date.UTC(2026, 10, 4, 12, 0, 0);
@@ -14,9 +15,17 @@ const SETTINGS = Object.freeze({
   managementClients: ['usher-ui', 'usher-cli'],
 });
 
+const HEADER: TokenHeader = Object.freeze({
+  alg: 'RS256',
+  kid: 'key-1',
+  typ: 'JWT',
+});
+
+// A Keycloak access token's claims for the management UI, its `typ` the one given to an access token
+// by Keycloak.
 const claimsWith = (
   departures: Readonly<Record<string, unknown>> = {},
-): Readonly<Record<string, unknown>> =>
+): TokenClaims =>
   Object.fromEntries(
     Object.entries({
       aud: ['usher-management'],
@@ -27,12 +36,20 @@ const claimsWith = (
       realm_access: { roles: ['offline_access', 'usher-platform-admin'] },
       sid: 'session-1',
       sub: 'subject-ana',
+      typ: 'Bearer',
       ...departures,
     }).filter(([, value]) => value !== undefined),
   );
 
-const read = (departures?: Readonly<Record<string, unknown>>) =>
-  readManagementClaims(claimsWith(departures), SETTINGS, NOW);
+const read = (
+  departures?: Readonly<Record<string, unknown>>,
+  header: TokenHeader = HEADER,
+) =>
+  readManagementClaims(
+    { claims: claimsWith(departures), header },
+    SETTINGS,
+    NOW,
+  );
 
 const refusal = (reason: string, subject = 'subject-ana') => ({
   kind: 'refused',
@@ -73,6 +90,31 @@ suite("reading a verified management token's claims", () => {
         reading.kind === 'accepted' ? reading.principal.type : undefined,
         'serviceAccount',
       ),
+    );
+  });
+
+  test('refuses a verified token other than an access token, an ID token among them, as otherType, naming its subject', () => {
+    ['ID', 'Refresh', 'Logout', 'DPoP', undefined].forEach((typ) =>
+      assert.deepEqual(read({ typ }), refusal('otherType')),
+    );
+  });
+
+  test('accepts an access token whatever its header typ, JWT or at+jwt', () => {
+    [HEADER, { ...HEADER, typ: 'at+jwt' }].forEach((header) =>
+      assert.equal(read({}, header).kind, 'accepted'),
+    );
+  });
+
+  test('judges the names before the type, and the type before the times, the audience and the client', () => {
+    assert.deepEqual(read({ sub: undefined, typ: 'ID' }), {
+      kind: 'unreadable',
+    });
+    assert.deepEqual(read({ sid: 'session\u0000', typ: 'ID' }), {
+      kind: 'unrepresentable',
+    });
+    assert.deepEqual(
+      read({ aud: 'account', azp: 'portal', exp: SECONDS - 60, typ: 'ID' }),
+      refusal('otherType'),
     );
   });
 

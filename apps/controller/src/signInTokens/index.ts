@@ -18,5 +18,6 @@ export type {
   SignInTokenVerifier,
   StandingQuestion,
   StoredRefusal,
+  TokenContents,
   TokenCurrency,
 } from './types.js';

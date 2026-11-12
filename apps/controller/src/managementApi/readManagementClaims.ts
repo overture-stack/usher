@@ -2,10 +2,12 @@ import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import type { TokenClaims } from '../identityProvider/index.js';
 import {
   currencyOf,
+  isKeycloakAccessToken,
   namesAudience,
   type NamesRefusal,
   readNames,
   sessionOf,
+  type TokenContents,
 } from '../signInTokens/index.js';
 import type {
   ClaimsReading,
@@ -56,18 +58,20 @@ const principalOf = (
 /**
  * Reads a verified management token's claims at an instant: its subject, which is required and must be
  * storable text, as must any `sid` it carries, both judged as `readNames` judges them on every route
- * reading a sign-in token, so a `sid` that is not text is refused; then its expiry, which is required,
- * and its `nbf`, each judged within {@link CLOCK_TOLERANCE_MILLISECONDS}; then its `aud`, a string or
- * a list, which must name the management API, and its `azp`, which must name a configured management
- * client. A token from a service account is read as one, and a principal holding the administrator
- * realm role as a platform administrator.
+ * reading a sign-in token, so a `sid` that is not text is refused; then whether it is an access token,
+ * as its identity provider's connector recognizes one, Keycloak's by `isKeycloakAccessToken`, any
+ * other token refused as `otherType`; then its expiry, which is required, and its `nbf`, each judged
+ * within {@link CLOCK_TOLERANCE_MILLISECONDS}; then its `aud`, a string or a list, which must name the
+ * management API, and its `azp`, which must name a configured management client. Each refusal from the
+ * access-token check on names the token's subject. A token from a service account is read as one, and
+ * a principal holding the administrator realm role as a platform administrator.
  *
- * @param claims the token's verified claims.
+ * @param token the token's verified claims and protected header.
  * @param settings the management API's audience and clients, and the administrator role.
  * @param now the instant, in milliseconds since the Unix epoch.
  */
 export const readManagementClaims = (
-  claims: TokenClaims,
+  token: TokenContents,
   {
     administratorRole,
     managementAudience,
@@ -75,14 +79,18 @@ export const readManagementClaims = (
   }: ManagementTokenSettings,
   now: number,
 ): ClaimsReading => {
+  const { claims } = token;
   const names = readNames(claims);
   if (names.kind === 'refused') {
     return NAMES_READINGS[names.reason];
   }
   const { subject } = names;
   const refused = (
-    reason: 'expiredToken' | 'missingExpiry' | 'notYetValid' | 'otherAudience',
+    reason: Extract<ClaimsReading, { kind: 'refused' }>['reason'],
   ): ClaimsReading => ({ kind: 'refused', reason, subject });
+  if (!isKeycloakAccessToken(token)) {
+    return refused('otherType');
+  }
   const currency = currencyOf(claims, now);
   if (currency.kind === 'refused') {
     return refused(currency.reason);
