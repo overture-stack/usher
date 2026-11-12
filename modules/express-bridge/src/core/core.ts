@@ -1,4 +1,5 @@
 import {
+  BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
   type CategoryName,
   type Enforcement,
   type KeyRegistration,
@@ -258,7 +259,9 @@ export interface BridgeCore {
    *   starting the channel does, once whatever had started has stopped.
    *
    * Every refusal but `startOnce` is logged as `bridge.startRefusal`; a refused configuration is
-   * logged through a fallback log, and not at all when its logger is unusable.
+   * logged through a fallback log, and not at all when its logger is unusable. A start that is not
+   * refused logs `bridge.exchangeTimeoutShort` once when the exchange timeout is below
+   * `BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS`, and starts all the same.
    */
   start(): Promise<void>;
 
@@ -1347,6 +1350,12 @@ export const createBridgeCoreWithSeams = (
       .forEach(([catalogue]) =>
         events.emit('catalogue.resourceListMissing', { catalogue }),
       );
+    if (checked.exchangeTimeoutMs < BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS) {
+      events.emit('bridge.exchangeTimeoutShort', {
+        exchangeTimeoutMs: checked.exchangeTimeoutMs,
+        minimumMs: BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+      });
+    }
     await runtime.refreshAnonymous();
   };
 

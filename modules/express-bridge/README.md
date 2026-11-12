@@ -92,7 +92,8 @@ Three terms name the timing of an exchange with the controller:
 margin (5 s), each exported by `@overture-stack/usher-types`. Keep it at least that: the controller
 answers every exchange by its deadline, so a bridge waiting the deadline plus the margin always
 receives the answer. A shorter timeout is accepted, since the bridge cannot see the controller's
-deadline, but the bridge may then give up on an exchange the controller answers in time.
+deadline, but the bridge may then give up on an exchange the controller answers in time, and its
+start logs `bridge.exchangeTimeoutShort` at warning, naming the timeout and the minimum.
 
 ## Design
 

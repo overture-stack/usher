@@ -133,6 +133,17 @@ type OneOf<Values extends readonly string[]> = Values[number];
 
 /** The fields carried by each event, keyed by the event's name. */
 export interface BridgeEventData {
+  /**
+   * Logged once at start when the configured exchange timeout is below the controller's exchange
+   * deadline plus the margin, so the bridge may give up on an answer the controller gives in time.
+   */
+  'bridge.exchangeTimeoutShort': {
+    /** The exchange timeout the bridge runs with, in milliseconds. */
+    exchangeTimeoutMs: number;
+
+    /** The least exchange timeout that waits out the controller's deadline and the margin, in milliseconds. */
+    minimumMs: number;
+  };
   'bridge.internalError': { stage: OneOf<typeof INTERNAL_ERROR_STAGES> };
   'bridge.startRefusal': { reason: OneOf<typeof START_REFUSAL_REASONS> };
   'catalogue.filterLimit': {
@@ -262,6 +273,11 @@ const oneOf = (values: readonly string[]): FieldKind => ({
 export const EVENT_CATALOGUE: Readonly<
   Record<BridgeEventName, EventDefinition>
 > = {
+  'bridge.exchangeTimeoutShort': {
+    actorType: 'system',
+    fields: { exchangeTimeoutMs: count, minimumMs: count },
+    severity: 'warning',
+  },
   'bridge.internalError': {
     actorType: 'system',
     fields: { stage: oneOf(INTERNAL_ERROR_STAGES) },

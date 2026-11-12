@@ -74,6 +74,7 @@ export type AuditEventType =
  * names are copied here; when the bridge adds one, add it. Follows `events.ts` `EVENT_CATALOGUE`.
  */
 export const BRIDGE_EVENT_TYPES: readonly string[] = Object.freeze([
+  'bridge.exchangeTimeoutShort',
   'bridge.internalError',
   'bridge.startRefusal',
   'catalogue.filterLimit',

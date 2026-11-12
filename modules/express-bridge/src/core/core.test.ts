@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { suite, test, type TestContext } from 'node:test';
 
 import {
+  BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
   type CategoryCondition,
   type CategoryName,
   type Enforcement,
@@ -753,6 +754,59 @@ suite('createBridgeCoreWithSeams', () => {
         ['empty'],
       );
       await harness.core.stop();
+    });
+
+    test("logs bridge.exchangeTimeoutShort once at start, at warning, naming the timeout and the minimum, for an exchange timeout below the controller's deadline plus the margin", async () => {
+      const short = BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS - 1;
+      const harness = await running({ files: catalogue }, (configuration) => ({
+        ...configuration,
+        exchangeTimeoutMs: short,
+      }));
+      await harness.core.refreshAnonymous();
+
+      assert.deepEqual(
+        harness
+          .events('bridge.exchangeTimeoutShort')
+          .map(({ data, severity }) => ({ data, severity })),
+        [
+          {
+            data: {
+              actorId: null,
+              actorType: 'system',
+              exchangeTimeoutMs: short,
+              minimumMs: BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+            },
+            severity: 'warning',
+          },
+        ],
+      );
+      assert.equal(harness.core.mode(), 'normal');
+      await harness.core.stop();
+    });
+
+    test('logs no bridge.exchangeTimeoutShort for an exchange timeout at the minimum, the default, or above it', async () => {
+      const timeouts = [
+        BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+        undefined,
+        BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS + 1,
+      ];
+
+      const logged = await Promise.all(
+        timeouts.map(async (exchangeTimeoutMs) => {
+          const harness = await running(
+            { files: catalogue },
+            (configuration) =>
+              exchangeTimeoutMs === undefined
+                ? configuration
+                : { ...configuration, exchangeTimeoutMs },
+          );
+          const events = harness.events('bridge.exchangeTimeoutShort');
+          await harness.core.stop();
+          return events;
+        }),
+      );
+
+      assert.deepEqual(logged, [[], [], []]);
     });
 
     test('names a probable key mismatch when the startup token fails decryption, and stays cold', async () => {
