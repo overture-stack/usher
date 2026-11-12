@@ -25,3 +25,12 @@
 apps/controller/compose.yaml
 apps/controller/compose/
 apps/controller/scripts/
+
+# The controller's tests and documents, which no image build reads either, so a change to them alone
+# leaves the image unchanged.
+apps/controller/test/
+apps/controller/test-support/
+apps/controller/DEVELOPMENT.md
+apps/controller/openapi.json
+apps/controller/tsdown.config.test.ts
+apps/controller/**/*.test.ts
