@@ -417,7 +417,7 @@
             }
           }
         },
-        "description": "The request is unreadable by its shape. `malformedCredential`: an `Authorization` header holding other than exactly one `Bearer` credential, or a credential in the query. `unreadablePath`: a path holding a percent-encoding that is not UTF-8. `unreadableQuery`: a query parameter not taken by the operation, or a value of one it cannot read. `unreadableBody`: a body that is not one JSON object, names a member twice, holds a `__proto__` member, lacks a required member, holds a member of the wrong type, or holds a member not taken by the operation, other than those named in its `422`. `unrepresentableText`: text in the body, or the access token's `sub` or `sid`, holding a NUL character or an unpaired surrogate, neither of which can be stored, or a `sid` that is not text."
+        "description": "The request is unreadable by its shape. `malformedCredential`: an `Authorization` header holding other than exactly one `Bearer` credential, or a credential in the query. `unreadablePath`: a path holding a percent-encoding that is not UTF-8. `unreadableQuery`: a query parameter not taken by the operation, or a value of one it cannot read. `unreadableBody`: a body that is not one JSON object, names a member twice, holds a `__proto__` member, lacks a required member, holds a member of the wrong type, or holds a member not taken by the operation, other than those named in its `422`. `unrepresentableText`: text in the body or in a path parameter, or the access token's `sub` or `sid`, holding a NUL character or an unpaired surrogate, neither of which can be stored, or a `sid` that is not text."
       }
     },
     "schemas": {
@@ -1702,7 +1702,7 @@
       "ResourceRegistration": {
         "properties": {
           "accessLevel": {
-            "description": "`open`, `registered` or `grant`, the instance's default when left out. Any other string is refused with `422`.",
+            "description": "`open`, `registered` or `grant`. A registration leaving it out, or naming any other string, is refused with `422`.",
             "type": "string"
           },
           "applications": {
@@ -1738,7 +1738,7 @@
             "type": "array"
           }
         },
-        "required": ["displayName", "externalId"],
+        "required": ["accessLevel", "displayName", "externalId"],
         "type": "object"
       },
       "ResourceRevocation": {
@@ -4214,7 +4214,7 @@
         "tags": ["Resources"]
       },
       "post": {
-        "description": "Registers a resource under its externalId, for platform administrators.\n\n`accessLevel` takes the instance's default when left out. `applications` names every application serving the resource from registration on, and each must be registered. `owners` names its first owners, written as owner grants in the registration's transaction; a platform administrator never names themself. Each value in `fields` names a resource field defined by the instance.\n\nAn externalId is in Unicode normalization form C, and from 1 to 128 characters long. It starts with a letter or a digit and holds letters, digits, dots, underscores and hyphens, or the wider set configured for the instance, never a filter marker, and is never `__proto__`. One externalId names one resource in any letter case, a retired resource included.",
+        "description": "Registers a resource under its externalId, for platform administrators.\n\n`applications` names every application serving the resource from registration on, and each must be registered. `owners` names its first owners, written as owner grants in the registration's transaction; a platform administrator never names themself. Each value in `fields` names a resource field defined by the instance.\n\nAn externalId is in Unicode normalization form C, and from 1 to 128 characters long. It starts with a letter or a digit and holds letters, digits, dots, underscores and hyphens, or the wider set configured for the instance, never a filter marker, and is never `__proto__`. One externalId names one resource in any letter case, a retired resource included.",
         "operationId": "registerResource",
         "requestBody": {
           "content": {
@@ -4296,7 +4296,7 @@
                 }
               }
             },
-            "description": "A rule is broken. `unknownApplication` names an application that is not registered, refusing the whole registration. The rest carry unnamed codes: an externalId breaking a rule of its form, NFC included; a display name that is blank or longer than 256 characters; a description longer than 4096 characters; an access level other than `open`, `registered` and `grant`; and a value for a field not defined by the instance."
+            "description": "A rule is broken. `unknownApplication` names an application that is not registered, refusing the whole registration. The rest carry unnamed codes: an externalId breaking a rule of its form, NFC included; a display name that is blank or longer than 256 characters; a description longer than 4096 characters; an access level left out, or other than `open`, `registered` and `grant`; a value for a field not defined by the instance; and a registration naming owners."
           },
           "503": {
             "content": {

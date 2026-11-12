@@ -8,6 +8,7 @@ suite('the applications module', () => {
     assert.deepEqual(Object.keys(applications).toSorted(), [
       'createApplicationKeyCipher',
       'createApplicationRoutes',
+      'findApplication',
     ]);
   });
 });

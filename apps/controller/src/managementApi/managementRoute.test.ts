@@ -94,9 +94,20 @@ interface Stand {
   server: FastifyInstance;
 }
 
+// What a test changes of the operation its stand serves.
+type OperationDepartures = Partial<
+  Pick<
+    ManagementOperation<{ title: string }>,
+    'body' | 'event' | 'method' | 'readInput' | 'takesQuery'
+  >
+>;
+
 interface StandOptions {
   /** The steps the operation names to run after its commit. */
   afterCommit?: readonly AfterCommitStepName[];
+
+  /** What the operation serves differently from the stand's own. */
+  departures?: OperationDepartures;
 
   /** What the operation answers. */
   outcome?: () => Promise<OperationOutcome>;
@@ -119,6 +130,7 @@ const shelving = (
   ran: Stand['ran'],
   outcome: () => Promise<OperationOutcome>,
   afterCommit: readonly AfterCommitStepName[] | undefined,
+  departures: OperationDepartures = {},
 ): ManagementOperation<{ title: string }> => ({
   administratorOnly: true,
   ...(afterCommit === undefined ? {} : { afterCommit }),
@@ -140,12 +152,14 @@ const shelving = (
     ran.push({ input, params });
     return outcome();
   },
+  ...departures,
 });
 
 const standUp = async (
   context: TestContext,
   {
     afterCommit,
+    departures,
     outcome = async () => ({
       body: { shelved: true },
       forbidsStoring: true,
@@ -170,7 +184,7 @@ const standUp = async (
     trustedProxies: [],
   });
   server.route(
-    managementRoute(shelving(stand.ran, outcome, afterCommit), {
+    managementRoute(shelving(stand.ran, outcome, afterCommit, departures), {
       eventLog: {
         error: (message, fields) => {
           stand.lines.push({ fields, message });
@@ -741,6 +755,64 @@ suite(
       assert.deepEqual(stand.ran, []);
     });
 
+    test('refuses a path parameter holding text that cannot be stored 400 unrepresentableText before the query and the body, recording it denied naming nothing, and never reads what it names, for a refusal of authority either', async (context) => {
+      const looked: Readonly<Record<string, string>>[] = [];
+      const stand = await standUp(context, {
+        departures: {
+          event: {
+            named: async (params) => {
+              looked.push(params);
+              return { shelfId: 'shelf-1' };
+            },
+            type: 'application.registration',
+          },
+        },
+        verifications: {
+          ...ADMIN,
+          reader: verified({ realm_access: { roles: [] } }),
+        },
+      });
+
+      const answers = [
+        await post(stand, {
+          body: '{"title":',
+          url: '/admin/shelves/shelf%00-1/books?page=2',
+        }),
+        await post(stand, {
+          token: 'reader',
+          url: '/admin/shelves/shelf%00-1/books',
+        }),
+      ];
+
+      assert.deepEqual(
+        answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+        [
+          [400, 'unrepresentableText'],
+          [403, 'administratorOnly'],
+        ],
+      );
+      assert.deepEqual(deniedFor(stand), [
+        {
+          actor: { id: 'subject-ana', type: 'human' },
+          data: {
+            reason: 'unrepresentableText',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
+          },
+        },
+        {
+          actor: { id: 'subject-ana', type: 'human' },
+          data: {
+            reason: 'administratorOnly',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
+          },
+        },
+      ]);
+      assert.deepEqual(looked, []);
+      assert.deepEqual(stand.ran, []);
+    });
+
     test('records a refusal the operation answers as denied, naming only what exists', async (context) => {
       const stand = await standUp(context, {
         outcome: async () => ({ kind: 'refused', problem: SHELF_LIMIT }),
@@ -976,3 +1048,99 @@ suite('the steps a management operation names to run after its commit', () => {
     );
   });
 });
+
+suite(
+  'a management operation taking a query, or answering with no content',
+  () => {
+    test('gives an operation taking a query its parameters as sent, decoded and in order, beside the principal', async (context) => {
+      const read: unknown[] = [];
+      const stand = await standUp(context, {
+        departures: {
+          body: 'none',
+          method: 'GET',
+          readInput: (_body, { principal, query }) => {
+            read.push({ principal, query });
+            return { input: { title: 'listed' }, kind: 'read' };
+          },
+          takesQuery: true,
+        },
+        verifications: ADMIN,
+      });
+
+      const answer = await stand.server.inject({
+        headers: { authorization: 'Bearer admin' },
+        method: 'GET',
+        url: '/admin/shelves/shelf-1/books?limit=2&cursor=a%2Bb&limit=3',
+      });
+
+      assert.equal(answer.statusCode, 201);
+      assert.deepEqual(read, [
+        {
+          principal: {
+            administrator: true,
+            subject: 'subject-ana',
+            type: 'human',
+          },
+          query: [
+            ['limit', '2'],
+            ['cursor', 'a+b'],
+            ['limit', '3'],
+          ],
+        },
+      ]);
+    });
+
+    test('records a refusal its reading of the query answers as denied, with the code answered', async (context) => {
+      const stand = await standUp(context, {
+        departures: {
+          body: 'none',
+          method: 'GET',
+          readInput: () => ({ kind: 'refused', problem: SHELF_LIMIT }),
+          takesQuery: true,
+        },
+        verifications: ADMIN,
+      });
+
+      const answer = await stand.server.inject({
+        headers: { authorization: 'Bearer admin' },
+        method: 'GET',
+        url: '/admin/shelves/shelf-1/books?limit=0',
+      });
+
+      assert.equal(answer.statusCode, 409);
+      assert.deepEqual(
+        stand.recorded.map(({ event }) => event.data['reason']),
+        ['shelfFull'],
+      );
+      assert.deepEqual(stand.ran, []);
+    });
+
+    test('serves an operation at PUT, and answers a success carrying no content with no body and no media type', async (context) => {
+      const stand = await standUp(context, {
+        departures: {
+          body: 'none',
+          method: 'PUT',
+          readInput: () => ({ input: { title: 'shelved' }, kind: 'read' }),
+        },
+        outcome: async () => ({
+          body: undefined,
+          forbidsStoring: false,
+          kind: 'answered',
+          status: 204,
+        }),
+        verifications: ADMIN,
+      });
+
+      const answer = await stand.server.inject({
+        headers: { authorization: 'Bearer admin' },
+        method: 'PUT',
+        url: '/admin/shelves/shelf-1/books',
+      });
+
+      assert.equal(answer.statusCode, 204);
+      assert.equal(answer.body, '');
+      assert.equal(answer.headers['content-type'], undefined);
+      assert.equal(stand.ran.length, 1);
+    });
+  },
+);

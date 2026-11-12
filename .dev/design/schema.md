@@ -19,7 +19,7 @@ steps of [token-calculation.md](token-calculation.md), and adds the channel half
 | Valkey                   | the payload cache behind the refresh fast path, and the pub/sub waking instances to new notices | shared between instances, and disposable: losing it costs recomputation, never truth   |
 | Controller configuration | the capability vocabulary's defaults, token lifetime, grace period, poll interval               | changes with a release or a deployment, never at runtime                               |
 | Controller secrets       | the key-encryption key, and the credentials for PostgreSQL and Valkey                           | read once at start; registering an application or changing its keys never touches them |
-| Instance configuration   | the baseline and the signed-in rule, and the platform's default base tier                       | settings of the instance rather than facts about any principal                         |
+| Instance configuration   | the baseline and the signed-in rule                                                             | settings of the instance rather than facts about any principal                         |
 
 Nothing a principal is granted lives outside PostgreSQL, so a Valkey loss never widens access: the
 fast path finds no cached payload and recomputes from the store. An application's key is stored only

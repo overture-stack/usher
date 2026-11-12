@@ -47,13 +47,22 @@ export const readCredential = (
 };
 
 /**
+ * A request's query parameters, each name and value decoded, in the order sent, a parameter sent
+ * twice listed twice.
+ *
+ * @param url the request's target, its path and query.
+ */
+export const queryParametersOf = (
+  url: string,
+): readonly (readonly [name: string, value: string])[] => {
+  const query = url.indexOf('?');
+  return query === -1 ? [] : [...new URLSearchParams(url.slice(query + 1))];
+};
+
+/**
  * The names of a request's query parameters, each as many times as it is sent.
  *
  * @param url the request's target, its path and query.
  */
-export const queryNamesOf = (url: string): readonly string[] => {
-  const query = url.indexOf('?');
-  return query === -1
-    ? []
-    : [...new URLSearchParams(url.slice(query + 1)).keys()];
-};
+export const queryNamesOf = (url: string): readonly string[] =>
+  queryParametersOf(url).map(([name]) => name);

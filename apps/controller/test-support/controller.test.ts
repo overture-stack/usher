@@ -64,7 +64,6 @@ const CONFIGURATION: ControllerConfiguration = {
   managementClients: ['usher-ui-test'],
   noticePageLimit: 500,
   noticeRereadMilliseconds: 2000,
-  platformDefaultAccessLevel: 'registered',
   port: 0,
   retentionGraceSeconds: 60,
   retentionMarginSeconds: 30,
@@ -132,7 +131,6 @@ const PENDING_VALUES: {
   egoMigrationBaseTier: 'grant',
   egoMigrationPrefixes: [''],
   grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
-  platformDefaultAccessLevel: 'open',
   selfGrantMaximumSeconds: 14_400,
   submitterCategory: 'global.controlled',
 };

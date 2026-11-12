@@ -91,6 +91,14 @@ export const PROBLEMS = Object.freeze({
 });
 
 /**
+ * The refusal of a query unreadable by its shape, for an operation taking query parameters.
+ *
+ * @param rule what is wrong with the query, worded to follow "The query".
+ */
+export const unreadableQuery = (rule: string): Problem =>
+  problem('unreadableQuery', 400, 'Query unreadable', `The query ${rule}.`);
+
+/**
  * The refusal of a body unreadable by its shape.
  *
  * @param rule what is wrong with the body, worded to follow "The body".

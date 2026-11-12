@@ -106,7 +106,7 @@ The rule behind the "What they reach" column is one line: a grant reaches the re
 
 **At the Open tier, everyone holds the open grant.** It is the one grant held without asking, signed in or not, and it reaches a resource's unmarked records. At the Registered tier, anyone signed in holds it instead. At the Controlled tier, nobody holds it until someone is deliberately granted it. That is how records not marked by any category stay reachable even when they are not open.
 
-**A new resource starts at the platform's default, and can be moved to another tier later.** Usher lets a platform make unmarked records Open by default, or not. Where it does, submitters are shown a warning, so nobody publishes openly without being aware of it. Where the default is Controlled, a new resource's records are reachable by nobody until someone is granted that access.
+**A new resource starts at the tier its registration names, and can be moved to another tier later.** A submitter choosing Open is shown a warning, so nobody publishes openly without being aware of it. A resource registered at Controlled has records reachable by nobody until someone is granted that access.
 
 Grants are also what let two people differ on one resource: both may hold its open grant while one may only read those records and the other may change them as well.
 

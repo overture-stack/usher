@@ -835,7 +835,7 @@ suite('a configuration only read', () => {
 });
 
 suite("batch 2's configuration defaults", () => {
-  test('sets the access level, the character set, the self-grant maximum, the submitter category, the event source, the instance, the grant rate and no directory or trusted proxy', () => {
+  test('sets the character set, the self-grant maximum, the submitter category, the event source, the instance, the grant rate and no directory or trusted proxy', () => {
     const configuration = harnessConfiguration(SETTINGS);
 
     assert.deepEqual(
@@ -845,7 +845,6 @@ suite("batch 2's configuration defaults", () => {
         eventSource: configuration.eventSource,
         grantRateThreshold: configuration.grantRateThreshold,
         instanceName: configuration.instanceName,
-        platformDefaultAccessLevel: configuration.platformDefaultAccessLevel,
         selfGrantMaximumSeconds: configuration.selfGrantMaximumSeconds,
         submitterCategory: configuration.submitterCategory,
         trustedProxies: configuration.trustedProxies,
@@ -856,7 +855,6 @@ suite("batch 2's configuration defaults", () => {
         eventSource: HARNESS_EVENT_SOURCE,
         grantRateThreshold: { operationCount: 100, windowSeconds: 60 },
         instanceName: 'usher-test-1',
-        platformDefaultAccessLevel: 'registered',
         selfGrantMaximumSeconds: 86_400,
         submitterCategory: 'global.unmarked',
         trustedProxies: [],

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 
 import {
+  type AccessLevel,
   type AdminCaller,
   type AdminResponse,
   registerResource,
@@ -277,17 +278,22 @@ export const registrationFixture = ({
 /** The display name {@link registration} gives every resource unless told otherwise. */
 export const SYNTHETIC_DISPLAY_NAME = 'Synthetic study';
 
+/** The access level {@link registration} gives every resource unless told otherwise. */
+export const SYNTHETIC_ACCESS_LEVEL: AccessLevel = 'registered';
+
 /**
- * A registration of an externalId under one fixed display name, and any other members given, for the
- * tests whose subject is another member.
+ * A registration of an externalId under one fixed display name and the access level `registered`,
+ * which a registration must name, and any other members given, for the tests whose subject is
+ * another member.
  *
  * @param externalId the resource.
- * @param extra members over the display name.
+ * @param extra members over the display name and the access level.
  */
 export const registration = (
   externalId: string,
   extra: Partial<Omit<ResourceRegistration, 'externalId'>> = {},
 ): ResourceRegistration => ({
+  accessLevel: SYNTHETIC_ACCESS_LEVEL,
   displayName: SYNTHETIC_DISPLAY_NAME,
   externalId,
   ...extra,

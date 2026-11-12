@@ -420,7 +420,6 @@ export const harnessConfiguration = ({
     managementClients: ['usher-ui-test'],
     noticePageLimit: 500,
     noticeRereadMilliseconds: 2000,
-    platformDefaultAccessLevel: 'registered',
     port: 0,
     retentionGraceSeconds: RETENTION_DEFAULTS.retentionGraceSeconds,
     retentionMarginSeconds: RETENTION_DEFAULTS.retentionMarginSeconds,

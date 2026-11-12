@@ -49,6 +49,7 @@ import {
   createNoticeReader,
 } from '../noticeStream/index.js';
 import { createReadiness } from '../readiness/index.js';
+import { createResourceRoutes } from '../resources/index.js';
 import {
   judgeSignInCredential,
   readStoredRefusal,
@@ -118,15 +119,15 @@ const READINESS_CONNECTIONS = 1;
 /**
  * Creates a controller from its configuration, connecting to nothing until it starts. Its start
  * checks the store before anything listens, so a refused start never accepts a connection, reads the
- * live application keys into memory, and then serves the Management API's application operations,
- * each event they record written to the audit log and the log stream, the revocation channel's poll
- * and push, the token exchange, and the identity provider's back-channel logout. A change committed
- * through an operation is held by the instance before it is answered: the instance's streams are
- * woken to its notices, as for a sign-out committed, and the live keys are read again for an
- * operation naming that step, as registering an application, issuing a key and revoking one do. A
- * failure in either step is written to the log and never changes the answer. The live keys are read
- * again too each time the configured clock passes the reload interval, and a stored key that does not
- * open is recorded as `applicationKey.unreadable`. The Management API,
+ * live application keys into memory, and then serves the Management API's application and resource
+ * operations, each event they record written to the audit log and the log stream, the revocation
+ * channel's poll and push, the token exchange, and the identity provider's back-channel logout. A
+ * change committed through an operation is held by the instance before it is answered: the
+ * instance's streams are woken to its notices, as for a sign-out committed, and the live keys are
+ * read again for an operation naming that step, as registering an application, issuing a key and
+ * revoking one do. A failure in either step is written to the log and never changes the answer.
+ * The live keys are read again too each time the configured clock passes the reload interval, and
+ * a stored key that does not open is recorded as `applicationKey.unreadable`. The Management API,
  * the exchange and the back-channel logout verify the identity provider's tokens through one verifier,
  * and the revocation channel and the exchange check channel assertions through one verifier, counting
  * those they cannot verify in one tally. Every unit of its store work, a request's statement or
@@ -378,6 +379,10 @@ export const createController = (
         store: reader,
         trail: wakingTrail,
       },
+      management,
+    ),
+    ...createResourceRoutes(
+      { settings: configuration, store: reader, trail: wakingTrail },
       management,
     ),
     ...channel.routes,

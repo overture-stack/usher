@@ -13,9 +13,13 @@ import {
 } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import type { UnverifiedReason } from '../identityProvider/index.js';
-import { holdsUnstorableText } from '../store/index.js';
+import { holdsUnstorableText, isStorableText } from '../store/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
-import { queryNamesOf, readCredential } from './credential.js';
+import {
+  queryNamesOf,
+  queryParametersOf,
+  readCredential,
+} from './credential.js';
 import {
   BODY_LIMIT_BYTES,
   PROBLEMS,
@@ -95,6 +99,11 @@ const paramsOf = (
     : {};
 };
 
+// Whether every path parameter, as decoded, can be stored and recorded: a NUL or an unpaired
+// surrogate in any one can be neither, so such a request names no entity the store could hold.
+const holdsStorablePath = (request: FastifyRequest): boolean =>
+  Object.values(paramsOf(request)).every(isStorableText);
+
 // A body the framework refused to read, as the refusal it earns: one too large, or any other fault of
 // the request's in reading it.
 const contentFaultOf = (error: FastifyError): Problem | undefined => {
@@ -126,16 +135,19 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * the person or the platform or a sign-out in the store, is refused 401, or 400 for a subject or
  * session that cannot be stored, and recorded as `managementToken.refusal`, its actor anonymous,
  * before the operation begins; a service account is refused 403, and so is anyone but a platform
- * administrator for an operation of theirs alone. Then the query, which no operation takes, and the
- * body are read, and the operation run. What the operation answers is sent once the steps it names
- * to run after its commit have run, as is the answer to a change whose `COMMIT` went unconfirmed; a
- * refusal or any other failure runs none. A refusal from admission on
+ * administrator for an operation of theirs alone. Then the query, refused 400 for an operation taking
+ * none, and the body are read, and the operation run. What the operation answers is sent once the
+ * steps it names to run after its commit have run, as is the answer to a change whose `COMMIT` went
+ * unconfirmed; a refusal or any other failure runs none. A success carrying no content is answered
+ * with no body. A refusal from admission on
  * records the operation's own event, `denied`, at warning, its reason the code answered, naming the
  * existing entities the request named; a failure of the store answers 503 and records it `failed`, at
- * error. A change whose
- * `COMMIT` the store did not confirm answers 503 `outcomeUnknown` and records nothing more, since it may
- * have been made. Text that cannot be stored, in the token's subject or session or anywhere in the
- * body, is refused 400 before any transaction begins.
+ * error. A change whose `COMMIT` the store did not confirm answers 503 `outcomeUnknown` and records
+ * nothing more, since it may have been made. Text that cannot be stored, in the token's subject or
+ * session, in a path parameter, or anywhere in the body, is refused 400 before any transaction
+ * begins, a path parameter's before the query and the body are read. A refusal of a request whose
+ * path parameter cannot be stored names no entity, so its event is recorded without the store being
+ * read for what the request named.
  *
  * @param operation the operation.
  * @param dependencies the verifier, the tally, the store's reading of a principal's standing, the
@@ -166,9 +178,9 @@ export const managementRoute = <Input>(
     }: { problem: Problem; result: 'denied' | 'failed'; severity: Severity },
   ): Promise<void> => {
     if (operation.event !== undefined) {
-      const named: EventMembers = await operation.event
-        .named(paramsOf(request))
-        .catch(() => ({}));
+      const named: EventMembers = holdsStorablePath(request)
+        ? await operation.event.named(paramsOf(request)).catch(() => ({}))
+        : {};
       await trail.recordEvent(actorOf(principal), {
         data: { ...named, reason: code, result, sourceIp: request.ip },
         severity,
@@ -295,8 +307,15 @@ export const managementRoute = <Input>(
       : undefined;
   };
 
-  const inputOf = (request: FastifyRequest): InputReading<Input> => {
-    if (queryNamesOf(request.raw.url ?? '').length > 0) {
+  const inputOf = (
+    request: FastifyRequest,
+    principal: Principal,
+  ): InputReading<Input> => {
+    if (!holdsStorablePath(request)) {
+      return { kind: 'refused', problem: PROBLEMS.unrepresentableText };
+    }
+    const query = queryParametersOf(request.raw.url ?? '');
+    if (operation.takesQuery !== true && query.length > 0) {
       return { kind: 'refused', problem: PROBLEMS.unreadableQuery };
     }
     const body = readJsonBody(
@@ -321,20 +340,29 @@ export const managementRoute = <Input>(
     if (body.kind === 'object' && holdsUnstorableText(body.value)) {
       return { kind: 'refused', problem: PROBLEMS.unrepresentableText };
     }
-    return operation.readInput(body.kind === 'object' ? body.value : undefined);
+    return operation.readInput(
+      body.kind === 'object' ? body.value : undefined,
+      { principal, query },
+    );
   };
 
+  // A success carrying no content is answered with no body and no media type.
   const answer = (
     reply: FastifyReply,
-    outcome: Extract<OperationOutcome, { kind: 'answered' }>,
-  ): FastifyReply =>
-    reply
-      .code(outcome.status)
-      .headers({
-        'content-type': 'application/json',
-        ...(outcome.forbidsStoring ? { 'cache-control': 'no-store' } : {}),
-      })
-      .send(JSON.stringify(outcome.body));
+    {
+      body,
+      forbidsStoring,
+      status,
+    }: Extract<OperationOutcome, { kind: 'answered' }>,
+  ): FastifyReply => {
+    const storing = forbidsStoring ? { 'cache-control': 'no-store' } : {};
+    return body === undefined
+      ? reply.code(status).headers(storing).send()
+      : reply
+          .code(status)
+          .headers({ 'content-type': 'application/json', ...storing })
+          .send(JSON.stringify(body));
+  };
 
   // A change whose commit went unconfirmed may have been made: recording it failed could be false,
   // and the trail's line already names its events. Its steps run, each being safe either way.
@@ -382,7 +410,7 @@ export const managementRoute = <Input>(
       if (principal === undefined) {
         return sendProblem(reply, PROBLEMS.internalError);
       }
-      const reading = inputOf(request);
+      const reading = inputOf(request, principal);
       if (reading.kind === 'refused') {
         return refuse(request, reply, principal, reading.problem);
       }

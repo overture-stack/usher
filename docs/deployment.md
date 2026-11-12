@@ -275,6 +275,18 @@ The controller trusts one realm of one identity provider. Its requirements, in K
 
 ---
 
+## Registering resources
+
+**A resource is what a catalogue's records name in their resource field, such as a study's id, and an application reaches only the resources registered as served by it.** A platform administrator registers each through the Management API, with a management token from a client in `USHER_MANAGEMENT_CLIENTS`:
+
+1. **Register the application** with `POST /admin/applications`, sending its `displayName`. The answer holds the application's `id`, its audience, and its first key, whose `value` that answer alone shows. Give both to the application's bridge. `POST /admin/applications/{id}/keys` issues another key.
+2. **Register each resource** with `POST /admin/resources`, sending its `externalId`, its `displayName`, its `accessLevel`, and in `applications` the id of each application serving it. `accessLevel` is required: `open` for a resource whose unmarked records reach everyone, the anonymous visitor included, `registered` for one whose unmarked records reach every signed-in person, and `grant` for one reached through a grant alone. An application serving it later is added with `PUT /admin/resources/{externalId}/applications/{applicationId}`.
+3. **Confirm with an anonymous exchange.** Start the application. Its bridge's start makes the anonymous visitor's exchange, which the controller logs as `bio.overture.token.exchange` with `result` `succeeded` and the application's id as `audience`, and which sets the key's `confirmedAt` in `GET /admin/applications/{id}`. `GET /admin/resources/{externalId}` names each application serving a resource in `applications`.
+
+**The externalId is the value carried by the records, matched exactly.** Each catalogue's records name their resource in the field named by its adapter as the catalogue's resource field. A terms aggregation on that field, over the catalogue's index, lists every value to register, given a size larger than the number of values. An externalId holds from 1 to 128 ASCII letters, digits, dots, underscores and hyphens, starting with a letter or a digit, and one externalId names one resource in any letter case, a retired resource included.
+
+---
+
 ## Readiness and liveness
 
 **Nothing listens until a start has checked the store and read the application keys**, so both probes fail to connect while an instance starts. Neither endpoint takes a credential, and neither answer carries a body.

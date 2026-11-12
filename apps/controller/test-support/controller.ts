@@ -249,9 +249,6 @@ export interface PendingSettings {
    */
   grantRateThreshold: { operationCount: number; windowSeconds: number };
 
-  /** The access level a resource registered naming none takes: `registered` by default (#211). */
-  platformDefaultAccessLevel: 'grant' | 'open' | 'registered';
-
   /** The longest an administrator's self-grant may last, in seconds: 86,400 by default (#212). */
   selfGrantMaximumSeconds: number;
 

@@ -115,6 +115,27 @@ suite("the controller's health endpoints", () => {
     assert.equal(JSON.parse(answer.body).code, 'unreadablePath');
     assert.equal(answer.body.includes('sent-'), false);
   });
+
+  test('routes a path parameter far longer than an identifier, percent-encoded, to its route whole', async (context) => {
+    const server = createServer({
+      isLive: () => true,
+      isReady: async () => true,
+      trustedProxies: [],
+    });
+    context.after(() => server.close());
+    server.get('/admin/resources/:externalId', async (request) => ({
+      length: Reflect.get(Object(request.params), 'externalId').length,
+    }));
+    const externalId = 'é'.repeat(1000);
+
+    const answer = await server.inject({
+      method: 'GET',
+      url: `/admin/resources/${encodeURIComponent(externalId)}`,
+    });
+
+    assert.equal(answer.statusCode, 200);
+    assert.deepEqual(JSON.parse(answer.body), { length: 1000 });
+  });
 });
 
 suite("the controller's requests", () => {

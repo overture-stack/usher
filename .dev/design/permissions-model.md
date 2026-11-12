@@ -978,12 +978,11 @@ with no categories is ungrantable, since a grant would have nothing to name.
 **`base_tier` and `suppressed` on `resources`.** The base tier is the least access to a resource's
 records, and never a description of the whole resource. Its unmarked records sit at that tier, open,
 registered or by grant, and each of the resource's categories adds a restriction on top of it: a
-resource with base tier open can hold controlled records that need a grant of their own. It is
-copied from the platform's default when the resource is registered, so changing the default later
-changes only resources registered afterwards. What the open and registered tiers grant, `read`
-unless narrowed, is the controller's runtime configuration and is stored nowhere. `suppressed` hides
-the resource from results without touching any grant, set by `resource.suppress` and cleared by
-`resource.restore`.
+resource with base tier open can hold controlled records that need a grant of their own. Each
+registration names it; the platform holds no default. What the open and registered tiers grant,
+`read` unless narrowed, is the controller's runtime configuration and is stored nowhere.
+`suppressed` hides the resource from results without touching any grant, set by `resource.suppress`
+and cleared by `resource.restore`.
 
 **User identifier discipline.** `users.id` is Usher's own identifier, used by `grants`,
 `grant_decisions` and every other reference inside Usher, and it never leaves Usher. Outside Usher a

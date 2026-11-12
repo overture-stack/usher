@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import { queryNamesOf, readCredential } from './credential.js';
+import {
+  queryNamesOf,
+  queryParametersOf,
+  readCredential,
+} from './credential.js';
 
 const TOKEN = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhbmEifQ.c2lnbmF0dXJl';
 
@@ -69,5 +73,18 @@ suite("reading a request's query parameter names", () => {
     ]);
     assert.deepEqual(queryNamesOf('/admin/applications'), []);
     assert.deepEqual(queryNamesOf('/admin/applications?'), []);
+  });
+
+  test("reads a query's parameters decoded, in the order sent, one sent twice listed twice", () => {
+    assert.deepEqual(
+      queryParametersOf('/admin/resources?limit=2&cursor=a%2Bb+c&limit=&flag'),
+      [
+        ['limit', '2'],
+        ['cursor', 'a+b c'],
+        ['limit', ''],
+        ['flag', ''],
+      ],
+    );
+    assert.deepEqual(queryParametersOf('/admin/resources'), []);
   });
 });

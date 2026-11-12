@@ -392,12 +392,12 @@ omit the configuration. Configuration that lists a resource whose records are ab
 catalogue makes the intersection non-empty and the page render empty, which is a stale-configuration
 flaw and fails toward showing an empty page rather than hiding a populated one.
 
-**Under the default it never fires.** Every resource with base tier open is reached by everyone
-through its `unmarked` grant, so the intersection is empty only where an instance set a catalogue's
-resources to another tier or turned the baseline off. Intersecting per resource and category pair
-does not help: a principal holding `unmarked` on a resource whose records in this catalogue are all
-`controlled` holds a pair and reaches nothing. So the existence check is load-bearing rather than a
-fallback.
+**Where every resource is open it never fires.** Every resource with base tier open is reached by
+everyone through its `unmarked` grant, so the intersection is empty only where a catalogue's
+resources are registered at another tier or the baseline is turned off. Intersecting per resource
+and category pair does not help: a principal holding `unmarked` on a resource whose records in this
+catalogue are all `controlled` holds a pair and reaches nothing. So the existence check is
+load-bearing rather than a fallback.
 
 **The category half takes a query.** Whether any of a catalogue's records escape every category
 outside the principal's grants is a fact about what was indexed, so only an existence check under

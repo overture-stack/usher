@@ -96,7 +96,10 @@ export const APPLICATION_LIVE_KEY_LIMIT = 2;
 
 /** What registering a resource sends. */
 export interface ResourceRegistration {
-  /** The platform's default when absent. */
+  /**
+   * Required: a registration naming none is refused 422 (ruled). Optional here alone, so a test can
+   * send a registration without it.
+   */
   accessLevel?: AccessLevel;
 
   /** The applications serving it from registration on, by id. */
@@ -1500,7 +1503,9 @@ const problem = <Code extends string, Status extends number>(
  * and no internal detail, and never repeats a value the caller sent.
  *
  * - 400, no code ruled: a body or query unreadable by its shape (not JSON, not an object, a required
- *   member missing, a member of the wrong type, or a member no entity has at all).
+ *   member missing, a member of the wrong type, or a member the operation does not take, other than
+ *   those named in its 422), but for a resource registration naming no `accessLevel`, which is
+ *   refused 422 (ruled).
  * - 401, no code ruled: any refused credential, with `WWW-Authenticate: Bearer`.
  * - 403: `serviceAccountNotPermitted`, a service account's token, on every operation before any
  *   lookup; `administratorOnly`, an administrator-only operation (retiring, deleting, serving, a
@@ -1526,10 +1531,10 @@ const problem = <Code extends string, Status extends number>(
  * - 413: `bodyTooLarge`, a body over its endpoint's limit ({@link BODY_LIMIT_BYTES}), the detail naming
  *   the limit and holding nothing of the body (ruled, "#216: faults mid-run, 401 and 413" 4).
  * - 415: `unsupportedMediaType`, a body in a media type other than `application/json`, or in none.
- * - 422, a well-formed request breaking a rule, a member the entity has but the operation may not set
- *   included: `registrationHasHistory`, deleting a registration that ever held a grant or an
- *   invitation, its text saying to retire it instead; `unknownApplication`, an unregistered application
- *   in a registration's body, the whole registration refused, or in an EGO migration's `audiences`;
+ * - 422, a well-formed request breaking a rule, a member named by the operation's 422 included:
+ *   `registrationHasHistory`, deleting a registration that ever held a grant or an invitation, its
+ *   text saying to retire it instead; `unknownApplication`, an unregistered application in a
+ *   registration's body, the whole registration refused, or in an EGO migration's `audiences`;
  *   `migrationNeedsAnAudience`, an EGO migration whose `audiences` is empty (ruled);
  *   `ownerGrantsDoNotExpire`, an owner grant given an expiry. Other 422s carry no code the rulings
  *   name.

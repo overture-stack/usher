@@ -129,8 +129,8 @@ export interface OperationRequest<Input> {
 /** What an operation answered: a success, or a refusal. */
 export type OperationOutcome =
   | {
-      /** The answer's JSON body. */
-      body: JsonValue;
+      /** The answer's JSON body, or none for a success answered with no content. */
+      body: JsonValue | undefined;
 
       /** Whether the answer forbids storing it, as one carrying a key's value does. */
       forbidsStoring: boolean;
@@ -140,9 +140,23 @@ export type OperationOutcome =
     }
   | { kind: 'refused'; problem: Problem };
 
-/** What an operation read from a request's body: its input, or the refusal it earned. */
+/** What an operation read from a request's body and query: its input, or the refusal it earned. */
 export type InputReading<Input> =
   { input: Input; kind: 'read' } | { kind: 'refused'; problem: Problem };
+
+/** A request's query parameters, decoded, in the order sent, one sent twice listed twice. */
+export type QueryParameters = readonly (readonly [
+  name: string,
+  value: string,
+])[];
+
+/** What an operation reads its input beside the body from: who calls, and the query sent. */
+export interface InputContext {
+  principal: Principal;
+
+  /** The query's parameters: none for an operation taking none, which refuses any sent. */
+  query: QueryParameters;
+}
 
 /** An event an operation records, and so records `denied` when it refuses. */
 export interface OperationEvent {
@@ -182,15 +196,22 @@ export interface ManagementOperation<Input> {
   /** The event it records; an operation recording none, such as a read, records no refusal. */
   event?: OperationEvent;
 
-  method: 'DELETE' | 'GET' | 'POST';
+  method: 'DELETE' | 'GET' | 'POST' | 'PUT';
 
-  /** Reads its input from the body's object, none when the request sent no body. */
+  /**
+   * Reads its input from the body's object, none when the request sent no body, and from the query's
+   * parameters, for an operation taking any, judging the principal's standing for what they name.
+   */
   readInput(
     body: Readonly<Record<string, unknown>> | undefined,
+    context: InputContext,
   ): InputReading<Input>;
 
   /** The route's template, its parameters in braces, as the contract writes it. */
   route: string;
+
+  /** Whether it takes query parameters; one taking none refuses any sent, 400 `unreadableQuery`. */
+  takesQuery?: boolean;
 
   /**
    * Answers an admitted, readable request. A failure it throws is the store's, since the store is

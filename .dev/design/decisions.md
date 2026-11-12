@@ -2934,16 +2934,14 @@ grantable name, and an owner can grant it like any other category.
 categories it carries. A resource may be set to registered and still carry `controlled`: the
 registered setting reaches its unmarked records, and its controlled records need their own grant.
 
-**Per instance.** The instance names a new resource's starting setting. It is copied onto the
-resource when the resource is registered, as `base_tier`, the least access to its records, so
-changing the default later changes only resources registered afterwards. Resolving the default at
-request time instead was rejected: one configuration change would then open every resource that
-never set its own. Where that default is open, a warning at submission time says so, so that nobody
-publishes openly by not choosing. Where it is by grant, a new resource's records are reached by
-nobody until someone is granted `unmarked` or a concrete category on it.
+**Per registration.** Each registration names a new resource's starting setting, stored on the
+resource as `base_tier`, the least access to its records; the instance holds no default. A submitter
+choosing open is shown a warning at submission time, so that nobody publishes openly without being
+aware of it. A resource registered by grant has records reached by nobody until someone is granted
+`unmarked` or a concrete category on it.
 
 **The submission-time warning is not yet designed**, and its wording matters more than most: it is
-the only thing standing between a default and an accidental publication.
+the only thing standing between a submitter's choice of open and an accidental publication.
 
 ---
 
