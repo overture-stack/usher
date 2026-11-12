@@ -20,4 +20,5 @@ export type {
   KeyConfirmations,
   KeyConfirmationSettings,
   RejectionCounter,
+  ShareExceededCounter,
 } from './types.js';

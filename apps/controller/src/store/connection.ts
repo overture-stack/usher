@@ -38,19 +38,25 @@ const failureOf = (error: Error): Readonly<Record<string, string>> => {
 };
 
 /**
- * Opens the controller's pool of store connections, connecting none until a query needs one, each
- * connection limited as {@link storeConnection} gives. An idle connection lost, as when the store
- * restarts, is written to the log at error as {@link IDLE_CONNECTION_LOST}, naming the failure by its
- * code where it has one, and is replaced at the next query.
+ * Opens one of the controller's pools of store connections, holding at most the connections given and
+ * connecting none until a query needs one, each connection limited as {@link storeConnection} gives,
+ * so every pool carries the same limits. An idle connection lost, as when the store restarts, is
+ * written to the log at error as {@link IDLE_CONNECTION_LOST}, naming the failure by its code where it
+ * has one, and is replaced at the next query.
  *
  * @param configuration the connection URL, the password and the store timeout.
  * @param log where the loss is written.
+ * @param connections the most connections the pool holds at once.
  */
 export const openStore = (
   configuration: StoreConnectionSettings,
   log: Pick<StoreLog, 'error'>,
+  connections: number,
 ): pg.Pool => {
-  const pool = new pg.Pool(storeConnection(configuration));
+  const pool = new pg.Pool({
+    ...storeConnection(configuration),
+    max: connections,
+  });
   // Unheard, an idle connection's error would end the process.
   pool.on('error', (error) => {
     log.error(IDLE_CONNECTION_LOST, failureOf(error));

@@ -5,6 +5,10 @@ import type {
   RouteOptions,
 } from 'fastify';
 
+import {
+  type Admitted,
+  SHARE_EXCEEDED_RETRY_AFTER_SECONDS,
+} from '../admission/index.js';
 import type { Actor, AuditEvent } from '../eventLog/index.js';
 import { failureCodeOf, failureNameOf } from '../failures/index.js';
 import type { Problem } from '../http/index.js';
@@ -82,8 +86,8 @@ const KEYS_UNAVAILABLE: SignInJudgement = Object.freeze({
   kind: 'keysUnavailable',
 });
 
-/** What the exchange holds for a request its channel assertion admitted: its deadline, and its key. */
-interface Admission {
+/** What the exchange holds for a request whose channel assertion verified: its deadline, and its key. */
+interface Verified {
   deadline: Deadline;
   key: ExchangeKey;
 }
@@ -111,6 +115,14 @@ const LATE: Outcome = Object.freeze({ kind: 'late' });
 interface CredentialRefusal extends Refusal {
   event: AuditEvent;
 }
+
+// The answer to an exchange over its application's share while the pool is contended, given before
+// any work on the store.
+const SHARE_EXCEEDED: Outcome = Object.freeze({
+  kind: 'refused',
+  problem: EXCHANGE_PROBLEMS.admissionShareExceeded,
+  retryAfterSeconds: SHARE_EXCEEDED_RETRY_AFTER_SECONDS,
+});
 
 // The failure by its code alone, where it carries one that is an identifier, since a message may quote
 // a value.
@@ -208,10 +220,13 @@ const credentialRefusalOf = (
  * Each request's channel assertion is checked first, from memory, so a caller it does not authenticate
  * is given no other work: an assertion that could not be verified, an unknown application's and one
  * whose application holds no live key among them, is counted by reason and named application in the
- * shared tally, and one that verified and is refused anyway is handed to the instance's recorder of
- * refused assertions, which records the instance's first refusal of each assertion as a
- * `channelAssertion.rejection` naming its application and counts the rest, the answer never waiting
- * on it. Each is answered one identical `401 channelAssertionRefused`, and confirms nothing. One assertion
+ * shared tally, and one that verified and is refused anyway is handed to the exchange's own recorder
+ * of refused assertions, taken from the instance's, which records the instance's first refusal of each
+ * assertion as a `channelAssertion.rejection` naming its application and counts the rest, the answer
+ * never waiting on it. Each recording is held to two bounds: the route's limit of recordings waiting
+ * on the store, and a place in the share of the application the assertion names, taken through
+ * `recordRefusalWithinShare` as a credential's refusal takes one; a refusal past either is counted.
+ * Each is answered one identical `401 channelAssertionRefused`, and confirms nothing. One assertion
  * serves every exchange within its lifetime. An assertion that verifies confirms the key it verified
  * under, as the confirmations given confirm it, beside the exchange's own work and bounded by the
  * exchange's deadline, every answer waiting for that confirmation until the deadline at most, whatever
@@ -252,7 +267,17 @@ const credentialRefusalOf = (
  * since the fetch of the identity provider's keys it may wait on is shared with other requests, and
  * its late result is dropped.
  *
- * A refused exchange follows the same rule as an issued one: every exchange that reaches the judgement
+ * Each exchange's store work, the anonymous calculation or a credential's refusal whatever the
+ * judgement, `signingKeyUnconfirmed` included, runs within its application's share of the exchange
+ * pool as `admission` admits it: its place is taken once every check needing no store has passed, the
+ * assertion, the body and the credential's judgement, and released once that work has ended, however
+ * it ended. An exchange within its share is always admitted; past it, one is admitted while the
+ * instance's exchanges in flight number fewer than the pool's connections, and one anonymous exchange
+ * per application past that. Any other is answered `503 admissionShareExceeded` with `Retry-After` at
+ * once, nothing begun on the store and nothing recorded, and is counted for its application. A refusal
+ * of the assertion or of the body, and a request answered as late, take no place.
+ *
+ * A refused exchange follows the same rule as an issued one: every exchange admitted into its share
  * is answered only once its `token.exchange` has committed, in a transaction of its own within the
  * store timeout and the deadline, so no exchange goes unrecorded while looking answered. One whose
  * transaction the store cannot take is answered `503 storeUnavailable`, its failure written by its
@@ -265,11 +290,14 @@ const credentialRefusalOf = (
  * answered `503 outcomeUnknown`, the trail's own line naming its event. A failure the route did not
  * expect is answered `500 internalError`. Every answer is `no-store`.
  *
- * @param settings the assertion verifier, its tally and the recorder of refused assertions, the
- *   deadline and the monotonic clock it is read on, the credential judge, the key confirmations, the
- *   trail, the log, and the configuration the exchange reads.
+ * @param settings the admission and where its refusals are counted, the assertion verifier, its tally,
+ *   the instance's recording of refused assertions and the exchange's limit of them, the deadline and
+ *   the monotonic clock it is read on, the credential judge, the key confirmations, the trail, the log,
+ *   and the configuration the exchange reads.
  */
 export const createExchange = ({
+  admission,
+  assertionRecordingLimit,
   assertionRefusals,
   assertionRejections,
   assertions,
@@ -280,10 +308,44 @@ export const createExchange = ({
   lateRequestThresholdMilliseconds,
   monotonicNow,
   settings,
+  sharesExceeded,
   trail,
 }: ExchangeSettings): Exchange => {
-  const admitted = new WeakMap<FastifyRequest, Admission>();
+  const admitted = new WeakMap<FastifyRequest, Verified>();
   const confirming = new WeakMap<FastifyRequest, Promise<void>>();
+
+  // A refusal's record is store work like any other, so it takes a place in its application's share:
+  // recorded outside it, a flood of refusals through one application's bridge would hold the pool's
+  // connections outside every share, and the shares would no longer keep the other applications
+  // served. A credential's refusal and a refused assertion's rejection both go through here.
+  const recordRefusalWithinShare = <Result>(
+    applicationId: string,
+    record: () => Promise<Result>,
+  ): Promise<Admitted<Result>> =>
+    admission.within(applicationId, 'credential', record);
+
+  // The route's recorder of refused assertions, holding at most its limit of recordings waiting on the
+  // store and each within the share of the application the assertion names.
+  const assertionRecorder = assertionRefusals.forRoute({
+    pendingLimit: assertionRecordingLimit,
+    trail,
+    within: async (applicationId, recording) =>
+      (await recordRefusalWithinShare(applicationId, recording)).kind ===
+      'admitted',
+  });
+
+  // An exchange admitted is answered by its own work; one refused is counted for its application and
+  // answered at once.
+  const outcomeWithin = (
+    applicationId: string,
+    work: Admitted<Outcome>,
+  ): Outcome => {
+    if (work.kind === 'admitted') {
+      return work.result;
+    }
+    sharesExceeded.count(applicationId);
+    return SHARE_EXCEEDED;
+  };
 
   // A request's deadline, fixed when it arrives.
   const deadlineFromNow = (): Deadline => {
@@ -307,7 +369,7 @@ export const createExchange = ({
     if (check.kind === 'unverified') {
       assertionRejections.count(check.reason, check.applicationId);
     } else {
-      assertionRefusals.refused({
+      assertionRecorder.refused({
         applicationId: check.applicationId,
         reason: check.reason,
         signingInputDigest: check.signingInputDigest,
@@ -329,7 +391,7 @@ export const createExchange = ({
     }));
 
   const issueAnonymous = (
-    { deadline, key }: Admission,
+    { deadline, key }: Verified,
     sourceIp: string,
   ): Promise<Answer> =>
     trail.inTransaction(
@@ -370,7 +432,7 @@ export const createExchange = ({
   // names the identity provider.
   const judgedWithin = (
     credential: string,
-    { key }: Admission,
+    { key }: Verified,
     budgetMilliseconds: number,
   ): Promise<SignInJudgement> =>
     withinOr(
@@ -384,31 +446,53 @@ export const createExchange = ({
 
   // A credential with too little of its deadline left for the least judgement budget arrived too late:
   // it is answered as late, judging and recording nothing, whatever threshold the handler was given.
+  // Every judgement's refusal is recorded within the application's share.
   const refuseCredential = async (
     credential: string,
-    admission: Admission,
+    verified: Verified,
     sourceIp: string,
   ): Promise<Outcome> => {
     const budgetMilliseconds =
-      admission.deadline.remainingMilliseconds() -
+      verified.deadline.remainingMilliseconds() -
       RECORDING_RESERVE_MILLISECONDS;
     if (budgetMilliseconds < MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS) {
       return LATE;
     }
     const judgement = await judgedWithin(
       credential,
-      admission,
+      verified,
       budgetMilliseconds,
     );
     const { event, ...refusal } = credentialRefusalOf(judgement, sourceIp);
-    return committed(
-      trail.inTransaction(
-        ANONYMOUS,
-        async ({ record }) => {
-          await record(event);
-          return { kind: 'refused', ...refusal };
-        },
-        { deadline: admission.deadline },
+    const { applicationId } = verified.key;
+    return outcomeWithin(
+      applicationId,
+      await recordRefusalWithinShare(applicationId, () =>
+        committed(
+          trail.inTransaction(
+            ANONYMOUS,
+            async ({ record }) => {
+              await record(event);
+              return { kind: 'refused', ...refusal };
+            },
+            { deadline: verified.deadline },
+          ),
+        ),
+      ),
+    );
+  };
+
+  // The anonymous exchange's calculation, within its application's share as an anonymous exchange,
+  // so the anonymous lane serves it past a full share.
+  const issueWithinShare = async (
+    verified: Verified,
+    sourceIp: string,
+  ): Promise<Outcome> => {
+    const { applicationId } = verified.key;
+    return outcomeWithin(
+      applicationId,
+      await admission.within(applicationId, 'anonymous', () =>
+        committed(issueAnonymous(verified, sourceIp)),
       ),
     );
   };
@@ -418,19 +502,19 @@ export const createExchange = ({
   // whenever the store takes the confirmation by then.
   const confirmationOf = (request: FastifyRequest): Promise<void> => {
     const confirmation = confirming.get(request);
-    const admission = admitted.get(request);
-    return confirmation === undefined || admission === undefined
+    const verified = admitted.get(request);
+    return confirmation === undefined || verified === undefined
       ? Promise.resolve()
       : withinOr(
           confirmation,
-          admission.deadline.remainingMilliseconds(),
+          verified.deadline.remainingMilliseconds(),
           undefined,
         );
   };
 
   const outcomeOf = async (
     request: FastifyRequest,
-    admission: Admission,
+    verified: Verified,
   ): Promise<Outcome> => {
     const reading = readExchangeRequest({
       body: request.body instanceof Uint8Array ? request.body : undefined,
@@ -440,8 +524,8 @@ export const createExchange = ({
       return { kind: 'refused', problem: reading.problem };
     }
     return reading.credential === undefined
-      ? committed(issueAnonymous(admission, request.ip))
-      : refuseCredential(reading.credential, admission, request.ip);
+      ? issueWithinShare(verified, request.ip)
+      : refuseCredential(reading.credential, verified, request.ip);
   };
 
   // A commit the store did not confirm may have taken effect, and the trail's own line names its event.
@@ -510,17 +594,17 @@ export const createExchange = ({
     },
     exposeHeadRoute: false,
     handler: async (request, reply) => {
-      const admission = admitted.get(request);
-      if (admission === undefined) {
+      const verified = admitted.get(request);
+      if (verified === undefined) {
         return sendExchangeProblem(reply, EXCHANGE_PROBLEMS.internalError);
       }
       if (
-        admission.deadline.remainingMilliseconds() <
+        verified.deadline.remainingMilliseconds() <
         lateRequestThresholdMilliseconds
       ) {
         return answerRequestTimeout(reply);
       }
-      const outcome = await outcomeOf(request, admission);
+      const outcome = await outcomeOf(request, verified);
       await confirmationOf(request);
       return answer(reply, outcome);
     },

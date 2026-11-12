@@ -11,6 +11,12 @@ export const BODY_LIMIT_BYTES = 65_536;
  * refused assertion is answered alike, and so is every refused credential.
  */
 export const EXCHANGE_PROBLEMS = Object.freeze({
+  admissionShareExceeded: problem(
+    'admissionShareExceeded',
+    503,
+    'Admission share exceeded',
+    "The application's exchanges in flight fill its share of the controller, and no connection is free to lend, so no token was issued. Try again once the seconds in Retry-After have passed.",
+  ),
   bodyTooLarge: problem(
     'bodyTooLarge',
     413,

@@ -73,6 +73,39 @@ suite('connecting to the store', () => {
   });
 });
 
+suite("each of the store's pools", () => {
+  test('holds at most the connections given, each limited alike', async () => {
+    const pools = [1, 5, 10].map((connections) =>
+      openStore(
+        {
+          databasePassword: 'given',
+          databaseUrl: 'postgres://usher_controller@127.0.0.1/usher',
+          storeTimeoutMilliseconds: 250,
+        },
+        { error: () => undefined },
+        connections,
+      ),
+    );
+    const held = pools.map(({ options }) => ({
+      connectionTimeoutMillis: options.connectionTimeoutMillis,
+      idleInTransaction: options.idle_in_transaction_session_timeout,
+      max: options.max,
+      statement: options.statement_timeout,
+    }));
+    await Promise.all(pools.map((pool) => pool.end()));
+
+    assert.deepEqual(
+      held,
+      [1, 5, 10].map((max) => ({
+        connectionTimeoutMillis: 250,
+        idleInTransaction: 250,
+        max,
+        statement: 250,
+      })),
+    );
+  });
+});
+
 suite("the store's idle connections", () => {
   const PASSWORD = 'a password/@:% only the store knows';
   const URL = 'postgres://usher_controller@db.example.org:6432/usher';
@@ -92,6 +125,7 @@ suite("the store's idle connections", () => {
           written.push([message, fields]);
         },
       },
+      10,
     );
     errors.forEach((error) => pool.emit('error', error));
     await pool.end();

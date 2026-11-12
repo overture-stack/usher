@@ -22,14 +22,15 @@ const { channelAssertionRejection, channelAssertionRejectionTally } =
   AUDIT_EVENT_TYPES;
 
 /**
- * The connections the controller's pool holds: the driver's default, which the controller's store
- * connection keeps. A constant of its own here, as the test reaches the controller through the seam.
+ * The connections the controller's exchange pool holds: `USHER_DATABASE_EXCHANGE_CONNECTIONS` at its
+ * default. A constant of its own here, as the test reaches the controller through the seam.
  */
 const POOL_CONNECTIONS = 10;
 
 /**
- * The most rejection recordings a route holds waiting on the store, by the controller's rule: half
- * its pool's connections, rounded down, and at least one.
+ * The most rejection recordings the exchange route holds waiting on the store, by the controller's
+ * rule: half its pool's connections, rounded down, and at least one. The one application registered
+ * has the whole pool as its share, so its share never bounds these recordings below that.
  */
 const PENDING_LIMIT = Math.max(1, Math.floor(POOL_CONNECTIONS / 2));
 

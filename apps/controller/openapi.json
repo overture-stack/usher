@@ -8,7 +8,7 @@
         }
       },
       "RetryAfter": {
-        "description": "The whole seconds to wait before trying again, at least 1. Sent with `signingKeyUnconfirmed`.",
+        "description": "The whole seconds to wait before trying again, at least 1. Sent with `signingKeyUnconfirmed`, and at the exchange with `admissionShareExceeded`.",
         "schema": {
           "minimum": 1,
           "type": "integer"
@@ -5767,7 +5767,7 @@
     },
     "/exchange": {
       "post": {
-        "description": "Answers an Usher token for the channel assertion's application, whatever the body carries: the anonymous visitor's for a body carrying no `credential`, or the principal's for a sign-in token verified by the identity provider's realm.\n\nThe token is a compact JWE whose protected header holds `alg` `dir`, `enc` `A256GCM` and `typ` `usher+jwt` alone, encrypted under the token subkey of the application key that verified the channel assertion. Its payload is in the highest version listed by the request and served by the controller.\n\nThe first exchange verified with a key records the key's `confirmedAt`, and the audit event `applicationKey.confirmation` records it once.\n\nThe channel assertion is checked first, so an exchange whose assertion is refused does no other work. A body member other than `credential` and `payloadVersions` is ignored.\n\nAn exchange its channel assertion and its body admit, the anonymous one included, is answered only once its `token.exchange` audit event has been recorded, whether it is issued a token or refused: one whose event cannot be recorded is answered `503`, and no token is issued for it.\n\nEvery exchange is answered by the controller's deadline, measured from the request's arrival and shorter than the bridge's timeout, so the bridge always has the answer before it gives up. A step the deadline cuts short is answered as that step's failure, as the responses below say.",
+        "description": "Answers an Usher token for the channel assertion's application, whatever the body carries: the anonymous visitor's for a body carrying no `credential`, or the principal's for a sign-in token verified by the identity provider's realm.\n\nThe token is a compact JWE whose protected header holds `alg` `dir`, `enc` `A256GCM` and `typ` `usher+jwt` alone, encrypted under the token subkey of the application key that verified the channel assertion. Its payload is in the highest version listed by the request and served by the controller.\n\nThe first exchange verified with a key records the key's `confirmedAt`, and the audit event `applicationKey.confirmation` records it once.\n\nThe channel assertion is checked first, so an exchange whose assertion is refused does no other work. A body member other than `credential` and `payloadVersions` is ignored.\n\nEach instance of the controller admits an application's exchanges within a share of its own exchange connections, so one application's exchanges never take another's share, and lends past a share any connection its exchanges in flight leave free. An exchange its channel assertion and its body admit, the anonymous one included, takes a place once its credential is judged; once the instance's exchanges in flight number as many as its exchange connections, one over its share, but for one anonymous exchange per application, is answered `503 admissionShareExceeded` at once, with `Retry-After`, recording nothing. An exchange admitted is answered only once its `token.exchange` audit event has been recorded, whether it is issued a token or refused: one whose event cannot be recorded is answered `503`, and no token is issued for it.\n\nEvery exchange is answered by the controller's deadline, measured from the request's arrival and shorter than the bridge's timeout, so the bridge always has the answer before it gives up. A step the deadline cuts short is answered as that step's failure, as the responses below say.",
         "operationId": "exchangeCredential",
         "requestBody": {
           "content": {
@@ -5917,6 +5917,7 @@
                       "properties": {
                         "code": {
                           "enum": [
+                            "admissionShareExceeded",
                             "identityProviderUnavailable",
                             "outcomeUnknown",
                             "signingKeyUnconfirmed",
@@ -5930,7 +5931,7 @@
                 }
               }
             },
-            "description": "No token is issued. `storeUnavailable`: the policy store cannot take the exchange now, so the exchange cannot be read or its `token.exchange` cannot be recorded, or a principal's first exchange cannot record their identity. `outcomeUnknown`: the store did not confirm whether the exchange's `token.exchange` was recorded. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the sign-in token, or not in time for the exchange to be recorded by its deadline, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the sign-in token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. An exchange whose token would be larger than the bridge's response cap is answered `503` too.",
+            "description": "No token is issued. `admissionShareExceeded`: the application's exchanges in flight fill its share of this instance while the instance's exchanges in flight hold every one of its exchange connections, so the exchange was refused before any work on the store and its `token.exchange` is not recorded; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot take the exchange now, so the exchange cannot be read or its `token.exchange` cannot be recorded, or a principal's first exchange cannot record their identity. `outcomeUnknown`: the store did not confirm whether the exchange's `token.exchange` was recorded. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the sign-in token, or not in time for the exchange to be recorded by its deadline, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the sign-in token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. An exchange whose token would be larger than the bridge's response cap is answered `503` too.",
             "headers": {
               "Retry-After": {
                 "$ref": "#/components/headers/RetryAfter"

@@ -370,7 +370,8 @@ export const passwordsApart = (
  * directory, no EGO migration settings, a grant rate threshold of 100 operations in 60 s, high enough
  * for no test to reach it by accident, the defaults given by the rulings (the timing settings at their
  * production defaults: a 10 s heartbeat, 300 s Usher tokens, a 500-notice page, a 2 s re-read, a 5 s
- * store timeout and a 15 min stream), loopback on any free port, the system's clock and the process's
+ * store timeout and a 15 min stream), the store connections at their defaults (10 for the exchange
+ * and 5 for everything else), loopback on any free port, the system's clock and the process's
  * standard output as the log stream; then the test's overrides over all of it. The configuration
  * names no application: the harness registers its applications through the API once its controller
  * listens.
@@ -394,6 +395,8 @@ export const harnessConfiguration = ({
     cacheUrl,
     clock: SYSTEM_CLOCK,
     cursorKey: freshKey(),
+    databaseControlConnections: 5,
+    databaseExchangeConnections: 10,
     databasePassword: freshPassword(),
     databaseSchema,
     databaseUrl,

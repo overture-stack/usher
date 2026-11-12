@@ -3,7 +3,11 @@ import type pg from 'pg';
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
 import type { Actor, AuditTrail, AuditTransaction } from '../eventLog/index.js';
 import { type StartProblem, StartRefusal } from '../failures/index.js';
-import { CommitUnconfirmed, StoreTimeout } from '../storeTimeout/index.js';
+import {
+  CommitUnconfirmed,
+  type StoreReader,
+  StoreTimeout,
+} from '../storeTimeout/index.js';
 import { connectionProblemOf } from './connectionProblemOf.js';
 import { checkKeyEncryptionKey } from './keyEncryptionKeyCheck.js';
 import {
@@ -130,4 +134,33 @@ export const prepareStore = async <Connection extends pg.ClientBase>(
     });
   });
   return { writes };
+};
+
+/**
+ * Checks, at the controller's start, that the store applies both of the controller's limits to the
+ * sessions of one more of its pools, as {@link prepareStore} checks them on the pool its transaction
+ * runs on, so a pool reaching the store through a pooler that drops them is found before anything
+ * listens. The limits are read in one statement, as a unit of its own within the store timeout.
+ *
+ * @param reader the pool's reader.
+ * @param settings the store timeout each limit must equal.
+ * @throws {StartRefusal} naming the database URL when either limit is missing or differs, or when
+ *   the store does not answer within the store timeout; naming the variable at fault when the store
+ *   cannot be reached or signed in to.
+ * @throws any other failure of the read, as it was thrown.
+ */
+export const checkStatementLimits = async (
+  reader: Pick<StoreReader, 'query'>,
+  settings: Pick<StoreSettings, 'storeTimeoutMilliseconds'>,
+): Promise<void> => {
+  const limits = await readStatementLimits(reader).catch((failure: unknown) => {
+    throw refusalFor(failure);
+  });
+  const problems = statementLimitProblems(
+    limits,
+    settings.storeTimeoutMilliseconds,
+  );
+  if (problems.length > 0) {
+    throw new StartRefusal(problems);
+  }
 };

@@ -345,6 +345,97 @@ suite("the instance's recording of refused assertions", () => {
   });
 });
 
+suite('a route admitting its recordings within shares', () => {
+  // A share admitting while the test says so, keeping the application each place was asked for.
+  const share = (): {
+    asked: string[];
+    full: { value: boolean };
+    within: (
+      applicationId: string,
+      recording: () => Promise<void>,
+    ) => Promise<boolean>;
+  } => {
+    const asked: string[] = [];
+    const full = { value: false };
+    return {
+      asked,
+      full,
+      within: async (applicationId, recording) => {
+        asked.push(applicationId);
+        if (full.value) {
+          return false;
+        }
+        await recording();
+        return true;
+      },
+    };
+  };
+
+  test('takes a place in the share of the application each refused assertion names, in the same turn as the refusal, and records it there', async () => {
+    const { counted, refusals } = standUp();
+    const { recordings, trail } = heldTrail();
+    const { asked, within } = share();
+    const route = refusals.forRoute({ pendingLimit: 5, trail, within });
+
+    route.refused(refusal('digest-1'));
+    route.refused({ ...refusal('digest-2'), applicationId: OTHER_APPLICATION });
+    const askedAtOnce = [...asked];
+    const begunAtOnce = recordings.length;
+    recordings.forEach(({ commit }) => {
+      commit();
+    });
+    await refusals.stop();
+
+    assert.deepEqual(askedAtOnce, [APPLICATION, OTHER_APPLICATION]);
+    assert.equal(begunAtOnce, 2);
+    assert.deepEqual(counted, []);
+  });
+
+  test('counts a refusal its share has no room for, beginning no recording and forgetting the assertion, so its next refusal is recorded once the share has room', async () => {
+    const { counted, refusals } = standUp();
+    const { recordings, trail } = heldTrail();
+    const { full, within } = share();
+    const route = refusals.forRoute({ pendingLimit: 5, trail, within });
+
+    full.value = true;
+    route.refused(refusal('digest-1'));
+    await settled();
+    const begunWhileFull = recordings.length;
+    full.value = false;
+    route.refused(refusal('digest-1'));
+    recordings.forEach(({ commit }) => {
+      commit();
+    });
+    await refusals.stop();
+
+    assert.equal(begunWhileFull, 0);
+    assert.equal(recordings.length, 1);
+    assert.deepEqual(counted, [
+      { applicationId: APPLICATION, reason: 'expiredAssertion' },
+    ]);
+  });
+
+  test("asks no place in a share for a refusal past the route's limit, which is counted, so the recordings are held to both bounds", async () => {
+    const { counted, refusals } = standUp();
+    const { recordings, trail } = heldTrail();
+    const { asked, within } = share();
+    const route = refusals.forRoute({ pendingLimit: 1, trail, within });
+
+    route.refused(refusal('digest-1'));
+    route.refused(refusal('digest-2'));
+    recordings.forEach(({ commit }) => {
+      commit();
+    });
+    await refusals.stop();
+
+    assert.deepEqual(asked, [APPLICATION]);
+    assert.equal(recordings.length, 1);
+    assert.deepEqual(counted, [
+      { applicationId: APPLICATION, reason: 'expiredAssertion' },
+    ]);
+  });
+});
+
 suite('the line naming refusals whose recording failed', () => {
   test('writes one warning for the failed recordings of one application, reason and failure code in an interval, carrying their count, once the interval ends', async (context) => {
     context.mock.timers.enable({ apis: ['setInterval'] });

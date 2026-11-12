@@ -615,10 +615,17 @@ failing check.** Five parts.
 
 1. **One enforcement point, per application.** The controller identifies the calling bridge by its channel
    assertion, signed under a key shared by every replica of an application. So it budgets an
-   application as a whole and never needs to tell replicas apart. Over its share, an application's
-   exchange is answered `503` with `Retry-After` at once, and every other application keeps its own
-   share.
-2. **Checks ordered by cost.** Only a credential passing every offline check takes a database slot:
+   application as a whole and never needs to tell replicas apart. Within its share, an application's
+   exchange is always admitted. Over its share, it borrows a connection no share is using while the
+   instance's exchanges in flight number fewer than its exchange connections; once they reach that
+   number, it is answered `503` with `Retry-After` at once. Every other application keeps its own
+   share. Each instance holds three pools of store connections: exchange connections, which the
+   shares divide, for the exchange's own transactions, key confirmations and recordings of refused
+   assertions; control connections for everything else, the Management API, the back-channel logout
+   and the notice channel among it; and one connection for readiness alone.
+2. **Checks ordered by cost.** A refused credential's record takes a slot from its application's
+   share, and the anonymous exchange keeps one slot per application per instance past a full share,
+   so the open tier stays fresh during a flood. The checks run in this order:
 
    | Order | Check                                                                                                           | Cost                         |
    | ----- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |

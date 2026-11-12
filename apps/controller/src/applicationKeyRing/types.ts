@@ -41,6 +41,12 @@ export interface ApplicationKeyRing {
   liveKeysOf(applicationId: string): readonly LiveApplicationKey[] | undefined;
 
   /**
+   * How many applications are registered, as the last read found them: each one, whether or not it
+   * holds a live key, and none before the first read.
+   */
+  registeredCount(): number;
+
+  /**
    * Reads the live keys again, resolving once a read begun after the call has ended, the events it
    * records included. It never rejects: a read that fails keeps the keys held, and is written to the
    * log.

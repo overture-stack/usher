@@ -10,6 +10,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { compactDecrypt, decodeProtectedHeader } from 'jose';
 import pg from 'pg';
 
+import { createAdmission } from '../admission/index.js';
 import { applicationSubkeys } from '../applicationKeyRing/index.js';
 import {
   type ChannelAssertionCheck,
@@ -238,6 +239,13 @@ interface Stand {
   confirmationDeadlines: (Deadline | undefined)[];
 
   counted: { applicationId: string | undefined; reason: string }[];
+
+  /** The application each exchange refused over its share was counted for, in order. */
+  countedOverShare: string[];
+
+  /** How many exchanges the stand's admission holds in flight now. */
+  inFlight(): number;
+
   judged: { audience: string; credential: string; now: number }[];
 
   /** The lines written at error. */
@@ -278,8 +286,20 @@ interface StandOptions {
   /** Settles when a refused assertion's recording, outside any exchange's transaction, is written: at once by default. */
   outsideRecorded?: Promise<void>;
 
+  /**
+   * How many connections the exchange pool holds, which the admission divides among the registered
+   * applications: 10 by default.
+   */
+  poolSize?: number;
+
   /** What the store's read throws, as a store failing within the transaction does. */
   readFailure?: unknown;
+
+  /** How many applications are registered: 1 by default, so the application's share is the pool. */
+  registered?: number;
+
+  /** Settles when the store takes each transaction begun, its work waiting until then: at once by default. */
+  storeTakes?: Promise<void>;
 }
 
 const standUp = (
@@ -291,13 +311,22 @@ const standUp = (
     judge,
     lateRequestThresholdMilliseconds = LATE_REQUEST_THRESHOLD_MILLISECONDS,
     outsideRecorded = Promise.resolve(),
+    poolSize = 10,
     readFailure,
+    registered = 1,
+    storeTakes = Promise.resolve(),
   }: StandOptions = {},
 ): Stand => {
+  const admission = createAdmission({
+    poolSize,
+    registeredCount: () => registered,
+  });
   const stand: Omit<Stand, 'server' | 'stop'> = {
     confirmationDeadlines: [],
     confirmed: [],
     counted: [],
+    countedOverShare: [],
+    inFlight: () => admission.inFlight(),
     judged: [],
     lines: [],
     outside: [],
@@ -327,20 +356,27 @@ const standUp = (
     rejections: counter,
   });
   const exchange = createExchange({
-    assertionRefusals: refusals.forRoute({
-      pendingLimit: 5,
-      trail: {
-        inTransaction: async (actor, work) =>
-          work({
-            connection: undefined,
-            record: async (event) => {
-              await outsideRecorded;
-              stand.outside.push({ actor, event });
-              return 'event-id';
-            },
-          }),
-      },
-    }),
+    admission,
+    assertionRecordingLimit: 5,
+    // The exchange's own recorder, its limit and its admission as the exchange gives them, writing to
+    // a trail of its own, apart from the exchange's transactions.
+    assertionRefusals: {
+      forRoute: (route) =>
+        refusals.forRoute({
+          ...route,
+          trail: {
+            inTransaction: async (actor, work) =>
+              work({
+                connection: undefined,
+                record: async (event) => {
+                  await outsideRecorded;
+                  stand.outside.push({ actor, event });
+                  return 'event-id';
+                },
+              }),
+          },
+        }),
+    },
     assertionRejections: counter,
     assertions: {
       verify: async (rawHeaders) => {
@@ -386,6 +422,11 @@ const standUp = (
     lateRequestThresholdMilliseconds,
     monotonicNow: () => performance.now(),
     settings: SETTINGS,
+    sharesExceeded: {
+      count: (applicationId) => {
+        stand.countedOverShare.push(applicationId);
+      },
+    },
     trail: {
       inTransaction: async (actor, work, options) => {
         const transaction: Transaction = {
@@ -395,6 +436,7 @@ const standUp = (
           statements: [],
         };
         stand.transactions.push(transaction);
+        await storeTakes;
         const query = async (text: string, values?: readonly unknown[]) => {
           transaction.statements.push({ text, values });
           if (readFailure !== undefined) {
@@ -476,6 +518,34 @@ const recordedIn = (stand: Stand): readonly AuditEvent[] =>
 
 const storeFailure = (code: string): Error =>
   Object.assign(new Error('the store refused the statement'), { code });
+
+// An answer's problem code, or its status for a token issued.
+const problemOrStatusOf = (answer: LightMyRequestResponse): unknown =>
+  answer.statusCode === 200 ? 200 : problemOf(answer).code;
+
+// Settles once the stand has begun as many transactions as given, or after ANSWER_WITHIN_MS, giving
+// whether it had, so a test never waits on time to learn that an exchange holds its place.
+const untilTransactionsBegun = async (
+  stand: Pick<Stand, 'transactions'>,
+  count: number,
+  deadline: number = Date.now() + ANSWER_WITHIN_MS,
+): Promise<boolean> => {
+  if (stand.transactions.length >= count) {
+    return true;
+  }
+  if (Date.now() > deadline) {
+    return false;
+  }
+  await delay(1);
+  return untilTransactionsBegun(stand, count, deadline);
+};
+
+// Whether an answer came before any wait on the store could have ended.
+const answeredAtOnce = (answering: Promise<unknown>): Promise<boolean> =>
+  Promise.race([
+    answering.then(() => true),
+    delay(ANSWER_WITHIN_MS).then(() => false),
+  ]);
 
 /** A stand whose exchange records through the audit trail itself, over a store a test holds back. */
 interface StoreStand {
@@ -598,7 +668,9 @@ const storeStandUp = (
     trustedProxies: [],
   });
   const exchange = createExchange({
-    assertionRefusals: { refused: () => undefined },
+    admission: createAdmission({ poolSize: 10, registeredCount: () => 1 }),
+    assertionRecordingLimit: 5,
+    assertionRefusals: { forRoute: () => ({ refused: () => undefined }) },
     assertionRejections: { count: () => undefined },
     assertions: {
       verify: async () => ASSERTIONS[VERIFIED] ?? assert.fail(),
@@ -611,6 +683,7 @@ const storeStandUp = (
     lateRequestThresholdMilliseconds,
     monotonicNow: () => performance.now(),
     settings: SETTINGS,
+    sharesExceeded: { count: () => undefined },
     trail,
   });
   server.route(exchange.route);
@@ -1663,6 +1736,355 @@ suite('the token exchange', () => {
         [{ result: 'succeeded', type: 'bio.overture.token.exchange' }],
       );
       assert.deepEqual(stand.releases, [undefined]);
+    });
+  });
+
+  suite("admission into its application's share", () => {
+    test("answers an exchange over its application's share, the pool contended, 503 admissionShareExceeded with Retry-After 1 at once, after judging its credential, beginning no transaction and counting it for the application", async (context) => {
+      const store = deferred();
+      const stand = standUp(context, {
+        poolSize: 1,
+        storeTakes: store.promise,
+      });
+
+      const holding = post(stand, withCredential('credential-forged'));
+      const placeTaken = await untilTransactionsBegun(stand, 1);
+      const answering = post(stand, withCredential('credential-expired'));
+      const overShareAtOnce = await answeredAtOnce(answering);
+      const transactionsWhileFull = stand.transactions.length;
+      store.release();
+      const [held, overShare] = await Promise.all([holding, answering]);
+
+      assert.equal(placeTaken, true);
+      assert.equal(overShareAtOnce, true);
+      assert.deepEqual(problemOf(overShare), {
+        code: 'admissionShareExceeded',
+        status: 503,
+      });
+      assert.equal(overShare.headers['retry-after'], '1');
+      assert.equal(overShare.headers['cache-control'], 'no-store');
+      assert.match(
+        String(overShare.headers['content-type']),
+        /^application\/problem\+json\b/u,
+      );
+      assert.equal(transactionsWhileFull, 1);
+      assert.deepEqual(
+        stand.judged.map(({ credential }) => credential),
+        ['credential-forged', 'credential-expired'],
+      );
+      assert.deepEqual(stand.countedOverShare, [APPLICATION]);
+      assert.equal(held.statusCode, 403);
+      assert.deepEqual(
+        recordedIn(stand).map(({ data }) => data['reason']),
+        ['invalidSignature'],
+      );
+    });
+
+    test('refuses a credential over its share, the pool contended, whatever its judgement, so none is answered 403 or 503 unrecorded', async (context) => {
+      const store = deferred();
+      const stand = standUp(context, {
+        poolSize: 1,
+        storeTakes: store.promise,
+      });
+      const credentials = [
+        'credential-accepted',
+        'credential-expired',
+        'credential-forged',
+        'credential-under-a-new-key',
+        'credential-while-keys-unavailable',
+        '',
+        'uak_example',
+      ];
+
+      const holding = post(stand, withCredential('credential-forged'));
+      await untilTransactionsBegun(stand, 1);
+      const answering = Promise.all(
+        credentials.map((credential) =>
+          post(stand, withCredential(credential)),
+        ),
+      );
+      const allAtOnce = await answeredAtOnce(answering);
+      const transactionsWhileFull = stand.transactions.length;
+      store.release();
+      const [answers] = await Promise.all([answering, holding]);
+
+      assert.equal(allAtOnce, true);
+      assert.deepEqual(
+        answers.map(problemOf),
+        credentials.map(() => ({
+          code: 'admissionShareExceeded',
+          status: 503,
+        })),
+      );
+      answers.forEach((answer) => {
+        assert.equal(answer.headers['retry-after'], '1');
+      });
+      assert.equal(transactionsWhileFull, 1);
+      assert.deepEqual(
+        stand.countedOverShare,
+        credentials.map(() => APPLICATION),
+      );
+    });
+
+    test('answers a credential whose signing key is not confirmed yet 503 admissionShareExceeded with the share full and the pool contended, counting it and recording nothing, and records it denied within the share', async (context) => {
+      const store = deferred();
+      const contended = standUp(context, {
+        poolSize: 1,
+        storeTakes: store.promise,
+      });
+      const withinShare = standUp(context, { poolSize: 1 });
+
+      const holding = post(contended, withCredential('credential-forged'));
+      await untilTransactionsBegun(contended, 1);
+      const overShare = await post(
+        contended,
+        withCredential('credential-under-a-new-key'),
+      );
+      store.release();
+      await holding;
+      const recorded = await post(
+        withinShare,
+        withCredential('credential-under-a-new-key'),
+      );
+
+      assert.deepEqual(
+        {
+          problem: problemOf(overShare),
+          retryAfter: overShare.headers['retry-after'],
+        },
+        {
+          problem: { code: 'admissionShareExceeded', status: 503 },
+          retryAfter: '1',
+        },
+      );
+      assert.deepEqual(contended.countedOverShare, [APPLICATION]);
+      assert.deepEqual(
+        recordedIn(contended).map(({ data }) => data['reason']),
+        ['invalidSignature'],
+      );
+      assert.deepEqual(
+        {
+          problem: problemOf(recorded),
+          retryAfter: recorded.headers['retry-after'],
+        },
+        {
+          problem: { code: 'signingKeyUnconfirmed', status: 503 },
+          retryAfter: '17',
+        },
+      );
+      assert.deepEqual(withinShare.countedOverShare, []);
+      assert.deepEqual(
+        recordedIn(withinShare).map(({ data }) => ({
+          reason: data['reason'],
+          result: data['result'],
+        })),
+        [{ reason: 'signingKeyUnconfirmed', result: 'denied' }],
+      );
+    });
+
+    test("lends a connection idle past the application's share, and refuses its next exchange once the exchanges in flight reach the pool's connections", async (context) => {
+      const store = deferred();
+      // Two applications registered over two connections: a share of one each.
+      const stand = standUp(context, {
+        poolSize: 2,
+        registered: 2,
+        storeTakes: store.promise,
+      });
+
+      const holding = [
+        post(stand, withCredential('credential-forged')),
+        post(stand, withCredential('credential-expired')),
+      ];
+      const bothBegun = await untilTransactionsBegun(stand, 2);
+      const inFlightOnceBorrowed = stand.inFlight();
+      const overShare = await post(stand, withCredential('uak_example'));
+      store.release();
+      const held = await Promise.all(holding);
+
+      assert.equal(bothBegun, true);
+      assert.equal(inFlightOnceBorrowed, 2);
+      assert.deepEqual(held.map(problemOrStatusOf), [
+        'credentialRefused',
+        'credentialRefused',
+      ]);
+      assert.equal(problemOf(overShare).code, 'admissionShareExceeded');
+      assert.deepEqual(stand.countedOverShare, [APPLICATION]);
+      assert.equal(stand.inFlight(), 0);
+    });
+
+    test('takes no place for an exchange refused before its store work, for its assertion, its body, or a judgement that fails unexpectedly, each answered as it would be with the share free', async (context) => {
+      const store = deferred();
+      const stand = standUp(context, {
+        poolSize: 1,
+        storeTakes: store.promise,
+      });
+
+      const holding = post(stand, withCredential('credential-forged'));
+      await untilTransactionsBegun(stand, 1);
+      const answering = Promise.all([
+        post(stand, { assertion: null }),
+        post(stand, {
+          assertion: 'Bearer assertion-of-a-keyless-application',
+        }),
+        post(stand, { body: '[1]' }),
+        post(stand, { body: '{"payloadVersions":[2]}' }),
+        post(stand, {
+          body: JSON.stringify({ padding: 'x'.repeat(65_536) }),
+        }),
+        post(stand, withCredential('a credential the stand cannot judge')),
+      ]);
+      const allAtOnce = await answeredAtOnce(answering);
+      const transactionsWhileFull = stand.transactions.length;
+      store.release();
+      const [answers] = await Promise.all([answering, holding]);
+
+      assert.equal(allAtOnce, true);
+      assert.deepEqual(
+        answers.map(({ statusCode }) => statusCode),
+        [401, 401, 400, 406, 413, 500],
+      );
+      assert.deepEqual(stand.countedOverShare, []);
+      assert.equal(transactionsWhileFull, 1);
+    });
+
+    test("releases the place once the exchange's store work has ended, whether its transaction committed or failed, so each exchange after it is admitted", async (context) => {
+      const stand = standUp(context, { poolSize: 1 });
+      const failing = standUp(context, {
+        poolSize: 1,
+        readFailure: storeFailure('57P01'),
+      });
+      const unconfirmed = standUp(context, {
+        commitFailure: new CommitUnconfirmed(),
+        poolSize: 1,
+      });
+
+      const answers = [
+        await post(stand),
+        await post(stand, withCredential('credential-forged')),
+        await post(stand),
+        await post(failing),
+        await post(failing),
+        await post(unconfirmed, withCredential('credential-forged')),
+        await post(unconfirmed),
+      ];
+
+      assert.deepEqual(answers.map(problemOrStatusOf), [
+        200,
+        'credentialRefused',
+        200,
+        'storeUnavailable',
+        'storeUnavailable',
+        'outcomeUnknown',
+        'outcomeUnknown',
+      ]);
+      assert.deepEqual(
+        [
+          ...stand.countedOverShare,
+          ...failing.countedOverShare,
+          ...unconfirmed.countedOverShare,
+        ],
+        [],
+      );
+      assert.deepEqual(
+        [stand, failing, unconfirmed].map(({ inFlight }) => inFlight()),
+        [0, 0, 0],
+      );
+    });
+
+    test('issues one anonymous exchange past a full share while the pool is contended, and refuses a second one concurrent with it 503', async (context) => {
+      const store = deferred();
+      const stand = standUp(context, {
+        poolSize: 1,
+        storeTakes: store.promise,
+      });
+
+      const recording = post(stand, withCredential('credential-forged'));
+      await untilTransactionsBegun(stand, 1);
+      const admittedPastShare = post(stand);
+      const laneTaken = await untilTransactionsBegun(stand, 2);
+      const second = post(stand);
+      const secondAtOnce = await answeredAtOnce(second);
+      store.release();
+      const [recorded, issued, refused] = await Promise.all([
+        recording,
+        admittedPastShare,
+        second,
+      ]);
+
+      assert.equal(laneTaken, true);
+      assert.equal(secondAtOnce, true);
+      assert.equal(recorded.statusCode, 403);
+      assert.equal(issued.statusCode, 200);
+      assert.equal(issued.headers['content-type'], 'application/jwt');
+      assert.deepEqual(problemOf(refused), {
+        code: 'admissionShareExceeded',
+        status: 503,
+      });
+      assert.equal(refused.headers['retry-after'], '1');
+      assert.equal(stand.transactions.length, 2);
+      assert.deepEqual(stand.countedOverShare, [APPLICATION]);
+    });
+
+    test("counts an assertion it verified and refused rather than recording it, with its application's share full and the pool contended, answering it 401 alike and counting no exchange over the share", async (context) => {
+      const store = deferred();
+      const stand = standUp(context, {
+        poolSize: 1,
+        storeTakes: store.promise,
+      });
+
+      const holding = post(stand, withCredential('credential-forged'));
+      await untilTransactionsBegun(stand, 1);
+      const whileFull = await post(stand, {
+        assertion: 'Bearer assertion-expired',
+      });
+      await stand.stop();
+      const outsideWhileFull = stand.outside.length;
+      store.release();
+      await holding;
+      const onceFree = await post(stand, {
+        assertion: 'Bearer assertion-for-another-audience',
+      });
+      await stand.stop();
+
+      assert.deepEqual(
+        [whileFull, onceFree].map(({ statusCode }) => statusCode),
+        [401, 401],
+      );
+      assert.equal(outsideWhileFull, 0);
+      assert.deepEqual(stand.counted, [
+        { applicationId: APPLICATION, reason: 'expiredAssertion' },
+      ]);
+      assert.deepEqual(
+        stand.outside.map(({ event }) => event.data['reason']),
+        ['otherAudience'],
+      );
+      assert.deepEqual(stand.countedOverShare, []);
+    });
+
+    test("holds a place in the application's share while a refused assertion's rejection is being recorded", async (context) => {
+      const written = deferred();
+      const stand = standUp(context, {
+        outsideRecorded: written.promise,
+        poolSize: 1,
+      });
+
+      const refused = await post(stand, {
+        assertion: 'Bearer assertion-expired',
+      });
+      const inFlightWhileRecording = stand.inFlight();
+      const whileRecording = await post(
+        stand,
+        withCredential('credential-forged'),
+      );
+      written.release();
+      await stand.stop();
+      const afterwards = await post(stand, withCredential('credential-forged'));
+
+      assert.equal(refused.statusCode, 401);
+      assert.equal(inFlightWhileRecording, 1);
+      assert.equal(problemOf(whileRecording).code, 'admissionShareExceeded');
+      assert.equal(problemOf(afterwards).code, 'credentialRefused');
+      assert.equal(stand.outside.length, 1);
     });
   });
 });

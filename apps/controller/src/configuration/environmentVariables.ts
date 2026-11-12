@@ -14,6 +14,8 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',
+  databaseControlConnections: 'USHER_DATABASE_CONTROL_CONNECTIONS',
+  databaseExchangeConnections: 'USHER_DATABASE_EXCHANGE_CONNECTIONS',
   databasePassword: 'USHER_DATABASE_PASSWORD',
   databaseSchema: 'USHER_DATABASE_SCHEMA',
   databaseUrl: 'USHER_DATABASE_URL',

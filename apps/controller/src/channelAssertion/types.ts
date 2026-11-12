@@ -155,6 +155,19 @@ export interface RefusedAssertions {
 /** Where one route's recordings of refused assertions are written, as the system, each in a transaction of its own. */
 export type RefusalTrail = Pick<AuditTrail<unknown>, 'inTransaction'>;
 
+/**
+ * Runs one recording within the share of the application its refused assertion names: `true` once the
+ * recording has run, and `false` when the share had no room, the recording never begun. A recording
+ * that fails rejects, as the recording did.
+ *
+ * @param applicationId the application whose key the assertion verified under.
+ * @param recording the recording's transaction.
+ */
+export type RecordingAdmission = (
+  applicationId: string,
+  recording: () => Promise<void>,
+) => Promise<boolean>;
+
 /** What one route's recorder of refused assertions writes through, and how many recordings it may hold waiting. */
 export interface RefusalRoute {
   /**
@@ -165,6 +178,12 @@ export interface RefusalRoute {
 
   /** Where the route's recordings are written. */
   trail: RefusalTrail;
+
+  /**
+   * Where the route takes a place for each recording in the share of the application it names, a
+   * bound beside its own limit; a route giving none runs each recording within its limit alone.
+   */
+  within?: RecordingAdmission;
 }
 
 /** One route's recorder of refused assertions. */
@@ -183,9 +202,9 @@ export interface RefusalRecorder {
 export interface AssertionRefusals {
   /**
    * A recorder for one route, writing through the route's trail and holding at most its own limit of
-   * recordings waiting.
+   * recordings waiting, each within its application's share where the route admits them so.
    *
-   * @param route the route's trail and its limit.
+   * @param route the route's trail, its limit, and where it takes a place in a share.
    */
   forRoute(route: RefusalRoute): RefusalRecorder;
 

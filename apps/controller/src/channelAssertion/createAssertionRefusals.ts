@@ -7,6 +7,7 @@ import { REJECTION_TALLY_INTERVAL_MILLISECONDS } from './rejectionTallyIntervalM
 import type {
   AssertionRefusals,
   AssertionRefusalSettings,
+  RecordingAdmission,
   RefusalLog,
   RefusalRecorder,
   RefusalRoute,
@@ -15,6 +16,12 @@ import type {
 } from './types.js';
 
 const SYSTEM: Actor = Object.freeze({ type: 'system' });
+
+// A route admitting its recordings by its own limit alone runs each at once.
+const RUN_AT_ONCE: RecordingAdmission = async (_applicationId, recording) => {
+  await recording();
+  return true;
+};
 
 // How often the clock is read for an interval's end, in real time, while a failed recording is held:
 // the configured clock may be moved past an interval at any moment, and its lines are due soon after.
@@ -140,7 +147,10 @@ const createUnrecordedCounts = (
  * 3. with the route holding its limit of recordings waiting on the store, it is counted and not
  *    remembered;
  * 4. otherwise it is remembered, and recorded as a `channelAssertion.rejection`, as the system, in a
- *    transaction of its own on the route's trail.
+ *    transaction of its own on the route's trail, within the share of the application it names for a
+ *    route admitting its recordings so;
+ * 5. a recording the share has no room for is never begun: the assertion is forgotten and the refusal
+ *    counted, so its next refusal is taken as its first.
  *
  * No route waits on a recording: each runs beside the answer. A recording that does not commit, the
  * store refusing it, not answering in time, or not confirming its `COMMIT`, forgets the assertion and
@@ -165,17 +175,35 @@ export const createAssertionRefusals = ({
   const everyRoutePending = new Set<Promise<void>>();
   const unrecorded = createUnrecordedCounts(clock, log);
 
-  const forRoute = ({ pendingLimit, trail }: RefusalRoute): RefusalRecorder => {
+  const forRoute = ({
+    pendingLimit,
+    trail,
+    within = RUN_AT_ONCE,
+  }: RefusalRoute): RefusalRecorder => {
     const pending = new Set<Promise<void>>();
 
+    // Forgotten and counted, so the assertion's next refusal is taken as its first.
+    const forgetAndCount = (refusal: VerifiedRefusal): void => {
+      refusedAssertions.forget(refusal.signingInputDigest);
+      rejections.count(refusal.reason, refusal.applicationId);
+    };
+
+    // The route's limit is checked before a place in the share is asked for, so a refusal past the
+    // limit takes no place; both are taken in the same turn as the refusal.
     const recorded = (refusal: VerifiedRefusal): void => {
-      const recording = trail
-        .inTransaction(SYSTEM, ({ record }) => record(rejectionEvent(refusal)))
+      const recording = within(refusal.applicationId, async () => {
+        await trail.inTransaction(SYSTEM, ({ record }) =>
+          record(rejectionEvent(refusal)),
+        );
+      })
         .then(
-          () => undefined,
+          (admitted) => {
+            if (!admitted) {
+              forgetAndCount(refusal);
+            }
+          },
           (failure: unknown) => {
-            refusedAssertions.forget(refusal.signingInputDigest);
-            rejections.count(refusal.reason, refusal.applicationId);
+            forgetAndCount(refusal);
             if (!(failure instanceof CommitUnconfirmed)) {
               unrecorded.count(refusal, failure);
             }

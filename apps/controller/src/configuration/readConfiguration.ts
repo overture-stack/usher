@@ -64,6 +64,14 @@ export const readConfiguration = (
     ),
     baseline: readRecordRule(variable('baseline')),
     cursorKey: readKey(variable('cursorKey')),
+    databaseControlConnections: readInteger(
+      variable('databaseControlConnections'),
+      { fallback: 5, minimum: 1 },
+    ),
+    databaseExchangeConnections: readInteger(
+      variable('databaseExchangeConnections'),
+      { fallback: 10, minimum: 1 },
+    ),
     databasePassword: readText(variable('databasePassword')),
     databaseSchema: readText(variable('databaseSchema')),
     databaseUrl: readDatabaseUrl(variable('databaseUrl'), {
@@ -128,6 +136,10 @@ export const readConfiguration = (
       baseline: valueOf(readings.baseline),
       clock: SYSTEM_CLOCK,
       cursorKey: valueOf(readings.cursorKey),
+      databaseControlConnections: valueOf(readings.databaseControlConnections),
+      databaseExchangeConnections: valueOf(
+        readings.databaseExchangeConnections,
+      ),
       databasePassword: valueOf(readings.databasePassword),
       databaseSchema: valueOf(readings.databaseSchema),
       databaseUrl: valueOf(readings.databaseUrl),

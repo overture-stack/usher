@@ -301,6 +301,8 @@ export const createApplicationKeyRing = ({
 
     liveKeysOf: (applicationId) => state.held.byApplication.get(applicationId),
 
+    registeredCount: () => state.held.byApplication.size,
+
     reload,
 
     start: async () => {

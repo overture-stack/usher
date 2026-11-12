@@ -24,6 +24,7 @@ export type {
   ChannelAssertionCheck,
   ChannelAssertionVerifier,
   LiveKeys,
+  RecordingAdmission,
   RefusalCounter,
   RefusalLog,
   RefusalRecorder,

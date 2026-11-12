@@ -3,9 +3,10 @@ import type { KeyObject } from 'node:crypto';
 import type { RouteOptions } from 'fastify';
 import type pg from 'pg';
 
+import type { Admission } from '../admission/index.js';
 import type {
+  AssertionRefusals,
   ChannelAssertionCheck,
-  RefusalRecorder,
   UnverifiedRejectionReason,
 } from '../channelAssertion/index.js';
 import type { ControllerConfiguration } from '../configuration/index.js';
@@ -60,6 +61,16 @@ export type CredentialJudge = (
   context: Omit<SignInJudgementContext, 'verifier'>,
 ) => Promise<SignInJudgement>;
 
+/** Where the exchange counts each exchange it refuses over its application's share. */
+export interface ShareExceededCounter {
+  /**
+   * Counts one refusal.
+   *
+   * @param applicationId the application the refused exchange was for.
+   */
+  count(applicationId: string): void;
+}
+
 /** Where the exchange writes its operational lines, each named by its message. */
 export interface ExchangeLog {
   /** Writes a line at error. */
@@ -101,11 +112,21 @@ export interface KeyConfirmationSettings {
 
 /** What the exchange is created from. */
 export interface ExchangeSettings {
+  /** Admits each exchange's store work, and each recording of a refused assertion, within its application's share. */
+  admission: Admission;
+
   /**
-   * Takes each refusal of an assertion that verified, recording the instance's first refusal of each
-   * assertion and counting the rest, never holding up the answer.
+   * The most recordings of refused assertions the exchange holds waiting on the store at once, as
+   * `pendingRecordingLimit` gives it from the exchange pool's connections.
    */
-  assertionRefusals: RefusalRecorder;
+  assertionRecordingLimit: number;
+
+  /**
+   * The instance's recording of refused assertions, from which the exchange takes its own recorder:
+   * it records the instance's first refusal of each assertion that verified through the exchange's
+   * trail and counts the rest, never holding up the answer.
+   */
+  assertionRefusals: Pick<AssertionRefusals, 'forRoute'>;
 
   /** Where each refusal of an assertion that could not be verified is counted. */
   assertionRejections: RejectionCounter;
@@ -150,7 +171,13 @@ export interface ExchangeSettings {
     'baseline' | 'clock' | 'databaseSchema' | 'issuer' | 'tokenLifetimeSeconds'
   >;
 
-  /** Where each exchange's `token.exchange` is written, in the exchange's own transaction. */
+  /** Where each exchange refused over its application's share is counted. */
+  sharesExceeded: ShareExceededCounter;
+
+  /**
+   * Where each exchange's `token.exchange` is written, in the exchange's own transaction, and each
+   * refused assertion's `channelAssertion.rejection`, in one of its own: over the exchange pool.
+   */
   trail: Pick<AuditTrail<pg.ClientBase>, 'inTransaction'>;
 }
 

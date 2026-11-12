@@ -258,6 +258,31 @@ suite('the ring of live application keys', () => {
     );
   });
 
+  test('counts every registered application as the last read found them, one holding no live key included, and none before its first read', async () => {
+    const searchId = randomUUID();
+    const reads = fakeStore([
+      issuedKey(searchId).row,
+      issuedKey(searchId).row,
+      { applicationId: randomUUID(), keyId: null, sealed: null },
+    ]);
+    const ring = createApplicationKeyRing(ringSettings(reads.store));
+
+    const beforeTheFirstRead = ring.registeredCount();
+    await ring.start();
+    const atTheStart = ring.registeredCount();
+    reads.setRows([
+      issuedKey(searchId).row,
+      issuedKey(randomUUID()).row,
+      issuedKey(randomUUID()).row,
+      issuedKey(randomUUID()).row,
+    ]);
+    await ring.reload();
+    const onceReloaded = ring.registeredCount();
+    await ring.stop();
+
+    assert.deepEqual([beforeTheFirstRead, atTheStart, onceReloaded], [0, 2, 4]);
+  });
+
   test('holds a key issued, and drops a key revoked, once reloaded, calling changed for each change alone', async () => {
     const applicationId = randomUUID();
     const kept = issuedKey(applicationId);

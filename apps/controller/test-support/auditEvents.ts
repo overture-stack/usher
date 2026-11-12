@@ -23,6 +23,7 @@ export const EVENT_TYPE_PREFIX = 'bio.overture.';
  */
 export const AUDIT_EVENT_TYPES = Object.freeze({
   adminOverride: 'admin.override',
+  admissionShareExceededTally: 'admission.shareExceededTally',
   applicationKeyConfirmation: 'applicationKey.confirmation',
   applicationKeyIssuance: 'applicationKey.issuance',
   applicationKeyRevocation: 'applicationKey.revocation',

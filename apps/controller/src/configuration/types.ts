@@ -33,6 +33,20 @@ export interface ControllerConfiguration {
   /** The key cursors are encrypted under, shared by every instance: 32 bytes as 43 base64url characters in canonical form. */
   cursorKey: string;
 
+  /**
+   * The store connections each instance holds for everything but the token exchange and readiness:
+   * the Management API, the back-channel logout, the notice channel, the key reloads, the tallies and
+   * the start; 5 by default.
+   */
+  databaseControlConnections: number;
+
+  /**
+   * The store connections each instance holds for the token exchange: its own transactions, its key
+   * confirmations and its recordings of refused channel assertions; 10 by default. Each application's
+   * admission share divides them.
+   */
+  databaseExchangeConnections: number;
+
   /** The runtime role's PostgreSQL password, read from a variable of its own and never shown. */
   databasePassword: string;
 

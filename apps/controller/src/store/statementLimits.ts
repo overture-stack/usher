@@ -1,7 +1,6 @@
-import type pg from 'pg';
-
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
 import type { StartProblem } from '../failures/index.js';
+import type { StoreReader } from '../storeTimeout/index.js';
 
 /** The limits the store applies to a session, each of which the controller sets to its store timeout. */
 export const STATEMENT_LIMITS: readonly string[] = Object.freeze([
@@ -38,13 +37,13 @@ const millisecondsOf = ({ setting, unit }: StatementLimit): number =>
   Number(setting) * (UNIT_MILLISECONDS.get(unit ?? '') ?? Number.NaN);
 
 /**
- * Reads the limits the store applies to the session of the connection given, as `pg_settings`
- * reports them.
+ * Reads the limits the store applies to the session a statement runs on, as `pg_settings` reports
+ * them: the session of the connection given, or of the connection a pool's reader takes.
  *
- * @param connection the connection whose session is read.
+ * @param connection the connection, or the pool's reader, whose session is read.
  */
 export const readStatementLimits = async (
-  connection: pg.ClientBase,
+  connection: Pick<StoreReader, 'query'>,
 ): Promise<readonly StatementLimit[]> =>
   (
     await connection.query<StatementLimit>(

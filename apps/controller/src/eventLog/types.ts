@@ -98,6 +98,7 @@ export type Actor =
  */
 export type AuditEventType =
   | 'admin.override'
+  | 'admission.shareExceededTally'
   | 'application.registration'
   | 'application.servedResourcesChange'
   | 'applicationKey.confirmation'

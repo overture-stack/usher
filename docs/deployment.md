@@ -67,12 +67,14 @@ A whole number is written in digits alone, with no sign, decimal point or unit. 
 
 ### The database
 
-| Variable                           | Kind           | What it is, and its rule                                                                                                                                                                                                                                                                                                           |
-| ---------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_DATABASE_URL`               | Required       | **Both commands, alike.** A `postgres:` or `postgresql:` URL connecting as the runtime role, at the address accepting writes. It must name that role, in its user information or as a `user` parameter. It never carries a password, in either place. The schema migration command reads the role's name from it and nothing else. |
-| `USHER_DATABASE_PASSWORD`          | Secret         | The runtime role's password. The controller alone reads it.                                                                                                                                                                                                                                                                        |
-| `USHER_DATABASE_SCHEMA`            | Required       | **Both commands, alike.** The schema holding the controller's tables.                                                                                                                                                                                                                                                              |
-| `USHER_STORE_TIMEOUT_MILLISECONDS` | Optional: 5000 | How long the controller waits on the store for one unit of work, such as a request's statement or transaction, a start, or a readiness probe, before giving up on it. The server also applies it to each of the controller's sessions, as its statement and idle-in-transaction limits. A whole number from 1 to 2147483647.       |
+| Variable                              | Kind           | What it is, and its rule                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USHER_DATABASE_URL`                  | Required       | **Both commands, alike.** A `postgres:` or `postgresql:` URL connecting as the runtime role, at the address accepting writes. It must name that role, in its user information or as a `user` parameter. It never carries a password, in either place. The schema migration command reads the role's name from it and nothing else. |
+| `USHER_DATABASE_PASSWORD`             | Secret         | The runtime role's password. The controller alone reads it.                                                                                                                                                                                                                                                                        |
+| `USHER_DATABASE_SCHEMA`               | Required       | **Both commands, alike.** The schema holding the controller's tables.                                                                                                                                                                                                                                                              |
+| `USHER_DATABASE_EXCHANGE_CONNECTIONS` | Optional: 10   | The store connections each instance holds for token exchanges: their own transactions, the confirmation of each application key's first exchange, and the recording of refused channel assertions. Each application's share of an instance's exchanges divides them. A whole number of at least 1.                                 |
+| `USHER_DATABASE_CONTROL_CONNECTIONS`  | Optional: 5    | The store connections each instance holds for everything but token exchanges and readiness: the Management API, the back-channel logout, the notice channel, key reloads, the counts of refusals it records, and the start. A whole number of at least 1.                                                                          |
+| `USHER_STORE_TIMEOUT_MILLISECONDS`    | Optional: 5000 | How long the controller waits on the store for one unit of work, such as a request's statement or transaction, a start, or a readiness probe, before giving up on it. The server also applies it to each of the controller's sessions, as its statement and idle-in-transaction limits. A whole number from 1 to 2147483647.       |
 
 ### The schema migration command's own
 
@@ -161,10 +163,19 @@ The same commands make passwords needing no quoting in a shell or an environment
 
 1. The controller sends `statement_timeout` and `idle_in_transaction_session_timeout` as startup parameters on every connection, each set to `USHER_STORE_TIMEOUT_MILLISECONDS`.
 2. Those limits are what end a statement or transaction the controller has given up on, since the server goes on running it after its client has gone.
-3. At each start, the controller reads both limits back from the server. It refuses to start, naming `USHER_DATABASE_URL`, when either is missing or differs.
+3. At each start, the controller reads both limits back from the server, on a connection of each of its pools. It refuses to start, naming `USHER_DATABASE_URL`, when either is missing or differs.
 4. So connect directly, or through a pooler only where each of the controller's connections keeps one server session carrying both limits. A pooler in transaction mode hands each transaction whichever server session is free, and a pooler that refuses or drops startup parameters it does not track, in any mode, fails the check at start.
 
 The schema migration command holds a session-level lock for its whole run, so it too needs one server session throughout: connect it directly, or through a pooler in session mode.
+
+**Each instance holds at most as many connections as `USHER_DATABASE_EXCHANGE_CONNECTIONS` plus `USHER_DATABASE_CONTROL_CONNECTIONS` plus one**, the last for its readiness probe alone: 16 at the defaults. The connections the database must take at once are:
+
+- that sum, times the most instances that can run at once: the replicas, plus those a rolling update starts before it stops old ones (its surge);
+- plus the schema migration command's own connection while it runs.
+
+Keep that total at most the database's `max_connections`, less the connections it keeps reserved and those its other clients hold. Through a pooler, each instance's sum counts against the pooler's limit on client connections, and the pooler's own connections to the database count against `max_connections`.
+
+For example, 3 replicas with a surge of 1, at the defaults, hold at most 4 × 16 = 64 connections, and a schema migration run adds 1, for 65. A database whose `max_connections` is 100, with 3 reserved and 10 held by other clients, leaves 87, so it takes them.
 
 ### The two database roles
 

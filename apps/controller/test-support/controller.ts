@@ -55,6 +55,18 @@ export interface ControllerSettings {
   cursorKey: string;
 
   /**
+   * The store connections each instance holds for everything but the token exchange and readiness: 5
+   * by default, a whole number of at least 1.
+   */
+  databaseControlConnections: number;
+
+  /**
+   * The store connections each instance holds for the token exchange, which each application's
+   * admission share divides: 10 by default, a whole number of at least 1.
+   */
+  databaseExchangeConnections: number;
+
+  /**
    * The runtime role's PostgreSQL password, in a variable of its own: a missing one refuses the start,
    * naming the variable and never its value.
    */
@@ -440,6 +452,8 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',
+  databaseControlConnections: 'USHER_DATABASE_CONTROL_CONNECTIONS',
+  databaseExchangeConnections: 'USHER_DATABASE_EXCHANGE_CONNECTIONS',
   databasePassword: 'USHER_DATABASE_PASSWORD',
   databaseSchema: 'USHER_DATABASE_SCHEMA',
   databaseUrl: 'USHER_DATABASE_URL',
@@ -538,6 +552,8 @@ export const environmentFor = ({
   backChannelLogoutAudiences,
   baseline,
   cursorKey,
+  databaseControlConnections,
+  databaseExchangeConnections,
   databasePassword,
   databaseSchema,
   databaseUrl,
@@ -569,6 +585,12 @@ export const environmentFor = ({
     backChannelLogoutAudiences.join(','),
   [VARIABLE_NAMES.baseline]: baseline.join(','),
   [VARIABLE_NAMES.cursorKey]: cursorKey,
+  [VARIABLE_NAMES.databaseControlConnections]: String(
+    databaseControlConnections,
+  ),
+  [VARIABLE_NAMES.databaseExchangeConnections]: String(
+    databaseExchangeConnections,
+  ),
   [VARIABLE_NAMES.databasePassword]: databasePassword,
   [VARIABLE_NAMES.databaseSchema]: databaseSchema,
   [VARIABLE_NAMES.databaseUrl]: databaseUrl,

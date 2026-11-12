@@ -135,6 +135,7 @@ export const RECURRING_PROPERTIES = Object.freeze({
  * being system-generated, no `sourceIp` (`audit-events.md` § Two families of event; #214 Q19).
  */
 export const OBSERVATION_TYPES: readonly AuditEventType[] = Object.freeze([
+  'admission.shareExceededTally',
   'applicationKey.confirmation',
   'applicationKey.unreadable',
   'channelAssertion.rejectionTally',

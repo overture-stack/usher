@@ -704,6 +704,13 @@ filter to apply, or `allow` for a catalogue open by configuration. Each arm has 
 at the application and none is an absent filter, so an omission never reads as consent. See
 [decisions.md](decisions.md) § Holding no grants is a distinct state, never an empty filter.
 
+**Exchange connections** and **control connections** _(two of a controller instance's store pools)_
+**Exchange connections** serve the token exchange alone: its own transactions, its key confirmations
+and its recordings of refused channel assertions. Each application's admission share divides them.
+**Control connections** serve everything else: the Management API, the back-channel logout, the
+notice channel, the key reloads, the tallies and the start. Readiness holds one connection of its own
+beside both. See [deployment.md](../../docs/deployment.md) § Connections and poolers.
+
 **Expiry** _(of a grant, and of a token)_
 Two things end on their own, and neither is anyone's act. A **grant's expiry** is the end of the
 period it was given, its `expires_at`, after which the controller leaves it out of every token it
