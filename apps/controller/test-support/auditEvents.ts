@@ -716,45 +716,52 @@ export const TOKEN_CAP_EVENT = Object.freeze({
  * token verifying under the trusted issuer and naming no `exp` is `missingExpiry` (ruled), not
  * `expiredToken`: the fault is an identity provider issuing tokens with no lifetime, not a clock or a
  * session's length, and the exchange and the Management API name it alike. A token issued before a
- * platform revocation, or naming no `iat`, is `revokedPlatform` at both. `invalidSignature`'s cases
- * are the developer's own suites'.
+ * platform revocation, or naming no `iat`, is `revokedPlatform` at both. A `credential` holding empty
+ * text is `missingCredential`. A token not marked as an access token by its identity provider's
+ * connector is `otherType`, one naming no `sub` is `missingSubject`, and one whose `sub` or `sid`
+ * holds text that cannot be stored is `unrepresentableSubject`, each read from the token's contents
+ * and naming no subject. A token whose signing key is not confirmed yet is `signingKeyUnconfirmed`,
+ * denied rather than failed, since a made-up key id or a routine key rotation produces it.
+ * `invalidSignature`'s cases are the developer's own suites'.
  */
 export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
   apiKeyVerifierNotConfigured: 'apiKeyVerifierNotConfigured',
   expiredToken: 'expiredToken',
   invalidSignature: 'invalidSignature',
+  missingCredential: 'missingCredential',
   missingExpiry: 'missingExpiry',
+  missingSubject: 'missingSubject',
   notYetValid: 'notYetValid',
   otherAudience: 'otherAudience',
   otherIssuer: 'otherIssuer',
+  otherType: 'otherType',
   revokedPlatform: 'revokedPlatform',
   revokedPrincipal: 'revokedPrincipal',
   signedOutSession: 'signedOutSession',
+  signingKeyUnconfirmed: 'signingKeyUnconfirmed',
   unreadableToken: 'unreadableToken',
+  unrepresentableSubject: 'unrepresentableSubject',
 } as const);
 
 /**
  * The reasons a `managementToken.refusal` records (ruled), in the order the table lists them: a
  * management token that verifies under the trusted issuer and is still refused. Each is one of
- * {@link EXCHANGE_REFUSAL_REASONS} but three, which a refused `token.exchange` records too, naming no
- * subject there: `missingSubject`, a token naming no `sub`; `otherType`, a token not marked as an
- * access token by its identity provider's connector; and `unrepresentableSubject`, one whose `sub` or
- * `sid` holds text that cannot be stored. Those of {@link EXCHANGE_REFUSAL_REASONS} are also the
- * reasons alone a refused `token.exchange` names the token's subject for, in
- * {@link REFUSED_SUBJECT_MEMBER}.
+ * {@link EXCHANGE_REFUSAL_REASONS}. A refused `token.exchange` names the token's subject, in
+ * {@link REFUSED_SUBJECT_MEMBER}, for each of them but `missingSubject`, `otherType` and
+ * `unrepresentableSubject`.
  */
 export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] =
   Object.freeze([
     EXCHANGE_REFUSAL_REASONS.expiredToken,
     EXCHANGE_REFUSAL_REASONS.missingExpiry,
-    'missingSubject',
+    EXCHANGE_REFUSAL_REASONS.missingSubject,
     EXCHANGE_REFUSAL_REASONS.notYetValid,
     EXCHANGE_REFUSAL_REASONS.otherAudience,
-    'otherType',
+    EXCHANGE_REFUSAL_REASONS.otherType,
     EXCHANGE_REFUSAL_REASONS.revokedPlatform,
     EXCHANGE_REFUSAL_REASONS.revokedPrincipal,
     EXCHANGE_REFUSAL_REASONS.signedOutSession,
-    'unrepresentableSubject',
+    EXCHANGE_REFUSAL_REASONS.unrepresentableSubject,
   ]);
 
 /**
@@ -772,17 +779,19 @@ export const MANAGEMENT_TOKEN_TALLY_REASONS: readonly string[] = Object.freeze([
 
 /**
  * The member naming a refused token's subject (ruled): the `sub` of a sign-in or management token
- * whose signature verifies under the trusted issuer and which is refused anyway, for one of
- * {@link MANAGEMENT_TOKEN_REFUSAL_REASONS}. It is a member of its own and never the actor, which stays
- * anonymous with a `null` `actorId`. It holds a `sub` of up to
+ * whose signature verifies under the trusted issuer and which is refused anyway. It is a member of its
+ * own and never the actor, which stays anonymous with a `null` `actorId`. It holds a `sub` of up to
  * {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters whole, and is left out for a longer one, never
- * truncated. Within that length, a `managementToken.refusal` carries it unless the `sub` is absent or
- * cannot be stored; a refused
- * `token.exchange` carries it for those reasons alone, and for a token whose signature does not verify
- * (`unreadableToken`, `otherIssuer`, `invalidSignature`) or an opaque credential
- * (`apiKeyVerifierNotConfigured`) leaves it out, never empty and never `null`, so a forged token
- * cannot put anyone's subject in the trail. A `managementToken.refusalTally` carries no subject, and
- * neither does the bridge's `credential.refusal`.
+ * truncated. Within that length, a `managementToken.refusal` carries it for `expiredToken`,
+ * `missingExpiry`, `notYetValid`, `otherAudience`, `otherType`, `revokedPlatform`, `revokedPrincipal`
+ * and `signedOutSession`, and a refused `token.exchange` for `expiredToken`, `missingExpiry`,
+ * `notYetValid` and `otherAudience` alone, once the token's signature verifies. Neither carries it for
+ * `missingSubject` or `unrepresentableSubject`, and `otherType` names it at the Management API alone.
+ * A refused `token.exchange` for a token whose signature does not verify (`unreadableToken`,
+ * `otherIssuer`, `invalidSignature`) or for an opaque credential (`apiKeyVerifierNotConfigured`)
+ * leaves it out, never empty and never `null`, so a forged token cannot put anyone's subject in the
+ * trail. A `managementToken.refusalTally` carries no subject, and neither does the bridge's
+ * `credential.refusal`.
  */
 export const REFUSED_SUBJECT_MEMBER = 'refusedSubject';
 
