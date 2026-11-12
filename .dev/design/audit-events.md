@@ -370,8 +370,9 @@ clock.
 **A credential refused at the exchange is recorded under the code another route gives the same
 cause, wherever one does.** Each is a `token.exchange` `denied`, its `reason` that code. A
 `credential` holding empty text is `missingCredential`. No other route records an empty credential,
-so this code is the exchange's own. A logout token, by its `events` or its header's type, is
-`otherType`, as the logout endpoint refuses a token of another type. A token naming no `sub` is
+so this code is the exchange's own. A token not marked as an access token by its identity provider's
+connector, an ID token or a logout token among them, is `otherType`: the exchange takes access
+tokens alone, as the logout endpoint takes logout tokens alone. A token naming no `sub` is
 `missingSubject`, and one whose `sub` or `sid` holds text that cannot be stored is
 `unrepresentableSubject`, as at the Management API. The exchange reads these three from the token's
 contents without checking its signature, so each is recorded whether or not the token verifies, and

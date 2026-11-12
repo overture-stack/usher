@@ -109,7 +109,19 @@ suite("the exchange's reading of a sign-in token's claims", () => {
     assert.equal(read({ nbf: SECONDS + TOLERANCE_SECONDS }).kind, 'accepted');
   });
 
-  test("refuses a logout token as otherType by its events or its header's type, whatever else it carries, naming no subject", () => {
+  test("refuses every other token issued by Keycloak, by its payload's typ, as otherType, naming no subject", () => {
+    ['ID', 'Refresh', 'Offline', 'Logout', 'DPoP', 'Serialized-ID'].forEach(
+      (typ) => assert.deepEqual(read({ typ }), unnamed('otherType')),
+    );
+  });
+
+  test('refuses a token naming no payload typ, or one that is not the text Bearer, as otherType, naming no subject', () => {
+    [undefined, 7, ['Bearer']].forEach((typ) =>
+      assert.deepEqual(read({ typ }), unnamed('otherType')),
+    );
+  });
+
+  test("refuses a logout token as otherType by its events or its header's type, whatever else it carries, a payload typ of Bearer included, naming no subject", () => {
     const logoutEvents = [
       { [BACK_CHANNEL_LOGOUT_EVENT]: {} },
       { [BACK_CHANNEL_LOGOUT_EVENT]: true },
@@ -132,8 +144,9 @@ suite("the exchange's reading of a sign-in token's claims", () => {
     );
   });
 
-  test("accepts a token whose header's type names another kind, or none", () => {
+  test("accepts an access token whatever its header's type: JWT, at+jwt, another kind, or none", () => {
     const headers: readonly TokenHeader[] = [
+      HEADER,
       { ...HEADER, typ: 'at+jwt' },
       { ...HEADER, typ: 'application/jwt' },
       Object.fromEntries(
@@ -146,7 +159,7 @@ suite("the exchange's reading of a sign-in token's claims", () => {
     );
   });
 
-  test('refuses a token naming no subject, an empty one or one that is not text as missingSubject, naming none', () => {
+  test('refuses an access token naming no subject, an empty one or one that is not text as missingSubject, naming none', () => {
     [undefined, '', 7, null, ['subject-ana']].forEach((sub) =>
       assert.deepEqual(read({ sub }), unnamed('missingSubject')),
     );
@@ -195,7 +208,12 @@ suite("the exchange's reading of a sign-in token's claims", () => {
     );
   });
 
-  test('judges the subject and session before the times, and the times before the audience', () => {
+  test('judges the type before the subject and session, those before the times, and the times before the audience', () => {
+    assert.deepEqual(read({ sub: undefined, typ: 'ID' }), unnamed('otherType'));
+    assert.deepEqual(
+      read({ aud: 'account', exp: SECONDS - 3600, typ: 'Refresh' }),
+      unnamed('otherType'),
+    );
     assert.deepEqual(
       read({ exp: SECONDS - 3600, sub: 'subject\u0000ana' }),
       unnamed('unrepresentableSubject'),

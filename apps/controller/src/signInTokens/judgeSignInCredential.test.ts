@@ -31,6 +31,8 @@ const ENCRYPTED_SHAPE = ['first', '', 'third', 'fourth', 'fifth']
   .map(segment)
   .join('.');
 
+// A Keycloak access token's claims for the calling application, its `typ` the one given to an
+// access token by Keycloak.
 const claimsWith = (
   departures: Readonly<Record<string, unknown>> = {},
 ): TokenClaims =>
@@ -42,6 +44,7 @@ const claimsWith = (
       iss: 'https://auth.example.org/realms/usher',
       sid: 'session-1',
       sub: 'subject-ana',
+      typ: 'Bearer',
       ...departures,
     }).filter(([, value]) => value !== undefined),
   );
@@ -173,6 +176,7 @@ suite(
         {
           events: { 'http://schemas.openid.net/event/backchannel-logout': {} },
         },
+        { typ: 'ID' },
         { sub: undefined },
         { sub: 'subject\u0000ana' },
         { sid: 'session\u0000' },
@@ -191,6 +195,7 @@ suite(
           recorded('missingExpiry', 'subject-ana'),
           recorded('notYetValid', 'subject-ana'),
           recorded('otherAudience', 'subject-ana'),
+          recorded('otherType'),
           recorded('otherType'),
           recorded('missingSubject'),
           recorded('unrepresentableSubject'),

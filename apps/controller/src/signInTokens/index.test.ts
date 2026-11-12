@@ -7,6 +7,7 @@ suite("the sign-in tokens' module", () => {
   test('exports at run time exactly the values its surface names', () => {
     assert.deepEqual(Object.keys(signInTokens).toSorted(), [
       'currencyOf',
+      'isKeycloakAccessToken',
       'judgeSignInCredential',
       'namesAudience',
       'readNames',

@@ -1,6 +1,7 @@
 import { REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import { BACK_CHANNEL_LOGOUT_EVENT } from '../signOuts/index.js';
 import { currencyOf } from './currencyOf.js';
+import { isKeycloakAccessToken } from './isKeycloakAccessToken.js';
 import { namesAudience } from './namesAudience.js';
 import { readNames } from './readNames.js';
 import { sessionOf } from './sessionOf.js';
@@ -34,7 +35,8 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // The same provider signs logout tokens and sign-in tokens, so a logout token is told apart by what it
-// declares: the back-channel logout among its `events`, whatever that member holds, or its type.
+// declares: the back-channel logout among its `events`, whatever that member holds, or its type. Read
+// alongside the access-token recognition, so a logout token is refused whatever its payload's `typ`.
 const isLogoutToken = ({ claims, header }: TokenContents): boolean => {
   const { events } = claims;
   const { typ } = header;
@@ -59,12 +61,14 @@ const refused = (
 });
 
 /**
- * Judges a sign-in token's claims for the exchange at an instant, in this order. It must not be a
- * logout token: one whose `events` hold the back-channel logout member, or whose header's `typ` is
- * `logout+jwt` in any letter case, with or without the `application/` prefix, is refused as
- * `otherType` whatever else it carries. Its names must be readable, as {@link readNames} reads them on
- * every route. Its `exp` is required and must not have passed, and any `nbf` must be reached, each
- * within the clock tolerance. And its `aud`, one string or a list, must name the calling application.
+ * Judges a sign-in token's claims for the exchange at an instant, in this order. It must be an access
+ * token, as its identity provider's connector recognizes one: Keycloak's, by
+ * {@link isKeycloakAccessToken}. And it must not be a logout token: one whose `events` hold the
+ * back-channel logout member, or whose header's `typ` is `logout+jwt` in any letter case, with or
+ * without the `application/` prefix. A token failing either is refused as `otherType` whatever else it
+ * carries. Its names must be readable, as {@link readNames} reads them on every route. Its `exp` is
+ * required and must not have passed, and any `nbf` must be reached, each within the clock tolerance.
+ * And its `aud`, one string or a list, must name the calling application.
  * A refusal in {@link SUBJECT_NAMING_REFUSALS} names the token's `sub` in `refusedSubject` when that is
  * at most {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters, and no other refusal names it. Its issuer
  * and signature are the verifier's to judge, and are not judged here.
@@ -78,7 +82,7 @@ export const readSignInClaims = (
   audience: string,
   now: number,
 ): SignInClaimsReading => {
-  if (isLogoutToken(token)) {
+  if (isLogoutToken(token) || !isKeycloakAccessToken(token)) {
     return refused('otherType');
   }
   const { claims } = token;

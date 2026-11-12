@@ -80,9 +80,10 @@ export type NamesReading =
 
 /**
  * Why the exchange refuses a signed token for what it carries, each a fixed code naming the fault and
- * never a value from it: a logout token presented (`otherType`); names refused, as {@link NamesRefusal}
- * gives them; no `exp` (`missingExpiry`), an `exp` passed (`expiredToken`), or an `nbf` not reached
- * (`notYetValid`); or an `aud` that does not name the calling application (`otherAudience`).
+ * never a value from it: a token other than an access token presented, an ID token or a logout token
+ * among them (`otherType`); names refused, as {@link NamesRefusal} gives them; no `exp`
+ * (`missingExpiry`), an `exp` passed (`expiredToken`), or an `nbf` not reached (`notYetValid`); or an
+ * `aud` that does not name the calling application (`otherAudience`).
  */
 export type SignInClaimsRefusal =
   | 'expiredToken'

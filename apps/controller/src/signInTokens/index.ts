@@ -1,4 +1,5 @@
 export { currencyOf } from './currencyOf.js';
+export { isKeycloakAccessToken } from './isKeycloakAccessToken.js';
 export { judgeSignInCredential } from './judgeSignInCredential.js';
 export { namesAudience } from './namesAudience.js';
 export { readNames } from './readNames.js';
