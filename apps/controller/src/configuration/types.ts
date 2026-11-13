@@ -104,7 +104,7 @@ export interface ControllerConfiguration {
   /** The margin the notice retention floor adds beyond the token lifetime and the grace period, in seconds; 30 by default. */
   retentionMarginSeconds: number;
 
-  /** The identity provider realm role marking its holder's token as a service account's, refused on every Management API operation; a role other than the administrator role, `usher-service-account` by default. */
+  /** The identity provider realm role marking its holder's token as a service account's; a role other than the administrator role, `usher-service-account` by default. */
   serviceAccountRole: string;
 
   /** The longest lifetime of a sign-in token the controller accepts, in seconds. */

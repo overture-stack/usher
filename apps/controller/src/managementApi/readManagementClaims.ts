@@ -35,8 +35,8 @@ const realmRolesOf = (claims: TokenClaims): readonly unknown[] => {
 };
 
 // Any one mark makes a token a service account's: either sign of a client-credentials token, or the
-// service-account realm role. So a person's token carrying one is refused as a service account's
-// rather than admitted as a person's.
+// service-account realm role. So a person's token carrying one is read as a service account's
+// rather than as a person's.
 const isServiceAccount = (
   claims: TokenClaims,
   serviceAccountRole: string,

@@ -106,8 +106,7 @@ export const readConfiguration = (
     port: readInteger(variable('port'), { maximum: 65_535, minimum: 0 }),
     retentionGraceSeconds: retention.retentionGraceSeconds,
     retentionMarginSeconds: retention.retentionMarginSeconds,
-    // Every token holding the administrator role would carry the service-account mark, refused on
-    // every Management API operation.
+    // Equal names would mark every administrator as a service account.
     serviceAccountRole: then(
       readText(variable('serviceAccountRole'), {
         fallback: 'usher-service-account',

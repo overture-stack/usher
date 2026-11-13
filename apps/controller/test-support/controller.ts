@@ -143,7 +143,7 @@ export interface ControllerSettings {
   /** The margin, in seconds, that the notice retention floor adds beyond the token lifetime and the grace period. */
   retentionMarginSeconds: number;
 
-  /** The identity provider realm role marking its holder's token as a service account's, refused on every Management API operation; a role other than the administrator role, `usher-service-account` by default. */
+  /** The identity provider realm role marking its holder's token as a service account's; a role other than the administrator role, `usher-service-account` by default. */
   serviceAccountRole: string;
 
   /**
