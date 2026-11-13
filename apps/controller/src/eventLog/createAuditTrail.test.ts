@@ -15,6 +15,7 @@ import type {
   Actor,
   AuditEvent,
   AuditTrail,
+  AuditTransaction,
   EventLog,
   TrailConnection,
 } from './types.js';
@@ -41,6 +42,16 @@ const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 const ROW_INSERT = /^INSERT INTO "usher"\.audit_log /u;
+
+// Each statement as the trail sends it, in full: an event's row, the declaration of the actor alone,
+// and the declaration setting both of the store's limits beside it.
+const ROW_INSERT_TEXT =
+  'INSERT INTO "usher".audit_log (id, specversion, source, type, occurred_at, dataschema, data, severity) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)';
+
+const ACTOR_DECLARATION =
+  "SELECT set_config('usher.actor_type', $1, true), set_config('usher.actor_id', $2, true)";
+
+const ACTOR_AND_LIMITS_DECLARATION = `${ACTOR_DECLARATION}, set_config('statement_timeout', $3, true), set_config('idle_in_transaction_session_timeout', $3, true)`;
 
 const GRANT_CREATION: AuditEvent = Object.freeze({
   data: {
@@ -198,6 +209,11 @@ const trailOver = (store: FakeStore = fakeStore()): Trail => {
 const rowInserts = (statements: readonly Statement[]): readonly Statement[] =>
   statements.filter(({ text }) => ROW_INSERT.test(text));
 
+const declarationsIn = (
+  statements: readonly Statement[],
+): readonly Statement[] =>
+  statements.filter(({ text }) => text.includes('set_config'));
+
 const dataOf = (
   line: Readonly<Record<string, unknown>> | undefined,
 ): Readonly<Record<string, unknown>> =>
@@ -232,6 +248,32 @@ suite('the audit trail', () => {
       /set_config\('usher\.actor_type', \$1, true\), set_config\('usher\.actor_id', \$2, true\)/u,
     );
     assert.deepEqual(store.releases, [undefined]);
+  });
+
+  test("sends a transaction naming no failure event as a plain BEGIN, the statement declaring its actor, the work's statements and COMMIT, each a query of its own", async () => {
+    const { store, trail } = trailOver();
+
+    await trail.inTransaction(ANA, async ({ connection, record }) => {
+      await connection.query('UPDATE grants SET revoked_at = now()');
+      await record(GRANT_CREATION);
+    });
+
+    assert.deepEqual(
+      store.statements.map(({ text }) => text),
+      [
+        'BEGIN',
+        ACTOR_DECLARATION,
+        'UPDATE grants SET revoked_at = now()',
+        ROW_INSERT_TEXT,
+        'COMMIT',
+      ],
+    );
+    assert.deepEqual(
+      store.statements
+        .filter(({ text }) => !ROW_INSERT.test(text))
+        .map(({ values }) => values),
+      [undefined, ['human', 'subject-ana'], undefined, undefined],
+    );
   });
 
   test('declares an actor who is nobody with an empty subject', async () => {
@@ -897,6 +939,70 @@ suite('a transaction given a deadline', () => {
     assert.match(store.statements[1]?.text ?? '', DECLARING_LIMITS);
   });
 
+  test("sends one naming no failure event as a plain BEGIN, the statement declaring its actor and both limits, the work's statements and COMMIT, each a query of its own", async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const { store, trail } = trailOver();
+
+    await trail.inTransaction(
+      ANA,
+      async ({ connection, record }) => {
+        await connection.query('UPDATE grants SET revoked_at = now()');
+        await record(GRANT_CREATION);
+      },
+      { deadline: deadlineAt(200) },
+    );
+
+    assert.deepEqual(
+      store.statements.map(({ text }) => text),
+      [
+        'BEGIN',
+        ACTOR_AND_LIMITS_DECLARATION,
+        'UPDATE grants SET revoked_at = now()',
+        ROW_INSERT_TEXT,
+        'COMMIT',
+      ],
+    );
+    assert.deepEqual(
+      store.statements
+        .filter(({ text }) => !ROW_INSERT.test(text))
+        .map(({ values }) => values),
+      [undefined, ['human', 'subject-ana', '200'], undefined, undefined],
+    );
+  });
+
+  test('declares its actor and both limits again after rolling back to the savepoint of a failure event, with the statement and the values it began with, though time has passed', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const { store, trail } = trailOver();
+    const failure = new Error('the change was refused');
+    const failureEvent: AuditEvent = {
+      data: { reason: 'storeUnavailable', result: 'failed' },
+      severity: 'error',
+      type: 'token.exchange',
+    };
+
+    await assert.rejects(
+      trail.inTransaction(
+        ANA,
+        async ({ connection }) => {
+          await connection.query('UPDATE grants SET revoked_at = now()');
+          context.mock.timers.tick(40);
+          throw failure;
+        },
+        { deadline: deadlineAt(220), failureEvent },
+      ),
+      (thrown) => thrown === failure,
+    );
+    const [first, again, ...more] = declarationsIn(store.statements);
+
+    assert.deepEqual(first, {
+      text: ACTOR_AND_LIMITS_DECLARATION,
+      values: ['human', 'subject-ana', '220'],
+    });
+    assert.deepEqual(again, first);
+    assert.deepEqual(more, []);
+    assert.equal(store.statements.at(-1)?.text, 'COMMIT');
+  });
+
   test('sends no COMMIT when less than the commit window is left to its deadline as its work ends, failing with StoreTimeout, discarding its connection and writing no line', async (context) => {
     context.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
     const deadlineMilliseconds = 200;
@@ -1019,6 +1125,331 @@ suite('a transaction given a deadline', () => {
 
     assert.deepEqual(store.statements[1]?.values, ['human', 'subject-ana']);
     assert.doesNotMatch(store.statements[1]?.text ?? '', /statement_timeout/u);
+  });
+});
+
+suite('a transaction naming a failure event', () => {
+  const STORE_FAILURE: AuditEvent = Object.freeze({
+    actor: { type: 'anonymous' } as const,
+    data: { reason: 'storeUnavailable', result: 'failed', userId: null },
+    severity: 'error',
+    type: 'token.exchange',
+  });
+
+  // Each statement by its first word, a text naming a savepoint in full without the savepoint's name,
+  // and an event's row as `INSERT row`.
+  const shapeOf = ({ text }: Statement): string => {
+    if (ROW_INSERT.test(text)) {
+      return 'INSERT row';
+    }
+    const savepoint =
+      /^(?<command>(?:BEGIN; |ROLLBACK TO )?SAVEPOINT) \w+$/u.exec(text)
+        ?.groups?.['command'];
+    return savepoint ?? text.split(' ')[0] ?? text;
+  };
+
+  // The savepoint each statement naming one names.
+  const savepointsNamed = (
+    statements: readonly Statement[],
+  ): readonly string[] =>
+    statements.flatMap(
+      ({ text }) =>
+        /SAVEPOINT (?<name>\w+)$/u.exec(text)?.groups?.['name'] ?? [],
+    );
+
+  // Each event's row inserted, by its id and its type.
+  const rowsInserted = (
+    statements: readonly Statement[],
+  ): readonly { id: unknown; type: unknown }[] =>
+    rowInserts(statements).map(({ values }) => ({
+      id: values?.[0],
+      type: values?.[3],
+    }));
+
+  const failingWork =
+    (failure: Error) =>
+    async ({
+      connection,
+      record,
+    }: AuditTransaction<TrailConnection>): Promise<never> => {
+      await connection.query('INSERT INTO grants DEFAULT VALUES');
+      await record(GRANT_CREATION);
+      throw failure;
+    };
+
+  test('runs its work under a savepoint taken in one query with its BEGIN, given no values, before its actor is declared, committing and writing its lines as any transaction does when the work succeeds', async () => {
+    const { lines, store, trail } = trailOver();
+
+    const result = await trail.inTransaction(
+      ANA,
+      async ({ record }) => {
+        await record(GRANT_CREATION);
+        return 'changed';
+      },
+      { failureEvent: STORE_FAILURE },
+    );
+
+    assert.equal(result, 'changed');
+    assert.deepEqual(store.statements.map(shapeOf), [
+      'BEGIN; SAVEPOINT',
+      'SELECT',
+      'INSERT row',
+      'COMMIT',
+    ]);
+    assert.equal(store.statements[0]?.values, undefined);
+    assert.deepEqual(store.statements[1], {
+      text: ACTOR_DECLARATION,
+      values: ['human', 'subject-ana'],
+    });
+    assert.deepEqual(
+      lines().map(({ type }) => type),
+      ['bio.overture.grant.creation'],
+    );
+    assert.deepEqual(store.releases, [undefined]);
+  });
+
+  test("rolls back to its savepoint when the work fails, declares its actor again, records the failure event in place of every event the work recorded, commits, and writes the failure event's line alone, throwing the work's failure", async () => {
+    const { lines, store, trail } = trailOver();
+    const failure = new Error('the change was refused');
+
+    await assert.rejects(
+      trail.inTransaction(ANA, failingWork(failure), {
+        failureEvent: STORE_FAILURE,
+      }),
+      (thrown) => thrown === failure,
+    );
+    const [, failureRow] = rowsInserted(store.statements);
+
+    assert.deepEqual(store.statements.map(shapeOf), [
+      'BEGIN; SAVEPOINT',
+      'SELECT',
+      'INSERT',
+      'INSERT row',
+      'ROLLBACK TO SAVEPOINT',
+      'SELECT',
+      'INSERT row',
+      'COMMIT',
+    ]);
+    assert.equal(new Set(savepointsNamed(store.statements)).size, 1);
+    assert.deepEqual(
+      rowsInserted(store.statements).map(({ type }) => type),
+      ['bio.overture.grant.creation', 'bio.overture.token.exchange'],
+    );
+    assert.deepEqual(
+      lines().map((line) => ({
+        actorId: dataOf(line)['actorId'],
+        actorType: dataOf(line)['actorType'],
+        id: line['id'],
+        reason: dataOf(line)['reason'],
+        result: dataOf(line)['result'],
+        type: line['type'],
+      })),
+      [
+        {
+          actorId: null,
+          actorType: 'anonymous',
+          id: failureRow?.id,
+          reason: 'storeUnavailable',
+          result: 'failed',
+          type: 'bio.overture.token.exchange',
+        },
+      ],
+    );
+    assert.deepEqual(store.releases, [undefined]);
+  });
+
+  test('declares its actor again after rolling back to its savepoint with the statement and the values it began with', async () => {
+    const { store, trail } = trailOver();
+    const failure = new Error('the change was refused');
+
+    await assert.rejects(
+      trail.inTransaction(ANA, failingWork(failure), {
+        failureEvent: STORE_FAILURE,
+      }),
+      (thrown) => thrown === failure,
+    );
+    const [first, again, ...more] = declarationsIn(store.statements);
+
+    assert.deepEqual(first, {
+      text: ACTOR_DECLARATION,
+      values: ['human', 'subject-ana'],
+    });
+    assert.deepEqual(again, first);
+    assert.deepEqual(more, []);
+  });
+
+  test('records the failure event when a statement of the work fails at the store', async () => {
+    const { lines, store, trail } = trailOver(
+      fakeStore((text) => text.startsWith('UPDATE')),
+    );
+
+    await assert.rejects(
+      trail.inTransaction(
+        ANA,
+        async ({ connection }) => {
+          await connection.query('UPDATE grants SET revoked_at = now()');
+        },
+        { failureEvent: STORE_FAILURE },
+      ),
+      { message: 'the store refused UPDATE' },
+    );
+
+    assert.equal(store.statements.at(-1)?.text, 'COMMIT');
+    assert.deepEqual(
+      lines().map(({ type }) => type),
+      ['bio.overture.token.exchange'],
+    );
+  });
+
+  test("records nothing when its connection cannot be rolled back to the savepoint, discarding the connection and throwing the work's failure", async () => {
+    const { lines, store, trail } = trailOver(
+      fakeStore((text) => text.startsWith('ROLLBACK')),
+    );
+    const failure = new Error('the change was refused');
+
+    await assert.rejects(
+      trail.inTransaction(ANA, failingWork(failure), {
+        failureEvent: STORE_FAILURE,
+      }),
+      (thrown) => thrown === failure,
+    );
+
+    assert.deepEqual(store.statements.map(shapeOf).slice(-2), [
+      'ROLLBACK TO SAVEPOINT',
+      'ROLLBACK',
+    ]);
+    assert.deepEqual(
+      rowsInserted(store.statements).map(({ type }) => type),
+      ['bio.overture.grant.creation'],
+    );
+    assert.deepEqual(lines(), []);
+    assert.deepEqual(store.releases, [true]);
+  });
+
+  test("records nothing when its connection fails as it declares its actor again after the rollback to the savepoint, discarding the connection and throwing the work's failure", async () => {
+    // A connection lost once it has rolled back to the savepoint: every statement after fails.
+    const store: FakeStore = fakeStore(
+      (text) =>
+        !text.startsWith('ROLLBACK TO SAVEPOINT') &&
+        store.statements.some(({ text: sent }) =>
+          sent.startsWith('ROLLBACK TO SAVEPOINT'),
+        ),
+    );
+    const { lines, trail } = trailOver(store);
+    const failure = new Error('the change was refused');
+
+    await assert.rejects(
+      trail.inTransaction(ANA, failingWork(failure), {
+        failureEvent: STORE_FAILURE,
+      }),
+      (thrown) => thrown === failure,
+    );
+
+    assert.deepEqual(store.statements.map(shapeOf).slice(-3), [
+      'ROLLBACK TO SAVEPOINT',
+      'SELECT',
+      'ROLLBACK',
+    ]);
+    assert.deepEqual(
+      rowsInserted(store.statements).map(({ type }) => type),
+      ['bio.overture.grant.creation'],
+    );
+    assert.deepEqual(lines(), []);
+    assert.deepEqual(store.releases, [true]);
+  });
+
+  test("commits nothing and throws the work's failure when the failure event's row cannot be written", async () => {
+    const { lines, store, trail } = trailOver(
+      fakeStore((text) => ROW_INSERT.test(text)),
+    );
+    const failure = new Error('the change was refused');
+
+    await assert.rejects(
+      trail.inTransaction(
+        ANA,
+        async ({ connection }) => {
+          await connection.query('UPDATE grants SET revoked_at = now()');
+          throw failure;
+        },
+        { failureEvent: STORE_FAILURE },
+      ),
+      (thrown) => thrown === failure,
+    );
+
+    assert.deepEqual(store.statements.map(shapeOf), [
+      'BEGIN; SAVEPOINT',
+      'SELECT',
+      'UPDATE',
+      'ROLLBACK TO SAVEPOINT',
+      'SELECT',
+      'INSERT row',
+      'ROLLBACK',
+    ]);
+    assert.deepEqual(lines(), []);
+  });
+
+  test("throws the work's failure rather than CommitUnconfirmed when the COMMIT recording the failure event goes unanswered, the line naming that event alone", async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const store = stallingStore((text) => text === 'COMMIT');
+    const { lines, trail } = trailOver(store);
+    const failure = new Error('the change was refused');
+    const outcome = trail
+      .inTransaction(ANA, failingWork(failure), {
+        failureEvent: STORE_FAILURE,
+      })
+      .then(
+        () => 'committed',
+        (thrown: unknown) => thrown,
+      );
+    await settled();
+
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS);
+    const thrown = await outcome;
+    const [, failureRow] = rowsInserted(store.statements);
+
+    assert.equal(thrown, failure);
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(
+      lines().map(({ events, message }) => ({ events, message })),
+      [
+        {
+          events: [{ id: failureRow?.id, type: 'bio.overture.token.exchange' }],
+          message: 'audit.commitUnconfirmed',
+        },
+      ],
+    );
+  });
+
+  test('fails with StoreTimeout and records nothing when the store stops answering the work within the store timeout, sending nothing to the discarded connection', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const store = stallingStore((text) => text.startsWith('UPDATE'));
+    const { lines, trail } = trailOver(store);
+    const outcome = trail
+      .inTransaction(
+        ANA,
+        async ({ connection }) => {
+          await connection.query('UPDATE grants SET revoked_at = now()');
+        },
+        { failureEvent: STORE_FAILURE },
+      )
+      .then(
+        () => 'committed',
+        (thrown: unknown) => thrown,
+      );
+    await settled();
+
+    context.mock.timers.tick(STORE_TIMEOUT_MILLISECONDS);
+    const thrown = await outcome;
+    await settled();
+
+    assert.ok(thrown instanceof StoreTimeout);
+    assert.deepEqual(store.statements.map(shapeOf), [
+      'BEGIN; SAVEPOINT',
+      'SELECT',
+      'UPDATE',
+    ]);
+    assert.deepEqual(store.releases, [true]);
+    assert.deepEqual(lines(), []);
   });
 });
 

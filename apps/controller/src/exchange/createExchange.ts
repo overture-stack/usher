@@ -158,6 +158,13 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
   return code === undefined ? {} : { code };
 };
 
+// What an exchange's transaction records in its work's place when that work fails: the exchange
+// failed as storeUnavailable, its actor anonymous whoever the transaction acts for.
+const storeFailureOf = (sourceIp: string): AuditEvent => ({
+  actor: ANONYMOUS,
+  ...failedExchangeEvent({ reason: 'storeUnavailable', sourceIp }),
+});
+
 // A refusal answered the one 403 every refused credential gets.
 const credentialRefused = (event: AuditEvent): CredentialRefusal => ({
   event,
@@ -350,9 +357,13 @@ const judgedCredentialOf = (
  * A refused exchange follows the same rule as an issued one: every exchange admitted into its share
  * is answered only once its `token.exchange` has committed, in a transaction of its own, so no
  * exchange goes unrecorded while looking answered. That transaction is given the deadline, and must
- * not run past it or past the store timeout. One whose transaction the store cannot take, or does not
- * take in time, is answered `503 storeUnavailable`, its failure written by its code alone, and one
- * whose commit the store did not confirm in time `503 outcomeUnknown`; neither issues a token, and a
+ * not run past it or past the store timeout. It is also given the event recording the exchange as
+ * `failed` at `error`, as `storeUnavailable`, its actor anonymous, which must take the place of every
+ * event the work recorded, keeping nothing the work wrote, when that work fails; the transaction must
+ * then fail with the work's failure whatever becomes of that event's `COMMIT`, so such an exchange is
+ * answered `503 storeUnavailable`, its failure written by its code alone. One whose transaction the
+ * store cannot take, or does not take in time, is answered `503 storeUnavailable` the same way, and
+ * one whose commit the store did not confirm in time `503 outcomeUnknown`; none issues a token, and a
  * refusal is never answered `403` unrecorded. A failure the route did not expect is answered
  * `500 internalError`. Every answer is `no-store`.
  *
@@ -489,7 +500,7 @@ export const createExchange = ({
         );
         return { kind: 'issued', token };
       },
-      { deadline },
+      { deadline, failureEvent: storeFailureOf(sourceIp) },
     );
 
   // The credential's judgement, waited for through its budget, the deadline less the recording
@@ -514,6 +525,7 @@ export const createExchange = ({
   const recordRefusal = (
     { event, ...refusal }: CredentialRefusal,
     { deadline }: Verified,
+    sourceIp: string,
   ): Promise<Answer> =>
     trail.inTransaction(
       ANONYMOUS,
@@ -521,7 +533,7 @@ export const createExchange = ({
         await record(event);
         return refusal;
       },
-      { deadline },
+      { deadline, failureEvent: storeFailureOf(sourceIp) },
     );
 
   // A principal the store refuses is recorded denied under that reason, naming the verified subject,
@@ -621,7 +633,7 @@ export const createExchange = ({
           ? issueToPrincipal(transaction, verified, issuable, sourceIp)
           : refuseForStanding(transaction, standing, subject, sourceIp);
       },
-      { deadline: verified.deadline },
+      { deadline: verified.deadline, failureEvent: storeFailureOf(sourceIp) },
     );
   };
 
@@ -660,7 +672,7 @@ export const createExchange = ({
             committed(issueSignedIn(verified, judged, sourceIp)),
           )
         : await recordRefusalWithinShare(applicationId, () =>
-            committed(recordRefusal(judged, verified)),
+            committed(recordRefusal(judged, verified, sourceIp)),
           );
     return outcomeWithin(applicationId, admitted);
   };

@@ -172,9 +172,15 @@ export interface AuditTransaction<Connection> {
   record(event: AuditEvent): Promise<string>;
 }
 
-/** One connection the audit trail runs a transaction on, released once the transaction ends. */
+/**
+ * One connection the audit trail runs a transaction on, released once the transaction ends. It must
+ * run a text of several statements given without values as one query, its statements in order.
+ */
 export interface TrailConnection {
-  /** Runs a statement, resolving to the command the store answered it with, such as `COMMIT`. */
+  /**
+   * Runs a statement, or a text of several given without values, resolving, for a single statement,
+   * to the command the store answered it with, such as `COMMIT`.
+   */
   query(
     text: string,
     values?: readonly unknown[],
@@ -189,7 +195,10 @@ export interface TrailStore<Connection extends TrailConnection> {
   connect(): Promise<Connection>;
 }
 
-/** How one transaction is run, where it differs from the configured store timeout. */
+/**
+ * How one transaction is run, where it differs from the default: its bounds, where they differ from
+ * the configured store timeout, and the event it records when its work fails.
+ */
 export interface TransactionOptions {
   /**
    * When the request the transaction runs for must have been answered, for a transaction one deadline
@@ -203,6 +212,22 @@ export interface TransactionOptions {
   deadline?: Deadline;
 
   /**
+   * The event recorded in the work's place when the work fails, for a unit whose design records its
+   * own failure. The work then runs under a savepoint taken in the one query that begins the
+   * transaction, before the actor is declared. When it fails, for any reason, the transaction is
+   * rolled back to that savepoint, which also reverts the actor's declaration and any limits set with
+   * it, and the actor and those limits are declared again with the values first declared; every event
+   * the work recorded is forgotten, its row never written and its line never written, and this event
+   * is recorded and committed in their place; the work's failure is then thrown, whatever became of
+   * the `COMMIT`. A connection that cannot be rolled back to the savepoint, that fails the actor's
+   * declaration made again, or that fails this event's row, records nothing: the transaction is
+   * rolled back whole and the work's failure thrown. A transaction abandoned for its timeout or its
+   * deadline before this event is recorded fails as any other does. A transaction naming none rolls
+   * back whole when its work fails.
+   */
+  failureEvent?: AuditEvent;
+
+  /**
    * The transaction's own timeout, in milliseconds, set where the unit is defined, as its design
    * gives it: it takes the place of the store timeout for the whole transaction, and both limits the
    * store applies to a session are raised to it inside the transaction alone. A transaction naming
@@ -214,23 +239,27 @@ export interface TransactionOptions {
 /** The audit trail: each event's row written in the transaction of the change it records. */
 export interface AuditTrail<Connection> {
   /**
-   * Runs work in one transaction that declares its actor before anything else, so the policy
-   * tables' triggers record each change under it. The rows of the events the work records commit
-   * with the change, and their lines are written once it has committed, in the order recorded.
-   * When the work, a row or the commit fails, the transaction rolls back, no line is written, and
-   * the failure is thrown. A line the log stream cannot take changes nothing of what committed.
-   * Taking the connection and the work run within the store timeout, or the transaction's own; past
-   * it, the transaction is abandoned, its connection discarded, and no line is written. The `COMMIT`
-   * is given one more timeout for its answer; past that, no line is written either, and one line at
-   * error names the `id` and `type` of each event recorded, whose rows may or may not have committed.
-   * A transaction given a deadline is bounded by it as well, as {@link TransactionOptions.deadline}
-   * says, and never runs past it.
+   * Runs work in one transaction that declares, before the work, the actor each change in it is to
+   * be recorded under. The rows of the events the work records commit with the change, and
+   * their lines are written once it has committed, in the order recorded. When the work, a row or
+   * the commit fails, the transaction rolls back, no line is written, and the failure is thrown,
+   * except where a failure event records the work's failure, as
+   * {@link TransactionOptions.failureEvent} says. A line the log stream cannot take changes nothing
+   * of what committed. Taking the connection and the work run within the store timeout, or the
+   * transaction's own; past it, the transaction is abandoned, its connection discarded, and no line
+   * is written. The `COMMIT` is given one more timeout for its answer; past that, no line is written
+   * either, and one line at error names the `id` and `type` of each event recorded, whose rows may
+   * or may not have committed. A transaction given a deadline is bounded by it as well, as
+   * {@link TransactionOptions.deadline} says, and never runs past it.
    *
    * @param actor who acts in the transaction.
    * @param work the change's statements, run on the transaction's connection.
-   * @param options the transaction's own timeout, for a unit whose design gives it one, and the
-   *   deadline, for a unit one deadline bounds with the rest of its request.
+   * @param options the transaction's own timeout, for a unit whose design gives it one; the deadline,
+   *   for a unit one deadline bounds with the rest of its request; and the event recorded in the
+   *   work's place when it fails, for a unit recording its own failure.
    * @throws when the actor names an empty subject, before anything runs.
+   * @throws the work's failure, where a failure event is given and the work fails, unless the
+   *   transaction was abandoned before that event was recorded.
    * @throws {StoreTimeout} when the store does not answer the transaction before its `COMMIT` in time,
    *   or too little is left to its deadline to send the `COMMIT`.
    * @throws {CommitUnconfirmed} when the store does not answer the `COMMIT` within its bound.

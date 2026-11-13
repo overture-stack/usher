@@ -6,8 +6,11 @@ import {
 import type { SignInRefusal, StoredRefusal } from '../signInTokens/index.js';
 import type { ConferringRule } from '../tokenCalculation/index.js';
 
-/** Why an exchange was not judged through a fault, the code answered: the identity provider's keys could not be had. */
-export type ExchangeFault = 'identityProviderUnavailable';
+/**
+ * Why a fault kept an exchange from being answered, the code answered: the identity provider's keys
+ * could not be had, or the store failed the exchange's work.
+ */
+export type ExchangeFault = 'identityProviderUnavailable' | 'storeUnavailable';
 
 /**
  * Why a credential's exchange was denied: the judgement's refusal; a signing key not confirmed yet,
@@ -108,8 +111,8 @@ export const deniedExchangeEvent = ({
 });
 
 /**
- * The `token.exchange` of an exchange an identity provider that cannot be reached kept from being
- * judged, at error: `failed`, under the code answered, naming no `userId`.
+ * The `token.exchange` of an exchange a fault kept from being answered, at error: `failed`, under the
+ * code answered, naming no `userId`.
  *
  * @param failure the code answered, and the request's address.
  */

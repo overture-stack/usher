@@ -663,8 +663,17 @@ const answeredAtOnce = (answering: Promise<unknown>): Promise<boolean> =>
     delay(ANSWER_WITHIN_MS).then(() => false),
   ]);
 
+/** A row the store committed: the table written, and the values bound. */
+interface CommittedRow {
+  table: string;
+  values: readonly unknown[];
+}
+
 /** A stand whose exchange records through the audit trail itself, over a store a test holds back. */
 interface StoreStand {
+  /** Every row the store committed, in order. */
+  committed: readonly CommittedRow[];
+
   /** Every line the exchange and its trail wrote, parsed. */
   lines(): readonly Readonly<Record<string, unknown>>[];
 
@@ -677,8 +686,17 @@ interface StoreStand {
   statements: string[];
 }
 
+/** A statement the store fails: the first one sent that matches, and whether its failure ends the connection. */
+interface StatementFault {
+  endsConnection: boolean;
+  matches(text: string): boolean;
+}
+
 interface StoreStandOptions {
   deadlineMilliseconds: number;
+
+  /** The statement the store fails: none by default. */
+  fault?: StatementFault;
 
   /**
    * The late-request threshold: none by default, since these tests shorten the deadline to make the
@@ -695,39 +713,112 @@ interface StoreStandOptions {
   storeTimeoutMilliseconds: number;
 }
 
+const INSERTED_TABLE = /^INSERT INTO "[^"]+"\.(?<table>\w+)/u;
+
+const SAVEPOINT_NAMED = /SAVEPOINT (?<name>\w+)$/u;
+
 // A store whose one connection answers each statement, the policy read included, once the time the
 // test holds it for has passed. A discarded connection fails every statement held, and every later
-// one without sending it, as the driver's does.
+// one without sending it, as the driver's does. It keeps each row inserted until its transaction
+// commits, forgetting those a rollback to a savepoint or a rollback undoes. The statement a fault
+// names fails, and ends the connection if the fault says so; otherwise every later statement but a
+// rollback fails, as the store's does in a transaction a statement failed in, and a COMMIT is
+// answered as a rollback.
 const heldStore = (
   holds: StoreStandOptions['holds'],
+  fault: StatementFault | undefined,
 ): {
+  committed: CommittedRow[];
   connect(): Promise<pg.PoolClient>;
   releases: (boolean | undefined)[];
   statements: string[];
 } => {
-  const state: { discarded: boolean; failHeld: (() => void)[] } = {
+  const state: {
+    aborted: boolean;
+    discarded: boolean;
+    failHeld: (() => void)[];
+    faulted: boolean;
+    pending: CommittedRow[];
+    savepoints: Map<string, number>;
+  } = {
+    aborted: false,
     discarded: false,
     failHeld: [],
+    faulted: false,
+    pending: [],
+    savepoints: new Map(),
   };
+  const committed: CommittedRow[] = [];
   const releases: (boolean | undefined)[] = [];
   const statements: string[] = [];
-  const query = (text: string): Promise<unknown> => {
+  const discard = (): void => {
+    state.discarded = true;
+    state.failHeld.forEach((fail) => fail());
+  };
+  // What the store does with a statement it answers, and the command it answers with.
+  const answered = (
+    text: string,
+    values: readonly unknown[] | undefined,
+  ): { command: string; rows: readonly unknown[] } => {
+    const savepoint = SAVEPOINT_NAMED.exec(text)?.groups?.['name'] ?? '';
+    if (text.startsWith('ROLLBACK TO SAVEPOINT')) {
+      state.pending.splice(state.savepoints.get(savepoint) ?? 0);
+      state.aborted = false;
+      return { command: 'ROLLBACK', rows: [] };
+    }
+    if (text.startsWith('SAVEPOINT') || text.startsWith('BEGIN; SAVEPOINT')) {
+      state.savepoints.set(savepoint, state.pending.length);
+    }
+    if (text === 'COMMIT' || text === 'ROLLBACK') {
+      const commits = text === 'COMMIT' && !state.aborted;
+      committed.push(...(commits ? state.pending : []));
+      state.pending = [];
+      state.aborted = false;
+      return { command: commits ? 'COMMIT' : 'ROLLBACK', rows: [] };
+    }
+    const table = INSERTED_TABLE.exec(text)?.groups?.['table'];
+    if (table !== undefined) {
+      state.pending.push({ table, values: values ?? [] });
+    }
+    return {
+      command: text.split(' ')[0] ?? text,
+      rows: rowsAnswering(text, undefined),
+    };
+  };
+  const query = (
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<unknown> => {
     if (state.discarded) {
       return Promise.reject(
         new Error('Client was closed and is not queryable'),
       );
     }
     statements.push(text);
-    const answered = {
-      command: text.split(' ')[0] ?? text,
-      rows: [POLICY_ROW],
-    };
+    if (!state.faulted && fault?.matches(text) === true) {
+      state.faulted = true;
+      if (fault.endsConnection) {
+        discard();
+        return Promise.reject(new Error('Connection terminated unexpectedly'));
+      }
+      state.aborted = true;
+      return Promise.reject(
+        Object.assign(new Error('a test injected a fault'), { code: 'P0001' }),
+      );
+    }
+    if (state.aborted && !text.startsWith('ROLLBACK') && text !== 'COMMIT') {
+      return Promise.reject(
+        Object.assign(new Error('the transaction is aborted'), {
+          code: '25P02',
+        }),
+      );
+    }
     const heldFor = holds(text);
     return heldFor === undefined
-      ? Promise.resolve(answered)
+      ? Promise.resolve(answered(text, values))
       : new Promise((resolve, reject) => {
           const timer = Number.isFinite(heldFor)
-            ? setTimeout(() => resolve(answered), heldFor)
+            ? setTimeout(() => resolve(answered(text, values)), heldFor)
             : undefined;
           state.failHeld.push(() => {
             clearTimeout(timer);
@@ -741,18 +832,18 @@ const heldStore = (
     release: (destroy?: boolean | Error) => {
       releases.push(destroy === true ? true : undefined);
       if (destroy === true) {
-        state.discarded = true;
-        state.failHeld.forEach((fail) => fail());
+        discard();
       }
     },
   });
-  return { connect: async () => connection, releases, statements };
+  return { committed, connect: async () => connection, releases, statements };
 };
 
 const storeStandUp = (
   context: TestContext,
   {
     deadlineMilliseconds,
+    fault,
     holds,
     lateRequestThresholdMilliseconds = 0,
     storeTimeoutMilliseconds,
@@ -766,7 +857,7 @@ const storeStandUp = (
     },
   });
   const eventLog = createEventLog({ clock: SETTINGS.clock, logStream });
-  const store = heldStore(holds);
+  const store = heldStore(holds, fault);
   const trail = createAuditTrail<pg.PoolClient>({
     eventLog,
     settings: {
@@ -807,6 +898,7 @@ const storeStandUp = (
     await server.close();
   });
   return {
+    committed: store.committed,
     lines: () =>
       chunks
         .join('')
@@ -818,6 +910,56 @@ const storeStandUp = (
     statements: store.statements,
   };
 };
+
+// What the store committed: each row by its table, an event's row by its type and what its data
+// names of the actor, the result and the reason.
+const committedIn = (
+  stand: Pick<StoreStand, 'committed'>,
+): readonly Readonly<Record<string, unknown>>[] =>
+  stand.committed.map(({ table, values }) => {
+    if (table !== 'audit_log') {
+      return { table };
+    }
+    const data = JSON.parse(String(values[6])) as Readonly<
+      Record<string, unknown>
+    >;
+    return {
+      actorType: data['actorType'],
+      reason: data['reason'],
+      result: data['result'],
+      table,
+      type: values[3],
+      userId: data['userId'],
+    };
+  });
+
+// The token.exchange recorded for an exchange whose store work failed.
+const STORE_FAILURE_ROW = Object.freeze({
+  actorType: 'anonymous',
+  reason: 'storeUnavailable',
+  result: 'failed',
+  table: 'audit_log',
+  type: 'bio.overture.token.exchange',
+  userId: null,
+});
+
+// What each event line names: its type, and its data's actor, result and reason.
+const eventsLoggedIn = (
+  stand: Pick<StoreStand, 'lines'>,
+): readonly Readonly<Record<string, unknown>>[] =>
+  eventLinesIn(stand.lines()).map(({ data, type }) => {
+    const members = data as Readonly<Record<string, unknown>>;
+    return {
+      actorType: members['actorType'],
+      reason: members['reason'],
+      result: members['result'],
+      type,
+    };
+  });
+
+// The audit row's insert of a store whose statements are named by their text.
+const isAuditInsert = (text: string): boolean =>
+  isInsert(text) && text.includes('.audit_log ');
 
 interface Timed {
   answer: LightMyRequestResponse;
@@ -2027,7 +2169,7 @@ suite('the token exchange', () => {
       const deadlineMilliseconds = 300;
       const stand = storeStandUp(context, {
         deadlineMilliseconds,
-        holds: (text) => (text === 'BEGIN' ? Infinity : undefined),
+        holds: (text) => (text.startsWith('BEGIN') ? Infinity : undefined),
         storeTimeoutMilliseconds: 5000,
       });
 
@@ -2170,6 +2312,192 @@ suite('the token exchange', () => {
         [{ result: 'succeeded', type: 'bio.overture.token.exchange' }],
       );
       assert.deepEqual(stand.releases, [undefined]);
+    });
+  });
+
+  suite('a failure of its store work', () => {
+    // A deadline leaving a credential its least judgement budget, and the store time to answer.
+    const deadlineMilliseconds = LATE_REQUEST_THRESHOLD_MILLISECONDS + 2000;
+
+    const failingAt = (
+      context: TestContext,
+      matches: (text: string) => boolean,
+      endsConnection = false,
+    ): StoreStand =>
+      storeStandUp(context, {
+        deadlineMilliseconds,
+        fault: { endsConnection, matches },
+        holds: () => undefined,
+        storeTimeoutMilliseconds: 5000,
+      });
+
+    test("gives each of its transactions the event recording a failure of its work: failed, storeUnavailable, at error, its actor anonymous, naming no userId, the request's address", async (context) => {
+      const stand = standUp(context);
+      const refusedByTheStore = standUp(context, {
+        standing: 'revokedPrincipal',
+      });
+
+      await post(stand);
+      await post(stand, withCredential('credential-forged'));
+      await post(stand, withCredential('credential-accepted'));
+      await post(refusedByTheStore, withCredential('credential-accepted'));
+
+      assert.deepEqual(
+        [...stand.transactions, ...refusedByTheStore.transactions].map(
+          ({ options }) => options?.failureEvent,
+        ),
+        [1, 2, 3, 4].map(() => ({
+          actor: { type: 'anonymous' },
+          data: {
+            reason: 'storeUnavailable',
+            result: 'failed',
+            sourceIp: '127.0.0.1',
+            userId: null,
+          },
+          severity: 'error',
+          type: 'token.exchange',
+        })),
+      );
+    });
+
+    test("answers the anonymous exchange whose token.exchange cannot be written 503 storeUnavailable, recording it failed in that event's place and writing the failure by its code", async (context) => {
+      const stand = failingAt(context, isAuditInsert);
+
+      const answer = await post(stand);
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'storeUnavailable',
+        status: 503,
+      });
+      assert.deepEqual(committedIn(stand), [STORE_FAILURE_ROW]);
+      assert.deepEqual(eventsLoggedIn(stand), [
+        {
+          actorType: 'anonymous',
+          reason: 'storeUnavailable',
+          result: 'failed',
+          type: 'bio.overture.token.exchange',
+        },
+      ]);
+      assert.deepEqual(
+        stand
+          .lines()
+          .filter(({ message }) => message === EXCHANGE_STORE_FAILED)
+          .map(({ code }) => code),
+        ['P0001'],
+      );
+      assert.deepEqual(stand.releases, [undefined]);
+    });
+
+    test("answers a refused credential whose refusal cannot be written 503 storeUnavailable rather than 403, recording it failed in the refusal's place", async (context) => {
+      const stand = failingAt(context, isAuditInsert);
+
+      const answer = await post(stand, withCredential('credential-forged'));
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'storeUnavailable',
+        status: 503,
+      });
+      assert.deepEqual(committedIn(stand), [STORE_FAILURE_ROW]);
+      assert.deepEqual(
+        eventsLoggedIn(stand).map(({ reason, result }) => [result, reason]),
+        [['failed', 'storeUnavailable']],
+      );
+    });
+
+    test('answers a first exchange whose identity cannot be written 503 storeUnavailable, issuing no token, recording it failed and keeping no person, no identity and no session', async (context) => {
+      const stand = failingAt(
+        context,
+        (text) => isInsert(text) && text.includes('.user_identities '),
+      );
+
+      const answer = await post(stand, withCredential('credential-accepted'));
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'storeUnavailable',
+        status: 503,
+      });
+      assert.match(
+        String(answer.headers['content-type']),
+        /^application\/problem\+json\b/u,
+      );
+      assert.ok(
+        stand.statements.some(
+          (text) => isInsert(text) && text.includes('.users '),
+        ),
+        'the person was written before the identity failed',
+      );
+      assert.deepEqual(committedIn(stand), [STORE_FAILURE_ROW]);
+      assert.deepEqual(
+        eventsLoggedIn(stand).map(({ reason, result }) => [result, reason]),
+        [['failed', 'storeUnavailable']],
+      );
+    });
+
+    test('records nothing when the failing statement ends the connection, answering 503 storeUnavailable and writing the failure, discarding the connection', async (context) => {
+      const stand = failingAt(
+        context,
+        (text) => isInsert(text) && text.includes('.user_identities '),
+        true,
+      );
+
+      const answer = await post(stand, withCredential('credential-accepted'));
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'storeUnavailable',
+        status: 503,
+      });
+      assert.deepEqual(stand.committed, []);
+      assert.deepEqual(eventLinesIn(stand.lines()), []);
+      assert.deepEqual(
+        stand.lines().map(({ message }) => message),
+        [EXCHANGE_STORE_FAILED],
+      );
+      assert.deepEqual(stand.releases, [true]);
+    });
+
+    test('records nothing more when the COMMIT of an exchange whose work succeeded goes unanswered, answering 503 outcomeUnknown', async (context) => {
+      const stand = storeStandUp(context, {
+        deadlineMilliseconds: 300,
+        holds: (text) => (text === 'COMMIT' ? Infinity : undefined),
+        storeTimeoutMilliseconds: 5000,
+      });
+
+      const answer = await post(stand);
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'outcomeUnknown',
+        status: 503,
+      });
+      assert.equal(stand.statements.filter(isAuditInsert).length, 1);
+      assert.equal(
+        stand.statements.some((text) => text.startsWith('ROLLBACK TO')),
+        false,
+      );
+      assert.deepEqual(stand.committed, []);
+    });
+
+    test("records nothing when the store stops answering the exchange's work by the deadline, answering 503 storeUnavailable with the store timeout's code", async (context) => {
+      const stand = storeStandUp(context, {
+        deadlineMilliseconds: 300,
+        holds: (text) =>
+          text.includes('application_resources') ? Infinity : undefined,
+        storeTimeoutMilliseconds: 5000,
+      });
+
+      const answer = await post(stand);
+      await delay(0);
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'storeUnavailable',
+        status: 503,
+      });
+      assert.deepEqual(stand.committed, []);
+      assert.equal(stand.statements.filter(isAuditInsert).length, 0);
+      assert.deepEqual(eventLinesIn(stand.lines()), []);
+      assert.deepEqual(
+        stand.lines().map(({ code, message }) => ({ code, message })),
+        [{ code: 'storeTimeout', message: EXCHANGE_STORE_FAILED }],
+      );
     });
   });
 

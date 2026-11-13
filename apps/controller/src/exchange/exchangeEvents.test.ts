@@ -194,6 +194,24 @@ suite("the exchange's token.exchange events", () => {
     });
   });
 
+  test('records an exchange whose store work failed at error as failed, as storeUnavailable, naming no userId', () => {
+    const event = failedExchangeEvent({
+      reason: 'storeUnavailable',
+      sourceIp: '192.0.2.10',
+    });
+
+    assert.deepEqual(event, {
+      data: {
+        reason: 'storeUnavailable',
+        result: 'failed',
+        sourceIp: '192.0.2.10',
+        userId: null,
+      },
+      severity: 'error',
+      type: 'token.exchange',
+    });
+  });
+
   test('records an exchange an unreachable identity provider kept from being judged at error as failed, under the code answered', () => {
     const event = failedExchangeEvent({
       reason: 'identityProviderUnavailable',

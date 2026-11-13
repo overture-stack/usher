@@ -34,6 +34,19 @@ const DECLARE_ACTOR =
 // what is left of the deadline of the request it runs for.
 const DECLARE_ACTOR_AND_LIMITS = `${DECLARE_ACTOR}, set_config('statement_timeout', $3, true), set_config('idle_in_transaction_session_timeout', $3, true)`;
 
+// The savepoint a transaction naming a failure event runs its work under. It is taken before the
+// actor is declared, so a rollback to it reverts the declaration's transaction-local settings along
+// with the work, and the declaration is made again after one.
+const WORK_SAVEPOINT = 'audited_work';
+
+// Begins a transaction naming a failure event and takes its savepoint: two statements in one text,
+// sent without values, which the connection must run as one query, in order.
+const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
+
+/** What a transaction's work gave: its result, or its failure, recorded in its place. */
+type WorkOutcome<Result> =
+  { kind: 'completed'; result: Result } | { failure: unknown; kind: 'failed' };
+
 /** The line naming an event whose row could not be written. */
 export const EVENT_UNRECORDED = 'audit.eventUnrecorded';
 
@@ -124,32 +137,41 @@ export const createAuditTrail = <Connection extends TrailConnection>({
   const inTransaction = async <Result>(
     actor: Actor,
     work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
-    { deadline, timeoutMilliseconds }: TransactionOptions = {},
+    { deadline, failureEvent, timeoutMilliseconds }: TransactionOptions = {},
   ): Promise<Result> => {
     if (actorIdOf(actor) === '') {
       throw new TypeError(
         'an actor who is a person or a service account names their subject',
       );
     }
-    const transaction = { open: true };
+    // The work's failure once its failure event is recorded in its place, which the transaction throws
+    // however its COMMIT then ends.
+    const transaction: {
+      open: boolean;
+      recordedFailure: { failure: unknown } | undefined;
+    } = { open: true, recordedFailure: undefined };
     const recorded: EventEnvelope[] = [];
     // A transaction bounded by the store timeout alone keeps the limits its session was opened with.
     const declarationOf = (
       boundMilliseconds: number,
-    ): { text: string; values: readonly string[] } =>
-      deadline === undefined && timeoutMilliseconds === undefined
-        ? { text: DECLARE_ACTOR, values: [] }
+    ): { text: string; values: readonly string[] } => {
+      const actorValues = [actor.type, actorIdOf(actor) ?? ''];
+      return deadline === undefined && timeoutMilliseconds === undefined
+        ? { text: DECLARE_ACTOR, values: actorValues }
         : {
             text: DECLARE_ACTOR_AND_LIMITS,
-            values: [String(boundMilliseconds)],
+            values: [...actorValues, String(boundMilliseconds)],
           };
+    };
     const committed = async ({
       boundMilliseconds,
       connection,
       release,
       sendingCommit,
-    }: Lease<Connection>): Promise<Result> => {
+    }: Lease<Connection>): Promise<WorkOutcome<Result>> => {
       const declaration = declarationOf(boundMilliseconds);
+      const declareActor = (): Promise<unknown> =>
+        connection.query(declaration.text, declaration.values);
       const record = async (event: AuditEvent): Promise<string> => {
         if (transaction.open) {
           const envelope = envelopeOf(event, actor);
@@ -161,14 +183,45 @@ export const createAuditTrail = <Connection extends TrailConnection>({
           'an event is recorded only while its transaction is open',
         );
       };
+      // With a failure event, the work runs under the savepoint the transaction began with, which
+      // precedes the actor's declaration: the work's failure rolls back to it, declares the actor and
+      // any limits again with the values first declared, forgets the events the work recorded, and
+      // records the failure event in their place. A connection failing any of that fails the
+      // transaction with the work's failure, recording nothing.
+      const outcomeOfWork = async (): Promise<WorkOutcome<Result>> => {
+        if (failureEvent === undefined) {
+          return {
+            kind: 'completed',
+            result: await work({ connection, record }),
+          };
+        }
+        const recordedBefore = recorded.length;
+        try {
+          return {
+            kind: 'completed',
+            result: await work({ connection, record }),
+          };
+        } catch (failure) {
+          await connection
+            .query(`ROLLBACK TO SAVEPOINT ${WORK_SAVEPOINT}`)
+            .then(declareActor)
+            .then(async () => {
+              recorded.splice(recordedBefore);
+              await record(failureEvent);
+            })
+            .catch(() => {
+              throw failure;
+            });
+          transaction.recordedFailure = { failure };
+          return { failure, kind: 'failed' };
+        }
+      };
       try {
-        await connection.query('BEGIN');
-        await connection.query(declaration.text, [
-          actor.type,
-          actorIdOf(actor) ?? '',
-          ...declaration.values,
-        ]);
-        const result = await work({ connection, record });
+        await connection.query(
+          failureEvent === undefined ? 'BEGIN' : BEGIN_UNDER_SAVEPOINT,
+        );
+        await declareActor();
+        const outcome = await outcomeOfWork();
         // A transaction in which a statement failed rolls back when told to commit, and says so only
         // in its answer, so a failure the work caught still leaves nothing committed and no line.
         // With too little left to its deadline, the lease throws instead and has discarded the
@@ -177,7 +230,7 @@ export const createAuditTrail = <Connection extends TrailConnection>({
         const { command } = await connection.query('COMMIT');
         if (command === 'COMMIT') {
           transaction.open = false;
-          return result;
+          return outcome;
         }
         throw new ControllerError(
           'the transaction rolled back at its commit, a statement in it having failed',
@@ -193,7 +246,7 @@ export const createAuditTrail = <Connection extends TrailConnection>({
         throw error;
       }
     };
-    const result = await withinStoreTimeout(
+    const outcome = await withinStoreTimeout(
       store,
       timeoutMilliseconds ?? settings.storeTimeoutMilliseconds,
       committed,
@@ -204,12 +257,16 @@ export const createAuditTrail = <Connection extends TrailConnection>({
           events: recorded.map(({ id, type }) => ({ id, type })),
         });
       }
-      throw failure;
+      const { recordedFailure } = transaction;
+      throw recordedFailure === undefined ? failure : recordedFailure.failure;
     });
     recorded.forEach((envelope) => {
       eventLog.writeEvent(envelope);
     });
-    return result;
+    if (outcome.kind === 'completed') {
+      return outcome.result;
+    }
+    throw outcome.failure;
   };
 
   const recordEvent = async (

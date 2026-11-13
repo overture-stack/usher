@@ -34,6 +34,27 @@ export const ACTOR_SETTINGS: Readonly<{ id: string; type: string }> =
   Object.freeze({ id: 'usher.actor_id', type: 'usher.actor_type' });
 
 /**
+ * The settings naming the two limits the store applies to a session, which a transaction given a
+ * bound of its own must set to that bound inside the transaction alone.
+ */
+export const SESSION_LIMIT_SETTINGS: Readonly<{
+  idleInTransactionSessionTimeout: string;
+  statementTimeout: string;
+}> = Object.freeze({
+  idleInTransactionSessionTimeout: 'idle_in_transaction_session_timeout',
+  statementTimeout: 'statement_timeout',
+});
+
+/** The savepoint a transaction naming a failure event must run its work under. */
+export const WORK_SAVEPOINT = 'audited_work';
+
+/**
+ * The one query that must begin a transaction naming a failure event: `BEGIN` and its savepoint, two
+ * statements in one text given without values, sent before the actor is declared.
+ */
+export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
+
+/**
  * Every table the tests read or write, each with its columns: the one place the tests assume a
  * table's or a column's name. Names follow `schema.md` as the rulings adjust it; the README's table
  * of assumptions lists each one no design document fixes. Among those:

@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 
 import type { RecordAction } from '@overture-stack/usher-types';
 
+import type { AuditEventType, Severity } from './auditEvents.js';
 import { type BuiltEntry, builtEntry } from './build.js';
+import type { Actor } from './policy.js';
 
 /** A source of the current time, in milliseconds since the Unix epoch. */
 export interface Clock {
@@ -340,27 +342,11 @@ export interface SeedingConnection {
   query(text: string, values?: unknown[]): Promise<{ command: string }>;
 }
 
-// The controller's audit trail and one of its transactions, as far as writing the seeded policy uses
-// them: the trail is created over one connection, and holds the transaction as the system.
+// One of the controller's audit trail's transactions, as far as writing the seeded policy uses it.
 interface SeedingTransaction {
   connection: unknown;
   record(event: unknown): Promise<string>;
 }
-
-type CreateAuditTrail = (options: {
-  eventLog: { error(): void; writeEvent(): void };
-  settings: Omit<SeededPolicySettings, 'baseline' | 'signedInRule'> & {
-    storeTimeoutMilliseconds: number;
-  };
-  store: {
-    connect(): Promise<SeedingConnection & { release(): void }>;
-  };
-}) => {
-  inTransaction<Result>(
-    actor: { type: 'system' },
-    work: (transaction: SeedingTransaction) => Promise<Result>,
-  ): Promise<Result>;
-};
 
 /**
  * The store module's export writing the policy a start seeds, in a transaction the audit trail holds:
@@ -371,6 +357,87 @@ export type WriteSeededPolicy = (
   transaction: SeedingTransaction,
   settings: SeededPolicySettings,
 ) => Promise<void>;
+
+/**
+ * One connection the audit trail runs a transaction on, released once the transaction ends. It must
+ * run a text of several statements given without values as one query, its statements in order.
+ */
+export interface TrailConnection {
+  /**
+   * Runs a statement, or a text of several given without values, resolving, for a single statement,
+   * to the command the store answered it with, such as `COMMIT`.
+   */
+  query(
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<{ command: string }>;
+
+  /** Returns the connection to its pool, or discards it when `destroy` is true. */
+  release(destroy?: boolean): void;
+}
+
+/** One audit event as a transaction records it, its type without the `bio.overture.` prefix. */
+export interface AuditEvent {
+  /** The event's own members. */
+  data: Readonly<Record<string, string>>;
+
+  severity: Severity;
+  type: AuditEventType;
+}
+
+/** An event's envelope as its line carries it, as far as a test reads it: the event's unique id. */
+export interface EventEnvelope {
+  id: string;
+}
+
+/** A transaction in progress, its actor declared. */
+export interface AuditTransaction<Connection> {
+  /** The transaction's connection, for the change's own statements. */
+  connection: Connection;
+
+  /** Writes an event's row in the transaction, resolving to the event's id once it is written. */
+  record(event: AuditEvent): Promise<string>;
+}
+
+/**
+ * How one transaction is run, where it differs from the default: its own timeout, in milliseconds,
+ * which both limits the store applies to a session are set to inside the transaction alone, and the
+ * event recorded in the work's place when the work fails.
+ */
+export interface TransactionOptions {
+  failureEvent?: AuditEvent;
+  timeoutMilliseconds?: number;
+}
+
+/** The controller's audit trail, as far as a test runs a transaction through it. */
+export interface AuditTrail<Connection> {
+  /**
+   * Runs work in one transaction declaring its actor, committing the rows of the events the work
+   * records with its change and writing their lines once it has committed.
+   */
+  inTransaction<Result>(
+    actor: Actor,
+    work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
+    options?: TransactionOptions,
+  ): Promise<Result>;
+}
+
+/** What the controller's audit trail is created from, as far as a test gives it. */
+export interface AuditTrailOptions<Connection extends TrailConnection> {
+  /** Where each committed event's line is written, and the line naming an event whose row was not. */
+  eventLog: { error(): void; writeEvent(envelope: EventEnvelope): void };
+
+  /**
+   * The clock events' times are read from, the store's schema, the event source, the instance's name,
+   * and the store timeout each transaction runs within.
+   */
+  settings: Omit<SeededPolicySettings, 'baseline' | 'signedInRule'> & {
+    storeTimeoutMilliseconds: number;
+  };
+
+  /** Where each transaction's connection is taken from. */
+  store: { connect(): Promise<Connection> };
+}
 
 /** A running controller, as a test holds it. */
 export interface RunningController {
@@ -679,8 +746,24 @@ export const migrate = async (options: MigrationOptions): Promise<void> => {
   await apply(options);
 };
 
-// The store timeout the seeding transaction runs within: the controller's default.
-const SEEDING_STORE_TIMEOUT_MILLISECONDS = 5000;
+/**
+ * Creates the controller's audit trail, through its own code, from the log stream's writes, the
+ * settings and the store given.
+ *
+ * @param options where lines are written, the settings, and where connections are taken from.
+ * @throws until the module exists, the seam's message that it is missing.
+ */
+export const createAuditTrail = async <Connection extends TrailConnection>(
+  options: AuditTrailOptions<Connection>,
+): Promise<AuditTrail<Connection>> => {
+  const create = await loadExport<
+    (options: AuditTrailOptions<Connection>) => AuditTrail<Connection>
+  >(CONTROLLER_MODULES.auditTrail);
+  return create(options);
+};
+
+/** The controller's store timeout where its configuration names none, in milliseconds. */
+export const DEFAULT_STORE_TIMEOUT_MILLISECONDS = 5000;
 
 /**
  * Writes the policy a controller's start seeds, through the controller's own code, on the connection
@@ -699,23 +782,26 @@ export const writeSeededPolicy = async (
   connection: SeedingConnection,
   settings: SeededPolicySettings,
 ): Promise<void> => {
-  const [createAuditTrail, write] = await Promise.all([
-    loadExport<CreateAuditTrail>(CONTROLLER_MODULES.auditTrail),
+  const [trail, write] = await Promise.all([
+    createAuditTrail({
+      eventLog: { error: () => undefined, writeEvent: () => undefined },
+      settings: {
+        ...settings,
+        storeTimeoutMilliseconds: DEFAULT_STORE_TIMEOUT_MILLISECONDS,
+      },
+      store: {
+        connect: async () => ({
+          query: (text: string, values?: readonly unknown[]) =>
+            connection.query(
+              text,
+              values === undefined ? undefined : [...values],
+            ),
+          release: () => undefined,
+        }),
+      },
+    }),
     loadExport<WriteSeededPolicy>(CONTROLLER_MODULES.seededPolicy),
   ]);
-  const trail = createAuditTrail({
-    eventLog: { error: () => undefined, writeEvent: () => undefined },
-    settings: {
-      ...settings,
-      storeTimeoutMilliseconds: SEEDING_STORE_TIMEOUT_MILLISECONDS,
-    },
-    store: {
-      connect: async () => ({
-        query: (text, values) => connection.query(text, values),
-        release: () => undefined,
-      }),
-    },
-  });
   await trail.inTransaction({ type: 'system' }, (transaction) =>
     write(transaction, settings),
   );

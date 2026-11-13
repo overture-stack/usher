@@ -410,6 +410,9 @@ judged.** One whose signing key is not confirmed yet is a `token.exchange` `deni
 does a routine key rotation, and neither is a fault in the controller. One that cannot be judged
 because the identity provider cannot be reached is `failed` at `error`, as
 `identityProviderUnavailable`, since that is a fault.
+An exchange whose work on the store fails, anonymous, refused or signed in, is `failed` at `error`
+too, as `storeUnavailable`, its actor anonymous, recorded in that work's place with nothing it wrote
+kept, wherever the store still takes the record, and answered `503` whether or not the record commits.
 
 **`migration.run` records each real run, and a dry run only when it is refused for authority.** A
 real run that succeeds records it at `info`, its actor the administrator, with `studiesReported`,
