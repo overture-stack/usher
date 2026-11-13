@@ -15,6 +15,20 @@
 
 ---
 
+## First deployment
+
+A first deployment takes these steps, in order, each one detailed in its section:
+
+1. Create the database and its two roles: [PostgreSQL](#postgresql), [The two database roles](#the-two-database-roles).
+2. Make the two keys: [Keys](#keys).
+3. Set up the realm: [The identity provider](#the-identity-provider).
+4. Set the variables, from what steps 1 to 3 made: [Variables](#variables).
+5. Run the image once as the schema migration command: [The image](#the-image), [Schema migration before each rollout](#schema-migration-before-each-rollout).
+6. Start the controller's instances, and wait for `GET /health/ready` to answer 200: [Readiness and liveness](#readiness-and-liveness).
+7. Register each application and its resources, then confirm with an anonymous exchange: [Registering resources](#registering-resources).
+
+---
+
 ## The image
 
 One image runs both commands. Its entrypoint is `/nodejs/bin/node`, and its arguments choose the command.
@@ -92,7 +106,7 @@ The controller never reads these two, so give them to the schema migration comma
 | `USHER_KEY_ENCRYPTION_KEY` | Secret | The key-encryption key, encrypting every stored application key. See [Keys](#keys). |
 | `USHER_CURSOR_KEY`         | Secret | The key encrypting every notice stream cursor. See [Keys](#keys).                   |
 
-### The identity provider
+### The identity provider's settings
 
 | Variable                                       | Kind                              | What it is, and its rule                                                                                                                                                                                                                            |
 | ---------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -280,7 +294,7 @@ The controller trusts one realm of one identity provider. Its requirements, in K
 
 **A resource is what a catalogue's records name in their resource field, such as a study's id, and an application reaches only the resources registered as served by it.** A platform administrator registers each through the Management API, with a management token from a client in `USHER_MANAGEMENT_CLIENTS`:
 
-1. **Register the application** with `POST /admin/applications`, sending its `displayName`. The answer holds the application's `id`, its audience, and its first key, whose `value` that answer alone shows. Give both to the application's bridge. `POST /admin/applications/{id}/keys` issues another key.
+1. **Register the application** with `POST /admin/applications`, sending its `displayName`. The answer holds the application's `id`, which is also its audience, and its first key, whose `value` that answer alone shows. Give both to the application's [bridge](https://github.com/overture-stack/usher/blob/main/modules/express-bridge/README.md#usage), as its `audience` and its `key`. `POST /admin/applications/{id}/keys` issues another key.
 2. **Register each resource** with `POST /admin/resources`, sending its `externalId`, its `displayName`, its `accessLevel`, and in `applications` the id of each application serving it. `accessLevel` is required: `open` for a resource whose unmarked records reach everyone, the anonymous visitor included, `registered` for one whose unmarked records reach every signed-in person, and `grant` for one reached through a grant alone. An application serving it later is added with `PUT /admin/resources/{externalId}/applications/{applicationId}`.
 3. **Confirm with an anonymous exchange.** Start the application. Its bridge's start makes the anonymous visitor's exchange, which the controller logs as `bio.overture.token.exchange` with `result` `succeeded` and the application's id as `audience`, and which sets the key's `confirmedAt` in `GET /admin/applications/{id}`. `GET /admin/resources/{externalId}` names each application serving a resource in `applications`.
 

@@ -45,14 +45,19 @@ import express from 'express';
 import pino from 'pino';
 
 // The application reads its own configuration; the bridge reads no environment variable.
+const audience = process.env.USHER_AUDIENCE;
 const key = process.env.USHER_KEY;
+
+if (audience === undefined) {
+  throw new Error('USHER_AUDIENCE is not set');
+}
 
 if (key === undefined) {
   throw new Error('USHER_KEY is not set');
 }
 
 const bridge = createBridgeCore({
-  audience: 'search',
+  audience,
   controllerUrl: 'https://usher.example.org',
   eventSource: 'https://search.example.org/usher-bridge',
   issuer: 'https://usher.example.org',
@@ -73,6 +78,19 @@ app.use(createUsherMiddleware(bridge));
 await bridge.start();
 app.listen(3000);
 ```
+
+The options naming this deployment come from these places, the first two from registering the
+application with the controller, as
+[Registering resources](https://github.com/overture-stack/usher/blob/main/docs/deployment.md#registering-resources)
+describes:
+
+| Option          | Where it comes from                                                                                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `audience`      | the application's `id`, in the answer registering it                                                                               |
+| `key`           | the `key.value` in that same answer, the only answer that shows it                                                                 |
+| `controllerUrl` | where the application reaches the controller: https, or plain http only to `127.0.0.1`, `localhost` or `[::1]`                     |
+| `issuer`        | the controller's `USHER_ISSUER`, the `iss` of every Usher token                                                                    |
+| `eventSource`   | the application's own: a URI reference naming this deployment rather than one replica, the `source` of every event the bridge logs |
 
 Each route mounted after the middleware reads its request's access from `res.locals` with
 `readAccess` from `@overture-stack/usher-types`. On shutdown, `await bridge.stop()`, which settles
