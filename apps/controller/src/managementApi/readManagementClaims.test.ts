@@ -52,11 +52,6 @@ const read = (
     NOW,
   );
 
-const principalTypeOf = (
-  reading: ReturnType<typeof read>,
-): string | undefined =>
-  reading.kind === 'accepted' ? reading.principal.type : undefined;
-
 const refusal = (reason: string, subject = 'subject-ana') => ({
   kind: 'refused',
   reason,
@@ -85,32 +80,6 @@ suite("reading a verified management token's claims", () => {
     );
   });
 
-  test("tells a service account apart by either sign of Keycloak's client credentials, the administrator role notwithstanding", () => {
-    const readings = [
-      read({ client_id: 'lyric-svc' }),
-      read({ preferred_username: 'service-account-lyric-svc' }),
-    ];
-
-    readings.forEach((reading) =>
-      assert.equal(principalTypeOf(reading), 'serviceAccount'),
-    );
-  });
-
-  test('reads a token holding the service-account realm role, and neither sign of client credentials, as a service account', () => {
-    const reading = read({
-      realm_access: { roles: ['offline_access', 'usher-service-account'] },
-    });
-
-    assert.deepEqual(
-      reading.kind === 'accepted' ? reading.principal : undefined,
-      {
-        administrator: false,
-        subject: 'subject-ana',
-        type: 'serviceAccount',
-      },
-    );
-  });
-
   test('reads a token holding the service-account realm role beside the administrator role as a service account', () => {
     const reading = read({
       realm_access: {
@@ -129,49 +98,6 @@ suite("reading a verified management token's claims", () => {
         subject: 'subject-ana',
         type: 'serviceAccount',
       },
-    );
-  });
-
-  test('takes the configured service-account role as the mark, and the default name then as any other role', () => {
-    const readWithRole = (roles: readonly string[]) =>
-      readManagementClaims(
-        { claims: claimsWith({ realm_access: { roles } }), header: HEADER },
-        { ...SETTINGS, serviceAccountRole: 'lyric-service' },
-        NOW,
-      );
-
-    assert.deepEqual(
-      [
-        principalTypeOf(readWithRole(['offline_access', 'lyric-service'])),
-        principalTypeOf(
-          readWithRole(['offline_access', 'usher-service-account']),
-        ),
-      ],
-      ['serviceAccount', 'human'],
-    );
-  });
-
-  test("reads a token as a person's when it carries neither sign of client credentials nor a realm role named exactly as the service-account role", () => {
-    const readings = [
-      read(),
-      read({ realm_access: { roles: ['offline_access'] } }),
-      read({ realm_access: undefined }),
-      read({
-        realm_access: {
-          roles: [
-            'Usher-Service-Account',
-            'usher-service-account-x',
-            ' usher-service-account',
-            ['usher-service-account'],
-          ],
-        },
-      }),
-      read({ realm_access: { roles: 'usher-service-account' } }),
-      read({ resource_access: { roles: ['usher-service-account'] } }),
-    ];
-
-    readings.forEach((reading) =>
-      assert.equal(principalTypeOf(reading), 'human'),
     );
   });
 

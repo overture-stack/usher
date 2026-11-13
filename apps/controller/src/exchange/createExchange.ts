@@ -4,19 +4,27 @@ import type {
   FastifyRequest,
   RouteOptions,
 } from 'fastify';
+import type pg from 'pg';
 
 import {
   type Admitted,
   SHARE_EXCEEDED_RETRY_AFTER_SECONDS,
 } from '../admission/index.js';
-import type { Actor, AuditEvent } from '../eventLog/index.js';
+import type { Actor, AuditEvent, AuditTransaction } from '../eventLog/index.js';
 import { failureCodeOf, failureNameOf } from '../failures/index.js';
+import { findOrRecordPerson } from '../findOrRecordPerson.js';
 import type { Problem } from '../http/index.js';
-import type { SignInJudgement } from '../signInTokens/index.js';
+import {
+  isServiceAccount,
+  readStoredRefusal,
+  type SignInJudgement,
+  type StoredRefusal,
+} from '../signInTokens/index.js';
 import { CommitUnconfirmed, type Deadline } from '../storeTimeout/index.js';
 import {
   anonymousCalculation,
   readAudiencePolicy,
+  signedInCalculation,
 } from '../tokenCalculation/index.js';
 import { sealUsherToken } from '../usherToken/index.js';
 import { anonymousPayload } from './anonymousPayload.js';
@@ -32,6 +40,8 @@ import {
   unreadableBody,
 } from './exchangeProblems.js';
 import { readExchangeRequest } from './readExchangeRequest.js';
+import { recordExchangedSession } from './recordExchangedSession.js';
+import { signedInPayload } from './signedInPayload.js';
 import type { Exchange, ExchangeKey, ExchangeSettings } from './types.js';
 
 /** The path bridges exchange credentials at. */
@@ -114,7 +124,24 @@ const LATE: Outcome = Object.freeze({ kind: 'late' });
 /** A credential's refusal, and the `token.exchange` recording it. */
 interface CredentialRefusal extends Refusal {
   event: AuditEvent;
+  kind: 'refused';
 }
+
+/** A sign-in token the judgement accepted. */
+type AcceptedJudgement = Extract<SignInJudgement, { kind: 'accepted' }>;
+
+/**
+ * A sign-in token the judgement accepted and nothing refused before the store is read: the principal
+ * it acts for, and the instant its Usher token is issued at, in whole seconds since the Unix epoch.
+ */
+interface Issuable {
+  issuedAt: number;
+  kind: 'issuable';
+  principal: AcceptedJudgement;
+}
+
+/** What judging a credential earns before the store is read: a refusal, or a token to issue. */
+type JudgedCredential = CredentialRefusal | Issuable;
 
 // The answer to an exchange over its application's share while the pool is contended, given before
 // any work on the store.
@@ -131,16 +158,10 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
   return code === undefined ? {} : { code };
 };
 
-// Until the exchange issues signed-in tokens, a credential the judgement accepts is refused like any
-// other, its answer the one every refused credential gets, and recorded as apiKeyVerifierNotConfigured,
-// naming no subject: no token bearing an identity exists before identity refusals do. This branch alone
-// changes when signed-in tokens are issued, which replace it whole, and its answer may change by ruling
-// before then.
-const acceptedCredentialRefusal = (sourceIp: string): CredentialRefusal => ({
-  event: deniedExchangeEvent({
-    reason: 'apiKeyVerifierNotConfigured',
-    sourceIp,
-  }),
+// A refusal answered the one 403 every refused credential gets.
+const credentialRefused = (event: AuditEvent): CredentialRefusal => ({
+  event,
+  kind: 'refused',
   problem: EXCHANGE_PROBLEMS.credentialRefused,
 });
 
@@ -171,24 +192,57 @@ const withinOr = <Value>(
     );
   });
 
+// A sign-in token the judgement accepted is refused still, before the store is read, when any one of a
+// service account's marks is on it, or when it expires at or before the second its Usher token would be
+// issued in, so that token would live no time; each refusal names the verified subject.
+const acceptedCredentialOf = (
+  principal: AcceptedJudgement,
+  {
+    issuedAt,
+    serviceAccountRole,
+  }: { issuedAt: number; serviceAccountRole: string },
+  sourceIp: string,
+): JudgedCredential => {
+  const { claims, expiresAt, subject } = principal;
+  if (isServiceAccount(claims, serviceAccountRole)) {
+    return credentialRefused(
+      deniedExchangeEvent({
+        reason: 'serviceAccountNotPermitted',
+        refusedSubject: subject,
+        sourceIp,
+      }),
+    );
+  }
+  return expiresAt > issuedAt
+    ? { issuedAt, kind: 'issuable', principal }
+    : credentialRefused(
+        deniedExchangeEvent({
+          reason: 'expiredToken',
+          refusedSubject: subject,
+          sourceIp,
+        }),
+      );
+};
+
 // What a judged credential is answered, and how its exchange is recorded: refused alike and denied
 // under its own reason; denied too while its signing key is not confirmed yet, since a made-up key id
-// or a routine key rotation produces that and neither is a fault in the controller; or kept from being
-// judged by an identity provider that cannot be reached, and failed.
-const credentialRefusalOf = (
+// or a routine key rotation produces that and neither is a fault in the controller; kept from being
+// judged by an identity provider that cannot be reached, and failed; or, accepted, issued for unless
+// refused before the store is read.
+const judgedCredentialOf = (
   judgement: SignInJudgement,
+  issuing: { issuedAt: number; serviceAccountRole: string },
   sourceIp: string,
-): CredentialRefusal => {
+): JudgedCredential => {
   if (judgement.kind === 'recorded') {
     const { reason, refusedSubject } = judgement;
-    return {
-      event: deniedExchangeEvent({
+    return credentialRefused(
+      deniedExchangeEvent({
         reason,
         ...(refusedSubject === undefined ? {} : { refusedSubject }),
         sourceIp,
       }),
-      problem: EXCHANGE_PROBLEMS.credentialRefused,
-    };
+    );
   }
   if (judgement.kind === 'keysUnavailable') {
     return {
@@ -196,99 +250,111 @@ const credentialRefusalOf = (
         reason: 'identityProviderUnavailable',
         sourceIp,
       }),
+      kind: 'refused',
       problem: EXCHANGE_PROBLEMS.identityProviderUnavailable,
     };
   }
   if (judgement.kind === 'signingKeyUnconfirmed') {
     return {
       event: deniedExchangeEvent({ reason: 'signingKeyUnconfirmed', sourceIp }),
+      kind: 'refused',
       problem: EXCHANGE_PROBLEMS.signingKeyUnconfirmed,
       retryAfterSeconds: judgement.retryAfterSeconds,
     };
   }
-  return acceptedCredentialRefusal(sourceIp);
+  return acceptedCredentialOf(judgement, issuing, sourceIp);
 };
 
 /**
- * Creates the token exchange, `POST /exchange`, the one call every bridge makes for an Usher token.
+ * Creates the token exchange, `POST /exchange`, answering the application a channel assertion names
+ * an Usher token: the anonymous visitor's, or a signed-in principal's.
  *
  * Every exchange is answered by its deadline, `deadlineMilliseconds` from the moment its request
- * arrives, read on the monotonic clock given. The bridge's timeout is that deadline plus a margin for
- * the network and for writing the answer, so the controller always answers before the bridge gives up.
- * Each step below that runs out of time is answered as its paragraph says, never past the deadline.
+ * arrives, read on the monotonic clock given. The deadline must stay shorter than the time its callers
+ * wait for an answer, by a margin for the network and for writing the answer, so every answer reaches
+ * them before they give up. Each step below that runs out of time is answered as its paragraph says,
+ * never past the deadline.
  *
  * Each request's channel assertion is checked first, from memory, so a caller it does not authenticate
  * is given no other work: an assertion that could not be verified, an unknown application's and one
  * whose application holds no live key among them, is counted by reason and named application in the
  * shared tally, and one that verified and is refused anyway is handed to the exchange's own recorder
- * of refused assertions, taken from the instance's, which records the instance's first refusal of each
- * assertion as a `channelAssertion.rejection` naming its application and counts the rest, the answer
- * never waiting on it. Each recording is held to two bounds: the route's limit of recordings waiting
- * on the store, and a place in the share of the application the assertion names, taken through
- * `recordRefusalWithinShare` as a credential's refusal takes one; a refusal past either is counted.
- * Each is answered one identical `401 channelAssertionRefused`, and confirms nothing. One assertion
- * serves every exchange within its lifetime. An assertion that verifies confirms the key it verified
- * under, as the confirmations given confirm it, beside the exchange's own work and bounded by the
- * exchange's deadline, every answer waiting for that confirmation until the deadline at most, whatever
- * the body and the credential then earn. A read straight after the answer therefore shows the key's
- * `confirmedAt` only when the store took the confirmation by the deadline; one it did not take by then
- * changes no answer, is written to the log as a failed confirmation is, and is tried again at the
- * key's next exchange.
+ * of refused assertions, taken from the instance's, the answer never waiting on it. That recorder is
+ * given two bounds, and must count a refusal past either rather than record it: the route's limit of
+ * recordings waiting on the store, and a place in the share of the application the assertion names,
+ * taken through `recordRefusalWithinShare` as a credential's refusal takes one. Each refused
+ * assertion is answered one identical `401 channelAssertionRefused`, and confirms nothing. The key an
+ * assertion verifies under is handed to the key confirmations given, beside the exchange's own work
+ * and bounded by the exchange's deadline, and every answer waits for that confirmation until the
+ * deadline at most, whatever the body and the credential then earn; a confirmation not settled by the
+ * deadline changes no answer.
  *
- * Then the body is read, as `readExchangeRequest` reads it: `400 unreadableBody` for one unreadable by
- * its shape, `406 payloadVersionUnserved` for one listing no version served, and `413 bodyTooLarge`
- * past 64 KiB. The time the body takes to arrive counts against the deadline, and is not cut short: a
- * request whose body arrives whole with less than the late-request threshold left to its deadline,
- * {@link LATE_REQUEST_THRESHOLD_MILLISECONDS} as the controller passes it, arrived too late to be
- * answered by its deadline. It is answered at once `408 requestTimeout`, with `Connection: close`,
- * judging nothing, recording nothing and writing one line at warning, {@link EXCHANGE_REQUEST_TIMEOUT},
- * naming the route alone, so a request's own lateness is never recorded as the identity provider's or
- * the store's failure.
+ * Then the body is read: one unreadable by its shape is answered `400 unreadableBody`, one listing no
+ * version served `406 payloadVersionUnserved`, and one past 64 KiB `413 bodyTooLarge`. The time the
+ * body takes to arrive counts against the deadline, and is not cut short: a request whose body arrives
+ * whole with less than the late-request threshold given left to its deadline arrived too late to be
+ * answered by it. It is answered at once `408 requestTimeout`, with `Connection: close`, judging
+ * nothing, recording nothing and writing one line at warning, {@link EXCHANGE_REQUEST_TIMEOUT}, naming
+ * the route alone, so a request's own lateness is never recorded as the identity provider's or the
+ * store's failure.
  *
  * A body carrying no credential is the anonymous visitor's exchange. In one transaction the audience's
- * policy is read in one statement, so from one snapshot, the anonymous calculation is run, its version
- * 1 payload is sealed under the token subkey of the key the assertion verified under, and its
- * `token.exchange` is recorded as `succeeded`, its actor anonymous. The token is answered `200` as one
- * compact `application/jwt` body once that transaction has committed.
+ * policy is read from one snapshot, the anonymous calculation is run, its version 1 payload is sealed
+ * under the token subkey of the key the assertion verified under, and its `token.exchange` is recorded
+ * as `succeeded`, its actor anonymous. The token is answered `200` as one compact `application/jwt`
+ * body once that transaction has committed.
  *
- * A credential is judged for the application the assertion names, through the verifier every route
- * shares, and refused: every credential the judgement refuses is answered one identical
+ * A credential is judged by the judge given, for the application the assertion names, at the
+ * configured clock's instant. Every credential the judgement refuses is answered one identical
  * `403 credentialRefused` and recorded `denied` under its own reason, naming the token's subject in
- * `refusedSubject` only where the judgement names it; a credential the judgement accepts is answered
- * the same `403` and recorded as `apiKeyVerifierNotConfigured`, naming no subject, until the exchange
- * issues signed-in tokens. Keys that cannot be had are answered `503 identityProviderUnavailable` and
- * recorded `failed` under that code. A signing key not confirmed yet is answered
- * `503 signingKeyUnconfirmed` with its seconds in `Retry-After` and recorded `denied` under that code,
- * since a made-up key id or a routine key rotation produces it and neither is a fault in the
- * controller. Every such event's actor is anonymous. The judgement is waited for until the deadline
- * less {@link RECORDING_RESERVE_MILLISECONDS}, which is kept for recording the refusal, a budget of at
- * least {@link MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS} for any request not answered as late; a judgement
- * not given by then is answered and recorded exactly as keys that cannot be had are. It is never cancelled,
- * since the fetch of the identity provider's keys it may wait on is shared with other requests, and
- * its late result is dropped.
+ * `refusedSubject` only where the judgement names it. Keys that cannot be had are answered
+ * `503 identityProviderUnavailable` and recorded `failed` under that code. A signing key not confirmed
+ * yet is answered `503 signingKeyUnconfirmed` with its seconds in `Retry-After` and recorded `denied`
+ * under that code, since a made-up key id or a routine key rotation produces it and neither is a fault
+ * in the controller. The judgement is waited for until the deadline less
+ * {@link RECORDING_RESERVE_MILLISECONDS}, which is kept for recording its outcome, a budget of at least
+ * {@link MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS} for any request not answered as late; a judgement not
+ * given by then is answered and recorded exactly as keys that cannot be had are. It is never
+ * cancelled, since what it waits on may be shared with other requests, and its late result is
+ * dropped.
  *
- * Each exchange's store work, the anonymous calculation or a credential's refusal whatever the
- * judgement, `signingKeyUnconfirmed` included, runs within its application's share of the exchange
- * pool as `admission` admits it: its place is taken once every check needing no store has passed, the
- * assertion, the body and the credential's judgement, and released once that work has ended, however
- * it ended. An exchange within its share is always admitted; past it, one is admitted while the
- * instance's exchanges in flight number fewer than the pool's connections, and one anonymous exchange
- * per application past that. Any other is answered `503 admissionShareExceeded` with `Retry-After` at
- * once, nothing begun on the store and nothing recorded, and is counted for its application. A refusal
- * of the assertion or of the body, and a request answered as late, take no place.
+ * A sign-in token the judgement accepts is still refused with the same `403`, before any work on the
+ * store, so its principal is never met as a person: as `serviceAccountNotPermitted` when
+ * {@link isServiceAccount} marks it as a service account's under the configured service-account role,
+ * and as `expiredToken` when its `exp` is at or before the second its Usher token would be issued in,
+ * so no Usher token living no time is issued. Each is recorded `denied`, naming the verified subject
+ * in `refusedSubject`. Every event recording a credential's refusal names its actor anonymous.
+ *
+ * Any other sign-in token the judgement accepts is issued for, in one transaction declaring its
+ * principal the actor, a person named by the identity provider's `sub`. Their standing is read first,
+ * under the identity provider's issuer: a principal the store refuses, revoked, issued for before a
+ * revocation of the whole platform, or signed out, is answered the same `403` and recorded `denied`
+ * under that reason, naming the subject in `refusedSubject`, its actor anonymous, with nothing else
+ * written. A principal in good standing is met, a person recorded on first meeting them; the
+ * audience's policy is read from one snapshot and the signed-in calculation is run; the session the
+ * sign-in token names, if it names one, is recorded with that token's `exp`; and the version 1
+ * payload, naming the identity provider's subject in `sub` and expiring a token lifetime after it is
+ * issued or with the sign-in token, whichever is sooner, is sealed as the anonymous one is. Its
+ * `token.exchange` is recorded as `succeeded`, naming the subject as `userId`, and the token is
+ * answered `200` as the anonymous one is, once that transaction has committed.
+ *
+ * Each exchange's store work runs within its application's share of the exchange pool, through the
+ * admission given: the anonymous exchange's in the anonymous lane, and every credential's, issued for
+ * or refused whatever the judgement, `signingKeyUnconfirmed` included, in the credential lane. Its
+ * place is taken once every check needing no store has passed, the assertion, the body and the
+ * credential's judgement, and released once that work has ended, however it ended. An exchange the
+ * admission does not admit is answered `503 admissionShareExceeded` with `Retry-After` at once,
+ * nothing begun on the store and nothing recorded, and is counted for its application. A refusal of
+ * the assertion or of the body, and a request answered as late, take no place.
  *
  * A refused exchange follows the same rule as an issued one: every exchange admitted into its share
- * is answered only once its `token.exchange` has committed, in a transaction of its own within the
- * store timeout and the deadline, so no exchange goes unrecorded while looking answered. One whose
- * transaction the store cannot take is answered `503 storeUnavailable`, its failure written by its
- * code alone, and one whose commit the store did not confirm `503 outcomeUnknown`; neither issues a
- * token, and a refusal is never answered `403` unrecorded. Bounded by the deadline, that transaction's
- * work runs for the store timeout or the time left to the deadline, whichever is shorter, and is
- * answered `503 storeUnavailable` with nothing recorded once that has passed; it sends no `COMMIT`
- * with too little left to the deadline for an answer, and is answered the same; and a `COMMIT` not
- * answered within the store timeout or the time left to the deadline, whichever is shorter, is
- * answered `503 outcomeUnknown`, the trail's own line naming its event. A failure the route did not
- * expect is answered `500 internalError`. Every answer is `no-store`.
+ * is answered only once its `token.exchange` has committed, in a transaction of its own, so no
+ * exchange goes unrecorded while looking answered. That transaction is given the deadline, and must
+ * not run past it or past the store timeout. One whose transaction the store cannot take, or does not
+ * take in time, is answered `503 storeUnavailable`, its failure written by its code alone, and one
+ * whose commit the store did not confirm in time `503 outcomeUnknown`; neither issues a token, and a
+ * refusal is never answered `403` unrecorded. A failure the route did not expect is answered
+ * `500 internalError`. Every answer is `no-store`.
  *
  * @param settings the admission and where its refusals are counted, the assertion verifier, its tally,
  *   the instance's recording of refused assertions and the exchange's limit of them, the deadline and
@@ -444,10 +510,126 @@ export const createExchange = ({
       KEYS_UNAVAILABLE,
     );
 
+  // A credential's refusal, recorded in a transaction of its own, its actor anonymous.
+  const recordRefusal = (
+    { event, ...refusal }: CredentialRefusal,
+    { deadline }: Verified,
+  ): Promise<Answer> =>
+    trail.inTransaction(
+      ANONYMOUS,
+      async ({ record }) => {
+        await record(event);
+        return refusal;
+      },
+      { deadline },
+    );
+
+  // A principal the store refuses is recorded denied under that reason, naming the verified subject,
+  // its actor anonymous since nothing is done for that subject.
+  const refuseForStanding = async (
+    { record }: AuditTransaction<pg.ClientBase>,
+    standing: StoredRefusal,
+    subject: string,
+    sourceIp: string,
+  ): Promise<Answer> => {
+    await record({
+      actor: ANONYMOUS,
+      ...deniedExchangeEvent({
+        reason: standing,
+        refusedSubject: subject,
+        sourceIp,
+      }),
+    });
+    return { kind: 'refused', problem: EXCHANGE_PROBLEMS.credentialRefused };
+  };
+
+  // A principal in good standing is met, a person recorded the first time, before anything else is
+  // written, so whatever the transaction records points at them; the session their sign-in token
+  // carries, if any, is recorded with that token's expiry.
+  const issueToPrincipal = async (
+    { connection, record }: AuditTransaction<pg.ClientBase>,
+    { key }: Verified,
+    { issuedAt, principal: { expiresAt, session, subject } }: Issuable,
+    sourceIp: string,
+  ): Promise<Answer> => {
+    const { databaseSchema, identityProviderIssuer } = settings;
+    await findOrRecordPerson(
+      connection,
+      databaseSchema,
+      { issuer: identityProviderIssuer, subject },
+      new Date(settings.clock.now()),
+    );
+    const policy = await readAudiencePolicy(
+      connection,
+      databaseSchema,
+      key.applicationId,
+    );
+    const calculation = signedInCalculation(
+      policy,
+      settings.baseline,
+      settings.signedInRule,
+    );
+    const { sid } = session;
+    if (sid !== undefined) {
+      await recordExchangedSession(connection, databaseSchema, {
+        expiresAt,
+        issuer: identityProviderIssuer,
+        sid,
+        subject,
+      });
+    }
+    const payload = signedInPayload(calculation, {
+      audience: key.applicationId,
+      issuedAt,
+      issuer: settings.issuer,
+      lifetimeSeconds: settings.tokenLifetimeSeconds,
+      signInExpiresAt: expiresAt,
+      subject,
+    });
+    const token = await sealUsherToken(payload, key);
+    await record(
+      issuedExchangeEvent({
+        audience: payload.aud,
+        generatedAt: payload.generatedAt,
+        grantCount: calculation.grantCount,
+        rules: calculation.rules,
+        sourceIp,
+        subject,
+        tokenTtl: payload.exp - payload.iat,
+      }),
+    );
+    return { kind: 'issued', token };
+  };
+
+  // A signed-in principal's exchange, in one transaction declaring them its actor, their standing read
+  // first.
+  const issueSignedIn = (
+    verified: Verified,
+    issuable: Issuable,
+    sourceIp: string,
+  ): Promise<Answer> => {
+    const { session, subject } = issuable.principal;
+    return trail.inTransaction(
+      { id: subject, type: 'human' },
+      async (transaction) => {
+        const standing = await readStoredRefusal(
+          transaction.connection,
+          settings.databaseSchema,
+          { issuer: settings.identityProviderIssuer, session, subject },
+        );
+        return standing === undefined
+          ? issueToPrincipal(transaction, verified, issuable, sourceIp)
+          : refuseForStanding(transaction, standing, subject, sourceIp);
+      },
+      { deadline: verified.deadline },
+    );
+  };
+
   // A credential with too little of its deadline left for the least judgement budget arrived too late:
-  // it is answered as late, judging and recording nothing, whatever threshold the handler was given.
-  // Every judgement's refusal is recorded within the application's share.
-  const refuseCredential = async (
+  // it is answered as late, judging and recording nothing, whatever the late-request threshold. Once
+  // judged, a credential is issued for or refused within its application's share as a credential,
+  // never in the anonymous lane.
+  const exchangeCredential = async (
     credential: string,
     verified: Verified,
     sourceIp: string,
@@ -463,23 +645,24 @@ export const createExchange = ({
       verified,
       budgetMilliseconds,
     );
-    const { event, ...refusal } = credentialRefusalOf(judgement, sourceIp);
-    const { applicationId } = verified.key;
-    return outcomeWithin(
-      applicationId,
-      await recordRefusalWithinShare(applicationId, () =>
-        committed(
-          trail.inTransaction(
-            ANONYMOUS,
-            async ({ record }) => {
-              await record(event);
-              return { kind: 'refused', ...refusal };
-            },
-            { deadline: verified.deadline },
-          ),
-        ),
-      ),
+    const judged = judgedCredentialOf(
+      judgement,
+      {
+        issuedAt: Math.floor(settings.clock.now() / 1000),
+        serviceAccountRole: settings.serviceAccountRole,
+      },
+      sourceIp,
     );
+    const { applicationId } = verified.key;
+    const admitted =
+      judged.kind === 'issuable'
+        ? await admission.within(applicationId, 'credential', () =>
+            committed(issueSignedIn(verified, judged, sourceIp)),
+          )
+        : await recordRefusalWithinShare(applicationId, () =>
+            committed(recordRefusal(judged, verified)),
+          );
+    return outcomeWithin(applicationId, admitted);
   };
 
   // The anonymous exchange's calculation, within its application's share as an anonymous exchange,
@@ -525,7 +708,7 @@ export const createExchange = ({
     }
     return reading.credential === undefined
       ? issueWithinShare(verified, request.ip)
-      : refuseCredential(reading.credential, verified, request.ip);
+      : exchangeCredential(reading.credential, verified, request.ip);
   };
 
   // A commit the store did not confirm may have taken effect, and the trail's own line names its event.

@@ -8,6 +8,7 @@ suite("the token calculation's module", () => {
     assert.deepEqual(Object.keys(tokenCalculation).toSorted(), [
       'anonymousCalculation',
       'readAudiencePolicy',
+      'signedInCalculation',
     ]);
   });
 });

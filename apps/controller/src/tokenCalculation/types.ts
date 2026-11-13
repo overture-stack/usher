@@ -34,7 +34,7 @@ export interface AudiencePolicy {
 }
 
 /** A rule conferring a grant on a whole class of principals, as `token.exchange` names it in `rules`. */
-export type ConferringRule = 'baseline';
+export type ConferringRule = 'baseline' | 'signedIn';
 
 /**
  * What the calculation gives a payload: what the principal holds and what the audience offers, as a

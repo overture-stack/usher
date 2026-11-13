@@ -1,34 +1,7 @@
-import type {
-  CategoryName,
-  NonEmpty,
-  RecordAction,
-  ResourcePermissions,
-} from '@overture-stack/usher-types';
+import type { RecordAction } from '@overture-stack/usher-types';
 
-import type { AudiencePolicy, Calculation, ServedResource } from './types.js';
-
-// The global category of the records matching no other, which a payload never lists as concrete.
-const UNMARKED = 'unmarked';
-
-const UNMARKED_CATEGORY: CategoryName = `global.${UNMARKED}`;
-
-const isCurrent = ({ retired }: ServedResource): boolean => !retired;
-
-// A resource whose unmarked records are open to everyone: open at its base tier, and not suppressed,
-// since a suppressed resource is reached by nobody.
-const isOpen = ({ baseTier, suppressed }: ServedResource): boolean =>
-  baseTier === 'open' && !suppressed;
-
-const nonEmpty = (
-  actions: readonly RecordAction[],
-): NonEmpty<RecordAction> | undefined => {
-  const [first, ...rest] = actions;
-  return first === undefined ? undefined : [first, ...rest];
-};
-
-const baselineEntry = (
-  actions: NonEmpty<RecordAction>,
-): ResourcePermissions => ({ [UNMARKED_CATEGORY]: { record: [...actions] } });
+import { ruleCalculation } from './ruleCalculation.js';
+import type { AudiencePolicy, Calculation } from './types.js';
 
 /**
  * Calculates what an anonymous visitor holds for one audience, from one read of the store: the
@@ -43,32 +16,9 @@ const baselineEntry = (
  * @param baseline the record actions the baseline confers on everyone.
  */
 export const anonymousCalculation = (
-  { globalCategories, served }: AudiencePolicy,
+  policy: AudiencePolicy,
   baseline: readonly RecordAction[],
-): Calculation => {
-  const current = served.filter(isCurrent);
-  const actions = nonEmpty(baseline);
-  const held =
-    actions === undefined
-      ? []
-      : current
-          .filter(isOpen)
-          .map((resource) => ({ entry: baselineEntry(actions), resource }));
-  return {
-    globalCategories: globalCategories
-      .filter((name) => name !== UNMARKED)
-      .map((name): CategoryName => `global.${name}`),
-    grantCount: 0,
-    permissions: Object.fromEntries(
-      held.map(({ entry, resource }) => [resource.externalId, entry]),
-    ),
-    resourceCategories: Object.fromEntries(
-      held.map(({ resource: { externalId, ownCategories } }) => [
-        externalId,
-        ownCategories.map((name): CategoryName => `resource.${name}`),
-      ]),
-    ),
-    rules: held.length > 0 ? ['baseline'] : [],
-    servedResources: current.map(({ externalId }) => externalId),
-  };
-};
+): Calculation =>
+  ruleCalculation(policy, [
+    { actions: baseline, rule: 'baseline', tier: 'open' },
+  ]);

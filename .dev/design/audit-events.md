@@ -394,7 +394,9 @@ clock.
 **A credential refused at the exchange is recorded under the code another route gives the same
 cause, wherever one does.** Each is a `token.exchange` `denied`, its `reason` that code. A
 `credential` holding empty text is `missingCredential`. No other route records an empty credential,
-so this code is the exchange's own. A token not marked as an access token by its identity provider's
+so this code is the exchange's own. A service account's token is `serviceAccountNotPermitted`, as at
+the Management API, answered the same `403` as every refused credential and never met as a person.
+A token not marked as an access token by its identity provider's
 connector, an ID token or a logout token among them, is `otherType`: the exchange takes access
 tokens alone, as the logout endpoint takes logout tokens alone. A token naming no `sub` is
 `missingSubject`, and one whose `sub` or `sid` holds text that cannot be stored is
@@ -423,7 +425,8 @@ neither does a run refused because another holds the lock.
 `refusedSubject` is the `sub` of a sign-in, management or logout token that verifies under the
 trusted issuer and is refused anyway: expired, carrying no `exp`, not yet valid, for another
 audience, or held by a revoked principal or a signed-out session, or issued before a platform
-revocation, or, for a logout token, refused for any reason `logoutToken.refusal` lists. It is a
+revocation, or, at the exchange, a service account's, or, for a logout token, refused for any
+reason `logoutToken.refusal` lists. It is a
 field of its own and never the actor, which stays anonymous, since the controller did not act for
 that subject. Every `managementToken.refusal` and every `logoutToken.refusal` is for such a token,
 so each carries it, unless its `sub` is absent, cannot be stored, or breaks the length rule below. A

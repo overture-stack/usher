@@ -8,10 +8,12 @@ suite("the sign-in tokens' module", () => {
     assert.deepEqual(Object.keys(signInTokens).toSorted(), [
       'currencyOf',
       'isKeycloakAccessToken',
+      'isServiceAccount',
       'judgeSignInCredential',
       'namesAudience',
       'readNames',
       'readStoredRefusal',
+      'realmRolesOf',
       'sessionOf',
     ]);
   });

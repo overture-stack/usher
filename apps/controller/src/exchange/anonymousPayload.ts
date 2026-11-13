@@ -1,5 +1,6 @@
 import type { Calculation } from '../tokenCalculation/index.js';
 import type { VersionOnePayload } from '../usherToken/index.js';
+import { versionOnePayload } from './versionOnePayload.js';
 
 /** When and by whom an anonymous token is issued, and for which audience. */
 export interface AnonymousIssuing {
@@ -26,23 +27,13 @@ export interface AnonymousIssuing {
  * @param issuing the audience, the instant, the issuer and the token lifetime.
  */
 export const anonymousPayload = (
-  {
-    globalCategories,
-    permissions,
-    resourceCategories,
-    servedResources,
-  }: Calculation,
+  calculation: Calculation,
   { audience, issuedAt, issuer, lifetimeSeconds }: AnonymousIssuing,
-): VersionOnePayload => ({
-  aud: audience,
-  exp: issuedAt + lifetimeSeconds,
-  generatedAt: issuedAt,
-  globalCategories,
-  iat: issuedAt,
-  iss: issuer,
-  payloadVersion: 1,
-  permissions,
-  resourceCategories,
-  servedResources,
-  sub: null,
-});
+): VersionOnePayload =>
+  versionOnePayload(calculation, {
+    audience,
+    expiresAt: issuedAt + lifetimeSeconds,
+    issuedAt,
+    issuer,
+    subject: null,
+  });

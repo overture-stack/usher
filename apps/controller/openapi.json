@@ -5790,7 +5790,7 @@
                 }
               }
             },
-            "description": "The Usher token, alone, as the body.",
+            "description": "The Usher token, the anonymous visitor's or the signed-in principal's, alone, as the body.",
             "headers": {
               "Cache-Control": {
                 "$ref": "#/components/headers/NoStore"
@@ -5842,7 +5842,7 @@
                 }
               }
             },
-            "description": "The credential is refused; `credentialRefused`. Every refused credential, a revoked principal's included, receives this one answer, with the same body. The caller is authenticated by its channel assertion, so a refused credential is answered `403` here, where the Management API answers the same code with `401`."
+            "description": "The credential is refused; `credentialRefused`. Every refused credential, a revoked principal's, a signed-out session's and a service account's included, receives this one answer, with the same body. The caller is authenticated by its channel assertion, so a refused credential is answered `403` here, where the Management API answers the same code with `401`."
           },
           "406": {
             "content": {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
+import { REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import {
   deniedExchangeEvent,
   failedExchangeEvent,
@@ -31,6 +32,33 @@ suite("the exchange's token.exchange events", () => {
         sourceIp: '192.0.2.10',
         tokenTtl: 300,
         userId: null,
+      },
+      severity: 'info',
+      type: 'token.exchange',
+    });
+  });
+
+  test("records a signed-in principal's token at info as succeeded, naming the identity provider's subject as userId and both conferring rules", () => {
+    const event = issuedExchangeEvent({
+      audience: AUDIENCE,
+      generatedAt: 1_767_225_600,
+      grantCount: 0,
+      rules: ['baseline', 'signedIn'],
+      sourceIp: '192.0.2.10',
+      subject: 'subject "ana" \\',
+      tokenTtl: 90,
+    });
+
+    assert.deepEqual(event, {
+      data: {
+        audience: AUDIENCE,
+        generatedAt: '2026-01-01T00:00:00.000Z',
+        grantCount: 0,
+        result: 'succeeded',
+        rules: ['baseline', 'signedIn'],
+        sourceIp: '192.0.2.10',
+        tokenTtl: 90,
+        userId: 'subject "ana" \\',
       },
       severity: 'info',
       type: 'token.exchange',
@@ -83,6 +111,69 @@ suite("the exchange's token.exchange events", () => {
     assert.equal(named.data['refusedSubject'], 'subject "ana" \\');
     assert.equal(named.data['userId'], null);
     assert.equal(Object.hasOwn(unnamed.data, 'refusedSubject'), false);
+  });
+
+  test("records a service account's token at warning as denied, under serviceAccountNotPermitted, naming its subject as refusedSubject and no userId", () => {
+    const event = deniedExchangeEvent({
+      reason: 'serviceAccountNotPermitted',
+      refusedSubject: 'service-account-subject',
+      sourceIp: '192.0.2.10',
+    });
+
+    assert.deepEqual(event, {
+      data: {
+        reason: 'serviceAccountNotPermitted',
+        refusedSubject: 'service-account-subject',
+        result: 'denied',
+        sourceIp: '192.0.2.10',
+        userId: null,
+      },
+      severity: 'warning',
+      type: 'token.exchange',
+    });
+  });
+
+  test('records each refusal the store holds for a principal as denied under its own reason, naming the refused subject', () => {
+    const events = (
+      ['revokedPlatform', 'revokedPrincipal', 'signedOutSession'] as const
+    ).map((reason) =>
+      deniedExchangeEvent({
+        reason,
+        refusedSubject: 'subject-ana',
+        sourceIp: '192.0.2.10',
+      }),
+    );
+
+    assert.deepEqual(
+      events.map(({ data }) => [
+        data['result'],
+        data['reason'],
+        data['refusedSubject'],
+        data['userId'],
+      ]),
+      [
+        ['denied', 'revokedPlatform', 'subject-ana', null],
+        ['denied', 'revokedPrincipal', 'subject-ana', null],
+        ['denied', 'signedOutSession', 'subject-ana', null],
+      ],
+    );
+  });
+
+  test('names a refused subject of 255 characters whole, and leaves the member out for a longer one, never cut short', () => {
+    const atTheLimit = 'a'.repeat(REFUSED_SUBJECT_MAXIMUM_LENGTH);
+    const pastTheLimit = 'b'.repeat(REFUSED_SUBJECT_MAXIMUM_LENGTH + 1);
+
+    const [named, unnamed] = [atTheLimit, pastTheLimit].map((refusedSubject) =>
+      deniedExchangeEvent({
+        reason: 'revokedPrincipal',
+        refusedSubject,
+        sourceIp: '192.0.2.10',
+      }),
+    );
+
+    assert.equal(REFUSED_SUBJECT_MAXIMUM_LENGTH, 255);
+    assert.equal(named?.data['refusedSubject'], atTheLimit);
+    assert.equal(Object.hasOwn(unnamed?.data ?? {}, 'refusedSubject'), false);
   });
 
   test('records a signing key not confirmed yet at warning as denied, under its code, naming no userId', () => {

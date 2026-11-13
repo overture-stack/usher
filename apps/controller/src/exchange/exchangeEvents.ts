@@ -1,15 +1,24 @@
-import { type AuditEvent, eventInstant } from '../eventLog/index.js';
-import type { SignInRefusal } from '../signInTokens/index.js';
+import {
+  type AuditEvent,
+  eventInstant,
+  REFUSED_SUBJECT_MAXIMUM_LENGTH,
+} from '../eventLog/index.js';
+import type { SignInRefusal, StoredRefusal } from '../signInTokens/index.js';
 import type { ConferringRule } from '../tokenCalculation/index.js';
 
 /** Why an exchange was not judged through a fault, the code answered: the identity provider's keys could not be had. */
 export type ExchangeFault = 'identityProviderUnavailable';
 
 /**
- * Why a credential's exchange was denied: the judgement's refusal, or a signing key not confirmed yet,
- * which a made-up key id or a routine key rotation produces, so no fault in the controller.
+ * Why a credential's exchange was denied: the judgement's refusal; a signing key not confirmed yet,
+ * which a made-up key id or a routine key rotation produces, so no fault in the controller; a service
+ * account's token (`serviceAccountNotPermitted`); or the store's refusal of the principal.
  */
-export type ExchangeDenial = SignInRefusal | 'signingKeyUnconfirmed';
+export type ExchangeDenial =
+  | SignInRefusal
+  | StoredRefusal
+  | 'serviceAccountNotPermitted'
+  | 'signingKeyUnconfirmed';
 
 /** An Usher token issued, as its `token.exchange` records it. */
 export interface Issuance {
@@ -68,10 +77,12 @@ export const issuedExchangeEvent = ({
 
 /**
  * The `token.exchange` of a credential refused, or of one whose signing key is not confirmed yet, at
- * warning: `denied`, under its reason, naming no `userId`, and the token's subject in `refusedSubject`
- * only where the judgement names it, so a token that did not verify can put no subject in the trail.
+ * warning: `denied`, under its reason, naming no `userId`. It names the subject given in
+ * `refusedSubject` whole when that is at most {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters, and
+ * leaves the member out for a longer one, never cut short, or where none is given. A subject given
+ * must be that of a token whose signature verified, so a forged token can put no subject in the trail.
  *
- * @param refusal the reason, the subject the judgement names if any, and the request's address.
+ * @param refusal the reason, the verified token's subject if it is named, and the request's address.
  */
 export const deniedExchangeEvent = ({
   reason,
@@ -84,7 +95,10 @@ export const deniedExchangeEvent = ({
 }): AuditEvent => ({
   data: {
     reason,
-    ...(refusedSubject === undefined ? {} : { refusedSubject }),
+    ...(refusedSubject !== undefined &&
+    refusedSubject.length <= REFUSED_SUBJECT_MAXIMUM_LENGTH
+      ? { refusedSubject }
+      : {}),
     result: 'denied',
     sourceIp,
     userId: null,

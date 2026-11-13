@@ -27,7 +27,7 @@ import {
   type TransactionOptions,
 } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
-import type { SignInJudgement } from '../signInTokens/index.js';
+import type { SignInJudgement, StoredRefusal } from '../signInTokens/index.js';
 import {
   COMMIT_WINDOW_MILLISECONDS,
   CommitUnconfirmed,
@@ -66,11 +66,18 @@ const KEY: ExchangeKey = {
   token: KEY_SUBKEYS.token,
 };
 
+const IDENTITY_PROVIDER = 'https://keycloak.example.org/realms/overture';
+
+const SERVICE_ACCOUNT_ROLE = 'usher-service-account';
+
 const SETTINGS = Object.freeze({
   baseline: ['count', 'view', 'export'] as const,
   clock: { now: () => NOW },
   databaseSchema: 'usher',
+  identityProviderIssuer: IDENTITY_PROVIDER,
   issuer: 'https://usher.example.org',
+  serviceAccountRole: SERVICE_ACCOUNT_ROLE,
+  signedInRule: ['view'] as const,
   tokenLifetimeSeconds: 300,
 });
 
@@ -108,17 +115,52 @@ const ASSERTIONS: Readonly<Record<string, ChannelAssertionCheck<ExchangeKey>>> =
 
 const VERIFIED = 'Bearer assertion-verified';
 
-const ACCEPTED: SignInJudgement = {
-  claims: { aud: [APPLICATION], exp: SECONDS + 300, sub: 'subject-ana' },
+const ACCEPTED = {
+  claims: {
+    aud: [APPLICATION],
+    exp: SECONDS + 300,
+    preferred_username: 'ana@example.org',
+    realm_access: { roles: ['offline_access'] },
+    sub: 'subject-ana',
+  },
   expiresAt: SECONDS + 300,
   kind: 'accepted',
   session: { issuedAt: SECONDS - 10, sid: 'session-1' },
   subject: 'subject-ana',
+} satisfies SignInJudgement;
+
+// An accepted judgement whose verified claims carry the departures given.
+const acceptedWith = (
+  departures: Readonly<Record<string, unknown>>,
+): SignInJudgement => ({
+  ...ACCEPTED,
+  claims: { ...ACCEPTED.claims, ...departures },
+});
+
+// An accepted judgement whose sign-in token expires at the second given.
+const expiringAt = (expiresAt: number): SignInJudgement => ({
+  ...ACCEPTED,
+  claims: { ...ACCEPTED.claims, exp: expiresAt },
+  expiresAt,
+});
+
+// Each of a service account's marks, on a token the judgement accepts.
+const SERVICE_ACCOUNT_MARKS: Readonly<Record<string, SignInJudgement>> = {
+  'credential-of-a-client': acceptedWith({ client_id: 'lyric-svc' }),
+  'credential-of-a-service-account-user': acceptedWith({
+    preferred_username: 'service-account-lyric-svc',
+  }),
+  'credential-of-the-service-account-role': acceptedWith({
+    realm_access: { roles: ['offline_access', SERVICE_ACCOUNT_ROLE] },
+  }),
 };
 
 const JUDGEMENTS: Readonly<Record<string, SignInJudgement>> = {
   '': { kind: 'recorded', reason: 'missingCredential' },
   'credential-accepted': ACCEPTED,
+  'credential-expiring-a-second-after-issue': expiringAt(SECONDS + 1),
+  'credential-expiring-as-issued': expiringAt(SECONDS),
+  'credential-of-no-session': { ...ACCEPTED, session: {} },
   'credential-expired': {
     kind: 'recorded',
     reason: 'expiredToken',
@@ -131,6 +173,7 @@ const JUDGEMENTS: Readonly<Record<string, SignInJudgement>> = {
     retryAfterSeconds: 17,
   },
   uak_example: { kind: 'recorded', reason: 'apiKeyVerifierNotConfigured' },
+  ...SERVICE_ACCOUNT_MARKS,
 };
 
 // The audience's policy as one read gives it: an open resource holding a category of its own, an open
@@ -178,6 +221,51 @@ const POLICY_ROW = {
   served: SERVED,
 };
 
+// The person the stand's store records on meeting a subject for the first time.
+const PERSON_ID = '4e8b1c2d-7a3f-4b9e-8d6c-5f2a1e9b3c70';
+
+// A principal's standing as the store answers it: refused for the reason given, or for none.
+const standingRow = (refusal: StoredRefusal | undefined) => ({
+  revoked: refusal === 'revokedPrincipal',
+  revokedPlatform: refusal === 'revokedPlatform',
+  signedOut: refusal === 'signedOutSession',
+});
+
+// What the stand's store reads for a statement: a principal's standing, a person recorded on meeting
+// them first, the audience's policy, or no row, as it finds no person and inserts a session.
+const rowsAnswering = (
+  text: string,
+  refusal: StoredRefusal | undefined,
+): readonly unknown[] => {
+  if (text.includes('principal_revocations')) {
+    return [standingRow(refusal)];
+  }
+  if (text.includes('RETURNING id')) {
+    return [{ id: PERSON_ID }];
+  }
+  return text.includes('application_resources') ? [POLICY_ROW] : [];
+};
+
+// What each statement the exchange sent reads or writes, by its text: a principal's standing, a
+// person, the audience's policy, or a session exchanged.
+const statementKindOf = (text: string): string => {
+  if (text.includes('principal_revocations')) {
+    return 'standing';
+  }
+  if (text.includes('exchanged_sids')) {
+    return 'session';
+  }
+  return text.includes('application_resources') ? 'policy' : 'person';
+};
+
+// The kinds of a transaction's statements in order, each run of one kind named once.
+const statementKindsIn = ({
+  statements,
+}: Pick<Transaction, 'statements'>): readonly string[] =>
+  statements
+    .map(({ text }) => statementKindOf(text))
+    .filter((kind, at, kinds) => kinds[at - 1] !== kind);
+
 const ANONYMOUS_PAYLOAD = {
   aud: APPLICATION,
   exp: SECONDS + 300,
@@ -198,6 +286,21 @@ const ANONYMOUS_PAYLOAD = {
   },
   servedResources: ['STUDY-A1', 'étude « Nord » "B2"', 'STUDY-F6', 'STUDY-C3'],
   sub: null,
+};
+
+// The anonymous visitor's payload, with the registered resource's unmarked records under the
+// signed-in rule, for the identity provider's subject.
+const SIGNED_IN_PAYLOAD = {
+  ...ANONYMOUS_PAYLOAD,
+  permissions: {
+    ...ANONYMOUS_PAYLOAD.permissions,
+    'STUDY-C3': { 'global.unmarked': { record: ['view'] } },
+  },
+  resourceCategories: {
+    ...ANONYMOUS_PAYLOAD.resourceCategories,
+    'STUDY-C3': [],
+  },
+  sub: 'subject-ana',
 };
 
 interface Deferred {
@@ -298,6 +401,9 @@ interface StandOptions {
   /** How many applications are registered: 1 by default, so the application's share is the pool. */
   registered?: number;
 
+  /** Why the store refuses every principal whose standing is read: for no reason by default. */
+  standing?: StoredRefusal;
+
   /** Settles when the store takes each transaction begun, its work waiting until then: at once by default. */
   storeTakes?: Promise<void>;
 }
@@ -314,6 +420,7 @@ const standUp = (
     poolSize = 10,
     readFailure,
     registered = 1,
+    standing,
     storeTakes = Promise.resolve(),
   }: StandOptions = {},
 ): Stand => {
@@ -442,7 +549,7 @@ const standUp = (
           if (readFailure !== undefined) {
             throw readFailure;
           }
-          return { rows: [POLICY_ROW] };
+          return { rows: rowsAnswering(text, standing) };
         };
         const opened: AuditTransaction<pg.ClientBase> = {
           // A client that never connects, its query answered here.
@@ -515,6 +622,15 @@ const problemOf = (
 
 const recordedIn = (stand: Stand): readonly AuditEvent[] =>
   stand.transactions.flatMap(({ recorded }) => recorded);
+
+// The payload an issued token holds, opened under the token subkey it was sealed under.
+const payloadIn = async (answer: LightMyRequestResponse): Promise<unknown> => {
+  const { plaintext } = await compactDecrypt(answer.body, KEY_SUBKEYS.token, {
+    contentEncryptionAlgorithms: ['A256GCM'],
+    keyManagementAlgorithms: ['dir'],
+  });
+  return JSON.parse(new TextDecoder().decode(plaintext));
+};
 
 const storeFailure = (code: string): Error =>
   Object.assign(new Error('the store refused the statement'), { code });
@@ -1049,12 +1165,13 @@ suite('the token exchange', () => {
   });
 
   suite("its key's confirmation", () => {
-    test('confirms the key the assertion verified under for every exchange it answers: issued, refused for its credential, for its body or for its size, or kept from its store', async (context) => {
+    test('confirms the key the assertion verified under for every exchange it answers: issued, anonymous or signed in, refused for its credential, for its body or for its size, or kept from its store', async (context) => {
       const stand = standUp(context);
       const failing = standUp(context, { readFailure: storeFailure('57P01') });
 
       const answers = await Promise.all([
         post(stand),
+        post(stand, withCredential('credential-accepted')),
         post(stand, withCredential('credential-expired')),
         post(stand, { body: '[1]' }),
         post(stand, { body: '{"payloadVersions":[2]}' }),
@@ -1066,7 +1183,7 @@ suite('the token exchange', () => {
 
       assert.deepEqual(
         answers.map(({ statusCode }) => statusCode),
-        [200, 403, 400, 406, 413, 503],
+        [200, 200, 403, 400, 406, 413, 503],
       );
       assert.deepEqual(
         [...stand.confirmed, ...failing.confirmed],
@@ -1198,27 +1315,6 @@ suite('the token exchange', () => {
       );
     });
 
-    test('is refused alike when the judgement accepts it, recorded as apiKeyVerifierNotConfigured naming no subject, so no token carries an identity', async (context) => {
-      const stand = standUp(context);
-
-      const accepted = await post(stand, withCredential('credential-accepted'));
-      const refused = await post(stand, withCredential('credential-forged'));
-
-      assert.equal(accepted.statusCode, 403);
-      assert.deepEqual(onTheWire(accepted), onTheWire(refused));
-      assert.deepEqual(recordedIn(stand)[0], {
-        data: {
-          reason: 'apiKeyVerifierNotConfigured',
-          result: 'denied',
-          sourceIp: '127.0.0.1',
-          userId: null,
-        },
-        severity: 'warning',
-        type: 'token.exchange',
-      });
-      assert.equal(accepted.body.includes('subject-ana'), false);
-    });
-
     test("is answered 503 identityProviderUnavailable while the identity provider's keys cannot be had, the exchange recorded as failed", async (context) => {
       const stand = standUp(context);
 
@@ -1279,7 +1375,7 @@ suite('the token exchange', () => {
       const answers = await Promise.all(
         [
           'credential-forged',
-          'credential-accepted',
+          'credential-of-a-client',
           'credential-while-keys-unavailable',
         ].map((credential) => post(stand, withCredential(credential))),
       );
@@ -1322,6 +1418,344 @@ suite('the token exchange', () => {
           message: EXCHANGE_UNEXPECTED_FAILURE,
         },
       ]);
+      assert.deepEqual(stand.transactions, []);
+    });
+  });
+
+  suite('a signed-in principal', () => {
+    test("is issued one compact token as an application/jwt body, no-store, sealed under the token subkey of the key the assertion verified under, holding their version 1 payload exactly: the identity provider's subject, the baseline on open resources and the signed-in rule on registered ones", async (context) => {
+      const stand = standUp(context);
+
+      const answer = await post(stand, withCredential('credential-accepted'));
+
+      assert.equal(answer.statusCode, 200);
+      assert.equal(answer.headers['content-type'], 'application/jwt');
+      assert.equal(answer.headers['cache-control'], 'no-store');
+      assert.deepEqual(decodeProtectedHeader(answer.body), {
+        alg: 'dir',
+        enc: 'A256GCM',
+        typ: 'usher+jwt',
+      });
+      assert.deepEqual(await payloadIn(answer), SIGNED_IN_PAYLOAD);
+    });
+
+    test("records its token.exchange succeeded at info in the exchange's one transaction, its actor the person by the identity provider's subject, naming them as userId, both conferring rules, no recorded grant, its lifetime, its audience and its computation time", async (context) => {
+      const stand = standUp(context);
+
+      await post(stand, withCredential('credential-accepted'));
+
+      assert.equal(stand.transactions.length, 1);
+      assert.equal(
+        stand.transactions[0]?.options?.deadline,
+        stand.confirmationDeadlines[0],
+      );
+      assert.deepEqual(stand.transactions[0]?.actor, {
+        id: 'subject-ana',
+        type: 'human',
+      });
+      assert.deepEqual(stand.transactions[0]?.recorded, [
+        {
+          data: {
+            audience: APPLICATION,
+            generatedAt: new Date(SECONDS * 1000).toISOString(),
+            grantCount: 0,
+            result: 'succeeded',
+            rules: ['baseline', 'signedIn'],
+            sourceIp: '127.0.0.1',
+            tokenTtl: 300,
+            userId: 'subject-ana',
+          },
+          severity: 'info',
+          type: 'token.exchange',
+        },
+      ]);
+    });
+
+    test("reads the principal's standing, meets them as a person, reads the audience's policy and records the session the sign-in token carries, in that order, in the one transaction", async (context) => {
+      const stand = standUp(context);
+
+      await post(stand, withCredential('credential-accepted'));
+      const statements = stand.transactions[0]?.statements ?? [];
+      const valuesOf = (kind: string): readonly unknown[] | undefined =>
+        statements.find(({ text }) => statementKindOf(text) === kind)?.values;
+
+      assert.deepEqual(statementKindsIn({ statements }), [
+        'standing',
+        'person',
+        'policy',
+        'session',
+      ]);
+      assert.deepEqual(valuesOf('standing'), [
+        IDENTITY_PROVIDER,
+        'subject-ana',
+        'session-1',
+        new Date((SECONDS - 10) * 1000),
+      ]);
+      assert.deepEqual(valuesOf('person'), [IDENTITY_PROVIDER, 'subject-ana']);
+      assert.deepEqual(valuesOf('policy'), [APPLICATION]);
+      assert.deepEqual(valuesOf('session'), [
+        IDENTITY_PROVIDER,
+        'session-1',
+        'subject-ana',
+        new Date((SECONDS + 300) * 1000),
+      ]);
+    });
+
+    test('records no session for a sign-in token carrying no sid', async (context) => {
+      const stand = standUp(context);
+
+      const answer = await post(
+        stand,
+        withCredential('credential-of-no-session'),
+      );
+
+      assert.equal(answer.statusCode, 200);
+      assert.deepEqual(
+        statementKindsIn(stand.transactions[0] ?? { statements: [] }),
+        ['standing', 'person', 'policy'],
+      );
+    });
+
+    test('is answered one identical 403 when the store refuses the principal, recorded denied under its own reason naming the refused subject, its actor anonymous, and nothing written beside it', async (context) => {
+      const refusals: readonly StoredRefusal[] = [
+        'revokedPlatform',
+        'revokedPrincipal',
+        'signedOutSession',
+      ];
+      const forged = await post(
+        standUp(context),
+        withCredential('credential-forged'),
+      );
+
+      const outcomes = await Promise.all(
+        refusals.map(async (standing) => {
+          const stand = standUp(context, { standing });
+          const answer = await post(
+            stand,
+            withCredential('credential-accepted'),
+          );
+          return { answer, transactions: stand.transactions };
+        }),
+      );
+
+      outcomes.forEach(({ answer }) => {
+        assert.deepEqual(onTheWire(answer), onTheWire(forged));
+        assert.equal(answer.body.includes('subject-ana'), false);
+      });
+      assert.deepEqual(problemOf(forged), {
+        code: 'credentialRefused',
+        status: 403,
+      });
+      assert.deepEqual(
+        outcomes.map(({ transactions }) =>
+          transactions.map((transaction) => ({
+            recorded: transaction.recorded,
+            statements: statementKindsIn(transaction),
+          })),
+        ),
+        refusals.map((reason) => [
+          {
+            recorded: [
+              {
+                actor: { type: 'anonymous' },
+                data: {
+                  reason,
+                  refusedSubject: 'subject-ana',
+                  result: 'denied',
+                  sourceIp: '127.0.0.1',
+                  userId: null,
+                },
+                severity: 'warning',
+                type: 'token.exchange',
+              },
+            ],
+            statements: ['standing'],
+          },
+        ]),
+      );
+    });
+
+    test("refuses a service account's token by each of its marks with the one 403, recorded denied as serviceAccountNotPermitted naming its subject, its actor anonymous, reading nothing from the store", async (context) => {
+      const stand = standUp(context);
+      const credentials = Object.keys(SERVICE_ACCOUNT_MARKS);
+
+      const answers = await Promise.all(
+        credentials.map((credential) =>
+          post(stand, withCredential(credential)),
+        ),
+      );
+      const forged = await post(stand, withCredential('credential-forged'));
+
+      answers.forEach((answer) => {
+        assert.deepEqual(onTheWire(answer), onTheWire(forged));
+      });
+      assert.deepEqual(
+        stand.transactions
+          .slice(0, credentials.length)
+          .map(({ actor, recorded, statements }) => ({
+            actor,
+            recorded,
+            statements: statements.length,
+          })),
+        credentials.map(() => ({
+          actor: { type: 'anonymous' },
+          recorded: [
+            {
+              data: {
+                reason: 'serviceAccountNotPermitted',
+                refusedSubject: 'subject-ana',
+                result: 'denied',
+                sourceIp: '127.0.0.1',
+                userId: null,
+              },
+              severity: 'warning',
+              type: 'token.exchange',
+            },
+          ],
+          statements: 0,
+        })),
+      );
+    });
+
+    test("refuses a sign-in token expiring at or before the issuing second as expiredToken, naming its subject and reading nothing from the store, and issues one expiring a second after it a token of that one second's lifetime", async (context) => {
+      const stand = standUp(context);
+
+      const refused = await post(
+        stand,
+        withCredential('credential-expiring-as-issued'),
+      );
+      const issued = await post(
+        stand,
+        withCredential('credential-expiring-a-second-after-issue'),
+      );
+      const [refusal, issuance] = stand.transactions;
+
+      assert.deepEqual(problemOf(refused), {
+        code: 'credentialRefused',
+        status: 403,
+      });
+      assert.deepEqual(
+        {
+          actor: refusal?.actor,
+          recorded: refusal?.recorded,
+          statements: refusal?.statements.length,
+        },
+        {
+          actor: { type: 'anonymous' },
+          recorded: [
+            {
+              data: {
+                reason: 'expiredToken',
+                refusedSubject: 'subject-ana',
+                result: 'denied',
+                sourceIp: '127.0.0.1',
+                userId: null,
+              },
+              severity: 'warning',
+              type: 'token.exchange',
+            },
+          ],
+          statements: 0,
+        },
+      );
+      assert.equal(issued.statusCode, 200);
+      assert.deepEqual(await payloadIn(issued), {
+        ...SIGNED_IN_PAYLOAD,
+        exp: SECONDS + 1,
+      });
+      assert.equal(issuance?.recorded[0]?.data['tokenTtl'], 1);
+    });
+
+    test('is answered 503 storeUnavailable, issuing no token, when the store cannot answer its reads or commit its token.exchange, writing the failure by its code alone', async (context) => {
+      const unreadable = standUp(context, {
+        readFailure: storeFailure('57P01'),
+      });
+      const uncommitted = standUp(context, {
+        commitFailure: storeFailure('40001'),
+      });
+
+      const answers = [
+        await post(unreadable, withCredential('credential-accepted')),
+        await post(uncommitted, withCredential('credential-accepted')),
+      ];
+
+      assert.deepEqual(
+        answers.map(problemOf),
+        answers.map(() => ({ code: 'storeUnavailable', status: 503 })),
+      );
+      assert.deepEqual(
+        [...unreadable.lines, ...uncommitted.lines],
+        [
+          {
+            fields: { code: '57P01', route: EXCHANGE_PATH },
+            message: EXCHANGE_STORE_FAILED,
+          },
+          {
+            fields: { code: '40001', route: EXCHANGE_PATH },
+            message: EXCHANGE_STORE_FAILED,
+          },
+        ],
+      );
+    });
+
+    test('is answered 503 outcomeUnknown, issuing no token, when its commit goes unconfirmed', async (context) => {
+      const stand = standUp(context, {
+        commitFailure: new CommitUnconfirmed(),
+      });
+
+      const answer = await post(stand, withCredential('credential-accepted'));
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'outcomeUnknown',
+        status: 503,
+      });
+      assert.deepEqual(stand.lines, []);
+    });
+
+    test("is answered 503 admissionShareExceeded at once over its application's share while the pool is contended, beginning no transaction, as every credential is and unlike the anonymous exchange", async (context) => {
+      const store = deferred();
+      const stand = standUp(context, {
+        poolSize: 1,
+        storeTakes: store.promise,
+      });
+
+      const holding = post(stand, withCredential('credential-forged'));
+      await untilTransactionsBegun(stand, 1);
+      const answering = post(stand, withCredential('credential-accepted'));
+      const atOnce = await answeredAtOnce(answering);
+      const transactionsWhileFull = stand.transactions.length;
+      store.release();
+      const [overShare] = await Promise.all([answering, holding]);
+
+      assert.equal(atOnce, true);
+      assert.deepEqual(problemOf(overShare), {
+        code: 'admissionShareExceeded',
+        status: 503,
+      });
+      assert.equal(overShare.headers['retry-after'], '1');
+      assert.equal(transactionsWhileFull, 1);
+      assert.deepEqual(stand.countedOverShare, [APPLICATION]);
+    });
+
+    test('is answered 408 requestTimeout when its body arrives with less than the late-request threshold left, judging nothing and beginning no transaction', async (context) => {
+      const stand = standUp(context, {
+        deadlineMilliseconds: LATE_REQUEST_THRESHOLD_MILLISECONDS + 300,
+      });
+
+      const answer = await postArrivingAfter(
+        stand,
+        JSON.stringify({
+          credential: 'credential-accepted',
+          payloadVersions: [1],
+        }),
+        400,
+      );
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'requestTimeout',
+        status: 408,
+      });
+      assert.deepEqual(stand.judged, []);
       assert.deepEqual(stand.transactions, []);
     });
   });

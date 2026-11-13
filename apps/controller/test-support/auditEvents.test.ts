@@ -791,6 +791,7 @@ suite("the controller's events, as the document registers them", () => {
       'otherType',
       'revokedPlatform',
       'revokedPrincipal',
+      'serviceAccountNotPermitted',
       'signedOutSession',
       'signingKeyUnconfirmed',
       'unreadableToken',

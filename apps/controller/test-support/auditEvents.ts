@@ -721,7 +721,8 @@ export const TOKEN_CAP_EVENT = Object.freeze({
  * text is `missingCredential`. A token not marked as an access token by its identity provider's
  * connector is `otherType`, one naming no `sub` is `missingSubject`, and one whose `sub` or `sid`
  * holds text that cannot be stored is `unrepresentableSubject`, each read from the token's contents
- * and naming no subject. A token whose signing key is not confirmed yet is `signingKeyUnconfirmed`,
+ * and naming no subject. A service account's token is `serviceAccountNotPermitted`, as at the
+ * Management API. A token whose signing key is not confirmed yet is `signingKeyUnconfirmed`,
  * denied rather than failed, since a made-up key id or a routine key rotation produces it.
  * `invalidSignature`'s cases are the developer's own suites'.
  */
@@ -738,6 +739,7 @@ export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
   otherType: 'otherType',
   revokedPlatform: 'revokedPlatform',
   revokedPrincipal: 'revokedPrincipal',
+  serviceAccountNotPermitted: 'serviceAccountNotPermitted',
   signedOutSession: 'signedOutSession',
   signingKeyUnconfirmed: 'signingKeyUnconfirmed',
   unreadableToken: 'unreadableToken',
@@ -786,7 +788,8 @@ export const MANAGEMENT_TOKEN_TALLY_REASONS: readonly string[] = Object.freeze([
  * truncated. Within that length, a `managementToken.refusal` carries it for `expiredToken`,
  * `missingExpiry`, `notYetValid`, `otherAudience`, `otherType`, `revokedPlatform`, `revokedPrincipal`
  * and `signedOutSession`, and a refused `token.exchange` for `expiredToken`, `missingExpiry`,
- * `notYetValid` and `otherAudience` alone, once the token's signature verifies. Neither carries it for
+ * `notYetValid`, `otherAudience`, `revokedPlatform`, `revokedPrincipal`, `signedOutSession` and
+ * `serviceAccountNotPermitted` alone, once the token's signature verifies. Neither carries it for
  * `missingSubject` or `unrepresentableSubject`, and `otherType` names it at the Management API alone.
  * A refused `token.exchange` for a token whose signature does not verify (`unreadableToken`,
  * `otherIssuer`, `invalidSignature`) or for an opaque credential (`apiKeyVerifierNotConfigured`)

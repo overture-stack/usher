@@ -165,10 +165,20 @@ export interface ExchangeSettings {
    */
   monotonicNow(): number;
 
-  /** The baseline, the clock, the schema, the issuer and the token lifetime. */
+  /**
+   * The baseline and the signed-in rule, the clock, the schema, the identity provider's issuer, the
+   * controller's own issuer, the service-account realm role, and the token lifetime.
+   */
   settings: Pick<
     ControllerConfiguration,
-    'baseline' | 'clock' | 'databaseSchema' | 'issuer' | 'tokenLifetimeSeconds'
+    | 'baseline'
+    | 'clock'
+    | 'databaseSchema'
+    | 'identityProviderIssuer'
+    | 'issuer'
+    | 'serviceAccountRole'
+    | 'signedInRule'
+    | 'tokenLifetimeSeconds'
   >;
 
   /** Where each exchange refused over its application's share is counted. */
