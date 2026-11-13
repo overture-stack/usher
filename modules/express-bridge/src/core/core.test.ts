@@ -264,6 +264,48 @@ const harnessParts = () => {
 
 type Harness = ReturnType<typeof harnessParts> & { core: BridgeCore };
 
+/**
+ * Holds one exchange for each of `count` distinct opaque credentials until `release` is called, after
+ * which the controller refuses each.
+ */
+const holdingExchanges = (
+  parts: Pick<Harness, 'answers'>,
+  count: number,
+): { credentials: readonly string[]; release: () => void } => {
+  const gate = { open: (): void => undefined };
+  const opened = new Promise<void>((resolve) => {
+    gate.open = resolve;
+  });
+  const credentials = Array.from(
+    { length: count },
+    (_, index) => `uak_held_${index}`,
+  );
+  credentials.forEach((credential) =>
+    parts.answers.set(credential, () =>
+      opened.then((): ExchangeAnswer => ({ kind: 'refused' })),
+    ),
+  );
+  return { credentials, release: () => gate.open() };
+};
+
+/**
+ * Scripts the controller to answer a credential's exchange only once the test hands over the answer,
+ * through the function returned.
+ */
+const answeringLater = (
+  parts: Pick<Harness, 'answers'>,
+  credential: string,
+): ((answer: ExchangeAnswer) => void) => {
+  const gate: { answer: (answer: ExchangeAnswer) => void } = {
+    answer: () => undefined,
+  };
+  const answered = new Promise<ExchangeAnswer>((resolve) => {
+    gate.answer = resolve;
+  });
+  parts.answers.set(credential, () => answered);
+  return (answer) => gate.answer(answer);
+};
+
 /** A harness with its core in normal mode. */
 const running = async (
   registrations: Readonly<Record<string, KeyRegistration>> = {
@@ -1686,7 +1728,6 @@ suite('createBridgeCoreWithSeams', () => {
       const core = createBridgeCoreWithSeams(
         {
           ...parts.configuration,
-          inFlightMax: 1,
           logger: { error: log, info: log, warn: log },
         },
         {
@@ -1701,7 +1742,10 @@ suite('createBridgeCoreWithSeams', () => {
       parts.confirm(0);
       await core.refreshAnonymous();
       const exchange = holdExchange(parts);
-      const resolving = core.resolve(exchange.credential);
+      const others = holdingExchanges(parts, 63);
+      const resolving = [exchange.credential, ...others.credentials].map(
+        (credential) => core.resolve(credential),
+      );
       await settled();
       const shed = await core.resolve(signInToken({ sub: 'subject-ben' }));
       logging.throws = true;
@@ -1711,8 +1755,9 @@ suite('createBridgeCoreWithSeams', () => {
       await settled();
       const whileHeld = { closes: closes.count, settled: stop.settled };
       exchange.release();
+      others.release();
       await assert.doesNotReject(stopping);
-      await Promise.allSettled([resolving]);
+      await Promise.allSettled(resolving);
       const successor = createBridgeCoreWithSeams(
         parts.configuration,
         parts.seams,
@@ -2057,27 +2102,25 @@ suite('createBridgeCoreWithSeams', () => {
       await harness.core.stop();
     });
 
-    test('answers unavailable to a new credential beyond the in-flight bound', async () => {
-      const harness = await running(undefined, (configuration) => ({
-        ...configuration,
-        inFlightMax: 1,
-      }));
-      const held = { release: (): void => undefined };
-      harness.answers.set(
-        'uak_first',
-        () =>
-          new Promise((resolve) => {
-            held.release = () => resolve({ kind: 'refused' });
-          }),
+    test('answers unavailable to a new credential beyond 64 exchanges in flight, having exchanged all 64', async () => {
+      const harness = await running();
+      const held = holdingExchanges(harness, 64);
+
+      const holding = held.credentials.map((credential) =>
+        harness.core.resolve(credential),
       );
-
-      const first = harness.core.resolve('uak_first');
-      const second = await harness.core.resolve('uak_second');
+      const beyond = await harness.core.resolve('uak_beyond');
       held.release();
-      await first;
+      await Promise.all(holding);
 
-      assert.deepEqual(second, { kind: 'unavailable' });
-      assert.equal(harness.exchanges.includes('uak_second'), false);
+      assert.deepEqual(beyond, { kind: 'unavailable' });
+      assert.deepEqual(
+        held.credentials.filter(
+          (credential) => !harness.exchanges.includes(credential),
+        ),
+        [],
+      );
+      assert.equal(harness.exchanges.includes('uak_beyond'), false);
       await harness.core.stop();
     });
 
@@ -2538,28 +2581,23 @@ suite('createBridgeCoreWithSeams', () => {
     }
 
     test('fetches the anonymous payload first after a global drop, and answers 503 beyond the in-flight bound', async () => {
-      const harness = await running(undefined, (configuration) => ({
-        ...configuration,
-        inFlightMax: 1,
-      }));
-      const held = { release: (): void => undefined };
-      harness.answers.set(
-        'uak_first',
-        () =>
-          new Promise((resolve) => {
-            held.release = () => resolve({ kind: 'refused' });
-          }),
-      );
+      const harness = await running();
+      const held = holdingExchanges(harness, 64);
       const before = harness.exchanges.length;
 
       harness.core.applyNotice({ cursor: 'c-1', kind: 'global', v: 1 });
-      const first = harness.core.resolve('uak_first');
-      const second = await harness.core.resolve('uak_second');
+      const holding = held.credentials.map((credential) =>
+        harness.core.resolve(credential),
+      );
+      const beyond = await harness.core.resolve('uak_beyond');
       held.release();
-      await first;
+      await Promise.all(holding);
 
-      assert.deepEqual(harness.exchanges.slice(before), [null, 'uak_first']);
-      assert.deepEqual(second, { kind: 'unavailable' });
+      assert.deepEqual(harness.exchanges.slice(before), [
+        null,
+        ...held.credentials,
+      ]);
+      assert.deepEqual(beyond, { kind: 'unavailable' });
       await harness.core.stop();
     });
 
@@ -3375,6 +3413,385 @@ suite('createBridgeCoreWithSeams', () => {
 
       assert.deepEqual(retriesPerInterval, Array(8).fill(1));
       await core.stop();
+    });
+  });
+
+  suite('backing off', () => {
+    /** Lets every callback already queued run, through setImmediate, which the mock timers leave alone. */
+    const settled = (): Promise<void> =>
+      new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+
+    const shedAnswer = (
+      retryAfterSeconds: number | undefined,
+    ): ExchangeAnswer => ({
+      kind: 'admissionShareExceeded',
+      retryAfterSeconds,
+    });
+
+    const heldAnswer = (retryAfterSeconds: number): ExchangeAnswer => ({
+      kind: 'retryAfter',
+      retryAfterSeconds,
+    });
+
+    /** A harness in normal mode whose seams draw every jitter from `random`. */
+    const runningWith = async (random: () => number): Promise<Harness> => {
+      const parts = harnessParts();
+      const core = createBridgeCoreWithSeams(parts.configuration, {
+        ...parts.seams,
+        random,
+      });
+      core.register({ files: catalogue });
+      await core.start();
+      parts.confirm(0);
+      await core.refreshAnonymous();
+      return { ...parts, core };
+    };
+
+    /** Moves the monotonic clock and the mock timers on together, then lets what fired run. */
+    const advance = async (
+      harness: Harness,
+      context: TestContext,
+      ms: number,
+    ): Promise<void> => {
+      harness.advanceMonotonic(ms);
+      context.mock.timers.tick(ms);
+      await settled();
+    };
+
+    const anonymousExchanges = (harness: Harness): number =>
+      harness.exchanges.filter((sent) => sent === null).length;
+
+    /** Each tallied failure logged, as its cause and count, in the order of its cause's name. */
+    const talliesLogged = (harness: Harness) =>
+      harness
+        .events('token.exchangeFailure')
+        .map(({ data }) => ({ cause: data['cause'], count: data['count'] }))
+        .toSorted((first, second) =>
+          String(first.cause).localeCompare(String(second.cause)),
+        );
+
+    test('starts no exchange while the window is open, signed-in or anonymous, serving a new credential the open tier, suspended and unconfirmed', async () => {
+      const harness = await running();
+      const ana = signInToken({ sub: 'subject-ana' });
+      harness.answers.set('uak_shed', shedAnswer(1));
+      harness.issue(ana, signedIn('05', 'subject-ana'));
+      const before = harness.exchanges.length;
+
+      const shed = await accessOf(harness.core, 'uak_shed');
+      const during = await accessOf(harness.core, ana);
+      const refreshed = await harness.core.refreshAnonymous();
+
+      assert.deepEqual(
+        [shed, during],
+        Array.from({ length: 2 }, () => ({
+          principal: UNCONFIRMED,
+          results: resultsFor(ANONYMOUS),
+          version: 1,
+        })),
+      );
+      assert.equal(refreshed, false);
+      assert.deepEqual(harness.exchanges.slice(before), ['uak_shed']);
+      await harness.core.stop();
+    });
+
+    for (const [jitter, random, lastClosedMs] of [
+      ['least', 0, 999],
+      ['most', 0.999_999, 1_499],
+    ] as const) {
+      test(`closes the window no sooner than Retry-After, plus the jitter at its ${jitter}`, async () => {
+        const harness = await runningWith(() => random);
+        harness.answers.set('uak_shed', shedAnswer(1));
+        await harness.core.resolve('uak_shed');
+
+        harness.advanceMonotonic(lastClosedMs);
+        await harness.core.resolve('uak_while_open');
+        harness.advanceMonotonic(1);
+        await harness.core.resolve('uak_once_closed');
+
+        assert.equal(harness.exchanges.includes('uak_while_open'), false);
+        assert.equal(harness.exchanges.includes('uak_once_closed'), true);
+        await harness.core.stop();
+      });
+    }
+
+    for (const [description, retryAfterSeconds, lastClosedMs] of [
+      ['a Retry-After past the ceiling as 5 s', 999_999, 4_999],
+      ['a Retry-After of 6 s as 5 s', 6, 4_999],
+      ['a Retry-After of 5 s as given', 5, 4_999],
+      ['no valid Retry-After as 1 s', undefined, 999],
+    ] as const) {
+      test(`opens the window for ${description}`, async () => {
+        const harness = await running();
+        harness.answers.set('uak_shed', shedAnswer(retryAfterSeconds));
+        await harness.core.resolve('uak_shed');
+
+        harness.advanceMonotonic(lastClosedMs);
+        await harness.core.resolve('uak_while_open');
+        harness.advanceMonotonic(1);
+        await harness.core.resolve('uak_once_closed');
+
+        assert.equal(harness.exchanges.includes('uak_while_open'), false);
+        assert.equal(harness.exchanges.includes('uak_once_closed'), true);
+        await harness.core.stop();
+      });
+    }
+
+    for (const [description, firstRetryAfter, lastClosedMs] of [
+      [
+        'extends the window by an admission refusal answered 800 ms after the first',
+        1,
+        1_799,
+      ],
+      [
+        'never shortens the window by an admission refusal ending sooner, answered 800 ms after the first',
+        3,
+        2_999,
+      ],
+    ] as const) {
+      test(description, async () => {
+        const harness = await running();
+        const answerFirst = answeringLater(harness, 'uak_first');
+        const answerSecond = answeringLater(harness, 'uak_second');
+        const first = harness.core.resolve('uak_first');
+        const second = harness.core.resolve('uak_second');
+
+        answerFirst(shedAnswer(firstRetryAfter));
+        await first;
+        harness.advanceMonotonic(800);
+        answerSecond(shedAnswer(1));
+        await second;
+        harness.advanceMonotonic(lastClosedMs - 800);
+        await harness.core.resolve('uak_while_open');
+        harness.advanceMonotonic(1);
+        await harness.core.resolve('uak_once_closed');
+
+        assert.equal(harness.exchanges.includes('uak_while_open'), false);
+        assert.equal(harness.exchanges.includes('uak_once_closed'), true);
+        await harness.core.stop();
+      });
+    }
+
+    test('lets an exchange already running finish and caches its answer, and serves a cached credential from the cache, while the window is open', async () => {
+      const harness = await running();
+      const ana = signInToken({ sub: 'subject-ana' });
+      const ben = signInToken({ sub: 'subject-ben' });
+      harness.issue(ana, signedIn('05', 'subject-ana'));
+      harness.issue(ben, signedIn('09', 'subject-ben'));
+      await accessOf(harness.core, ana);
+      const answerBen = answeringLater(harness, ben);
+      harness.answers.set('uak_shed', shedAnswer(5));
+
+      const benResolving = accessOf(harness.core, ben);
+      await harness.core.resolve('uak_shed');
+      answerBen({ kind: 'token', token: `token:${ben}` });
+      const forBen = await benResolving;
+      const forAnaAgain = await accessOf(harness.core, ana);
+      const forBenAgain = await accessOf(harness.core, ben);
+
+      assert.equal(subjectInForce(forBen.principal), 'subject-ben');
+      assert.equal(subjectInForce(forAnaAgain.principal), 'subject-ana');
+      assert.equal(forBenAgain, forBen);
+      assert.deepEqual(
+        [exchangesOf(harness, ana), exchangesOf(harness, ben)],
+        [1, 1],
+      );
+      await harness.core.stop();
+    });
+
+    test('discards an answer a notice overtakes while the window is open as a second discard is, exchanging nothing again', async () => {
+      const harness = await running();
+      const ana = signInToken({ sub: 'subject-ana' });
+      const answerAna = answeringLater(harness, ana);
+      harness.readings.set('token:ana', {
+        kind: 'payload',
+        payload: signedIn('05', 'subject-ana'),
+      });
+      harness.answers.set('uak_shed', shedAnswer(5));
+
+      const anaResolving = accessOf(harness.core, ana);
+      await harness.core.resolve('uak_shed');
+      harness.core.applyNotice({
+        cursor: 'c-1',
+        kind: 'principal',
+        subjectTag: await tagFor('subject-ana'),
+        v: 1,
+      });
+      answerAna({ kind: 'token', token: 'token:ana' });
+      const forAna = await anaResolving;
+
+      assert.deepEqual(forAna.principal, ANA_SUSPENDED);
+      assert.equal(exchangesOf(harness, ana), 1);
+      assert.deepEqual(
+        harness.events('token.overtaken').map(({ data }) => data['outcome']),
+        ['servedOpenTier'],
+      );
+      await harness.core.stop();
+    });
+
+    test('answers unavailable while the window is open when no usable anonymous payload is held, never passing the request unfiltered', async () => {
+      const harness = await running();
+      harness.answers.set('uak_shed', shedAnswer(5));
+      harness.answers.set(null, { cause: 'network', kind: 'failed' });
+      harness.advanceWall(LIFETIME_MS);
+
+      const shed = await harness.core.resolve('uak_shed');
+      const during = await harness.core.resolve('uak_during');
+
+      assert.deepEqual(
+        [shed, during],
+        [{ kind: 'unavailable' }, { kind: 'unavailable' }],
+      );
+      assert.equal(harness.exchanges.includes('uak_during'), false);
+      await harness.core.stop();
+    });
+
+    test('holds no credential whose exchange was shed, exchanging it again once the window ends', async () => {
+      const harness = await running();
+      harness.answers.set('uak_shed', shedAnswer(1));
+      await harness.core.resolve('uak_shed');
+
+      harness.advanceMonotonic(1_000);
+      await harness.core.resolve('uak_shed');
+
+      assert.equal(exchangesOf(harness, 'uak_shed'), 2);
+      await harness.core.stop();
+    });
+
+    test('fetches the anonymous payload no sooner than the window ends, when the window outlasts the refresh backoff', async (context) => {
+      context.mock.timers.enable({ apis: ['setTimeout'] });
+      const harness = await running();
+      harness.answers.set(null, shedAnswer(3));
+      await harness.core.refreshAnonymous();
+      const afterShed = anonymousExchanges(harness);
+      harness.answers.set(null, { kind: 'token', token: 'token:anonymous' });
+
+      await advance(harness, context, 2_999);
+      const beforeTheEnd = anonymousExchanges(harness);
+      await advance(harness, context, 1);
+
+      assert.equal(beforeTheEnd, afterShed);
+      assert.equal(anonymousExchanges(harness), afterShed + 1);
+      await harness.core.stop();
+    });
+
+    test('makes an anonymous fetch asked for while the window is open once it ends', async (context) => {
+      context.mock.timers.enable({ apis: ['setTimeout'] });
+      const harness = await running();
+      harness.answers.set('uak_shed', shedAnswer(5));
+      await harness.core.resolve('uak_shed');
+      const before = anonymousExchanges(harness);
+
+      harness.core.applyNotice({ cursor: 'c-1', kind: 'baseline', v: 1 });
+      const refreshed = await harness.core.refreshAnonymous();
+      await advance(harness, context, 4_999);
+      const beforeTheEnd = anonymousExchanges(harness);
+      await advance(harness, context, 1);
+
+      assert.equal(refreshed, false);
+      assert.equal(beforeTheEnd, before);
+      assert.equal(anonymousExchanges(harness), before + 1);
+      assert.equal(
+        (await harness.core.resolve(null)).kind,
+        'access',
+        'the anonymous payload is installed again',
+      );
+      await harness.core.stop();
+    });
+
+    for (const [description, random, retryAfterSeconds, lastHeldMs] of [
+      ['for its Retry-After, plus the jitter at its least', 0, 17, 16_999],
+      [
+        'for its Retry-After, plus the jitter at its most',
+        0.999_999,
+        17,
+        25_499,
+      ],
+      ['for 60 s when its Retry-After is past the ceiling', 0, 999_999, 59_999],
+    ] as const) {
+      test(`holds a credential answered with any other 503 carrying Retry-After ${description}, alone, and exchanges it once the hold ends`, async () => {
+        const harness = await runningWith(() => random);
+        const ana = signInToken({ sub: 'subject-ana' });
+        const ben = signInToken({ sub: 'subject-ben' });
+        harness.answers.set(ana, heldAnswer(retryAfterSeconds));
+        harness.issue(ben, signedIn('09', 'subject-ben'));
+
+        const held = await accessOf(harness.core, ana);
+        harness.advanceMonotonic(lastHeldMs);
+        const stillHeld = await accessOf(harness.core, ana);
+        const forBen = await accessOf(harness.core, ben);
+        const exchangesWhileHeld = exchangesOf(harness, ana);
+        harness.advanceMonotonic(1);
+        harness.issue(ana, signedIn('05', 'subject-ana'));
+        const afterTheHold = await accessOf(harness.core, ana);
+
+        assert.deepEqual(
+          [held.principal, stillHeld.principal],
+          [UNCONFIRMED, UNCONFIRMED],
+        );
+        assert.equal(subjectInForce(forBen.principal), 'subject-ben');
+        assert.equal(exchangesWhileHeld, 1);
+        assert.equal(subjectInForce(afterTheHold.principal), 'subject-ana');
+        assert.equal(exchangesOf(harness, ana), 2);
+        await harness.core.stop();
+      });
+    }
+
+    test('holds the anonymous fetch for any other 503 carrying Retry-After, past the refresh backoff, fetching nothing asked for meanwhile', async (context) => {
+      context.mock.timers.enable({ apis: ['setTimeout'] });
+      const harness = await running();
+      harness.answers.set(null, heldAnswer(10));
+      await harness.core.refreshAnonymous();
+      const afterHold = anonymousExchanges(harness);
+      harness.answers.set(null, { kind: 'token', token: 'token:anonymous' });
+
+      await advance(harness, context, 5_000);
+      const askedWhileHeld = await harness.core.refreshAnonymous();
+      await advance(harness, context, 4_999);
+      const beforeTheEnd = anonymousExchanges(harness);
+      await advance(harness, context, 1);
+
+      assert.equal(askedWhileHeld, false);
+      assert.equal(beforeTheEnd, afterHold);
+      assert.equal(anonymousExchanges(harness), afterHold + 1);
+      await harness.core.stop();
+    });
+
+    test('counts each shed exchange, each request answered without an exchange and each hold, one event per cause per interval and none per request', async (context) => {
+      context.mock.timers.enable({ apis: ['setTimeout'] });
+      const harness = await running();
+      const answerFirst = answeringLater(harness, 'uak_shed_first');
+      const answerSecond = answeringLater(harness, 'uak_shed_second');
+      harness.answers.set('uak_held_first', heldAnswer(3));
+      harness.answers.set('uak_held_second', heldAnswer(3));
+
+      const shedding = [
+        harness.core.resolve('uak_shed_first'),
+        harness.core.resolve('uak_shed_second'),
+      ];
+      answerFirst(shedAnswer(1));
+      answerSecond(shedAnswer(1));
+      await Promise.all(shedding);
+      await Promise.all(
+        ['uak_a', 'uak_b', 'uak_c'].map((credential) =>
+          harness.core.resolve(credential),
+        ),
+      );
+      harness.advanceMonotonic(1_000);
+      await harness.core.resolve('uak_held_first');
+      await harness.core.resolve('uak_held_second');
+      await harness.core.resolve('uak_held_second');
+      const loggedWithinTheInterval = harness.events('token.exchangeFailure');
+      context.mock.timers.tick(60_000);
+
+      assert.deepEqual(loggedWithinTheInterval, []);
+      assert.deepEqual(talliesLogged(harness), [
+        { cause: 'admissionShareExceeded', count: 2 },
+        { cause: 'backedOff', count: 3 },
+        { cause: 'retryAfter', count: 2 },
+      ]);
+      await harness.core.stop();
     });
   });
 

@@ -114,16 +114,33 @@ carry.
 **Exchanges**
 
 - Concurrent requests on one digest share one exchange.
-- A global bound on exchanges in flight answers 503 beyond it. The controller sets that bound and
-  tells its bridges, since a bound each bridge set for itself would multiply with the replicas
-  ([decisions.md](../../../design/decisions.md), decided on 2026-10-06). The number and how it reaches
-  a bridge are open, and the bridge's own default stands in until then.
+- A bound of 64 exchanges in flight for each bridge answers 503 beyond it. It is a constant with no
+  setting, and bounds only the bridge's own memory. The controller paces exchanges and tells its
+  bridges to back off with `Retry-After`, since a bound each bridge set for itself would multiply
+  with the replicas ([decisions.md](../../../design/decisions.md), decided on 2026-10-06).
 - Each exchange carries its own timeout, from an `AbortController` that a `setTimeout` aborts, never
   tied to one request.
 - The anonymous refresh runs outside the bound, in its own single flight.
 - A controller's 403 is a refused identity. Its 401 refuses the channel assertion, not the identity,
-  so it is unavailable and never cached as a refusal. A timeout, a network failure, a 5xx or a 408 is
-  a failure.
+  so it is unavailable and never cached as a refusal. A timeout, a network failure, a 408, and a 5xx
+  are a failure, except a 503 naming `admissionShareExceeded` or carrying a valid `Retry-After`.
+- A `503 admissionShareExceeded` opens one back-off window for the whole bridge. It lasts the
+  answer's `Retry-After`, or 1 s without a valid one, capped at 5 s, plus jitter drawn uniformly from
+  0 to half of that. A later one extends the window, and none shortens it. Until it ends no exchange
+  starts, signed-in or anonymous. Exchanges already running finish, and an answer a notice overtakes
+  meanwhile is discarded as a second discard is. A cached credential is served from the cache, and
+  a request needing an exchange is served the open tier, suspended, or 503 when no anonymous payload
+  is usable. The credential whose exchange was shed is not held, and the anonymous refresh waits for
+  the window to end.
+- Any other 503 carrying a valid `Retry-After` holds that credential alone, or the anonymous
+  refresh, for that `Retry-After`, capped at 60 s, plus the same jitter. Meanwhile the credential is
+  served as a failed exchange is, and it is exchanged once the hold ends.
+- The bridge reads a 503's problem code from no more than 2 KiB of its body, or the response cap when
+  that is smaller, and cancels the rest. It compares the code with `admissionShareExceeded` alone and
+  logs neither the body nor the code.
+- A valid `Retry-After` is the whole header value as fetch returns it: 1 to 6 ASCII digits naming at
+  least one second. An HTTP-date, a sign, a fraction, several values, 0, and anything else count as
+  absent.
 - A 429, and every other status, is unavailable: 503, not cached, and logged as
   `token.exchangeFailure` with cause `status`.
 - An Usher token the bridge cannot read, whose `sub` does not match the kind of exchange, or whose
@@ -387,7 +404,6 @@ interface BridgeConfiguration {
 	exchangeTimeoutMs?: number; // default 5000
 	filterClauseLimit?: number; // default 1024; a record key's filter counting more is denied with filter-limit
 	graceMs?: number; // default 60000
-	inFlightMax?: number; // default 64, standing in until the controller sets the bound
 	issuer: string;
 	key: string; // 43 base64url characters; imported at start, never held as bytes
 	localRefusalClockToleranceMs?: number; // default 60000; the controller's own never exceeds it
@@ -912,16 +928,19 @@ every request URL is built relative to it.
 
 ### Reading the answer
 
-| Controller answer                                                                                                                  | Outcome                       | Held           | The request gets                                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| success, token accepted                                                                                                            | granted                       | positive store | access                                                                                                                                |
-| success, token rejected, `sub` not matching the kind of exchange, or `sub` differing from a three-part sign-in token's own subject | malformed                     | failure store  | 503                                                                                                                                   |
-| an answer past the response cap                                                                                                    | malformed, as `tokenTooLarge` | failure store  | 503                                                                                                                                   |
-| 403                                                                                                                                | refused                       | refusal store  | 401                                                                                                                                   |
-| 401, the channel assertion refused                                                                                                 | unavailable                   | no             | 503, logged as `token.exchangeFailure` with cause `assertionRefused`; at startup, a probable key mismatch                             |
-| timeout, network failure, 5xx or 408                                                                                               | failed                        | failure store  | the anonymous results, `openTierOnly` and `suspended`, credential `unconfirmed` with no subject; 503 with no usable anonymous payload |
-| 429, or any other status                                                                                                           | unavailable                   | no             | 503, logged as `token.exchangeFailure` with cause `status`                                                                            |
-| beyond the in-flight bound                                                                                                         | overloaded                    | no             | 503, counted in the aggregated `token.exchangeFailure` event with cause `overloaded`                                                  |
+| Controller answer                                                                                                                  | Outcome                       | Held                                               | The request gets                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| success, token accepted                                                                                                            | granted                       | positive store                                     | access                                                                                                                                |
+| success, token rejected, `sub` not matching the kind of exchange, or `sub` differing from a three-part sign-in token's own subject | malformed                     | failure store                                      | 503                                                                                                                                   |
+| an answer past the response cap                                                                                                    | malformed, as `tokenTooLarge` | failure store                                      | 503                                                                                                                                   |
+| 403                                                                                                                                | refused                       | refusal store                                      | 401                                                                                                                                   |
+| 401, the channel assertion refused                                                                                                 | unavailable                   | no                                                 | 503, logged as `token.exchangeFailure` with cause `assertionRefused`; at startup, a probable key mismatch                             |
+| timeout, network failure, 408, or a 5xx other than a 503 naming `admissionShareExceeded` or carrying a valid `Retry-After`         | failed                        | failure store                                      | the anonymous results, `openTierOnly` and `suspended`, credential `unconfirmed` with no subject; 503 with no usable anonymous payload |
+| 503 `admissionShareExceeded`                                                                                                       | backed off                    | no; the back-off window opens for the whole bridge | as for a failed exchange; counted in the aggregated `token.exchangeFailure` event with cause `admissionShareExceeded`                 |
+| any other 503 carrying a valid `Retry-After`                                                                                       | held                          | failure store, for that `Retry-After` plus jitter  | as for a failed exchange; counted in the aggregated `token.exchangeFailure` event with cause `retryAfter`                             |
+| 429, or any other status                                                                                                           | unavailable                   | no                                                 | 503, logged as `token.exchangeFailure` with cause `status`                                                                            |
+| beyond the in-flight bound                                                                                                         | overloaded                    | no                                                 | 503, counted in the aggregated `token.exchangeFailure` event with cause `overloaded`                                                  |
+| a new credential while the back-off window is open                                                                                 | backed off                    | no                                                 | as for a failed exchange, with no exchange; counted in the aggregated `token.exchangeFailure` event with cause `backedOff`            |
 
 Mapping every status other than 403 to a failure fails open. With a simulated controller that refused
 an identity with 400 or 403, a client mapping that way served the credential the open tier (run). A
@@ -930,8 +949,9 @@ controller sheds exchanges. Reading any other status as a refusal, answered 401,
 to sign the person out over what may be a bridge defect or a busy controller. A refused assertion is
 the sharpest case: read as a refused identity, a key revoked or rotated away would sign everyone
 out. A 408 stays a failure,
-because it reports a timeout, which the contract already treats as one. A controller that sheds with
-503 rather than 429 lands on the failure path. The registered `token.exchangeFailure` carries no
+because it reports a timeout, which the contract already treats as one. The controller sheds with
+`503 admissionShareExceeded`, which opens the back-off window and serves what a failed exchange
+serves, holding no credential. The registered `token.exchangeFailure` carries no
 status code, so its cause `status` reads the same for a 429 answered 503 and for a 5xx served the
 open tier.
 
@@ -1291,7 +1311,7 @@ Every event the bridge emits, as registered in [audit-events.md](../../../design
 | `category.unknown`                | a key defines a category the payload does not list, global or for a resource it names, so its records are always excluded there; once per catalogue and category, and per resource for a resource category                                                                                               | `catalogue`, `category`, `resourceId` for a resource category                                                                                                                                   | `warning`                                                         |
 | `category.unmapped`               | a key is denied for a global category it neither defines nor declares absent, once per catalogue and category; or a resource is withheld from a key for a resource category the key does not define, once per catalogue, category and resource                                                           | `catalogue`, `category`; `resourceId` for a resource category only                                                                                                                              | `critical` for a global category, `error` for a resource category |
 | `credential.refusal`              | an identity is refused                                                                                                                                                                                                                                                                                   | `origin`: `controller`, `localExpiry` or `cachedRefusal`                                                                                                                                        | `info`                                                            |
-| `token.exchangeFailure`           | an exchange cannot complete, whether failed or unavailable, or requests are overloaded                                                                                                                                                                                                                   | `cause`: `timeout`, `network`, `status`, `assertionRefused` or `overloaded`; an overload event adds `count`                                                                                     | `warning`                                                         |
+| `token.exchangeFailure`           | an exchange cannot complete, whether failed or unavailable, once for each; or, counted with one event per cause per interval, requests overloaded, exchanges shed for the admission share, requests answered without an exchange while the bridge backs off, and holds for `Retry-After`                 | `cause`: `timeout`, `network`, `status` or `assertionRefused`; or a counted cause, `overloaded`, `admissionShareExceeded`, `backedOff` or `retryAfter`, which adds `count`                      | `warning`                                                         |
 | `token.rejection`                 | an Usher token is rejected                                                                                                                                                                                                                                                                               | `reason`, one of the jose note's reason codes; a token whose `aud` does not name this application is `audienceRejected`                                                                         | `warning`                                                         |
 | `notice.applied`                  | a notice is applied                                                                                                                                                                                                                                                                                      | `kind`, `entriesDropped`                                                                                                                                                                        | `info`                                                            |
 | `token.overtaken`                 | an exchange answer is discarded because a notice affecting it arrived while it was in flight: the first time the bridge exchanges again, the second it serves the open tier, marked suspended and naming its verified subject for attribution alone, or nothing when no usable anonymous payload is held | `outcome`: `exchangedAgain`, `servedOpenTier` or `abandoned`                                                                                                                                    | `info`                                                            |
@@ -1391,23 +1411,22 @@ The core's `start` then adds refusals of its own, judged in this order:
   or the revocation channel, or starts the channel. Whatever had started is stopped before `start`
   rejects. The event's `reason` stays the fixed code, never the thrown error's message.
 
-| Parameter                      | Default                                 |
-| ------------------------------ | --------------------------------------- |
-| `exchangeTimeoutMs`            | 5000                                    |
-| `filterClauseLimit`            | 1024                                    |
-| `graceMs`                      | 60000                                   |
-| `inFlightMax`                  | 64, until the controller sets the bound |
-| `localRefusalClockToleranceMs` | 60000                                   |
-| `pollDeadlineMs`               | 10000                                   |
-| `pollIntervalMs`               | 30000                                   |
-| `pollRecoveryIntervalMs`       | 10000, or `pollIntervalMs` when lower   |
-| `pushIdleMs`                   | 25000                                   |
-| `responseCapBytes`             | 1048576, so 1 MiB                       |
-| `stores.failureHoldMs`         | 10000                                   |
-| `stores.failureMax`            | 1000                                    |
-| `stores.positiveMax`           | 10000                                   |
-| `stores.refusalMax`            | 10000                                   |
-| `tokenTtlMs`                   | 300000                                  |
+| Parameter                      | Default                               |
+| ------------------------------ | ------------------------------------- |
+| `exchangeTimeoutMs`            | 5000                                  |
+| `filterClauseLimit`            | 1024                                  |
+| `graceMs`                      | 60000                                 |
+| `localRefusalClockToleranceMs` | 60000                                 |
+| `pollDeadlineMs`               | 10000                                 |
+| `pollIntervalMs`               | 30000                                 |
+| `pollRecoveryIntervalMs`       | 10000, or `pollIntervalMs` when lower |
+| `pushIdleMs`                   | 25000                                 |
+| `responseCapBytes`             | 1048576, so 1 MiB                     |
+| `stores.failureHoldMs`         | 10000                                 |
+| `stores.failureMax`            | 1000                                  |
+| `stores.positiveMax`           | 10000                                 |
+| `stores.refusalMax`            | 10000                                 |
+| `tokenTtlMs`                   | 300000                                |
 
 **Two clock tolerances, never one.** The local refusal of a three-part sign-in token whose own `exp`
 has passed uses a tolerance read from configuration as `localRefusalClockToleranceMs`, 60000 ms by

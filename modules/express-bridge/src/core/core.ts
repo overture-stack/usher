@@ -35,7 +35,7 @@ import {
   type BridgeEventData,
   type BridgeMode,
   createEventLog,
-  createOverloadTally,
+  createExchangeFailureTally,
   type EventLog,
 } from './events.js';
 import { grantSet, holdsOnlyOpenTier } from './grants.js';
@@ -66,11 +66,19 @@ import { isReadablePayloadVersion } from './tokenReader.js';
 
 type TokenRejectionReason = BridgeEventData['token.rejection']['reason'];
 
-/** What the controller answered an exchange with, as the controller client reads its status. */
+/**
+ * What the controller answered an exchange with, as the controller client reads it. Two answers
+ * carry the seconds of a valid `Retry-After`:
+ * - `admissionShareExceeded`, a 503 shedding the application's exchanges, with `undefined` when it
+ *   carried no valid `Retry-After`;
+ * - `retryAfter`, any other 503 carrying one.
+ */
 export type ExchangeAnswer =
+  | { kind: 'admissionShareExceeded'; retryAfterSeconds: number | undefined }
   | { cause: 'network' | 'status' | 'timeout'; kind: 'failed' }
   | { cause: 'assertionRefused' | 'status'; kind: 'unavailable' }
   | { kind: 'refused' }
+  | { kind: 'retryAfter'; retryAfterSeconds: number }
   | { kind: 'token'; token: string }
   | { kind: 'unreadable'; reason: TokenRejectionReason };
 
@@ -138,7 +146,10 @@ export interface CoreSeams {
   /** Builds the reader that decrypts and validates each Usher token. */
   createTokenReader(context: SeamContext): TokenReader;
 
-  /** Uniform randomness in [0, 1), for the refresh's backoff jitter; `Math.random` when omitted. */
+  /**
+   * Uniform randomness in [0, 1), for the jitter of the refresh's backoff, the back-off window and
+   * each hold for `Retry-After`; `Math.random` when omitted.
+   */
   random?: () => number;
 }
 
@@ -181,7 +192,9 @@ export interface BridgeCore {
    * @returns whether a readable anonymous payload arrived:
    * - `true` when one arrived, whether kept or used only as the self-test;
    * - `false` when the fetch failed, when a reset overtook it, or when a notice overtook both it and
-   *   the one fetch made again after it.
+   *   the one fetch made again after it;
+   * - `false`, fetching nothing, while the bridge backs off or the anonymous fetch is held for
+   *   `Retry-After`; the fetch is made once both have ended.
    * @throws {UsherContractError} as a rejection, naming `START_REFUSAL_RULES.notRegistered` before
    * `register`, and `CORE_RULES.startFirst` before `start` has finished or after `stop`.
    */
@@ -231,10 +244,21 @@ export interface BridgeCore {
   /**
    * Resolves one request's credential, or `null` for none, to one of:
    * - `access`: the principal's access, or the open tier for no credential; or the open tier,
-   *   suspended, when the controller cannot be reached or the revocation channel is uncertain;
+   *   suspended, when the exchange fails or is held, when the bridge backs off, or when the
+   *   revocation channel is uncertain;
    * - `refused`: the controller refused the credential, or it is a signed token past its own `exp`;
    * - `unavailable`: the core is not running or is cold, the controller's answer could not be read,
    *   the in-flight bound is reached, or no open tier is held to serve.
+   *
+   * How the controller's 503 is honoured:
+   * - `503 admissionShareExceeded` opens the back-off window for the whole bridge, lasting its
+   *   `Retry-After`, or 1 s without a valid one, capped at 5 s, plus jitter drawn uniformly from 0 to
+   *   half of that. A later one extends the window, and none shortens it. Until it ends no exchange
+   *   starts: exchanges already running finish, an answer a notice overtakes meanwhile is discarded
+   *   as a second discard is, and a cached credential is served from the cache.
+   * - Any other 503 carrying a valid `Retry-After` holds that credential alone for it, capped at
+   *   60 s, plus the same jitter, and it is exchanged once the hold ends.
+   * - Any other failed exchange holds the credential for `stores.failureHoldMs`.
    *
    * It rejects when the controller client or the token reader throws, or when tagging the payload's
    * subject fails.
@@ -319,6 +343,7 @@ interface FlightStart {
  */
 type FlightOutcome =
   | { access: Readonly<UsherRequestAccess>; kind: 'granted' }
+  | { kind: 'backedOff' }
   | { kind: 'degraded'; subject: string | null }
   | { kind: 'refused' }
   | { kind: 'unavailable' };
@@ -339,6 +364,7 @@ interface AnonymousEntry {
 
 const REFUSED: ResolveOutcome = Object.freeze({ kind: 'refused' });
 const UNAVAILABLE: ResolveOutcome = Object.freeze({ kind: 'unavailable' });
+const BACKED_OFF_FLIGHT: FlightOutcome = Object.freeze({ kind: 'backedOff' });
 const DEGRADED_FLIGHT: FlightOutcome = Object.freeze({
   kind: 'degraded',
   subject: null,
@@ -380,6 +406,21 @@ const answeredBy = (
       .then(resolve, reject)
       .finally(() => signal.removeEventListener('abort', timedOut));
   });
+
+/**
+ * The most new exchanges in flight at once, a bound on the bridge's own memory: the controller paces
+ * the bridge's exchanges by `Retry-After`.
+ */
+const IN_FLIGHT_MAX = 64;
+
+/** The back-off window's length in seconds, before jitter, when it opens with no valid `Retry-After`. */
+const WINDOW_DEFAULT_SECONDS = 1;
+
+/** The longest `Retry-After` honoured for the back-off window, in seconds; a longer one counts as this. */
+const WINDOW_CEILING_SECONDS = 5;
+
+/** The longest `Retry-After` honoured for one hold, in seconds; a longer one counts as this. */
+const HOLD_CEILING_SECONDS = 60;
 
 /** How many distinct result sets are interned at once. */
 const INTERN_MAX = 4_096;
@@ -517,7 +558,7 @@ const createRuntime = ({
     graceMs: configuration.graceMs,
     monotonicClock: clocks.monotonic,
   });
-  const tally = createOverloadTally(events);
+  const tally = createExchangeFailureTally(events);
   const positive = createPositiveStore<PositiveEntry>({
     clocks,
     max: stores.positiveMax,
@@ -535,8 +576,8 @@ const createRuntime = ({
     Readonly<Record<string, Enforcement>>
   >({ clocks, max: INTERN_MAX });
   const flights = createSingleFlight<FlightOutcome>({
-    max: configuration.inFlightMax,
-    onOverload: tally.record,
+    max: IN_FLIGHT_MAX,
+    onOverload: () => tally.record('overloaded'),
     overloaded: UNAVAILABLE_FLIGHT,
     timeoutMs: configuration.exchangeTimeoutMs,
   });
@@ -570,19 +611,60 @@ const createRuntime = ({
     afterCheck: channel.checkedSinceReset,
     generation: channel.generation,
   });
+  /** `heldUntil` is when its hold for `Retry-After` ends, on the monotonic clock. */
   const anonymous: {
     entry: AnonymousEntry | undefined;
+    heldUntil: number;
     installedOnce: boolean;
     retries: number;
     timer: ReturnType<typeof setTimeout> | undefined;
   } = {
     entry: undefined,
+    heldUntil: Number.NEGATIVE_INFINITY,
     installedOnce: false,
     retries: 0,
     timer: undefined,
   };
   /** Once set, no exchange or anonymous fetch starts. */
   const lifecycle: { stopped: boolean } = { stopped: false };
+  /** No exchange starts, signed-in or anonymous, until `windowEndsAt` on the monotonic clock. */
+  const backOff: { windowEndsAt: number } = {
+    windowEndsAt: Number.NEGATIVE_INFINITY,
+  };
+
+  /** `Retry-After` capped at the ceiling, plus jitter drawn uniformly from 0 to half of it, in ms. */
+  const jitteredMs = (
+    retryAfterSeconds: number,
+    ceilingSeconds: number,
+  ): number =>
+    Math.min(retryAfterSeconds, ceilingSeconds) * 1_000 * (1 + random() / 2);
+
+  const holdEndsAt = (retryAfterSeconds: number): number =>
+    clocks.monotonic.now() +
+    jitteredMs(retryAfterSeconds, HOLD_CEILING_SECONDS);
+
+  const backingOff = (): boolean =>
+    clocks.monotonic.now() < backOff.windowEndsAt;
+
+  /** Opens the back-off window, or extends the one open, never shortening it. */
+  const backOffFor = (retryAfterSeconds: number | undefined): void => {
+    backOff.windowEndsAt = Math.max(
+      backOff.windowEndsAt,
+      clocks.monotonic.now() +
+        jitteredMs(
+          retryAfterSeconds ?? WINDOW_DEFAULT_SECONDS,
+          WINDOW_CEILING_SECONDS,
+        ),
+    );
+    tally.record('admissionShareExceeded');
+  };
+
+  /** When the next anonymous fetch may start: once the back-off window and its own hold have ended. */
+  const anonymousResumesAt = (): number =>
+    Math.max(backOff.windowEndsAt, anonymous.heldUntil);
+
+  const anonymousWaits = (): boolean =>
+    clocks.monotonic.now() < anonymousResumesAt();
 
   const ttlFromNow = (): number =>
     clocks.monotonic.now() + configuration.tokenTtlMs;
@@ -601,9 +683,13 @@ const createRuntime = ({
     events.emit('credential.refusal', { origin: 'controller' });
   };
 
-  const holdFailure = (digest: string, failure: 'failed' | 'rejected'): void =>
+  const holdFailure = (
+    digest: string,
+    failure: 'failed' | 'rejected',
+    endsAt: number = clocks.monotonic.now() + stores.failureHoldMs,
+  ): void =>
     failures.set(digest, failure, {
-      monotonicMs: clocks.monotonic.now() + stores.failureHoldMs,
+      monotonicMs: endsAt,
       wallMs: Number.POSITIVE_INFINITY,
     });
 
@@ -742,10 +828,15 @@ const createRuntime = ({
    * Fetches the anonymous payload in its own single flight, outside the in-flight bound. Each
    * reset generation has a flight of its own, so a fetch after a reset never joins one started
    * before it. A defect in the client or the reader is logged and retried like any failed fetch, so
-   * retrying never stops.
+   * retrying never stops. While the bridge backs off, or the anonymous fetch is held, nothing is
+   * fetched, and the fetch is scheduled for when both have ended.
    */
   const runAnonymous = (): Promise<AnonymousFetch> => {
     if (lifecycle.stopped) {
+      return Promise.resolve('failed');
+    }
+    if (anonymousWaits()) {
+      scheduleRefresh(0);
       return Promise.resolve('failed');
     }
     const start = flightStart();
@@ -762,16 +853,23 @@ const createRuntime = ({
       (fetched) => fetched === 'installed' || fetched === 'selfTest',
     );
 
+  /** Schedules the next anonymous fetch after `delayMs`, and never before it may start. */
   function scheduleRefresh(delayMs: number): void {
     // stop clears the timer once, so a fetch ending after it must not arm another.
     if (lifecycle.stopped) {
       return;
     }
     clearTimeout(anonymous.timer);
-    anonymous.timer = setTimeout(() => {
-      anonymous.timer = undefined;
-      void runAnonymous();
-    }, delayMs);
+    anonymous.timer = setTimeout(
+      () => {
+        anonymous.timer = undefined;
+        void runAnonymous();
+      },
+      Math.max(
+        delayMs,
+        Math.ceil(anonymousResumesAt() - clocks.monotonic.now()),
+      ),
+    );
     anonymous.timer.unref?.();
   }
 
@@ -807,6 +905,39 @@ const createRuntime = ({
     scheduleRefresh(Math.max(0, (endsAt - receivedAt) * 0.8));
   };
 
+  /** Records why an anonymous fetch was answered with no token, before it is retried. */
+  const anonymousFailure = (
+    answer: Exclude<ExchangeAnswer, { kind: 'token' }>,
+  ): void => {
+    switch (answer.kind) {
+      case 'admissionShareExceeded':
+        backOffFor(answer.retryAfterSeconds);
+        return;
+      case 'failed':
+        events.emit('token.exchangeFailure', { cause: answer.cause });
+        return;
+      case 'refused':
+        events.emit('token.exchangeFailure', { cause: 'status' });
+        return;
+      case 'retryAfter':
+        anonymous.heldUntil = Math.max(
+          anonymous.heldUntil,
+          holdEndsAt(answer.retryAfterSeconds),
+        );
+        tally.record('retryAfter');
+        return;
+      case 'unavailable':
+        events.emit('token.exchangeFailure', { cause: answer.cause });
+        if (answer.cause === 'assertionRefused') {
+          selfTestFailed();
+        }
+        return;
+      case 'unreadable':
+        events.emit('token.rejection', { reason: answer.reason });
+        return;
+    }
+  };
+
   const fetchAnonymous = async (
     signal: AbortSignal,
     start: FlightStart,
@@ -817,20 +948,8 @@ const createRuntime = ({
       signal,
       client.exchange({ credential: null, signal }),
     );
-    if (answer.kind === 'unreadable') {
-      events.emit('token.rejection', { reason: answer.reason });
-      return failedRefresh();
-    }
     if (answer.kind !== 'token') {
-      events.emit('token.exchangeFailure', {
-        cause: answer.kind === 'refused' ? 'status' : answer.cause,
-      });
-      if (
-        answer.kind === 'unavailable' &&
-        answer.cause === 'assertionRefused'
-      ) {
-        selfTestFailed();
-      }
+      anonymousFailure(answer);
       return failedRefresh();
     }
     const reading = await reader.read(answer.token);
@@ -853,7 +972,7 @@ const createRuntime = ({
       return 'stale';
     }
     if (notices.affects(since, reading.payload, undefined)) {
-      const lastDiscard = overtaken || lifecycle.stopped;
+      const lastDiscard = overtaken || lifecycle.stopped || anonymousWaits();
       events.emit('token.overtaken', {
         outcome: lastDiscard ? 'abandoned' : 'exchangedAgain',
       });
@@ -885,6 +1004,9 @@ const createRuntime = ({
     claims: SignedTokenClaims | undefined,
   ): FlightOutcome => {
     switch (answer.kind) {
+      case 'admissionShareExceeded':
+        backOffFor(answer.retryAfterSeconds);
+        return DEGRADED_FLIGHT;
       case 'failed':
         holdFailure(digest, 'failed');
         events.emit('token.exchangeFailure', { cause: answer.cause });
@@ -892,6 +1014,10 @@ const createRuntime = ({
       case 'refused':
         refuse(digest, claims);
         return REFUSED_FLIGHT;
+      case 'retryAfter':
+        holdFailure(digest, 'failed', holdEndsAt(answer.retryAfterSeconds));
+        tally.record('retryAfter');
+        return DEGRADED_FLIGHT;
       case 'unavailable':
         events.emit('token.exchangeFailure', { cause: answer.cause });
         return UNAVAILABLE_FLIGHT;
@@ -934,7 +1060,7 @@ const createRuntime = ({
       channel.generation !== start.generation ||
       notices.affects(since, payload, tag)
     ) {
-      const lastDiscard = overtaken || lifecycle.stopped;
+      const lastDiscard = overtaken || lifecycle.stopped || backingOff();
       events.emit('token.overtaken', {
         outcome: lastDiscard ? lastDiscardOutcome() : 'exchangedAgain',
       });
@@ -993,6 +1119,9 @@ const createRuntime = ({
 
   const outcomeOf = (outcome: FlightOutcome): ResolveOutcome => {
     switch (outcome.kind) {
+      case 'backedOff':
+        tally.record('backedOff');
+        return suspendedFor(modes.mode(), null);
       case 'degraded':
         return suspendedFor(modes.mode(), outcome.subject);
       case 'granted': {
@@ -1047,7 +1176,9 @@ const createRuntime = ({
     }
     return outcomeOf(
       await flights.run(digest, (signal) =>
-        exchange(credential, digest, claims, signal, false),
+        backingOff()
+          ? Promise.resolve(BACKED_OFF_FLIGHT)
+          : exchange(credential, digest, claims, signal, false),
       ),
     );
   };

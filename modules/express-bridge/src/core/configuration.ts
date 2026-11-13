@@ -70,12 +70,6 @@ export interface BridgeConfiguration {
    */
   graceMs?: number;
 
-  /**
-   * The most new exchanges in flight at once; 64 by default. A request needing one beyond it is
-   * answered as unavailable and counted as overloaded.
-   */
-  inFlightMax?: number;
-
   /** The issuer required in every accepted Usher token. */
   issuer: string;
 
@@ -161,7 +155,6 @@ export interface ResolvedConfiguration {
   exchangeTimeoutMs: number;
   filterClauseLimit: number;
   graceMs: number;
-  inFlightMax: number;
   issuer: string;
   key: string;
   localRefusalClockToleranceMs: number;
@@ -198,7 +191,6 @@ export const CONFIGURATION_DEFAULTS: Readonly<{
   exchangeTimeoutMs: number;
   filterClauseLimit: number;
   graceMs: number;
-  inFlightMax: number;
   localRefusalClockToleranceMs: number;
   pollDeadlineMs: number;
   pollIntervalMs: number;
@@ -211,7 +203,6 @@ export const CONFIGURATION_DEFAULTS: Readonly<{
   exchangeTimeoutMs: BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
   filterClauseLimit: 1_024,
   graceMs: 60_000,
-  inFlightMax: 64,
   localRefusalClockToleranceMs: 60_000,
   pollDeadlineMs: 10_000,
   pollIntervalMs: 30_000,
@@ -294,7 +285,6 @@ const rangedSettings = (
   ['exchangeTimeoutMs', input.exchangeTimeoutMs, 1],
   ['filterClauseLimit', input.filterClauseLimit, 1],
   ['graceMs', input.graceMs, 1],
-  ['inFlightMax', input.inFlightMax, 1],
   ['pollDeadlineMs', input.pollDeadlineMs, 1],
   ['pollIntervalMs', input.pollIntervalMs, POLL_INTERVAL_MIN_MS],
   [
@@ -412,10 +402,6 @@ export const checkConfiguration = (
       CONFIGURATION_DEFAULTS.filterClauseLimit,
     ),
     graceMs: orDefault(input.graceMs, CONFIGURATION_DEFAULTS.graceMs),
-    inFlightMax: orDefault(
-      input.inFlightMax,
-      CONFIGURATION_DEFAULTS.inFlightMax,
-    ),
     pollDeadlineMs: orDefault(
       input.pollDeadlineMs,
       CONFIGURATION_DEFAULTS.pollDeadlineMs,

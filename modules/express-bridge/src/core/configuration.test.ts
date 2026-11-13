@@ -60,7 +60,6 @@ suite('checkConfiguration', () => {
         exchangeTimeoutMs: configuration?.exchangeTimeoutMs,
         filterClauseLimit: configuration?.filterClauseLimit,
         graceMs: configuration?.graceMs,
-        inFlightMax: configuration?.inFlightMax,
         localRefusalClockToleranceMs:
           configuration?.localRefusalClockToleranceMs,
         pollDeadlineMs: configuration?.pollDeadlineMs,
@@ -75,7 +74,6 @@ suite('checkConfiguration', () => {
         exchangeTimeoutMs: 5_000,
         filterClauseLimit: 1_024,
         graceMs: 60_000,
-        inFlightMax: 64,
         localRefusalClockToleranceMs: 60_000,
         pollDeadlineMs: 10_000,
         pollIntervalMs: 30_000,
@@ -119,6 +117,17 @@ suite('checkConfiguration', () => {
       : undefined;
 
     assert.equal(exchange, 'https://usher.example.org/api/exchange');
+  });
+
+  test('reads no in-flight bound, neither refusing one given nor keeping it', () => {
+    const check = checkWith({ inFlightMax: 0 });
+
+    assert.equal(check.ok, true);
+    assert.equal(
+      check.ok && Object.hasOwn(check.configuration, 'inFlightMax'),
+      false,
+    );
+    assert.equal(Object.hasOwn(CONFIGURATION_DEFAULTS, 'inFlightMax'), false);
   });
 
   test('keeps a value given in place of a default', () => {
@@ -463,7 +472,6 @@ suite('checkConfiguration', () => {
         { payloadVersions: [1.5] },
         'payloadVersionsInvalid',
       ],
-      ['a zero in-flight bound', { inFlightMax: 0 }, 'numberOutOfRange'],
       [
         'a fractional exchange timeout',
         { exchangeTimeoutMs: 2.5 },

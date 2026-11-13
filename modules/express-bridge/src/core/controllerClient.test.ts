@@ -8,7 +8,12 @@ import {
 import type { AddressInfo } from 'node:net';
 import { suite, test } from 'node:test';
 
-import { createFetchControllerClient } from './controllerClient.js';
+import fastCheck from 'fast-check';
+
+import {
+  createFetchControllerClient,
+  retryAfterSecondsOf,
+} from './controllerClient.js';
 import type { ExchangeAnswer } from './core.js';
 
 interface Received {
@@ -71,6 +76,55 @@ const answering =
     response.writeHead(status, headers);
     response.end(body);
   };
+
+/**
+ * A refusal of the exchange as the controller sends it: its problem details as JSON, `no-store`, and
+ * `Retry-After` when the refusal names a time to wait.
+ */
+const controllerRefusal = (
+  problem: { code: string; detail: string; title: string },
+  retryAfterSeconds?: number,
+): Handler =>
+  answering(
+    503,
+    JSON.stringify({
+      code: problem.code,
+      detail: problem.detail,
+      status: 503,
+      title: problem.title,
+    }),
+    {
+      'cache-control': 'no-store',
+      'content-type': 'application/problem+json',
+      ...(retryAfterSeconds === undefined
+        ? {}
+        : { 'retry-after': String(retryAfterSeconds) }),
+    },
+  );
+
+const ADMISSION_SHARE_EXCEEDED = {
+  code: 'admissionShareExceeded',
+  detail:
+    "The application's exchanges in flight fill its share of the controller, and no connection is free to lend, so no token was issued. Try again once the seconds in Retry-After have passed.",
+  title: 'Admission share exceeded',
+};
+
+const SIGNING_KEY_UNCONFIRMED = {
+  code: 'signingKeyUnconfirmed',
+  detail:
+    "The sign-in token's signing key is not confirmed yet, and no token was issued. Try again once the seconds in Retry-After have passed.",
+  title: 'Signing key not confirmed yet',
+};
+
+const STORE_UNAVAILABLE = {
+  code: 'storeUnavailable',
+  detail:
+    'The policy store cannot take this exchange now, and no token was issued. Try again.',
+  title: 'Policy store unavailable',
+};
+
+const problemBody = (code: unknown): string =>
+  JSON.stringify({ code, detail: 'detail', status: 503, title: 'title' });
 
 const exchange = (
   handler: Handler,
@@ -246,5 +300,247 @@ suite('createFetchControllerClient', () => {
 
     assert.deepEqual(answer, { cause: 'network', kind: 'failed' });
     assert.equal(received.length, 1);
+  });
+
+  suite('a 503', () => {
+    test("reads the controller's admissionShareExceeded and signingKeyUnconfirmed, header and body, as the controller sends them", async () => {
+      const shed = await exchange(
+        controllerRefusal(ADMISSION_SHARE_EXCEEDED, 1),
+      );
+      const held = await exchange(
+        controllerRefusal(SIGNING_KEY_UNCONFIRMED, 17),
+      );
+
+      assert.deepEqual(
+        [shed.answer, held.answer],
+        [
+          { kind: 'admissionShareExceeded', retryAfterSeconds: 1 },
+          { kind: 'retryAfter', retryAfterSeconds: 17 },
+        ],
+      );
+    });
+
+    for (const [description, handler, expected] of [
+      [
+        'admissionShareExceeded with no Retry-After',
+        controllerRefusal(ADMISSION_SHARE_EXCEEDED),
+        { kind: 'admissionShareExceeded', retryAfterSeconds: undefined },
+      ],
+      [
+        'admissionShareExceeded with a Retry-After outside its grammar',
+        answering(503, problemBody('admissionShareExceeded'), {
+          'retry-after': '1.5',
+        }),
+        { kind: 'admissionShareExceeded', retryAfterSeconds: undefined },
+      ],
+      [
+        'signingKeyUnconfirmed with no Retry-After',
+        controllerRefusal(SIGNING_KEY_UNCONFIRMED),
+        { cause: 'status', kind: 'failed' },
+      ],
+      [
+        'storeUnavailable with a Retry-After',
+        controllerRefusal(STORE_UNAVAILABLE, 3),
+        { kind: 'retryAfter', retryAfterSeconds: 3 },
+      ],
+      [
+        'storeUnavailable with no Retry-After',
+        controllerRefusal(STORE_UNAVAILABLE),
+        { cause: 'status', kind: 'failed' },
+      ],
+      [
+        'a code the bridge does not know, with a Retry-After',
+        answering(503, problemBody('somethingNew'), { 'retry-after': '4' }),
+        { kind: 'retryAfter', retryAfterSeconds: 4 },
+      ],
+      [
+        'a code differing from admissionShareExceeded only in case, with a Retry-After',
+        answering(503, problemBody('AdmissionShareExceeded'), {
+          'retry-after': '4',
+        }),
+        { kind: 'retryAfter', retryAfterSeconds: 4 },
+      ],
+      [
+        'a code that is not a string, with a Retry-After',
+        answering(503, problemBody(['admissionShareExceeded']), {
+          'retry-after': '4',
+        }),
+        { kind: 'retryAfter', retryAfterSeconds: 4 },
+      ],
+      [
+        'a body that is not JSON, with a Retry-After',
+        answering(503, 'admissionShareExceeded', { 'retry-after': '5' }),
+        { kind: 'retryAfter', retryAfterSeconds: 5 },
+      ],
+      [
+        'a body that is not JSON, with no Retry-After',
+        answering(503, 'admissionShareExceeded'),
+        { cause: 'status', kind: 'failed' },
+      ],
+      [
+        'no body, with a Retry-After',
+        answering(503, '', { 'retry-after': '6' }),
+        { kind: 'retryAfter', retryAfterSeconds: 6 },
+      ],
+      [
+        'admissionShareExceeded padded past 2 KiB, with a Retry-After',
+        answering(
+          503,
+          JSON.stringify({
+            code: 'admissionShareExceeded',
+            detail: 'x'.repeat(2_048),
+          }),
+          { 'retry-after': '1' },
+        ),
+        { kind: 'retryAfter', retryAfterSeconds: 1 },
+      ],
+      [
+        'a Retry-After sent with whitespace around it, which fetch returns with the trailing space',
+        answering(503, problemBody('signingKeyUnconfirmed'), {
+          'retry-after': ' 2 ',
+        }),
+        { cause: 'status', kind: 'failed' },
+      ],
+      [
+        'two Retry-After lines, which fetch joins into one value',
+        ((_request, response) => {
+          response.writeHead(503, ['retry-after', '1', 'retry-after', '2']);
+          response.end(problemBody('signingKeyUnconfirmed'));
+        }) satisfies Handler,
+        { cause: 'status', kind: 'failed' },
+      ],
+    ] as const) {
+      test(`reads ${description} as ${JSON.stringify(expected)}`, async () => {
+        const { answer } = await exchange(handler);
+
+        assert.deepEqual(answer, expected);
+      });
+    }
+
+    test('reads its body no further than the response cap when the cap is under 2 KiB', async () => {
+      const { answer } = await exchange(
+        controllerRefusal(ADMISSION_SHARE_EXCEEDED, 1),
+        'sign-in-token',
+        100,
+      );
+
+      assert.deepEqual(answer, { kind: 'retryAfter', retryAfterSeconds: 1 });
+    });
+
+    test('cancels the rest of a body running past 2 KiB, answering before the exchange times out', async () => {
+      const signal = AbortSignal.timeout(5_000);
+      const closing = { atServer: (): void => undefined };
+      const closedAtServer = new Promise<'closed'>((resolve) => {
+        closing.atServer = () => resolve('closed');
+      });
+      const stillOpen = (): Promise<'still open'> =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve('still open'), 2_000).unref();
+        });
+      const ended = { atServer: '' };
+      const { answer } = await exchangingWith(
+        (_request, response) => {
+          response.on('close', closing.atServer);
+          response.writeHead(503, {
+            'content-type': 'application/problem+json',
+            'retry-after': '7',
+          });
+          response.write(problemBody('admissionShareExceeded').slice(0, -1));
+          // The body never ends, so only a cancel ends the connection before the signal aborts.
+          response.write(`,"padding":"${'x'.repeat(3_072)}`);
+        },
+        async (controllerUrl) => {
+          const read = await clientFor(controllerUrl).exchange({
+            credential: 'sign-in-token',
+            signal,
+          });
+          ended.atServer = await Promise.race([closedAtServer, stillOpen()]);
+          return read;
+        },
+      );
+
+      assert.deepEqual(answer, { kind: 'retryAfter', retryAfterSeconds: 7 });
+      assert.equal(signal.aborted, false);
+      assert.equal(ended.atServer, 'closed');
+    });
+
+    test('reads a failure while reading its body as a network failure', async () => {
+      const client = createFetchControllerClient({
+        assertion: () => Promise.resolve('assertion-token'),
+        controllerUrl: new URL('http://controller.invalid/'),
+        fetch: () =>
+          Promise.resolve({
+            body: new ReadableStream<Uint8Array>({
+              pull: () => {
+                throw new Error('a connection reset mid-body');
+              },
+            }),
+            headers: {
+              get: (name: string) => (name === 'retry-after' ? '1' : null),
+            },
+            status: 503,
+          }),
+        payloadVersions: [1],
+        responseCapBytes: 1_048_576,
+      });
+
+      const answer = await client.exchange({
+        credential: 'sign-in-token',
+        signal: AbortSignal.timeout(5_000),
+      });
+
+      assert.deepEqual(answer, { cause: 'network', kind: 'failed' });
+    });
+  });
+});
+
+suite('retryAfterSecondsOf', () => {
+  for (const [value, expected] of [
+    ['1', 1],
+    ['30', 30],
+    ['000001', 1],
+    ['6', 6],
+    ['61', 61],
+    ['999999', 999_999],
+    ['0', undefined],
+    ['000000', undefined],
+    ['-1', undefined],
+    ['+1', undefined],
+    ['1.5', undefined],
+    ['1e3', undefined],
+    ['1, 2', undefined],
+    ['Wed, 21 Oct 2026 07:28:00 GMT', undefined],
+    ['', undefined],
+    [' 1', undefined],
+    ['1\n', undefined],
+    ['1000000', undefined],
+    ['\u0661', undefined],
+    [null, undefined],
+  ] as const) {
+    test(`reads ${JSON.stringify(value)} as ${String(expected)}`, () => {
+      assert.equal(retryAfterSecondsOf(value), expected);
+    });
+  }
+
+  test('reads every string outside 1 to 6 ASCII digits as absent', () => {
+    fastCheck.assert(
+      fastCheck.property(
+        fastCheck
+          .string({ unit: 'binary' })
+          .filter((value) => !/^[0-9]{1,6}$/u.test(value)),
+        (value) => retryAfterSecondsOf(value) === undefined,
+      ),
+    );
+  });
+
+  test('reads 1 to 6 ASCII digits as the whole seconds they name, or absent when they name none', () => {
+    fastCheck.assert(
+      fastCheck.property(
+        fastCheck.stringMatching(/^[0-9]{1,6}$/u),
+        (value) =>
+          retryAfterSecondsOf(value) ===
+          (Number(value) > 0 ? Number(value) : undefined),
+      ),
+    );
   });
 });

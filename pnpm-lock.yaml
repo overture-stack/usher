@@ -336,6 +336,9 @@ importers:
       express4:
         specifier: 'catalog:'
         version: express@4.22.3
+      fast-check:
+        specifier: 'catalog:'
+        version: 4.10.2
       tsdown:
         specifier: 'catalog:'
         version: 0.23.5(tsx@4.23.15)(typescript@7.0.2)
