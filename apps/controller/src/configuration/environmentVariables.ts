@@ -33,6 +33,7 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   port: 'USHER_PORT',
   retentionGraceSeconds: 'USHER_RETENTION_GRACE_SECONDS',
   retentionMarginSeconds: 'USHER_RETENTION_MARGIN_SECONDS',
+  serviceAccountRole: 'USHER_SERVICE_ACCOUNT_ROLE',
   signInTokenMaximumLifetimeSeconds:
     'USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS',
   signedInRule: 'USHER_SIGNED_IN_RULE',

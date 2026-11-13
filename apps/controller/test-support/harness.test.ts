@@ -207,7 +207,7 @@ suite("the harness's configuration", () => {
     assert.equal(new URL(configuration.databaseUrl).password, '');
   });
 
-  test("names the management API and its client, the administrator role and the rulings' defaults", () => {
+  test("names the management API and its client, the administrator and service-account roles and the rulings' defaults", () => {
     const configuration = harnessConfiguration(SETTINGS);
 
     assert.deepEqual(
@@ -220,6 +220,7 @@ suite("the harness's configuration", () => {
         managementAudience: configuration.managementAudience,
         managementClients: configuration.managementClients,
         port: configuration.port,
+        serviceAccountRole: configuration.serviceAccountRole,
         signedInRule: configuration.signedInRule,
         tokenLifetimeSeconds: configuration.tokenLifetimeSeconds,
       },
@@ -232,6 +233,7 @@ suite("the harness's configuration", () => {
         managementAudience: 'usher-management-test',
         managementClients: ['usher-ui-test'],
         port: 0,
+        serviceAccountRole: 'usher-service-account',
         signedInRule: ['count', 'view', 'export'],
         tokenLifetimeSeconds: 300,
       },

@@ -34,25 +34,35 @@ const realmRolesOf = (claims: TokenClaims): readonly unknown[] => {
   return Array.isArray(roles) ? roles : [];
 };
 
-// Either sign of a client-credentials token marks a service account, so a person's token carrying one
-// is refused as a service account's rather than admitted as a person's.
-const isServiceAccount = (claims: TokenClaims): boolean => {
+// Any one mark makes a token a service account's: either sign of a client-credentials token, or the
+// service-account realm role. So a person's token carrying one is refused as a service account's
+// rather than admitted as a person's.
+const isServiceAccount = (
+  claims: TokenClaims,
+  serviceAccountRole: string,
+): boolean => {
   const username = claims['preferred_username'];
   return (
     typeof claims['client_id'] === 'string' ||
     (typeof username === 'string' &&
-      username.startsWith(SERVICE_ACCOUNT_USERNAME))
+      username.startsWith(SERVICE_ACCOUNT_USERNAME)) ||
+    realmRolesOf(claims).includes(serviceAccountRole)
   );
 };
 
 const principalOf = (
   claims: TokenClaims,
   subject: string,
-  administratorRole: string,
+  {
+    administratorRole,
+    serviceAccountRole,
+  }: Pick<ManagementTokenSettings, 'administratorRole' | 'serviceAccountRole'>,
 ): Principal => ({
   administrator: realmRolesOf(claims).includes(administratorRole),
   subject,
-  type: isServiceAccount(claims) ? 'serviceAccount' : 'human',
+  type: isServiceAccount(claims, serviceAccountRole)
+    ? 'serviceAccount'
+    : 'human',
 });
 
 /**
@@ -63,11 +73,14 @@ const principalOf = (
  * other token refused as `otherType`; then its expiry, which is required, and its `nbf`, each judged
  * within {@link CLOCK_TOLERANCE_MILLISECONDS}; then its `aud`, a string or a list, which must name the
  * management API, and its `azp`, which must name a configured management client. Each refusal from the
- * access-token check on names the token's subject. A token from a service account is read as one, and
- * a principal holding the administrator realm role as a platform administrator.
+ * access-token check on names the token's subject. A token carrying any one of three marks is read as
+ * a service account's, whether or not it also holds the administrator realm role: a `client_id` claim
+ * that is text, a `preferred_username` starting `service-account-`, or the service-account realm role,
+ * compared by its exact name as the administrator role is. A principal holding the administrator realm
+ * role is read as a platform administrator.
  *
  * @param token the token's verified claims and protected header.
- * @param settings the management API's audience and clients, and the administrator role.
+ * @param settings the management API's audience and clients, and the administrator and service-account roles.
  * @param now the instant, in milliseconds since the Unix epoch.
  */
 export const readManagementClaims = (
@@ -76,6 +89,7 @@ export const readManagementClaims = (
     administratorRole,
     managementAudience,
     managementClients,
+    serviceAccountRole,
   }: ManagementTokenSettings,
   now: number,
 ): ClaimsReading => {
@@ -103,7 +117,10 @@ export const readManagementClaims = (
   ) {
     return {
       kind: 'accepted',
-      principal: principalOf(claims, subject, administratorRole),
+      principal: principalOf(claims, subject, {
+        administratorRole,
+        serviceAccountRole,
+      }),
       session: sessionOf(claims),
     };
   }

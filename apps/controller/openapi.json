@@ -1883,7 +1883,7 @@
       },
       "managementToken": {
         "bearerFormat": "JWT",
-        "description": "An access token from the identity provider, naming the management API's configured audience in `aud` and a configured management client in `azp`. A principal holding the configured administrator realm role, read from each request's token, is a platform administrator. A service account's token is refused on every operation with `serviceAccountNotPermitted`.",
+        "description": "An access token from the identity provider, naming the management API's configured audience in `aud` and a configured management client in `azp`. A principal holding the configured administrator realm role, read from each request's token, is a platform administrator. A service account's token is refused on every operation with `serviceAccountNotPermitted`, whether or not it also holds the administrator role: a token carrying a `client_id` claim that is text, a `preferred_username` starting `service-account-`, or the configured service-account realm role is a service account's.",
         "scheme": "bearer",
         "type": "http"
       }

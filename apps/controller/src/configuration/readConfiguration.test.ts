@@ -106,6 +106,7 @@ suite('reading the configuration from an environment', () => {
         noticeRereadMilliseconds: '250',
         retentionGraceSeconds: '0',
         retentionMarginSeconds: '45',
+        serviceAccountRole: 'ims-usher-service',
         signedInRule: 'count,view',
         storeTimeoutMilliseconds: '250',
         streamLimitPerAudience: '2',
@@ -140,6 +141,7 @@ suite('reading the configuration from an environment', () => {
       port: 8443,
       retentionGraceSeconds: 0,
       retentionMarginSeconds: 45,
+      serviceAccountRole: 'ims-usher-service',
       signInTokenMaximumLifetimeSeconds: 3600,
       signedInRule: ['count', 'view'],
       storeTimeoutMilliseconds: 250,
@@ -165,6 +167,7 @@ suite('reading the configuration from an environment', () => {
         noticeRereadMilliseconds: configuration.noticeRereadMilliseconds,
         retentionGraceSeconds: configuration.retentionGraceSeconds,
         retentionMarginSeconds: configuration.retentionMarginSeconds,
+        serviceAccountRole: configuration.serviceAccountRole,
         signedInRule: configuration.signedInRule,
         storeTimeoutMilliseconds: configuration.storeTimeoutMilliseconds,
         streamLimitPerAudience: configuration.streamLimitPerAudience,
@@ -184,6 +187,7 @@ suite('reading the configuration from an environment', () => {
         noticeRereadMilliseconds: 2000,
         retentionGraceSeconds: 60,
         retentionMarginSeconds: 30,
+        serviceAccountRole: 'usher-service-account',
         signedInRule: ['count', 'view', 'export'],
         storeTimeoutMilliseconds: 5000,
         streamLimitPerAudience: 64,
@@ -224,6 +228,63 @@ suite('reading the configuration from an environment', () => {
       ENVIRONMENT_VARIABLES.issuer,
     ]);
     assert.match(refusal.message, /USHER_ISSUER is empty/u);
+  });
+
+  test('refuses a service-account role set empty, naming its variable', () => {
+    const refusal = refusalOf(environmentWith({ serviceAccountRole: '' }));
+
+    assert.deepEqual(refusal.variables, [
+      ENVIRONMENT_VARIABLES.serviceAccountRole,
+    ]);
+    assert.match(refusal.message, /USHER_SERVICE_ACCOUNT_ROLE is empty/u);
+  });
+
+  test('refuses a service-account role naming the administrator role, naming its variable and the rule', () => {
+    const refusal = refusalOf(
+      environmentWith({
+        administratorRole: 'ims-usher',
+        serviceAccountRole: 'ims-usher',
+      }),
+    );
+
+    assert.deepEqual(refusal.variables, [
+      ENVIRONMENT_VARIABLES.serviceAccountRole,
+    ]);
+    assert.match(
+      refusal.message,
+      /USHER_SERVICE_ACCOUNT_ROLE must name a role other than the one in USHER_ADMINISTRATOR_ROLE/u,
+    );
+  });
+
+  test('refuses an administrator role naming the default service-account role while the service-account role is unset', () => {
+    const refusal = refusalOf(
+      environmentWith({ administratorRole: 'usher-service-account' }),
+    );
+
+    assert.deepEqual(refusal.variables, [
+      ENVIRONMENT_VARIABLES.serviceAccountRole,
+    ]);
+    assert.match(
+      refusal.message,
+      /USHER_SERVICE_ACCOUNT_ROLE must name a role other than the one in USHER_ADMINISTRATOR_ROLE/u,
+    );
+  });
+
+  test('reads an administrator role and a service-account role differing only in letter case as two roles', () => {
+    const configuration = readConfiguration(
+      environmentWith({
+        administratorRole: 'Usher-Ops',
+        serviceAccountRole: 'usher-ops',
+      }),
+    );
+
+    assert.deepEqual(
+      {
+        administratorRole: configuration.administratorRole,
+        serviceAccountRole: configuration.serviceAccountRole,
+      },
+      { administratorRole: 'Usher-Ops', serviceAccountRole: 'usher-ops' },
+    );
   });
 });
 

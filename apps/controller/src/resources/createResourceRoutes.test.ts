@@ -69,6 +69,7 @@ const standUp = (context: TestContext): Stand => {
         identityProviderIssuer: ISSUER,
         managementAudience: 'usher-management',
         managementClients: ['usher-ui'],
+        serviceAccountRole: 'usher-service-account',
       },
       storedRefusal: async () => undefined,
       tokenVerifier: {

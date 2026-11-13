@@ -424,6 +424,7 @@ export const harnessConfiguration = ({
     retentionGraceSeconds: RETENTION_DEFAULTS.retentionGraceSeconds,
     retentionMarginSeconds: RETENTION_DEFAULTS.retentionMarginSeconds,
     selfGrantMaximumSeconds: 86_400,
+    serviceAccountRole: 'usher-service-account',
     signInTokenMaximumLifetimeSeconds: 3600,
     signedInRule: ['count', 'view', 'export'],
     storeTimeoutMilliseconds: 5000,

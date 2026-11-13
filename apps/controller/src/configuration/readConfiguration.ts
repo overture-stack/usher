@@ -10,6 +10,7 @@ import type {
 } from './types.js';
 import {
   CONTROLLER_ROLE_DESCRIPTION,
+  read,
   readAddresses,
   readDatabaseUrl,
   readInteger,
@@ -18,6 +19,8 @@ import {
   readSecureUrl,
   readText,
   type Reading,
+  refused,
+  then,
   type Variable,
 } from './variableReaders.js';
 
@@ -55,10 +58,11 @@ export const readConfiguration = (
     value: environment[ENVIRONMENT_VARIABLES[field]],
   });
   const retention = readRetentionDurations(variable);
+  const administratorRole = readText(variable('administratorRole'), {
+    fallback: 'usher-platform-admin',
+  });
   const readings = {
-    administratorRole: readText(variable('administratorRole'), {
-      fallback: 'usher-platform-admin',
-    }),
+    administratorRole,
     backChannelLogoutAudiences: readList(
       variable('backChannelLogoutAudiences'),
     ),
@@ -102,6 +106,20 @@ export const readConfiguration = (
     port: readInteger(variable('port'), { maximum: 65_535, minimum: 0 }),
     retentionGraceSeconds: retention.retentionGraceSeconds,
     retentionMarginSeconds: retention.retentionMarginSeconds,
+    // Every token holding the administrator role would carry the service-account mark, refused on
+    // every Management API operation.
+    serviceAccountRole: then(
+      readText(variable('serviceAccountRole'), {
+        fallback: 'usher-service-account',
+      }),
+      (role): Reading<string> =>
+        administratorRole.kind === 'read' && role === administratorRole.value
+          ? refused(
+              variable('serviceAccountRole'),
+              `must name a role other than the one in ${ENVIRONMENT_VARIABLES.administratorRole}`,
+            )
+          : read(role),
+    ),
     signInTokenMaximumLifetimeSeconds: readInteger(
       variable('signInTokenMaximumLifetimeSeconds'),
       { minimum: 1 },
@@ -158,6 +176,7 @@ export const readConfiguration = (
       port: valueOf(readings.port),
       retentionGraceSeconds: valueOf(readings.retentionGraceSeconds),
       retentionMarginSeconds: valueOf(readings.retentionMarginSeconds),
+      serviceAccountRole: valueOf(readings.serviceAccountRole),
       signInTokenMaximumLifetimeSeconds: valueOf(
         readings.signInTokenMaximumLifetimeSeconds,
       ),

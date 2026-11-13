@@ -143,6 +143,9 @@ export interface ControllerSettings {
   /** The margin, in seconds, that the notice retention floor adds beyond the token lifetime and the grace period. */
   retentionMarginSeconds: number;
 
+  /** The identity provider realm role marking its holder's token as a service account's, refused on every Management API operation; a role other than the administrator role, `usher-service-account` by default. */
+  serviceAccountRole: string;
+
   /**
    * The longest lifetime, in seconds, of a sign-in token the deployment accepts: how long a relayed
    * sign-out naming a subject alone is kept (R7).
@@ -468,6 +471,7 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   port: 'USHER_PORT',
   retentionGraceSeconds: 'USHER_RETENTION_GRACE_SECONDS',
   retentionMarginSeconds: 'USHER_RETENTION_MARGIN_SECONDS',
+  serviceAccountRole: 'USHER_SERVICE_ACCOUNT_ROLE',
   signInTokenMaximumLifetimeSeconds:
     'USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS',
   signedInRule: 'USHER_SIGNED_IN_RULE',
@@ -568,6 +572,7 @@ export const environmentFor = ({
   port,
   retentionGraceSeconds,
   retentionMarginSeconds,
+  serviceAccountRole,
   signInTokenMaximumLifetimeSeconds,
   signedInRule,
   storeTimeoutMilliseconds,
@@ -605,6 +610,7 @@ export const environmentFor = ({
   [VARIABLE_NAMES.port]: String(port),
   [VARIABLE_NAMES.retentionGraceSeconds]: String(retentionGraceSeconds),
   [VARIABLE_NAMES.retentionMarginSeconds]: String(retentionMarginSeconds),
+  [VARIABLE_NAMES.serviceAccountRole]: serviceAccountRole,
   [VARIABLE_NAMES.signInTokenMaximumLifetimeSeconds]: String(
     signInTokenMaximumLifetimeSeconds,
   ),

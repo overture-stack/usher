@@ -30,7 +30,10 @@ export interface Principal {
 /** What the management API reads of the configuration to judge a management token. */
 export type ManagementTokenSettings = Pick<
   ControllerConfiguration,
-  'administratorRole' | 'managementAudience' | 'managementClients'
+  | 'administratorRole'
+  | 'managementAudience'
+  | 'managementClients'
+  | 'serviceAccountRole'
 >;
 
 /**

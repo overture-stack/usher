@@ -39,6 +39,7 @@ const SETTINGS = Object.freeze({
   identityProviderIssuer: ISSUER,
   managementAudience: 'usher-management',
   managementClients: ['usher-ui'],
+  serviceAccountRole: 'usher-service-account',
 });
 
 const SHELF_LIMIT = problem(
