@@ -780,10 +780,12 @@ suite("the controller's events, as the document registers them", () => {
     ]);
     assert.deepEqual(Object.values(EXCHANGE_REFUSAL_REASONS).toSorted(), [
       'apiKeyVerifierNotConfigured',
+      'excessiveLifetime',
       'expiredToken',
       'invalidSignature',
       'missingCredential',
       'missingExpiry',
+      'missingIssuedAt',
       'missingSubject',
       'notYetValid',
       'otherAudience',

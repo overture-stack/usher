@@ -337,6 +337,8 @@ export const createController = (
     judgeCredential: (credential, context) =>
       judgeSignInCredential(credential, {
         ...context,
+        signInTokenMaximumLifetimeSeconds:
+          configuration.signInTokenMaximumLifetimeSeconds,
         verifier: tokenVerifier,
       }),
     keyConfirmations: createKeyConfirmations({

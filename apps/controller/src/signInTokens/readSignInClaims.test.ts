@@ -4,6 +4,8 @@ import { suite, test } from 'node:test';
 import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import { REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import type { TokenClaims, TokenHeader } from '../identityProvider/index.js';
+import { EXCESSIVE_LIFETIME } from './excessiveLifetime.js';
+import { MISSING_ISSUED_AT } from './missingIssuedAt.js';
 import { readSignInClaims } from './readSignInClaims.js';
 
 const NOW = Date.UTC(2026, 10, 9, 12, 0, 0);
@@ -11,6 +13,8 @@ const NOW = Date.UTC(2026, 10, 9, 12, 0, 0);
 const SECONDS = Math.floor(NOW / 1000);
 
 const TOLERANCE_SECONDS = CLOCK_TOLERANCE_MILLISECONDS / 1000;
+
+const MAXIMUM_LIFETIME_SECONDS = 3600;
 
 const AUDIENCE = '7f3c2a9e-1d4b-4c8e-9a6f-2b5d8e1c0a47';
 
@@ -45,7 +49,14 @@ const read = (
   departures?: Readonly<Record<string, unknown>>,
   header: TokenHeader = HEADER,
 ) =>
-  readSignInClaims({ claims: claimsWith(departures), header }, AUDIENCE, NOW);
+  readSignInClaims(
+    { claims: claimsWith(departures), header },
+    {
+      audience: AUDIENCE,
+      now: NOW,
+      signInTokenMaximumLifetimeSeconds: MAXIMUM_LIFETIME_SECONDS,
+    },
+  );
 
 const naming = (reason: string, refusedSubject = 'subject-ana') => ({
   kind: 'refused',
@@ -107,6 +118,59 @@ suite("the exchange's reading of a sign-in token's claims", () => {
       assert.deepEqual(read({ nbf }), naming('notYetValid')),
     );
     assert.equal(read({ nbf: SECONDS + TOLERANCE_SECONDS }).kind, 'accepted');
+  });
+
+  test('refuses a token naming no iat, or one that is not a number, as missingIssuedAt, naming the subject', () => {
+    [undefined, String(SECONDS - 10), null].forEach((iat) =>
+      assert.deepEqual(read({ iat }), naming(MISSING_ISSUED_AT)),
+    );
+  });
+
+  test('accepts a token whose exp falls exactly the maximum lifetime after its iat, and refuses one a second or more past it as excessiveLifetime, with no clock tolerance, naming the subject', () => {
+    const iat = SECONDS - 10;
+
+    assert.equal(
+      read({ exp: iat + MAXIMUM_LIFETIME_SECONDS, iat }).kind,
+      'accepted',
+    );
+    [MAXIMUM_LIFETIME_SECONDS + 1, MAXIMUM_LIFETIME_SECONDS * 24].forEach(
+      (lifetime) =>
+        assert.deepEqual(
+          read({ exp: iat + lifetime, iat }),
+          naming(EXCESSIVE_LIFETIME),
+        ),
+    );
+  });
+
+  test('judges the expiry, then the iat, then the lifetime, each before the nbf and the audience', () => {
+    const iat = SECONDS - 10;
+    const overLong = iat + MAXIMUM_LIFETIME_SECONDS + 1;
+    const longPast = SECONDS - 3600 - MAXIMUM_LIFETIME_SECONDS - 1;
+
+    assert.deepEqual(
+      [
+        read({ exp: undefined, iat: undefined }),
+        read({ exp: undefined, iat: longPast }),
+        read({ exp: SECONDS - 3600, iat: undefined }),
+        read({ exp: SECONDS - 3600, iat: longPast }),
+        read({ exp: SECONDS + MAXIMUM_LIFETIME_SECONDS * 24, iat: undefined }),
+        read({ iat: undefined, nbf: SECONDS + 3600 }),
+        read({ aud: 'account', iat: undefined }),
+        read({ exp: overLong, iat, nbf: SECONDS + 3600 }),
+        read({ aud: 'account', exp: overLong, iat }),
+      ],
+      [
+        naming('missingExpiry'),
+        naming('missingExpiry'),
+        naming('expiredToken'),
+        naming('expiredToken'),
+        naming(MISSING_ISSUED_AT),
+        naming(MISSING_ISSUED_AT),
+        naming(MISSING_ISSUED_AT),
+        naming(EXCESSIVE_LIFETIME),
+        naming(EXCESSIVE_LIFETIME),
+      ],
+    );
   });
 
   test("refuses every other token issued by Keycloak, by its payload's typ, as otherType, naming no subject", () => {
@@ -178,18 +242,12 @@ suite("the exchange's reading of a sign-in token's claims", () => {
     );
   });
 
-  test('reads the session of a token naming no sid, or no iat that is a time, without it', () => {
-    const readings = [
-      read({ sid: undefined }),
-      read({ iat: undefined }),
-      read({ iat: String(SECONDS - 10) }),
-    ];
+  test('reads the session of a token naming no sid without it', () => {
+    const reading = read({ sid: undefined });
 
     assert.deepEqual(
-      readings.map((reading) =>
-        reading.kind === 'accepted' ? reading.session : undefined,
-      ),
-      [{ issuedAt: SECONDS - 10 }, { sid: 'session-1' }, { sid: 'session-1' }],
+      reading.kind === 'accepted' ? reading.session : undefined,
+      { issuedAt: SECONDS - 10 },
     );
   });
 
@@ -205,6 +263,22 @@ suite("the exchange's reading of a sign-in token's claims", () => {
     assert.deepEqual(
       read({ exp: SECONDS - 3600, sub: pastTheLimit }),
       unnamed('expiredToken'),
+    );
+    assert.deepEqual(
+      read({ exp: SECONDS + MAXIMUM_LIFETIME_SECONDS, sub: atTheLimit }),
+      naming(EXCESSIVE_LIFETIME, atTheLimit),
+    );
+    assert.deepEqual(
+      read({ exp: SECONDS + MAXIMUM_LIFETIME_SECONDS, sub: pastTheLimit }),
+      unnamed(EXCESSIVE_LIFETIME),
+    );
+    assert.deepEqual(
+      read({ iat: undefined, sub: atTheLimit }),
+      naming(MISSING_ISSUED_AT, atTheLimit),
+    );
+    assert.deepEqual(
+      read({ iat: undefined, sub: pastTheLimit }),
+      unnamed(MISSING_ISSUED_AT),
     );
   });
 

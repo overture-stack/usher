@@ -43,16 +43,20 @@ const principalOf = (
  * Reads a verified management token's claims at an instant, in this order. Its subject is required
  * and must be storable text, as must any `sid` it carries, so a `sid` that is not text is refused.
  * It must be an access token as its identity provider's connector recognizes one, Keycloak's by
- * `isKeycloakAccessToken`, and any other token is refused as `otherType`. Its expiry is required,
- * and its expiry and any `nbf` are judged within {@link CLOCK_TOLERANCE_MILLISECONDS}. Its `aud`, a
- * string or a list, must name the management API, and its `azp` must name a configured management
- * client. Each refusal from the access-token check on names the token's subject. A token that
- * {@link isServiceAccount} marks as a service account's is read as one, whether or not it also holds
- * the administrator realm role. A principal holding the administrator realm role, compared by its
- * exact name, is read as a platform administrator.
+ * `isKeycloakAccessToken`, and any other token is refused as `otherType`. Its expiry is required and
+ * must not have passed, within {@link CLOCK_TOLERANCE_MILLISECONDS}. Its `iat` is required, else it is
+ * refused as `missingIssuedAt`, and its expiry must fall at most the longest lifetime a sign-in token
+ * may have after it, compared exactly, with no tolerance, else it is refused as `excessiveLifetime`.
+ * Any `nbf` must be reached, within the clock tolerance. Its `aud`, a string or a list, must name the
+ * management API, and its `azp` must name a configured management client. Each refusal from the
+ * access-token check on names the token's subject. A token that {@link isServiceAccount} marks as a
+ * service account's is read as one, whether or not it also holds the administrator realm role. A
+ * principal holding the administrator realm role, compared by its exact name, is read as a platform
+ * administrator.
  *
  * @param token the token's verified claims and protected header.
- * @param settings the management API's audience and clients, and the administrator and service-account roles.
+ * @param settings the management API's audience and clients, the administrator and service-account
+ *   roles, and the longest lifetime a sign-in token may have.
  * @param now the instant, in milliseconds since the Unix epoch.
  */
 export const readManagementClaims = (
@@ -62,6 +66,7 @@ export const readManagementClaims = (
     managementAudience,
     managementClients,
     serviceAccountRole,
+    signInTokenMaximumLifetimeSeconds,
   }: ManagementTokenSettings,
   now: number,
 ): ClaimsReading => {
@@ -77,7 +82,11 @@ export const readManagementClaims = (
   if (!isKeycloakAccessToken(token)) {
     return refused('otherType');
   }
-  const currency = currencyOf(claims, now);
+  const currency = currencyOf(
+    claims,
+    { signInTokenMaximumLifetimeSeconds },
+    now,
+  );
   if (currency.kind === 'refused') {
     return refused(currency.reason);
   }

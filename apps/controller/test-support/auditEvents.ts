@@ -716,9 +716,11 @@ export const TOKEN_CAP_EVENT = Object.freeze({
  * state rather than the credential, so the verifier's own reasons can sit beside it when API keys land. A
  * token verifying under the trusted issuer and naming no `exp` is `missingExpiry` (ruled), not
  * `expiredToken`: the fault is an identity provider issuing tokens with no lifetime, not a clock or a
- * session's length, and the exchange and the Management API name it alike. A token issued before a
- * platform revocation, or naming no `iat`, is `revokedPlatform` at both. A `credential` holding empty
- * text is `missingCredential`. A token not marked as an access token by its identity provider's
+ * session's length, and the exchange and the Management API name it alike. One naming no `iat` is
+ * `missingIssuedAt`, and one whose `exp` falls more than the configured maximum lifetime after its
+ * `iat` is `excessiveLifetime`, at both (ruled), each judged after the `exp` and before any standing
+ * is read. A token issued before a platform revocation is `revokedPlatform` at both. A `credential`
+ * holding empty text is `missingCredential`. A token not marked as an access token by its identity provider's
  * connector is `otherType`, one naming no `sub` is `missingSubject`, and one whose `sub` or `sid`
  * holds text that cannot be stored is `unrepresentableSubject`, each read from the token's contents
  * and naming no subject. A service account's token is `serviceAccountNotPermitted`, as at the
@@ -728,10 +730,12 @@ export const TOKEN_CAP_EVENT = Object.freeze({
  */
 export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
   apiKeyVerifierNotConfigured: 'apiKeyVerifierNotConfigured',
+  excessiveLifetime: 'excessiveLifetime',
   expiredToken: 'expiredToken',
   invalidSignature: 'invalidSignature',
   missingCredential: 'missingCredential',
   missingExpiry: 'missingExpiry',
+  missingIssuedAt: 'missingIssuedAt',
   missingSubject: 'missingSubject',
   notYetValid: 'notYetValid',
   otherAudience: 'otherAudience',
@@ -755,8 +759,10 @@ export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
  */
 export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] =
   Object.freeze([
+    EXCHANGE_REFUSAL_REASONS.excessiveLifetime,
     EXCHANGE_REFUSAL_REASONS.expiredToken,
     EXCHANGE_REFUSAL_REASONS.missingExpiry,
+    EXCHANGE_REFUSAL_REASONS.missingIssuedAt,
     EXCHANGE_REFUSAL_REASONS.missingSubject,
     EXCHANGE_REFUSAL_REASONS.notYetValid,
     EXCHANGE_REFUSAL_REASONS.otherAudience,
@@ -785,10 +791,11 @@ export const MANAGEMENT_TOKEN_TALLY_REASONS: readonly string[] = Object.freeze([
  * whose signature verifies under the trusted issuer and which is refused anyway. It is a member of its
  * own and never the actor, which stays anonymous with a `null` `actorId`. It holds a `sub` of up to
  * {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters whole, and is left out for a longer one, never
- * truncated. Within that length, a `managementToken.refusal` carries it for `expiredToken`,
- * `missingExpiry`, `notYetValid`, `otherAudience`, `otherType`, `revokedPlatform`, `revokedPrincipal`
- * and `signedOutSession`, and a refused `token.exchange` for `expiredToken`, `missingExpiry`,
- * `notYetValid`, `otherAudience`, `revokedPlatform`, `revokedPrincipal`, `signedOutSession` and
+ * truncated. Within that length, a `managementToken.refusal` carries it for `excessiveLifetime`,
+ * `expiredToken`, `missingExpiry`, `missingIssuedAt`, `notYetValid`, `otherAudience`, `otherType`,
+ * `revokedPlatform`, `revokedPrincipal` and `signedOutSession`, and a refused `token.exchange` for
+ * `excessiveLifetime`, `expiredToken`, `missingExpiry`, `missingIssuedAt`, `notYetValid`,
+ * `otherAudience`, `revokedPlatform`, `revokedPrincipal`, `signedOutSession` and
  * `serviceAccountNotPermitted` alone, once the token's signature verifies. Neither carries it for
  * `missingSubject` or `unrepresentableSubject`, and `otherType` names it at the Management API alone.
  * A refused `token.exchange` for a token whose signature does not verify (`unreadableToken`,

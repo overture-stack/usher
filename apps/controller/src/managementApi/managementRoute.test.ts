@@ -16,7 +16,11 @@ import type {
   TokenClaims,
   TokenVerification,
 } from '../identityProvider/index.js';
-import type { StoredRefusal } from '../signInTokens/index.js';
+import {
+  EXCESSIVE_LIFETIME,
+  MISSING_ISSUED_AT,
+  type StoredRefusal,
+} from '../signInTokens/index.js';
 import { managementRoute, STORE_FAILED } from './managementRoute.js';
 import { BODY_LIMIT_BYTES } from './problems.js';
 import { readTextMembers } from './requestBody.js';
@@ -40,6 +44,7 @@ const SETTINGS = Object.freeze({
   managementAudience: 'usher-management',
   managementClients: ['usher-ui'],
   serviceAccountRole: 'usher-service-account',
+  signInTokenMaximumLifetimeSeconds: 3600,
 });
 
 const SHELF_LIMIT = problem(
@@ -436,6 +441,49 @@ suite('admitting a request to a management operation', () => {
       },
     ]);
     assert.deepEqual(stand.ran, []);
+  });
+
+  test('refuses a verified token naming no iat, and one whose exp falls more than the configured maximum lifetime after its iat, 401 credentialRefused, recording a managementToken.refusal naming its subject for each', async (context) => {
+    const stand = await standUp(context, {
+      verifications: {
+        overLong: verified({
+          exp: SECONDS + SETTINGS.signInTokenMaximumLifetimeSeconds,
+        }),
+        undated: verified({ iat: undefined }),
+      },
+    });
+
+    const answers = [
+      await post(stand, { token: 'undated' }),
+      await post(stand, { token: 'overLong' }),
+    ];
+
+    assert.deepEqual(
+      answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+      [
+        [401, 'credentialRefused'],
+        [401, 'credentialRefused'],
+      ],
+    );
+    assert.deepEqual(
+      stand.recorded,
+      [MISSING_ISSUED_AT, EXCESSIVE_LIFETIME].map((reason) => ({
+        actor: { type: 'anonymous' },
+        event: {
+          data: {
+            method: 'POST',
+            reason,
+            refusedSubject: 'subject-ana',
+            result: 'denied',
+            route: ROUTE,
+            sourceIp: '127.0.0.1',
+          },
+          severity: 'warning',
+          type: 'managementToken.refusal',
+        },
+      })),
+    );
+    assert.deepEqual([stand.counted, stand.ran], [[], []]);
   });
 
   test('refuses a verified ID token 401 credentialRefused, recording one managementToken.refusal for otherType naming its subject, and counting nothing', async (context) => {

@@ -313,6 +313,7 @@ const routeThrough = (
           managementAudience: 'usher-management',
           managementClients: ['usher-ui'],
           serviceAccountRole: 'usher-service-account',
+          signInTokenMaximumLifetimeSeconds: 3600,
         },
         storedRefusal: async () => undefined,
         tokenVerifier: {

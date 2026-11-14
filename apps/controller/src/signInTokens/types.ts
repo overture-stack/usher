@@ -1,11 +1,14 @@
 import type pg from 'pg';
 
+import type { ControllerConfiguration } from '../configuration/index.js';
 import type {
   HeldKeyVerification,
   TokenClaims,
   TokenHeader,
   TokenVerification,
 } from '../identityProvider/index.js';
+import type { EXCESSIVE_LIFETIME } from './excessiveLifetime.js';
+import type { MISSING_ISSUED_AT } from './missingIssuedAt.js';
 
 /** The session a sign-in token belongs to, as far as it names one. */
 export interface Session {
@@ -44,8 +47,24 @@ export interface StoreReader {
   ): Promise<pg.QueryResult<Row>>;
 }
 
-/** Why a token's times refuse it: it names no `exp`, its `exp` has passed, or its `nbf` is not reached yet. */
-export type CurrencyRefusal = 'expiredToken' | 'missingExpiry' | 'notYetValid';
+/** What judging a token's times reads of the configuration: the longest lifetime a token may have. */
+export type CurrencySettings = Pick<
+  ControllerConfiguration,
+  'signInTokenMaximumLifetimeSeconds'
+>;
+
+/**
+ * Why a token's times refuse it: it names no `exp` (`missingExpiry`), its `exp` has passed
+ * (`expiredToken`), it names no `iat` ({@link MISSING_ISSUED_AT}), its `exp` falls more than the
+ * longest lifetime a token may have after its `iat` ({@link EXCESSIVE_LIFETIME}), or its `nbf` is not
+ * reached yet (`notYetValid`).
+ */
+export type CurrencyRefusal =
+  | 'expiredToken'
+  | 'missingExpiry'
+  | 'notYetValid'
+  | typeof EXCESSIVE_LIFETIME
+  | typeof MISSING_ISSUED_AT;
 
 /** What a token's times gave: current, with its `exp` in seconds since the Unix epoch, or refused. */
 export type TokenCurrency =
@@ -81,17 +100,12 @@ export type NamesReading =
 /**
  * Why the exchange refuses a signed token for what it carries, each a fixed code naming the fault and
  * never a value from it: a token other than an access token presented, an ID token or a logout token
- * among them (`otherType`); names refused, as {@link NamesRefusal} gives them; no `exp`
- * (`missingExpiry`), an `exp` passed (`expiredToken`), or an `nbf` not reached (`notYetValid`); or an
- * `aud` that does not name the calling application (`otherAudience`).
+ * among them (`otherType`); names refused, as {@link NamesRefusal} gives them; times refused, as
+ * {@link CurrencyRefusal} gives them; or an `aud` that does not name the calling application
+ * (`otherAudience`).
  */
 export type SignInClaimsRefusal =
-  | 'expiredToken'
-  | 'missingExpiry'
-  | 'notYetValid'
-  | 'otherAudience'
-  | 'otherType'
-  | NamesRefusal;
+  'otherAudience' | 'otherType' | CurrencyRefusal | NamesRefusal;
 
 /**
  * What a sign-in token's claims gave the exchange: the subject it acts for, with the token's session
@@ -174,13 +188,19 @@ export interface SignInTokenVerifier {
   verifyHeld(token: string): Promise<HeldKeyVerification>;
 }
 
-/** What a credential is judged against: the calling application, the instant, and the verifier. */
+/**
+ * What a credential is judged against: the calling application, the instant, the longest lifetime a
+ * sign-in token may have, and the verifier.
+ */
 export interface SignInJudgementContext {
   /** The calling application's id, which a sign-in token's `aud` must name. */
   audience: string;
 
   /** The instant, in milliseconds since the Unix epoch. */
   now: number;
+
+  /** The most seconds a sign-in token's `exp` may fall after its `iat`, the configuration's. */
+  signInTokenMaximumLifetimeSeconds: number;
 
   verifier: SignInTokenVerifier;
 }

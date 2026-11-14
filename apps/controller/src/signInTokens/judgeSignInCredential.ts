@@ -39,6 +39,9 @@ const VERIFIER_REASONS = {
   unreadableToken: 'unreadableToken',
 } as const satisfies Readonly<Record<UnverifiedReason, SignInRefusal>>;
 
+// What a token's claims are judged against: everything a credential is, but the verifier.
+type ClaimsContext = Omit<SignInJudgementContext, 'verifier'>;
+
 const recorded = (reason: SignInRefusal): RecordedRefusal => ({
   kind: 'recorded',
   reason,
@@ -54,14 +57,13 @@ const unverifiedContentsOf = (token: string): TokenContents | undefined => {
 
 const contentsRefusalOf = (
   token: string,
-  audience: string,
-  now: number,
+  claimsContext: ClaimsContext,
 ): ContentsRefusal | undefined => {
   const contents = unverifiedContentsOf(token);
   if (contents === undefined) {
     return 'unreadableToken';
   }
-  const reading = readSignInClaims(contents, audience, now);
+  const reading = readSignInClaims(contents, claimsContext);
   return reading.kind === 'refused' ? reading.reason : undefined;
 };
 
@@ -69,11 +71,10 @@ const contentsRefusalOf = (
 // be: by its verified claims alone once it verifies.
 const judgementOf = (
   verification: TokenVerification,
-  audience: string,
-  now: number,
+  claimsContext: ClaimsContext,
 ): SignInJudgement => {
   if (verification.kind === 'verified') {
-    const reading = readSignInClaims(verification, audience, now);
+    const reading = readSignInClaims(verification, claimsContext);
     return reading.kind === 'accepted'
       ? { claims: verification.claims, ...reading }
       : { ...reading, kind: 'recorded' };
@@ -89,11 +90,10 @@ const judgementOf = (
 const refusalOf = (
   contentsRefusal: ContentsRefusal,
   verification: HeldKeyVerification,
-  audience: string,
-  now: number,
+  claimsContext: ClaimsContext,
 ): RecordedRefusal => {
   if (verification.kind === 'verified') {
-    const reading = readSignInClaims(verification, audience, now);
+    const reading = readSignInClaims(verification, claimsContext);
     if (reading.kind === 'refused') {
       return { ...reading, kind: 'recorded' };
     }
@@ -115,22 +115,22 @@ const refusalOf = (
  *
  * @param token the credential, a compact JWS.
  * @param contentsRefusal why its contents, read without verifying them, refused it, if they did.
- * @param context the calling application's id, the instant, and the verifier.
+ * @param context the calling application's id, the instant, the longest lifetime a sign-in token may
+ *   have, and the verifier.
  */
 export const judgeSignedToken = async (
   token: string,
   contentsRefusal: ContentsRefusal | undefined,
-  { audience, now, verifier }: SignInJudgementContext,
+  { verifier, ...claimsContext }: SignInJudgementContext,
 ): Promise<SignInJudgement> => {
   if (contentsRefusal === undefined) {
-    return judgementOf(await verifier.verify(token), audience, now);
+    return judgementOf(await verifier.verify(token), claimsContext);
   }
   return SUBJECT_NAMING_REFUSALS.has(contentsRefusal)
     ? refusalOf(
         contentsRefusal,
         await verifier.verifyHeld(token),
-        audience,
-        now,
+        claimsContext,
       )
     : recorded(contentsRefusal);
 };
@@ -144,7 +144,8 @@ export const judgeSignedToken = async (
  * the token's subject.
  *
  * @param credential the credential, as the request carried it.
- * @param context the calling application's id, the instant, and the verifier.
+ * @param context the calling application's id, the instant, the longest lifetime a sign-in token may
+ *   have, and the verifier.
  */
 export const judgeSignInCredential = async (
   credential: string,
@@ -154,7 +155,7 @@ export const judgeSignInCredential = async (
   return shape === 'signedToken'
     ? judgeSignedToken(
         credential,
-        contentsRefusalOf(credential, context.audience, context.now),
+        contentsRefusalOf(credential, context),
         context,
       )
     : recorded(SHAPE_REASONS[shape]);

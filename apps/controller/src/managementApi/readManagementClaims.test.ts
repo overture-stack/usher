@@ -3,17 +3,24 @@ import { suite, test } from 'node:test';
 
 import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import type { TokenClaims, TokenHeader } from '../identityProvider/index.js';
+import {
+  EXCESSIVE_LIFETIME,
+  MISSING_ISSUED_AT,
+} from '../signInTokens/index.js';
 import { readManagementClaims } from './readManagementClaims.js';
 
 const NOW = Date.UTC(2026, 10, 4, 12, 0, 0);
 
 const SECONDS = Math.floor(NOW / 1000);
 
+const MAXIMUM_LIFETIME_SECONDS = 3600;
+
 const SETTINGS = Object.freeze({
   administratorRole: 'usher-platform-admin',
   managementAudience: 'usher-management',
   managementClients: ['usher-ui', 'usher-cli'],
   serviceAccountRole: 'usher-service-account',
+  signInTokenMaximumLifetimeSeconds: MAXIMUM_LIFETIME_SECONDS,
 });
 
 const HEADER: TokenHeader = Object.freeze({
@@ -151,6 +158,59 @@ suite("reading a verified management token's claims", () => {
     assert.deepEqual(read({ nbf: SECONDS + 120 }), refusal('notYetValid'));
     assert.deepEqual(read({ nbf: 'soon' }), refusal('notYetValid'));
     assert.equal(read({ nbf: SECONDS + tolerance }).kind, 'accepted');
+  });
+
+  test('refuses a token naming no iat, or one that is not a number, as missingIssuedAt, naming its subject', () => {
+    [undefined, String(SECONDS - 10), null].forEach((iat) =>
+      assert.deepEqual(read({ iat }), refusal(MISSING_ISSUED_AT)),
+    );
+  });
+
+  test('accepts a token whose exp falls exactly the maximum lifetime after its iat, and refuses one a second or more past it as excessiveLifetime, with no clock tolerance, naming its subject', () => {
+    const iat = SECONDS - 10;
+
+    assert.equal(
+      read({ exp: iat + MAXIMUM_LIFETIME_SECONDS, iat }).kind,
+      'accepted',
+    );
+    [MAXIMUM_LIFETIME_SECONDS + 1, MAXIMUM_LIFETIME_SECONDS * 24].forEach(
+      (lifetime) =>
+        assert.deepEqual(
+          read({ exp: iat + lifetime, iat }),
+          refusal(EXCESSIVE_LIFETIME),
+        ),
+    );
+  });
+
+  test('judges the expiry, then the iat, then the lifetime, each before the nbf, the audience and the client', () => {
+    const iat = SECONDS - 10;
+    const overLong = iat + MAXIMUM_LIFETIME_SECONDS + 1;
+    const longPast = SECONDS - 3600 - MAXIMUM_LIFETIME_SECONDS - 1;
+
+    assert.deepEqual(
+      [
+        read({ exp: undefined, iat: undefined }),
+        read({ exp: undefined, iat: longPast }),
+        read({ exp: SECONDS - 3600, iat: undefined }),
+        read({ exp: SECONDS - 3600, iat: longPast }),
+        read({ exp: SECONDS + MAXIMUM_LIFETIME_SECONDS * 24, iat: undefined }),
+        read({ iat: undefined, nbf: SECONDS + 3600 }),
+        read({ aud: 'account', azp: 'portal', iat: undefined }),
+        read({ exp: overLong, iat, nbf: SECONDS + 3600 }),
+        read({ aud: 'account', azp: 'portal', exp: overLong, iat }),
+      ],
+      [
+        refusal('missingExpiry'),
+        refusal('missingExpiry'),
+        refusal('expiredToken'),
+        refusal('expiredToken'),
+        refusal(MISSING_ISSUED_AT),
+        refusal(MISSING_ISSUED_AT),
+        refusal(MISSING_ISSUED_AT),
+        refusal(EXCESSIVE_LIFETIME),
+        refusal(EXCESSIVE_LIFETIME),
+      ],
+    );
   });
 
   test('accepts an aud naming the management API as a string or among others, and refuses every other as otherAudience', () => {

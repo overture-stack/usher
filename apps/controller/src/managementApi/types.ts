@@ -11,6 +11,7 @@ import type {
 import type { Problem } from '../http/index.js';
 import type { TokenVerification } from '../identityProvider/index.js';
 import type {
+  CurrencyRefusal,
   Session,
   StandingQuestion,
   StoredRefusal,
@@ -34,6 +35,7 @@ export type ManagementTokenSettings = Pick<
   | 'managementAudience'
   | 'managementClients'
   | 'serviceAccountRole'
+  | 'signInTokenMaximumLifetimeSeconds'
 >;
 
 /**
@@ -55,19 +57,16 @@ export interface TokenVerifier {
 
 /**
  * What a verified management token's claims gave: a principal; a refusal naming its reason and the
- * token's subject, `otherType` for a token not recognized as an access token; a token naming no
- * subject to act for; or one whose subject or session cannot be stored.
+ * token's subject, its times refused as {@link CurrencyRefusal} gives them, `otherAudience` for an
+ * `aud` or `azp` the management API does not take, and `otherType` for a token not recognized as an
+ * access token; a token naming no subject to act for; or one whose subject or session cannot be
+ * stored.
  */
 export type ClaimsReading =
   | { kind: 'accepted'; principal: Principal; session: Session }
   | {
       kind: 'refused';
-      reason:
-        | 'expiredToken'
-        | 'missingExpiry'
-        | 'notYetValid'
-        | 'otherAudience'
-        | 'otherType';
+      reason: 'otherAudience' | 'otherType' | CurrencyRefusal;
       subject: string;
     }
   | { kind: 'unreadable' }

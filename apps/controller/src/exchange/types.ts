@@ -50,15 +50,17 @@ export interface RejectionCounter {
 }
 
 /**
- * Judges a credential presented at the exchange for the calling application at an instant, as
- * `judgeSignInCredential` judges it through the verifier every route shares.
+ * Judges a credential presented at the exchange for the calling application at an instant. The
+ * exchange gives it those two alone, so the judge holds everything else a judgement needs: the
+ * verifier every route verifying the identity provider's tokens shares, and the longest lifetime a
+ * sign-in token may have.
  *
  * @param credential the credential, as the request carried it.
  * @param context the calling application's id, and the instant.
  */
 export type CredentialJudge = (
   credential: string,
-  context: Omit<SignInJudgementContext, 'verifier'>,
+  context: Pick<SignInJudgementContext, 'audience' | 'now'>,
 ) => Promise<SignInJudgement>;
 
 /** Where the exchange counts each exchange it refuses over its application's share. */

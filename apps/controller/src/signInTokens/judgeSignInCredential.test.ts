@@ -11,11 +11,15 @@ import {
   judgeSignedToken,
   judgeSignInCredential,
 } from './judgeSignInCredential.js';
+import { EXCESSIVE_LIFETIME } from './excessiveLifetime.js';
+import { MISSING_ISSUED_AT } from './missingIssuedAt.js';
 import type { ContentsRefusal, SignInJudgementContext } from './types.js';
 
 const NOW = Date.UTC(2026, 10, 9, 12, 0, 0);
 
 const SECONDS = Math.floor(NOW / 1000);
+
+const MAXIMUM_LIFETIME_SECONDS = 3600;
 
 const AUDIENCE = '7f3c2a9e-1d4b-4c8e-9a6f-2b5d8e1c0a47';
 
@@ -88,6 +92,7 @@ const answering = ({ full = verified(), held = verified() }: Answers = {}): {
     context: {
       audience: AUDIENCE,
       now: NOW,
+      signInTokenMaximumLifetimeSeconds: MAXIMUM_LIFETIME_SECONDS,
       verifier: {
         verify: async (token) => {
           asked.push({ method: 'verify', token });
@@ -171,6 +176,8 @@ suite(
       const departures: readonly Readonly<Record<string, unknown>>[] = [
         { exp: SECONDS - 3600 },
         { exp: undefined },
+        { iat: undefined },
+        { exp: SECONDS + MAXIMUM_LIFETIME_SECONDS },
         { nbf: SECONDS + 3600 },
         { aud: ['account'] },
         {
@@ -193,6 +200,8 @@ suite(
         [
           recorded('expiredToken', 'subject-ana'),
           recorded('missingExpiry', 'subject-ana'),
+          recorded(MISSING_ISSUED_AT, 'subject-ana'),
+          recorded(EXCESSIVE_LIFETIME, 'subject-ana'),
           recorded('notYetValid', 'subject-ana'),
           recorded('otherAudience', 'subject-ana'),
           recorded('otherType'),
@@ -241,6 +250,11 @@ suite(
       }[] = [
         { departure: { exp: SECONDS - 3600 }, reason: 'expiredToken' },
         { departure: { exp: undefined }, reason: 'missingExpiry' },
+        { departure: { iat: undefined }, reason: MISSING_ISSUED_AT },
+        {
+          departure: { exp: SECONDS + MAXIMUM_LIFETIME_SECONDS },
+          reason: EXCESSIVE_LIFETIME,
+        },
         { departure: { nbf: SECONDS + 3600 }, reason: 'notYetValid' },
         { departure: { aud: ['account'] }, reason: 'otherAudience' },
       ];

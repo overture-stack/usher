@@ -1,13 +1,16 @@
 import { REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import { BACK_CHANNEL_LOGOUT_EVENT } from '../signOuts/index.js';
 import { currencyOf } from './currencyOf.js';
+import { EXCESSIVE_LIFETIME } from './excessiveLifetime.js';
 import { isKeycloakAccessToken } from './isKeycloakAccessToken.js';
+import { MISSING_ISSUED_AT } from './missingIssuedAt.js';
 import { namesAudience } from './namesAudience.js';
 import { readNames } from './readNames.js';
 import { sessionOf } from './sessionOf.js';
 import type {
   SignInClaimsReading,
   SignInClaimsRefusal,
+  SignInJudgementContext,
   SignInRefusal,
   TokenContents,
 } from './types.js';
@@ -19,8 +22,10 @@ import type {
  * accepted, name it too.
  */
 export const SUBJECT_NAMING_REFUSALS: ReadonlySet<SignInRefusal> = new Set([
+  EXCESSIVE_LIFETIME,
   'expiredToken',
   'missingExpiry',
+  MISSING_ISSUED_AT,
   'notYetValid',
   'otherAudience',
 ]);
@@ -67,20 +72,25 @@ const refused = (
  * back-channel logout member, or whose header's `typ` is `logout+jwt` in any letter case, with or
  * without the `application/` prefix. A token failing either is refused as `otherType` whatever else it
  * carries. Its names must be readable, as {@link readNames} reads them on every route. Its `exp` is
- * required and must not have passed, and any `nbf` must be reached, each within the clock tolerance.
- * And its `aud`, one string or a list, must name the calling application.
+ * required and must not have passed, within the clock tolerance; its `iat` is required, and its `exp`
+ * must fall at most the longest lifetime a sign-in token may have after it, with no tolerance; and any
+ * `nbf` must be reached, within the tolerance. And its `aud`, one string or a list, must name the
+ * calling application.
  * A refusal in {@link SUBJECT_NAMING_REFUSALS} names the token's `sub` in `refusedSubject` when that is
  * at most {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters, and no other refusal names it. Its issuer
  * and signature are the verifier's to judge, and are not judged here.
  *
  * @param token the token's claims and protected header.
- * @param audience the calling application's id.
- * @param now the instant, in milliseconds since the Unix epoch.
+ * @param context the calling application's id, the instant, and the longest lifetime a sign-in token
+ *   may have.
  */
 export const readSignInClaims = (
   token: TokenContents,
-  audience: string,
-  now: number,
+  {
+    audience,
+    now,
+    signInTokenMaximumLifetimeSeconds,
+  }: Omit<SignInJudgementContext, 'verifier'>,
 ): SignInClaimsReading => {
   if (isLogoutToken(token) || !isKeycloakAccessToken(token)) {
     return refused('otherType');
@@ -91,7 +101,11 @@ export const readSignInClaims = (
     return refused(names.reason);
   }
   const { subject } = names;
-  const currency = currencyOf(claims, now);
+  const currency = currencyOf(
+    claims,
+    { signInTokenMaximumLifetimeSeconds },
+    now,
+  );
   if (currency.kind === 'refused') {
     return refused(currency.reason, subject);
   }
