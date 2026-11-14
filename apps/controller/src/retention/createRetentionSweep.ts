@@ -1,5 +1,6 @@
 import pg from 'pg';
 
+import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import type { Actor } from '../eventLog/index.js';
 import { failureCodeOf } from '../failures/index.js';
 import type { RetentionSweep, RetentionSweepSettings } from './types.js';
@@ -27,26 +28,42 @@ const STORE_FAILED = 'storeFailed';
 
 const SYSTEM: Actor = Object.freeze({ type: 'system' });
 
-/** A table whose rows are deleted once expired, and the column holding each row's expiry. */
+/**
+ * A table whose rows are deleted once expired: the column holding each row's expiry, and how long
+ * past that expiry, in milliseconds on the configured clock, a row is kept.
+ */
 interface SweptTable {
   expiryColumn: string;
+  marginMilliseconds: number;
   name: string;
 }
 
 const SWEPT_TABLES: readonly SweptTable[] = [
-  { expiryColumn: 'expires_at', name: 'exchanged_sids' },
+  { expiryColumn: 'expires_at', marginMilliseconds: 0, name: 'exchanged_sids' },
+  {
+    expiryColumn: 'expires_at',
+    marginMilliseconds: CLOCK_TOLERANCE_MILLISECONDS,
+    name: 'sid_sign_outs',
+  },
+  {
+    expiryColumn: 'expires_at',
+    marginMilliseconds: CLOCK_TOLERANCE_MILLISECONDS,
+    name: 'subject_sign_outs',
+  },
 ];
 
 /**
- * Creates the retention sweep. Each run is one transaction, as the system and recording no event,
- * which first tries the advisory lock {@link RETENTION_SWEEP_LOCK} and ends at once, deleting
- * nothing, while another session holds it. Holding it, the run deletes the rows of `exchanged_sids`
- * whose `expires_at` is before the configured clock's reading, at most
- * {@link RETENTION_SWEEP_ROWS_PER_TABLE} of them, then calls `trim_notices` with that same bound,
- * which must delete at most that many notices older than the retention floor. The first run begins
- * {@link RETENTION_SWEEP_INTERVAL_MILLISECONDS} after the start, and each later one that long after
- * the one before it has ended, so no two overlap. A run that fails is written as
- * {@link RETENTION_SWEEP_FAILED} naming its `cause`: the failure's code, a SQLSTATE, a system
+ * Creates the retention sweep. Each run is one transaction, as the system and recording no
+ * event, which first tries the advisory lock {@link RETENTION_SWEEP_LOCK} and ends at once,
+ * deleting nothing, while another session holds it. Holding it, the run reads the configured
+ * clock once and deletes at most {@link RETENTION_SWEEP_ROWS_PER_TABLE} rows from each table,
+ * in this order: those of `exchanged_sids` whose `expires_at` is before that reading, then
+ * those of `sid_sign_outs` and then of `subject_sign_outs` whose `expires_at` is more than
+ * {@link CLOCK_TOLERANCE_MILLISECONDS} before it. It then calls `trim_notices` with that same
+ * bound, which must delete at most that many notices older than the retention floor. The first
+ * run begins {@link RETENTION_SWEEP_INTERVAL_MILLISECONDS} after the start, and each later one
+ * that long after the one before it has ended, so no two overlap. A run that fails is written
+ * as {@link RETENTION_SWEEP_FAILED} naming its `cause`: the failure's code, a SQLSTATE, a system
  * error's or the controller's own such as `storeTimeout`, or `storeFailed` for a failure carrying
  * none. It is written as runs start failing and not again until a run has succeeded, and a run that
  * succeeds writes nothing.
@@ -61,10 +78,15 @@ export const createRetentionSweep = ({
 }: RetentionSweepSettings): RetentionSweep => {
   const qualified = (name: string): string =>
     `${pg.escapeIdentifier(schema)}.${pg.escapeIdentifier(name)}`;
-  const deletions = SWEPT_TABLES.map(({ expiryColumn, name }) => {
-    const table = qualified(name);
-    return `DELETE FROM ${table} WHERE ctid IN (SELECT ctid FROM ${table} WHERE ${pg.escapeIdentifier(expiryColumn)} < $1 LIMIT $2)`;
-  });
+  const deletions = SWEPT_TABLES.map(
+    ({ expiryColumn, marginMilliseconds, name }) => {
+      const table = qualified(name);
+      return {
+        marginMilliseconds,
+        text: `DELETE FROM ${table} WHERE ctid IN (SELECT ctid FROM ${table} WHERE ${pg.escapeIdentifier(expiryColumn)} < $1 LIMIT $2)`,
+      };
+    },
+  );
   const trim = `SELECT ${qualified('trim_notices')}($1::integer)`;
 
   const state: {
@@ -80,14 +102,17 @@ export const createRetentionSweep = ({
       [RETENTION_SWEEP_LOCK],
     );
     if (rows[0]?.locked === true) {
-      const cutoff = new Date(clock.now());
-      await deletions.reduce<Promise<void>>(async (earlier, deletion) => {
-        await earlier;
-        await connection.query(deletion, [
-          cutoff,
-          RETENTION_SWEEP_ROWS_PER_TABLE,
-        ]);
-      }, Promise.resolve());
+      const now = clock.now();
+      await deletions.reduce<Promise<void>>(
+        async (earlier, { marginMilliseconds, text }) => {
+          await earlier;
+          await connection.query(text, [
+            new Date(now - marginMilliseconds),
+            RETENTION_SWEEP_ROWS_PER_TABLE,
+          ]);
+        },
+        Promise.resolve(),
+      );
       await connection.query(trim, [RETENTION_SWEEP_ROWS_PER_TABLE]);
     }
   };

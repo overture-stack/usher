@@ -20,7 +20,7 @@ export interface SweepLog {
 
 /** What the retention sweep is created from. */
 export interface RetentionSweepSettings {
-  /** The configured clock, whose reading at a run is the instant before which a row has expired. */
+  /** The configured clock, which each run reads once to judge every row's expiry. */
   clock: Clock;
 
   /** Where a run that fails, once runs start failing, is written. */

@@ -21,7 +21,7 @@ import {
 } from '../../test-support/policy.js';
 import { cleanupFor, eventually } from '../../test-support/waiting.js';
 
-const { exchangedSids } = POLICY_TABLES;
+const { exchangedSids, sidSignOuts, subjectSignOuts } = POLICY_TABLES;
 
 const HOUR_MILLISECONDS = 3_600_000;
 
@@ -39,26 +39,37 @@ const messagesIn = (log: LogCapture): readonly unknown[] =>
       : undefined;
   });
 
-/** Sessions of one test's own, told apart from every other test's by the prefix of their `sid`. */
-interface Sessions {
+/**
+ * Rows of one test's own in one table, told apart from every other test's by the prefix of their
+ * key.
+ */
+interface OwnRows {
   /** How many of them the store holds now. */
   held(): Promise<number>;
 
-  /** Records sessions under the harness's issuer, each expiring at the instant given. */
+  /** Records rows under the harness's issuer, each expiring at the instant given. */
   record(count: number, expiresAt: Date): Promise<void>;
 }
 
-const sessionsOf = (harness: Harness, client: pg.ClientBase): Sessions => {
+// How many rows of a table the store holds whose key starts with the prefix.
+const heldWithPrefix = async (
+  client: pg.ClientBase,
+  table: { name: string },
+  key: string,
+  prefix: string,
+): Promise<number> => {
+  const { rows } = await client.query<{ held: number }>(
+    `SELECT count(*)::int AS held FROM ${qualified(table)} WHERE starts_with(${quoted(key)}, $1)`,
+    [prefix],
+  );
+  return rows[0]?.held ?? 0;
+};
+
+const sessionsOf = (harness: Harness, client: pg.ClientBase): OwnRows => {
   const prefix = `${randomUUID()}:`;
   const { columns } = exchangedSids;
   return {
-    held: async () => {
-      const { rows } = await client.query<{ held: number }>(
-        `SELECT count(*)::int AS held FROM ${qualified(exchangedSids)} WHERE starts_with(${quoted(columns.sid)}, $1)`,
-        [prefix],
-      );
-      return rows[0]?.held ?? 0;
-    },
+    held: () => heldWithPrefix(client, exchangedSids, columns.sid, prefix),
     record: async (count, expiresAt) => {
       await client.query(
         `INSERT INTO ${qualified(exchangedSids)} (${quoted(columns.idpIssuer)}, ${quoted(columns.sid)}, ${quoted(columns.idpSubjectId)}, ${quoted(columns.expiresAt)})
@@ -73,6 +84,52 @@ const sessionsOf = (harness: Harness, client: pg.ClientBase): Sessions => {
     },
   };
 };
+
+// Each sign-out table, with the column beside the issuer in its key, which tells one test's rows
+// apart from another's.
+const SIGN_OUT_TABLES = [
+  { key: sidSignOuts.columns.sid, table: sidSignOuts },
+  { key: subjectSignOuts.columns.idpSubjectId, table: subjectSignOuts },
+] as const;
+
+type SignOutTable = (typeof SIGN_OUT_TABLES)[number];
+
+const signOutsOf = (
+  harness: Harness,
+  client: pg.ClientBase,
+  { key, table }: SignOutTable,
+): OwnRows => {
+  const prefix = `${randomUUID()}:`;
+  const { columns } = table;
+  return {
+    held: () => heldWithPrefix(client, table, key, prefix),
+    record: async (count, expiresAt) => {
+      await client.query(
+        `INSERT INTO ${qualified(table)} (${quoted(columns.idpIssuer)}, ${quoted(key)}, ${quoted(columns.signedOutAt)}, ${quoted(columns.expiresAt)})
+         SELECT $1, $2 || gen_random_uuid(), $3, $4 FROM generate_series(1, $5)`,
+        [
+          harness.configuration.identityProviderIssuer,
+          prefix,
+          new Date(expiresAt.getTime() - HOUR_MILLISECONDS),
+          expiresAt,
+          count,
+        ],
+      );
+    },
+  };
+};
+
+// One test's own rows in every table the sweep deletes from, in the order it deletes from them.
+const sweptRowsOf = (
+  harness: Harness,
+  client: pg.ClientBase,
+): readonly OwnRows[] => [
+  sessionsOf(harness, client),
+  ...SIGN_OUT_TABLES.map((table) => signOutsOf(harness, client, table)),
+];
+
+const heldIn = (tables: readonly OwnRows[]): Promise<readonly number[]> =>
+  Promise.all(tables.map((rows) => rows.held()));
 
 suite('the retention sweep against the store', () => {
   const shared = suiteHarness({ applications: [] });
@@ -94,51 +151,65 @@ suite('the retention sweep against the store', () => {
     assert.equal(await live.held(), 2);
   });
 
-  test('deletes at most 1,000 expired sessions in one run, and the rest in the next', async (context) => {
+  test('deletes at most 1,000 expired rows from each table in one run, and the rest in the next', async (context) => {
     const harness = await shared();
     const holder = await harness.database.connect('migration');
     cleanupFor(context).defer(() => holder.end());
-    const sessions = sessionsOf(harness, harness.clients.migration);
+    const tables = sweptRowsOf(harness, harness.clients.migration);
     const backlog = RETENTION_SWEEP.rowsPerRun + 500;
     const hold = await holdRetentionSweep(holder);
-    await sessions.record(backlog, new Date(Date.now() - HOUR_MILLISECONDS));
+    await Promise.all(
+      tables.map((rows) =>
+        rows.record(backlog, new Date(Date.now() - HOUR_MILLISECONDS)),
+      ),
+    );
 
     await hold.release();
     const firstRunEnded = await eventually(
-      async () => (await sessions.held()) < backlog,
+      async () => (await heldIn(tables)).some((held) => held < backlog),
       RUNS_WITHIN_MILLISECONDS,
       20,
     );
-    const afterFirstRun = await sessions.held();
+    const afterFirstRun = await heldIn(tables);
     const drained = await eventually(
-      async () => (await sessions.held()) === 0,
+      async () => (await heldIn(tables)).every((held) => held === 0),
       RUNS_WITHIN_MILLISECONDS,
       20,
     );
 
-    assert.equal(firstRunEnded, true, 'no run deleted an expired session');
-    assert.equal(afterFirstRun, backlog - RETENTION_SWEEP.rowsPerRun);
-    assert.equal(drained, true, 'the next run left expired sessions behind');
+    assert.equal(firstRunEnded, true, 'no run deleted an expired row');
+    assert.deepEqual(
+      afterFirstRun,
+      tables.map(() => backlog - RETENTION_SWEEP.rowsPerRun),
+    );
+    assert.equal(drained, true, 'the next run left expired rows behind');
   });
 
   test('deletes nothing while another session holds its lock', async (context) => {
     const harness = await shared();
     const holder = await harness.database.connect('migration');
     cleanupFor(context).defer(() => holder.end());
-    const sessions = sessionsOf(harness, harness.clients.migration);
+    const tables = sweptRowsOf(harness, harness.clients.migration);
     const hold = await holdRetentionSweep(holder);
-    await sessions.record(5, new Date(Date.now() - HOUR_MILLISECONDS));
+    await Promise.all(
+      tables.map((rows) =>
+        rows.record(5, new Date(Date.now() - HOUR_MILLISECONDS)),
+      ),
+    );
 
     await delay(RUNS_WITHIN_MILLISECONDS);
-    const whileHeld = await sessions.held();
+    const whileHeld = await heldIn(tables);
     await hold.release();
     const goneOnceReleased = await eventually(
-      async () => (await sessions.held()) === 0,
+      async () => (await heldIn(tables)).every((held) => held === 0),
       RUNS_WITHIN_MILLISECONDS,
       20,
     );
 
-    assert.equal(whileHeld, 5);
+    assert.deepEqual(
+      whileHeld,
+      tables.map(() => 5),
+    );
     assert.equal(
       goneOnceReleased,
       true,
@@ -176,6 +247,54 @@ suite("the retention sweep on the controller's configured clock", () => {
 
         assert.equal(gone, true, "the sweep read expiry on the store's clock");
         assert.equal(await liveOnTheClock.held(), 2);
+      },
+      context,
+    );
+  });
+
+  test("keeps a sign-out of either table until its expiry is more than the clock tolerance before the configured clock's now", async (context) => {
+    const now = Date.now() + 2 * HOUR_MILLISECONDS;
+    const cutoff = now - RETENTION_SWEEP.clockToleranceMilliseconds;
+    await withHarness(
+      { applications: [], configuration: { clock: fixedClock(now) } },
+      async (harness) => {
+        const client = harness.clients.migration;
+        const tables = SIGN_OUT_TABLES.map((table) => ({
+          atTolerance: signOutsOf(harness, client, table),
+          pastTolerance: signOutsOf(harness, client, table),
+          withinTolerance: signOutsOf(harness, client, table),
+        }));
+        await Promise.all(
+          tables.flatMap(({ atTolerance, pastTolerance, withinTolerance }) => [
+            atTolerance.record(1, new Date(cutoff)),
+            pastTolerance.record(1, new Date(cutoff - 1)),
+            withinTolerance.record(1, new Date(cutoff + 1)),
+          ]),
+        );
+
+        const gone = await eventually(
+          async () =>
+            (
+              await heldIn(tables.map(({ pastTolerance }) => pastTolerance))
+            ).every((held) => held === 0),
+          RUNS_WITHIN_MILLISECONDS,
+          20,
+        );
+
+        assert.equal(
+          gone,
+          true,
+          'a sign-out more than the clock tolerance past its expiry outlived the sweep',
+        );
+        assert.deepEqual(
+          await heldIn(
+            tables.flatMap(({ atTolerance, withinTolerance }) => [
+              atTolerance,
+              withinTolerance,
+            ]),
+          ),
+          [1, 1, 1, 1],
+        );
       },
       context,
     );

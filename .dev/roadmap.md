@@ -457,8 +457,8 @@ identifier, and plain prose still says "open" for records reachable by everyone.
 Open, to settle with the developer. Each table that grows needs a stated retention rule and the
 means of applying it, the audit log included, whose rows would move to files after a period rather
 than growing without bound. The retention sweep's rules are provisional until this is settled:
-exchanged sessions at their expiry and notices at the retention floor, while sign-out records are
-kept.
+exchanged sessions at their expiry, sign-out records the clock tolerance past their expiry, and
+notices at the retention floor.
 
 ---
 

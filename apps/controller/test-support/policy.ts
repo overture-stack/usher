@@ -432,17 +432,22 @@ export const BOUNDED_TRIM_REFUSAL = '22023';
  * The retention sweep every controller instance whose role writes runs (ruled; the lock's key
  * assumed): each run beginning `intervalMilliseconds` of real time after the one before has ended,
  * and one run at a time across instances, each run's transaction first trying the advisory lock
- * `lock` and ending at once, deleting nothing, while another session holds it. A run deletes at most `rowsPerRun` rows of
- * `exchanged_sids` whose `expires_at` is before the configured clock's now, then calls the bounded
- * trim with `rowsPerRun`, in the same transaction. It records no event, and writes the operational
- * line `failedLine` at error once as runs start failing.
+ * `lock` and ending at once, deleting nothing, while another session holds it. In the same
+ * transaction, a run deletes at most `rowsPerRun` rows from each table, in this order: those of
+ * `exchanged_sids` whose `expires_at` is before the configured clock's now, then those of
+ * `sid_sign_outs` and then of `subject_sign_outs` whose `expires_at` is more than
+ * `clockToleranceMilliseconds`, the controller's clock tolerance, before that now. It then calls the
+ * bounded trim with `rowsPerRun`. It records no event, and writes the operational line `failedLine`
+ * at error once as runs start failing.
  */
 export const RETENTION_SWEEP: Readonly<{
+  clockToleranceMilliseconds: number;
   failedLine: string;
   intervalMilliseconds: number;
   lock: number;
   rowsPerRun: number;
 }> = Object.freeze({
+  clockToleranceMilliseconds: 30_000,
   failedLine: 'retention.sweepFailed',
   intervalMilliseconds: 1000,
   lock: 8_617_207_004,
