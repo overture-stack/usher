@@ -39,6 +39,13 @@ export interface ControllerSettings {
   /** The identity provider realm role that makes its holder a platform administrator; `usher-platform-admin` by default. */
   administratorRole: string;
 
+  /**
+   * The client used by the API documentation page at `/api-docs` to sign people in, which must be one
+   * of the management clients exactly: any other refuses the start. Empty, the default, for no page,
+   * every path under `/api-docs` then answered as an unknown path is.
+   */
+  apiDocsClient: string;
+
   /** The `aud` values a back-channel logout token may carry: the platform's client identifiers. */
   backChannelLogoutAudiences: readonly string[];
 
@@ -516,6 +523,7 @@ export type FieldWithVariable = Exclude<
 
 const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   administratorRole: 'USHER_ADMINISTRATOR_ROLE',
+  apiDocsClient: 'USHER_API_DOCS_CLIENT',
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',
@@ -617,6 +625,7 @@ const loadExport = async <Exported>(
  */
 export const environmentFor = ({
   administratorRole,
+  apiDocsClient,
   backChannelLogoutAudiences,
   baseline,
   cursorKey,
@@ -650,6 +659,7 @@ export const environmentFor = ({
   trustedProxies,
 }: ControllerSettings): Readonly<Record<string, string>> => ({
   [VARIABLE_NAMES.administratorRole]: administratorRole,
+  [VARIABLE_NAMES.apiDocsClient]: apiDocsClient,
   [VARIABLE_NAMES.backChannelLogoutAudiences]:
     backChannelLogoutAudiences.join(','),
   [VARIABLE_NAMES.baseline]: baseline.join(','),

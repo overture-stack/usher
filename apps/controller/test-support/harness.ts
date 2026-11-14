@@ -235,6 +235,9 @@ export type SharedHarness = () => Promise<Harness>;
  */
 export const HARNESS_LOGOUT_CLIENT = 'portal-ui-test';
 
+/** The one management client the harness's controller lists by default, `managementClients`. */
+export const HARNESS_MANAGEMENT_CLIENT = 'usher-ui-test';
+
 /** The CloudEvents `source` the harness's controller emits under, one for the whole deployment (#214). */
 export const HARNESS_EVENT_SOURCE = 'https://usher.example.org/controller';
 
@@ -388,6 +391,7 @@ export const harnessConfiguration = ({
   passwordsApart({
     administratorRole: 'usher-platform-admin',
     allowedCharactersExtra: '',
+    apiDocsClient: '',
     autoAccept: false,
     backChannelLogoutAudiences: [HARNESS_LOGOUT_CLIENT],
     baseline: ['count', 'view', 'export'],
@@ -417,7 +421,7 @@ export const harnessConfiguration = ({
     keyEncryptionKey: freshKey(),
     logStream: process.stdout,
     managementAudience: 'usher-management-test',
-    managementClients: ['usher-ui-test'],
+    managementClients: [HARNESS_MANAGEMENT_CLIENT],
     noticePageLimit: 500,
     noticeRereadMilliseconds: 2000,
     port: 0,

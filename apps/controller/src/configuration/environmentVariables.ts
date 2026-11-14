@@ -11,6 +11,7 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   Record<FieldWithVariable, string>
 > = Object.freeze({
   administratorRole: 'USHER_ADMINISTRATOR_ROLE',
+  apiDocsClient: 'USHER_API_DOCS_CLIENT',
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',

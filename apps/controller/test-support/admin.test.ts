@@ -72,6 +72,8 @@ import {
   postBackChannelLogout,
   type ProblemDetails,
   PROBLEMS,
+  readApiDocsContract,
+  readApiDocsPage,
   readApplication,
   readAudit,
   readLiveness,
@@ -812,6 +814,32 @@ suite('reading what an operation answered', () => {
       backChannelLogoutUrl(new URL('http://127.0.0.1:8443/usher/')).href,
       'http://127.0.0.1:8443/usher/backchannel-logout',
     );
+  });
+});
+
+suite('the API documentation page', () => {
+  test('asks for the page and its contract at their paths, with no credential', async (context) => {
+    const server = await recording(context, () => ({ status: 404 }));
+
+    const page = await readApiDocsPage(server.url);
+    const contract = await readApiDocsContract(server.url);
+
+    assert.deepEqual(
+      server.requests.map(({ headers, method, target }) => ({
+        authorization: headers.authorization,
+        method,
+        target,
+      })),
+      [
+        { authorization: undefined, method: 'GET', target: '/api-docs' },
+        {
+          authorization: undefined,
+          method: 'GET',
+          target: '/api-docs/openapi.json',
+        },
+      ],
+    );
+    assert.deepEqual([page.status, contract.status], [404, 404]);
   });
 });
 

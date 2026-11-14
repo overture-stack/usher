@@ -1,5 +1,6 @@
 import type { JWK } from 'jose';
 
+import { discoveryUrl } from './discoveryUrl.js';
 import type {
   KeySetFetchFailure,
   KeySetReading,
@@ -80,10 +81,6 @@ const fetchedJson = async (
   await response.body?.cancel();
   return failed('status');
 };
-
-// OpenID Connect Discovery's location: the issuer, any trailing slash left out, then the well-known path.
-const discoveryUrl = (issuer: string): URL =>
-  new URL(`${issuer.replace(/\/$/u, '')}/.well-known/openid-configuration`);
 
 // A key the provider publishes for verifying signatures: never one published for encryption, and never
 // a private key, which no provider publishes on purpose.

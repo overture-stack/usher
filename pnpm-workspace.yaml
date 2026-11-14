@@ -23,6 +23,7 @@ catalog:
   pg-connection-string: ^2.14.1
   pino: ^10.4.0
   prettier: ^3.9.10
+  swagger-ui-dist: 5.34.1
   testcontainers: ^12.2.1
   tsdown: 0.23.5
   tsx: ^4.23.15

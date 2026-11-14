@@ -26,11 +26,11 @@ apps/controller/compose.yaml
 apps/controller/compose/
 apps/controller/scripts/
 
-# The controller's tests and documents, which no image build reads either, so a change to them alone
-# leaves the image unchanged.
+# The controller's tests and its development guide, which no image build reads either, so a change to
+# them alone leaves the image unchanged. Its contract, openapi.json, stays in, since the build bundles
+# it.
 apps/controller/test/
 apps/controller/test-support/
 apps/controller/DEVELOPMENT.md
-apps/controller/openapi.json
 apps/controller/tsdown.config.test.ts
 apps/controller/**/*.test.ts

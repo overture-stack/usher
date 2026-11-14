@@ -252,6 +252,8 @@ const ACCESS_TOKEN_ONLY_CLAIMS = Object.freeze({
 const segment = (value: string): string => encodeURIComponent(value);
 
 const PATHS = {
+  apiDocs: 'api-docs',
+  apiDocsContract: 'api-docs/openapi.json',
   application: (id: string): string => `admin/applications/${segment(id)}`,
   applicationKey: (id: string, keyId: string): string =>
     `admin/applications/${segment(id)}/keys/${segment(keyId)}`,
@@ -1364,6 +1366,31 @@ const unauthenticatedGet = async (
       redirect: 'manual',
     }),
   );
+
+/**
+ * Asks for the API documentation page: `GET /api-docs`, unauthenticated.
+ *
+ * @param controllerUrl the controller's URL, ending in `/`.
+ * @param overrides departures from the request.
+ */
+export const readApiDocsPage = (
+  controllerUrl: URL,
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  unauthenticatedGet(controllerUrl, PATHS.apiDocs, overrides);
+
+/**
+ * Asks for the contract the API documentation page shows: `GET /api-docs/openapi.json`,
+ * unauthenticated.
+ *
+ * @param controllerUrl the controller's URL, ending in `/`.
+ * @param overrides departures from the request.
+ */
+export const readApiDocsContract = (
+  controllerUrl: URL,
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  unauthenticatedGet(controllerUrl, PATHS.apiDocsContract, overrides);
 
 /**
  * Asks whether the controller is ready to serve (#214 Q18): `GET /health/ready`, unauthenticated,

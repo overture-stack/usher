@@ -32,6 +32,7 @@ const freshSecret = (): string => randomBytes(32).toString('base64url');
 const CONFIGURATION: ControllerConfiguration = {
   administratorRole: 'usher-platform-admin',
   allowedCharactersExtra: '',
+  apiDocsClient: '',
   autoAccept: false,
   backChannelLogoutAudiences: ['portal-test'],
   baseline: ['count', 'view', 'export'],
@@ -84,6 +85,7 @@ const OTHER_VALUES: {
   [Field in FieldWithVariable]: ControllerConfiguration[Field];
 } = {
   administratorRole: 'ims-usher-admin',
+  apiDocsClient: 'usher-ui-test',
   backChannelLogoutAudiences: ['portal-test', 'submission-test'],
   baseline: [],
   cursorKey: syntheticKey(5),

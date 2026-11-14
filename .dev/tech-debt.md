@@ -65,3 +65,12 @@ fix: widen `HOST_PORTS` again to 10000 to 32767, and the range where the module'
 and the test-support README name it.
 standalone: no
 context: waits on the shared CI Docker host admitting 10000 to 32767 from the Jenkins agents.
+
+The API documentation page's sign-in offers the authorization code flow alone.
+fix: serve the page's sign-in scheme as an `oauth2` scheme with a single `authorizationCode` flow,
+its authorization and token endpoints taken from the discovery document the controller already
+reads, in place of the `openIdConnect` scheme, whose Authorize dialog shows a sign-in form for each
+grant type the discovery document lists.
+test: the served contract's sign-in scheme names one flow, `authorizationCode`.
+severity: medium: fix before a deployment beyond development turns the page on.
+standalone: yes

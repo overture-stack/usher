@@ -21,6 +21,12 @@ export interface ControllerConfiguration {
   /** The identity provider realm role making its holder a platform administrator; `usher-platform-admin` by default. */
   administratorRole: string;
 
+  /**
+   * The client used by the API documentation page at `/api-docs` to sign people in, which must be one
+   * of the management clients exactly; empty, the default, for no page.
+   */
+  apiDocsClient: string;
+
   /** The `aud` values a back-channel logout token may carry: the platform's client identifiers. */
   backChannelLogoutAudiences: readonly string[];
 

@@ -97,6 +97,7 @@ suite('reading the configuration from an environment', () => {
     const configuration = readConfiguration(
       environmentWith({
         administratorRole: 'ims-usher-admin',
+        apiDocsClient: 'usher-ui',
         backChannelLogoutAudiences: 'portal-test, submission-test',
         baseline: 'view',
         databaseControlConnections: '3',
@@ -119,6 +120,7 @@ suite('reading the configuration from an environment', () => {
 
     assert.deepEqual(fieldsOf(configuration), {
       administratorRole: 'ims-usher-admin',
+      apiDocsClient: 'usher-ui',
       backChannelLogoutAudiences: ['portal-test', 'submission-test'],
       baseline: ['view'],
       cursorKey: CURSOR_KEY,
@@ -159,6 +161,7 @@ suite('reading the configuration from an environment', () => {
     assert.deepEqual(
       {
         administratorRole: configuration.administratorRole,
+        apiDocsClient: configuration.apiDocsClient,
         baseline: configuration.baseline,
         databaseControlConnections: configuration.databaseControlConnections,
         databaseExchangeConnections: configuration.databaseExchangeConnections,
@@ -179,6 +182,7 @@ suite('reading the configuration from an environment', () => {
       },
       {
         administratorRole: 'usher-platform-admin',
+        apiDocsClient: '',
         baseline: ['count', 'view', 'export'],
         databaseControlConnections: 5,
         databaseExchangeConnections: 10,
@@ -285,6 +289,79 @@ suite('reading the configuration from an environment', () => {
       },
       { administratorRole: 'Usher-Ops', serviceAccountRole: 'usher-ops' },
     );
+  });
+});
+
+suite("reading the API documentation page's client", () => {
+  test('reads the page as off, its client empty, when the variable is unset or set empty', () => {
+    const unset = readConfiguration(environmentWith({}));
+    const empty = readConfiguration(environmentWith({ apiDocsClient: '' }));
+
+    assert.deepEqual([unset.apiDocsClient, empty.apiDocsClient], ['', '']);
+  });
+
+  test('reads a client listed among the management clients as given', () => {
+    const configuration = readConfiguration(
+      environmentWith({
+        apiDocsClient: 'usher-cli',
+        managementClients: 'usher-ui, usher-cli',
+      }),
+    );
+
+    assert.equal(configuration.apiDocsClient, 'usher-cli');
+  });
+
+  test('refuses a client the management clients do not list exactly, naming its variable and the rule', () => {
+    const unlisted = [
+      'usher-docs',
+      'Usher-UI',
+      ' usher-ui',
+      'usher-ui ',
+      'usher',
+      'usher-ui,usher-cli',
+    ];
+
+    const refusals = unlisted.map((client) =>
+      refusalOf(
+        environmentWith({
+          apiDocsClient: client,
+          managementClients: 'usher-ui,usher-cli',
+        }),
+      ),
+    );
+
+    refusals.forEach((refusal, index) => {
+      assert.deepEqual(
+        refusal.variables,
+        [ENVIRONMENT_VARIABLES.apiDocsClient],
+        `client ${index}`,
+      );
+      assert.match(
+        refusal.message,
+        /USHER_API_DOCS_CLIENT is not one of the clients in USHER_MANAGEMENT_CLIENTS/u,
+      );
+    });
+  });
+
+  test('refuses any client while the management clients are an empty list', () => {
+    const refusal = refusalOf(
+      environmentWith({ apiDocsClient: 'usher-ui', managementClients: '' }),
+    );
+
+    assert.deepEqual(refusal.variables, [ENVIRONMENT_VARIABLES.apiDocsClient]);
+  });
+
+  test('names the management clients alone when their own value is refused, leaving the client unjudged', () => {
+    const refusal = refusalOf(
+      environmentWith({
+        apiDocsClient: 'usher-ui',
+        managementClients: 'usher-ui,',
+      }),
+    );
+
+    assert.deepEqual(refusal.variables, [
+      ENVIRONMENT_VARIABLES.managementClients,
+    ]);
   });
 });
 

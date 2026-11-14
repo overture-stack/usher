@@ -9,6 +9,7 @@ import {
   SHARE_EXCEEDED_TALLY_INTERVAL_MILLISECONDS,
   shareExceededTallyEvent,
 } from '../admission/index.js';
+import { createApiDocsRoutes } from '../apiDocs/index.js';
 import { createApplicationKeyRing } from '../applicationKeyRing/index.js';
 import {
   createApplicationKeyCipher,
@@ -118,21 +119,22 @@ const READINESS_CONNECTIONS = 1;
 
 /**
  * Creates a controller from its configuration, connecting to nothing until it starts. Its start
- * checks the store before anything listens, so a refused start never accepts a connection, reads the
- * live application keys into memory, and then serves the Management API's application and resource
- * operations, each event they record written to the audit log and the log stream, the revocation
- * channel's poll and push, the token exchange, and the identity provider's back-channel logout. A
- * change committed through an operation is held by the instance before it is answered: the
- * instance's streams are woken to its notices, as for a sign-out committed, and the live keys are
- * read again for an operation naming that step, as registering an application, issuing a key and
- * revoking one do. A failure in either step is written to the log and never changes the answer.
- * The live keys are read again too each time the configured clock passes the reload interval, and
- * a stored key that does not open is recorded as `applicationKey.unreadable`. The Management API,
- * the exchange and the back-channel logout verify the identity provider's tokens through one verifier,
- * and the revocation channel and the exchange check channel assertions through one verifier, counting
- * those they cannot verify in one tally. Every unit of its store work, a request's statement or
- * transaction, a recorded event, a read of the keys or the notices, or the start's transaction, runs
- * within the store timeout.
+ * checks the store before anything listens, so a refused start never accepts a connection, reads
+ * the live application keys into memory, and then serves the Management API's application and
+ * resource operations, each event they record written to the audit log and the log stream, the
+ * revocation channel's poll and push, the token exchange, and the identity provider's back-channel
+ * logout, and, while `apiDocsClient` names a client, the API documentation page at `/api-docs`,
+ * taking no credential, its files read as the controller is created. A change committed through an
+ * operation is held by the instance before it is answered: the instance's streams are woken to its
+ * notices, as for a sign-out committed, and the live keys are read again for an operation naming
+ * that step, as registering an application, issuing a key and revoking one do. A failure in either
+ * step is written to the log and never changes the answer. The live keys are read again too each
+ * time the configured clock passes the reload interval, and a stored key that does not open is
+ * recorded as `applicationKey.unreadable`. The Management API, the exchange and the back-channel
+ * logout verify the identity provider's tokens through one verifier, and the revocation channel and
+ * the exchange check channel assertions through one verifier, counting those they cannot verify in
+ * one tally. Every unit of its store work, a request's statement or transaction, a recorded event,
+ * a read of the keys or the notices, or the start's transaction, runs within the store timeout.
  *
  * It holds three pools of store connections, each with the same limits, so no one kind of work can
  * hold the connections another needs: the exchange pool, of `databaseExchangeConnections`, for the
@@ -144,21 +146,21 @@ const READINESS_CONNECTIONS = 1;
  *
  * A channel assertion that verifies and is refused anyway, on either route, is recorded as a
  * `channelAssertion.rejection` the first time the instance refuses it, and counted on every later
- * refusal; every route shares one memory of refused assertions, and each holds at most half its pool's
- * connections, at least one, in those recordings. The exchange admits each application's exchanges
- * within a share of the exchange pool, divided among the applications the key ring holds as
- * registered, lending the pool's idle connections past a share, and counts the exchanges it refuses in
- * a tally of its own; its recordings of refused assertions take a place in those shares too. The
- * token exchange answers every exchange by its deadline, `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS`
- * from the request's arrival on the monotonic clock, which every bridge's default timeout waits out
- * with a margin to spare, so its store work runs within that deadline too. Its stop ends every stream,
- * then closes the server, letting requests in flight finish, waits for the refused channel assertions
- * still being recorded, records the counts its four tallies hold, stops reading the keys, then closes
- * every pool's connections and lets go of the log stream. It reports itself ready while it is started,
- * its log stream takes its lines, and its store answers readiness's own connection within the store
- * timeout, not reading as read-only when its database role writes, as `createReadiness` judges it,
- * writing each change. It reports itself live until its log stream fails to take a line, which only a
- * restart recovers from, and writes nothing as it stops being live.
+ * refusal; every route shares one memory of refused assertions, and each holds at most half its
+ * pool's connections, at least one, in those recordings. The exchange admits each application's
+ * exchanges within a share of the exchange pool, divided among the applications the key ring holds
+ * as registered, lending the pool's idle connections past a share, and counts the exchanges it
+ * refuses in a tally of its own; its recordings of refused assertions take a place in those shares
+ * too. The token exchange answers every exchange by its deadline,
+ * `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` from the request's arrival on the monotonic clock, so
+ * its store work runs within that deadline too. Its stop ends every stream, then closes the server,
+ * letting requests in flight finish, waits for the refused channel assertions still being recorded,
+ * records the counts its four tallies hold, stops reading the keys, then closes every pool's
+ * connections and lets go of the log stream. It reports itself ready while it is started, its log
+ * stream takes its lines, and its store answers readiness's own connection within the store
+ * timeout, not reading as read-only when its database role writes, writing each change. It reports
+ * itself live until its log stream fails to take a line, which only a restart recovers from, and
+ * writes nothing as it stops being live.
  *
  * @param configuration the controller's configuration.
  */
@@ -394,6 +396,7 @@ export const createController = (
       tokenVerifier,
       trail: wakingTrail,
     }),
+    ...createApiDocsRoutes(configuration),
   ].forEach((route) => {
     server.route(route);
   });

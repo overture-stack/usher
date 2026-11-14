@@ -61,8 +61,22 @@ export const readConfiguration = (
   const administratorRole = readText(variable('administratorRole'), {
     fallback: 'usher-platform-admin',
   });
+  const managementClients = readList(variable('managementClients'));
   const readings = {
     administratorRole,
+    // The page's tokens are management tokens, so its client is one of the management clients, as listed.
+    apiDocsClient: then(
+      readText(variable('apiDocsClient'), { emptyAllowed: true, fallback: '' }),
+      (client): Reading<string> =>
+        client !== '' &&
+        managementClients.kind === 'read' &&
+        !managementClients.value.includes(client)
+          ? refused(
+              variable('apiDocsClient'),
+              `is not one of the clients in ${ENVIRONMENT_VARIABLES.managementClients}`,
+            )
+          : read(client),
+    ),
     backChannelLogoutAudiences: readList(
       variable('backChannelLogoutAudiences'),
     ),
@@ -94,7 +108,7 @@ export const readConfiguration = (
     issuer: readText(variable('issuer')),
     keyEncryptionKey: readKey(variable('keyEncryptionKey')),
     managementAudience: readText(variable('managementAudience')),
-    managementClients: readList(variable('managementClients')),
+    managementClients,
     noticePageLimit: readInteger(variable('noticePageLimit'), {
       fallback: 500,
       minimum: 1,
@@ -149,6 +163,7 @@ export const readConfiguration = (
   if (problems.length === 0) {
     return {
       administratorRole: valueOf(readings.administratorRole),
+      apiDocsClient: valueOf(readings.apiDocsClient),
       backChannelLogoutAudiences: valueOf(readings.backChannelLogoutAudiences),
       baseline: valueOf(readings.baseline),
       clock: SYSTEM_CLOCK,
