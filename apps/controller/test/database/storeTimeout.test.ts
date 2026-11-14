@@ -225,9 +225,12 @@ const heldSessions = async (runtime: pg.ClientBase): Promise<number> =>
     )
   )[0]?.count ?? 0;
 
-// The statements the controller's sessions on the test's database began after an instant on the
-// store's clock, each as its session and its start, read under the controller's own role.
-const statementsSince = async (
+// What the readiness probe's statement reads, which tells it from the controller's other statements.
+const READINESS_PROBE_READS = "current_setting('transaction_read_only')";
+
+// The readiness probes the controller's sessions on the test's database began after an instant on
+// the store's clock, each as its session and its start, read under the controller's own role.
+const probesSince = async (
   runtime: pg.ClientBase,
   since: string,
 ): Promise<readonly string[]> =>
@@ -236,23 +239,20 @@ const statementsSince = async (
       runtime,
       `SELECT pid, query_start::text AS began FROM pg_stat_activity
         WHERE datname = current_database() AND usename = current_user AND pid <> pg_backend_pid()
-          AND query_start > $1::timestamptz`,
-      [since],
+          AND query_start > $1::timestamptz AND strpos(query, $2) > 0`,
+      [since, READINESS_PROBE_READS],
     )
   ).map(({ began, pid }) => `${pid} ${began}`);
 
-// Every statement the controller's sessions began after an instant, read every few milliseconds
-// until a deadline: a session keeps showing its last statement's start until it begins another.
+// Every readiness probe the controller's sessions began after an instant, read every few
+// milliseconds until a deadline: a session keeps showing its last statement until it begins another.
 const sampledUntil = async (
   runtime: pg.ClientBase,
   since: string,
   deadline: number,
   seen: ReadonlySet<string> = new Set(),
 ): Promise<ReadonlySet<string>> => {
-  const sampled = new Set([
-    ...seen,
-    ...(await statementsSince(runtime, since)),
-  ]);
+  const sampled = new Set([...seen, ...(await probesSince(runtime, since))]);
   if (performance.now() < deadline) {
     await delay(10);
     return sampledUntil(runtime, since, deadline, sampled);

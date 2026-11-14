@@ -74,7 +74,11 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
   } satisfies Record<string, PermittedWrites>),
 );
 
-/** The functions of the controller's schema the release's migrations let its runtime role call. */
+/**
+ * The functions of the controller's schema the release's migrations let its runtime role call, by
+ * name, each name standing for every function of the schema so named: `trim_notices` for the trim
+ * taking no argument and for the one taking the most notices it deletes.
+ */
 export const RUNTIME_CALLS: ReadonlySet<string> = new Set(['trim_notices']);
 
 // Where every change the controller makes is recorded, so a role writing anywhere must insert here.

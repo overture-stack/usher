@@ -52,6 +52,7 @@ import {
 } from '../noticeStream/index.js';
 import { createReadiness } from '../readiness/index.js';
 import { createResourceRoutes } from '../resources/index.js';
+import { createRetentionSweep } from '../retention/index.js';
 import {
   judgeSignInCredential,
   readStoredRefusal,
@@ -131,19 +132,22 @@ const READINESS_CONNECTIONS = 1;
  * that step, as registering an application, issuing a key and revoking one do. A failure in either
  * step is written to the log and never changes the answer. The live keys are read again too each
  * time the configured clock passes the reload interval, and a stored key that does not open is
- * recorded as `applicationKey.unreadable`. The Management API, the exchange and the back-channel
+ * recorded as `applicationKey.unreadable`. A start finding that its database role writes then runs
+ * the retention sweep until the stop, giving it the configured clock; a run of it that fails changes
+ * no answer of any route, readiness's included. The Management API, the exchange and the back-channel
  * logout verify the identity provider's tokens through one verifier, and the revocation channel and
  * the exchange check channel assertions through one verifier, counting those they cannot verify in
  * one tally. Every unit of its store work, a request's statement or transaction, a recorded event,
- * a read of the keys or the notices, or the start's transaction, runs within the store timeout.
+ * a read of the keys or the notices, a run of the sweep, or the start's transaction, runs within the
+ * store timeout.
  *
  * It holds three pools of store connections, each with the same limits, so no one kind of work can
  * hold the connections another needs: the exchange pool, of `databaseExchangeConnections`, for the
  * exchange's own transactions, its key confirmations and its recordings of refused assertions; the
  * control pool, of `databaseControlConnections`, for everything else, the Management API, the
  * back-channel logout, the notice channel's reads and its recordings of refused assertions, the key
- * reloads, the tallies and the start; and one connection of readiness's own. The start checks the
- * store's limits on the sessions of each.
+ * reloads, the tallies, the retention sweep and the start; and one connection of readiness's own.
+ * The start checks the store's limits on the sessions of each.
  *
  * A channel assertion that verifies and is refused anyway, on either route, is recorded as a
  * `channelAssertion.rejection` the first time the instance refuses it, and counted on every later
@@ -154,11 +158,12 @@ const READINESS_CONNECTIONS = 1;
  * refuses in a tally of its own; its recordings of refused assertions take a place in those shares
  * too. The token exchange answers every exchange by its deadline,
  * `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` from the request's arrival on the monotonic clock, so
- * its store work runs within that deadline too. Its stop ends every stream, then closes the server,
- * letting requests in flight finish, waits for the refused channel assertions still being recorded,
- * records the counts its four tallies hold, stops reading the keys, then closes every pool's
- * connections and lets go of the log stream. It reports itself ready while it is started, its log
- * stream takes its lines, and its store answers readiness's own connection within the store
+ * its store work runs within that deadline too. Its stop first stops the sweep, so no run of it
+ * begins once the stop has, then ends every stream, then closes the server, letting requests in
+ * flight finish, waits for the refused channel assertions still being recorded and for the sweep's
+ * run in flight, records the counts its four tallies hold, stops reading the keys, then closes every
+ * pool's connections and lets go of the log stream. It reports itself ready while it is started, its
+ * log stream takes its lines, and its store answers readiness's own connection within the store
  * timeout, not reading as read-only when its database role writes, writing each change. It reports
  * itself live until its log stream fails to take a line, which only a restart recovers from, and
  * writes nothing as it stops being live.
@@ -256,6 +261,12 @@ export const createController = (
     eventOf: shareExceededTallyEvent,
     intervalMilliseconds: SHARE_EXCEEDED_TALLY_INTERVAL_MILLISECONDS,
     partsOf: (applicationId) => [applicationId],
+    trail,
+  });
+  const sweep = createRetentionSweep({
+    clock: configuration.clock,
+    log: eventLog,
+    schema: configuration.databaseSchema,
     trail,
   });
   const cipher = createApplicationKeyCipher(configuration.keyEncryptionKey);
@@ -418,12 +429,18 @@ export const createController = (
     logoutTokenRefusals.start();
     assertionRejections.start();
     sharesExceeded.start();
+    // A role that may only read deletes nothing, so its runs could only fail.
+    if (writes) {
+      sweep.start();
+    }
     lifecycle.ready = lifecycle.stopped === undefined;
     return { url: urlOf(server.server.address()) };
   };
 
   const stopOnce = async (): Promise<void> => {
     lifecycle.ready = false;
+    // Stopped before anything is awaited, so no run of the sweep begins once the stop has.
+    const sweepStopped = sweep.stop();
     await lifecycle.started?.catch(() => undefined);
     try {
       try {
@@ -438,6 +455,7 @@ export const createController = (
           assertionRefusals.stop().then(() => assertionRejections.stop()),
           sharesExceeded.stop(),
           keyRing.stop(),
+          sweepStopped,
         ]);
       }
     } finally {

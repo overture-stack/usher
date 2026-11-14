@@ -19,6 +19,7 @@ import {
   grantCountOn,
   highestPosition,
   holdNoticesNaming,
+  holdRetentionSweep,
   insertNotices,
   internalIdsInStore,
   inTransactionAs,
@@ -41,6 +42,7 @@ import {
   removeGroupMember,
   resourceIdOf,
   restoreStoreSnapshot,
+  RETENTION_SWEEP,
   retireInStore,
   revokeGrantInStore,
   revokePrincipalInStore,
@@ -66,6 +68,7 @@ import {
   tablesOf,
   takeStoreSnapshot,
   trimNotices,
+  trimNoticesBounded,
   trimNoticesOpen,
   userIdOf,
   usersWithSubject,
@@ -1214,6 +1217,58 @@ suite('the trimming function, called', () => {
     assert.deepEqual(
       (await noticesAfter(client)).map(({ kind }) => kind),
       ['baseline'],
+    );
+  });
+
+  test('calls the bounded trim with the most notices it may delete, committing it', async (context) => {
+    const client = await ownerOfFreshDatabase(context);
+    const old = new Date(Date.now() - 3_600_000);
+    await insertNotices(client, [
+      { createdAt: old, kind: 'baseline' },
+      { createdAt: old, kind: 'global' },
+      { kind: 'baseline' },
+    ]);
+    const [first] = await noticePositions(client);
+
+    const trimmedThrough = await trimNoticesBounded(client, 1);
+
+    assert.equal(trimmedThrough, first);
+    assert.equal((await readNoticeStream(client)).trimmedThrough, first);
+    assert.deepEqual(
+      (await noticesAfter(client)).map(({ kind }) => kind),
+      ['global', 'baseline'],
+    );
+  });
+});
+
+suite("the retention sweep's lock, held", () => {
+  test('keeps the lock from every other session until released', async (context) => {
+    const database = await createTestDatabase(STARTED_STORE_TEMPLATE);
+    context.after(() => database.close());
+    const holder = await database.connect('migration');
+    const other = await database.connect('runtime');
+    const tryLock = async (): Promise<boolean> => {
+      await other.query('BEGIN');
+      try {
+        const { rows } = await other.query<{ locked: boolean }>(
+          'SELECT pg_try_advisory_xact_lock($1) AS locked',
+          [RETENTION_SWEEP.lock],
+        );
+        return rows[0]?.locked === true;
+      } finally {
+        await other.query('COMMIT');
+      }
+    };
+
+    const hold = await holdRetentionSweep(holder);
+    const whileHeld = await tryLock();
+    await hold.release();
+    await hold.release();
+    const released = await tryLock();
+
+    assert.deepEqual(
+      { released, whileHeld },
+      { released: true, whileHeld: false },
     );
   });
 });

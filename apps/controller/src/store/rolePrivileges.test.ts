@@ -35,11 +35,16 @@ const callable = (name: string, executes: boolean): HeldFunction => ({
 });
 
 // The runtime role exactly as its migrations leave it: each permitted write, every other table read
-// alone, the notice positions' sequence untouched, and the trimming its one call.
+// alone, the notice positions' sequence untouched, and the trimming, unbounded and bounded, its only
+// calls.
 const MIGRATED_ROLE: HeldPrivileges = {
   creatableSchemas: [],
   createsSchemas: false,
-  functions: [callable('record_change', false), callable('trim_notices', true)],
+  functions: [
+    callable('record_change', false),
+    callable('trim_notices', true),
+    callable('trim_notices', true),
+  ],
   memberships: [],
   relations: [
     ...[...RUNTIME_WRITES].map(([name, { deletes, updates }]) =>

@@ -30,6 +30,7 @@ import {
   retentionFloorSeconds,
 } from '../../test-support/harness.js';
 import {
+  holdRetentionSweep,
   insertNotices,
   noticePositions,
   simulateRestore,
@@ -245,6 +246,11 @@ suite('the revocation channel, against the store', () => {
     const harness = await startChannelHarness(scope, {
       configuration: SHORT_RETENTION,
     });
+    // The test's own trim is the only one: a run of the sweep reaching the notices written below
+    // would move the watermark past a cursor before the test reads past it.
+    const holder = await harness.database.connect('migration');
+    scope.defer(() => holder.end());
+    await holdRetentionSweep(holder);
     assert.ok(
       await untilNoticesOlderThan(
         harness.clients.migration,

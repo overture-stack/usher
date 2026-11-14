@@ -410,14 +410,44 @@ export const POLICY_CONSTRAINTS: Readonly<{
 });
 
 /**
- * The functions a test calls. `trimNotices`, owned by the migration role and executable by the
- * controller's role alone (R3), takes no argument: it reads the floor from `notice_retention`,
- * deletes the notices through the watermark that floor gives, raises `trimmed_through` in the same
- * transaction, and returns it. No caller can choose the floor, so none can trim a notice a bridge
- * may still need.
+ * The functions a test calls. `trimNotices` names two functions, each owned by the migration role and
+ * executable by the controller's role alone (R3). The one taking no argument reads the floor from
+ * `notice_retention`, deletes the notices through the watermark that floor gives, raises
+ * `trimmed_through` in the same transaction, and returns it. The one taking an `integer`, `max_rows`
+ * (ruled), trims the same way but reaches no further than the highest position among the oldest
+ * `max_rows` notices the other would delete, so one call deletes at most `max_rows`, and refuses a
+ * `max_rows` below 1, or none. No caller can choose the floor, so none can trim a notice a bridge may
+ * still need.
  */
 export const POLICY_FUNCTIONS: Readonly<{ trimNotices: string }> =
   Object.freeze({ trimNotices: 'trim_notices' });
+
+/**
+ * The SQLSTATE the bounded trim refuses a `max_rows` below 1, or none, with: PostgreSQL's
+ * `invalid_parameter_value`.
+ */
+export const BOUNDED_TRIM_REFUSAL = '22023';
+
+/**
+ * The retention sweep every controller instance whose role writes runs (ruled; the lock's key
+ * assumed): each run beginning `intervalMilliseconds` of real time after the one before has ended,
+ * and one run at a time across instances, each run's transaction first trying the advisory lock
+ * `lock` and ending at once, deleting nothing, while another session holds it. A run deletes at most `rowsPerRun` rows of
+ * `exchanged_sids` whose `expires_at` is before the configured clock's now, then calls the bounded
+ * trim with `rowsPerRun`, in the same transaction. It records no event, and writes the operational
+ * line `failedLine` at error once as runs start failing.
+ */
+export const RETENTION_SWEEP: Readonly<{
+  failedLine: string;
+  intervalMilliseconds: number;
+  lock: number;
+  rowsPerRun: number;
+}> = Object.freeze({
+  failedLine: 'retention.sweepFailed',
+  intervalMilliseconds: 1000,
+  lock: 8_617_207_004,
+  rowsPerRun: 1000,
+});
 
 /**
  * The column of `grant_decisions` marking a decision the EGO migration recorded for a migrated
@@ -1648,6 +1678,56 @@ export const trimNotices = async (runtime: pg.ClientBase): Promise<bigint> => {
   const trim = await trimNoticesOpen(runtime);
   await trim.commit();
   return trim.trimmedThrough;
+};
+
+/**
+ * Runs the bounded trimming function, `trim_notices(max_rows)`, as the connection's role, as a
+ * statement of its own.
+ *
+ * @param runtime a connection under the controller's runtime role, holding no transaction.
+ * @param maxRows the most notices the call may delete, or `null` for none given.
+ * @returns the watermark the function returned.
+ * @throws what the function threw, such as its refusal of a `maxRows` below 1.
+ */
+export const trimNoticesBounded = async (
+  runtime: pg.ClientBase,
+  maxRows: number | null,
+): Promise<bigint> => {
+  const { rows } = await runtime.query<{ trimmed_through: string }>(
+    `SELECT ${qualified({ name: POLICY_FUNCTIONS.trimNotices })}($1::integer)::text AS trimmed_through`,
+    [maxRows],
+  );
+  return BigInt(rows[0]?.trimmed_through ?? '0');
+};
+
+/** The retention sweep's lock, held by a session of the test's. */
+export interface SweepHold {
+  /** Lets the lock go, so the next run of the sweep takes it; a later call does nothing. */
+  release(): Promise<void>;
+}
+
+/**
+ * Takes the retention sweep's lock ({@link RETENTION_SWEEP}) at the level of the connection's session,
+ * waiting for a run holding it to end first, so every run beginning while it is held ends at once,
+ * deleting nothing. The lock is held until released or until the connection ends.
+ *
+ * @param client a connection of the test's, under either role.
+ */
+export const holdRetentionSweep = async (
+  client: pg.ClientBase,
+): Promise<SweepHold> => {
+  await client.query('SELECT pg_advisory_lock($1)', [RETENTION_SWEEP.lock]);
+  const state = { held: true };
+  return {
+    release: async () => {
+      if (state.held) {
+        state.held = false;
+        await client.query('SELECT pg_advisory_unlock($1)', [
+          RETENTION_SWEEP.lock,
+        ]);
+      }
+    },
+  };
 };
 
 /**

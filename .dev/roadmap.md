@@ -452,6 +452,14 @@ was signed out (case 34).
 The rest of the design corpus now names the category `unmarked` wherever it is written as an
 identifier, and plain prose still says "open" for records reachable by everyone.
 
+### Retention policy for every store that grows
+
+Open, to settle with the developer. Each table that grows needs a stated retention rule and the
+means of applying it, the audit log included, whose rows would move to files after a period rather
+than growing without bound. The retention sweep's rules are provisional until this is settled:
+exchanged sessions at their expiry and notices at the retention floor, while sign-out records are
+kept.
+
 ---
 
 ## Implementation: Core service
@@ -504,6 +512,11 @@ Shared library embedded in every ushered application: the authenticated token ex
 ### First publish of the two packages
 
 Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Arranger's adapter is built and reviewed and merges only once both packages are published, so the first publish is its last step. Also before the first publish: lifting `private: true` from both packages, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, and real versions, since the packed bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies. Pre-releases are `0.0.1-beta.N` under the `next` dist-tag, and main keeps `0.0.0-dev` (developer, 2026-11-03).
+
+- The first publish is `0.0.0-alpha.1` under the `rc` dist-tag, for the initial overture-dev deployment alone (developer, 2026-11-13).
+- The review of both packages and the publishing-integrity choice come when the packages move off beta into `0.0.1` proper, so betas publish before that review (developer, 2026-11-13).
+- Betas, `0.0.1-beta.N` under `next`, follow once that deployment is stable.
+- Dist-tags follow the branch: `next` from main, `rc` from `release-test`, `latest` from `release` (developer, 2026-11-13). The pipeline publishes from `release-test` and `release` today. Publishing from main under `next` needs the pipeline to publish there too, with a version scheme for main's builds, since main keeps `0.0.0-dev`.
 
 ### Licence for Usher's packages, with their v1 releases
 
