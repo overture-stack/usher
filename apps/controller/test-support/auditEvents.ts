@@ -726,7 +726,6 @@ export const TOKEN_CAP_EVENT = Object.freeze({
  * and naming no subject. A service account's token is `serviceAccountNotPermitted`, as at the
  * Management API. A token whose signing key is not confirmed yet is `signingKeyUnconfirmed`,
  * denied rather than failed, since a made-up key id or a routine key rotation produces it.
- * `invalidSignature`'s cases are the developer's own suites'.
  */
 export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
   apiKeyVerifierNotConfigured: 'apiKeyVerifierNotConfigured',

@@ -108,10 +108,10 @@ const refusalOf = (
  * verify, and not judged while the keys cannot be had or its key is not confirmed yet. A token its
  * contents refused stays refused, and its signature is checked only where that can change the record:
  * for a refusal in {@link SUBJECT_NAMING_REFUSALS}, under the keys already held alone, so nothing is
- * fetched to judge a token already refused. Once that verifies it, it is recorded as its verified claims
- * refuse it, naming its subject as {@link readSignInClaims} allows; otherwise, its key not held or the
- * verifier refusing it, it is recorded under the refusal its contents earned, naming no subject, as is
- * every other refusal of its contents, without any check of its signature.
+ * fetched to judge a token already refused. Once that verifies it, it is recorded under the refusal
+ * its verified claims earn, naming the subject that refusal names; otherwise, its key not held or
+ * the verifier refusing it, it is recorded under the refusal its contents earned, naming no
+ * subject, as is every other refusal of its contents, without any check of its signature.
  *
  * @param token the credential, a compact JWS.
  * @param contentsRefusal why its contents, read without verifying them, refused it, if they did.
@@ -139,9 +139,9 @@ export const judgeSignedToken = async (
  * Judges a credential presented at the exchange at an instant, its checks ordered by cost so a
  * credential is refused at its cheapest failing one, and every refusal recorded. Its shape first: an
  * empty, encrypted or opaque credential is refused, and never verified. A signed token's contents next,
- * read without verifying them and judged as {@link readSignInClaims} judges a sign-in token's claims.
- * Then its signature, as {@link judgeSignedToken} checks it, which alone decides whether a refusal names
- * the token's subject.
+ * read without verifying them and judged by {@link readSignInClaims}. Then its signature, by
+ * {@link judgeSignedToken}, and a refusal names the token's subject only where that judgement
+ * names it.
  *
  * @param credential the credential, as the request carried it.
  * @param context the calling application's id, the instant, the longest lifetime a sign-in token may

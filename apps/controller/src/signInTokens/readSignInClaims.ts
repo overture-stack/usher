@@ -16,10 +16,8 @@ import type {
 } from './types.js';
 
 /**
- * The refusals of a token's contents the audit trail names its verified subject for, in
- * `refusedSubject`: those for its times and its audience. No other refusal of its contents names it,
- * so for no other is its signature worth checking. The standing refusals, decided once a token is
- * accepted, name it too.
+ * The refusals of a token's contents that name its verified subject, in `refusedSubject`: those for
+ * its times and its audience. No other refusal of its contents names it.
  */
 export const SUBJECT_NAMING_REFUSALS: ReadonlySet<SignInRefusal> = new Set([
   EXCESSIVE_LIFETIME,
@@ -71,14 +69,13 @@ const refused = (
  * {@link isKeycloakAccessToken}. And it must not be a logout token: one whose `events` hold the
  * back-channel logout member, or whose header's `typ` is `logout+jwt` in any letter case, with or
  * without the `application/` prefix. A token failing either is refused as `otherType` whatever else it
- * carries. Its names must be readable, as {@link readNames} reads them on every route. Its `exp` is
- * required and must not have passed, within the clock tolerance; its `iat` is required, and its `exp`
- * must fall at most the longest lifetime a sign-in token may have after it, with no tolerance; and any
- * `nbf` must be reached, within the tolerance. And its `aud`, one string or a list, must name the
- * calling application.
- * A refusal in {@link SUBJECT_NAMING_REFUSALS} names the token's `sub` in `refusedSubject` when that is
- * at most {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters, and no other refusal names it. Its issuer
- * and signature are the verifier's to judge, and are not judged here.
+ * carries. Its names must be ones {@link readNames} reads. Its `exp` is required and must not have
+ * passed, within the clock tolerance; its `iat` is required, and its `exp` must fall at most the
+ * longest lifetime a sign-in token may have after it, with no tolerance; and any `nbf` must be
+ * reached, within the tolerance. And its `aud`, one string or a list, must name the calling
+ * application. A refusal in {@link SUBJECT_NAMING_REFUSALS} names the token's `sub` in
+ * `refusedSubject` when that is at most {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters, and no
+ * other refusal names it. Its issuer and signature are not judged.
  *
  * @param token the token's claims and protected header.
  * @param context the calling application's id, the instant, and the longest lifetime a sign-in token

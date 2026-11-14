@@ -51,7 +51,7 @@ interface PackageFile {
 }
 
 // The allow-list: the only files of the package ever read, each once, by these fixed names. The
-// redirect page is not stored, since its URL carries the authorization code.
+// redirect page is answered `no-store`, since its URL carries an authorization code.
 const PACKAGE_FILES: readonly PackageFile[] = [
   {
     cacheControl: PACKAGE_FILE_CACHING,
@@ -108,8 +108,8 @@ const contentSecurityPolicy = (issuer: string): string =>
     "object-src 'none'",
   ].join('; ');
 
-// No answer sets a cross-origin opener policy, since the redirect page needs window.opener after its
-// round trip through the identity provider.
+// No answer sets a cross-origin opener policy, so the redirect page served here keeps window.opener
+// after its round trip through the identity provider.
 const securityHeaders = (issuer: string): Readonly<Record<string, string>> => ({
   'content-security-policy': contentSecurityPolicy(issuer),
   'referrer-policy': 'no-referrer',

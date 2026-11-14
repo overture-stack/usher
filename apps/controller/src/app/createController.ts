@@ -101,13 +101,10 @@ const urlOf = (address: unknown): URL => {
   throw new ControllerError('the controller listens on no TCP address');
 };
 
-// The exchange's deadline, from which every bridge's default timeout is built, shared through
-// usher-types. It is typed as that constant's own literal, so the two cannot drift apart: changing
-// either alone fails the type check, while the constant keeps its literal type, which usher-types'
-// own tests assert. The value is written here rather than imported, since the controller takes only
-// types from the libraries, and its build and image carry none of their code. Once the controller
-// first needs a value from usher-types at run time, its build bundles usher-types, and this literal
-// gives way to an import.
+// The exchange's deadline, which must equal usher-types'
+// `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS`. It is typed as that constant's literal, so any other
+// value here fails the type check. It is written here rather than imported, since the controller
+// takes only types from the libraries.
 const EXCHANGE_DEADLINE_MILLISECONDS: typeof CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS = 4000;
 
 // What readiness asks the store: whether it reads as read-only, a statement reading no table.
@@ -381,9 +378,7 @@ export const createController = (
     writesStore: () => lifecycle.writes,
   });
   const server = createServer({
-    // A log stream that has failed a write takes nothing more until the process restarts, so the
-    // instance is not live from then on. Unlike readiness, liveness writes no line as it changes:
-    // the line would go to the stream that failed.
+    // The instance is live while its event log can still be written.
     isLive: () => eventLog.isWritable(),
     isReady: readiness.isReady,
     trustedProxies: configuration.trustedProxies,
@@ -419,7 +414,8 @@ export const createController = (
   const startOnce = async (): Promise<{ url: URL }> => {
     const { writes } = await prepareStore(trail, configuration, eventLog);
     lifecycle.writes = writes;
-    // The start's own transaction checked the control pool's limits; the other two are checked here.
+    // Checks the statement limits of the exchange's and readiness's pools. The control pool's must
+    // already have been checked, in prepareStore's transaction.
     await Promise.all(
       [exchangeReader, readinessReader].map((poolReader) =>
         checkStatementLimits(poolReader, configuration),
@@ -449,11 +445,11 @@ export const createController = (
         await channel.stop();
         await server.close();
       } finally {
-        // A refused assertion whose recording fails is counted, so the recordings end before the
-        // tally of refused assertions records what it holds.
         await Promise.all([
           refusalTally.stop(),
           logoutTokenRefusals.stop(),
+          // The rejection tally stops after the assertion refusals, so any count they make while
+          // stopping reaches it.
           assertionRefusals.stop().then(() => assertionRejections.stop()),
           sharesExceeded.stop(),
           keyRing.stop(),

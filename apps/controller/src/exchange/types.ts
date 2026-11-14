@@ -138,10 +138,8 @@ export interface ExchangeSettings {
 
   /**
    * The exchange's deadline, in milliseconds: when the controller must have answered an exchange,
-   * measured from the request's arrival. Shorter than the bridge's timeout, how long the bridge waits
-   * for the answer, by the margin left for the network and for writing the answer, so the controller
-   * always answers before the bridge gives up; the controller passes the value of
-   * `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` from `@overture-stack/usher-types`.
+   * measured from the request's arrival. It must be shorter than the bridge's timeout, how long the
+   * bridge waits for the answer, by the margin left for the network and for writing the answer.
    */
   deadlineMilliseconds: number;
 
@@ -156,8 +154,7 @@ export interface ExchangeSettings {
 
   /**
    * The least time left to its deadline, in milliseconds, for a request whose body has arrived to be
-   * served rather than answered `408 requestTimeout` as late: the controller passes
-   * `LATE_REQUEST_THRESHOLD_MILLISECONDS`, the recording reserve and the least judgement budget.
+   * served rather than answered `408 requestTimeout` as late.
    */
   lateRequestThresholdMilliseconds: number;
 

@@ -113,8 +113,8 @@ export const createSigningKeys = (
     cache.attemptedAt = clock.now();
     // The fetch leaves flight however it ends, so no later asker joins one that rejected.
     try {
-      // What a fetch throws, it throws for want of an answer: a connection refused or cut, or no
-      // answer within the timeout.
+      // A fetch that throws is counted unreachable, so fetchSigningKeys must throw only for want of
+      // an answer: a connection refused or cut, or no answer within the timeout.
       const outcome = await fetchSigningKeys(identityProviderIssuer).catch(
         (): Step<never> => failed('unreachable'),
       );
