@@ -184,6 +184,9 @@ export interface ExchangeSettings {
   /** Where each exchange refused over its application's share is counted. */
   sharesExceeded: ShareExceededCounter;
 
+  /** The largest token the exchange answers, in bytes as its `200` body sends them. */
+  tokenLimitBytes: number;
+
   /**
    * Where each exchange's `token.exchange` is written, in the exchange's own transaction, and each
    * refused assertion's `channelAssertion.rejection`, in one of its own: over the exchange pool.

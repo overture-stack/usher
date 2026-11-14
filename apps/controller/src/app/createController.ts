@@ -30,6 +30,7 @@ import {
   createExchange,
   createKeyConfirmations,
   LATE_REQUEST_THRESHOLD_MILLISECONDS,
+  TOKEN_LIMIT_BYTES,
 } from '../exchange/index.js';
 import { ControllerError } from '../failures/index.js';
 import { createServer } from '../http/index.js';
@@ -336,6 +337,7 @@ export const createController = (
     monotonicNow: () => performance.now(),
     settings: configuration,
     sharesExceeded,
+    tokenLimitBytes: TOKEN_LIMIT_BYTES,
     trail: exchangeTrail,
   });
   const management: ManagementDependencies = {

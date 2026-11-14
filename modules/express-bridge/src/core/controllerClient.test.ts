@@ -123,6 +123,13 @@ const STORE_UNAVAILABLE = {
   title: 'Policy store unavailable',
 };
 
+const TOKEN_OVER_RESPONSE_CAP = {
+  code: 'tokenOverResponseCap',
+  detail:
+    "The token for this exchange would hold more than 1048576 bytes, the bridge's default response cap, so no token was issued.",
+  title: 'Token over the response cap',
+};
+
 const problemBody = (code: unknown): string =>
   JSON.stringify({ code, detail: 'detail', status: 503, title: 'title' });
 
@@ -346,6 +353,11 @@ suite('createFetchControllerClient', () => {
       [
         'storeUnavailable with no Retry-After',
         controllerRefusal(STORE_UNAVAILABLE),
+        { cause: 'status', kind: 'failed' },
+      ],
+      [
+        'tokenOverResponseCap with no Retry-After',
+        controllerRefusal(TOKEN_OVER_RESPONSE_CAP),
         { cause: 'status', kind: 'failed' },
       ],
       [

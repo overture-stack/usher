@@ -1428,6 +1428,9 @@ The core's `start` then adds refusals of its own, judged in this order:
 | `stores.refusalMax`            | 10000                                 |
 | `tokenTtlMs`                   | 300000                                |
 
+The controller sends a token of up to the default `responseCapBytes`, 1048576 bytes, and a bridge
+holding a smaller cap reads a larger token as `tokenTooLarge`.
+
 **Two clock tolerances, never one.** The local refusal of a three-part sign-in token whose own `exp`
 has passed uses a tolerance read from configuration as `localRefusalClockToleranceMs`, 60000 ms by
 default. The controller's own tolerance for a sign-in token's `exp` never exceeds it, or a bridge

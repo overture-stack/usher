@@ -127,10 +127,14 @@ that looks complete and answers only one path.
     5. Every resource holding at least one kept grant goes in the token, carrying
        the categories kept for it and, under each, the entities reached and the
        actions held. Grants naming a field category collect under that category's
-       `field` key. A category not kept is simply not named, and the records
-       carrying it are not reached; a field category not kept is not named either,
-       and its columns are not shown. Beside them, every category each of those
-       resources offers, held or not.
+       `field` key (post-MVP). A category not kept is simply not named, and the
+       records carrying it are not reached; a field category not kept is not named
+       either, and its columns are not shown. Beside them, every category each of
+       those resources offers, held or not.
+
+While field restriction is post-MVP, a grant naming a field category confers nothing: step 5 puts no
+resource in the token for it, and it counts neither in `token.exchange`'s `grantCount` nor towards
+the token's `exp`.
 
 Step 5 decides what the token says, and the bridge renders what that reaches: one filter per
 catalogue, reaching the resources held and excluding, category by category, the records of each held

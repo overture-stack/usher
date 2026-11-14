@@ -5921,7 +5921,8 @@
                             "identityProviderUnavailable",
                             "outcomeUnknown",
                             "signingKeyUnconfirmed",
-                            "storeUnavailable"
+                            "storeUnavailable",
+                            "tokenOverResponseCap"
                           ]
                         }
                       },
@@ -5931,7 +5932,7 @@
                 }
               }
             },
-            "description": "No token is issued. `admissionShareExceeded`: the application's exchanges in flight fill its share of this instance while the instance's exchanges in flight hold every one of its exchange connections, so the exchange was refused before any work on the store and its `token.exchange` is not recorded; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot take the exchange now, so the exchange cannot be read or its `token.exchange` cannot be recorded, or a principal's first exchange cannot record their identity. `outcomeUnknown`: the store did not confirm whether the exchange's `token.exchange` was recorded. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the sign-in token, or not in time for the exchange to be recorded by its deadline, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the sign-in token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. An exchange whose token would be larger than the bridge's response cap is answered `503` too.",
+            "description": "No token is issued. `admissionShareExceeded`: the application's exchanges in flight fill its share of this instance while the instance's exchanges in flight hold every one of its exchange connections, so the exchange was refused before any work on the store and its `token.exchange` is not recorded; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot take the exchange now, so the exchange cannot be read or its `token.exchange` cannot be recorded, or a principal's first exchange cannot record their identity. `outcomeUnknown`: the store did not confirm whether the exchange's `token.exchange` was recorded. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the sign-in token, or not in time for the exchange to be recorded by its deadline, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the sign-in token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `tokenOverResponseCap`: the token would be larger than the bridge's default response cap of 1,048,576 bytes, so none is issued and the exchange's `token.exchange` is recorded as failed.",
             "headers": {
               "Retry-After": {
                 "$ref": "#/components/headers/RetryAfter"

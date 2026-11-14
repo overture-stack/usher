@@ -413,6 +413,10 @@ because the identity provider cannot be reached is `failed` at `error`, as
 An exchange whose work on the store fails, anonymous, refused or signed in, is `failed` at `error`
 too, as `storeUnavailable`, its actor anonymous, recorded in that work's place with nothing it wrote
 kept, wherever the store still takes the record, and answered `503` whether or not the record commits.
+An exchange whose token would be larger than the bridge's default response cap is `failed` at `error`
+too, as `tokenOverResponseCap`, its actor the exchange's, in its issuance's place, naming `userId`,
+the resources its payload holds an entry for as `heldResourceCount` and the token's size in bytes as
+`tokenBytes`, and no resource, grant count or rule; it is answered `503` with no `Retry-After`.
 
 **`migration.run` records each real run, and a dry run only when it is refused for authority.** A
 real run that succeeds records it at `info`, its actor the administrator, with `studiesReported`,

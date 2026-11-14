@@ -6,6 +6,7 @@ import {
   deniedExchangeEvent,
   failedExchangeEvent,
   issuedExchangeEvent,
+  overLimitExchangeEvent,
 } from './exchangeEvents.js';
 
 const AUDIENCE = '0d4c7e2a-8b1f-4a63-9e05-3f7a2c9d1b68';
@@ -228,5 +229,32 @@ suite("the exchange's token.exchange events", () => {
       severity: 'error',
       type: 'token.exchange',
     });
+  });
+
+  test("records an exchange whose token would pass the token limit at error as failed, under tokenOverResponseCap, with the resources its payload holds and its token's bytes, naming its subject as userId and no grant count, rule or resource", () => {
+    const events = ['subject "ana" \\', null].map((subject) =>
+      overLimitExchangeEvent({
+        heldResourceCount: 4000,
+        sourceIp: '192.0.2.10',
+        subject,
+        tokenBytes: 1_048_577,
+      }),
+    );
+
+    assert.deepEqual(
+      events,
+      ['subject "ana" \\', null].map((userId) => ({
+        data: {
+          heldResourceCount: 4000,
+          reason: 'tokenOverResponseCap',
+          result: 'failed',
+          sourceIp: '192.0.2.10',
+          tokenBytes: 1_048_577,
+          userId,
+        },
+        severity: 'error',
+        type: 'token.exchange',
+      })),
+    );
   });
 });

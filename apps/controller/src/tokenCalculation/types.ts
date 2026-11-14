@@ -4,6 +4,8 @@ import type {
   ResourcePermissions,
 } from '@overture-stack/usher-types';
 
+import type { Plane } from '../capabilities/index.js';
+
 /** The tier a resource's unmarked records sit at, as the store holds it. */
 export type BaseTier = 'grant' | 'open' | 'registered';
 
@@ -33,6 +35,56 @@ export interface AudiencePolicy {
   served: readonly ServedResource[];
 }
 
+/** A category a grant names, by its scope and its name without that scope, as the store holds them. */
+export interface NamedCategory {
+  name: string;
+  scope: 'global' | 'resource';
+}
+
+/**
+ * A person's latest decision on a grant, as the calculation reads it: whether it accepted or rejected
+ * the grant, and the capabilities it was given on, as `entity.action` names.
+ */
+export interface LatestDecision {
+  capabilities: readonly string[];
+  decision: 'accepted' | 'rejected';
+}
+
+/**
+ * A recorded grant reaching a signed-in principal, as the calculation reads it: unrevoked, held by the
+ * principal or by a group they belong to, on a resource the audience serves.
+ */
+export interface ReachingGrant {
+  /** When it expires, in milliseconds since the Unix epoch; `null` for a grant that never does. */
+  expiresAt: number | null;
+
+  /** The identifier of the resource it is on. */
+  externalId: ResourceIdentifier;
+
+  /** The field category it names within its record category; `null` where it names none. */
+  fieldCategory: NamedCategory | null;
+
+  /** The principal's own latest decision on it, by its instant; `null` where they have made none. */
+  latestDecision: LatestDecision | null;
+
+  /** The plane of its role. */
+  plane: Plane;
+
+  /** Its record category; `null` for the control plane's wildcard, the whole resource. */
+  recordCategory: NamedCategory | null;
+
+  /** The capabilities its role carries as the store holds them, as `entity.action` names. */
+  roleCapabilities: readonly string[];
+}
+
+/**
+ * What one read of the store gives the calculation for a signed-in principal and one audience: the
+ * audience's policy, and every recorded grant reaching the principal there.
+ */
+export interface PrincipalPolicy extends AudiencePolicy {
+  grants: readonly ReachingGrant[];
+}
+
 /** A rule conferring a grant on a whole class of principals, as `token.exchange` names it in `rules`. */
 export type ConferringRule = 'baseline' | 'signedIn';
 
@@ -41,6 +93,12 @@ export type ConferringRule = 'baseline' | 'signedIn';
  * payload's members of the same names carry them, with what conferred it.
  */
 export interface Calculation {
+  /**
+   * The earliest expiry among the recorded grants that reached the payload, in whole seconds since the
+   * Unix epoch, rounded down; absent where none of them expires.
+   */
+  earliestGrantExpiry?: number;
+
   /** Every concrete global category, as a payload names it, never `global.unmarked`. */
   globalCategories: readonly CategoryName[];
 

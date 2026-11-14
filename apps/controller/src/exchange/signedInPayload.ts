@@ -26,9 +26,10 @@ export interface SignedInIssuing {
 /**
  * A signed-in principal's payload, version 1: `sub` the identity provider's subject, the configured
  * `iss`, the audience as one string in `aud`, `iat` and `generatedAt` the instant it is computed and
- * issued at, `exp` a token lifetime later or the sign-in token's `exp`, whichever is sooner, and what
- * the calculation holds and offers. The sign-in token's `exp` must be after the instant of issue, so
- * the token lives at least one second. It carries version 1's members and no other, whatever else the
+ * issued at, `exp` the soonest of a token lifetime later, the sign-in token's `exp` and the earliest
+ * expiry among the recorded grants the calculation drew on, and what the calculation holds and offers.
+ * The sign-in token's `exp` and that earliest expiry must each be after the instant of issue, so the
+ * token lives at least one second. It carries version 1's members and no other, whatever else the
  * calculation holds.
  *
  * @param calculation what the principal holds, and what the audience offers.
@@ -48,7 +49,11 @@ export const signedInPayload = (
 ): VersionOnePayload =>
   versionOnePayload(calculation, {
     audience,
-    expiresAt: Math.min(issuedAt + lifetimeSeconds, signInExpiresAt),
+    expiresAt: Math.min(
+      issuedAt + lifetimeSeconds,
+      signInExpiresAt,
+      calculation.earliestGrantExpiry ?? Number.POSITIVE_INFINITY,
+    ),
     issuedAt,
     issuer,
     subject,

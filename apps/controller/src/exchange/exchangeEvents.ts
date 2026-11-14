@@ -110,6 +110,46 @@ export const deniedExchangeEvent = ({
   type: TYPE,
 });
 
+/** An Usher token not issued for passing the token limit, as its `token.exchange` records it. */
+export interface OverLimitToken {
+  /** How many resources its payload holds an entry for. */
+  heldResourceCount: number;
+
+  sourceIp: string;
+
+  /** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
+  subject: string | null;
+
+  /** Its size in bytes, as the `200` body would have sent it. */
+  tokenBytes: number;
+}
+
+/**
+ * The `token.exchange` of an exchange whose token would pass the token limit, at error: `failed`,
+ * under `tokenOverResponseCap`, with the resources its payload holds as `heldResourceCount`, the
+ * token's size as `tokenBytes`, and its subject as `userId`. It names no resource, no grant count and
+ * no rule.
+ *
+ * @param token the token's subject, its size and the resources it holds, and the request's address.
+ */
+export const overLimitExchangeEvent = ({
+  heldResourceCount,
+  sourceIp,
+  subject,
+  tokenBytes,
+}: OverLimitToken): AuditEvent => ({
+  data: {
+    heldResourceCount,
+    reason: 'tokenOverResponseCap',
+    result: 'failed',
+    sourceIp,
+    tokenBytes,
+    userId: subject,
+  },
+  severity: 'error',
+  type: TYPE,
+});
+
 /**
  * The `token.exchange` of an exchange a fault kept from being answered, at error: `failed`, under the
  * code answered, naming no `userId`.

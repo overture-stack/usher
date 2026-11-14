@@ -85,9 +85,37 @@ suite("a signed-in principal's payload", () => {
     assert.deepEqual({ exp, iat }, { exp: ISSUED_AT + 1, iat: ISSUED_AT });
   });
 
+  test('expires with the earliest grant it drew on when that expires sooner than a token lifetime and the sign-in token', () => {
+    const { exp } = signedInPayload(
+      { ...CALCULATION, earliestGrantExpiry: ISSUED_AT + 120 },
+      { ...ISSUING, signInExpiresAt: ISSUED_AT + 200 },
+    );
+
+    assert.equal(exp, ISSUED_AT + 120);
+  });
+
+  test('expires a token lifetime after it is issued, or with the sign-in token, when either comes before the earliest grant it drew on expires', () => {
+    const expiries = [
+      signedInPayload(
+        { ...CALCULATION, earliestGrantExpiry: ISSUED_AT + 301 },
+        ISSUING,
+      ).exp,
+      signedInPayload(
+        { ...CALCULATION, earliestGrantExpiry: ISSUED_AT + 91 },
+        { ...ISSUING, signInExpiresAt: ISSUED_AT + 90 },
+      ).exp,
+    ];
+
+    assert.deepEqual(expiries, [ISSUED_AT + 300, ISSUED_AT + 90]);
+  });
+
   test("carries every member of payload version 1 and no other, whatever else the calculation holds, and is a payload usher-types' validator accepts", () => {
     const payload = signedInPayload(
-      { ...CALCULATION, ...{ jti: 'not a member', nbf: ISSUED_AT } },
+      {
+        ...CALCULATION,
+        earliestGrantExpiry: ISSUED_AT + 120,
+        ...{ jti: 'not a member', nbf: ISSUED_AT },
+      },
       ISSUING,
     );
 

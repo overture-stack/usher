@@ -6,6 +6,9 @@ import { problem, type Problem } from '../http/index.js';
 /** The largest request body the exchange reads, in bytes: 64 KiB. */
 export const BODY_LIMIT_BYTES = 65_536;
 
+/** The largest token the exchange answers, in bytes as its `200` body sends them: 1 MiB. */
+export const TOKEN_LIMIT_BYTES = 1_048_576;
+
 /**
  * The refusals the exchange answers, each naming the rule broken or the cause and no value sent. Every
  * refused assertion is answered alike, and so is every refused credential.
@@ -71,6 +74,12 @@ export const EXCHANGE_PROBLEMS = Object.freeze({
     503,
     'Policy store unavailable',
     'The policy store cannot take this exchange now, and no token was issued. Try again.',
+  ),
+  tokenOverResponseCap: problem(
+    'tokenOverResponseCap',
+    503,
+    'Token over the response cap',
+    `The token for this exchange would hold more than ${TOKEN_LIMIT_BYTES} bytes, the bridge's default response cap, so no token was issued.`,
   ),
 });
 

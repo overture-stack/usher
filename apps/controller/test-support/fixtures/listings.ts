@@ -494,7 +494,7 @@ export const listingPolicy = (
 
 /**
  * The plan's seed with every owner grant in a state that confers nothing, beside one that does: Ana's
- * on `STUDY-A1` pending, Hal's on `STUDY-B2` expired, and Cy's on `STUDY-C3` revoked, with Dee's on
+ * on `STUDY-A1` pending, Hal's on `STUDY-B2` rejected, and Cy's on `STUDY-C3` revoked, with Dee's on
  * `STUDY-C3` accepted.
  *
  * @param realm the realm.
@@ -520,16 +520,16 @@ export const ownerStatesPolicy = (
   return {
     ...main,
     decisions: [
-      ...(main.decisions ?? []).filter(({ grant }) => grant !== 'a1Owner'),
+      ...(main.decisions ?? []).filter(
+        ({ grant }) => grant !== 'a1Owner' && grant !== 'b2Owner',
+      ),
+      answer('b2Owner', 'rejected', daysBefore(base, 1)),
       answer('c3CyOwner', 'accepted', daysBefore(base, 14)),
       answer('c3DeeOwner', 'accepted', daysBefore(base, 11)),
     ],
     grants: {
       ...main.grants,
-      b2Owner: {
-        ...owner('hal', STUDIES.b2, 35),
-        expiresAt: daysBefore(base, 1),
-      },
+      b2Owner: owner('hal', STUDIES.b2, 35),
       c3CyOwner: {
         ...owner('cy', STUDIES.c3, 15),
         revoked: { at: daysBefore(base, 3), by: 'administrator' },

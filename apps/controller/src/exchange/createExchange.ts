@@ -24,14 +24,16 @@ import { CommitUnconfirmed, type Deadline } from '../storeTimeout/index.js';
 import {
   anonymousCalculation,
   readAudiencePolicy,
+  readPrincipalPolicy,
   signedInCalculation,
 } from '../tokenCalculation/index.js';
-import { sealUsherToken } from '../usherToken/index.js';
+import { sealUsherToken, type VersionOnePayload } from '../usherToken/index.js';
 import { anonymousPayload } from './anonymousPayload.js';
 import {
   deniedExchangeEvent,
   failedExchangeEvent,
   issuedExchangeEvent,
+  overLimitExchangeEvent,
 } from './exchangeEvents.js';
 import {
   BODY_LIMIT_BYTES,
@@ -49,6 +51,9 @@ export const EXCHANGE_PATH = '/exchange';
 
 /** The line naming a failure of the store while an exchange was answered. */
 export const EXCHANGE_STORE_FAILED = 'exchange.storeFailed';
+
+/** The line naming an exchange whose token would pass the token limit, answered `503 tokenOverResponseCap`. */
+export const EXCHANGE_TOKEN_OVER_RESPONSE_CAP = 'exchange.tokenOverResponseCap';
 
 /** The line naming a failure the controller did not expect, answered `500 internalError`. */
 export const EXCHANGE_UNEXPECTED_FAILURE = 'exchange.unexpectedFailure';
@@ -164,6 +169,9 @@ const storeFailureOf = (sourceIp: string): AuditEvent => ({
   actor: ANONYMOUS,
   ...failedExchangeEvent({ reason: 'storeUnavailable', sourceIp }),
 });
+
+// The bytes a token takes as the `200` body sends it: its compact form, as UTF-8.
+const bodyBytesOf = (token: string): number => Buffer.byteLength(token, 'utf8');
 
 // A refusal answered the one 403 every refused credential gets.
 const credentialRefused = (event: AuditEvent): CredentialRefusal => ({
@@ -338,12 +346,24 @@ const judgedCredentialOf = (
  * revocation of the whole platform, or signed out, is answered the same `403` and recorded `denied`
  * under that reason, naming the subject in `refusedSubject`, its actor anonymous, with nothing else
  * written. A principal in good standing is met, a person recorded on first meeting them; the
- * audience's policy is read from one snapshot and the signed-in calculation is run; the session the
- * sign-in token names, if it names one, is recorded with that token's `exp`; and the version 1
- * payload, naming the identity provider's subject in `sub` and expiring a token lifetime after it is
- * issued or with the sign-in token, whichever is sooner, is sealed as the anonymous one is. Its
- * `token.exchange` is recorded as `succeeded`, naming the subject as `userId`, and the token is
- * answered `200` as the anonymous one is, once that transaction has committed.
+ * audience's policy and the recorded grants reaching that person are read from one snapshot, and the
+ * signed-in calculation is run at the second the token is issued in; the version 1 payload, naming
+ * the identity provider's subject in `sub` and expiring a token lifetime after it is issued, with the
+ * sign-in token, or with the earliest grant it drew on, whichever is soonest, is sealed as the
+ * anonymous one is; and the session the sign-in token names, if it names one, is recorded with that
+ * token's `exp`. Its `token.exchange` is recorded as `succeeded`, naming the subject as `userId` and
+ * counting the grants drawn on as `grantCount`, and the token is answered `200` as the anonymous one
+ * is, once that transaction has committed.
+ *
+ * Every token sealed, anonymous or signed in, is measured before anything more is written, as the
+ * bytes its `200` body would send, its compact form as UTF-8, against the token limit given: a token of
+ * exactly the limit is answered, and a larger one is not. Such an exchange is answered
+ * `503 tokenOverResponseCap`, with no token and no `Retry-After`, and its `token.exchange` is recorded
+ * `failed` at `error` in its issuance's place, its actor the exchange's, naming the resources its
+ * payload holds an entry for as `heldResourceCount`, the token's size as `tokenBytes` and its subject
+ * as `userId`, and no resource, grant count or rule; one line at error,
+ * {@link EXCHANGE_TOKEN_OVER_RESPONSE_CAP}, names the route alone. No session is recorded for it, and a
+ * person met for the first time is kept, committed with that event.
  *
  * Each exchange's store work runs within its application's share of the exchange pool, through the
  * admission given: the anonymous exchange's in the anonymous lane, and every credential's, issued for
@@ -369,8 +389,8 @@ const judgedCredentialOf = (
  *
  * @param settings the admission and where its refusals are counted, the assertion verifier, its tally,
  *   the instance's recording of refused assertions and the exchange's limit of them, the deadline and
- *   the monotonic clock it is read on, the credential judge, the key confirmations, the trail, the log,
- *   and the configuration the exchange reads.
+ *   the monotonic clock it is read on, the credential judge, the key confirmations, the token limit,
+ *   the trail, the log, and the configuration the exchange reads.
  */
 export const createExchange = ({
   admission,
@@ -386,6 +406,7 @@ export const createExchange = ({
   monotonicNow,
   settings,
   sharesExceeded,
+  tokenLimitBytes,
   trail,
 }: ExchangeSettings): Exchange => {
   const admitted = new WeakMap<FastifyRequest, Verified>();
@@ -467,6 +488,26 @@ export const createExchange = ({
       kind: 'failed',
     }));
 
+  // The answer for a token past the token limit: a line naming the route alone, the exchange recorded
+  // failed in place of its issuance, and a refusal carrying no Retry-After.
+  const overLimitAnswer = async (
+    record: AuditTransaction<pg.ClientBase>['record'],
+    payload: VersionOnePayload,
+    tokenBytes: number,
+    sourceIp: string,
+  ): Promise<Answer> => {
+    eventLog.error(EXCHANGE_TOKEN_OVER_RESPONSE_CAP, { route: EXCHANGE_PATH });
+    await record(
+      overLimitExchangeEvent({
+        heldResourceCount: Object.keys(payload.permissions).length,
+        sourceIp,
+        subject: payload.sub,
+        tokenBytes,
+      }),
+    );
+    return { kind: 'refused', problem: EXCHANGE_PROBLEMS.tokenOverResponseCap };
+  };
+
   const issueAnonymous = (
     { deadline, key }: Verified,
     sourceIp: string,
@@ -487,18 +528,22 @@ export const createExchange = ({
           lifetimeSeconds: settings.tokenLifetimeSeconds,
         });
         const token = await sealUsherToken(payload, key);
-        await record(
-          issuedExchangeEvent({
-            audience: payload.aud,
-            generatedAt: payload.generatedAt,
-            grantCount: calculation.grantCount,
-            rules: calculation.rules,
-            sourceIp,
-            subject: payload.sub,
-            tokenTtl: payload.exp - payload.iat,
-          }),
-        );
-        return { kind: 'issued', token };
+        const tokenBytes = bodyBytesOf(token);
+        if (tokenBytes <= tokenLimitBytes) {
+          await record(
+            issuedExchangeEvent({
+              audience: payload.aud,
+              generatedAt: payload.generatedAt,
+              grantCount: calculation.grantCount,
+              rules: calculation.rules,
+              sourceIp,
+              subject: payload.sub,
+              tokenTtl: payload.exp - payload.iat,
+            }),
+          );
+          return { kind: 'issued', token };
+        }
+        return overLimitAnswer(record, payload, tokenBytes, sourceIp);
       },
       { deadline, failureEvent: storeFailureOf(sourceIp) },
     );
@@ -556,8 +601,9 @@ export const createExchange = ({
   };
 
   // A principal in good standing is met, a person recorded the first time, before anything else is
-  // written, so whatever the transaction records points at them; the session their sign-in token
-  // carries, if any, is recorded with that token's expiry.
+  // written, so whatever the transaction records points at them. Their token is sealed and measured
+  // before the session their sign-in token carries, if any, is recorded with that token's expiry, so
+  // a token past the token limit records no session.
   const issueToPrincipal = async (
     { connection, record }: AuditTransaction<pg.ClientBase>,
     { key }: Verified,
@@ -565,31 +611,23 @@ export const createExchange = ({
     sourceIp: string,
   ): Promise<Answer> => {
     const { databaseSchema, identityProviderIssuer } = settings;
-    await findOrRecordPerson(
+    const person = await findOrRecordPerson(
       connection,
       databaseSchema,
       { issuer: identityProviderIssuer, subject },
       new Date(settings.clock.now()),
     );
-    const policy = await readAudiencePolicy(
+    const policy = await readPrincipalPolicy(
       connection,
       databaseSchema,
       key.applicationId,
+      person,
     );
-    const calculation = signedInCalculation(
-      policy,
-      settings.baseline,
-      settings.signedInRule,
-    );
-    const { sid } = session;
-    if (sid !== undefined) {
-      await recordExchangedSession(connection, databaseSchema, {
-        expiresAt,
-        issuer: identityProviderIssuer,
-        sid,
-        subject,
-      });
-    }
+    const calculation = signedInCalculation(policy, {
+      baseline: settings.baseline,
+      issuedAt,
+      signedInRule: settings.signedInRule,
+    });
     const payload = signedInPayload(calculation, {
       audience: key.applicationId,
       issuedAt,
@@ -599,18 +637,31 @@ export const createExchange = ({
       subject,
     });
     const token = await sealUsherToken(payload, key);
-    await record(
-      issuedExchangeEvent({
-        audience: payload.aud,
-        generatedAt: payload.generatedAt,
-        grantCount: calculation.grantCount,
-        rules: calculation.rules,
-        sourceIp,
-        subject,
-        tokenTtl: payload.exp - payload.iat,
-      }),
-    );
-    return { kind: 'issued', token };
+    const tokenBytes = bodyBytesOf(token);
+    if (tokenBytes <= tokenLimitBytes) {
+      const { sid } = session;
+      if (sid !== undefined) {
+        await recordExchangedSession(connection, databaseSchema, {
+          expiresAt,
+          issuer: identityProviderIssuer,
+          sid,
+          subject,
+        });
+      }
+      await record(
+        issuedExchangeEvent({
+          audience: payload.aud,
+          generatedAt: payload.generatedAt,
+          grantCount: calculation.grantCount,
+          rules: calculation.rules,
+          sourceIp,
+          subject,
+          tokenTtl: payload.exp - payload.iat,
+        }),
+      );
+      return { kind: 'issued', token };
+    }
+    return overLimitAnswer(record, payload, tokenBytes, sourceIp);
   };
 
   // A signed-in principal's exchange, in one transaction declaring them its actor, their standing read

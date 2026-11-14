@@ -33,17 +33,22 @@ import {
   CommitUnconfirmed,
   type Deadline,
 } from '../storeTimeout/index.js';
-import type { ServedResource } from '../tokenCalculation/index.js';
+import type {
+  ReachingGrant,
+  ServedResource,
+} from '../tokenCalculation/index.js';
 import {
   createExchange,
   EXCHANGE_PATH,
   EXCHANGE_REQUEST_TIMEOUT,
   EXCHANGE_STORE_FAILED,
+  EXCHANGE_TOKEN_OVER_RESPONSE_CAP,
   EXCHANGE_UNEXPECTED_FAILURE,
   LATE_REQUEST_THRESHOLD_MILLISECONDS,
   MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS,
   RECORDING_RESERVE_MILLISECONDS,
 } from './createExchange.js';
+import { TOKEN_LIMIT_BYTES } from './exchangeProblems.js';
 import type { CredentialJudge, ExchangeKey } from './types.js';
 
 const NOW = Date.UTC(2026, 10, 10, 12, 0, 0, 750);
@@ -218,6 +223,7 @@ const SERVED: readonly ServedResource[] = [
 
 const POLICY_ROW = {
   globalCategories: ['community-governed', 'controlled', 'unmarked'],
+  grants: [],
   served: SERVED,
 };
 
@@ -232,10 +238,12 @@ const standingRow = (refusal: StoredRefusal | undefined) => ({
 });
 
 // What the stand's store reads for a statement: a principal's standing, a person recorded on meeting
-// them first, the audience's policy, or no row, as it finds no person and inserts a session.
+// them first, the audience's policy with the grants given as those reaching the principal, or no row,
+// as it finds no person and inserts a session.
 const rowsAnswering = (
   text: string,
   refusal: StoredRefusal | undefined,
+  grants: readonly ReachingGrant[] = [],
 ): readonly unknown[] => {
   if (text.includes('principal_revocations')) {
     return [standingRow(refusal)];
@@ -243,7 +251,9 @@ const rowsAnswering = (
   if (text.includes('RETURNING id')) {
     return [{ id: PERSON_ID }];
   }
-  return text.includes('application_resources') ? [POLICY_ROW] : [];
+  return text.includes('application_resources')
+    ? [{ ...POLICY_ROW, grants }]
+    : [];
 };
 
 // What each statement the exchange sent reads or writes, by its text: a principal's standing, a
@@ -383,6 +393,9 @@ interface StandOptions {
    */
   lateRequestThresholdMilliseconds?: number;
 
+  /** The grants the store reads as reaching a signed-in principal: none by default. */
+  grants?: readonly ReachingGrant[];
+
   /** Judges each credential in place of the stand's own judgements. */
   judge?: CredentialJudge;
 
@@ -406,6 +419,9 @@ interface StandOptions {
 
   /** Settles when the store takes each transaction begun, its work waiting until then: at once by default. */
   storeTakes?: Promise<void>;
+
+  /** The most bytes a token answered may hold: the controller's own limit by default. */
+  tokenLimitBytes?: number;
 }
 
 const standUp = (
@@ -414,6 +430,7 @@ const standUp = (
     commitFailure,
     confirmationSettled = Promise.resolve(),
     deadlineMilliseconds = CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS,
+    grants,
     judge,
     lateRequestThresholdMilliseconds = LATE_REQUEST_THRESHOLD_MILLISECONDS,
     outsideRecorded = Promise.resolve(),
@@ -422,6 +439,7 @@ const standUp = (
     registered = 1,
     standing,
     storeTakes = Promise.resolve(),
+    tokenLimitBytes = TOKEN_LIMIT_BYTES,
   }: StandOptions = {},
 ): Stand => {
   const admission = createAdmission({
@@ -534,6 +552,7 @@ const standUp = (
         stand.countedOverShare.push(applicationId);
       },
     },
+    tokenLimitBytes,
     trail: {
       inTransaction: async (actor, work, options) => {
         const transaction: Transaction = {
@@ -549,7 +568,7 @@ const standUp = (
           if (readFailure !== undefined) {
             throw readFailure;
           }
-          return { rows: rowsAnswering(text, standing) };
+          return { rows: rowsAnswering(text, standing, grants) };
         };
         const opened: AuditTransaction<pg.ClientBase> = {
           // A client that never connects, its query answered here.
@@ -711,6 +730,9 @@ interface StoreStandOptions {
   holds: (text: string) => number | undefined;
 
   storeTimeoutMilliseconds: number;
+
+  /** The most bytes a token answered may hold: the controller's own limit by default. */
+  tokenLimitBytes?: number;
 }
 
 const INSERTED_TABLE = /^INSERT INTO "[^"]+"\.(?<table>\w+)/u;
@@ -847,6 +869,7 @@ const storeStandUp = (
     holds,
     lateRequestThresholdMilliseconds = 0,
     storeTimeoutMilliseconds,
+    tokenLimitBytes = TOKEN_LIMIT_BYTES,
   }: StoreStandOptions,
 ): StoreStand => {
   const chunks: string[] = [];
@@ -891,6 +914,7 @@ const storeStandUp = (
     monotonicNow: () => performance.now(),
     settings: SETTINGS,
     sharesExceeded: { count: () => undefined },
+    tokenLimitBytes,
     trail,
   });
   server.route(exchange.route);
@@ -1613,7 +1637,57 @@ suite('the token exchange', () => {
       ]);
     });
 
-    test("reads the principal's standing, meets them as a person, reads the audience's policy and records the session the sign-in token carries, in that order, in the one transaction", async (context) => {
+    test("draws on the grants the store reads as reaching them: each kept grant's entry in the payload, its expiry bounding the token's, rounded down, and their count in the token.exchange", async (context) => {
+      const stand = standUp(context, {
+        grants: [
+          {
+            expiresAt: (SECONDS + 120) * 1000 + 500,
+            externalId: 'STUDY-A1',
+            fieldCategory: null,
+            latestDecision: {
+              capabilities: ['record.view'],
+              decision: 'accepted',
+            },
+            plane: 'data',
+            recordCategory: { name: 'controlled', scope: 'global' },
+            roleCapabilities: ['record.count', 'record.export', 'record.view'],
+          },
+          {
+            expiresAt: null,
+            externalId: 'STUDY-C3',
+            fieldCategory: null,
+            latestDecision: null,
+            plane: 'data',
+            recordCategory: { name: 'controlled', scope: 'global' },
+            roleCapabilities: ['record.view'],
+          },
+        ],
+      });
+
+      const answer = await post(stand, withCredential('credential-accepted'));
+
+      assert.equal(answer.statusCode, 200);
+      assert.deepEqual(await payloadIn(answer), {
+        ...SIGNED_IN_PAYLOAD,
+        exp: SECONDS + 120,
+        permissions: {
+          ...SIGNED_IN_PAYLOAD.permissions,
+          'STUDY-A1': {
+            'global.controlled': { record: ['view'] },
+            'global.unmarked': { record: ['count', 'view', 'export'] },
+          },
+        },
+      });
+      assert.deepEqual(
+        stand.transactions[0]?.recorded.map(({ data }) => ({
+          grantCount: data['grantCount'],
+          tokenTtl: data['tokenTtl'],
+        })),
+        [{ grantCount: 1, tokenTtl: 120 }],
+      );
+    });
+
+    test("reads the principal's standing, meets them as a person, reads the audience's policy and the grants reaching them, binding the person met, and records the session the sign-in token carries, in that order, in the one transaction", async (context) => {
       const stand = standUp(context);
 
       await post(stand, withCredential('credential-accepted'));
@@ -1634,7 +1708,7 @@ suite('the token exchange', () => {
         new Date((SECONDS - 10) * 1000),
       ]);
       assert.deepEqual(valuesOf('person'), [IDENTITY_PROVIDER, 'subject-ana']);
-      assert.deepEqual(valuesOf('policy'), [APPLICATION]);
+      assert.deepEqual(valuesOf('policy'), [APPLICATION, PERSON_ID]);
       assert.deepEqual(valuesOf('session'), [
         IDENTITY_PROVIDER,
         'session-1',
@@ -1899,6 +1973,121 @@ suite('the token exchange', () => {
       });
       assert.deepEqual(stand.judged, []);
       assert.deepEqual(stand.transactions, []);
+    });
+  });
+
+  suite('a token past the token limit', () => {
+    // The bytes a token answered takes on the wire: its body as UTF-8.
+    const bodyBytesOf = (answer: LightMyRequestResponse): number =>
+      Buffer.byteLength(answer.body, 'utf8');
+
+    test('serves the anonymous visitor a token of exactly the limit, and answers one a byte past it 503 tokenOverResponseCap with no token and no Retry-After, recording its token.exchange failed at error, its actor anonymous, with the resources its payload holds and its bytes', async (context) => {
+      const limit = bodyBytesOf(await post(standUp(context)));
+      const atLimit = standUp(context, { tokenLimitBytes: limit });
+      const pastLimit = standUp(context, { tokenLimitBytes: limit - 1 });
+
+      const served = await post(atLimit);
+      const refused = await post(pastLimit);
+
+      assert.equal(served.statusCode, 200);
+      assert.equal(bodyBytesOf(served), limit);
+      assert.deepEqual(await payloadIn(served), ANONYMOUS_PAYLOAD);
+      assert.deepEqual(problemOf(refused), {
+        code: 'tokenOverResponseCap',
+        status: 503,
+      });
+      assert.match(
+        String(refused.headers['content-type']),
+        /^application\/problem\+json\b/u,
+      );
+      assert.equal(refused.headers['retry-after'], undefined);
+      assert.equal(refused.headers['cache-control'], 'no-store');
+      assert.deepEqual(pastLimit.transactions[0]?.actor, { type: 'anonymous' });
+      assert.deepEqual(recordedIn(pastLimit), [
+        {
+          data: {
+            heldResourceCount: 2,
+            reason: 'tokenOverResponseCap',
+            result: 'failed',
+            sourceIp: '127.0.0.1',
+            tokenBytes: limit,
+            userId: null,
+          },
+          severity: 'error',
+          type: 'token.exchange',
+        },
+      ]);
+      assert.deepEqual(pastLimit.lines, [
+        {
+          fields: { route: EXCHANGE_PATH },
+          message: EXCHANGE_TOKEN_OVER_RESPONSE_CAP,
+        },
+      ]);
+    });
+
+    test("answers a signed-in principal's token past the limit 503 tokenOverResponseCap, recording only its failed token.exchange, naming them as userId, and recording no session", async (context) => {
+      const tokenBytes = bodyBytesOf(
+        await post(standUp(context), withCredential('credential-accepted')),
+      );
+      const stand = standUp(context, { tokenLimitBytes: tokenBytes - 1 });
+
+      const answer = await post(stand, withCredential('credential-accepted'));
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'tokenOverResponseCap',
+        status: 503,
+      });
+      assert.equal(answer.headers['retry-after'], undefined);
+      assert.deepEqual(
+        statementKindsIn(stand.transactions[0] ?? { statements: [] }),
+        ['standing', 'person', 'policy'],
+      );
+      assert.deepEqual(stand.transactions[0]?.actor, {
+        id: 'subject-ana',
+        type: 'human',
+      });
+      assert.deepEqual(recordedIn(stand), [
+        {
+          data: {
+            heldResourceCount: 3,
+            reason: 'tokenOverResponseCap',
+            result: 'failed',
+            sourceIp: '127.0.0.1',
+            tokenBytes,
+            userId: 'subject-ana',
+          },
+          severity: 'error',
+          type: 'token.exchange',
+        },
+      ]);
+    });
+
+    test("commits a signed-in principal's first meeting and their failed token.exchange alone when their token passes the limit, and no session", async (context) => {
+      const stand = storeStandUp(context, {
+        deadlineMilliseconds: CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS,
+        holds: () => undefined,
+        storeTimeoutMilliseconds: 5000,
+        tokenLimitBytes: 100,
+      });
+
+      const answer = await post(stand, withCredential('credential-accepted'));
+
+      assert.deepEqual(problemOf(answer), {
+        code: 'tokenOverResponseCap',
+        status: 503,
+      });
+      assert.deepEqual(committedIn(stand), [
+        { table: 'users' },
+        { table: 'user_identities' },
+        {
+          actorType: 'human',
+          reason: 'tokenOverResponseCap',
+          result: 'failed',
+          table: 'audit_log',
+          type: 'bio.overture.token.exchange',
+          userId: 'subject-ana',
+        },
+      ]);
     });
   });
 

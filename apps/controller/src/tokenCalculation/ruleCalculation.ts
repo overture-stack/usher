@@ -1,10 +1,12 @@
-import type {
-  CategoryName,
-  NonEmpty,
-  RecordAction,
-  ResourcePermissions,
-} from '@overture-stack/usher-types';
+import type { RecordAction } from '@overture-stack/usher-types';
 
+import {
+  calculationOf,
+  type HeldEntry,
+  nonEmpty,
+  reachableOf,
+  UNMARKED_CATEGORY,
+} from './heldEntries.js';
 import type {
   AudiencePolicy,
   BaseTier,
@@ -24,23 +26,49 @@ export interface Conferral {
   tier: BaseTier;
 }
 
-// The global category of the records matching no other, which a payload never lists as concrete.
-const UNMARKED = 'unmarked';
+/** What the rules confer: their entries, and the rules conferring at least one. */
+export interface RuleEntries {
+  entries: readonly HeldEntry[];
 
-const UNMARKED_CATEGORY: CategoryName = `global.${UNMARKED}`;
+  /** Each rule conferring an entry, once, in the order given. */
+  rules: readonly ConferringRule[];
+}
 
-const isCurrent = ({ retired }: ServedResource): boolean => !retired;
-
-const nonEmpty = (
-  actions: readonly RecordAction[],
-): NonEmpty<RecordAction> | undefined => {
-  const [first, ...rest] = actions;
-  return first === undefined ? undefined : [first, ...rest];
+/**
+ * The entries the rules given confer: each rule's record actions on `global.unmarked` of every
+ * resource the audience serves at the rule's base tier, neither retired nor suppressed. Each rule
+ * conferring an entry is named once, in the order given; a rule conferring no actions, or reaching no
+ * resource, confers nothing and is not named.
+ *
+ * @param served every resource the audience serves, retired ones included.
+ * @param conferrals the rules, each with its actions and the base tier it reaches, in the order they
+ *   are named.
+ */
+export const ruleEntries = (
+  served: readonly ServedResource[],
+  conferrals: readonly Conferral[],
+): RuleEntries => {
+  const conferring = conferrals.flatMap(({ actions, rule, tier }) => {
+    const conferred = nonEmpty(actions);
+    return conferred === undefined ? [] : [{ actions: conferred, rule, tier }];
+  });
+  const held = reachableOf(served).flatMap((resource) => {
+    const conferral = conferring.find(({ tier }) => tier === resource.baseTier);
+    return conferral === undefined ? [] : [{ conferral, resource }];
+  });
+  return {
+    entries: held.map(({ conferral, resource }) => ({
+      category: UNMARKED_CATEGORY,
+      externalId: resource.externalId,
+      permissions: { record: [...conferral.actions] },
+    })),
+    rules: conferring
+      .filter(({ rule }) =>
+        held.some(({ conferral }) => conferral.rule === rule),
+      )
+      .map(({ rule }) => rule),
+  };
 };
-
-const unmarkedEntry = (
-  actions: NonEmpty<RecordAction>,
-): ResourcePermissions => ({ [UNMARKED_CATEGORY]: { record: [...actions] } });
 
 /**
  * Calculates what a principal holds for one audience through the rules given, from one read of the
@@ -57,42 +85,9 @@ const unmarkedEntry = (
  *   are named.
  */
 export const ruleCalculation = (
-  { globalCategories, served }: AudiencePolicy,
+  policy: AudiencePolicy,
   conferrals: readonly Conferral[],
 ): Calculation => {
-  const current = served.filter(isCurrent);
-  const conferring = conferrals.flatMap(({ actions, rule, tier }) => {
-    const conferred = nonEmpty(actions);
-    return conferred === undefined ? [] : [{ actions: conferred, rule, tier }];
-  });
-  const held = current.flatMap((resource) => {
-    const conferral = resource.suppressed
-      ? undefined
-      : conferring.find(({ tier }) => tier === resource.baseTier);
-    return conferral === undefined ? [] : [{ conferral, resource }];
-  });
-  return {
-    globalCategories: globalCategories
-      .filter((name) => name !== UNMARKED)
-      .map((name): CategoryName => `global.${name}`),
-    grantCount: 0,
-    permissions: Object.fromEntries(
-      held.map(({ conferral, resource }) => [
-        resource.externalId,
-        unmarkedEntry(conferral.actions),
-      ]),
-    ),
-    resourceCategories: Object.fromEntries(
-      held.map(({ resource: { externalId, ownCategories } }) => [
-        externalId,
-        ownCategories.map((name): CategoryName => `resource.${name}`),
-      ]),
-    ),
-    rules: conferring
-      .filter(({ rule }) =>
-        held.some(({ conferral }) => conferral.rule === rule),
-      )
-      .map(({ rule }) => rule),
-    servedResources: current.map(({ externalId }) => externalId),
-  };
+  const { entries, rules } = ruleEntries(policy.served, conferrals);
+  return calculationOf(policy, entries, { grantCount: 0, rules });
 };

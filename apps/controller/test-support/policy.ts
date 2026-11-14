@@ -694,6 +694,9 @@ export interface FixtureGrant {
 
   expiresAt?: Date;
 
+  /** A field category within its category, named as `category` names one; none when absent. */
+  fieldCategory?: string;
+
   /** The transaction's clock when it is written, by default. */
   grantedAt?: Date;
 
@@ -1323,6 +1326,10 @@ const seedWithin = async (
   const grantIds = await idsByName(fixture.grants ?? {}, (grant) =>
     insertWithId(client, grants, {
       [grants.columns.expiresAt]: grant.expiresAt ?? null,
+      [grants.columns.fieldCategoryId]:
+        grant.fieldCategory === undefined
+          ? null
+          : category(grant.fieldCategory, grant.resource),
       [grants.columns.grantedAt]: at(grant.grantedAt),
       [grants.columns.grantedBy]: actor(grant.grantedBy),
       [grants.columns.holderGroupId]:
