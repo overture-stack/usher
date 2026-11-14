@@ -1,12 +1,11 @@
 import pg from 'pg';
 
 import type { StoreReader } from '../managementApi/index.js';
-import type {
-  ListingQuery,
-  Reader,
-  Registration,
-  StoredResource,
-} from './types.js';
+import {
+  type ResourceStanding,
+  standingColumns,
+} from '../resourceStanding/index.js';
+import type { ListingQuery, Registration, StoredResource } from './types.js';
 
 // An id as the store generates one; any other text names no application, and is never sent to the
 // store, which would refuse it as a uuid.
@@ -62,31 +61,38 @@ const resourceColumns = (schema: string): string => {
 };
 
 /**
- * Reads one resource by its externalId, matched exactly, as the reader may see it: a platform
- * administrator sees every resource; any other principal one whose access level is `open` or
- * `registered`, neither retired nor suppressed.
+ * Reads one resource by its externalId, matched exactly, with one principal's standing on it, in
+ * one statement, so the two come from one snapshot. Whether the principal may see it is not judged
+ * here.
  *
  * @param store where it is read.
  * @param schema the controller's schema.
- * @param issuer the trusted issuer, whose identity names a principal holding several.
- * @param read the externalId as sent, and who reads it.
- * @returns the resource, or `undefined` when none the reader may see has the externalId.
+ * @param read the externalId as sent, the trusted issuer, whose identity names a principal holding
+ *   several and under whose identity the principal is found, the principal's subject, and the
+ *   configured clock's instant.
+ * @returns the resource and the standing, or `undefined` when no resource has the externalId.
  */
 export const readResource = async (
   store: StoreReader,
   schema: string,
-  issuer: string,
-  { externalId, reader }: { externalId: string; reader: Reader },
-): Promise<StoredResource | undefined> => {
-  const visible =
-    reader === 'administrator'
-      ? ''
-      : `AND resource.base_tier IN ('open', 'registered')
-         AND resource.retired_at IS NULL AND NOT resource.suppressed`;
-  const { rows } = await store.query<StoredResource>(
-    `SELECT ${resourceColumns(schema)} FROM ${tableIn(schema)('resources')} resource
-      WHERE resource.external_id = $2 ${visible}`,
-    [issuer, externalId],
+  {
+    externalId,
+    issuer,
+    now,
+    subject,
+  }: { externalId: string; issuer: string; now: Date; subject: string },
+): Promise<(ResourceStanding & StoredResource) | undefined> => {
+  const { rows } = await store.query<ResourceStanding & StoredResource>(
+    `SELECT ${resourceColumns(schema)},
+            resource.id::text AS id,
+            ${standingColumns(schema, {
+              issuer: '$1::text',
+              now: '$3::timestamptz',
+              subject: '$4::text',
+            })}
+       FROM ${tableIn(schema)('resources')} resource
+      WHERE resource.external_id = $2`,
+    [issuer, externalId, now, subject],
   );
   return rows[0];
 };

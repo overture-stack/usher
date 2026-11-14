@@ -58,6 +58,9 @@ const TALLY_REASONS = {
   unreadableToken: 'unreadableToken',
 } as const satisfies Readonly<Record<UnverifiedReason, TallyReason>>;
 
+// A request's body as a refused event may read it.
+type Body = Readonly<Record<string, unknown>> | undefined;
+
 type Admission =
   | { kind: 'admitted'; principal: Principal }
   | {
@@ -125,29 +128,33 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
 };
 
 /**
- * Builds the route of one Management API operation. Each request is admitted before its body is read:
- * its credential must be exactly one Bearer token, else it is refused 400 and counted in the refusal
- * tally as `malformedCredential`; a missing one is refused 401 and recorded nowhere; a token that
- * cannot be verified is refused 401 and counted in the refusal tally by reason; a token whose keys
- * cannot be fetched is refused 503, and one whose signing key is not confirmed yet is refused 503
- * `signingKeyUnconfirmed` with `Retry-After` naming the seconds to wait, neither counted nor recorded;
- * a verified token refused for its claims, or by a revocation of
- * the person or the platform or a sign-out in the store, is refused 401, or 400 for a subject or
- * session that cannot be stored, and recorded as `managementToken.refusal`, its actor anonymous,
- * before the operation begins; a service account is refused 403, and so is anyone but a platform
- * administrator for an operation of theirs alone. Then the query, refused 400 for an operation taking
- * none, and the body are read, and the operation run. What the operation answers is sent once the
- * steps it names to run after its commit have run, as is the answer to a change whose `COMMIT` went
+ * Builds the route of one Management API operation. Each request is admitted before its body is
+ * read: its credential must be exactly one Bearer token, else it is refused 400 and counted in the
+ * refusal tally as `malformedCredential`; a missing one is refused 401 and recorded nowhere; a
+ * token that cannot be verified is refused 401 and counted in the refusal tally by reason; a token
+ * whose keys cannot be fetched is refused 503, and one whose signing key is not confirmed yet is
+ * refused 503 `signingKeyUnconfirmed` with `Retry-After` naming the seconds to wait, neither
+ * counted nor recorded; a verified token refused for its claims, or by a revocation of the person
+ * or the platform or a sign-out in the store, is refused 401, or 400 for a subject or session that
+ * cannot be stored, and recorded as `managementToken.refusal`, its actor anonymous, before the
+ * operation begins; a service account is refused 403, and so is anyone but a platform administrator
+ * for an operation of theirs alone. Then the query, refused 400 for an operation taking none, and
+ * the body are read, and the operation run. What the operation answers is sent once the steps it
+ * names to run after its commit have run, as is the answer to a change whose `COMMIT` went
  * unconfirmed; a refusal or any other failure runs none. A success carrying no content is answered
- * with no body. A refusal from admission on
- * records the operation's own event, `denied`, at warning, its reason the code answered, naming the
- * existing entities the request named; a failure of the store answers 503 and records it `failed`, at
- * error. A change whose `COMMIT` the store did not confirm answers 503 `outcomeUnknown` and records
- * nothing more, since it may have been made. Text that cannot be stored, in the token's subject or
- * session, in a path parameter, or anywhere in the body, is refused 400 before any transaction
- * begins, a path parameter's before the query and the body are read. A refusal of a request whose
- * path parameter cannot be stored names no entity, so its event is recorded without the store being
- * read for what the request named.
+ * with no body.
+ *
+ * A refusal from admission on records the operation's own event, `denied`, at warning. Its reason
+ * is the code answered, or the reason the operation gives in its place, as where a `404` stands in
+ * for a refusal of authority. It names what the operation reads the request to name, from the path
+ * and from a body read as an object holding no text that cannot be stored. A failure of the store
+ * answers 503 and records the event `failed`, at error, naming the same. A change whose `COMMIT`
+ * the store did not confirm answers 503 `outcomeUnknown` and records nothing more, since it may
+ * have been made. Text that cannot be stored, in the token's subject or session, in a path
+ * parameter, or anywhere in the body, is refused 400 before any transaction begins, a path
+ * parameter's before the query and the body are read. A refusal of a request whose path parameter
+ * cannot be stored names no entity, so its event is recorded without the operation being asked what
+ * the request named.
  *
  * @param operation the operation.
  * @param dependencies the verifier, the tally, the store's reading of a principal's standing, the
@@ -172,17 +179,25 @@ export const managementRoute = <Input>(
     request: FastifyRequest,
     principal: Principal,
     {
-      problem: { code },
+      body,
+      reason,
       result,
       severity,
-    }: { problem: Problem; result: 'denied' | 'failed'; severity: Severity },
+    }: {
+      body: Body;
+      reason: string;
+      result: 'denied' | 'failed';
+      severity: Severity;
+    },
   ): Promise<void> => {
     if (operation.event !== undefined) {
       const named: EventMembers = holdsStorablePath(request)
-        ? await operation.event.named(paramsOf(request)).catch(() => ({}))
+        ? await operation.event
+            .named({ body, params: paramsOf(request) })
+            .catch(() => ({}))
         : {};
       await trail.recordEvent(actorOf(principal), {
-        data: { ...named, reason: code, result, sourceIp: request.ip },
+        data: { ...named, reason, result, sourceIp: request.ip },
         severity,
         type: operation.event.type,
       });
@@ -193,10 +208,15 @@ export const managementRoute = <Input>(
     request: FastifyRequest,
     reply: FastifyReply,
     principal: Principal,
-    problem: Problem,
+    {
+      body,
+      problem,
+      recordedReason,
+    }: { body: Body; problem: Problem; recordedReason?: string },
   ): Promise<FastifyReply> => {
     await recordOperationEvent(request, principal, {
-      problem,
+      body,
+      reason: recordedReason ?? problem.code,
       result: 'denied',
       severity: 'warning',
     });
@@ -307,43 +327,47 @@ export const managementRoute = <Input>(
       : undefined;
   };
 
+  // The input read, beside the body's object as a refused event may read it: none while the body
+  // could not be read as one, or holds text that cannot be stored.
   const inputOf = (
     request: FastifyRequest,
     principal: Principal,
-  ): InputReading<Input> => {
+  ): { body: Body; reading: InputReading<Input> } => {
+    const refusedFor = (
+      problem: Problem,
+      body: Body = undefined,
+    ): { body: Body; reading: InputReading<Input> } => ({
+      body,
+      reading: { kind: 'refused', problem },
+    });
     if (!holdsStorablePath(request)) {
-      return { kind: 'refused', problem: PROBLEMS.unrepresentableText };
+      return refusedFor(PROBLEMS.unrepresentableText);
     }
     const query = queryParametersOf(request.raw.url ?? '');
     if (operation.takesQuery !== true && query.length > 0) {
-      return { kind: 'refused', problem: PROBLEMS.unreadableQuery };
+      return refusedFor(PROBLEMS.unreadableQuery);
     }
-    const body = readJsonBody(
+    const read = readJsonBody(
       request.body instanceof Uint8Array ? request.body : undefined,
       request.headers['content-type'],
     );
-    if (body.kind === 'refused') {
-      return body;
+    if (read.kind === 'refused') {
+      return refusedFor(read.problem);
     }
-    if (body.kind === 'object' && operation.body === 'none') {
-      return {
-        kind: 'refused',
-        problem: unreadableBody('is not taken by this operation'),
-      };
+    const body =
+      read.kind === 'object' && !holdsUnstorableText(read.value)
+        ? read.value
+        : undefined;
+    if (read.kind === 'object' && operation.body === 'none') {
+      return refusedFor(unreadableBody('is not taken by this operation'), body);
     }
-    if (body.kind === 'absent' && operation.body === 'required') {
-      return {
-        kind: 'refused',
-        problem: unreadableBody('is required by this operation'),
-      };
+    if (read.kind === 'absent' && operation.body === 'required') {
+      return refusedFor(unreadableBody('is required by this operation'));
     }
-    if (body.kind === 'object' && holdsUnstorableText(body.value)) {
-      return { kind: 'refused', problem: PROBLEMS.unrepresentableText };
+    if (read.kind === 'object' && body === undefined) {
+      return refusedFor(PROBLEMS.unrepresentableText);
     }
-    return operation.readInput(
-      body.kind === 'object' ? body.value : undefined,
-      { principal, query },
-    );
+    return { body, reading: operation.readInput(body, { principal, query }) };
   };
 
   // A success carrying no content is answered with no body and no media type.
@@ -370,7 +394,7 @@ export const managementRoute = <Input>(
     request: FastifyRequest,
     reply: FastifyReply,
     principal: Principal,
-    failure: unknown,
+    { body, failure }: { body: Body; failure: unknown },
   ): Promise<FastifyReply> => {
     if (failure instanceof CommitUnconfirmed) {
       await runAfterCommit(operation.afterCommit ?? []);
@@ -382,7 +406,8 @@ export const managementRoute = <Input>(
       route: operation.route,
     });
     await recordOperationEvent(request, principal, {
-      problem: PROBLEMS.storeUnavailable,
+      body,
+      reason: PROBLEMS.storeUnavailable.code,
       result: 'failed',
       severity: 'error',
     });
@@ -395,7 +420,10 @@ export const managementRoute = <Input>(
       const principal = admitted.get(request);
       const fault = contentFaultOf(error);
       if (principal !== undefined && fault !== undefined) {
-        return refuse(request, reply, principal, fault);
+        return refuse(request, reply, principal, {
+          body: undefined,
+          problem: fault,
+        });
       }
       eventLog.error(UNEXPECTED_FAILURE, {
         error: error.code ?? error.name,
@@ -410,9 +438,12 @@ export const managementRoute = <Input>(
       if (principal === undefined) {
         return sendProblem(reply, PROBLEMS.internalError);
       }
-      const reading = inputOf(request, principal);
+      const { body, reading } = inputOf(request, principal);
       if (reading.kind === 'refused') {
-        return refuse(request, reply, principal, reading.problem);
+        return refuse(request, reply, principal, {
+          body,
+          problem: reading.problem,
+        });
       }
       const outcome = await operation
         .run({
@@ -423,13 +454,22 @@ export const managementRoute = <Input>(
         })
         .catch((failure: unknown) => ({ failure, kind: 'failed' as const }));
       if (outcome.kind === 'failed') {
-        return failed(request, reply, principal, outcome.failure);
+        return failed(request, reply, principal, {
+          body,
+          failure: outcome.failure,
+        });
       }
       if (outcome.kind === 'answered') {
         await runAfterCommit(operation.afterCommit ?? []);
         return answer(reply, outcome);
       }
-      return refuse(request, reply, principal, outcome.problem);
+      return refuse(request, reply, principal, {
+        body,
+        problem: outcome.problem,
+        ...(outcome.recordedReason === undefined
+          ? {}
+          : { recordedReason: outcome.recordedReason }),
+      });
     },
     method: operation.method,
     onRequest: async (request, reply) => {
@@ -443,7 +483,10 @@ export const managementRoute = <Input>(
       }
       const problem = authorityProblem(admission.principal);
       if (problem !== undefined) {
-        return refuse(request, reply, admission.principal, problem);
+        return refuse(request, reply, admission.principal, {
+          body: undefined,
+          problem,
+        });
       }
       admitted.set(request, admission.principal);
       return undefined;

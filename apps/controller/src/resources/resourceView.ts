@@ -3,8 +3,8 @@ import type { Reader, StoredResource } from './types.js';
 
 /**
  * A resource as an answer shows it: a registration's, a read's, and each entry of a listing alike. A
- * platform administrator's answer carries `grantSummary`, which counts no holder, since no operation
- * writes a grant; anyone else's carries none.
+ * platform administrator's answer and a counted owner's carry `grantSummary`, holding no count;
+ * anyone else's carries none.
  *
  * @param resource the resource as the store holds it.
  * @param reader who it is answered to.
@@ -33,7 +33,7 @@ export const resourceView = (
   displayName,
   externalId,
   fields,
-  ...(reader === 'administrator' ? { grantSummary: {} } : {}),
+  ...(reader === 'signedIn' ? {} : { grantSummary: {} }),
   registeredAt: eventInstant(registeredAt.getTime()),
   registeredBy: registeredBy === null ? null : { subject: registeredBy },
   retired,

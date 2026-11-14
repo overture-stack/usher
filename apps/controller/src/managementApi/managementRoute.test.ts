@@ -142,7 +142,7 @@ const shelving = (
   ...(afterCommit === undefined ? {} : { afterCommit }),
   body: 'required',
   event: {
-    named: async (params) =>
+    named: async ({ params }) =>
       params['id'] === 'shelf-1' ? { shelfId: 'shelf-1' } : {},
     type: 'application.registration',
   },
@@ -809,7 +809,7 @@ suite(
       const stand = await standUp(context, {
         departures: {
           event: {
-            named: async (params) => {
+            named: async ({ params }) => {
               looked.push(params);
               return { shelfId: 'shelf-1' };
             },
@@ -887,6 +887,87 @@ suite(
             sourceIp: '127.0.0.1',
           },
           { reason: 'shelfFull', result: 'denied', sourceIp: '127.0.0.1' },
+        ],
+      );
+    });
+
+    test("names in a refused event what the request's body names, as the operation reads it, and nothing of a body holding text that cannot be stored", async (context) => {
+      const stand = await standUp(context, {
+        departures: {
+          event: {
+            named: async ({ body }) => {
+              const title = body?.['title'];
+              return typeof title === 'string' ? { title } : {};
+            },
+            type: 'application.registration',
+          },
+        },
+        outcome: async () => ({ kind: 'refused', problem: SHELF_LIMIT }),
+        verifications: ADMIN,
+      });
+
+      const answers = [
+        await post(stand),
+        await post(stand, { body: '{"title":"Dubliners","x":"\\u0000"}' }),
+        await post(stand, { body: '{"title":7}' }),
+      ];
+
+      assert.deepEqual(
+        answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+        [
+          [409, 'shelfFull'],
+          [400, 'unrepresentableText'],
+          [400, 'unreadableBody'],
+        ],
+      );
+      assert.deepEqual(
+        deniedFor(stand).map(({ data }) => data),
+        [
+          {
+            reason: 'shelfFull',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
+            title: 'Dubliners',
+          },
+          {
+            reason: 'unrepresentableText',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
+          },
+          { reason: 'unreadableBody', result: 'denied', sourceIp: '127.0.0.1' },
+        ],
+      );
+    });
+
+    test('records the reason an operation gives for its refusal in place of the code answered, the answer unchanged', async (context) => {
+      const hidden = problem(
+        'shelfNotFound',
+        404,
+        'Shelf not found',
+        'No shelf you may see has the id named.',
+      );
+      const stand = await standUp(context, {
+        outcome: async () => ({
+          kind: 'refused',
+          problem: hidden,
+          recordedReason: 'noAuthorityOnShelf',
+        }),
+        verifications: ADMIN,
+      });
+
+      const answer = await post(stand);
+
+      assert.equal(answer.statusCode, 404);
+      assert.deepEqual(JSON.parse(answer.body), hidden);
+      assert.deepEqual(
+        deniedFor(stand).map(({ data }) => data),
+        [
+          {
+            reason: 'noAuthorityOnShelf',
+            result: 'denied',
+            shelfId: 'shelf-1',
+            sourceIp: '127.0.0.1',
+          },
         ],
       );
     });

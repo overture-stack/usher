@@ -22,8 +22,8 @@ interface Stand {
   recorded: AuditEvent[];
   server: FastifyInstance;
 
-  /** How many transactions the resource operations began. */
-  transactions: number;
+  /** How many transactions the resource operations began, as they began. */
+  transactions: { count: number };
 }
 
 // The resource routes over a store and a trail that answer nothing, each counting what reaches it, and
@@ -32,7 +32,7 @@ const standUp = (context: TestContext): Stand => {
   const stand = {
     reads: [] as string[],
     recorded: [] as AuditEvent[],
-    transactions: 0,
+    transactions: { count: 0 },
   };
   const server = createServer({
     isLive: () => true,
@@ -42,6 +42,7 @@ const standUp = (context: TestContext): Stand => {
   createResourceRoutes(
     {
       settings: {
+        autoAccept: false,
         clock: { now: () => NOW },
         databaseSchema: 'usher',
         identityProviderIssuer: ISSUER,
@@ -54,7 +55,7 @@ const standUp = (context: TestContext): Stand => {
       },
       trail: {
         inTransaction: async () => {
-          stand.transactions += 1;
+          stand.transactions.count += 1;
           throw new Error('the store answers nothing here');
         },
       },
@@ -147,7 +148,7 @@ suite(
         requests.map(() => [400, 'unrepresentableText']),
       );
       assert.deepEqual(stand.reads, []);
-      assert.equal(stand.transactions, 0);
+      assert.equal(stand.transactions.count, 0);
     });
 
     test('records each refused change to a served set denied, naming nothing, and records nothing failed nor anything for a read', async (context) => {
@@ -200,3 +201,72 @@ suite(
     });
   },
 );
+
+suite('the resource routes, for a registration naming its owners', () => {
+  test('answers a registration naming an owner by address 503 directoryUnavailable, beginning no transaction, and records it denied', async (context) => {
+    const stand = standUp(context);
+
+    const answer = await stand.server.inject({
+      headers: {
+        authorization: 'Bearer administrator',
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+      payload: JSON.stringify({
+        accessLevel: 'grant',
+        displayName: 'Owned study',
+        externalId: 'STUDY-N1',
+        owners: [{ subject: 'subject-ana' }, { email: 'owner.bo@example.org' }],
+      }),
+      url: '/admin/resources',
+    });
+
+    assert.deepEqual(
+      [answer.statusCode, codeOf(answer.body)],
+      [503, 'directoryUnavailable'],
+    );
+    assert.equal(stand.transactions.count, 0);
+    assert.deepEqual(
+      stand.recorded.map(({ data, type }) => ({ data, type })),
+      [
+        {
+          data: {
+            reason: 'directoryUnavailable',
+            result: 'denied',
+            sourceIp: '127.0.0.1',
+          },
+          type: 'resource.registration',
+        },
+      ],
+    );
+  });
+
+  test('refuses a registration naming its caller an owner 403 administratorSelfOwnership, beginning no transaction, and records it denied for that reason', async (context) => {
+    const stand = standUp(context);
+
+    const answer = await stand.server.inject({
+      headers: {
+        authorization: 'Bearer administrator',
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+      payload: JSON.stringify({
+        accessLevel: 'grant',
+        displayName: 'Self-owned study',
+        externalId: 'STUDY-P1',
+        owners: [{ subject: 'subject-administrator' }],
+      }),
+      url: '/admin/resources',
+    });
+
+    assert.deepEqual(
+      [answer.statusCode, codeOf(answer.body)],
+      [403, 'administratorSelfOwnership'],
+    );
+    assert.equal(stand.transactions.count, 0);
+    assert.deepEqual(
+      stand.recorded.map(({ data }) => data['reason']),
+      ['administratorSelfOwnership'],
+    );
+  });
+});

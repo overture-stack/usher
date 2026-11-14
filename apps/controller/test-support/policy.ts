@@ -65,6 +65,9 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  *   transaction, which the payload cache's key carries (R6).
  * - `rules_digest`, one row: the digest of the baseline and the signed-in rule the controller last
  *   started with, from which a start under changed rules writes one baseline notice (#210 Q2).
+ * - `grants.ended_at`: when a grant on the same terms replaced a grant once it had expired, after
+ *   which the index allowing one live grant per holder, resource, category and role no longer
+ *   counts it; `null` while it has not been replaced (ruled).
  * - `resources.retired_at` and `retired_by`: a retired resource keeps its row, so the unique index
  *   on its external identifier goes on reserving it (#320 B).
  * - `sid_sign_outs` and `subject_sign_outs`: the sign-outs relayed from the identity provider, by
@@ -198,6 +201,7 @@ export const POLICY_TABLES = {
   },
   grants: {
     columns: {
+      endedAt: 'ended_at',
       expiresAt: 'expires_at',
       fieldCategoryId: 'field_category_id',
       grantedAt: 'granted_at',
@@ -395,16 +399,22 @@ export const POLICY_TABLES = {
 
 /**
  * The constraints and indexes a test names, as PostgreSQL reports them in a refusal: the decisions'
- * key on person, grant and time (#207 Q12); the identities' key on issuer and subject identifier, so
- * one identity belongs to one person; and the partial unique index allowing one live grant per
- * holder, resource, category and role (#212 Q17). The two keys carry PostgreSQL's default names.
+ * key on person, grant and time (#207 Q12); the identities' key on issuer and subject identifier,
+ * so one identity belongs to one person; the partial unique index allowing one grant per holder,
+ * resource, category and role that is neither revoked nor ended (#212 Q17); the check that a grant
+ * ends only once it has expired (`grantEndedAfterExpiry`); and the rule keeping an ended grant's
+ * end, expiry and role as written (`grantEndKept`). The two keys carry PostgreSQL's default names.
  */
 export const POLICY_CONSTRAINTS: Readonly<{
   decisionOrder: string;
+  grantEndKept: string;
+  grantEndedAfterExpiry: string;
   identity: string;
   liveGrant: string;
 }> = Object.freeze({
   decisionOrder: 'grant_decisions_user_id_grant_id_decided_at_key',
+  grantEndKept: 'grants_end_kept',
+  grantEndedAfterExpiry: 'grants_ended_after_expiry',
   identity: 'user_identities_idp_issuer_idp_subject_id_key',
   liveGrant: 'grants_live_unique',
 });

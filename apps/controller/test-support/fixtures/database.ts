@@ -1705,6 +1705,7 @@ export const DESIGNED_COLUMNS: {
     userId: required(UUID),
   },
   grants: {
+    endedAt: optional(INSTANT),
     expiresAt: optional(INSTANT),
     fieldCategoryId: optional(UUID),
     grantedAt: required(INSTANT),

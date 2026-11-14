@@ -1,3 +1,9 @@
+import {
+  GRANT_PROBLEMS,
+  type HolderReading,
+  type NamedHolder,
+  readHolder,
+} from '../grants/index.js';
 import type { Problem } from '../http/index.js';
 import { type InputReading, unreadableBody } from '../managementApi/index.js';
 import { externalIdRuleBroken } from './externalId.js';
@@ -97,25 +103,75 @@ const shapeProblem = (
       );
 };
 
+// One person as owners name them: a subject exactly, and an address in any letter case.
+const personKey = (holder: NamedHolder): string =>
+  holder.kind === 'subject'
+    ? `subject:${holder.subject}`
+    : `address:${holder.email.toLowerCase()}`;
+
+// The owners a registration names, each read as a grant's holder is.
+const ownerReadings = (owners: unknown): readonly HolderReading[] =>
+  Array.isArray(owners)
+    ? owners.map((owner) => readHolder(owner, 'an owner'))
+    : [];
+
+// The refusal of an owner by its shape, the first one's, or none.
+const ownerShapeProblem = (owners: unknown): Problem | undefined =>
+  ownerReadings(owners).flatMap((reading) =>
+    reading.kind === 'refused' && reading.problem.status === 400
+      ? [reading.problem]
+      : [],
+  )[0];
+
+// The owners a registration names, in order: refused for the first owner breaking a rule, then for
+// one person named twice, then for the caller named.
+const ownersNamed = (
+  owners: unknown,
+  callerSubject: string,
+): InputReading<readonly NamedHolder[]> => {
+  const readings = ownerReadings(owners);
+  const broken = readings.find((reading) => reading.kind === 'refused');
+  if (broken?.kind === 'refused') {
+    return broken;
+  }
+  const holders = readings.flatMap((reading) =>
+    reading.kind === 'read' ? [reading.holder] : [],
+  );
+  if (new Set(holders.map(personKey)).size < holders.length) {
+    return refused(RESOURCE_PROBLEMS.ownerNamedTwice);
+  }
+  return holders.some(
+    (holder) => holder.kind === 'subject' && holder.subject === callerSubject,
+  )
+    ? refused(GRANT_PROBLEMS.administratorSelfOwnership)
+    : { input: holders, kind: 'read' };
+};
+
 /**
  * Reads a resource's registration from its body. A body is first read by its shape alone, refused
  * 400: a member other than `accessLevel`, `applications`, `description`, `displayName`,
- * `externalId`, `fields` and `owners`; `externalId` or `displayName` missing; or a member holding a
- * value of another type, `null` included. Its rules are then judged in turn, each refused 422: the
- * externalId's form; a display name blank, or longer than {@link DISPLAY_NAME_MAXIMUM_LENGTH}
- * characters once normalized to NFC; a description longer than {@link DESCRIPTION_MAXIMUM_LENGTH}
- * characters once normalized to NFC; an access level missing, or other than `open`, `registered`
- * and `grant`; a value for any resource field, since the instance defines none; and any owner, since
- * a registration names none. A display name is blank when it holds nothing once trimmed. The display
- * name and the description are stored exactly as given, and a description left out as none.
+ * `externalId`, `fields` and `owners`; `externalId` or `displayName` missing; a member holding a
+ * value of another type, `null` included; or an owner naming its subject or its address as anything
+ * but a string. Its rules are then judged in turn, each refused 422: the externalId's form; a
+ * display name blank, or longer than {@link DISPLAY_NAME_MAXIMUM_LENGTH} characters once normalized
+ * to NFC; a description longer than {@link DESCRIPTION_MAXIMUM_LENGTH} characters once normalized
+ * to NFC; an access level missing, or other than `open`, `registered` and `grant`; a value for any
+ * resource field, since the instance defines none; an owner naming other than exactly one person,
+ * or an address out of an address's form, as a grant's holder is read; and one person named twice,
+ * by one subject or by one address in any letter case, `ownerNamedTwice`. A registration naming its
+ * caller an owner is then refused 403 `administratorSelfOwnership`. A display name is blank when it
+ * holds nothing once trimmed. The display name and the description are stored exactly as given, a
+ * description left out as none, and the owners kept in the order named.
  *
  * @param body the body's object, or none for a request sending none.
+ * @param callerSubject the subject of the platform administrator registering.
  */
 export const readRegistration = (
   body: Readonly<Record<string, unknown>> | undefined,
+  callerSubject: string,
 ): InputReading<Registration> => {
   const sent = body ?? {};
-  const shape = shapeProblem(sent);
+  const shape = shapeProblem(sent) ?? ownerShapeProblem(sent['owners']);
   if (shape !== undefined) {
     return refused(shape);
   }
@@ -155,8 +211,9 @@ export const readRegistration = (
   if (isRecord(fields) && Object.keys(fields).length > 0) {
     return refused(RESOURCE_PROBLEMS.unknownResourceField);
   }
-  if (Array.isArray(owners) && owners.length > 0) {
-    return refused(RESOURCE_PROBLEMS.ownersAtRegistration);
+  const named = ownersNamed(owners, callerSubject);
+  if (named.kind === 'refused') {
+    return named;
   }
   return {
     input: {
@@ -167,6 +224,7 @@ export const readRegistration = (
       description: description ?? null,
       displayName,
       externalId,
+      owners: named.input,
     },
     kind: 'read',
   };

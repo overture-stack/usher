@@ -1,4 +1,5 @@
 import { type Problem, problem } from '../http/index.js';
+import { STANDING_PROBLEMS } from '../resourceStanding/index.js';
 import { EXTERNAL_ID_MAXIMUM_LENGTH } from './externalId.js';
 import type { ExternalIdRule } from './types.js';
 
@@ -46,11 +47,11 @@ export const RESOURCE_PROBLEMS = Object.freeze({
     'Display name too long',
     `displayName holds at most ${DISPLAY_NAME_MAXIMUM_LENGTH} characters once normalized to NFC.`,
   ),
-  ownersAtRegistration: problem(
-    'ownersAtRegistration',
+  ownerNamedTwice: problem(
+    'ownerNamedTwice',
     422,
-    'Owners not taken at registration',
-    'A registration names no owners: owners leaves them out, or is empty.',
+    'Owner named twice',
+    'owners names each person once, by one subject or one address.',
   ),
   pageSizeTooSmall: problem(
     'pageSizeTooSmall',
@@ -58,12 +59,7 @@ export const RESOURCE_PROBLEMS = Object.freeze({
     'Page size too small',
     'limit is a whole number of at least 1.',
   ),
-  resourceNotFound: problem(
-    'resourceNotFound',
-    404,
-    'Resource not found',
-    'No resource you may see has the externalId named.',
-  ),
+  resourceNotFound: STANDING_PROBLEMS.resourceNotFound,
   retiredListedToAdministrators: problem(
     'administratorOnly',
     403,

@@ -38,7 +38,14 @@ suite('a resource as an answer shows it', () => {
     });
   });
 
-  test('shows anyone else no grant summary at all', () => {
+  test("shows a counted owner the administrator's answer, the empty grant summary included", () => {
+    assert.deepEqual(
+      resourceView(STORED, 'owner'),
+      resourceView(STORED, 'administrator'),
+    );
+  });
+
+  test('shows anyone else, a holder of a grant on it among them, no grant summary at all', () => {
     const view = resourceView(STORED, 'signedIn');
 
     assert.equal(

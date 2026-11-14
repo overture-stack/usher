@@ -46,6 +46,13 @@ export interface ControllerSettings {
    */
   apiDocsClient: string;
 
+  /**
+   * Whether a grant is accepted at creation without its holder answering it (auto-accept): its
+   * holder's acceptance, showing what the grant's role carries then, is recorded with it. Off by
+   * default.
+   */
+  autoAccept: boolean;
+
   /** The `aud` values a back-channel logout token may carry: the platform's client identifiers. */
   backChannelLogoutAudiences: readonly string[];
 
@@ -183,6 +190,9 @@ export interface ControllerSettings {
   /** The notices queued for one stream before the controller closes a stream whose reader has stopped reading; 1,000 by default. */
   streamQueueLimit: number;
 
+  /** The category a submitter grant naming none takes, as the payload names it: `global.unmarked` by default (#212 Q6). */
+  submitterCategory: string;
+
   /** How long an Usher token lives, in seconds; 300 by default. */
   tokenLifetimeSeconds: number;
 
@@ -204,9 +214,6 @@ export interface PendingSettings {
    * case folding after NFC.
    */
   allowedCharactersExtra: string;
-
-  /** Whether a grant is accepted at creation without its recipient answering it (auto-accept); off by default. */
-  autoAccept: boolean;
 
   /**
    * The cache's (Valkey) password, in a variable of its own: a missing one refuses the start, naming
@@ -263,9 +270,6 @@ export interface PendingSettings {
 
   /** The longest an administrator's self-grant may last, in seconds: 86,400 by default (#212). */
   selfGrantMaximumSeconds: number;
-
-  /** The category a submitter grant names, as the payload names it: `global.unmarked` by default (#212 Q6). */
-  submitterCategory: string;
 }
 
 /** The controller's configuration as the harness holds it: the settings the controller reads, and those it does not read yet. */
@@ -524,6 +528,7 @@ export type FieldWithVariable = Exclude<
 const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   administratorRole: 'USHER_ADMINISTRATOR_ROLE',
   apiDocsClient: 'USHER_API_DOCS_CLIENT',
+  autoAccept: 'USHER_GRANT_AUTO_ACCEPT',
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',
@@ -554,6 +559,7 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   streamLimitPerAudience: 'USHER_STREAM_LIMIT_PER_AUDIENCE',
   streamMaximumLifetimeSeconds: 'USHER_STREAM_MAXIMUM_LIFETIME_SECONDS',
   streamQueueLimit: 'USHER_STREAM_QUEUE_LIMIT',
+  submitterCategory: 'USHER_SUBMITTER_CATEGORY',
   tokenLifetimeSeconds: 'USHER_TOKEN_LIFETIME_SECONDS',
   trustedProxies: 'USHER_TRUSTED_PROXIES',
 };
@@ -626,6 +632,7 @@ const loadExport = async <Exported>(
 export const environmentFor = ({
   administratorRole,
   apiDocsClient,
+  autoAccept,
   backChannelLogoutAudiences,
   baseline,
   cursorKey,
@@ -655,11 +662,13 @@ export const environmentFor = ({
   streamLimitPerAudience,
   streamMaximumLifetimeSeconds,
   streamQueueLimit,
+  submitterCategory,
   tokenLifetimeSeconds,
   trustedProxies,
 }: ControllerSettings): Readonly<Record<string, string>> => ({
   [VARIABLE_NAMES.administratorRole]: administratorRole,
   [VARIABLE_NAMES.apiDocsClient]: apiDocsClient,
+  [VARIABLE_NAMES.autoAccept]: String(autoAccept),
   [VARIABLE_NAMES.backChannelLogoutAudiences]:
     backChannelLogoutAudiences.join(','),
   [VARIABLE_NAMES.baseline]: baseline.join(','),
@@ -698,6 +707,7 @@ export const environmentFor = ({
     streamMaximumLifetimeSeconds,
   ),
   [VARIABLE_NAMES.streamQueueLimit]: String(streamQueueLimit),
+  [VARIABLE_NAMES.submitterCategory]: submitterCategory,
   [VARIABLE_NAMES.tokenLifetimeSeconds]: String(tokenLifetimeSeconds),
   [VARIABLE_NAMES.trustedProxies]: trustedProxies.join(','),
 });

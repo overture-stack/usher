@@ -140,7 +140,17 @@ export type OperationOutcome =
       kind: 'answered';
       status: number;
     }
-  | { kind: 'refused'; problem: Problem };
+  | {
+      kind: 'refused';
+      problem: Problem;
+
+      /**
+       * The reason the refusal's event records, where it differs from the code answered: as where a
+       * `404` stands in for a refusal of authority, so the caller cannot tell what they may not act
+       * on from what does not exist, while the event says what happened.
+       */
+      recordedReason?: string;
+    };
 
 /** What an operation read from a request's body and query: its input, or the refusal it earned. */
 export type InputReading<Input> =
@@ -160,13 +170,26 @@ export interface InputContext {
   query: QueryParameters;
 }
 
+/** What a request names, as the event recording its refusal reads it. */
+export interface NamedByRequest {
+  /**
+   * The body's object, none for a request sending none, one not yet read, or one holding text that
+   * cannot be stored.
+   */
+  body: Readonly<Record<string, unknown>> | undefined;
+
+  /** The path's parameters, by the names the route gives them, decoded. */
+  params: Readonly<Record<string, string>>;
+}
+
 /** An event an operation records, and so records `denied` when it refuses. */
 export interface OperationEvent {
   /**
-   * The existing entities a request names, as the event's members, for the event recording its
-   * refusal: never one the request would have created, nor an identifier naming nothing.
+   * The entities a request names, as the event's members, for the event recording its refusal or
+   * its failure: never one the request would have created, nor an identifier in its path naming
+   * nothing.
    */
-  named(params: Readonly<Record<string, string>>): Promise<EventMembers>;
+  named(request: NamedByRequest): Promise<EventMembers>;
 
   type: AuditEventType;
 }

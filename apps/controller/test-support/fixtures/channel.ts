@@ -389,8 +389,13 @@ export const issueFirstKeys = async (harness: Harness): Promise<void> => {
   await harness.stopController();
 };
 
+// The store connections the channel harness's instance holds for the token exchange: enough for the
+// bursts of exchanges a channel test sends at once, beyond the controller's default of 10.
+const CHANNEL_EXCHANGE_CONNECTIONS = 20;
+
 /**
- * The harness options of a channel test: the three audiences and the channel's fixture.
+ * The harness options of a channel test: the three audiences, the channel's fixture, and an
+ * exchange pool of 20 connections unless the test's configuration sets another.
  *
  * @param options configuration, policy, PostgreSQL and whether a controller starts.
  */
@@ -401,7 +406,10 @@ export const channelHarnessOptions = ({
   startsController,
 }: ChannelHarnessOptions = {}): HarnessOptions => ({
   applications: AUDIENCE_LABELS,
-  configuration,
+  configuration: {
+    databaseExchangeConnections: CHANNEL_EXCHANGE_CONNECTIONS,
+    ...configuration,
+  },
   fixture: channelPolicy(policy),
   ...(postgresql === undefined ? {} : { postgresql }),
   ...(startsController === undefined ? {} : { startsController }),
@@ -1419,7 +1427,7 @@ export const commitTimesByPosition = async (
     committed_at: Date;
     position: string;
   }>(
-    `SELECT ${pg.escapeIdentifier(notices.columns.position)}::text AS position, pg_xact_commit_timestamp(xmin) AS committed_at FROM ${qualified(notices)} ORDER BY ${pg.escapeIdentifier(notices.columns.position)}`,
+    `SELECT ${pg.escapeIdentifier(notices.columns.position)}, pg_xact_commit_timestamp(xmin) AS committed_at FROM ${qualified(notices)} ORDER BY ${pg.escapeIdentifier(notices.columns.position)}`,
   );
   return rows.map(({ committed_at, position }) => ({
     committedAt: committed_at,

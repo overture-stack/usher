@@ -87,6 +87,51 @@ export const readText = (
     : read(value);
 };
 
+/**
+ * Reads a switch, written `true` or `false` in lower case: the default when the variable is unset,
+ * and any other value refused.
+ *
+ * @param variable the variable.
+ * @param fallback the value when the variable is unset.
+ */
+export const readSwitch = (
+  variable: Variable,
+  fallback: boolean,
+): Reading<boolean> => {
+  const { value } = variable;
+  if (value === undefined) {
+    return read(fallback);
+  }
+  if (value === 'true' || value === 'false') {
+    return read(value === 'true');
+  }
+  return refused(variable, 'is neither true nor false');
+};
+
+// A global category as a payload names it: its scope, a dot, and a name holding no dot.
+const GLOBAL_CATEGORY = /^global\.[^.]+$/u;
+
+/**
+ * Reads a global category as a payload names it, `global.` followed by its name, which holds no
+ * dot: the default when the variable is unset. Whether the store holds the category is not judged
+ * here.
+ *
+ * @param variable the variable.
+ * @param fallback the category when the variable is unset.
+ */
+export const readGlobalCategory = (
+  variable: Variable,
+  fallback: string,
+): Reading<string> =>
+  then(readText(variable, { emptyAllowed: true, fallback }), (category) =>
+    GLOBAL_CATEGORY.test(category)
+      ? read(category)
+      : refused(
+          variable,
+          'is not global. followed by the name of a category, which holds no dot',
+        ),
+  );
+
 const isCanonicalKey = (text: string): boolean => {
   const bytes = Buffer.from(text, 'base64url');
   try {

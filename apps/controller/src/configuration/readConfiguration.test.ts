@@ -98,6 +98,7 @@ suite('reading the configuration from an environment', () => {
       environmentWith({
         administratorRole: 'ims-usher-admin',
         apiDocsClient: 'usher-ui',
+        autoAccept: 'true',
         backChannelLogoutAudiences: 'portal-test, submission-test',
         baseline: 'view',
         databaseControlConnections: '3',
@@ -113,6 +114,7 @@ suite('reading the configuration from an environment', () => {
         streamLimitPerAudience: '2',
         streamMaximumLifetimeSeconds: '60',
         streamQueueLimit: '10',
+        submitterCategory: 'global.controlled',
         tokenLifetimeSeconds: '120',
         trustedProxies: '127.0.0.1,::1',
       }),
@@ -121,6 +123,7 @@ suite('reading the configuration from an environment', () => {
     assert.deepEqual(fieldsOf(configuration), {
       administratorRole: 'ims-usher-admin',
       apiDocsClient: 'usher-ui',
+      autoAccept: true,
       backChannelLogoutAudiences: ['portal-test', 'submission-test'],
       baseline: ['view'],
       cursorKey: CURSOR_KEY,
@@ -150,6 +153,7 @@ suite('reading the configuration from an environment', () => {
       streamLimitPerAudience: 2,
       streamMaximumLifetimeSeconds: 60,
       streamQueueLimit: 10,
+      submitterCategory: 'global.controlled',
       tokenLifetimeSeconds: 120,
       trustedProxies: ['127.0.0.1', '::1'],
     });
@@ -162,6 +166,7 @@ suite('reading the configuration from an environment', () => {
       {
         administratorRole: configuration.administratorRole,
         apiDocsClient: configuration.apiDocsClient,
+        autoAccept: configuration.autoAccept,
         baseline: configuration.baseline,
         databaseControlConnections: configuration.databaseControlConnections,
         databaseExchangeConnections: configuration.databaseExchangeConnections,
@@ -177,12 +182,14 @@ suite('reading the configuration from an environment', () => {
         streamMaximumLifetimeSeconds:
           configuration.streamMaximumLifetimeSeconds,
         streamQueueLimit: configuration.streamQueueLimit,
+        submitterCategory: configuration.submitterCategory,
         tokenLifetimeSeconds: configuration.tokenLifetimeSeconds,
         trustedProxies: configuration.trustedProxies,
       },
       {
         administratorRole: 'usher-platform-admin',
         apiDocsClient: '',
+        autoAccept: false,
         baseline: ['count', 'view', 'export'],
         databaseControlConnections: 5,
         databaseExchangeConnections: 10,
@@ -197,6 +204,7 @@ suite('reading the configuration from an environment', () => {
         streamLimitPerAudience: 64,
         streamMaximumLifetimeSeconds: 900,
         streamQueueLimit: 1000,
+        submitterCategory: 'global.unmarked',
         tokenLifetimeSeconds: 300,
         trustedProxies: [],
       },
@@ -362,6 +370,61 @@ suite("reading the API documentation page's client", () => {
     assert.deepEqual(refusal.variables, [
       ENVIRONMENT_VARIABLES.managementClients,
     ]);
+  });
+});
+
+suite('reading the grant settings', () => {
+  test('reads auto-accept as true or false, written in lower case', () => {
+    assert.deepEqual(
+      ['true', 'false'].map(
+        (value) =>
+          readConfiguration(environmentWith({ autoAccept: value })).autoAccept,
+      ),
+      [true, false],
+    );
+  });
+
+  test('refuses auto-accept written any other way, naming its variable and the rule', () => {
+    ['TRUE', 'False', 'yes', '1', '', ' true'].forEach((value) => {
+      const refusal = refusalOf(environmentWith({ autoAccept: value }));
+
+      assert.deepEqual(refusal.variables, [ENVIRONMENT_VARIABLES.autoAccept]);
+      assert.ok(
+        refusal.message.includes(
+          `${ENVIRONMENT_VARIABLES.autoAccept} is neither true nor false`,
+        ),
+      );
+    });
+  });
+
+  test('reads a submitter category scoped global, as a payload names it', () => {
+    const configuration = readConfiguration(
+      environmentWith({ submitterCategory: 'global.trial-cohort' }),
+    );
+
+    assert.equal(configuration.submitterCategory, 'global.trial-cohort');
+  });
+
+  test('refuses a submitter category that is not global, or not one name after its scope, naming its variable and the rule', () => {
+    [
+      'unmarked',
+      'resource.internal',
+      'global.',
+      'global.a.b',
+      'Global.unmarked',
+      '',
+    ].forEach((value) => {
+      const refusal = refusalOf(environmentWith({ submitterCategory: value }));
+
+      assert.deepEqual(refusal.variables, [
+        ENVIRONMENT_VARIABLES.submitterCategory,
+      ]);
+      assert.ok(
+        refusal.message.includes(
+          `${ENVIRONMENT_VARIABLES.submitterCategory} is not global. followed by the name of a category, which holds no dot`,
+        ),
+      );
+    });
   });
 });
 

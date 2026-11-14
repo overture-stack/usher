@@ -27,6 +27,12 @@ export interface ControllerConfiguration {
    */
   apiDocsClient: string;
 
+  /**
+   * Whether a grant is accepted at its creation, the holder's acceptance recorded with it, so no
+   * holder answers it; off by default.
+   */
+  autoAccept: boolean;
+
   /** The `aud` values a back-channel logout token may carry: the platform's client identifiers. */
   backChannelLogoutAudiences: readonly string[];
 
@@ -130,6 +136,12 @@ export interface ControllerConfiguration {
 
   /** The notices queued for one stream before a stream whose reader stopped reading is closed; 1,000 by default. */
   streamQueueLimit: number;
+
+  /**
+   * The category a `submitter` grant naming none takes, as a payload names it: a global category,
+   * `global.unmarked` by default.
+   */
+  submitterCategory: string;
 
   /** How long an Usher token lives, in seconds; 300 by default. */
   tokenLifetimeSeconds: number;

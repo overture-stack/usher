@@ -13,10 +13,12 @@ import {
   read,
   readAddresses,
   readDatabaseUrl,
+  readGlobalCategory,
   readInteger,
   readKey,
   readList,
   readSecureUrl,
+  readSwitch,
   readText,
   type Reading,
   refused,
@@ -77,6 +79,7 @@ export const readConfiguration = (
             )
           : read(client),
     ),
+    autoAccept: readSwitch(variable('autoAccept'), false),
     backChannelLogoutAudiences: readList(
       variable('backChannelLogoutAudiences'),
     ),
@@ -154,6 +157,10 @@ export const readConfiguration = (
       fallback: 1000,
       minimum: 1,
     }),
+    submitterCategory: readGlobalCategory(
+      variable('submitterCategory'),
+      'global.unmarked',
+    ),
     tokenLifetimeSeconds: retention.tokenLifetimeSeconds,
     trustedProxies: readAddresses(variable('trustedProxies')),
   } satisfies Record<FieldWithVariable, Reading<unknown>>;
@@ -164,6 +171,7 @@ export const readConfiguration = (
     return {
       administratorRole: valueOf(readings.administratorRole),
       apiDocsClient: valueOf(readings.apiDocsClient),
+      autoAccept: valueOf(readings.autoAccept),
       backChannelLogoutAudiences: valueOf(readings.backChannelLogoutAudiences),
       baseline: valueOf(readings.baseline),
       clock: SYSTEM_CLOCK,
@@ -201,6 +209,7 @@ export const readConfiguration = (
         readings.streamMaximumLifetimeSeconds,
       ),
       streamQueueLimit: valueOf(readings.streamQueueLimit),
+      submitterCategory: valueOf(readings.submitterCategory),
       tokenLifetimeSeconds: valueOf(readings.tokenLifetimeSeconds),
       trustedProxies: valueOf(readings.trustedProxies),
     };

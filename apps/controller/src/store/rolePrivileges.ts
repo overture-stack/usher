@@ -40,7 +40,13 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
     grant_decisions: { deletes: false, updates: [] },
     grants: {
       deletes: false,
-      updates: ['expires_at', 'revoked_at', 'revoked_by', 'role_id'],
+      updates: [
+        'ended_at',
+        'expires_at',
+        'revoked_at',
+        'revoked_by',
+        'role_id',
+      ],
     },
     key_encryption_key_check: { deletes: false, updates: [] },
     notices: { deletes: false, updates: [] },

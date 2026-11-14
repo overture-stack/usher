@@ -171,8 +171,10 @@ export const SHOWN = Object.freeze({
 });
 
 /**
- * The reasons the audit log records for a grant's revocations, read from its `grant.revocation`
- * events' `grantId` and `reason`, as `audit-events.md` names them.
+ * The reasons the audit log records for a grant's revocations, read from its succeeded
+ * `grant.revocation` events' `grantId` and `reason`, as `audit-events.md` names them. A refused
+ * revocation is recorded as the operation's event too, `denied`, its reason the refusal's, so it is
+ * left out.
  *
  * @param harness the harness.
  * @param grantId the grant's id.
@@ -182,11 +184,13 @@ export const revocationReasonsRecorded = async (
   grantId: string,
 ): Promise<readonly unknown[]> => {
   const { auditLog } = POLICY_TABLES;
+  const data = pg.escapeIdentifier(auditLog.columns.data);
   const { rows } = await harness.clients.migration.query<{ reason: unknown }>(
-    `SELECT ${pg.escapeIdentifier(auditLog.columns.data)} -> 'reason' AS reason
+    `SELECT ${data} -> 'reason' AS reason
        FROM ${qualified(auditLog)}
       WHERE ${pg.escapeIdentifier(auditLog.columns.type)} = $1
-        AND ${pg.escapeIdentifier(auditLog.columns.data)} ->> 'grantId' = $2`,
+        AND ${data} ->> 'grantId' = $2
+        AND ${data} ->> 'result' = 'succeeded'`,
     [emittedType(AUDIT_EVENT_TYPES.grantRevocation), grantId],
   );
   return rows.map(({ reason }) => reason);

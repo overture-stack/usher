@@ -86,6 +86,7 @@ const OTHER_VALUES: {
 } = {
   administratorRole: 'ims-usher-admin',
   apiDocsClient: 'usher-ui-test',
+  autoAccept: true,
   backChannelLogoutAudiences: ['portal-test', 'submission-test'],
   baseline: [],
   cursorKey: syntheticKey(5),
@@ -115,6 +116,7 @@ const OTHER_VALUES: {
   streamLimitPerAudience: 2,
   streamMaximumLifetimeSeconds: 60,
   streamQueueLimit: 10,
+  submitterCategory: 'global.controlled',
   tokenLifetimeSeconds: 120,
   trustedProxies: ['127.0.0.1', '::1'],
 };
@@ -124,7 +126,6 @@ const PENDING_VALUES: {
   [Field in keyof PendingSettings]: PendingSettings[Field];
 } = {
   allowedCharactersExtra: ' :*/Éé',
-  autoAccept: true,
   cachePassword: freshSecret(),
   cacheUrl: 'redis://127.0.0.1:6380',
   directoryClientId: 'usher-directory-other',
@@ -136,7 +137,6 @@ const PENDING_VALUES: {
   egoMigrationPrefixes: [''],
   grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
   selfGrantMaximumSeconds: 14_400,
-  submitterCategory: 'global.controlled',
 };
 
 suite('the environment a configuration is expressed as', () => {

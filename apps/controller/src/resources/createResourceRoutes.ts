@@ -2,7 +2,15 @@ import type { RouteOptions } from 'fastify';
 
 import { findApplication } from '../applications/index.js';
 import type { Actor, AuditEvent, JsonValue } from '../eventLog/index.js';
+import { ControllerError } from '../failures/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
+import {
+  GRANT_PROBLEMS,
+  type GrantStore,
+  type GrantToWrite,
+  sqlGrantStore,
+  writeGrant,
+} from '../grants/index.js';
 import type { Problem } from '../http/index.js';
 import {
   type InputReading,
@@ -12,6 +20,7 @@ import {
   type OperationOutcome,
   type Principal,
 } from '../managementApi/index.js';
+import { maySee, type ResourceStanding } from '../resourceStanding/index.js';
 import { cursorAfter, readListingQuery } from './listingQuery.js';
 import { readRegistration } from './readRegistration.js';
 import { RESOURCE_PROBLEMS } from './resourceProblems.js';
@@ -46,6 +55,58 @@ class RefusedWithin extends Error {
 
 const refuseWithin = (problem: Problem): never => {
   throw new RefusedWithin(problem);
+};
+
+const ownerRoleMissing = (): never => {
+  throw new ControllerError('the store holds no owner role');
+};
+
+// The resource is new to the registration's transaction, so no grant on it is held already.
+const ownerGrantUnwritten = (): never => {
+  throw new ControllerError(
+    'an owner grant on a resource being registered was not written',
+  );
+};
+
+// Writes an owner grant on a resource being registered for each person named, in turn, each with
+// its `grant.creation`, and with its holder's acceptance under auto-accept.
+const writeOwnerGrants = async ({
+  autoAccept,
+  grants,
+  granter,
+  holderSubjects,
+  now,
+  record,
+  resource,
+  sourceIp,
+}: Pick<GrantToWrite, 'autoAccept' | 'granter' | 'resource' | 'sourceIp'> & {
+  grants: GrantStore;
+  holderSubjects: readonly string[];
+  now: Date;
+  record: (event: AuditEvent) => Promise<string>;
+}): Promise<void> => {
+  if (holderSubjects.length === 0) {
+    return;
+  }
+  const role = (await grants.findRole('owner')) ?? ownerRoleMissing();
+  await holderSubjects.reduce<Promise<unknown>>(
+    (earlier, holderSubject) =>
+      earlier.then(
+        async () =>
+          (await writeGrant(grants, record, {
+            autoAccept,
+            category: null,
+            expiresAt: null,
+            grantedAt: now,
+            granter,
+            holderSubject,
+            resource,
+            role,
+            sourceIp,
+          })) ?? ownerGrantUnwritten(),
+      ),
+    Promise.resolve(),
+  );
 };
 
 const refused = (problem: Problem): OperationOutcome => ({
@@ -108,8 +169,15 @@ const servedResourcesChange = ({
   type: 'application.servedResourcesChange',
 });
 
-const readerOf = ({ administrator }: Principal): Reader =>
-  administrator ? 'administrator' : 'signedIn';
+const readerOf = (
+  { administrator }: Principal,
+  { countedOwner }: ResourceStanding,
+): Reader => {
+  if (administrator) {
+    return 'administrator';
+  }
+  return countedOwner ? 'owner' : 'signedIn';
+};
 
 /**
  * Creates the routes of the Management API's resource operations: registering a resource, reading
@@ -119,29 +187,36 @@ const readerOf = ({ administrator }: Principal): Reader =>
  * names its access level, and every application it names must be registered, else it is refused 422
  * `unknownApplication` whole. One externalId names one resource in any letter case under ICU's root
  * collation, a retired resource included: a registration of an externalId held already is refused
- * 409 `alreadyExists`, as is the loser of two racing for one. A registration commits in one
- * transaction with its `resource.registration` event, whose `initialOwnerId` is `null` since a
- * registration names no owner, the served rows, a servedResources notice for each application named,
- * and an `application.servedResourcesChange` event for each. A change to a served set refuses 404
- * `resourceNotFound` or `applicationNotFound` for what the path names and the store does not hold,
- * and commits its row, its notice and its event in one transaction; adding an application serving
- * the resource already, or removing one serving it not, succeeds and writes nothing. A refusal
- * inside a change's transaction rolls it back whole.
+ * 409 `alreadyExists`, as is the loser of two racing for one. A registration naming an owner by
+ * address is refused 503 `directoryUnavailable` before anything is read, since no directory is
+ * read. A registration commits in one transaction with its `resource.registration` event, whose
+ * `initialOwnerId` is the subject of the first owner it names, or `null` for none, the served rows,
+ * a servedResources notice for each application named, an `application.servedResourcesChange` event
+ * for each, and an owner grant on the whole resource for each owner named, in order, as a grant is
+ * written: its holder recorded on first meeting them, no expiry, the registering administrator its
+ * granter, its holder's acceptance with it under auto-accept, and its `grant.creation` event. A
+ * change to a served set refuses 404 `resourceNotFound` or `applicationNotFound` for what the path
+ * names and the store does not hold, and commits its row, its notice and its event in one
+ * transaction; adding an application serving the resource already, or removing one serving it not,
+ * succeeds and writes nothing. A refusal inside a change's transaction rolls it back whole.
  *
- * A read and a listing record no event. A platform administrator reads and lists every resource; any
- * other principal reads one whose access level is `open` or `registered`, neither retired nor
- * suppressed, and is answered 404 `resourceNotFound` for any other, as for one that does not exist,
- * and is listed an empty page, since no operation writes the owner grant that lists a resource to
- * them. A listing pages in the order of the externalIds in any letter case, retired resources only to
- * an administrator asking for them.
+ * A read and a listing record no event. A read answers a resource to a principal who may see it: a
+ * platform administrator, who sees a retired resource too; a holder of a live grant on it that
+ * their latest answer did not reject, its owners among them; and, while it is neither retired nor
+ * suppressed, every signed-in principal when its access level is `open` or `registered`. Anyone
+ * else is answered 404 `resourceNotFound`, as for one that does not exist. A platform
+ * administrator's answer and a counted owner's carry the grant summary. A platform administrator
+ * lists every resource, and any other principal is listed an empty page. A listing pages in the
+ * order of the externalIds in any letter case, retired resources only to an administrator asking
+ * for them.
  *
- * @param settings the clock, the schema, the trusted issuer, the store and the trail, each on the
- *   control pool.
+ * @param settings whether an owner grant written at registration is accepted with it, the clock,
+ *   the schema, the trusted issuer, the store and the trail, each on the control pool.
  * @param dependencies what every Management API operation's route is built on.
  */
 export const createResourceRoutes = (
   {
-    settings: { clock, databaseSchema, identityProviderIssuer },
+    settings: { autoAccept, clock, databaseSchema, identityProviderIssuer },
     store,
     trail,
   }: ResourceOperationsSettings,
@@ -153,7 +228,7 @@ export const createResourceRoutes = (
     administratorOnly: true,
     body: 'none',
     event: {
-      named: (params) =>
+      named: ({ params }) =>
         readNamedServing(store, databaseSchema, {
           applicationId: params['applicationId'] ?? '',
           externalId: params['externalId'] ?? '',
@@ -213,9 +288,16 @@ export const createResourceRoutes = (
     body: 'required',
     event: { named: async () => ({}), type: 'resource.registration' },
     method: 'POST',
-    readInput: readRegistration,
+    readInput: (body, { principal }) =>
+      readRegistration(body, principal.subject),
     route: '/admin/resources',
     run: async ({ input, principal, sourceIp }) => {
+      const owners = input.owners.flatMap((owner) =>
+        owner.kind === 'subject' ? [owner.subject] : [],
+      );
+      if (owners.length < input.owners.length) {
+        return refused(GRANT_PROBLEMS.directoryUnavailable);
+      }
       const now = new Date(clock.now());
       return changeOutcome(
         trail.inTransaction(
@@ -250,13 +332,26 @@ export const createResourceRoutes = (
             });
             await record({
               data: {
-                initialOwnerId: null,
+                initialOwnerId: owners[0] ?? null,
                 resourceId: input.externalId,
                 result: 'succeeded',
                 sourceIp,
               },
               severity: 'info',
               type: 'resource.registration',
+            });
+            await writeOwnerGrants({
+              autoAccept,
+              grants: sqlGrantStore(connection, {
+                issuer: identityProviderIssuer,
+                schema: databaseSchema,
+              }),
+              granter: { subject: principal.subject, userId: registrant },
+              holderSubjects: owners,
+              now,
+              record,
+              resource: { externalId: input.externalId, id: resourceId },
+              sourceIp,
             });
             await applicationIds.reduce<Promise<unknown>>(
               (earlier, applicationId) =>
@@ -305,16 +400,19 @@ export const createResourceRoutes = (
     readInput: noInput,
     route: '/admin/resources/{externalId}',
     run: async ({ params, principal }) => {
-      const reader = readerOf(principal);
-      const resource = await readResource(
-        store,
-        databaseSchema,
-        identityProviderIssuer,
-        { externalId: params['externalId'] ?? '', reader },
-      );
-      return resource === undefined
-        ? refused(RESOURCE_PROBLEMS.resourceNotFound)
-        : answered(200, resourceView(resource, reader));
+      const resource = await readResource(store, databaseSchema, {
+        externalId: params['externalId'] ?? '',
+        issuer: identityProviderIssuer,
+        now: new Date(clock.now()),
+        subject: principal.subject,
+      });
+      return resource !== undefined &&
+        maySee(resource, {
+          administrator: principal.administrator,
+          asksForRetired: true,
+        })
+        ? answered(200, resourceView(resource, readerOf(principal, resource)))
+        : refused(RESOURCE_PROBLEMS.resourceNotFound);
     },
   };
 

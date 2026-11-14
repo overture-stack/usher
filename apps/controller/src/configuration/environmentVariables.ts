@@ -12,6 +12,7 @@ export const ENVIRONMENT_VARIABLES: Readonly<
 > = Object.freeze({
   administratorRole: 'USHER_ADMINISTRATOR_ROLE',
   apiDocsClient: 'USHER_API_DOCS_CLIENT',
+  autoAccept: 'USHER_GRANT_AUTO_ACCEPT',
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',
@@ -42,6 +43,7 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   streamLimitPerAudience: 'USHER_STREAM_LIMIT_PER_AUDIENCE',
   streamMaximumLifetimeSeconds: 'USHER_STREAM_MAXIMUM_LIFETIME_SECONDS',
   streamQueueLimit: 'USHER_STREAM_QUEUE_LIMIT',
+  submitterCategory: 'USHER_SUBMITTER_CATEGORY',
   tokenLifetimeSeconds: 'USHER_TOKEN_LIFETIME_SECONDS',
   trustedProxies: 'USHER_TRUSTED_PROXIES',
 });

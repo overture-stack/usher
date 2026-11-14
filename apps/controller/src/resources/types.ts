@@ -2,13 +2,17 @@ import type pg from 'pg';
 
 import type { ControllerConfiguration } from '../configuration/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
+import type { NamedHolder } from '../grants/index.js';
 import type { StoreReader } from '../managementApi/index.js';
+import type { AccessLevel } from '../resourceStanding/index.js';
 
-/** A resource's access level, its base tier, as the API names it. */
-export type AccessLevel = 'grant' | 'open' | 'registered';
+export type { AccessLevel };
 
-/** Who a resource is read for: a platform administrator, who sees every one, or any other principal. */
-export type Reader = 'administrator' | 'signedIn';
+/**
+ * Who a resource is answered to: a platform administrator, a counted owner of it, or any other
+ * principal who may see it.
+ */
+export type Reader = 'administrator' | 'owner' | 'signedIn';
 
 /**
  * The rule of an externalId's form a value breaks: its normalization form, its length, its
@@ -31,6 +35,9 @@ export interface Registration {
   displayName: string;
 
   externalId: string;
+
+  /** Its first owners, in the order named, each one person by subject or by address, as given. */
+  owners: readonly NamedHolder[];
 }
 
 /** What the listing reads from its query. */
@@ -73,10 +80,13 @@ export interface StoredResource {
 
 /** What the resource operations are created from. */
 export interface ResourceOperationsSettings {
-  /** The clock each time written is read from, the schema, and the trusted issuer people are found under. */
+  /**
+   * Whether an owner grant written at registration is accepted with it, the clock each time written
+   * is read from, the schema, and the trusted issuer people are found under.
+   */
   settings: Pick<
     ControllerConfiguration,
-    'clock' | 'databaseSchema' | 'identityProviderIssuer'
+    'autoAccept' | 'clock' | 'databaseSchema' | 'identityProviderIssuer'
   >;
 
   /** Where a resource is read, on the control pool. */

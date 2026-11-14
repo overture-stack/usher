@@ -324,7 +324,7 @@ export const createApplicationRoutes = (
     afterCommit: KEY_CHANGE_STEPS,
     body: 'none',
     event: {
-      named: (params) => namedApplication(params, false),
+      named: ({ params }) => namedApplication(params, false),
       type: 'applicationKey.issuance',
     },
     method: 'POST',
@@ -381,7 +381,7 @@ export const createApplicationRoutes = (
     afterCommit: KEY_CHANGE_STEPS,
     body: 'optional',
     event: {
-      named: (params) => namedApplication(params, true),
+      named: ({ params }) => namedApplication(params, true),
       type: 'applicationKey.revocation',
     },
     method: 'DELETE',

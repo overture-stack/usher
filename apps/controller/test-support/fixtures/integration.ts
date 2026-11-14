@@ -297,10 +297,15 @@ export const relayTo = async (scope: Cleanup, url: URL): Promise<Relay> => {
   return relay;
 };
 
+// The store connections the integration harness's instance holds for the token exchange: enough for
+// the largest burst of exchanges an integration test sends at once, 50, beyond the controller's
+// default of 10.
+const INTEGRATION_EXCHANGE_CONNECTIONS = 60;
+
 /**
  * Starts a harness serving both applications, seeded with the integration fixture, on a profile's
- * controller timing from the typed configuration (#217 Q2), and a relay in front of it; defers their
- * stops.
+ * controller timing from the typed configuration (#217 Q2) and an exchange pool of 60 connections
+ * unless the test's configuration sets another, and a relay in front of it; defers their stops.
  *
  * @param scope the test's cleanup.
  * @param options the configuration, the policy, a PostgreSQL of the test's own and the profile.
@@ -316,7 +321,11 @@ export const startIntegration = async (
 ): Promise<Integration> => {
   const harness = await startHarness({
     applications: APPLICATION_LABELS,
-    configuration: { ...TIMING_PROFILES[profile].controller, ...configuration },
+    configuration: {
+      databaseExchangeConnections: INTEGRATION_EXCHANGE_CONNECTIONS,
+      ...TIMING_PROFILES[profile].controller,
+      ...configuration,
+    },
     fixture: integrationPolicy(policy),
     ...(postgresql === undefined ? {} : { postgresql }),
   });

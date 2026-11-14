@@ -30,6 +30,7 @@ import {
   stewardOf,
   writeOutcome,
 } from '../../test-support/fixtures/database.js';
+import { storedDecisions } from '../../test-support/fixtures/grants.js';
 import {
   APPLICATIONS,
   applicationIdsOf,
@@ -44,12 +45,14 @@ import {
   changeRecordCount,
   highestPosition,
   inTurn,
+  liveGrantId,
   noticesAfter,
   type PolicyFixture,
   POLICY_TABLES,
   policySnapshot,
   qualified,
   storedExternalIds,
+  usersWithSubject,
 } from '../../test-support/policy.js';
 
 const { applicationResources, auditLog, resources } = POLICY_TABLES;
@@ -343,7 +346,7 @@ suite("a resource's registration in the store", () => {
     );
   });
 
-  test('refuses a registration naming an application that is not registered 422 unknownApplication whole, and one naming owners 422, writing nothing of either and recording each denied', async (context) => {
+  test('refuses a registration naming an application that is not registered 422 unknownApplication whole, and one naming one owner twice 422, writing nothing of either and recording each denied', async (context) => {
     await withHarness(
       { fixture: FIXTURE },
       async (harness) => {
@@ -360,7 +363,10 @@ suite("a resource's registration in the store", () => {
             }),
             registration('STUDY-U2', { applications: ['not-an-id'] }),
             registration('STUDY-U3', {
-              owners: [{ subject: 'subject-unused' }],
+              owners: [
+                { subject: 'subject-unused' },
+                { subject: 'subject-unused' },
+              ],
             }),
           ],
           (sent) => registerResource(administrator, sent),
@@ -378,7 +384,7 @@ suite("a resource's registration in the store", () => {
         );
         assertRuleBroken(
           answers[2] ?? assert.fail('no answer'),
-          'a registration naming owners',
+          'a registration naming one owner twice',
         );
         assert.deepEqual(await policySnapshot(migration), before);
         assert.deepEqual(await noticesAfter(migration, since), []);
@@ -402,6 +408,83 @@ suite("a resource's registration in the store", () => {
             .toSorted((left, right) =>
               String(left.reason).localeCompare(String(right.reason)),
             ),
+        );
+      },
+      context,
+    );
+  });
+});
+
+suite("a registration's owners in the store", () => {
+  test('commits an owner grant for each owner named with the registration, each holder met first, each with its grant.creation and, under auto-accept, its acceptance, the first named its initialOwnerId', async (context) => {
+    const owners = ['subject-first-owner', 'subject-second-owner'];
+    await withHarness(
+      { configuration: { autoAccept: true }, fixture: FIXTURE },
+      async (harness) => {
+        const { migration } = harness.clients;
+        const before = await inTurn(owners, (subject) =>
+          usersWithSubject(migration, subject),
+        );
+
+        const answer = await registerResource(
+          await administratorCaller(harness),
+          registration('STUDY-N1', {
+            accessLevel: 'grant',
+            owners: owners.map((subject) => ({ subject })),
+          }),
+        );
+
+        assertSucceeded(answer, 'the registration naming two owners');
+        assert.deepEqual(before, [0, 0]);
+        assert.deepEqual(
+          await inTurn(owners, (subject) =>
+            usersWithSubject(migration, subject),
+          ),
+          [1, 1],
+        );
+        const grantIds = await inTurn(owners, (holder) =>
+          liveGrantId(migration, {
+            category: null,
+            holder,
+            resource: 'STUDY-N1',
+            role: 'owner',
+          }),
+        );
+        const decided = await inTurn(grantIds, (grantId) =>
+          storedDecisions(harness, grantId),
+        );
+        assert.deepEqual(
+          decided.map((decisions) =>
+            decisions.map(({ deciderSubject, decision }) => [
+              deciderSubject,
+              decision,
+            ]),
+          ),
+          owners.map((subject) => [[subject, 'accepted']]),
+        );
+        const events = (await auditRows(migration)).filter(
+          ({ data }) =>
+            typeof data === 'object' &&
+            data !== null &&
+            Reflect.get(data, 'resourceId') === 'STUDY-N1',
+        );
+        assert.deepEqual(
+          events
+            .filter(({ type }) => type === emittedType(resourceRegistration))
+            .map((event) => dataOf(event)['initialOwnerId']),
+          [owners[0]],
+        );
+        assert.deepEqual(
+          events
+            .filter(
+              ({ type }) =>
+                type === emittedType(AUDIT_EVENT_TYPES.grantCreation),
+            )
+            .map((event) => {
+              const data = dataOf(event);
+              return [data['granteeId'], data['role'], data['category']];
+            }),
+          owners.map((subject) => [subject, 'owner', null]),
         );
       },
       context,

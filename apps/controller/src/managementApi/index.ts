@@ -10,6 +10,7 @@ export type {
   InputReading,
   ManagementDependencies,
   ManagementOperation,
+  NamedByRequest,
   OperationOutcome,
   Principal,
   QueryParameters,

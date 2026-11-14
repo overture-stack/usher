@@ -33,6 +33,7 @@ import {
   TOKEN_LIMIT_BYTES,
 } from '../exchange/index.js';
 import { ControllerError } from '../failures/index.js';
+import { createGrantRoutes, sqlGrantStore } from '../grants/index.js';
 import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
 import {
@@ -119,8 +120,8 @@ const READINESS_CONNECTIONS = 1;
 /**
  * Creates a controller from its configuration, connecting to nothing until it starts. Its start
  * checks the store before anything listens, so a refused start never accepts a connection, reads
- * the live application keys into memory, and then serves the Management API's application and
- * resource operations, each event they record written to the audit log and the log stream, the
+ * the live application keys into memory, and then serves the Management API's application, resource
+ * and grant operations, each event they record written to the audit log and the log stream, the
  * revocation channel's poll and push, the token exchange, and the identity provider's back-channel
  * logout, and, while `apiDocsClient` names a client, the API documentation page at `/api-docs`,
  * taking no credential, its files read as the controller is created. A change committed through an
@@ -130,13 +131,13 @@ const READINESS_CONNECTIONS = 1;
  * step is written to the log and never changes the answer. The live keys are read again too each
  * time the configured clock passes the reload interval, and a stored key that does not open is
  * recorded as `applicationKey.unreadable`. A start finding that its database role writes then runs
- * the retention sweep until the stop, giving it the configured clock; a run of it that fails changes
- * no answer of any route, readiness's included. The Management API, the exchange and the back-channel
- * logout verify the identity provider's tokens through one verifier, and the revocation channel and
- * the exchange check channel assertions through one verifier, counting those they cannot verify in
- * one tally. Every unit of its store work, a request's statement or transaction, a recorded event,
- * a read of the keys or the notices, a run of the sweep, or the start's transaction, runs within the
- * store timeout.
+ * the retention sweep until the stop, giving it the configured clock; a run of it that fails
+ * changes no answer of any route, readiness's included. The Management API, the exchange and the
+ * back-channel logout verify the identity provider's tokens through one verifier, and the
+ * revocation channel and the exchange check channel assertions through one verifier, counting those
+ * they cannot verify in one tally. Every unit of its store work, a request's statement or
+ * transaction, a recorded event, a read of the keys or the notices, a run of the sweep, or the
+ * start's transaction, runs within the store timeout.
  *
  * It holds three pools of store connections, each with the same limits, so no one kind of work can
  * hold the connections another needs: the exchange pool, of `databaseExchangeConnections`, for the
@@ -158,12 +159,12 @@ const READINESS_CONNECTIONS = 1;
  * its store work runs within that deadline too. Its stop first stops the sweep, so no run of it
  * begins once the stop has, then ends every stream, then closes the server, letting requests in
  * flight finish, waits for the refused channel assertions still being recorded and for the sweep's
- * run in flight, records the counts its four tallies hold, stops reading the keys, then closes every
- * pool's connections and lets go of the log stream. It reports itself ready while it is started, its
- * log stream takes its lines, and its store answers readiness's own connection within the store
- * timeout, not reading as read-only when its database role writes, writing each change. It reports
- * itself live until its log stream fails to take a line, which only a restart recovers from, and
- * writes nothing as it stops being live.
+ * run in flight, records the counts its four tallies hold, stops reading the keys, then closes
+ * every pool's connections and lets go of the log stream. It reports itself ready while it is
+ * started, its log stream takes its lines, and its store answers readiness's own connection within
+ * the store timeout, not reading as read-only when its database role writes, writing each change.
+ * It reports itself live until its log stream fails to take a line, which only a restart recovers
+ * from, and writes nothing as it stops being live.
  *
  * @param configuration the controller's configuration.
  */
@@ -395,6 +396,19 @@ export const createController = (
     ),
     ...createResourceRoutes(
       { settings: configuration, store: reader, trail: wakingTrail },
+      management,
+    ),
+    ...createGrantRoutes(
+      {
+        grantStoreOf: (connection) =>
+          sqlGrantStore(connection, {
+            issuer: configuration.identityProviderIssuer,
+            schema: configuration.databaseSchema,
+          }),
+        settings: configuration,
+        store: reader,
+        trail: wakingTrail,
+      },
       management,
     ),
     ...channel.routes,

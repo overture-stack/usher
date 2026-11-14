@@ -149,6 +149,13 @@ The sum of these three durations is the notice retention floor: how long each no
 
 A start under a baseline or signed-in rule differing from those recorded in the store records the new rules, with a `baseline.change` event at warning, since every principal's reach changes with them.
 
+### Grants
+
+| Variable                   | Kind                        | What it is, and its rule                                                                                                                                                                       |
+| -------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USHER_GRANT_AUTO_ACCEPT`  | Optional: `false`           | Whether a grant is accepted as it is created, its holder's acceptance recorded with it, showing what the grant's role confers then, so no holder answers it: `true` or `false`, in lower case. |
+| `USHER_SUBMITTER_CATEGORY` | Optional: `global.unmarked` | The record category a `submitter` grant naming none takes, as a payload names it: `global.` followed by the name of a global category, which holds no dot.                                     |
+
 ---
 
 ## Keys

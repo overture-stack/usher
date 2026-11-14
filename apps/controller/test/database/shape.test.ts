@@ -274,6 +274,7 @@ suite("the schema's shape", () => {
       globalRevocations: [[globalRevocations.columns.revokedAt, 35]],
       grantDecisions: [[grantDecisions.columns.decidedAt, 15]],
       grants: [
+        [grants.columns.endedAt, 52],
         [grants.columns.expiresAt, 50],
         [grants.columns.grantedAt, 10],
         [grants.columns.revokedAt, 20],
