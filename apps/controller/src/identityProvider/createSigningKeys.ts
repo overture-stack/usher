@@ -1,8 +1,15 @@
 import type { JWK } from 'jose';
 
-import { discoveryUrl } from './discoveryUrl.js';
+import {
+  discoveryDocument,
+  failed,
+  fetchedJson,
+  isRecord,
+  keySetUrl,
+  obtained,
+  type Step,
+} from './discovery.js';
 import type {
-  KeySetFetchFailure,
   KeySetReading,
   SigningKeys,
   TokenVerifierLog,
@@ -18,69 +25,7 @@ export const KEY_REFETCH_COOLDOWN_MILLISECONDS = 30_000;
 /** The line naming a fetch of the trusted issuer's key set that failed, and its cause. */
 export const KEY_SET_FETCH_FAILED = 'identityProvider.keySetFetchFailed';
 
-// A fetch the provider never answers ends here, in real time, so one silent provider holds no request
-// open for long.
-const FETCH_TIMEOUT_MILLISECONDS = 5000;
-
-const LOOPBACK_HOSTS: ReadonlySet<string> = new Set([
-  '127.0.0.1',
-  '[::1]',
-  'localhost',
-]);
-
 const UNAVAILABLE: KeySetReading = Object.freeze({ kind: 'unavailable' });
-
-// What one step of a fetch gave: its value, or the fixed cause it failed for.
-type Step<Value> =
-  | { cause: KeySetFetchFailure; kind: 'failed' }
-  | { kind: 'obtained'; value: Value };
-
-const failed = (cause: KeySetFetchFailure): Step<never> => ({
-  cause,
-  kind: 'failed',
-});
-
-const obtained = <Value>(value: Value): Step<Value> => ({
-  kind: 'obtained',
-  value,
-});
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-// The same rule the issuer itself is read under: nothing the controller trusts crosses a network in
-// the clear.
-const isSecure = (url: URL): boolean =>
-  url.protocol === 'https:' ||
-  (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname));
-
-const parsedJson = (
-  text: string,
-  unreadable: KeySetFetchFailure,
-): Step<unknown> => {
-  try {
-    return obtained(JSON.parse(text));
-  } catch {
-    return failed(unreadable);
-  }
-};
-
-// A redirect is taken as answered, never followed, so it fails as a status other than 200.
-const fetchedJson = async (
-  url: URL,
-  unreadable: KeySetFetchFailure,
-): Promise<Step<unknown>> => {
-  const response = await fetch(url, {
-    headers: { accept: 'application/json' },
-    redirect: 'manual',
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MILLISECONDS),
-  });
-  if (response.status === 200) {
-    return parsedJson(await response.text(), unreadable);
-  }
-  await response.body?.cancel();
-  return failed('status');
-};
 
 // A key the provider publishes for verifying signatures: never one published for encryption, and never
 // a private key, which no provider publishes on purpose.
@@ -90,25 +35,14 @@ const isSigningKey = (key: unknown): key is JWK =>
   key['use'] !== 'enc' &&
   !Object.hasOwn(key, 'd');
 
-const keySetUrl = (discovery: unknown, issuer: string): Step<URL> => {
-  if (isRecord(discovery) && discovery['issuer'] === issuer) {
-    const named = discovery['jwks_uri'];
-    const url = typeof named === 'string' ? URL.parse(named) : null;
-    return url !== null && isSecure(url)
-      ? obtained(url)
-      : failed('keySetLocation');
-  }
-  return failed('discoveryIssuer');
-};
-
 const fetchSigningKeys = async (
   issuer: string,
 ): Promise<Step<readonly JWK[]>> => {
-  const discovery = await fetchedJson(discoveryUrl(issuer), 'discoveryIssuer');
+  const discovery = await discoveryDocument(issuer);
   if (discovery.kind === 'failed') {
     return discovery;
   }
-  const location = keySetUrl(discovery.value, issuer);
+  const location = keySetUrl(discovery.value);
   if (location.kind === 'failed') {
     return location;
   }

@@ -398,7 +398,7 @@ export const createController = (
       tokenVerifier,
       trail: wakingTrail,
     }),
-    ...createApiDocsRoutes(configuration),
+    ...createApiDocsRoutes(configuration, eventLog),
   ].forEach((route) => {
     server.route(route);
   });

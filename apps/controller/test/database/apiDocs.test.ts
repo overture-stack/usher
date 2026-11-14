@@ -12,7 +12,7 @@ import {
 
 /** A security scheme, as far as this test reads it. */
 interface SecurityScheme {
-  openIdConnectUrl?: unknown;
+  flows?: unknown;
   type?: unknown;
 }
 
@@ -25,8 +25,17 @@ const securitySchemesOf = (body: unknown): readonly SecurityScheme[] =>
     ).components.securitySchemes,
   );
 
+// The token URL of each flow an OAuth 2.0 scheme names, one entry per flow.
+const tokenUrlsOf = ({ flows }: SecurityScheme): readonly unknown[] =>
+  Object.values(typeof flows === 'object' && flows !== null ? flows : {}).map(
+    (flow: unknown) =>
+      typeof flow === 'object' && flow !== null
+        ? Reflect.get(flow, 'tokenUrl')
+        : undefined,
+  );
+
 suite("a started controller's API documentation page", () => {
-  test('is served, its contract naming one OpenID Connect scheme at the trusted issuer, while its client is one of the management clients', async (context) => {
+  test("is served, its contract naming one OAuth 2.0 scheme with one flow, whose token URL is at the trusted issuer's origin, while its client is one of the management clients", async (context) => {
     await withHarness(
       {
         applications: [],
@@ -35,19 +44,20 @@ suite("a started controller's API documentation page", () => {
       async (harness) => {
         const page = await readApiDocsPage(harness.url);
         const contract = await readApiDocsContract(harness.url);
+        const origin = new URL(harness.configuration.identityProviderIssuer)
+          .origin;
 
         assert.equal(page.status, 200);
         assert.equal(contract.status, 200);
+        const schemes = securitySchemesOf(contract.body)
+          .filter(({ type }) => type === 'oauth2')
+          .map(tokenUrlsOf);
+        assert.equal(schemes.length, 1);
         assert.deepEqual(
-          securitySchemesOf(contract.body)
-            .filter(({ type }) => type === 'openIdConnect')
-            .map(
-              ({ openIdConnectUrl }) =>
-                typeof openIdConnectUrl === 'string' &&
-                openIdConnectUrl.startsWith(
-                  `${harness.configuration.identityProviderIssuer}/`,
-                ),
-            ),
+          schemes[0]?.map(
+            (tokenUrl) =>
+              typeof tokenUrl === 'string' && tokenUrl.startsWith(`${origin}/`),
+          ),
           [true],
         );
       },

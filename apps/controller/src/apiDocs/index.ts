@@ -1,2 +1,2 @@
 export { createApiDocsRoutes } from './createApiDocsRoutes.js';
-export type { ApiDocsSettings } from './types.js';
+export type { ApiDocsLog, ApiDocsSettings } from './types.js';

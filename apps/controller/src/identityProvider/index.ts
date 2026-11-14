@@ -1,7 +1,16 @@
+export {
+  createIssuerEndpoints,
+  ENDPOINTS_RETRY_COOLDOWN_MILLISECONDS,
+  ISSUER_ENDPOINTS_UNAVAILABLE,
+} from './createIssuerEndpoints.js';
 export { createTokenVerifier } from './createTokenVerifier.js';
-export { discoveryUrl } from './discoveryUrl.js';
 export type {
   HeldKeyVerification,
+  IssuerEndpoints,
+  IssuerEndpointsLog,
+  IssuerEndpointsReading,
+  IssuerEndpointsSettings,
+  SignInEndpoints,
   TokenClaims,
   TokenHeader,
   TokenVerification,

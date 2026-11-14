@@ -1,9 +1,11 @@
-import { discoveryUrl } from '../identityProvider/index.js';
+import type { SignInEndpoints } from '../identityProvider/index.js';
 import type { OpenApiDocument } from './types.js';
 
 const MANAGEMENT_SCHEME = 'managementToken';
 
 const SIGN_IN_SCHEME = 'identityProviderSignIn';
+
+const OPENID_SCOPE_DESCRIPTION = 'Sign in through the identity provider.';
 
 // The members of a path item that are operations, by the method each is called with.
 const OPERATION_METHODS: ReadonlySet<string> = new Set([
@@ -33,18 +35,18 @@ const withSignInAlternatives = (operation: unknown): unknown =>
     : operation;
 
 /**
- * The contract the API documentation page serves: the committed one, plus an OpenID Connect security
- * scheme, `identityProviderSignIn`, naming the discovery document at the issuer as the controller
- * finds it, and, right after every security requirement naming `managementToken`, the alternative
- * `{ "identityProviderSignIn": [] }`. Nothing else is added, and the committed contract is left as it
- * was.
+ * The contract the API documentation page serves: the committed one, plus an OAuth 2.0 security
+ * scheme, `identityProviderSignIn`, naming one flow, `authorizationCode`, at the authorization and
+ * token endpoints given, with the `openid` scope alone, and, right after every security requirement
+ * naming `managementToken`, the alternative `{ "identityProviderSignIn": [] }`. Nothing else is added,
+ * and the committed contract is left as it was.
  *
  * @param committed the committed contract.
- * @param issuer the identity provider's issuer, as its tokens carry it.
+ * @param endpoints the identity provider's authorization and token endpoints.
  */
 export const servedSpec = (
   committed: OpenApiDocument,
-  issuer: string,
+  { authorizationEndpoint, tokenEndpoint }: SignInEndpoints,
 ): OpenApiDocument => ({
   ...committed,
   components: {
@@ -52,8 +54,14 @@ export const servedSpec = (
     securitySchemes: {
       ...committed.components.securitySchemes,
       [SIGN_IN_SCHEME]: {
-        openIdConnectUrl: discoveryUrl(issuer).href,
-        type: 'openIdConnect',
+        flows: {
+          authorizationCode: {
+            authorizationUrl: authorizationEndpoint,
+            scopes: { openid: OPENID_SCOPE_DESCRIPTION },
+            tokenUrl: tokenEndpoint,
+          },
+        },
+        type: 'oauth2',
       },
     },
   },

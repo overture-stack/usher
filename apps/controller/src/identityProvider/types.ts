@@ -64,6 +64,57 @@ export type KeySetFetchFailure =
   | 'status'
   | 'unreachable';
 
+/** What the issuer's sign-in endpoints are read with: the clock the cooldown is measured on, and the trusted issuer. */
+export type IssuerEndpointsSettings = Pick<
+  ControllerConfiguration,
+  'clock' | 'identityProviderIssuer'
+>;
+
+/** Where a failed read of the issuer's sign-in endpoints is written. */
+export type IssuerEndpointsLog = Pick<EventLog, 'error'>;
+
+/**
+ * Why a read of the trusted issuer's sign-in endpoints failed, each a fixed cause and never a value the
+ * read met: the provider gave no answer, as when it cannot be reached or answers too slowly; it
+ * answered a status other than 200, a redirect among them; its discovery document is not a JSON
+ * object naming the trusted issuer exactly; that document names an authorization or token endpoint
+ * that is missing, not a string, not a URL, or reachable neither over https nor over http to a
+ * loopback host; or it names one at an origin other than the issuer's.
+ */
+export type IssuerEndpointsFailure =
+  | 'discoveryIssuer'
+  | 'endpointLocation'
+  | 'endpointOrigin'
+  | 'status'
+  | 'unreachable';
+
+/** The trusted issuer's authorization and token endpoints, each at the issuer's origin, as URLs. */
+export interface SignInEndpoints {
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+}
+
+/**
+ * What asking for the issuer's sign-in endpoints found: the endpoints; or that they cannot be read
+ * now, with the milliseconds of the configured clock until a read may start again, at most the
+ * cooldown.
+ */
+export type IssuerEndpointsReading =
+  | { endpoints: SignInEndpoints; kind: 'read' }
+  | { kind: 'unavailable'; retryInMilliseconds: number };
+
+/**
+ * The trusted issuer's sign-in endpoints, read from its discovery document when first asked for and
+ * held from then on.
+ */
+export interface IssuerEndpoints {
+  /**
+   * The endpoints: those held; else those of a read in flight, joined; else, unless a read failed
+   * within the cooldown, those of a read it starts.
+   */
+  current(): Promise<IssuerEndpointsReading>;
+}
+
 /**
  * The trusted issuer's signing keys as a reading of them gave them, with whether the reading fetched
  * them and whether the latest attempt to fetch them failed, or that none could be had.

@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { createServer as createHttpServer } from 'node:http';
 import { createRequire } from 'node:module';
+import type { AddressInfo } from 'node:net';
 import { dirname, join } from 'node:path';
 import { suite, test, type TestContext } from 'node:test';
 
 import type { FastifyInstance } from 'fastify';
 
+import type { Clock } from '../configuration/index.js';
+import type { LineFields } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
+import {
+  ENDPOINTS_RETRY_COOLDOWN_MILLISECONDS,
+  ISSUER_ENDPOINTS_UNAVAILABLE,
+} from '../identityProvider/index.js';
 import { createApiDocsRoutes } from './createApiDocsRoutes.js';
 import { initializerScript } from './initializerScript.js';
 import { servedSpec } from './servedSpec.js';
@@ -14,25 +22,42 @@ import type { ApiDocsSettings, OpenApiDocument } from './types.js';
 
 const ISSUER = 'https://auth.example.org/realms/usher';
 
+interface ControlledClock extends Clock {
+  advance(milliseconds: number): void;
+}
+
+// A clock that stands still between a test's moves, so a time left in the cooldown is exact.
+const controlledClock = (): ControlledClock => {
+  const state = { now: Date.now() };
+  return {
+    advance: (milliseconds) => {
+      state.now += milliseconds;
+    },
+    now: () => state.now,
+  };
+};
+
 const ON: ApiDocsSettings = {
   apiDocsClient: 'usher-ui',
+  clock: controlledClock(),
   identityProviderIssuer: ISSUER,
 };
 
 const OFF: ApiDocsSettings = {
   apiDocsClient: '',
+  clock: controlledClock(),
   identityProviderIssuer: ISSUER,
 };
 
-const CONTENT_SECURITY_POLICY =
-  "default-src 'none'; script-src 'self'; connect-src 'self' https://auth.example.org; img-src 'self' data:; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'";
+const contentSecurityPolicy = (origin: string): string =>
+  `default-src 'none'; script-src 'self'; connect-src 'self' ${origin}; img-src 'self' data:; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'`;
 
-const SECURITY_HEADERS = {
-  'content-security-policy': CONTENT_SECURITY_POLICY,
+const securityHeaders = (origin: string): Readonly<Record<string, string>> => ({
+  'content-security-policy': contentSecurityPolicy(origin),
   'referrer-policy': 'no-referrer',
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
-};
+});
 
 const NOT_STORED = 'no-store';
 
@@ -133,21 +158,140 @@ const UNSERVED_PATHS: readonly string[] = [
 
 const UNKNOWN_PATH = '/an-unknown-path';
 
+const CONTRACT_PATH = '/api-docs/openapi.json';
+
+const DISCOVERY_PATH = '/realms/test/.well-known/openid-configuration';
+
+interface Line {
+  fields: LineFields | undefined;
+  message: string;
+}
+
+interface Provider {
+  /** Each path asked for, in order. */
+  asked: string[];
+
+  /** Members set over the discovery document's own. */
+  departures: Readonly<Record<string, unknown>>;
+
+  /** Settles once the provider is first asked for anything. */
+  firstAsked: Promise<void>;
+
+  issuer: string;
+
+  /** The issuer's origin, as the content security policy names it. */
+  origin: string;
+
+  /** Whether it answers every request 503. */
+  refusing: boolean;
+
+  /** Lets every answer go, for a provider started holding them. */
+  release(): void;
+}
+
+const isAddress = (address: unknown): address is AddressInfo =>
+  typeof address === 'object' && address !== null && 'port' in address;
+
+// An identity provider answering its discovery document, holding every answer until released when
+// asked to.
+const startProvider = async (
+  context: TestContext,
+  holding = false,
+): Promise<Provider> => {
+  const held = Promise.withResolvers<void>();
+  const asked = Promise.withResolvers<void>();
+  const provider: Provider = {
+    asked: [],
+    departures: {},
+    firstAsked: asked.promise,
+    issuer: '',
+    origin: '',
+    refusing: false,
+    release: () => held.resolve(),
+  };
+  const server = createHttpServer((request, response) => {
+    const path = request.url ?? '';
+    provider.asked.push(path);
+    asked.resolve();
+    const answer = (): void => {
+      if (provider.refusing) {
+        response.writeHead(503);
+        response.end();
+      } else if (path === DISCOVERY_PATH) {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(
+          JSON.stringify({
+            authorization_endpoint: `${provider.issuer}/protocol/openid-connect/auth`,
+            issuer: provider.issuer,
+            token_endpoint: `${provider.issuer}/protocol/openid-connect/token`,
+            ...provider.departures,
+          }),
+        );
+      } else {
+        response.writeHead(404);
+        response.end();
+      }
+    };
+    if (holding) {
+      void held.promise.then(answer);
+    } else {
+      answer();
+    }
+  });
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  context.after(
+    () =>
+      new Promise<void>((resolve) => {
+        held.resolve();
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  );
+  const address = server.address();
+  assert.ok(isAddress(address));
+  provider.origin = `http://127.0.0.1:${address.port}`;
+  provider.issuer = `${provider.origin}/realms/test`;
+  return provider;
+};
+
+const endpointsOf = (
+  provider: Provider,
+): { authorizationEndpoint: string; tokenEndpoint: string } => ({
+  authorizationEndpoint: `${provider.issuer}/protocol/openid-connect/auth`,
+  tokenEndpoint: `${provider.issuer}/protocol/openid-connect/token`,
+});
+
 const serverWith = (
   context: TestContext,
   settings: ApiDocsSettings,
+  lines: Line[] = [],
 ): FastifyInstance => {
   const server = createServer({
     isLive: () => true,
     isReady: async () => true,
     trustedProxies: [],
   });
-  createApiDocsRoutes(settings).forEach((route) => {
+  createApiDocsRoutes(settings, {
+    error: (message, fields) => {
+      lines.push({ fields, message });
+    },
+  }).forEach((route) => {
     server.route(route);
   });
   context.after(() => server.close());
   return server;
 };
+
+const providerSettings = (
+  provider: Provider,
+  clock: Clock = controlledClock(),
+): ApiDocsSettings => ({
+  apiDocsClient: 'usher-ui',
+  clock,
+  identityProviderIssuer: provider.issuer,
+});
 
 interface Answer {
   body: string;
@@ -211,13 +355,30 @@ suite('the API documentation page, while its client is empty', () => {
   });
 
   test('builds no route at all', () => {
-    assert.deepEqual(createApiDocsRoutes(OFF), []);
+    assert.deepEqual(createApiDocsRoutes(OFF, { error: () => undefined }), []);
+  });
+
+  test('asks the identity provider for nothing, whatever path is asked for', async (context) => {
+    const provider = await startProvider(context);
+    const server = serverWith(context, {
+      ...providerSettings(provider),
+      apiDocsClient: '',
+    });
+
+    await Promise.all(
+      [...SERVED.map(({ path }) => path), ...UNSERVED_PATHS].map((path) =>
+        answerOf(server, 'GET', path),
+      ),
+    );
+
+    assert.deepEqual(provider.asked, []);
   });
 });
 
 suite('the API documentation page, while its client is set', () => {
   test('answers each route with exactly the security headers, its content type and its caching, the content security policy whole, on GET and HEAD alike', async (context) => {
-    const server = serverWith(context, ON);
+    const provider = await startProvider(context);
+    const server = serverWith(context, providerSettings(provider));
 
     const answers = await Promise.all(
       SERVED.flatMap(({ cacheControl, contentType, path }) =>
@@ -244,7 +405,7 @@ suite('the API documentation page, while its client is set', () => {
       assert.deepEqual(
         headers,
         {
-          ...SECURITY_HEADERS,
+          ...securityHeaders(provider.origin),
           'cache-control': cacheControl,
           'content-type': contentType,
         },
@@ -256,6 +417,7 @@ suite('the API documentation page, while its client is set', () => {
   test("names the identity provider's origin alone in connect-src, never its path, and answers no cross-origin opener policy", async (context) => {
     const server = serverWith(context, {
       apiDocsClient: 'usher-ui',
+      clock: controlledClock(),
       identityProviderIssuer: 'http://127.0.0.1:8080/realms/overture',
     });
 
@@ -348,15 +510,44 @@ suite('the API documentation page, while its client is set', () => {
     );
   });
 
-  test('serves the contract as built from the committed one and the issuer', async (context) => {
-    const server = serverWith(context, ON);
+  test("serves the contract built from the committed one and the endpoints the issuer's discovery document names, reading them once for every request", async (context) => {
+    const provider = await startProvider(context);
+    const server = serverWith(context, providerSettings(provider));
 
-    const { body } = await answerOf(server, 'GET', '/api-docs/openapi.json');
+    const first = await answerOf(server, 'GET', CONTRACT_PATH);
+    const second = await answerOf(server, 'GET', CONTRACT_PATH);
 
+    assert.equal(first.statusCode, 200);
     assert.deepEqual(
-      JSON.parse(body),
-      servedSpec(await committedSpec(), ISSUER),
+      JSON.parse(first.body),
+      servedSpec(await committedSpec(), endpointsOf(provider)),
     );
+    assert.equal(second.body, first.body);
+    assert.deepEqual(provider.asked, [DISCOVERY_PATH]);
+  });
+
+  test('holds a request for the contract while the endpoints are being read, answering it once the read ends, one read for every request held', async (context) => {
+    const provider = await startProvider(context, true);
+    const server = serverWith(context, providerSettings(provider));
+    const settled: string[] = [];
+
+    const requests = [1, 2].map(async (order) => {
+      const answer = await answerOf(server, 'GET', CONTRACT_PATH);
+      settled.push(`request ${order}`);
+      return answer;
+    });
+    await provider.firstAsked;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const settledWhileReading = [...settled];
+    provider.release();
+    const answers = await Promise.all(requests);
+
+    assert.deepEqual(settledWhileReading, []);
+    assert.deepEqual(
+      answers.map(({ statusCode }) => statusCode),
+      [200, 200],
+    );
+    assert.deepEqual(provider.asked, [DISCOVERY_PATH]);
   });
 
   test('serves the initializer generated for the configured client', async (context) => {
@@ -395,6 +586,143 @@ suite('the API documentation page, while its client is set', () => {
     );
   });
 });
+
+suite(
+  "the API documentation page's contract, while the identity provider's endpoints cannot be read",
+  () => {
+    const PROBLEM_HEADERS = {
+      'cache-control': NOT_STORED,
+      'content-type': 'application/problem+json; charset=utf-8',
+    };
+
+    test('answers 503 identityProviderUnavailable as problem details, never stored, with the security headers and Retry-After the whole seconds left in the cooldown, at least 1, asking the provider nothing more within it', async (context) => {
+      const provider = await startProvider(context);
+      provider.refusing = true;
+      const clock = controlledClock();
+      const lines: Line[] = [];
+      const server = serverWith(
+        context,
+        providerSettings(provider, clock),
+        lines,
+      );
+
+      const failedRead = await answerOf(server, 'GET', CONTRACT_PATH);
+      clock.advance(10_500);
+      const later = await answerOf(server, 'HEAD', CONTRACT_PATH);
+      clock.advance(ENDPOINTS_RETRY_COOLDOWN_MILLISECONDS - 10_501);
+      const last = await answerOf(server, 'GET', CONTRACT_PATH);
+
+      const { 'content-length': _length, ...headers } = failedRead.headers;
+      assert.equal(failedRead.statusCode, 503);
+      assert.deepEqual(headers, {
+        ...securityHeaders(provider.origin),
+        ...PROBLEM_HEADERS,
+        'retry-after': '30',
+      });
+      assert.deepEqual(JSON.parse(failedRead.body), {
+        code: 'identityProviderUnavailable',
+        detail:
+          "The identity provider's sign-in endpoints cannot be read from its discovery document. Try again once the seconds in Retry-After have passed.",
+        status: 503,
+        title: 'Identity provider unavailable',
+      });
+      assert.deepEqual(
+        [later.statusCode, later.headers['retry-after']],
+        [503, '20'],
+      );
+      assert.deepEqual(
+        [last.statusCode, last.headers['retry-after'], last.body],
+        [503, '1', failedRead.body],
+      );
+      assert.deepEqual(provider.asked, [DISCOVERY_PATH]);
+      assert.deepEqual(lines, [
+        { fields: { cause: 'status' }, message: ISSUER_ENDPOINTS_UNAVAILABLE },
+      ]);
+    });
+
+    test('reads the endpoints again once the cooldown has passed, serving the contract once they are read', async (context) => {
+      const provider = await startProvider(context);
+      provider.refusing = true;
+      const clock = controlledClock();
+      const server = serverWith(context, providerSettings(provider, clock));
+
+      const refused = await answerOf(server, 'GET', CONTRACT_PATH);
+      provider.refusing = false;
+      clock.advance(ENDPOINTS_RETRY_COOLDOWN_MILLISECONDS);
+      const served = await answerOf(server, 'GET', CONTRACT_PATH);
+
+      assert.equal(refused.statusCode, 503);
+      assert.equal(served.statusCode, 200);
+      assert.deepEqual(
+        JSON.parse(served.body),
+        servedSpec(await committedSpec(), endpointsOf(provider)),
+      );
+      assert.deepEqual(provider.asked, [DISCOVERY_PATH, DISCOVERY_PATH]);
+    });
+
+    test("answers 503 when the discovery document names its authorization or its token endpoint at another origin, the content security policy naming the issuer's origin alone in every answer", async (context) => {
+      const departures = [
+        {
+          authorization_endpoint:
+            'https://elsewhere.example.org/realms/test/protocol/openid-connect/auth',
+        },
+        {
+          token_endpoint:
+            'https://elsewhere.example.org/realms/test/protocol/openid-connect/token',
+        },
+        {},
+      ];
+
+      const answers = await Promise.all(
+        departures.map(async (departure) => {
+          const provider = await startProvider(context);
+          provider.departures = departure;
+          const server = serverWith(context, providerSettings(provider));
+          return {
+            contract: await answerOf(server, 'GET', CONTRACT_PATH),
+            page: await answerOf(server, 'GET', '/api-docs'),
+            policy: contentSecurityPolicy(provider.origin),
+          };
+        }),
+      );
+
+      assert.deepEqual(
+        answers.map(({ contract }) => contract.statusCode),
+        [503, 503, 200],
+      );
+      answers.forEach(({ contract, page, policy }) => {
+        assert.equal(contract.headers['content-security-policy'], policy);
+        assert.equal(page.headers['content-security-policy'], policy);
+      });
+    });
+
+    test('serves the page, the initializer, the redirect page and the package files as ever while the contract answers 503', async (context) => {
+      const provider = await startProvider(context);
+      provider.refusing = true;
+      const server = serverWith(context, providerSettings(provider));
+
+      const contract = await answerOf(server, 'GET', CONTRACT_PATH);
+      const others = await Promise.all(
+        SERVED.filter(({ path }) => path !== CONTRACT_PATH).map(
+          async ({ cacheControl, contentType, path }) => ({
+            answer: await answerOf(server, 'GET', path),
+            cacheControl,
+            contentType,
+            path,
+          }),
+        ),
+      );
+
+      assert.equal(contract.statusCode, 503);
+      others.forEach(({ answer, cacheControl, contentType, path }) => {
+        assert.equal(answer.statusCode, 200, path);
+        assert.equal(answer.headers['cache-control'], cacheControl, path);
+        assert.equal(answer.headers['content-type'], contentType, path);
+      });
+      assert.deepEqual(provider.asked, [DISCOVERY_PATH]);
+    });
+  },
+);
 
 suite('the Swagger UI package served', () => {
   test('is named through the workspace catalogue, which pins exactly 5.34.1, and resolves to that version', async () => {
