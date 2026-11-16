@@ -79,6 +79,9 @@ EGO-based instances (primarily iMS):
    name and metadata.
 2. **Resource user migration.** Map EGO group members to Usher `grants` rows. EGO user UUIDs resolve
    to Keycloak user IDs (both systems use Keycloak-issued UUIDs for the same user population).
+   A membership naming the administrator running the migration is refused and never written, as
+   the standard grant endpoint refuses self-targeting; that administrator reaches the resource
+   through the self-grant flow below.
 3. **Policy migration.** EGO policies (each named like its group, such as `STUDY-<id>`, with
    `WRITE` permission for the corresponding group) map to Usher category grants. The category in
    Usher is instance-specific; the studies management service's implicit "access to this study"
@@ -379,17 +382,38 @@ identity with an explicitly enumerated permission set.
 
 ### Authentication
 
-Keycloak client credentials flow (OAuth 2.0 `client_credentials` grant, machine-to-machine, no
-user login involved). The Keycloak client for the service has a realm role identifying it as a
-Usher service account (for example, `usher-service-account`). Usher reads this from the token
-to distinguish service account requests from human user requests.
+A service account signs in through the identity provider's client credentials grant (OAuth 2.0
+`client_credentials`: machine to machine, with no user signing in). In Keycloak, a Keycloak client,
+the provider's record of an application, with that grant enabled is given a service-account user,
+and every token issued to it names that user's subject in `sub`. Usher knows a service account by
+that issuer and subject, as it knows a user by theirs.
 
-### Permission model
+### Registration and permissions
 
-Keycloak provides authentication and the coarse-grained signal that the token belongs to a
-service account. Usher maintains its own `service_accounts` table keyed on the `client_id` from
-the token, recording which specific permissions that service account holds. Admins
-manage this table through the Usher management UI.
+An administrator registers a service account by its Keycloak client. Usher looks up the client's
+service-account user once, through the identity provider's user lookup (the connector's lookup
+through the provider's admin API, in the capability table below), and stores that user's subject,
+with the client's id as its display name. It refuses the registration unless the lookup reports
+the user as a service account. The lookup reads with a credential limited to viewing users and
+clients, so the connector can change nothing in the identity provider.
+
+**Where no lookup can say, the registration is recorded as unconfirmed.** The administrator gives
+the subject, read from a token issued to the client, and Usher records the registration as
+unconfirmed at `warning`, so a subject entered in error, a user's in place of a client's, shows in
+the audit trail rather than passing silently. Closing this gap is on the
+[roadmap](../roadmap.md).
+
+**A service account's permissions are held against its registered subject, like any principal's,
+and nothing else in a token decides them:** not `azp`, which a user's token carries too, naming the
+application the user signed in through, and not `client_id` or a realm role.
+
+**A recreated client starts with nothing.** Recreating the client in the identity provider gives
+it a new service-account user, so the new client holds no permission until it is registered again,
+and never inherits a deleted client's.
+
+**At the exchange, a service account holds the baseline and its own grants.** The signed-in rule
+confers on users alone. Each Keycloak client using the client credentials grant must issue tokens
+carrying at least one of the signs under Service account detection below.
 
 Fine-grained permissions (`resource.register` and `category.associate` are examples, and the
 vocabulary is in [permissions-model.md](permissions-model.md#the-capability-vocabulary)) live in
@@ -408,11 +432,12 @@ handles fine-grained authorization.
   write only data-plane grants, never a control-plane one, which is a restriction on the plane
   rather than on a level.
 - They cannot read or modify audit log entries.
-- All service account actions are logged with the `client_id` as the actor, distinguishable
-  from human admin actions in the audit trail.
-- Admins can revoke all permissions for a service account by removing or disabling
-  its entry in the `service_accounts` table. The next service account request will fail the
-  permission check.
+- All service account actions are logged with the service account's subject as the actor, its
+  `actorType` `serviceAccount`, distinguishable from human admin actions in the audit trail.
+- Admins can revoke all permissions for a service account by removing or disabling its
+  registration. Its next request fails the permission check, and the removal sends a principal's
+  revocation on the notice stream, so every bridge drops the Usher tokens it holds for the account
+  before they expire.
 
 ### Lyric use case
 
@@ -498,9 +523,12 @@ Usher reads all admin state from the validated OIDC token. The connector interfa
 - **Admin claim configuration:** the claim path and value to check are configurable. Default for
   Keycloak: `realm_access.roles` contains `usher-platform-admin`. For a generic OIDC provider:
   a configurable top-level claim path and expected value.
-- **Service account detection:** distinguish client credentials tokens from user tokens. For
-  Keycloak: the presence of `azp` (authorized party) and the absence of a human-user `sub`
-  indicate a service account token.
+- **Service account detection, for refusal only:** where an operation is for users alone, a token
+  carrying any sign of a service account is refused. In Keycloak, the signs are a `client_id` claim,
+  a `preferred_username` starting `service-account-`, or the realm role the instance configures as
+  `USHER_SERVICE_ACCOUNT_ROLE`. Any one sign suffices, so a misread token is refused rather than
+  admitted. Detection never grants anything: a service
+  account's permissions follow its registered subject alone.
 
 The connector is the only component that knows it is talking to a specific provider. The rest of
 Usher's code works with a validated, normalized claim set. The monorepo will contain a

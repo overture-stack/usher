@@ -487,6 +487,10 @@ faith. It reports and does not block: a custodian has the authority to issue eve
 grants, so the event exists to make the pattern visible rather than to decide whether it was
 legitimate.
 
+**Grants written by an EGO migration run do not count toward the administrator running it.** The
+run's `migration.run` event records them, and counting them would raise the alert on every
+migration, which teaches operators to ignore it.
+
 ---
 
 ## Open items
@@ -505,7 +509,8 @@ legitimate.
   different things by one entity produces two occurrences under one name, and a consumer joins them.
   There is no registry and no owner. The failure is silent.
 - `grantRateThreshold` configures when `grant.rateExceeded` fires, as an `operationCount` over
-  a `windowSeconds`. The name is settled; both default values are not. Where the count is kept is a
+  a `windowSeconds`. By default it fires when one administrator's grants number more than 10 within
+  60 seconds: grants are expected a handful a minute at most, so more is the pattern worth seeing. Where the count is kept is a
   scaling question rather than a detail: see multi-instance propagation in
   [security-workflow.md](security-workflow.md#multi-instance-propagation).
 - **`resource.registration` carries no field name or value.** The resource field name is

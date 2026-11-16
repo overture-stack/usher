@@ -965,6 +965,21 @@ sentence about a process names the component it is an instance of.
 **A bridge needs no qualifier either way.** There is one per application process already, so "each
 bridge" and "per bridge" say what "bridge instance" was reaching for.
 
+### Migration, schema and data
+
+**A schema migration** changes the policy store's structure. Each is one of the numbered SQL files
+carried by a controller release, applied before a rollout by the migration command, `dist/migrate.js`,
+connected as the schema migration role, which owns the schema. Its settings are named for it, as
+`USHER_SCHEMA_MIGRATION_DATABASE_URL` is.
+
+**A data migration** brings another system's access records into Usher while Usher runs, through the
+Management API. The EGO migration is the first, at `/admin/migrations/ego`, and each run is recorded
+as a `migration.run` event.
+
+**Here:** where a reader could take either, the word is qualified. Bare, it means a data migration,
+as the Management API and the audit catalogue use it. The exception is the schema's own record,
+`schema.md`, and the controller's `migrations` module, whose only subject is schema migrations.
+
 ### Relation
 
 **In the relational model** (Codd, and SQL theory) a relation **is a table**: a set of tuples over a

@@ -1564,13 +1564,78 @@ alone. So the bridge does not check signatures (decided 2026-10-06; the research
 for the first release.** The bound keeps the controller up, and cached principals keep their access
 until their entries end, while new sign-ins and refreshes are answered 503 for as long as the flood
 lasts. The anonymous refresh runs outside the bound, so the open tier stays fresh. Admission control
-that keeps sign-ins served through a flood is on the roadmap as research. Decided 2026-10-06.
+that keeps sign-ins served through a flood is on the roadmap as research. Decided 2026-10-06, and
+narrowed on 2026-11-06 by § The controller admits each application within a share of its own: a
+flood aimed at one application leaves every other application's sign-ins served, and a credential
+failing a check that needs no database is refused before any database work on it.
 
 **The controller sets the bound, and tells its bridges.** A bound each bridge sets for itself
 multiplies with the replicas: 64 exchanges per bridge across twenty replicas is 1,280 at once against
 one controller, a number nobody chose and one that grows with every scale-out. The bound exists to
 protect the controller, so the controller owns it. Decided 2026-10-06; the number, and how it reaches
 a bridge, are open on the roadmap, and the bridge's own default stands in until then.
+
+**Superseded in mechanism, not in principle: the controller bounds its own work.** The controller
+announces no number for bridges to keep. It divides its own exchange connections into a share per
+application and answers an exchange past its share `503` with `Retry-After`, so the bound that
+protects the controller is the controller's own pool, and a bridge's bound only limits the bridge's
+memory. Decided 2026-11-06, in § The controller admits each application within a share of its own.
+
+---
+
+### The controller admits each application within a share of its own
+
+**The threat.** A bound each bridge keeps is a bound the controller does not have. Twenty replicas of
+one application at 64 exchanges each put 1,280 against the controller at once, and a bridge that
+ignores its bound, through a defect or a compromise, meets no limit at all. Each fix that adds a cap in
+another layer leaves the same gap one layer down.
+
+**Decision (2026-11-06): the controller enforces its own admission, and refuses every credential at
+its cheapest failing check.**
+
+1. **A share per application, on each instance.** The controller knows the calling bridge by its
+   channel assertion, signed under a key every replica of an application shares, so it budgets the
+   application as a whole and never tells replicas apart. Each instance holds three pools of store
+   connections: exchange connections, for the exchange's own transactions, key confirmations and
+   recordings of refused assertions; control connections, for everything else; and one connection
+   for readiness alone. The exchange connections are divided equally among the registered
+   applications, at least one each, and each instance counts its own. Within its share an
+   application's exchange is admitted. Past it, the exchange borrows a connection the instance's
+   exchanges in flight leave free; once those number as many as the exchange connections, it is
+   answered `503 admissionShareExceeded` with `Retry-After` at once, before any work on the store.
+   One anonymous exchange per application is admitted past a full share, so the open tier stays
+   fresh during a flood.
+2. **Checks ordered by cost.** A credential failing a check that needs no database is refused before
+   any database work on it. Recording that refusal takes a place in its application's share, so a
+   flood of junk through one application's bridge fills that application's share and no other's.
+
+   | Order | Check                                                                                                           | Cost                  |
+   | ----- | --------------------------------------------------------------------------------------------------------------- | --------------------- |
+   | 1     | the bridge's channel assertion                                                                                  | one signature check   |
+   | 2     | the credential's shape; for a sign-in token, its issuer, audience, expiry and key id against the cached key set | string comparisons    |
+   | 3     | the credential's own mark: a sign-in token's signature                                                          | one signature, no I/O |
+   | 4     | admission into the application's share                                                                          | a counter             |
+   | 5     | the identity lookup, revocation and the token calculation                                                       | the database          |
+
+3. **Bridges cooperate rather than configure.** A bridge keeps a fixed bound only on its own memory,
+   honours `Retry-After` with jitter, and offers no option for the bound.
+4. **Counted, never banned.** Each instance counts the exchanges it refuses over a share, per
+   application, and records one `admission.shareExceededTally` for each every 60 seconds. A rule over
+   the tallies, such as a count in several intervals in a row, belongs downstream with the other rules
+   over the audit stream, so the controller sets no alert threshold of its own. Banning an
+   application is revoking its key, which a person does. A ban the controller imposed itself would
+   let an attacker lock an application out by flooding its search server.
+
+**An API key has no mark of its own**, so junk shaped like one costs a lookup. A watermark closes
+that: a key minted by the platform reads `<prefix>_<version><random><mac>`, a MAC over the rest under
+a key of this instance, which the controller checks before any lookup. The MAC proves where a key was
+minted, never that it is still valid, so expiry, revocation and scope stay with the lookup and keys
+stay opaque. The Keycloak API key plugin mints the keys, so the watermark is designed with the API
+keys, on the roadmap.
+
+**No message broker.** An exchange runs while a person's request waits for it. A queue adds delay to
+every sign-in and keeps junk ahead of real requests, and a broker's durability and replay are worth
+nothing for a request that is stale in seconds. Shedding load serves this better than queueing it.
 
 ---
 
@@ -1932,6 +1997,16 @@ currently call EGO's authorization endpoints are updated to use Usher's bridge a
 for iMS backend services. This is harder than an incremental integration but avoids indefinite
 operational complexity from running two authorization systems.
 
+**A migration run writes no grant naming the administrator running it, and every real run is
+recorded at `warning`.** A run writes grants in bulk from an export the administrator supplies, so
+without this rule an administrator, or anyone holding their session, could write themselves access
+to every study in one request, recorded at `info` and outside the grant-rate alert. A membership
+naming the administrator running the run is refused as the standard grant endpoint refuses
+self-targeting: it is never written, the run's answer lists it, and the administrator reaches that
+resource through the self-grant flow in [admin-model.md](admin-model.md). A run while the
+migration's settings are missing is refused, so removing them switches the run off. Decided
+2026-11-16.
+
 ---
 
 ### The identity provider's subject identifies a principal; email for access invitations only
@@ -2008,9 +2083,13 @@ already was.
 
 **Some grants are conferred by a rule rather than recorded one per holder.** The baseline is the
 first: it gives every principal the `unmarked` grant on each resource whose unmarked records are
-open. The second, in the first release, gives every signed-in principal the `unmarked` grant on each
-resource whose unmarked records are registered, which is what the Registered tier needs: data reachable by anyone signed in without an approval, beside data reachable by an anonymous visitor. Without it a signed-in principal holding no grants receives the
+open. The second, in the first release, gives every signed-in user the `unmarked` grant on each
+resource whose unmarked records are registered, which is what the Registered tier needs: data reachable by anyone signed in without an approval, beside data reachable by an anonymous visitor. Without it a signed-in user holding no grants receives the
 same token as an anonymous one, and registration can gate open data only for a whole instance.
+
+**A service account holds the baseline and its own grants, never the signed-in rule's.** The rule
+confers on users alone: a service account reaches only what it is registered and granted. Decided
+2026-11-09.
 
 **A rule decides who holds a grant, never which records a category covers.** Neither open nor
 registered is a category: both are settings of a resource's `unmarked` records, and the rule is what

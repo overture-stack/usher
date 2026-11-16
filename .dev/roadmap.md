@@ -102,6 +102,8 @@ Programmatic access runs on API keys from a Keycloak plugin maintained by the te
 
 Introspection needs Usher's first credential to Keycloak, a basic-auth one able to check anybody's key, since the endpoint requires a bearer token's subject to own the key it checks. The format must be settled before the first key is issued in it, because an unparseable scope makes the whole key unreadable rather than one entry unrecognized. See [API keys](docs/atlas/roadmap/api-keys.md).
 
+**Keys gain a watermark the controller checks before any lookup** ([decisions.md](design/decisions.md), "The controller admits each application within a share of its own"), minted by the plugin. Open: how the plugin and the controller share its MAC keys and rotate them; the date after which an unwatermarked key is refused, and how key holders are told to rotate, since keys are issued for years and junk shaped like an old key costs a lookup until then.
+
 ### Move ownership from a single owner to a set
 
 The business requirements call for several owners of one resource at once, with equal rights to restrict, share and revoke, naming the real case: a principal investigator holds legal authority while submitters do the work, so all of them need it. `permissions-model.md` instead requires exactly one owner per resource and builds the ownership cascade, last-owner promotion and transfer-before-removal on that singularity.
@@ -220,7 +222,7 @@ Usher must publish the vocabulary expressing own-sets-by-default, an administrat
 
 ### Admission control at the controller
 
-Proposed in [to-discuss.md](design/to-discuss.md), "The controller has no budget of its own", to settle before the controller's exchange unit. The controller budgets each application as a whole, refuses every credential at its cheapest failing check, and tells bridges to back off with `Retry-After`. API keys gain a watermark the controller checks before any lookup, minted by the Keycloak API key plugin. The bridge's own option for the bound is gone: its bound is a constant that bounds only its memory, and it backs off as `Retry-After` tells it. This refines the 2026-10-06 decision that the controller sets the bound and tells its bridges ([decisions.md](design/decisions.md), "The bridge's cache is keyed by the sign-in token"). Research beyond it: keeping sign-ins served within the application a flood targets, which an admission-priority lane in the bridge did against every measured flood shape; see [sign-in signature precheck](docs/atlas/bridge/signin-signature-precheck.md).
+**Decided (developer, 2026-11-06)** in [decisions.md](design/decisions.md), "The controller admits each application within a share of its own", and built: each instance divides its exchange connections equally among the registered applications, answers an exchange past its share `503` with `Retry-After`, and counts those refusals in `admission.shareExceededTally`; the bridge's option for the bound is gone, and it backs off as `Retry-After` tells it. Still to do: check Fastify's load-shedding and rate-limit plugins against what was built, and measure what verifying the identity provider's signature costs. The API key watermark is designed with the API keys, under "API keys stay opaque" above. Research beyond it: keeping sign-ins served within the application a flood targets, which an admission-priority lane in the bridge did against every measured flood shape; see [sign-in signature precheck](docs/atlas/bridge/signin-signature-precheck.md).
 
 ### Federation posture
 
@@ -390,7 +392,17 @@ layer, where the recommendation is Kysely.
 
 ### Deployment architecture
 
-High-availability design for stateless Usher instances sharing a policy database as source of truth. Container strategy, health check endpoints, replica configuration.
+High-availability design for stateless Usher instances sharing a policy database as source of truth: replica configuration, and how many push connections a surviving instance must absorb when another fails.
+
+**Container strategy decided (developer, 2026-11-06).** One image on distroless Node 26 with two commands: serving, and the migrate command, which runs before each rollout under the schema migration role, so the controller's pods never hold that role's password. Local development runs on docker compose, with Keycloak importing a committed dev realm. Health endpoints exist: `/health/live` and `/health/ready`. Built in the controller's deployability units, whose operator page gives "Deployment runbook has no home" its home. The first deployment target is overture-dev, reached by Arranger once the exchange exists.
+
+**Asked of the Jenkins pipeline library: build the controller's image and run its schema migration before each rollout.** The build and runtime contract:
+
+- **Build:** `apps/controller/Dockerfile`, with the repository's root as context, to its default final stage, `runtime`, for linux/amd64, with no build arguments. linux/arm64 is added when a deployment needs it. The build reaches the npm registry, Docker Hub and gcr.io.
+- **Serving:** the controller listens on `USHER_PORT`, which has no default, and answers `GET /health/live` and `GET /health/ready` without authentication.
+- **Schema migration:** before each rollout, a Job runs the same image with `args: ["dist/migrate.js"]` and `command` unset. It receives the `USHER_SCHEMA_MIGRATION_*` variables, `USHER_DATABASE_URL` for the runtime role's name, `USHER_DATABASE_SCHEMA` and the retention durations. The controller's pods never receive the schema migration variables.
+- **Rollback:** rolling the image back one release skips the schema migration Job, since an earlier release's command refuses a database recording a later migration, and the earlier controller runs on the later schema.
+- **Store:** PostgreSQL 15 or later, reached directly, or through a pooler only where each connection keeps one server session carrying the controller's two startup parameters. The schema migration Job needs one server session throughout.
 
 ### Keycloak realm configuration via Terraform
 
@@ -496,6 +508,21 @@ Two parts of this are design prerequisites rather than implementation, and their
 ### Policy database
 
 Schema implementation and migration tooling. Integrity controls: transactions, foreign key constraints, audit triggers for policy changes.
+
+### What the controller's later units carry
+
+Requirements that surfaced while earlier units were reviewed, held here so each later unit's brief starts from them.
+
+- **EGO migration.** It is the first unit to give its transaction a timeout of its own, so it commits a test against a real store showing that timeout, not the store's, is the one applied.
+- **Every unit, for its settings (decided by the developer, 2026-11-09).** The controller reads a setting only once code uses it. Each unit adds its variables, the operator page's rows and their local-development values in the commit that brings the code using them. The grants unit's `USHER_GRANT_RATE_THRESHOLD` is optional, defaulting to 10 operations within 60 seconds.
+- **Every unit building a Management API operation.** The contract already lists each operation's `503` codes, from the design. The unit checks that list against what its code can answer, and corrects whichever is wrong.
+- **A contract test, once the exchange has landed.** Every `$ref` in `openapi.json` resolves, and every code an implemented route can answer appears among its responses, so the contract and the code cannot drift apart unnoticed.
+- **Back-channel logout.** The identity provider calls it, so it follows OIDC Back-Channel Logout: a failed logout answers `400`, carrying `storeUnavailable`, `outcomeUnknown` or `identityProviderUnavailable` in its problem body, and a token naming an audience outside the configured list is refused.
+- **`role.define`.** It refuses a role carrying any `custodianship.*` capability while the self-appointment hole stands, per [permissions-model.md](design/permissions-model.md).
+- **Application keys.** The key ring's remaining work: waking through Valkey, the token key, and reload hooks precise to the change they follow. The channel's held refusal test for an application with no live key resumes there, since `noLiveKey` is now tallied.
+- **The log stream, in whichever unit next changes it.** It holds a bounded amount for a sink that falls behind, so a slow sink cannot grow the process's memory without limit. What the stream does at that bound is decided with the unit. If it refuses further lines, that counts as a failed write and takes liveness down.
+- **Service accounts, decided (developer, 2026-11-09 and 2026-11-16).** A service account's permissions are held against its registered subject, which the identity provider's user lookup confirms as a service-account user at registration; where no lookup can say, the registration is recorded as unconfirmed at `warning`. Removing a registration sends a principal's revocation. No claim grants anything, and the signs of a service account only refuse, as the Management API already does. At the exchange a service account holds the baseline and its own grants; until this unit, the exchange refuses its token outright. See [admin-model.md](design/admin-model.md) § Service accounts.
+- **Unconfirmed service-account registrations, to tighten.** Where no user lookup can confirm a subject, an administrator's typed subject is trusted and only recorded. Find a way to confirm it without the lookup; one candidate takes the subject from a verified token issued to the client rather than from typed text.
 
 ---
 

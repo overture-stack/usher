@@ -612,8 +612,9 @@ would make it a second and unaudited read of the policy store.
 **Why it is encrypted rather than open.** The dictionary is disclosive on its own: it names what
 kinds of governed data exist on the platform. A subkey derived from the requesting application's key
 reuses the key material already provisioned for Usher tokens, adds no new distribution problem, and
-keeps the list unreadable to anything that is not a bridge. The application key itself encrypts Usher
-tokens and nothing else; every other use derives its own subkey, as the notice stream does.
+keeps the list unreadable to anything that is not a bridge. The application key itself is only ever
+the HKDF input for every subkey, and every use, Usher tokens included, has its own subkey, so no key
+serves two purposes.
 
 **The check it was first proposed for runs on the payload instead.** Computing `unmarked` by
 complement needs a compensating control: where `unmarked` means "carrying none of the mapped

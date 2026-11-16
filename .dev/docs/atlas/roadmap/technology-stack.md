@@ -6,6 +6,10 @@
 
 **Policy store:** PostgreSQL. Handles grants, resource users, categories, `revoked_at` timestamps, and the audit log; requires transactions and foreign-key integrity.
 
+**Valkey client: iovalkey (decided by the developer, 2026-11-09).** It is the Valkey project's fork of ioredis, with no native code, so the controller's image carries none for it. It was chosen over ioredis and node-redis, both built for Redis, and over Valkey GLIDE, which ships a native binary for each platform. Usher's use is basic: values with an expiry, and publish and subscribe for wake-ups. It is pre-1.0, so a minor release may change its API; when it is added to the catalogue, its caret range admits patch releases alone.
+
+**Supported PostgreSQL: 15 or later, documented for operators.** The schema needs 15: two of its uniqueness rules use `NULLS NOT DISTINCT`, new in that release. The schema migration command refuses an older server by name before it writes anything, and the controller's suites run against 15 and 18. Which version a deployment runs is its own pin, kept in the deployment's own infrastructure repository.
+
 **Shared cache and revocation pub/sub:** Valkey (already deployed in the Overture environment; protocol-compatible with Redis). Two roles: caching computed permissions payloads across Usher instances, which is what the fast-path refresh reads, and pub/sub that wakes every instance to read new notices from PostgreSQL and push them to its SSE subscribers. Pub/sub delivers at most once, so it carries a wake-up rather than the notice, and a lost message costs a delay, never a notice. See Kafka in Future scope for external consumer fan-out.
 
 **Structured logging:** Pino, decided with Fastify, which it integrates with natively; outputs structured JSON by default; one of the fastest Node.js loggers, which matters on the auth hot path.

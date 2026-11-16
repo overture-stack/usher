@@ -508,7 +508,7 @@ append-only tables above included. A compromised controller can then read and wr
 must, but cannot widen its own privileges or drop the audit log.
 
 **Every function a migration creates starts closed to everyone but its grantees.** The first
-migration revokes `EXECUTE` on new functions from `PUBLIC` as the migration role's own default, so a
+migration revokes `EXECUTE` on new functions from `PUBLIC` as the schema migration role's own default, so a
 later migration need not remember to. The default is the role's, not the schema's, since a default
 set for one schema only adds to the role's and cannot remove `PUBLIC`'s.
 

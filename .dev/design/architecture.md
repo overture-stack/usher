@@ -173,11 +173,13 @@ write. Valkey is not part of readiness, since an instance without it still answe
 picks up new keys through its 30-second reload. Neither answer carries a body, so neither says
 anything about the instance to whoever asks.
 
-**The controller connects to its store directly, or through a pooler in session mode.** Each
-connection carries the store's statement and idle-in-transaction limits as startup parameters, and
-those limits are what stop a statement the controller has abandoned: closing the client's socket
-stops nothing a pooler holds open on the server. A pooler in transaction mode refuses those
-parameters or drops them, so a start whose connection does not carry them is refused.
+**The controller connects to its store directly, or through a pooler only where each of its
+connections keeps one server session carrying both of its limits.** Each connection carries the
+store's statement and idle-in-transaction limits as startup parameters, and those limits are what
+end a statement or transaction the controller has abandoned, since the server goes on running it
+after its client has gone. Each start reads both limits back and is refused when either is missing
+or differs. So a pooler in transaction mode cannot serve the controller, and neither can one that
+refuses or drops startup parameters it does not track, in any mode.
 
 ---
 
