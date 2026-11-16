@@ -33,9 +33,24 @@ A pin of `main` follows the newest commit instead, and a clone then reads its wo
 - Shared library packages receive configuration as typed function parameters, never `process.env`.
 - Usher is a secure access control system, built so that the systems relying on it can handle sensitive data such as personal health information. Hold every change to that standard.
 - **Design-first:** do not implement a component without a completed design in `.dev/design/`. Open design questions are tracked there.
-- **Model-agnostic:** the service core uses generic terms (`resource`, `role`, `category`); domain-specific labels (study, patient, cohort) belong in the management UI layer only.
+- **Model-agnostic:** the service core's code and identifiers use generic terms (`resource`, `role`, `category`); domain-specific labels (study, patient, cohort) appear only in the management UI layer, in reader-facing prose and in worked examples.
 - **Fail-secure:** errors in the authorization path must result in denial, not permission. If the revocation channel is unavailable beyond the grace period, sessions are suspended (503), not permitted.
 - **Deny by default:** a role sets the ceiling of what a principal may do on a resource's records, and reaches nothing without a grant naming the categories it applies to; the absence of a grant is a denial.
+- **One word, one meaning:** a defined term keeps its one sense in every Usher text, code and identifiers included. Before naming anything, or writing a doc, comment, identifier or UI string, check the glossary and read `.dev/docs/atlas/roadmap/terminology-usage.md` in full: its reserved senses, its retired terms, and its rule that a term of art is either defined or not used.
+- **Migrations are forward-only:** a released schema migration is never edited; a change ships as a new migration.
+
+## When to read what in this project
+
+- Editing any markdown -> run `bash .dev/check-prose.sh FILE...` and read the verdict on its last line; for a design document also read `.dev/design/README.md` § What these documents hold, and what they do not, and § Document coverage; for a glossary entry also read `.dev/docs/atlas/roadmap/terminology-usage.md` § A definition is one sentence, and the rest is detail
+- Acting on review feedback -> read `.dev/docs/atlas/roadmap/doc-review-patterns.md` § How to read the review itself
+- Naming an identifier, table, event or capability -> read `.dev/docs/atlas/roadmap/terminology-usage.md` § camelCase wherever the name is not a database identifier, and `.dev/design/decisions.md` § Schema naming, and the three rules behind it
+- Logging, throwing or writing a refusal -> read `.dev/docs/atlas/bridge/packaging-and-toolchain.md` § Errors and logs, and `.dev/design/decisions.md` § A denial is named at catalogue level, and never at record level
+- Adding an audit event -> read `.dev/design/audit-events.md` § The envelope and § The shape of a type
+- Writing tests, mocks or fixtures -> read `.dev/docs/phase-1.md` § Conformance corpus, then run `python3 .dev/check-fixtures.py`
+- Adding a setting -> read `.dev/design/architecture.md` § Controller
+- Writing controller code -> read `.dev/docs/atlas/roadmap/technology-stack.md` § Architectural constraint: framework is a delivery mechanism only
+- Writing a schema migration -> read `.dev/design/schema.md` § The data access layer
+- Adding a dependency -> read `.dev/docs/atlas/roadmap/technology-stack.md` § Decided: toolchain for this repository, then run `pnpm check:pack`
 
 ## Security triggers
 
@@ -49,6 +64,7 @@ Check these as you write or review code. Flag violations rather than silently sk
 - Default or empty JWE decryption key accepted at startup
 - Fail-open error handling in the authorization or revocation path
 - Stack traces or internal paths in API error responses
+- A refusal or denial message naming anything finer than a catalogue
 
 ## Extension points
 
