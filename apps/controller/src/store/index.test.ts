@@ -12,6 +12,7 @@ suite("the store's module", () => {
       'isStorableText',
       'openStore',
       'prepareStore',
+      'readStoreProbe',
       'writeSeededPolicy',
     ]);
   });

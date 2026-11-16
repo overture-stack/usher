@@ -24,6 +24,7 @@ const table = (
   name,
   owns: false,
   privileges,
+  reads: true,
   updatable,
 });
 
@@ -34,9 +35,9 @@ const callable = (name: string, executes: boolean): HeldFunction => ({
   owns: false,
 });
 
-// The runtime role exactly as its migrations leave it: each permitted write, every other table read
-// alone, the notice positions' sequence untouched, and the trimming, unbounded and bounded, its only
-// calls.
+// The runtime role exactly as its migrations and the schema migration command leave it: every table
+// read, the record of applied migrations among them, each permitted write, the notice positions'
+// sequence untouched, and the trimming, unbounded and bounded, its only calls.
 const MIGRATED_ROLE: HeldPrivileges = {
   creatableSchemas: [],
   createsSchemas: false,
@@ -57,7 +58,12 @@ const MIGRATED_ROLE: HeldPrivileges = {
     table('change_records'),
     table('notice_retention'),
     table('schema_migrations'),
-    { ...table('notices_position_seq'), columns: [], kind: 'sequence' },
+    {
+      ...table('notices_position_seq'),
+      columns: [],
+      kind: 'sequence',
+      reads: false,
+    },
   ],
   roleAttributes: [],
   schema: { grants: false, owns: false, uses: true },
@@ -97,7 +103,7 @@ const granting =
     }));
 
 suite("the privileges of the controller's database role", () => {
-  test('finds nothing beyond need in the privileges the migrations grant the runtime role, nor in reading alone', () => {
+  test('finds nothing beyond need in the privileges the migrations and the schema migration command grant the runtime role, nor in reading alone', () => {
     assert.deepEqual(privilegesBeyondNeed(MIGRATED_ROLE), []);
     assert.deepEqual(privilegesBeyondNeed(READ_ONLY_ROLE), []);
     assert.deepEqual(grantsBeyondUse(MIGRATED_ROLE), []);
@@ -310,6 +316,55 @@ suite('the problems refusing a start on a database role', () => {
 
     assert.equal(problem?.variable, 'USHER_DATABASE_URL');
     assert.match(problem?.rule ?? '', /may not insert into audit_log/u);
+  });
+
+  test("names the schema's variable and the schema migration command when the schema holds no record of applied migrations, and names the schema's absence alone when there is no schema", () => {
+    const withoutRecord: HeldPrivileges = {
+      ...MIGRATED_ROLE,
+      relations: MIGRATED_ROLE.relations.filter(
+        ({ name }) => name !== 'schema_migrations',
+      ),
+    };
+    const withoutSchema: HeldPrivileges = {
+      ...MIGRATED_ROLE,
+      relations: [],
+      schema: undefined,
+    };
+
+    assert.deepEqual(privilegeProblems(withoutRecord), [
+      {
+        rule: 'names a schema holding no record of applied migrations, schema_migrations: run the schema migration command, which creates it',
+        variable: 'USHER_DATABASE_SCHEMA',
+      },
+    ]);
+    assert.deepEqual(privilegeProblems(withoutSchema), [
+      {
+        rule: 'names no schema of the database',
+        variable: 'USHER_DATABASE_SCHEMA',
+      },
+    ]);
+  });
+
+  test("names the schema's variable and the schema migration command when the database role may not read the record of applied migrations, whose reading is neither beyond need nor beyond use", () => {
+    const unread = withRelation(
+      MIGRATED_ROLE,
+      'schema_migrations',
+      (relation) => ({
+        ...relation,
+        reads: false,
+      }),
+    );
+
+    assert.deepEqual(privilegeProblems(unread), [
+      {
+        rule: 'names a schema whose record of applied migrations, schema_migrations, the database role may not read: run the schema migration command, which grants the runtime role reading it',
+        variable: 'USHER_DATABASE_SCHEMA',
+      },
+    ]);
+    assert.deepEqual(
+      [privilegesBeyondNeed(MIGRATED_ROLE), grantsBeyondUse(MIGRATED_ROLE)],
+      [[], []],
+    );
   });
 
   test("names the schema's variable when the database holds no such schema, or the role may not use it", () => {

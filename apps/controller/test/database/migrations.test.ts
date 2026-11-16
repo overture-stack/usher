@@ -180,6 +180,16 @@ const storeState = async (client: pg.ClientBase): Promise<StoreState> => ({
   rows: await tableContents(client),
 });
 
+// Whether the runtime role may read the record of applied migrations, as the catalogue reports it.
+const runtimeReadsRecord = async (client: pg.ClientBase): Promise<boolean> =>
+  (
+    await selectRows<{ reads: boolean }>(
+      client,
+      "SELECT has_table_privilege($1, $2, 'SELECT') AS reads",
+      [DATABASE_ROLES.runtime, qualified(schemaMigrations)],
+    )
+  )[0]?.reads ?? false;
+
 suite('migrations', () => {
   test('builds the whole schema on an empty database, writing one line at info naming each migration it applied and the retention floor, and no URL, role or password', async (context) => {
     const database = await openEmptyDatabase(context);
@@ -228,6 +238,18 @@ suite('migrations', () => {
       retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
       message: 'schemaMigrations.applied',
     });
+  });
+
+  test('grants the runtime role reading the record of applied migrations on every run, one on an up-to-date database included', async (context) => {
+    const { database, owner } = await openSeededDatabase(context);
+    await owner.query(
+      `REVOKE SELECT ON ${qualified(schemaMigrations)} FROM ${pg.escapeIdentifier(DATABASE_ROLES.runtime)}`,
+    );
+    const revoked = await runtimeReadsRecord(owner);
+
+    await migrateDatabase(database);
+
+    assert.deepEqual([revoked, await runtimeReadsRecord(owner)], [false, true]);
   });
 
   test('applies each migration whole or not at all', async (context) => {

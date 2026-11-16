@@ -8,8 +8,12 @@ suite('the migrations module', () => {
     assert.deepEqual(Object.keys(migrations).toSorted(), [
       'LARGEST_RETENTION_FLOOR_SECONDS',
       'MIGRATIONS_REFUSE_TO_RUN',
+      'MIGRATION_UNKNOWN',
       'MigrationRefusal',
       'migrate',
+      'migrationUnknownFields',
+      'readMigrations',
+      'unknownMigrations',
     ]);
   });
 });

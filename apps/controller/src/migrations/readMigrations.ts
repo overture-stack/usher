@@ -8,7 +8,19 @@ import type { Migration } from './types.js';
 export const MIGRATIONS_FOLDER: URL = new URL('./sql/', import.meta.url);
 
 // Four digits giving the order, then words naming what the migration does.
-const MIGRATION_FILE = /^(?<number>\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*\.sql$/u;
+const MIGRATION_NAME = '(?<number>\\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*';
+
+const MIGRATION_FILE = new RegExp(`^${MIGRATION_NAME}\\.sql$`, 'u');
+
+const NAME_ALONE = new RegExp(`^${MIGRATION_NAME}$`, 'u');
+
+/**
+ * Whether a name is in migration form, as the name of every file {@link readMigrations} accepts is
+ * without its extension: four digits, then lower-case words joined by underscores.
+ *
+ * @param name the name.
+ */
+export const isMigrationName = (name: string): boolean => NAME_ALONE.test(name);
 
 const SQL_EXTENSION = '.sql';
 

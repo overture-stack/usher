@@ -44,6 +44,9 @@ export interface HeldRelation {
    */
   privileges: readonly string[];
 
+  /** Whether it may read the relation whole: SELECT on the table or the sequence. */
+  reads: boolean;
+
   /** The columns of a table it may update, whether granted by column or for the whole table. */
   updatable: readonly string[];
 }

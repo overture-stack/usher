@@ -6,6 +6,7 @@
 -- controller's runtime role.
 
 -- The runtime role reaches the schema's objects through the privileges the migrations grant it, and
+-- through the schema migration command's grant of reading the record of applied migrations, and
 -- through nothing else.
 GRANT USAGE ON SCHEMA :"schema" TO :"runtime_role";
 

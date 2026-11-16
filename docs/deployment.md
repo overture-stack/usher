@@ -205,7 +205,7 @@ For example, 3 replicas with a surge of 1, at the defaults, hold at most 4 × 16
 | Role                  | Holds                                                                   | Used by                            | Its password                                                            |
 | --------------------- | ----------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
 | Schema migration role | Ownership of the database, the controller's schema and everything in it | The schema migration command alone | `USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD`, given to that command alone |
-| Runtime role          | Only what the migrations grant it                                       | Every controller instance          | `USHER_DATABASE_PASSWORD`                                               |
+| Runtime role          | What the migrations and the schema migration command grant it           | Every controller instance          | `USHER_DATABASE_PASSWORD`                                               |
 
 **The runtime role is a separate login role: neither the schema migration role, nor a member of it, nor a superuser.** The schema migration command refuses a runtime role breaking that rule, or one not yet created, before writing anything. The split is what protects the store from a compromised controller: it can read and write policy, which it must, but it cannot widen its own privileges or drop the audit log.
 
@@ -239,7 +239,7 @@ At each start, before anything listens, the controller reads every privilege hel
 - `TRUNCATE` or `TRIGGER` on any table in the schema;
 - any write beyond what the migrations grant, `INSERT` included, on an append-only table: `audit_log`, `change_records`, `grant_decisions`, `key_encryption_key_check` or `notices`.
 
-It also refuses a role allowed to write some table but not to insert into `audit_log`, since a change could then go unrecorded. A missing schema, or one unusable by the role, is refused naming `USHER_DATABASE_SCHEMA`.
+It also refuses a role allowed to write some table but not to insert into `audit_log`, since a change could then go unrecorded. A missing schema, or one unusable by the role, is refused naming `USHER_DATABASE_SCHEMA`. So is a schema holding no record of applied migrations, `schema_migrations`, or one whose record the role may not read: run the schema migration command, which creates the record and grants the runtime role reading it.
 
 **Any other grant beyond the release's is tolerated, and logged.** Examples are membership in `pg_read_all_data`, `UPDATE` on a column never updated by the release, and `EXECUTE` on another function in the schema. Once the start commits, each one is written at warning as `store.grantBeyondUse`, with its `privilege`, its `object` and, for a grant on one column, its `column`. That tolerance lets an instance of one release keep running after the next release's migration grants more.
 
@@ -264,8 +264,9 @@ A run goes through these steps, and every refusal comes before anything is writt
 3. It takes a lock held for its whole session, so two runs at once on one database apply each migration once.
 4. It refuses a runtime role that does not exist or could act as the schema's owner, and a schema owned by another role.
 5. It refuses a database whose record departs from this release's migrations: a migration it does not hold, one changed since it was applied, or one missing below an applied one.
-6. It applies each pending migration in a transaction of its own, which records it.
-7. It stores the notice retention floor, when it differs from the stored one.
+6. It creates the record of applied migrations, `schema_migrations`, when the schema has none, and grants the runtime role reading it.
+7. It applies each pending migration in a transaction of its own, which records it.
+8. It stores the notice retention floor, when it differs from the stored one.
 
 | Outcome                          | What it writes                                                                                                                                            | Exit code                           |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
@@ -273,14 +274,21 @@ A run goes through these steps, and every refusal comes before anything is writt
 | Refusal or failure               | One fatal line on standard error, as [Logs](#logs) describes                                                                                              | 1                                   |
 | Stopped by `SIGTERM` or `SIGINT` | One fatal line on standard error, saying the run was stopped                                                                                              | 143 for `SIGTERM`, 130 for `SIGINT` |
 
-- **A run on a current database applies nothing**, so `applied` is an empty list. All it may change is the retention floor. Changing any of the three durations therefore takes a run, with the new values, before the controller rolls out with them.
+**To check a run and the rollout after it:**
+
+1. The run exits 0 and writes one `schemaMigrations.applied` line, whose `applied` lists the release's migrations the database did not yet hold, or nothing on a database already current.
+2. After the rollout, the controller reports itself ready, which confirms its database records no migration this release does not know.
+3. A controller that does not become ready says why in its `schema.migrationUnknown` line or its readiness cause, as [Readiness and liveness](#readiness-and-liveness) describes.
+
+- **A run on a current database applies nothing**, so `applied` is an empty list. All it may change is the retention floor, and the runtime role's reading of `schema_migrations` where that was revoked. Changing any of the three durations therefore takes a run, with the new values, before the controller rolls out with them.
 - **A failed migration leaves none of itself applied**, and every migration before it stays applied. Run the command again to apply the rest.
 - **Connecting is bounded at 30 seconds, but statements are not**, since a migration's changes to the schema may run long. Give the job a deadline of your platform's own, such as a Kubernetes Job's `activeDeadlineSeconds`, so a run that stops making progress cannot hold a rollout indefinitely.
 - **A stop rolls back the migration in flight.** The first `SIGTERM` or `SIGINT` ends the run's connection, and every migration committed before it stays applied. A second signal ends the process at once. The run's session checks every second that its client is still connected, so even a process ended outright has its session ended by the server within about a second, rolling back and releasing the lock.
-- **Migrations only move forward.** Rolling back the controller's image does not roll back the schema, and rolling it back one release needs no change to the schema: the controller's start reads no record of migrations, and a release removes from the schema only what the release before it stopped reading. So the previous release's controller runs on the current schema.
-- **A rollback skips the schema migration run.** The previous release's schema migration command refuses a database recording a migration it does not hold, so a rollout that always runs it first would block its own rollback.
+- **Migrations only move forward.** Rolling back the controller's image does not roll back the schema. A later release may record restrictions, such as sign-outs or suspensions, in tables an earlier release never reads, so an earlier release cannot vouch for a database a later release has migrated.
+- **A rollback runs only to a release that knows every applied migration.** The controller refuses to start, and reports itself unready, while its database records a migration its release does not know, including one changed since it was applied. A release refused this way is fixed forward: deploy a release that knows every applied migration. A rollback to a release holding the same migrations is unaffected, and its schema migration run applies nothing.
+- **A rollout applying a migration takes the previous release's instances out of rotation.** Once the schema migration run applies a migration, each instance of the previous release reports itself unready, with the cause `migrationUnknown`, until it is replaced, so no instance is ready from then until the new release's first one is. A rollout applying no migration leaves them ready.
 
-A controller started before any migration run is refused, naming `USHER_DATABASE_SCHEMA`.
+A controller started before any migration run is refused, naming `USHER_DATABASE_SCHEMA`. So is a controller whose database records a migration its release does not know: the refusal names each such migration, and says of each the release holds that its checksum differs, but never shows a checksum. Before it is refused, the start writes those migrations as `schema.migrationUnknown` at error, with `refused` set to `start`, as [Readiness and liveness](#readiness-and-liveness) describes.
 
 ---
 
@@ -323,15 +331,18 @@ Where `USHER_API_DOCS_CLIENT` is set, these calls can also be made from a browse
 | `GET /health/live`  | 200 until a log write fails, 503 from then on        | Liveness   |
 | `GET /health/ready` | 200 while the instance is ready, 503 while it is not | Readiness  |
 
-An instance is ready while all four hold, checked in this order:
+An instance is ready while all five hold, checked in this order:
 
 1. It has started, and is not stopping.
 2. Every line it has written has reached its log stream.
 3. Its store answers a probe within `USHER_STORE_TIMEOUT_MILLISECONDS`.
-4. Its store does not answer as read-only, for an instance with a role allowed to write.
+4. Its store records no migration this release does not know, in a record its role may read.
+5. Its store does not answer as read-only, for an instance with a role allowed to write.
 
 - **The store's answer is reused for one second**, so however often readiness is asked, the store is probed at most once a second.
-- **Each change of readiness is logged when readiness is next asked.** Becoming unready is `readiness.lost` at warning, with its `cause`: `stopping`, `logUnwritable`, `storeTimeout`, a SQLSTATE, `storeFailed` for a failure carrying no code, or `readOnly`. Becoming ready again is `readiness.restored` at info.
+- **Each change of readiness is logged when readiness is next asked.** Becoming unready is `readiness.lost` at warning, with its `cause`: `stopping`, `logUnwritable`, `storeTimeout`, a SQLSTATE, `storeFailed` for a failure carrying no code, `migrationRecordUnreadable`, `migrationUnknown`, or `readOnly`. Becoming ready again is `readiness.restored` at info.
+- **With the cause `migrationRecordUnreadable`, the schema holds no record of applied migrations, or the role may not read it.** Run the schema migration command, which creates the record and grants the runtime role reading it.
+- **With the cause `migrationUnknown`, the store records a migration this release does not know**, including one changed since it was applied. The instance writes `schema.migrationUnknown` at error once each time it becomes unready for this cause, however often readiness is asked. Its `migrations` names each such migration by its `name`, with `checksumDiffers` set to `true` for one the release holds under that name with another checksum, and its `refused` is `readiness`. A refused start writes the same line with `refused` set to `start`. A recorded name not in migration form, four digits then lower-case words joined by underscores, is written as `a name not in migration form`. The cure is to deploy a release that knows every applied migration, as [Schema migration before each rollout](#schema-migration-before-each-rollout) describes.
 - **Once its log stream fails to take a line, an instance fails liveness as well as readiness, until it is restarted.** A restart is the only recovery, and no line can report the failure, since the stream it would go to is the one that failed. So the liveness probe is the signal: an instance restarting over and over points at its log stream.
 
 The image holds no shell and no curl. Probe over HTTP on the port in `USHER_PORT`, or run Node itself as an exec probe, with 3000 replaced by that port:

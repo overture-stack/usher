@@ -1,5 +1,6 @@
 export { openStore } from './connection.js';
 export { connectionProblemOf } from './connectionProblemOf.js';
+export { readStoreProbe } from './migrationRecord.js';
 export { checkStatementLimits, prepareStore } from './prepareStore.js';
 export { holdsUnstorableText, isStorableText } from './storableText.js';
 export type {

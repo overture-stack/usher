@@ -25,7 +25,10 @@ export interface MigrationOptions {
    */
   retentionFloorSeconds: number;
 
-  /** The controller's runtime role, created before the run, to which the migrations grant. */
+  /**
+   * The controller's runtime role, created before the run, to which the migrations grant, and the
+   * run grants reading the record of applied migrations.
+   */
   runtimeRole: string;
 
   /** The schema the tables live in, created by the run when absent. */
@@ -81,3 +84,23 @@ export interface MigrationNames {
 
 /** An option of a migration run that a refusal can be laid on. */
 export type RefusedOption = 'databaseUrl' | 'runtimeRole' | 'schema';
+
+/**
+ * A migration the database records as applied that this release does not know, as a line or a
+ * refusal names it.
+ */
+export interface UnknownMigration {
+  /**
+   * Whether this release holds a migration of that name, whose checksum differs from the record's.
+   */
+  checksumDiffers: boolean;
+
+  /**
+   * The recorded name when it is in migration form, and otherwise a fixed phrase saying it is not,
+   * so no other value the database holds is ever written.
+   */
+  name: string;
+}
+
+/** What refused because the database records a migration this release does not know. */
+export type UnknownMigrationRefusal = 'readiness' | 'start';

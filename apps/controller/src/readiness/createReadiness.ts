@@ -1,4 +1,9 @@
 import type { Readiness } from '../http/index.js';
+import {
+  MIGRATION_UNKNOWN,
+  migrationUnknownFields,
+  type UnknownMigration,
+} from '../migrations/index.js';
 import type { ReadinessSettings, StoreProbe } from './types.js';
 
 /**
@@ -18,6 +23,8 @@ export const READINESS_RESTORED = 'readiness.restored';
 // The cause naming a probe's failure that carries no code of its own.
 const STORE_FAILED = 'storeFailed';
 
+const MIGRATION_UNKNOWN_CAUSE = 'migrationUnknown';
+
 type ProbeOutcome =
   { answer: StoreProbe; kind: 'answered' } | { cause: string; kind: 'failed' };
 
@@ -28,9 +35,21 @@ interface StoreAnswer {
   probedAt: number;
 }
 
-type Judgement = { cause: string; ready: false } | { ready: true };
+// An unready judgement for unknown migrations alone carries them.
+type Judgement =
+  | {
+      cause: string;
+      ready: false;
+      unknownMigrations?: readonly UnknownMigration[];
+    }
+  | { ready: true };
 
 const READY: Judgement = Object.freeze({ ready: true });
+
+const unknownOf = (
+  judgement: Judgement,
+): readonly UnknownMigration[] | undefined =>
+  judgement.ready ? undefined : judgement.unknownMigrations;
 
 // A failure by its code, a SQLSTATE or a system error's or the store timeout's, since a store's
 // message may quote a value.
@@ -43,15 +62,19 @@ const causeOf = (failure: unknown): string => {
 };
 
 /**
- * Creates the controller's readiness: ready while it has started and is not stopping, its log stream
- * has taken every line, and its store answers within the store timeout, not reading as read-only
- * when the instance's role writes. Those are checked in that order, and the store asked only once the
- * others hold. The store is probed once at a time, every request arriving meanwhile awaiting the probe
- * in flight, and its answer is reused for {@link STORE_PROBE_INTERVAL_MILLISECONDS} after the probe
- * began. Each change is written to the log as it is seen, when readiness is asked: becoming unready
- * as {@link READINESS_LOST} at warning, naming its `cause` (`stopping`, `logUnwritable`, the code of
- * the probe's failure, such as `storeTimeout` or a SQLSTATE, `storeFailed` for one carrying none, or
- * `readOnly`), and becoming ready again as {@link READINESS_RESTORED} at info.
+ * Creates the controller's readiness: ready while it has started and is not stopping, its log
+ * stream has taken every line, and its store answers within the store timeout, recording no
+ * migration this release does not know and not reading as read-only when the instance's role
+ * writes. Those are checked in that order, and the store asked only once the others hold. The store
+ * is probed once at a time, every request arriving meanwhile awaiting the probe in flight, and its
+ * answer is reused for {@link STORE_PROBE_INTERVAL_MILLISECONDS} after the probe began. Each change
+ * is written to the log as it is seen, when readiness is asked: becoming unready as
+ * {@link READINESS_LOST} at warning, naming its `cause` (`stopping`, `logUnwritable`, the code of
+ * the probe's failure, such as `storeTimeout`, `migrationRecordUnreadable` or a SQLSTATE,
+ * `storeFailed` for one carrying none, `migrationUnknown` or `readOnly`), and becoming ready again
+ * as {@link READINESS_RESTORED} at info. Each time the cause becomes `migrationUnknown`, from ready
+ * or from another cause, the migrations are written too, as {@link MIGRATION_UNKNOWN} at error with
+ * `refused` `readiness`, and not again while that stays the cause, however many probes find them.
  *
  * @param settings the lifecycle, the log stream, the log, the monotonic clock, the store's probe and
  *   whether the instance's role writes.
@@ -104,7 +127,15 @@ export const createReadiness = ({
     if (outcome.kind === 'failed') {
       return { cause: outcome.cause, ready: false };
     }
-    return outcome.answer.readOnly && writesStore()
+    const { readOnly, unknownMigrations } = outcome.answer;
+    if (unknownMigrations.length > 0) {
+      return {
+        cause: MIGRATION_UNKNOWN_CAUSE,
+        ready: false,
+        unknownMigrations,
+      };
+    }
+    return readOnly && writesStore()
       ? { cause: 'readOnly', ready: false }
       : READY;
   };
@@ -116,8 +147,9 @@ export const createReadiness = ({
     return { cause: isServing() ? 'logUnwritable' : 'stopping', ready: false };
   };
 
-  // Lines mark changes alone, so a run of failed probes writes one; the controller counts as ready
-  // until judged otherwise, its start having proved the store.
+  // Lines mark changes alone, so a run of failed probes writes one, and a run of probes finding
+  // unknown migrations one naming them; the controller counts as ready until judged otherwise, its
+  // start having proved the store.
   const noteChange = (judgement: Judgement): void => {
     const previous = state.judged ?? READY;
     state.judged = judgement;
@@ -126,6 +158,13 @@ export const createReadiness = ({
     }
     if (judgement.ready === false && previous.ready) {
       log.warning(READINESS_LOST, { cause: judgement.cause });
+    }
+    const unknown = unknownOf(judgement);
+    if (unknown !== undefined && unknownOf(previous) === undefined) {
+      log.error(
+        MIGRATION_UNKNOWN,
+        migrationUnknownFields(unknown, 'readiness'),
+      );
     }
   };
 

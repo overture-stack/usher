@@ -93,8 +93,8 @@ export const refuseUnsupportedServer = async (client: {
   );
 };
 
-// Decide H: the runtime role holds only the privileges the migrations grant it, so it must be a role
-// of its own that cannot act as the schema's owner.
+// Decide H: the runtime role holds only the privileges the migrations and the run grant it, so it
+// must be a role of its own that cannot act as the schema's owner.
 const refuseUnsafeRuntimeRole = async (
   client: pg.ClientBase,
   runtimeRole: string,
@@ -151,19 +151,25 @@ const appliedMigrations = async (
 };
 
 // The record is the runner's rather than a migration's, since it says which migrations have run.
+// The controller reads it before anything else in the schema, so every run grants the runtime role
+// reading it, not only the run creating it.
 const ensureRecord = async (
   client: pg.ClientBase,
-  schema: string,
+  { runtimeRole, schema }: MigrationNames,
 ): Promise<void> => {
+  const record = qualified(schema, RECORD_TABLE);
   await client.query(
     `CREATE SCHEMA IF NOT EXISTS ${pg.escapeIdentifier(schema)}`,
   );
   await client.query(
-    `CREATE TABLE IF NOT EXISTS ${qualified(schema, RECORD_TABLE)} (
+    `CREATE TABLE IF NOT EXISTS ${record} (
        name text PRIMARY KEY,
        checksum text NOT NULL,
        applied_at timestamptz NOT NULL DEFAULT now()
      )`,
+  );
+  await client.query(
+    `GRANT SELECT ON ${record} TO ${pg.escapeIdentifier(runtimeRole)}`,
   );
 };
 
@@ -196,8 +202,9 @@ const applyMigration = async (
   }
 };
 
-// Run again on an up-to-date database, this is all a run changes, and only when the floor differs. The
-// floor is stored once the migration creating its table has applied, and the answer is whether it was.
+// Run again on an up-to-date database, this and the record's grant are all a run can change, the
+// floor only when it differs. The floor is stored once the migration creating its table has
+// applied, and the answer is whether it was.
 const storeRetentionFloor = async (
   client: pg.ClientBase,
   schema: string,
@@ -288,7 +295,7 @@ const migrateOn = async (
       await appliedMigrations(client, schema),
       target,
     );
-    await ensureRecord(client, schema);
+    await ensureRecord(client, { runtimeRole, schema });
     await pending.reduce<Promise<void>>(async (earlier, migration) => {
       await earlier;
       await applyMigration(client, migration, { runtimeRole, schema });
@@ -310,14 +317,16 @@ const migrateOn = async (
  * when no store answers at the URL within the connection timeout, when the runtime role does not
  * exist or could act as the schema's owner, when another role owns the schema, when the target
  * names no migration, and when the database records a migration this release does not hold, or
- * holds changed. A target already passed applies nothing. Each migration commits with its record,
- * so a failure keeps every migration before it. Last, the run stores the retention floor, which is
- * all a run on an up-to-date database changes. It settles once its connection has closed. The URL
- * is parsed rather than handed to the driver whole, since the driver lets a URL's own settings, its
- * empty password included, override any given beside it. Connecting and signing in are limited by
- * the connection timeout; statements are not. The run's session checks every second that its
- * connection is open, so once it closes, by a stop or by the process ending, the session ends too,
- * rolling back the migration in flight and releasing the run's lock.
+ * holds changed. Then it creates the record of applied migrations when the schema lacks one, and
+ * grants the runtime role reading it, which the controller's start requires. A target already
+ * passed applies nothing. Each migration commits with its record, so a failure keeps every
+ * migration before it. Last, the run stores the retention floor, so on an up-to-date database a run
+ * changes nothing but the floor and the record's grant. It settles once its connection has closed.
+ * The URL is parsed rather than handed to the driver whole, since the driver lets a URL's own
+ * settings, its empty password included, override any given beside it. Connecting and signing in
+ * are limited by the connection timeout; statements are not. The run's session checks every second
+ * that its connection is open, so once it closes, by a stop or by the process ending, the session
+ * ends too, rolling back the migration in flight and releasing the run's lock.
  *
  * @param options the schema migration role's connection URL and password, the connection timeout,
  *   the retention floor, the runtime role, the schema, the signal stopping the run, and the target.

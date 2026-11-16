@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
+import type { LineFields } from '../eventLog/index.js';
+import { MIGRATION_UNKNOWN } from '../migrations/index.js';
 import {
   createReadiness,
   READINESS_LOST,
@@ -10,8 +12,8 @@ import {
 import type { ReadinessLog, ReadinessSettings, StoreProbe } from './types.js';
 
 interface Line {
-  fields: Readonly<Record<string, string>> | undefined;
-  level: 'info' | 'warning';
+  fields: LineFields | undefined;
+  level: 'error' | 'info' | 'warning';
   message: string;
 }
 
@@ -24,6 +26,9 @@ const lines = (): Lines => {
   const written: Line[] = [];
   return {
     log: {
+      error: (message, fields) => {
+        written.push({ fields, level: 'error', message });
+      },
       info: (message, fields) => {
         written.push({ fields, level: 'info', message });
       },
@@ -83,7 +88,7 @@ const answeringStore = (): {
 } => {
   const state = { asked: 0 };
   const answers: { outcome: Error | StoreProbe } = {
-    outcome: { readOnly: false },
+    outcome: { readOnly: false, unknownMigrations: [] },
   };
   return {
     answers,
@@ -122,6 +127,17 @@ const serving = (
   monotonicNow: clockAt(0).now,
   writesStore: () => true,
   ...overrides,
+});
+
+// A migration of this release recorded with another checksum, and one this release does not hold.
+const CHANGED = Object.freeze({
+  checksumDiffers: true,
+  name: '0001_policy_store',
+});
+
+const LATER = Object.freeze({
+  checksumDiffers: false,
+  name: '0099_later_release',
 });
 
 suite("the controller's readiness", () => {
@@ -173,7 +189,7 @@ suite("the controller's readiness", () => {
     store.answers.outcome = failureWith('storeTimeout');
     clock.advance(STORE_PROBE_INTERVAL_MILLISECONDS);
     const unanswering = await readiness.isReady();
-    store.answers.outcome = { readOnly: false };
+    store.answers.outcome = { readOnly: false, unknownMigrations: [] };
     clock.advance(STORE_PROBE_INTERVAL_MILLISECONDS);
     const answeringAgain = await readiness.isReady();
 
@@ -202,7 +218,7 @@ suite("the controller's readiness", () => {
     await askAfterInterval();
     store.answers.outcome = failureWith('storeTimeout');
     await askAfterInterval();
-    store.answers.outcome = { readOnly: false };
+    store.answers.outcome = { readOnly: false, unknownMigrations: [] };
     await askAfterInterval();
     await askAfterInterval();
 
@@ -229,7 +245,7 @@ suite("the controller's readiness", () => {
 
   test('is unready while the store reads as read-only on an instance whose role writes, and ready on one whose role only reads', async () => {
     const store = answeringStore();
-    store.answers.outcome = { readOnly: true };
+    store.answers.outcome = { readOnly: true, unknownMigrations: [] };
     const writing = lines();
     const reading = lines();
     const writer = createReadiness(
@@ -302,11 +318,103 @@ suite("the controller's readiness", () => {
     probes.answer(failureWith('storeTimeout'));
     const answers = await Promise.all([first, whileInFlight]);
     const next = readiness.isReady();
-    probes.answer({ readOnly: false });
+    probes.answer({ readOnly: false, unknownMigrations: [] });
 
     assert.equal(askedInFlight, 1);
     assert.deepEqual(answers, [false, false]);
     assert.equal(await next, true);
     assert.equal(probes.asked(), 2);
+  });
+
+  test('is unready while the store records a migration this release does not know, naming that cause before a read-only store, whether its role writes or only reads', async () => {
+    const store = answeringStore();
+    store.answers.outcome = { readOnly: true, unknownMigrations: [LATER] };
+    const writing = lines();
+    const reading = lines();
+    const writer = createReadiness(
+      serving({ log: writing.log, probeStore: store.probeStore }),
+    );
+    const reader = createReadiness(
+      serving({
+        log: reading.log,
+        probeStore: store.probeStore,
+        writesStore: () => false,
+      }),
+    );
+
+    const answers = [await writer.isReady(), await reader.isReady()];
+
+    assert.deepEqual(answers, [false, false]);
+    assert.deepEqual(
+      [writing, reading].map(({ written }) =>
+        written
+          .filter(({ message }) => message === READINESS_LOST)
+          .map(({ fields }) => fields),
+      ),
+      [[{ cause: 'migrationUnknown' }], [{ cause: 'migrationUnknown' }]],
+    );
+  });
+
+  test('writes schema.migrationUnknown at error, naming each migration and that readiness refused, once each time it turns unready for that reason, however many probes and requests find one', async () => {
+    const store = answeringStore();
+    const clock = clockAt(0);
+    const { log, written } = lines();
+    const readiness = createReadiness(
+      serving({ log, monotonicNow: clock.now, probeStore: store.probeStore }),
+    );
+    const askAfterInterval = async (): Promise<void> => {
+      clock.advance(STORE_PROBE_INTERVAL_MILLISECONDS);
+      await Promise.all(Array.from({ length: 5 }, () => readiness.isReady()));
+    };
+
+    await readiness.isReady();
+    store.answers.outcome = {
+      readOnly: false,
+      unknownMigrations: [CHANGED, LATER],
+    };
+    await askAfterInterval();
+    await askAfterInterval();
+    store.answers.outcome = { readOnly: false, unknownMigrations: [LATER] };
+    await askAfterInterval();
+    store.answers.outcome = { readOnly: false, unknownMigrations: [] };
+    await askAfterInterval();
+    store.answers.outcome = failureWith('storeTimeout');
+    await askAfterInterval();
+    store.answers.outcome = { readOnly: false, unknownMigrations: [LATER] };
+    await askAfterInterval();
+    await askAfterInterval();
+
+    assert.deepEqual(written, [
+      {
+        fields: { cause: 'migrationUnknown' },
+        level: 'warning',
+        message: READINESS_LOST,
+      },
+      {
+        fields: {
+          migrations: [
+            { checksumDiffers: true, name: '0001_policy_store' },
+            { name: '0099_later_release' },
+          ],
+          refused: 'readiness',
+        },
+        level: 'error',
+        message: MIGRATION_UNKNOWN,
+      },
+      { fields: undefined, level: 'info', message: READINESS_RESTORED },
+      {
+        fields: { cause: 'storeTimeout' },
+        level: 'warning',
+        message: READINESS_LOST,
+      },
+      {
+        fields: {
+          migrations: [{ name: '0099_later_release' }],
+          refused: 'readiness',
+        },
+        level: 'error',
+        message: MIGRATION_UNKNOWN,
+      },
+    ]);
   });
 });

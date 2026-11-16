@@ -1,10 +1,20 @@
-/** What the store answered readiness's probe: whether it reads as read-only. */
+import type { LineFields } from '../eventLog/index.js';
+import type { UnknownMigration } from '../migrations/index.js';
+
+/**
+ * What the store answered readiness's probe: whether it reads as read-only, and the migrations it
+ * records as applied that this release does not know.
+ */
 export interface StoreProbe {
   readOnly: boolean;
+  unknownMigrations: readonly UnknownMigration[];
 }
 
 /** Where readiness writes its lines, each named by its message. */
 export interface ReadinessLog {
+  /** Writes a line at error. */
+  error(message: string, fields: LineFields): void;
+
   /** Writes a line at info. */
   info(message: string, fields?: Readonly<Record<string, string>>): void;
 

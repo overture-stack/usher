@@ -18,7 +18,13 @@ const SETTINGS: StoreSettings = {
   storeTimeoutMilliseconds: 5000,
 };
 
-const QUIET = Object.freeze({ warning: () => undefined });
+const QUIET = Object.freeze({
+  error: () => undefined,
+  warning: () => undefined,
+});
+
+// The release's migrations, none here: every trail below fails before the record is read.
+const MIGRATIONS = Object.freeze([]);
 
 // A trail whose every transaction fails as given, before any statement.
 const failingTrail = (
@@ -33,6 +39,7 @@ suite("preparing the store at the controller's start", () => {
       failingTrail(new StoreTimeout()),
       SETTINGS,
       QUIET,
+      MIGRATIONS,
     ).catch((failure: unknown) => failure);
 
     assert.ok(refusal instanceof StartRefusal);
@@ -48,6 +55,7 @@ suite("preparing the store at the controller's start", () => {
       failingTrail(new CommitUnconfirmed()),
       SETTINGS,
       QUIET,
+      MIGRATIONS,
     ).catch((failure: unknown) => failure);
 
     assert.ok(refusal instanceof StartRefusal);
@@ -66,6 +74,7 @@ suite("preparing the store at the controller's start", () => {
           ),
           SETTINGS,
           QUIET,
+          MIGRATIONS,
         ).catch((failure: unknown) => failure),
       ),
     );
@@ -88,7 +97,7 @@ suite("preparing the store at the controller's start", () => {
     });
 
     await assert.rejects(
-      prepareStore(failingTrail(reset), SETTINGS, QUIET),
+      prepareStore(failingTrail(reset), SETTINGS, QUIET, MIGRATIONS),
       (thrown) => thrown === reset,
     );
   });

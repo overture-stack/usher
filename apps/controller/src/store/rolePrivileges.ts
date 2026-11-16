@@ -81,6 +81,14 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
 );
 
 /**
+ * The table recording the migrations applied to the schema, which the start reads before anything
+ * else in it. The schema migration command creates it and grants the runtime role reading it,
+ * beside the reading the migrations grant on every other table, so the start requires that reading
+ * of the role, and reading is never a grant beyond use.
+ */
+export const MIGRATION_RECORD = 'schema_migrations';
+
+/**
  * The functions of the controller's schema the release's migrations let its runtime role call, by
  * name, each name standing for every function of the schema so named: `trim_notices` for the trim
  * taking no argument and for the one taking the most notices it deletes.
@@ -214,6 +222,7 @@ const relationsQuery = (maintains: boolean): string => `
          CASE WHEN relation.relkind = 'S' THEN 'sequence' ELSE 'table' END AS kind,
          relation.relname::text AS name,
          pg_has_role(relation.relowner, 'MEMBER') AS owns,
+         has_table_privilege(relation.oid, 'SELECT') AS reads,
          CASE WHEN relation.relkind = 'S'
               THEN ${heldAmong(SEQUENCE_CHECKS)}
               ELSE ${heldAmong(tableChecks(maintains))}
@@ -464,10 +473,40 @@ const schemaProblems = (
   ];
 };
 
+// The record is the schema migration command's, which creates it and grants reading it, so its
+// absence and a role that may not read it both send the operator to that command.
+const recordReadingProblems = (
+  relations: readonly HeldRelation[],
+): readonly StartProblem[] => {
+  const record = relations.find(
+    ({ kind, name }) => kind === 'table' && name === MIGRATION_RECORD,
+  );
+  if (record?.reads === true) {
+    return [];
+  }
+  return [
+    {
+      rule:
+        record === undefined
+          ? `names a schema holding no record of applied migrations, ${MIGRATION_RECORD}: run the schema migration command, which creates it`
+          : `names a schema whose record of applied migrations, ${MIGRATION_RECORD}, the database role may not read: run the schema migration command, which grants the runtime role reading it`,
+      variable: ENVIRONMENT_VARIABLES.databaseSchema,
+    },
+  ];
+};
+
+// A schema the role may not use is named as that alone, its record unreachable whatever it holds.
+const recordProblems = ({
+  relations,
+  schema,
+}: HeldPrivileges): readonly StartProblem[] =>
+  schema?.uses === true ? recordReadingProblems(relations) : [];
+
 /**
  * The rules a role breaks as the controller's database role, each naming the variable at fault and
- * each refusing the start: a schema it cannot use, anything it holds beyond what the controller
- * needs, and writing without recording.
+ * each refusing the start: a schema it cannot use, a record of applied migrations the schema lacks
+ * or the role may not read, anything it holds beyond what the controller needs, and writing without
+ * recording.
  *
  * @param held what the role holds.
  */
@@ -477,6 +516,7 @@ export const privilegeProblems = (
   const beyond = privilegesBeyondNeed(held);
   return [
     ...schemaProblems(held.schema),
+    ...recordProblems(held),
     ...(beyond.length === 0
       ? []
       : [
