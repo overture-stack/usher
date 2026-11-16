@@ -136,11 +136,11 @@ export interface EventFieldSets {
 
 /**
  * A row's severity, as its cell names it: one severity; one that follows the event's `result`; one
- * chosen by a field's value, as the key revocation's is by `reason` and the mode change's by `toMode`;
- * category.unmapped's two, told apart by whether the event carries a field; or the baseline change's
- * two, told apart by whether the start recording it is the store's first, which no field carries. One
- * severity or one chosen by value may give a denied result a severity of its own, read before
- * anything else.
+ * chosen by a field's value, as the key revocation's is by `reason`, the mode change's by `toMode`
+ * and the import run's by `result`; category.unmapped's two, told apart by whether the event carries
+ * a field; or the baseline change's two, told apart by whether the start recording it is the store's
+ * first, which no field carries. One severity or one chosen by value may give a denied result a
+ * severity of its own, read before anything else.
  */
 export type EventSeverity =
   | {
@@ -236,6 +236,11 @@ const FOLLOWS_RESULT = 'follows `result`';
 const ON_REFUSAL = 'on refusal';
 
 const ON_SUCCESS = 'on success';
+
+// The field an action's outcome is carried in, and the values it takes.
+const RESULT_FIELD = 'result';
+
+const RESULT_VALUES: readonly string[] = ['denied', 'failed', 'succeeded'];
 
 // The word opening the condition a field is carried under, as in "`count` when overloaded" or
 // "`resourceId` for a resource category".
@@ -435,7 +440,13 @@ const fieldListing = (fieldsCell: string, value: string): string | undefined =>
     ([, , listed]) => backtickedIn(listed ?? '').includes(value),
   )?.[1];
 
-// A severity cell naming a severity per case, each value's field found in the row's fields cell.
+// The field a value of a `for` clause belongs to: the one the fields cell lists it for, or `result`
+// for a value of `result` the cell lists for no field.
+const fieldOfValue = (fieldsCell: string, value: string): string | undefined =>
+  fieldListing(fieldsCell, value) ??
+  (RESULT_VALUES.includes(value) ? RESULT_FIELD : undefined);
+
+// A severity cell naming a severity per case, each value's field found by `fieldOfValue`.
 const casedSeverityIn = (cell: string, fieldsCell: string): EventSeverity => {
   const clauses = cell
     .split(';')
@@ -461,7 +472,7 @@ const casedSeverityIn = (cell: string, fieldsCell: string): EventSeverity => {
     ...new Set(
       Object.keys(byValue).map(
         (value) =>
-          fieldListing(fieldsCell, value) ??
+          fieldOfValue(fieldsCell, value) ??
           unreadable(`field listing \`${value}\``, cell),
       ),
     ),
@@ -478,14 +489,17 @@ const casedSeverityIn = (cell: string, fieldsCell: string): EventSeverity => {
 /**
  * The severity a severity cell registers: one backticked severity; one that follows `result`; one of
  * the cells telling their cases apart in prose; or one per case, by the clauses its semicolons divide
- * it into, `when refused` for a denied result, `for` the values its fields cell lists for one field,
- * and `else` for every other case, as `` `warning` when refused; `critical` for `compromised`; else
- * `info` `` reads.
+ * it into, `when refused` for a denied result, `for` values of one field, and `else` for every other
+ * case, as `` `warning` when refused; `critical` for `compromised`; else `info` `` reads. A `for`
+ * clause's value belongs to the field its fields cell lists it for, and a value of `result`
+ * (`succeeded`, `denied` or `failed`) the cell lists for no field belongs to `result`, which every
+ * action carries, so `` `error` for `failed`; else `warning` `` is chosen by `result`.
  *
  * @param cell the cell.
  * @param fieldsCell the row's fields cell, naming the field each value of a `for` clause belongs to:
  * none by default.
- * @throws for any other cell, or for a value no field lists, or values listed by two fields.
+ * @throws for any other cell, for a value no field lists that is not a value of `result`, or for
+ * values of two fields.
  */
 export const severityIn = (
   cell: string,
@@ -599,15 +613,16 @@ export const emittedType = (event: string): string =>
  * The counts an `import.run` event carries on success, as the note below the Events table lists
  * them, each by the member naming it: the holdings of an all-study policy the report lists, one a
  * holding as its `allStudyAccess` lists them; the studies holding data without a policy; the grants
- * the run wrote; the resources it registered without an owner; and the studies it registered,
- * reported and skipped. The dry run's operational line ({@link DRY_RUN_LOG_LINE}) carries the same
- * ones.
+ * the run wrote; the resources it registered without an owner; the memberships naming the
+ * administrator running the run, which are never written; and the studies it registered, reported
+ * and skipped. The dry run's operational line ({@link DRY_RUN_LOG_LINE}) carries the same ones.
  */
 export const IMPORT_RUN_COUNTS = Object.freeze({
   allStudyHoldings: 'allStudyHoldings',
   dataWithoutPolicy: 'dataWithoutPolicy',
   grantsWritten: 'grantsWritten',
   resourcesWithoutOwner: 'resourcesWithoutOwner',
+  selfGrantsRefused: 'selfGrantsRefused',
   studiesRegistered: 'studiesRegistered',
   studiesReported: 'studiesReported',
   studiesSkipped: 'studiesSkipped',

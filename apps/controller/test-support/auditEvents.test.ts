@@ -129,6 +129,44 @@ suite("reading audit-events.md's Events table", () => {
     });
   });
 
+  test("reads a for clause naming a value of result as a severity chosen by result when the fields cell lists that value for no field, and as the field's when it lists it for one", () => {
+    assert.deepEqual(
+      severityIn(
+        '`error` for `failed`; else `warning`',
+        '`actorId`; on success, the counts listed below the table',
+      ),
+      {
+        byValue: { failed: 'error' },
+        field: 'result',
+        kind: 'byValue',
+        otherwise: 'warning',
+      },
+    );
+    assert.deepEqual(
+      severityIn(
+        '`info` for `succeeded`; `error` for `denied` or `failed`; else `warning`',
+      ),
+      {
+        byValue: { denied: 'error', failed: 'error', succeeded: 'info' },
+        field: 'result',
+        kind: 'byValue',
+        otherwise: 'warning',
+      },
+    );
+    assert.deepEqual(
+      severityIn(
+        '`error` for `failed`; else `warning`',
+        '`actorId`, `stage` (`failed` or `passed`)',
+      ),
+      {
+        byValue: { failed: 'error' },
+        field: 'stage',
+        kind: 'byValue',
+        otherwise: 'warning',
+      },
+    );
+  });
+
   test('refuses a severity cell any of whose cases cannot be read', () => {
     const fields = '`reason` (`compromised` or `rotated`), `mode` (`cold`)';
 
@@ -144,6 +182,14 @@ suite("reading audit-events.md's Events table", () => {
       () =>
         severityIn(
           '`critical` for `compromised` or `cold`; else `info`',
+          fields,
+        ),
+      /no severity chosen by one field can be read/u,
+    );
+    assert.throws(
+      () =>
+        severityIn(
+          '`critical` for `compromised` or `failed`; else `info`',
           fields,
         ),
       /no severity chosen by one field can be read/u,
@@ -904,7 +950,7 @@ suite('reading the events a log stream holds', () => {
 });
 
 suite("the import's own event and the over-cap exchange's", () => {
-  test('reads import.run as the administrator acting, carrying on success the counts listed below the table and a reason otherwise, at the severity its result gives, its writes caused by it', () => {
+  test('reads import.run as the administrator acting, carrying on success the counts listed below the table and a reason otherwise, at error when it fails and at warning otherwise, its writes caused by it', () => {
     const {
       actor,
       fields: { always, conditional, onRefusal, onSuccess },
@@ -918,7 +964,13 @@ suite("the import's own event and the over-cap exchange's", () => {
         always: ['actorId'],
         conditional: [],
         onRefusal: ['reason'],
-        severity: { kind: 'followsResult' },
+        severity: {
+          byValue: { failed: 'error' },
+          field: 'result',
+          kind: 'byValue',
+          otherwise: 'warning',
+          whenDenied: 'warning',
+        },
       },
     );
     assert.deepEqual(
