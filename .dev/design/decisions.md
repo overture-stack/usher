@@ -1894,10 +1894,71 @@ design choice rather than an oversight. For the failure behaviour and grace peri
 
 ---
 
+### A release that cannot honour a recorded restriction does not serve
+
+**The threat.** A rollback moves the controller back to an older release and leaves the schema as the
+newer release left it, since migrations go forward only. Where the newer release added a kind of
+restriction, the older release never reads where it is recorded, and every restriction of that kind
+is lifted with nothing to show it:
+
+1. Release 2 adds suspensions: a table, the check that reads it, and the action that writes it.
+2. An administrator suspends a compromised account, and its exchanges are refused.
+3. Release 2 has an unrelated defect, and operators roll back to release 1.
+4. Release 1 never reads the suspensions table, so the account's exchanges succeed again.
+
+**Decision (2026-11-16): a controller holding a database with a migration it does not know, which
+records a restriction, refuses to serve.**
+
+- **A migration says whether it records a restriction.** A migration whose table or column records
+  anything an older release would ignore at the cost of access, a sign-out or a suspension among
+  them, declares so, with one sentence saying what an older release would stop enforcing. The
+  declarations live in a list beside the migrations rather than in their files, since a released
+  migration's file never changes and the first releases predate the declarations; a test holds the
+  list complete. A released migration's declaration is fixed as its file is. The runner records each
+  declaration with its migration's row, filling in rows applied before declarations existed, and
+  refuses a list whose declaration for an applied migration differs from the one recorded. Review of
+  each migration checks its declaration as it checks the rest.
+- **The controller checks at start and at readiness.** A controller finding such a migration outside
+  its own list refuses to start, and one already running stops reporting ready, so an older release
+  stops taking exchanges as soon as a newer release's migration recording a restriction is applied.
+  Each logs the migrations it does not know, with their sentences. An upgrade across such a
+  migration leaves no instance serving from the moment the migration is applied until the newer
+  instances are ready, so the deployment pipeline applies the migration and moves the controller in
+  one step to keep that short, and the downtime is scheduled and announced, through the portals'
+  banners among other ways. Fail-secure accepts it.
+- **A rollback across such a migration is refused, so a defective release is fixed forward.**
+- **A forced rollback is the exception, for a release that must not be fixed forward**, a
+  compromised release among them. An operator runs the forced-rollback command once, the way the
+  schema migration command is run, from the image of the release being returned to and never from
+  the release being left, naming that release by its newest migration and giving a reference to
+  where the incident is recorded. It needs no particular pipeline, and docs/deployment.md gives its
+  procedure for any platform. The reference is never a description of the incident, since the
+  arguments a deployment passes, through a pipeline's parameters or an infrastructure repository,
+  are usually readable more widely than the incident's own record. The command runs before the controller moves, and changes only what the database records:
+  the schema stays as it is, and so does the schema migration Job's version. It is recorded at
+  `critical` in the audit log with each migration it sets aside and its sentence, so the trail says
+  what stopped being enforced and where to read why. The controller's own database role cannot write
+  a forced rollback, so forcing one takes the same access as deploying a release. A forced rollback
+  lasts until a release that knows every applied migration starts again, which ends it through a
+  function able only to end the forced rollback in force, and records that.
+
+**The check ships in the first release.** A release without it ignores every declaration, and no
+check can be added to a release already shipped. A release cut before the declarations exist checks
+more strictly: it refuses to start, and stops reporting ready, on a database recording any migration
+it does not know, whatever that migration declares. It carries no forced-rollback command, so a
+return to it is refused outright and its problems are fixed forward. Later releases narrow the check
+to migrations declaring a restriction.
+
+**What it leaves as it was.** A migration removing anything still ships one release after the code
+stops reading it, per [schema.md](schema.md) § Decide G. A rollback moves the controller alone,
+without its migration step, so the runner keeps refusing a record ahead of its own release.
+
+---
+
 ### Usher is data-agnostic
 
-Usher does not know the schema of the data it protects. It does not query the data store, run
-migrations, or write to any data table. It holds grants (user, resource, category) and issues
+Usher does not know the schema of the data it protects. It does not query the data store, rewrite
+its records, or write to any data table. It holds grants (user, resource, category) and issues
 Usher tokens. What those categories mean in terms of actual records or fields is
 application-specific configuration that lives in the adapter.
 

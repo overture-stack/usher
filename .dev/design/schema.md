@@ -489,7 +489,9 @@ checked when the controller is built, not recorded here.
 **Decide G: migrations are numbered, forward-only and reviewed.** Each runs in a transaction of its
 own, none is edited once released, and a correction is a new migration. Rolling back a deployment
 does not roll back its schema, so a migration that removes anything ships one release after the code
-stops reading it.
+stops reading it. A migration recording a restriction says so, and a release that does not know it
+refuses to serve: see [decisions.md](decisions.md) § A release that cannot honour a recorded
+restriction does not serve.
 
     schema_migrations
       name               text         primary key

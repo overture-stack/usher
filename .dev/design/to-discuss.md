@@ -724,15 +724,6 @@ any paediatric data.
 
 ## Integration and operations
 
-**[MEDIUM] A rollback cannot run an older release's migration step, which refuses a database holding
-newer migrations.** The runner refuses a record departing from its own release's migrations. That is
-right for a forward run, and wrong for a rollback: an older release meeting a newer schema refuses
-before it starts. Decide G already keeps the schema usable by the release before it, since a
-migration removing anything ships one release after the code stops reading it, so a rollback can run
-the older release without its migration step. Whether the runner accepts a record ahead of its own,
-and how a deployment's procedure carries the rollback, is open. To settle before the first release
-that has a predecessor.
-
 **[MEDIUM] Audit log noise from vulnerability scanners and automated probes needs a tagging mechanism.**
 Automated vulnerability scanners and pentesting tools will hammer Usher's auth endpoints with
 probing requests, flooding the audit log with failed-auth events that are not genuine incidents.
