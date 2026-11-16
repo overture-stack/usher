@@ -232,6 +232,7 @@ catalogs:
       version: 4.6.7
 
 overrides:
+  '@scarf/scarf': '-'
   archiver-utils>glob: ^14.0.3
 
 importers:
@@ -722,9 +723,6 @@ packages:
 
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
-
-  '@scarf/scarf@1.4.0':
-    resolution: {integrity: sha512-xxeapPiUXdZAE3che6f3xogoJPeZgig6omHEy1rIY5WVsB3H2BHNnZH+gHG6x91SCWyQCzWGsuL2Hh3ClO5/qQ==}
 
   '@testcontainers/postgresql@12.2.1':
     resolution: {integrity: sha512-MIbI5KjZ9M4SY4+xzxg/w4ZLBeV+Jd6ognXoWn7dh/mhIhBbn7ss0MiZHNg2XbCbu03BW9YQ9+H9xW8PFkJWaA==}
@@ -2293,8 +2291,6 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@scarf/scarf@1.4.0': {}
-
   '@testcontainers/postgresql@12.2.1(bare-buffer@3.7.1)':
     dependencies:
       testcontainers: 12.2.1(bare-buffer@3.7.1)
@@ -3547,9 +3543,7 @@ snapshots:
     dependencies:
       ansi-regex: 5.0.1
 
-  swagger-ui-dist@5.34.1:
-    dependencies:
-      '@scarf/scarf': 1.4.0
+  swagger-ui-dist@5.34.1: {}
 
   tar-fs@2.1.5:
     dependencies:

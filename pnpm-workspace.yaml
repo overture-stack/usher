@@ -34,6 +34,10 @@ catalog:
 minimumReleaseAge: 1440
 
 overrides:
+  # @scarf/scarf, a dependency of swagger-ui-dist, reports each install to Scarf's analytics service.
+  # This project carries no telemetry it did not add on purpose, so the dependency is removed;
+  # swagger-ui-dist serves its files without it
+  '@scarf/scarf': '-'
   # archiver-utils, under testcontainers' archiver, requires glob ^10, which carries
   # GHSA-3g3m-2fjr-6pw4 and, through its minimatch, GHSA-g3hv-75wg-m249; glob 14 keeps the sync
   # call archiver-utils makes
