@@ -3,7 +3,7 @@
 Eleven items surfaced by preparing the first adapter integration. They belong here rather than in
 the integration's own repository because each one is a question about Usher's model, a decision for
 the developer alone, or an answer owed by an instance; none is waiting on adapter work. Per-instance
-specifics belong in that integration's own repository, following the same split as the migration
+specifics belong in that integration's own repository, following the same split as the import
 item.
 
 Grouped by what each is blocked on, because that is what decides who can move it.

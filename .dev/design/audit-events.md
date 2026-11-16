@@ -487,9 +487,9 @@ faith. It reports and does not block: a custodian has the authority to issue eve
 grants, so the event exists to make the pattern visible rather than to decide whether it was
 legitimate.
 
-**Grants written by an EGO migration run do not count toward the administrator running it.** The
-run's `migration.run` event records them, and counting them would raise the alert on every
-migration, which teaches operators to ignore it.
+**Grants written by an EGO import run do not count toward the administrator running it.** The
+run's `import.run` event records them, and counting them would raise the alert on every
+import, which teaches operators to ignore it.
 
 ---
 

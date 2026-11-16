@@ -22,7 +22,7 @@ That is the problem standing still. Several secondary challenges compound it.
 
 **Failure must be safe.** If a system cannot determine what a user is permitted to do, the correct response is to do nothing: show no records, and refuse the write, rather than falling through to an open default in either direction. Uncertainty is not permission.
 
-**The underlying data should not need to change.** Migrations are expensive and error-prone. Access policy is a query-time concern, not a storage-time one. A platform should be able to apply new rules without modifying the records being protected.
+**The underlying data should not need to change.** Data rewrites are expensive and error-prone. Access policy is a query-time concern, not a storage-time one. A platform should be able to apply new rules without modifying the records being protected.
 
 ---
 
@@ -72,7 +72,7 @@ Usher is Overture's [authorization](concepts.md#authentication-vs-authorization)
 
 If the channel goes quiet for longer than a configurable grace period, the bridge stops serving data and reports itself unavailable until the connection returns. That is deliberate: an attacker who silences the channel gains nothing, because silence denies access rather than preserving it.
 
-**Usher does not touch the underlying data.** It does not write to the data store, run migrations, or modify records. Access policy is applied at query time by the adapter. An instance can adopt Usher without touching the data it protects, and removing it leaves no data artifacts behind.
+**Usher does not touch the underlying data.** It does not write to the data store, run data rewrites, or modify records. Access policy is applied at query time by the adapter. An instance can adopt Usher without touching the data it protects, and removing it leaves no data artifacts behind.
 
 **Community data governance.** For instances where a specific community holds data sovereignty rights over their contributed data, Usher's **Custodian** role lets a community representative govern grants for their categories independently of platform administrators. The role is in the design and not in the first release, because nothing appoints a custodian in it. See [Concepts](concepts.md#privileged-roles) for the Custodian and Admin roles.
 

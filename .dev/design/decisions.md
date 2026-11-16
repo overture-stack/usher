@@ -78,7 +78,7 @@ question "what can this user see or do?" is answered by querying which grant rec
 user. There is no Rego logic to evaluate: the policy IS the grant record. Using OPA would mean
 feeding the grants database into OPA's data store and writing Rego that simply reads it back. That
 adds operational complexity (data sync between the grants store and OPA, Rego maintenance) without
-adding functionality. OPA's migration benefit (ecosystem familiarity) also depends on exposing Rego
+adding functionality. OPA's adoption benefit (ecosystem familiarity) also depends on exposing Rego
 policies as a customization surface; if the Rego is internal, that benefit does not transfer. If it
 is exposed, it adds significant complexity to what is currently a clean, well-defined data model.
 
@@ -1324,8 +1324,8 @@ ceiling on every artifact derived from it.
 
 **An artifact with no recoverable provenance can never be widened.** Not as a policy choice: the
 check has nothing to evaluate, and derivation-time state cannot be reconstructed after the fact. So
-artifacts predating provenance recording stay private permanently, and no migration recovers them.
-A migration can restore ownership, which makes an artifact readable by its owner, because that is
+artifacts predating provenance recording stay private permanently, and no schema migration recovers them.
+A schema migration can restore ownership, which makes an artifact readable by its owner, because that is
 self-scoping and needs no provenance. It cannot make one shareable.
 
 Anywhere the widening operation is unavailable, it must be **absent rather than permitted**. A
@@ -1993,18 +1993,18 @@ map EGO group memberships to Usher `grants` rows. The studies management service
 EGO) is retired; its operations become Usher admin API calls. Backend services in iMS that
 currently call EGO's authorization endpoints are updated to use Usher's bridge and token exchange.
 
-**Tradeoffs accepted.** A full replacement requires a migration event and a coordinated cutover
+**Tradeoffs accepted.** A full replacement requires an import and a coordinated cutover
 for iMS backend services. This is harder than an incremental integration but avoids indefinite
 operational complexity from running two authorization systems.
 
-**A migration run writes no grant naming the administrator running it, and every real run is
+**An import run writes no grant naming the administrator running it, and every real run is
 recorded at `warning`.** A run writes grants in bulk from an export the administrator supplies, so
 without this rule an administrator, or anyone holding their session, could write themselves access
 to every study in one request, recorded at `info` and outside the grant-rate alert. A membership
 naming the administrator running the run is refused as the standard grant endpoint refuses
 self-targeting: it is never written, the run's answer lists it, and the administrator reaches that
 resource through the self-grant flow in [admin-model.md](admin-model.md). A run while the
-migration's settings are missing is refused, so removing them switches the run off. Decided
+import's settings are missing is refused, so removing them switches the run off. Decided
 2026-11-16.
 
 ---
@@ -2029,8 +2029,8 @@ leaked in a token or log exposure reveals PII; a Keycloak UUID reveals nothing w
 the IdP. Email addresses can also change; principal IDs are stable for the lifetime of the account.
 
 Email is used in exactly one place: the `invitations` entity, where a grant has been sent to
-an address that belongs to a user who has not yet registered. Once the user registers, the pending
-grant is migrated to their account and the email reference is discarded.
+an address that belongs to a user who has not yet registered. Once the user registers, the invitation
+is claimed, the pending grant is tied to their account, and the email reference is discarded.
 
 Any portal or consumer-facing feature that needs to display a user's name or email (for example,
 a "shared with me" listing) resolves that information via the Keycloak admin API at the portal
@@ -2338,7 +2338,7 @@ of a category carried by the data, and either one suffices. An approver may neve
 trail and limited in time, with a maximum configurable per instance and 24 hours recommended, and
 nobody approves it. Adding approval later needs no restructuring: it adds an approval record and one
 check, and any self-grant made before the switch expires within its time limit, so none is left to
-migrate.
+convert.
 
 **A resource with no available approver keeps its grants as they are until one is assigned.** The
 case needs a vacancy unexpected under the no-owner invariant, and no custodian. Existing grants are

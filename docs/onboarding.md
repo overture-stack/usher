@@ -274,9 +274,9 @@ This keeps the rules consistent as the platform grows. Adding an application doe
 
 ### Usher never touches the data it protects
 
-No records are rewritten, no columns added, no migration run. The rules are applied at the moment of the query.
+No records are rewritten and no columns added. The rules are applied at the moment of the query.
 
-Applying rules at query time is what separates adopting a policy system from undertaking a data migration. A platform can turn Usher on without altering the data it holds, and turning it off leaves nothing behind to clean up.
+Applying rules at query time is what separates adopting a policy system from undertaking a data rewrite. A platform can turn Usher on without altering the data it holds, and turning it off leaves nothing behind to clean up.
 
 ### The Usher token is encrypted, short-lived, and never reaches the person asking
 

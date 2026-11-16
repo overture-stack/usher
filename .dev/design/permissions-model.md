@@ -1022,8 +1022,8 @@ The grant attaches only to **an account that holds the invited address, verified
 3. The recipient's account holds a different address. Nothing binds, and the steward invites them
    again at the address their account holds.
 
-Matching rows are migrated to `grants`, with no decision row until the recipient answers, under the
-account's Keycloak subject, and the `invitations` row is deleted after migration. A lookup by address
+Matching rows are claimed into `grants`, with no decision row until the recipient answers, under the
+account's Keycloak subject, and the `invitations` row is deleted after claiming. A lookup by address
 matches any of the account's verified addresses, and only a verified address may bind a grant:
 otherwise claiming an address would be enough to collect grants intended for whoever holds it.
 
@@ -1109,7 +1109,7 @@ acting.
 **Each of these acts is audited.** Creation, the recipient's answer, the binding of an invited
 identity, and revocation each produce an audit entry.
 
-**Claiming an access invitation from an existing account.** The migration above fires when a new
+**Claiming an access invitation from an existing account.** The claim above fires when a new
 account verifies the invited address, which leaves a gap: an invitee whose account already holds that
 address, verified, triggers nothing, so the pending row would wait with nothing to resolve it.
 
@@ -1681,7 +1681,7 @@ cascade, applied in order:
 never changes regardless of ownership transfers. `owner` is a role that can move.
 
 **No-owner invariant.** Operations that would leave a resource without an owner are blocked. If a
-resource becomes ownerless through an abnormal path (data migration, database inconsistency), the
+resource becomes ownerless through an abnormal path (an import, a database inconsistency), the
 system must notify the system administrator. The admin assigns a new owner, which in the first
 release needs no further approval, and the new owner accepts the ownership grant as any grant is
 accepted. Until then the admin may suppress the resource, `resource.suppress`, without resetting
@@ -1864,7 +1864,7 @@ modifying data. Every change is audited in both directions, and what it does to 
 holding grants is covered below.
 
 **Note: a resource with no categories cannot be created.** The choice is required rather than
-defaulted, so skipping it is not an available path. Should one exist anyway, through migration or an
+defaulted, so skipping it is not an available path. Should one exist anyway, through an import or an
 inconsistency, it is invalid: it is not queryable, and it is flagged as needing categorization rather
 than treated as open. That last part is the whole reason for requiring the choice, since a resource
 carrying no categories would otherwise be reachable by everyone by omission.
@@ -2116,7 +2116,7 @@ Three MVP paths, none yet chosen:
 made, never written as grants copied onto the new submission at submission time. Copied grants
 outlive the access that produced them, so revoking someone's study access leaves them reading every
 submission made while they held it, silently. Copied grants are also already written when finer
-granularity arrives later, making a narrowing into a data migration. A derivation can simply be
+granularity arrives later, making a narrowing into a data rewrite. A derivation can simply be
 narrowed.
 
 This decision affects: the Lyric service account model (what Usher operations does the service
@@ -2126,7 +2126,7 @@ account perform at submission time?); the entity schema (does submission create 
 **Note on identifier availability.** Current submission tokens carry `context.user.email` but not
 `context.user.sub`. If option 1 or 2 requires creating grants bound to a specific user at
 submission time, the Keycloak `sub` must be present in the token forwarded by the submission service.
-This is a token schema change that must be coordinated with the IdP migration.
+This is a token schema change that must be coordinated with the change of identity provider.
 
 **Current state (iMS submission service).** Read authorization is not implemented: GET requests
 bypass auth middleware entirely, `allowedReadOrganizations` is hardcoded empty, and read

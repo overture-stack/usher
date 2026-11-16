@@ -895,7 +895,7 @@ backstop, with the operating rule written into the runbook.
 **How identities relate: a direction for after the first release.** A person can hold more than one
 identity over time: accounts at a second identity provider, or a new account in a provider that can't
 merge two. EGO already records each user's provider and provider subject beside its own identifier,
-which is what lets the EGO migration resolve a member by subject first. The direction:
+which is what lets the EGO import resolve a member by subject first. The direction:
 
 - a person in Usher may hold several identities, each an issuer and subject;
 - an administrator links two identities to one person as a recorded act with an audit event of its own,
@@ -929,4 +929,4 @@ with a refresh token, on a password reset, on a "not before" revocation, and whe
 Related: the erasure item above, which decides what may be kept about a person; the "revoke user
 everywhere" item above, which a deletion's revocation would use; the identity provider features table in
 [admin-model.md](admin-model.md), whose admin events row anticipates learning of a deleted account
-without designing it; and the EGO migration (#216), which resolves members by subject first.
+without designing it; and the EGO import (#216), which resolves members by subject first.

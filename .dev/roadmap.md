@@ -340,9 +340,9 @@ verified flag per account, so a secondary address is a custom attribute it never
 needs a verification flow of Usher's own. See "One account, several addresses, and only verified
 ones bind" in [decisions.md](design/decisions.md).
 
-### Define resource derivation for migration
+### Define resource derivation for import
 
-`architecture.md`'s migration table maps each EGO study group to an Usher resource one to one. That holds only where a resource corresponds to an entity with its own creation operation. Where an instance's resources instead correspond to a registered vocabulary or to an attribute of some other entity, there is no creation operation to map and the step needs its own definition.
+[admin-model.md](design/admin-model.md)'s EGO replacement steps map each EGO study group to an Usher resource one to one. That holds only where a resource corresponds to an entity with its own creation operation. Where an instance's resources instead correspond to a registered vocabulary or to an attribute of some other entity, there is no creation operation to map and the step needs its own definition.
 
 Two rules for that step. Derive resources from the registered vocabulary, never by enumerating distinct values found in data: where an instance has both, the accumulated set drifts from the curated one, including near-duplicate spellings of the same identifier, and enumerating splits one resource in two so that a grant on either silently misses the other's records. And reconcile before creating, since the failure is fail-closed and therefore presents as missing data rather than as an error.
 
@@ -513,7 +513,7 @@ Schema implementation and migration tooling. Integrity controls: transactions, f
 
 Requirements that surfaced while earlier units were reviewed, held here so each later unit's brief starts from them.
 
-- **EGO migration.** It is the first unit to give its transaction a timeout of its own, so it commits a test against a real store showing that timeout, not the store's, is the one applied.
+- **EGO import.** It is the first unit to give its transaction a timeout of its own, so it commits a test against a real store showing that timeout, not the store's, is the one applied.
 - **Every unit, for its settings (decided by the developer, 2026-11-09).** The controller reads a setting only once code uses it. Each unit adds its variables, the operator page's rows and their local-development values in the commit that brings the code using them. The grants unit's `USHER_GRANT_RATE_THRESHOLD` is optional, defaulting to 10 operations within 60 seconds.
 - **Every unit building a Management API operation.** The contract already lists each operation's `503` codes, from the design. The unit checks that list against what its code can answer, and corrects whichever is wrong.
 - **A contract test, once the exchange has landed.** Every `$ref` in `openapi.json` resolves, and every code an implemented route can answer appears among its responses, so the contract and the code cannot drift apart unnoticed.

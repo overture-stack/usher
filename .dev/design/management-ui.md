@@ -67,11 +67,11 @@ Stage rather than preferences:
   with variants by class composition. Custom properties are the one input common to both, since
   Tailwind v4 defines its theme as them, shadcn's convention is CSS variables for colour, and a
   CSS-in-JS runtime reads `var(--x)` without difficulty. A theme object would be correct for a host
-  today and wrong for the same host after a migration already decided.
+  today and wrong for the same host after a move already decided.
 
   **The two-stack case is the expected path rather than a hedge.** The first host's move to the
   utility-class stack is decided and unstarted, with no replacement framework chosen, so this package
-  ships while that host is still on CSS-in-JS and the host migrates underneath it afterwards. Same
+  ships while that host is still on CSS-in-JS and the host moves stacks underneath it afterwards. Same
   package, same host, two stacks, in that order, with no re-theming in between. That is what the
   custom-properties input is for, and without it the package would need retheming exactly when
   the host has the least attention to spare.
@@ -129,7 +129,7 @@ lessons are recorded here and the example is not cited as a place to look.
 described something other than what a package must support: a client-side session check framed as a
 browser-only architecture, the host's outgoing styling system, and an unmerged pull request
 described as one of the platform's packages. Each was caught, none by this side. Where a
-host is mid-migration, "how it works now" and "what it will need" diverge, and a published interface
+host is between stacks, "how it works now" and "what it will need" diverge, and a published interface
 has to be built against the second.
 
 The practice that follows is cheap: label an integration fact as current implementation or durable

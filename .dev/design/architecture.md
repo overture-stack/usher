@@ -24,8 +24,8 @@ EGO was Overture's previous combined identity and authorization service. It mana
 and access policies. Usher replaces EGO's authorization responsibilities entirely; Keycloak (the
 IdP already deployed alongside EGO) handles the identity responsibilities.
 
-EGO is deprovisioned once the migration is complete. See [admin-model.md](admin-model.md) for the
-migration steps.
+EGO is deprovisioned once the EGO replacement is complete. See [admin-model.md](admin-model.md)
+for the replacement steps.
 
 ### Studies management service (retired)
 
@@ -41,7 +41,7 @@ reach which study. All of its operations are absorbed by Usher:
 | List users in a study                | `GET /admin/resources/{id}/grants`                   |
 | Create EGO policy for study          | Implicit: resource creation creates the access scope |
 
-The service is retired once Usher's resource management API is live and migrated data is verified.
+The service is retired once Usher's resource management API is live and imported data is verified.
 
 ### SONG (narrowed role)
 

@@ -20,7 +20,7 @@ Four pieces must be working together for the iMS UAC integration phase to start 
 3. The Arranger adapter injecting per-resource SQON filters at query time, derived from the grants fetched from Usher by the bridge
 4. Enforcement composed at a boundary inherited by every Arranger read path (hits, aggregations, saved sets and download), verified by a shared test asserting a denied principal sees nothing on each of them
 
-**Migrating the portal off EGO is not among them.** Phase 1 runs on `overture-dev`, which has no
+**Moving the portal off EGO is not among them.** Phase 1 runs on `overture-dev`, which has no
 EGO at all, so the move belongs to a later phase.
 
 Working backwards: two weeks of integration buffer means implementation must be functionally
@@ -347,7 +347,7 @@ services, using different fields for the same role, at matching granularity. The
 stays there because none of it constrains Usher's design, and stating it here would make an
 instance's configuration read as a platform rule.
 
-One general finding is worth keeping on this side: **migration must derive resources from a
+One general finding is worth keeping on this side: **an import must derive resources from a
 registered vocabulary rather than by enumerating values found in data.** Where an instance has both,
 the accumulated set drifts from the curated one, including near-duplicate spellings of the same
 identifier. Enumerating splits one resource in two, and a grant on either silently misses the
@@ -588,7 +588,7 @@ trade rather than inheriting it. See the lifetime-versus-duration decision in
 [../design/decisions.md](../design/decisions.md) and the long-running operation item in
 [../roadmap.md](../roadmap.md).
 
-**What it gated:** the bridge's cache window sizing, and the migration baseline, since Usher's
+**What it gated:** the bridge's cache window sizing, and the EGO replacement baseline, since Usher's
 token lifetime should not exceed what it replaces without a reason.
 
 **The baseline is satisfied by a wide margin.** The designed Usher token lifetime is five minutes,
@@ -599,7 +599,7 @@ reason to lengthen it.
 principal keeps minting access tokens until their refresh token stops working, so the current
 worst-case window is bounded by the 12-hour refresh lifetime rather than the 3-hour access
 lifetime, unless revocation invalidates stored refresh tokens server-side. EGO persists refresh
-tokens, so it may; that is worth confirming, because the migration is measured against it
+tokens, so it may; that is worth confirming, because the replacement is measured against it
 and the difference between 3 and 12 hours is the difference between a good improvement and
 a large one.
 
@@ -803,6 +803,6 @@ since they are contract concerns; anything true only of one instance belongs the
 that records only an outcome can keep passing for a reason that has stopped being true. A case
 asserting "empty grants yields no access" currently holds on the submission path because of a
 particular library pairing rather than because of the query language, so it would stay green through
-a migration that breaks it. Either expectations carry which layer is responsible for an outcome, or
+a change of library that breaks it. Either expectations carry which layer is responsible for an outcome, or
 a separate test class pins the emitted query. The neutral-terms design above is unaffected and still
 correct; this is an additional test class, not a change to the corpus format.

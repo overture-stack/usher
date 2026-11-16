@@ -422,7 +422,7 @@ The general form is worth recognizing, because it appeared twice on this path fr
 directions: **a safety property attributed to the wrong layer.** Operator documentation attributed
 a behaviour to a name. Separately, a finding that a submission service "fails secure on empty query
 combinations" attributed that guarantee to the query language when it belonged to a particular
-library pairing, so it inverts silently on migration. Neither misattribution produces an error when
+library pairing, so it inverts silently when that pairing changes. Neither misattribution produces an error when
 what it depends on changes, which is why the check has to be execution and not reading.
 
 **Enforcement must be installed at every layer that serves protected data.** An instance where

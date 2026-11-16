@@ -351,7 +351,7 @@ otherwise think Usher were one of them.
 
 ## Field against field name, and how to tell which
 
-**The same ambiguity cost Arranger a painful migration, so it is checked here rather than trusted.**
+**The same ambiguity cost Arranger a painful rewrite, so it is checked here rather than trusted.**
 A field is the whole key-and-value unit carried by a record; the field name is the key; the value is
 what that record holds there.
 

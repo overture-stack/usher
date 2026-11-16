@@ -22,7 +22,7 @@ This is a hard design boundary. A decision is computed from the policy alone, th
 filter returned to the requesting application, which is where it meets the data. That covers
 content-based rules such as "access if fieldA equals X": the rule names a field and a value, and
 the application resolves it. The data itself is never modified as a side effect of a policy
-decision. There are no permission-driven data migrations and no field redactions written back to
+decision. There are no permission-driven data rewrites and no field redactions written back to
 the source. No synthetic columns are added to support access logic.
 
 This matters for two reasons:
@@ -31,7 +31,7 @@ This matters for two reasons:
 corrupt, alter, or annotate source records. Any system that reads the underlying store directly
 (outside Usher's control) sees exactly what was submitted.
 
-**Non-invasive adoption.** Usher can be applied to an existing dataset without any migration or
+**Non-invasive adoption.** Usher can be applied to an existing dataset without any rewrite or
 transformation of the stored records. The access policy layer is additive and external. The data
 layer is untouched.
 

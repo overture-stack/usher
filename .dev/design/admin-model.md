@@ -70,19 +70,19 @@ grant through the same permissions system that governs all users.
 
 ## EGO replacement scope
 
-Usher is a full replacement for EGO, not an integration partner. The migration path for
+Usher is a full replacement for EGO, not an integration partner. The replacement path for
 EGO-based instances (primarily iMS):
 
-1. **Resource migration.** Enumerate EGO groups named by a study's identifier and a prefix the
+1. **Resource import.** Enumerate EGO groups named by a study's identifier and a prefix the
    deployment configures, for example `STUDY-<id>`; a study may have several, one per service that
    reads them. Create one Usher resource per study, mapping the study identifier to the resource's
    name and metadata.
-2. **Resource user migration.** Map EGO group members to Usher `grants` rows. EGO user UUIDs resolve
+2. **Membership import.** Map EGO group members to Usher `grants` rows. EGO user UUIDs resolve
    to Keycloak user IDs (both systems use Keycloak-issued UUIDs for the same user population).
-   A membership naming the administrator running the migration is refused and never written, as
+   A membership naming the administrator running the import is refused and never written, as
    the standard grant endpoint refuses self-targeting; that administrator reaches the resource
    through the self-grant flow below.
-3. **Policy migration.** EGO policies (each named like its group, such as `STUDY-<id>`, with
+3. **Policy import.** EGO policies (each named like its group, such as `STUDY-<id>`, with
    `WRITE` permission for the corresponding group) map to Usher category grants. The category in
    Usher is instance-specific; the studies management service's implicit "access to this study"
    becomes an explicit category grant (for example, `registered` or `controlled_access` depending
@@ -90,29 +90,29 @@ EGO-based instances (primarily iMS):
 4. **Service retirement.** The studies management service (the orchestration layer over EGO) is
    retired. Its operations (creating a study group, adding a member, removing a member) become
    Usher admin API calls.
-5. **Host application migration.** What must migrate is any code that either calls EGO's
+5. **Host application change.** What must change is any code that either calls EGO's
    authorization endpoints or builds request context from EGO-derived claims. Two categories:
 
    - **Services calling EGO endpoints directly.** Portals and gateway APIs that validate EGO
      tokens or resolve EGO group memberships before serving requests. These are updated to use
      Usher's bridge and token exchange. For services that verify tokens by public key (RS256),
-     **key rotation is a required migration step, distinct from code changes**: Keycloak uses its
+     **key rotation is a required step of the replacement, distinct from code changes**: Keycloak uses its
      own signing key pair, so the configured public key at each dependent service must be updated
      to the Keycloak signing key before the first Keycloak-issued token is accepted. A service
      still configured with EGO's public key will reject all Keycloak-issued tokens at the signature
-     verification step, regardless of any other migration work.
+     verification step, regardless of any other replacement work.
    - **Authorization callbacks reading EGO-populated context.** Search instances may currently
      express authorization by reading EGO claims that a host application placed into request
      context. That callback code lives in the host application's own repo, not in the data
      service's repo, and would not appear in any audit of the ushered service itself. Identify and
-     migrate these in the same pass.
+     change these in the same pass.
 
    Ushered services that perform no authentication themselves
    (for example, a search-server instance relying entirely on host-supplied context) are not
-   in scope for that migration as shipped: there is no EGO call to repoint. What requires migration
+   in scope for that replacement as shipped: there is no EGO call to repoint. What requires change
    is the host code that constructs that context.
 
-This migration must be planned and coordinated before any EGO infrastructure is deprovisioned.
+This replacement must be planned and coordinated before any EGO infrastructure is deprovisioned.
 
 ---
 
@@ -376,7 +376,7 @@ decision on PHI implications before design begins.
 
 ## Service accounts
 
-Automated processes (Lyric at ingest, migration tooling, monitoring scripts) need to interact
+Automated processes (Lyric at ingest, import tooling, monitoring scripts) need to interact
 with Usher without being admins. A service account is a narrowly-scoped, non-human
 identity with an explicitly enumerated permission set.
 

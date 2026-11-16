@@ -895,7 +895,7 @@ This table is the index. A term whose collision needs more than a row is expande
 **EGO**
 Overture's previous authorization service (managing users, groups, and policies). Usher is
 EGO's full replacement, not an integration: instances that adopt Usher retire EGO and the
-studies management service that orchestrated EGO. Existing EGO group data migrates to Usher
+studies management service that orchestrated EGO. Existing EGO group data imports to Usher
 resources and who belonged to them; see [architecture.md](architecture.md).
 
 **SONG**
@@ -965,20 +965,23 @@ sentence about a process names the component it is an instance of.
 **A bridge needs no qualifier either way.** There is one per application process already, so "each
 bridge" and "per bridge" say what "bridge instance" was reaching for.
 
-### Migration, schema and data
+### Migration and import
 
-**A schema migration** changes the policy store's structure. Each is one of the numbered SQL files
-carried by a controller release, applied before a rollout by the migration command, `dist/migrate.js`,
+**A migration** changes the policy store's structure. Each is one of the numbered SQL files carried
+by a controller release, applied before a rollout by the migration command, `dist/migrate.js`,
 connected as the schema migration role, which owns the schema. Its settings are named for it, as
-`USHER_SCHEMA_MIGRATION_DATABASE_URL` is.
+`USHER_SCHEMA_MIGRATION_DATABASE_URL` is. "Schema migration" says the same where a reader could take
+the bare word in its everyday sense.
 
-**A data migration** brings another system's access records into Usher while Usher runs, through the
-Management API. The EGO migration is the first, at `/admin/migrations/ego`, and each run is recorded
-as a `migration.run` event.
+**An import** brings another system's access records into Usher while Usher runs, through the
+Management API. The EGO import is the first, at `/admin/imports/ego`, and each run is recorded as an
+`import.run` event. It is one step of the EGO replacement, which also retires the studies management
+service and changes the host applications that called EGO.
 
-**Here:** where a reader could take either, the word is qualified. Bare, it means a data migration,
-as the Management API and the audit catalogue use it. The exception is the schema's own record,
-`schema.md`, and the controller's `migrations` module, whose only subject is schema migrations.
+**Here:** a migration is a schema migration, and nothing else is called one. Other moves keep words
+of their own: an invitation is claimed, an instance moves to another host, and a deployment changes
+identity provider. A JavaScript `import` and Keycloak's realm import are their own tools' terms, not
+this one.
 
 ### Relation
 
