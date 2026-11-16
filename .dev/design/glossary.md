@@ -43,6 +43,15 @@ A non-human identity used by Overture services (for example Lyric) to perform sy
 operations in Usher, such as creating a resource at submission time. Authenticated via Keycloak
 client credentials, not user sessions. See [admin-model.md](admin-model.md).
 
+**First user**
+The identity-provider account that nominates Usher's first admin, possibly itself, and holds no
+power in Usher once an admin accepts. Its identity provider marks it with a role, `usher-first-user`
+by default. See [admin-model.md](admin-model.md) § Bootstrap.
+
+**Base user**
+A user holding no grant, who reaches only what resources' base tiers allow. Anonymous visitors reach
+a base tier too, but hold no account, so they are not users.
+
 **Identity**
 What the identity provider validates and asserts _about_ a principal: the answer to who someone is,
 where the principal is the actor asking. Usher records each of a principal's identities as one
@@ -645,8 +654,8 @@ naming a data-plane role, and the same person may hold one separately. Distinct 
 role, though a single person can hold both.
 
 **Viewer**
-The base data-plane role: read on the records reached by its grant, and no authority over anyone else's
-access. Every other data-plane role is defined against it.
+The data-plane role every other data-plane role is defined against: read on the records reached by
+its grant, and no authority over anyone else's access.
 
 **Curator**
 The data-plane role carrying create, read, update and delete on the records reached by its grant.

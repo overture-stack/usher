@@ -435,8 +435,8 @@ token issued for a resource covers both layers, but each layer must have an adap
 and enforces it. Omitting an adapter at any layer is a deliberate architectural decision that leaves
 that path open, not an acceptable default.
 
-**Platform admin bypass is an adapter-layer decision.** A PEP adapter may detect the
-`usher-platform-admin` role in the IdP token and skip SQON filter injection for that request,
+**Platform admin bypass is an adapter-layer decision.** A PEP adapter may learn that the principal
+is on Usher's list of admins, never from a role in the IdP token, and skip SQON filter injection for that request,
 allowing platform admins to query without category restrictions. This bypass does not produce
 an Usher token entry; the adapter must log each bypass event with user ID, timestamp, and reason
 (`platform_admin_bypass`). The bypass is optional per adapter and per instance; see

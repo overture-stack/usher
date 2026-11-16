@@ -142,60 +142,52 @@ This replacement must be planned and coordinated before any EGO infrastructure i
 
 ### How Usher determines admin status
 
-Usher reads admin status from the validated OIDC token on every request to the admin API. No
-database lookup is required; the token claim is authoritative.
-
-The claim check is OIDC-provider-specific and configurable via the OIDC connector:
-
-- **Keycloak (default connector):** `realm_access.roles` contains the configured admin
-  role name (default: `usher-platform-admin`).
-- **Generic OIDC connector:** a configurable top-level claim (e.g. `usher_admin: true`), or a
-  path in the token namespace, evaluated against a configured expected value.
-
-Usher never caches or persists admin status between requests. The token is validated and the claim
-is inspected on every admin API call. This is the fail-secure default: if the IdP revokes the
-admin role, the next token issued will not carry the claim, and that user's access to the admin
-API ends at the next token expiry. Keep IdP token lifetimes short (15 minutes or less; see the
-Non-obvious constraints section), which is the identity provider's own setting rather than the
-Usher token's five-minute default.
+Usher keeps its own list of admins and reads admin status from it on every request to the
+Management API. The identity provider's role confers nothing once the first admin has accepted, so
+every act that makes an admin is Usher's own and recorded in its audit log, whoever administers the
+identity provider. Usher never caches admin status between requests, so a change to the list holds
+from the next request.
 
 **Adversarial framing:** if an admin account is compromised, the attacker gains grant
-management power. But every action they take is logged, they do not gain silent unlogged data
-access, and their admin status disappears automatically when the IdP role is revoked.
+management power. But every action they take is logged, and they do not gain silent unlogged data
+access.
 
 ---
 
 ## Bootstrap: how the first admin is established
 
-Usher has no bootstrap logic of its own. The identity provider handles this entirely.
+The identity provider names a first user, and the first user nominates the first admin. Usher has
+no admin until one accepts:
 
-**For Keycloak (the default):**
+1. A Keycloak administrator gives Kim the first-user role, `usher-first-user` by default.
+2. Kim signs in. Usher records Kim as a base user, so the audit log can name who nominated the first
+   admin.
+3. Kim nominates the first admin: themself, or a user who has signed in at least once.
+4. The nominee accepts, and Usher records its first admin.
+5. From then on the first-user role confers nothing, whoever holds it. Kim is a base user unless
+   Kim was the nominee.
 
-1. At Keycloak instance time, a Keycloak administrator is created via Keycloak's own
-   bootstrap mechanism (the `KC_BOOTSTRAP_ADMIN_USERNAME` / `KC_BOOTSTRAP_ADMIN_PASSWORD`
-   environment variables, set before first launch). In Overture's instances, Terraform's Keycloak
-   provider configures the realm and its clients at deploy time, reducing the need for manual
-   Keycloak UI work.
-2. That Keycloak admin creates a realm for Usher and defines a realm role named
-   `usher-platform-admin` (the exact name is configurable in the Usher connector config).
-3. The Keycloak admin assigns that role to the user who will be the first Usher admin.
-4. When that user authenticates, their OIDC token carries the `usher-platform-admin` claim.
-   Usher reads the claim, recognizes admin status, and the management API and UI become
-   available. No Usher-side initialization is required.
+**Until an admin has accepted, every Management API operation answers `403`**, except the first
+user nominating and the nominee accepting. The health routes and the token exchange answer as
+usual: nothing is registered yet, so a token reaches nothing.
 
-Usher has no `BOOTSTRAP_ADMIN_EMAIL` configuration, no `platform_admins` table, and no startup
-warning for missing admins. Adding or removing admins is a Keycloak (or IdP) operation.
-Usher application code has no role in that lifecycle.
+**Each step is recorded:** the nomination, and its acceptance, which makes the first admin and is
+recorded at `critical`.
 
-**For alternative OIDC providers:** the concept is identical. The provider-specific mechanism
-for assigning the admin signal to a user (a role, a group, a custom claim) is
-configured in the connector. Usher reads the result from the token.
+**Built after the first release, each as a forward migration:** admins nominating and removing
+admins, recovery when no admin can sign in, an admin owning a resource they registered, and adding
+grants from a list of email addresses. Recovery is a command in the controller's image, run once the
+way the schema migration command is, so it needs no particular pipeline, and its procedure in
+docs/deployment.md § Break-glass access serves any platform.
+
+**For alternative OIDC providers:** the provider's mechanism for marking the first user (a role, a
+group, a custom claim) is configured in the connector, and confers nothing once an admin exists.
 
 **Security note:** the Keycloak realm administrator credential is infrastructure-tier: store it
 in a secrets manager, scope it tightly, and log its use at the instance platform level.
-Usher's audit log records application-layer policy changes; Keycloak's own audit logs record
-IdP-level admin operations. Both are needed for a complete audit trail (see the Non-obvious
-constraints section).
+Usher's audit log records application-layer policy changes, the making of admins among them;
+Keycloak's own audit logs record IdP-level admin operations. Both are needed for a complete audit
+trail (see the Non-obvious constraints section).
 
 ---
 
@@ -302,8 +294,9 @@ decision.
 
 An admin who needs to view data across all resources without a self-grant (for example, a portal
 admin responding to a governance inquiry) can be accommodated at the
-adapter layer rather than through an Usher token entry. The PEP adapter detects the
-`usher-platform-admin` role in the IdP token and applies no SQON filter for that request.
+adapter layer rather than through an Usher token entry. The PEP adapter learns that the principal
+is on Usher's list of admins, never from a role in the IdP token, and applies no SQON filter for
+that request. How an adapter learns it is designed with the bypass, which is not built.
 
 This is distinct from the self-grant flow:
 
@@ -516,13 +509,15 @@ which is why CloudEvents puts routable facts in the envelope.
 
 ## OIDC connector design
 
-Usher reads all admin state from the validated OIDC token. The connector interface must expose:
+Usher reads identity from the validated OIDC token, and admin status from its own list. The connector
+interface must expose:
 
 - **Token validation:** verify signature against the provider's JWKS, check expiry and issuer.
-- **Claim extraction:** pull `sub` (user subject), `email`, and the admin indicator.
-- **Admin claim configuration:** the claim path and value to check are configurable. Default for
-  Keycloak: `realm_access.roles` contains `usher-platform-admin`. For a generic OIDC provider:
-  a configurable top-level claim path and expected value.
+- **Claim extraction:** pull `sub` (user subject), `email`, and the first-user indicator.
+- **First-user claim configuration:** the claim path and value marking the first user are
+  configurable. Default for Keycloak: `realm_access.roles` contains `usher-first-user`. For a
+  generic OIDC provider: a configurable top-level claim path and expected value. The claim matters
+  only until the first admin accepts.
 - **Service account detection, for refusal only:** where an operation is for users alone, a token
   carrying any sign of a service account is refused. In Keycloak, the signs are a `client_id` claim,
   a `preferred_username` starting `service-account-`, or the realm role the instance configures as
@@ -608,20 +603,20 @@ database access controls are a separate layer. Document this boundary in the ins
 architecture document.
 
 **Keycloak admin operations are outside Usher's audit scope:** actions taken by Keycloak realm
-administrators (assigning or revoking the admin role, disabling user accounts) are
+administrators (assigning the first-user role, disabling user accounts) are
 logged by Keycloak's own audit system, not by Usher's audit log. The boundary must be explicitly
 documented so that security auditors understand that Usher's audit log is not a complete record
 of all privilege changes on the platform. Both logs are required for a complete audit trail.
 
-**Whoever manages a realm's users can make a platform admin:** in Keycloak, holding `manage-users` for a
-realm is enough to assign any role in that realm that is not one of Keycloak's own admin roles, and `usher-platform-admin` is not one. So every administrator who manages the realm's
-users can make someone a platform admin, themselves included, and is trusted at that level: a
-realm's administrators are its system administrators (accepted 2026-10-13). A role meant only for
-user support must get its rights through Keycloak's fine-grained admin permissions rather than
-`manage-users`, so that it cannot assign roles. Such an assignment is recorded only in Keycloak's
-own audit log, as the constraint above says.
+**Whoever manages a realm's users can name a first user, and that confers nothing once an admin
+exists:** in Keycloak, holding `manage-users` for a realm is enough to assign any role in that realm
+that is not one of Keycloak's own admin roles, and `usher-first-user` is not one. Until the first
+admin accepts, a realm's administrators are trusted at that level, since a first user they name
+nominates that admin (accepted 2026-10-13, narrowed 2026-11-15 to the time before the first admin).
+A role meant only for user support must get its rights through Keycloak's fine-grained admin
+permissions rather than `manage-users`, so that it cannot assign roles.
 
-**Token TTL bounds the deprovisioning lag:** when an admin's role is revoked in the identity
+**Token TTL bounds the deprovisioning lag:** when an admin's account is disabled in the identity
 provider, any token they already hold remains valid until expiry. Instances must configure short
 IdP token lifetimes (15 minutes or less) to bound this exposure window. Usher's fail-secure
 default means it always reads the claim from the current token; it never trusts a cached admin

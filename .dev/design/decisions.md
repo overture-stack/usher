@@ -2672,6 +2672,32 @@ than moot.
 
 ---
 
+### Usher keeps its own admins, and a first user only nominates the first
+
+**The threat.** Where an identity provider's role makes an admin, every act of making or removing an
+admin happens in the identity provider and is recorded, if at all, only in its own log. Usher's
+audit log cannot answer who made a person an admin, or when, and launching without that
+accountability would leave the most powerful act on the platform outside the trail.
+
+**Decision (2026-11-15): Usher keeps its own list of admins, and the identity provider's role only
+names a first user, who nominates the first admin.** The first user is recorded as a base user,
+nominates the first admin, possibly themself, and holds no power in Usher once that admin accepts.
+Until an admin has accepted, every Management API operation answers `403` but the nomination and its
+acceptance. From then on the role confers nothing, whoever holds it. The trace is in
+[admin-model.md](admin-model.md) § Bootstrap.
+
+**The first slice ships before the first release (decided 2026-11-16)**: the list, the first user's
+nomination and its acceptance, and the `403` before an admin exists. Those decide the identity
+provider's role and the controller's settings, so building them first leaves a deployment's
+configuration unchanged by everything after: admins nominating and removing admins, recovery when no
+admin can sign in, an admin owning a resource they registered, and adding grants from a list of
+email addresses. Each of those is a forward migration.
+
+**Rejected: an identity-provider role that makes admins**, the design before this one, for the
+threat above.
+
+---
+
 ### Ownership assignment is instance policy, not Usher behaviour
 
 A submitter becoming the owner of what they submit is a **rule chosen by the instance**, not
