@@ -25,7 +25,7 @@ export const USHER_SCHEMA = 'usher';
 
 /**
  * A role that may read every table of a test database's schema and write nothing, which a deployment
- * does not create: the role a dry run of the EGO migration completes under (#216 Q16). It is created
+ * does not create: the role a dry run of the EGO import completes under (#216 Q16). It is created
  * on a PostgreSQL the first time a test asks for it, beside the deployment's two, and given read
  * access to a database only when a test asks, through {@link TestDatabase.readOnlyUrl}.
  */

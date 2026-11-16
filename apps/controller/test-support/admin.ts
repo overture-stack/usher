@@ -118,7 +118,7 @@ export interface ResourceRegistration {
 
 /**
  * The longest a resource's externalId may be, in characters after NFC (#211 Q3): a registration with a
- * longer one is refused, and the EGO migration reports a study whose id is longer as `tooLong`.
+ * longer one is refused, and the EGO import reports a study whose id is longer as `tooLong`.
  */
 export const EXTERNAL_ID_MAXIMUM_LENGTH = 128;
 
@@ -265,7 +265,7 @@ const PATHS = {
   categories: 'admin/categories',
   category: (scopedName: string): string =>
     `admin/categories/${segment(scopedName)}`,
-  egoMigration: 'admin/migrations/ego',
+  egoImport: 'admin/imports/ego',
   globalRevocation: 'admin/revocations/global',
   grant: (id: string): string => `admin/grants/${segment(id)}`,
   grantDecisions: (id: string): string =>
@@ -321,7 +321,7 @@ export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
   ...routes('/admin/grants/{id}', ['DELETE', 'PATCH']),
   ...routes('/admin/grants/{id}/decisions', ['POST']),
   ...routes('/admin/me/grants', ['GET']),
-  ...routes('/admin/migrations/ego', ['POST']),
+  ...routes('/admin/imports/ego', ['POST']),
   ...routes('/admin/people/grants', ['POST']),
   ...routes('/admin/people/revocations', ['POST']),
   ...routes('/admin/people/revocations/lifts', ['POST']),
@@ -1291,11 +1291,11 @@ export const readAudit = (
   );
 
 /**
- * Migrates EGO's study groups from an export of them, as assumed: `POST /admin/migrations/ego`, for
+ * Imports EGO's study groups from an export of them, as assumed: `POST /admin/imports/ego`, for
  * administrators alone, taking `{ audiences, export }` and running dry unless `apply: true` is
  * added beside them. `audiences` names, by id, the applications serving each resource the run
- * registers (ruled): an empty list is refused 422 `migrationNeedsAnAudience`, and an id naming no
- * registered application 422 `unknownApplication`. Either run answers 200 with the migration's
+ * registers (ruled): an empty list is refused 422 `importNeedsAnAudience`, and an id naming no
+ * registered application 422 `unknownApplication`. Either run answers 200 with the import's
  * report as its JSON body, returned unread; a dry run is a read-only transaction writing nothing,
  * its audit row included (#216 Q16). The export is sent as given, so this function holds no view of
  * its format.
@@ -1305,7 +1305,7 @@ export const readAudit = (
  * @param run the audiences, by id, and `apply: true` for a real run.
  * @param overrides departures from the request.
  */
-export const migrateFromEgo = (
+export const importFromEgo = (
   caller: AdminCaller,
   egoExport: unknown,
   {
@@ -1323,7 +1323,7 @@ export const migrateFromEgo = (
         export: egoExport,
       },
       method: 'POST',
-      path: PATHS.egoMigration,
+      path: PATHS.egoImport,
     },
     overrides,
   );
@@ -1552,7 +1552,7 @@ const problem = <Code extends string, Status extends number>(
  * - 409: `alreadyExists`; `alreadyHolds`; `doesNotHold`, a key revoked already among them;
  *   `grantsOrInvitationsRemain`, retiring while a non-owner live grant or a pending invitation remains,
  *   its text saying to revoke them first; `resourceNeedsAnOwner`, revoking or declining a resource's
- *   last owner grant; `migrationInProgress`, a run of the EGO migration while another holds its lock;
+ *   last owner grant; `importInProgress`, a run of the EGO import while another holds its lock;
  *   `applicationKeyLimit`, an issue for an application holding {@link APPLICATION_LIVE_KEY_LIMIT} live
  *   keys already.
  * - 413: `bodyTooLarge`, a body over its endpoint's limit ({@link BODY_LIMIT_BYTES}), the detail naming
@@ -1561,12 +1561,12 @@ const problem = <Code extends string, Status extends number>(
  * - 422, a well-formed request breaking a rule, a member named by the operation's 422 included:
  *   `registrationHasHistory`, deleting a registration that ever held a grant or an invitation, its
  *   text saying to retire it instead; `unknownApplication`, an unregistered application in a
- *   registration's body, the whole registration refused, or in an EGO migration's `audiences`;
- *   `migrationNeedsAnAudience`, an EGO migration whose `audiences` is empty (ruled);
+ *   registration's body, the whole registration refused, or in an EGO import's `audiences`;
+ *   `importNeedsAnAudience`, an EGO import whose `audiences` is empty (ruled);
  *   `ownerGrantsDoNotExpire`, an owner grant given an expiry. Other 422s carry no code the rulings
  *   name.
  * - 503: `directoryUnavailable`, an address operation the directory cannot answer;
- *   `migrationNotConfigured`, a run of the EGO migration while its settings are missing, before its
+ *   `importNotConfigured`, a run of the EGO import while its settings are missing, before its
  *   export is read; `storeUnavailable`, an operation that would write on a controller whose database
  *   role may only read, failing closed with no partial effect (#216's refusals and the read-only role).
  */
@@ -1588,9 +1588,9 @@ export const PROBLEMS = Object.freeze({
   grantNotFound: problem('grantNotFound', 404),
   grantsOrInvitationsRemain: problem('grantsOrInvitationsRemain', 409),
   holderNotFound: problem('holderNotFound', 404),
-  migrationInProgress: problem('migrationInProgress', 409),
-  migrationNeedsAnAudience: problem('migrationNeedsAnAudience', 422),
-  migrationNotConfigured: problem('migrationNotConfigured', 503),
+  importInProgress: problem('importInProgress', 409),
+  importNeedsAnAudience: problem('importNeedsAnAudience', 422),
+  importNotConfigured: problem('importNotConfigured', 503),
   noAuthorityOnResource: problem('noAuthorityOnResource', 403),
   ownerGrantsDoNotExpire: problem('ownerGrantsDoNotExpire', 422),
   ownersAndAdministratorsOnly: problem('ownersAndAdministratorsOnly', 403),
@@ -1720,13 +1720,13 @@ export const FIELD_CATEGORY_MEMBER = 'fieldCategory';
 
 /**
  * The largest request body each endpoint reads, in bytes (ruled, "#216's reasons, export size and
- * prefixes" 2): 10 MiB for the EGO migration's endpoint alone, which checks the administrator before
+ * prefixes" 2): 10 MiB for the EGO import's endpoint alone, which checks the administrator before
  * it reads the body; 64 KiB for every other, as #208 Q13 set for the exchange. A body over its limit
  * is refused 413 `bodyTooLarge` in problem details whose detail names the limit and holds nothing of
  * the body (ruled, "#216: faults mid-run, 401 and 413" 4); {@link namesBodyLimit} reads the detail.
  */
 export const BODY_LIMIT_BYTES = Object.freeze({
-  egoMigration: 10_485_760,
+  egoImport: 10_485_760,
   everyOther: 65_536,
 });
 
@@ -2914,7 +2914,7 @@ export interface SlowlySent extends AdminResponse {
  * whole body, then the body a chunk at a time, waiting after each, and records whether the answer
  * arrived before the body ended. Once the answer arrives, nothing more of the body is written, and the
  * connection ends once the answer has been read. For a test that a body is refused without being read
- * (ruled: the EGO migration's endpoint checks the administrator before it reads the body). The
+ * (ruled: the EGO import's endpoint checks the administrator before it reads the body). The
  * operation's path and headers are its own, recorded as {@link sendRaw} records them, with the
  * departures given.
  *

@@ -245,22 +245,22 @@ export interface PendingSettings {
    * study from such a policy and writes its holders no grant; it lists each holding in the report's
    * `allStudyAccess`, for the administrator to decide each person deliberately.
    */
-  egoMigrationAllStudyPolicies: readonly string[];
+  egoImportAllStudyPolicies: readonly string[];
 
   /**
-   * The base tier of each resource the EGO migration registers (#216 Q12); `null`, none, by default,
-   * and a migration run while none is configured is refused before it reads its export.
+   * The base tier of each resource the EGO import registers (#216 Q12); `null`, none, by default,
+   * and an import run while none is configured is refused before it reads its export.
    */
-  egoMigrationBaseTier: 'grant' | 'open' | 'registered' | null;
+  egoImportBaseTier: 'grant' | 'open' | 'registered' | null;
 
   /**
-   * The prefixes the EGO migration reads a study id after in a policy's name, matched as literal text
+   * The prefixes the EGO import reads a study id after in a policy's name, matched as literal text
    * in their configured letter case (#216 Q4, Q7): `PX-` and `PX-FILES-` in iMS. None by default, and a
-   * migration run while none is configured answers 503 `migrationNotConfigured` before it reads its
+   * import run while none is configured answers 503 `importNotConfigured` before it reads its
    * export; an empty prefix, or one listed twice, refuses the controller's start, naming this field's
    * variable (ruled, "#216's reasons, export size and prefixes" 3).
    */
-  egoMigrationPrefixes: readonly string[];
+  egoImportPrefixes: readonly string[];
 
   /**
    * When `grant.rateExceeded` fires: more grant operations by one actor than `operationCount` within

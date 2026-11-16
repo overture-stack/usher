@@ -465,8 +465,8 @@ export const RETENTION_SWEEP: Readonly<{
 });
 
 /**
- * The column of `grant_decisions` marking a decision the EGO migration recorded for a migrated
- * submitter rather than one the person gave: it holds `'migration'` on each acceptance a migration
+ * The column of `grant_decisions` marking a decision the EGO import recorded for an imported
+ * submitter rather than one the person gave: it holds `'import'` on each acceptance an import
  * records, and `null` on a person's own answer.
  * The name is assumed, and kept apart from {@link POLICY_TABLES}, whose columns are those `schema.md`
  * names, until the schema names it.

@@ -16,7 +16,7 @@ live in `test/`, one folder per boundary:
 | `test/audit/`       | the audit log, the log stream and `GET /admin/audit`                         |
 | `test/conformance/` | the conformance corpus, replayed against the controller                      |
 | `test/integration/` | the real bridge running against the controller                               |
-| `test/migration/`   | the migration of EGO's study groups                                          |
+| `test/import/`      | the import of EGO's study groups                                             |
 
 This is a deliberate exception to the rule that a test sits beside the source file it tests. These
 tests pin a contract at a boundary, not a file, so the drift that rule guards against does not

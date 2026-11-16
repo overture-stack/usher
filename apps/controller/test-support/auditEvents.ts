@@ -52,7 +52,7 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
   logoutTokenRefusalTally: 'logoutToken.refusalTally',
   managementTokenRefusal: 'managementToken.refusal',
   managementTokenRefusalTally: 'managementToken.refusalTally',
-  migrationRun: 'migration.run',
+  importRun: 'import.run',
   ownershipTransfer: 'ownership.transfer',
   platformRevocation: 'platform.revocation',
   resourceDeletion: 'resource.deletion',
@@ -321,7 +321,7 @@ const backtickedIn = (text: string): readonly string[] =>
   Array.from(text.matchAll(/`(\w+)`/gu), ([, name]) => name ?? '');
 
 // The names listed in the note below the table whose bold lead opens with an event's type, such as
-// `migration.run`'s counts.
+// `import.run`'s counts.
 const namesListedFor = (
   notes: readonly string[],
   event: string,
@@ -596,14 +596,14 @@ export const emittedType = (event: string): string =>
   `${EVENT_TYPE_PREFIX}${event}`;
 
 /**
- * The counts a `migration.run` event carries on success, as the note below the Events table lists
+ * The counts an `import.run` event carries on success, as the note below the Events table lists
  * them, each by the member naming it: the holdings of an all-study policy the report lists, one a
  * holding as its `allStudyAccess` lists them; the studies holding data without a policy; the grants
  * the run wrote; the resources it registered without an owner; and the studies it registered,
  * reported and skipped. The dry run's operational line ({@link DRY_RUN_LOG_LINE}) carries the same
  * ones.
  */
-export const MIGRATION_RUN_COUNTS = Object.freeze({
+export const IMPORT_RUN_COUNTS = Object.freeze({
   allStudyHoldings: 'allStudyHoldings',
   dataWithoutPolicy: 'dataWithoutPolicy',
   grantsWritten: 'grantsWritten',
@@ -659,38 +659,38 @@ export const EVENT_INSTANT_FORM =
 export const CAUSED_BY_MEMBER = 'causedBy';
 
 /**
- * The member marking an event as the EGO migration's, and its value (ruled, #216 Q8 option 2 and Q15),
+ * The member marking an event as the EGO import's, and its value (ruled, #216 Q8 option 2 and Q15),
  * named here alone: `resource.registration`, `grant.creation` and `grant.decision` carry `origin`
- * `migration` for each write a migration's real run makes, the migrated submitters' recorded
+ * `import` for each write an import's real run makes, the imported submitters' recorded
  * acceptances included, whose actor is the administrator who ran it. An event of a write made through
  * any other operation carries no `origin` (assumed). The decision row's own mark is policy.ts's
  * `DECISION_ORIGIN_COLUMN`, holding the same value.
  */
-export const MIGRATION_ORIGIN = Object.freeze({
+export const IMPORT_ORIGIN = Object.freeze({
   member: 'origin',
-  value: 'migration',
+  value: 'import',
 } as const);
 
 /**
- * The events carrying {@link MIGRATION_ORIGIN} for the migration's writes (ruled, #216 Q15), each also
- * carrying {@link CAUSED_BY_MEMBER} holding the CloudEvents `id` of the `migration.run` event of the run
+ * The events carrying {@link IMPORT_ORIGIN} for the import's writes (ruled, #216 Q15), each also
+ * carrying {@link CAUSED_BY_MEMBER} holding the CloudEvents `id` of the `import.run` event of the run
  * that wrote it (ruled, "#216's export details, member reasons and the run's event" 3), so every
  * registration, grant and decision a run writes is answerable from the trail to that run.
  */
-export const MIGRATION_ORIGIN_EVENT_TYPES: readonly AuditEventType[] =
+export const IMPORT_ORIGIN_EVENT_TYPES: readonly AuditEventType[] =
   Object.freeze(['grant.creation', 'grant.decision', 'resource.registration']);
 
 /**
- * The one operational log line a dry run of the EGO migration writes (ruled: at info, naming the
+ * The one operational log line a dry run of the EGO import writes (ruled: at info, naming the
  * administrator and the counts, since the directory read leaves a trace; the member names assumed): a
  * line carrying no CloudEvents envelope, its `message` naming it, its `level` the logger's info,
- * `actorId` the administrator's subject, and the run's counts under {@link MIGRATION_RUN_COUNTS}' names.
+ * `actorId` the administrator's subject, and the run's counts under {@link IMPORT_RUN_COUNTS}' names.
  */
 export const DRY_RUN_LOG_LINE = Object.freeze({
   actorMember: 'actorId',
   message: Object.freeze({
     member: 'message',
-    value: 'egoMigration.dryRun',
+    value: 'egoImport.dryRun',
   } as const),
 } as const);
 

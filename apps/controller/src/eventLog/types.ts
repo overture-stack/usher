@@ -127,7 +127,7 @@ export type AuditEventType =
   | 'logoutToken.refusalTally'
   | 'managementToken.refusal'
   | 'managementToken.refusalTally'
-  | 'migration.run'
+  | 'import.run'
   | 'ownership.transfer'
   | 'platform.revocation'
   | 'resource.deletion'

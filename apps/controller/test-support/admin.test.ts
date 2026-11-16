@@ -61,7 +61,7 @@ import {
   listResourceFields,
   listResourceGrants,
   listResources,
-  migrateFromEgo,
+  importFromEgo,
   mintLogoutToken,
   mintManagementToken,
   namesBodyLimit,
@@ -476,10 +476,10 @@ const OPERATIONS: readonly Expected[] = [
   {
     body: { audiences: [APPLICATION], export: { policies: [] } },
     call: (caller) =>
-      migrateFromEgo(caller, { policies: [] }, { audiences: [APPLICATION] }),
+      importFromEgo(caller, { policies: [] }, { audiences: [APPLICATION] }),
     method: 'POST',
-    name: 'migrateFromEgo, a dry run',
-    target: '/admin/migrations/ego',
+    name: 'importFromEgo, a dry run',
+    target: '/admin/imports/ego',
   },
   {
     body: {
@@ -488,14 +488,14 @@ const OPERATIONS: readonly Expected[] = [
       export: { policies: [] },
     },
     call: (caller) =>
-      migrateFromEgo(
+      importFromEgo(
         caller,
         { policies: [] },
         { apply: true, audiences: [APPLICATION] },
       ),
     method: 'POST',
-    name: 'migrateFromEgo, applied',
-    target: '/admin/migrations/ego',
+    name: 'importFromEgo, applied',
+    target: '/admin/imports/ego',
   },
 ];
 
@@ -940,22 +940,18 @@ suite('the problem codes and reason vocabularies', () => {
         'applicationKeyLimit',
         'doesNotHold',
         'grantsOrInvitationsRemain',
-        'migrationInProgress',
+        'importInProgress',
         'resourceNeedsAnOwner',
       ],
       413: ['bodyTooLarge'],
       415: ['unsupportedMediaType'],
       422: [
-        'migrationNeedsAnAudience',
+        'importNeedsAnAudience',
         'ownerGrantsDoNotExpire',
         'registrationHasHistory',
         'unknownApplication',
       ],
-      503: [
-        'directoryUnavailable',
-        'migrationNotConfigured',
-        'storeUnavailable',
-      ],
+      503: ['directoryUnavailable', 'importNotConfigured', 'storeUnavailable'],
     });
     assert.ok(
       Object.entries(PROBLEMS).every(([name, { code }]) => name === code),
@@ -1541,18 +1537,14 @@ const bodyReader = async (
 
 suite('a large body sent slowly', () => {
   const body = new Uint8Array(512 * 1024).fill(0x20);
-  const migrate = (recorded: AdminCaller): Promise<AdminResponse> =>
-    migrateFromEgo(
-      recorded,
-      { formatVersion: 1 },
-      { audiences: [APPLICATION] },
-    );
+  const importRequest = (recorded: AdminCaller): Promise<AdminResponse> =>
+    importFromEgo(recorded, { formatVersion: 1 }, { audiences: [APPLICATION] });
 
   test("sends the operation's headers at once, and tells an answer arriving before the body ended", async (context) => {
     const server = await bodyReader(context, 'atOnce');
     const caller: AdminCaller = { token: null, url: server.url };
 
-    const sent = await sendSlowly(caller, migrate, {
+    const sent = await sendSlowly(caller, importRequest, {
       authorizations: [],
       body,
       chunkBytes: 64 * 1024,
@@ -1566,7 +1558,7 @@ suite('a large body sent slowly', () => {
     assert.ok(sent.bytesSentBeforeAnswer < sent.bodyBytes);
     assert.equal(sent.bodyBytes, body.byteLength);
     assert.equal(request?.method, 'POST');
-    assert.equal(request?.target, '/admin/migrations/ego');
+    assert.equal(request?.target, '/admin/imports/ego');
     assert.deepEqual(
       linesNamed(request?.rawHeaders ?? [], 'authorization'),
       [],
@@ -1580,7 +1572,7 @@ suite('a large body sent slowly', () => {
     const server = await bodyReader(context, 'afterBody');
     const caller: AdminCaller = { token: 'management-token', url: server.url };
 
-    const sent = await sendSlowly(caller, migrate, {
+    const sent = await sendSlowly(caller, importRequest, {
       body,
       chunkBytes: 64 * 1024,
       intervalMs: 10,
@@ -1596,9 +1588,9 @@ suite('a large body sent slowly', () => {
     );
   });
 
-  test('allows the EGO migration 10 MiB of body and every other endpoint 64 KiB (ruled)', () => {
+  test('allows the EGO import 10 MiB of body and every other endpoint 64 KiB (ruled)', () => {
     assert.deepEqual(BODY_LIMIT_BYTES, {
-      egoMigration: 10 * 1024 * 1024,
+      egoImport: 10 * 1024 * 1024,
       everyOther: 64 * 1024,
     });
   });

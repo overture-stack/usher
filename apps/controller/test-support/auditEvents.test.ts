@@ -35,8 +35,8 @@ import {
   MANAGEMENT_TOKEN_TALLY_REASONS,
   managementTokenRefusal,
   managementTokenRefusalsIn,
-  MIGRATION_ORIGIN_EVENT_TYPES,
-  MIGRATION_RUN_COUNTS,
+  IMPORT_ORIGIN_EVENT_TYPES,
+  IMPORT_RUN_COUNTS,
   NOT_EMITTED_IN_THIS_EPIC,
   ofType,
   POST_MVP_EVENT_TYPES,
@@ -67,14 +67,14 @@ const FIXTURE = [
   '| `resource.orphaned` | Resource has no owner | System | Resource | `resourceId`, `lastOwnerId` | `critical` |',
   '| `grant.unguarded` | A grant took effect without a custodian |  |  |  |  |',
   '| `applicationKey.revocation` | Application key revoked | Admin | Application key | `actorId`, `keyId`; `reason` (`rotated`, `compromised` or `retired`) when given | `warning` when refused; `critical` for `compromised`; else `info` |',
-  '| `migration.run` | EGO migration run | Admin | Resources and grants | `actorId`; on success, the counts listed below the table | follows `result` |',
+  '| `import.run` | EGO import run | Admin | Resources and grants | `actorId`; on success, the counts listed below the table | follows `result` |',
   '| `revocationChannel.reset` | Bridge dropped every entry | System | All active sessions | none | `warning` |',
   '| `category.unmapped` | Bridge denied a result | System | Catalogue | `catalogue`, `category`, `resourceId` | `critical` for a global category, `error` for a resource category |',
   '',
   '**`token.exchange` names no grant.** It carries `tokenTtl`, `grantCount` and',
   '`rules` alone.',
   '',
-  '**`migration.run` records each real run.** A real run that succeeds records it at `info`, with',
+  '**`import.run` records each real run.** A real run that succeeds records it at `info`, with',
   '`studiesReported`, `grantsWritten` and `resourcesWithoutOwner`.',
   '',
   '## Open items',
@@ -281,7 +281,7 @@ suite("reading audit-events.md's Events table", () => {
         },
         {
           actor: { kind: 'roles', roles: ['admin'] },
-          event: 'migration.run',
+          event: 'import.run',
           fields: {
             always: ['actorId'],
             conditional: [],
@@ -884,7 +884,7 @@ suite('reading the events a log stream holds', () => {
   test("finds the dry run's operational line, never an event naming the same message", () => {
     const log = captureLog();
     const counts = Object.fromEntries(
-      Object.values(MIGRATION_RUN_COUNTS).map((name, index) => [name, index]),
+      Object.values(IMPORT_RUN_COUNTS).map((name, index) => [name, index]),
     );
     const line = {
       [DRY_RUN_LOG_LINE.actorMember]: 'admin-0001',
@@ -894,7 +894,7 @@ suite('reading the events a log stream holds', () => {
     };
     log.stream.write(`${JSON.stringify(line)}\n`);
     log.stream.write(
-      `${loggedEvent('migration.run', counts, {
+      `${loggedEvent('import.run', counts, {
         [DRY_RUN_LOG_LINE.message.member]: DRY_RUN_LOG_LINE.message.value,
       })}\n`,
     );
@@ -903,13 +903,13 @@ suite('reading the events a log stream holds', () => {
   });
 });
 
-suite("the migration's own event and the over-cap exchange's", () => {
-  test('reads migration.run as the administrator acting, carrying on success the counts listed below the table and a reason otherwise, at the severity its result gives, its writes caused by it', () => {
+suite("the import's own event and the over-cap exchange's", () => {
+  test('reads import.run as the administrator acting, carrying on success the counts listed below the table and a reason otherwise, at the severity its result gives, its writes caused by it', () => {
     const {
       actor,
       fields: { always, conditional, onRefusal, onSuccess },
       severity,
-    } = registered(AUDIT_EVENT_TYPES.migrationRun);
+    } = registered(AUDIT_EVENT_TYPES.importRun);
 
     assert.deepEqual(
       { actor, always, conditional, onRefusal, severity },
@@ -923,10 +923,10 @@ suite("the migration's own event and the over-cap exchange's", () => {
     );
     assert.deepEqual(
       onSuccess.toSorted(),
-      Object.values(MIGRATION_RUN_COUNTS).toSorted(),
+      Object.values(IMPORT_RUN_COUNTS).toSorted(),
     );
     assert.equal(CAUSED_BY_MEMBER, 'causedBy');
-    assert.deepEqual(MIGRATION_ORIGIN_EVENT_TYPES.toSorted(), [
+    assert.deepEqual(IMPORT_ORIGIN_EVENT_TYPES.toSorted(), [
       'grant.creation',
       'grant.decision',
       'resource.registration',

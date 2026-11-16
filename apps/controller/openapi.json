@@ -787,14 +787,14 @@
         "required": ["description", "id", "members", "name"],
         "type": "object"
       },
-      "EgoMigrationRequest": {
+      "EgoImportRequest": {
         "properties": {
           "apply": {
             "description": "Sent as `true` for a real run; a run is dry otherwise.",
             "type": "boolean"
           },
           "audiences": {
-            "description": "The applications serving each resource registered by the run, by id. An empty list is refused with `422` `migrationNeedsAnAudience`, and an id naming no registered application with `422` `unknownApplication`.",
+            "description": "The applications serving each resource registered by the run, by id. An empty list is refused with `422` `importNeedsAnAudience`, and an id naming no registered application with `422` `unknownApplication`.",
             "items": {
               "type": "string"
             },
@@ -892,7 +892,7 @@
             "type": "string"
           },
           "status": {
-            "description": "`APPROVED`, `DISABLED`, `PENDING` or `REJECTED`. An approved user's `WRITE` alone migrates.",
+            "description": "`APPROVED`, `DISABLED`, `PENDING` or `REJECTED`. An approved user's `WRITE` alone is imported.",
             "type": "string"
           }
         },
@@ -1206,7 +1206,7 @@
           "readPermission",
           "rejectedInEgo",
           "revoked",
-          "studyNotMigrated",
+          "studyNotImported",
           "subjectAddressDisagreement",
           "twoAccounts",
           "userPermission"
@@ -1224,7 +1224,7 @@
         ],
         "type": "string"
       },
-      "MigrationReport": {
+      "ImportReport": {
         "additionalProperties": false,
         "description": "What a run did, or would do. A dry run and a real run on the same data report the same items, `dryRun` apart.",
         "properties": {
@@ -1509,7 +1509,7 @@
             "type": "array"
           },
           "outcome": {
-            "description": "`registered` for a resource registered for the study, `existing` for a resource already held by Usher, `reported` for a study not migrated that holds data or breaks a rule, and `skipped` for one outside the allowed set holding none.",
+            "description": "`registered` for a resource registered for the study, `existing` for a resource already held by Usher, `reported` for a study not imported that holds data or breaks a rule, and `skipped` for one outside the allowed set holding none.",
             "enum": ["existing", "registered", "reported", "skipped"],
             "type": "string"
           },
@@ -3528,15 +3528,15 @@
         "tags": ["People"]
       }
     },
-    "/admin/migrations/ego": {
+    "/admin/imports/ego": {
       "post": {
-        "description": "Migrates EGO's study groups from an export, for platform administrators. The administrator is checked before the body is read, and the body may be up to 10 MiB.\n\nA run is dry unless `apply: true` is sent beside the export. A dry run writes nothing and reports exactly what a real run on the same data then does. A real run writes all of its changes or none of them, and holds a lock that refuses a second run until it ends.\n\nEach resource registered by a run takes the instance's configured base tier and is served by every application named in `audiences`. The prefixes that read a study's id from a policy's name, and the policies granting every study, come from the instance's configuration.\n\nEither run answers its report to the administrator alone. The report is never written to the log stream.",
-        "operationId": "migrateFromEgo",
+        "description": "Imports EGO's study groups from an export, for platform administrators. The administrator is checked before the body is read, and the body may be up to 10 MiB.\n\nA run is dry unless `apply: true` is sent beside the export. A dry run writes nothing and reports exactly what a real run on the same data then does. A real run writes all of its changes or none of them, and holds a lock that refuses a second run until it ends.\n\nEach resource registered by a run takes the instance's configured base tier and is served by every application named in `audiences`. The prefixes that read a study's id from a policy's name, and the policies granting every study, come from the instance's configuration.\n\nEither run answers its report to the administrator alone. The report is never written to the log stream.",
+        "operationId": "importFromEgo",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EgoMigrationRequest"
+                "$ref": "#/components/schemas/EgoImportRequest"
               }
             }
           },
@@ -3548,7 +3548,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MigrationReport"
+                  "$ref": "#/components/schemas/ImportReport"
                 }
               }
             },
@@ -3596,7 +3596,7 @@
                     {
                       "properties": {
                         "code": {
-                          "enum": ["migrationInProgress"]
+                          "enum": ["importInProgress"]
                         }
                       },
                       "type": "object"
@@ -3605,7 +3605,7 @@
                 }
               }
             },
-            "description": "Another run holds the lock; `migrationInProgress`."
+            "description": "Another run holds the lock; `importInProgress`."
           },
           "413": {
             "content": {
@@ -3640,7 +3640,7 @@
                 }
               }
             },
-            "description": "`unknownApplication`: `audiences` names an application that is not registered. `migrationNeedsAnAudience`: `audiences` is empty."
+            "description": "`unknownApplication`: `audiences` names an application that is not registered. `importNeedsAnAudience`: `audiences` is empty."
           },
           "503": {
             "content": {
@@ -3656,7 +3656,7 @@
                           "enum": [
                             "directoryUnavailable",
                             "identityProviderUnavailable",
-                            "migrationNotConfigured",
+                            "importNotConfigured",
                             "outcomeUnknown",
                             "signingKeyUnconfirmed",
                             "storeUnavailable"
@@ -3669,7 +3669,7 @@
                 }
               }
             },
-            "description": "`migrationNotConfigured`: a setting read by the migration from the instance's configuration is missing, checked before the export is read. `directoryUnavailable`: the directory cannot answer a lookup during the run. `storeUnavailable`: the store cannot complete the run, and nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "description": "`importNotConfigured`: a setting read by the import from the instance's configuration is missing, checked before the export is read. `directoryUnavailable`: the directory cannot answer a lookup during the run. `storeUnavailable`: the store cannot complete the run, and nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
             "headers": {
               "Retry-After": {
                 "$ref": "#/components/headers/RetryAfter"
@@ -3682,8 +3682,8 @@
             "managementToken": []
           }
         ],
-        "summary": "Migrates EGO's study groups",
-        "tags": ["Migrations"]
+        "summary": "Imports EGO's study groups",
+        "tags": ["Imports"]
       }
     },
     "/admin/people/grants": {
@@ -6283,8 +6283,8 @@
       "name": "Applications"
     },
     {
-      "description": "The migration from EGO.",
-      "name": "Migrations"
+      "description": "The import from EGO.",
+      "name": "Imports"
     },
     {
       "description": "The audit log.",

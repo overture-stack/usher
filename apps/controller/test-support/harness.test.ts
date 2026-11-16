@@ -897,8 +897,8 @@ suite('the timing settings', () => {
 
     assert.deepEqual(
       {
-        egoMigrationBaseTier: usual.egoMigrationBaseTier,
-        egoMigrationPrefixes: usual.egoMigrationPrefixes,
+        egoImportBaseTier: usual.egoImportBaseTier,
+        egoImportPrefixes: usual.egoImportPrefixes,
         heartbeatMilliseconds: usual.heartbeatMilliseconds,
         noticePageLimit: usual.noticePageLimit,
         noticeRereadMilliseconds: usual.noticeRereadMilliseconds,
@@ -907,8 +907,8 @@ suite('the timing settings', () => {
         tokenLifetimeSeconds: usual.tokenLifetimeSeconds,
       },
       {
-        egoMigrationBaseTier: null,
-        egoMigrationPrefixes: [],
+        egoImportBaseTier: null,
+        egoImportPrefixes: [],
         heartbeatMilliseconds: 10_000,
         noticePageLimit: 500,
         noticeRereadMilliseconds: 2000,

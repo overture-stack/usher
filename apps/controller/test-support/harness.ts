@@ -370,7 +370,7 @@ export const passwordsApart = (
  * ({@link passwordsApart}), a fresh one standing in where the URL carries none, the management API
  * `usher-management-test` with the client `usher-ui-test`, {@link HARNESS_LOGOUT_CLIENT} as the
  * back-channel logout audience, {@link HARNESS_EVENT_SOURCE} and the instance `usher-test-1`, no
- * directory, no EGO migration settings, a grant rate threshold of 100 operations in 60 s, high enough
+ * directory, no EGO import settings, a grant rate threshold of 100 operations in 60 s, high enough
  * for no test to reach it by accident, the defaults given by the rulings (the timing settings at their
  * production defaults: a 10 s heartbeat, 300 s Usher tokens, a 500-notice page, a 2 s re-read, a 5 s
  * store timeout and a 15 min stream), the store connections at their defaults (10 for the exchange
@@ -408,9 +408,9 @@ export const harnessConfiguration = ({
     directoryClientSecret: '',
     directoryRealm: '',
     directoryUrl: '',
-    egoMigrationAllStudyPolicies: [],
-    egoMigrationBaseTier: null,
-    egoMigrationPrefixes: [],
+    egoImportAllStudyPolicies: [],
+    egoImportBaseTier: null,
+    egoImportPrefixes: [],
     eventSource: HARNESS_EVENT_SOURCE,
     grantRateThreshold: { operationCount: 100, windowSeconds: 60 },
     heartbeatMilliseconds: 10_000,
@@ -1042,7 +1042,7 @@ export const startInstance = async (
 
 /**
  * Starts another controller instance beside the harness's, as {@link startInstance} does, on the
- * database's read-only role ({@link TestDatabase.readOnlyUrl}): for the dry run of the EGO migration,
+ * database's read-only role ({@link TestDatabase.readOnlyUrl}): for the dry run of the EGO import,
  * which completes under a role that may only read (#216 Q16). Its start writes nothing, so it starts
  * once the harness's own controller has started on the database and written what a start writes.
  *

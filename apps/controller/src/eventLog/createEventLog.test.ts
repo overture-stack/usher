@@ -107,14 +107,14 @@ suite('the log stream', () => {
     const { parsed, stream } = capture();
     const log = createEventLog({ clock: FIXED_CLOCK, logStream: stream });
 
-    log.info('egoMigration.dryRun');
+    log.info('egoImport.dryRun');
     log.warning('store.grantBeyondUse');
     log.error('store.idleConnectionLost');
 
     assert.deepEqual(
       parsed().map(({ level, message }) => [message, level]),
       [
-        ['egoMigration.dryRun', 30],
+        ['egoImport.dryRun', 30],
         ['store.grantBeyondUse', 40],
         ['store.idleConnectionLost', 50],
       ],
@@ -194,7 +194,7 @@ suite('the log stream', () => {
       ...envelope('info'),
       data: { ...envelope('info').data, reason: awkward },
     });
-    log.info('egoMigration.dryRun', { actorId: awkward });
+    log.info('egoImport.dryRun', { actorId: awkward });
 
     assert.equal(text().split('\n').length, 3);
     assert.deepEqual(
