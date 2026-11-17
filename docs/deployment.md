@@ -25,7 +25,8 @@ A first deployment takes these steps, in order, each one detailed in its section
 4. Set the variables, from what steps 1 to 3 made: [Variables](#variables).
 5. Run the image once as the schema migration command: [The image](#the-image), [Schema migration before each rollout](#schema-migration-before-each-rollout).
 6. Start the controller's instances, and wait for `GET /health/ready` to answer 200: [Readiness and liveness](#readiness-and-liveness).
-7. Register each application and its resources, then confirm with an anonymous exchange: [Registering resources](#registering-resources).
+7. Have the first user nominate Usher's first administrator, and the nominee accept, since every other Management API operation is refused until then: [The identity provider](#the-identity-provider).
+8. Register each application and its resources, then confirm with an anonymous exchange: [Registering resources](#registering-resources).
 
 ---
 
