@@ -5,6 +5,7 @@ import { suite, test } from 'node:test';
 import type pg from 'pg';
 
 import {
+  administratorRow,
   BASE_FIXTURE,
   capabilityId,
   committedInsert,
@@ -18,6 +19,7 @@ import {
   INTEGRITY,
   invitationRow,
   type NamedTable,
+  nominationRow,
   noticeRow,
   openSeededDatabase,
   readForeignKeys,
@@ -47,6 +49,7 @@ import {
 } from '../../test-support/policy.js';
 
 const {
+  administrators,
   applicationKeys,
   applicationResources,
   applications,
@@ -57,6 +60,7 @@ const {
   groupUsers,
   groups,
   invitations,
+  nominations,
   notices,
   notificationOutbox,
   principalRevocations,
@@ -85,6 +89,19 @@ const DESIGNED_FOREIGN_KEYS: readonly {
   referenced: NamedTable;
   table: NamedTable;
 }[] = [
+  {
+    columns: [
+      administrators.columns.nominationId,
+      administrators.columns.userId,
+    ],
+    referenced: nominations,
+    table: administrators,
+  },
+  {
+    columns: [administrators.columns.userId],
+    referenced: users,
+    table: administrators,
+  },
   {
     columns: [applicationKeys.columns.applicationId],
     referenced: applications,
@@ -256,6 +273,16 @@ const DESIGNED_FOREIGN_KEYS: readonly {
     table: resources,
   },
   {
+    columns: [nominations.columns.nominatedBy],
+    referenced: users,
+    table: nominations,
+  },
+  {
+    columns: [nominations.columns.nomineeId],
+    referenced: users,
+    table: nominations,
+  },
+  {
     columns: [rolePermissions.columns.capabilityId],
     referenced: capabilities,
     table: rolePermissions,
@@ -349,6 +376,15 @@ suite('foreign keys', () => {
         roleId: viewer,
         ...parts,
       });
+    const cyNominated = String(
+      (
+        await committedInsert(
+          owner,
+          nominations,
+          nominationRow({ nominatedBy: steward, nomineeId: user('cy') }),
+        )
+      )[nominations.columns.id],
+    );
     const lyric = seededId(seeded.applications, 'ims-lyric');
     const lyricKey = (parts: Readonly<Record<string, string>>): Row => ({
       [applicationKeys.columns.applicationId]: lyric,
@@ -359,6 +395,42 @@ suite('foreign keys', () => {
       ...parts,
     });
     const cases: readonly ReferenceCase[] = [
+      {
+        held: cyNominated,
+        label: "an administrator's nomination",
+        row: (id) => administratorRow({ nominationId: id, userId: user('cy') }),
+        table: administrators,
+      },
+      {
+        held: user('cy'),
+        label:
+          "an administrator's person, the nominee of the nomination accepted",
+        row: (id) =>
+          administratorRow({ nominationId: cyNominated, userId: id }),
+        table: administrators,
+      },
+      {
+        held: steward,
+        label: "a nomination's nominator",
+        row: (id) =>
+          nominationRow({
+            nominatedAt: new Date(Date.now() + 1000),
+            nominatedBy: id,
+            nomineeId: user('cy'),
+          }),
+        table: nominations,
+      },
+      {
+        held: user('bo'),
+        label: "a nomination's nominee",
+        row: (id) =>
+          nominationRow({
+            nominatedAt: new Date(Date.now() + 2000),
+            nominatedBy: steward,
+            nomineeId: id,
+          }),
+        table: nominations,
+      },
       {
         held: lyric,
         label: "a key's application",

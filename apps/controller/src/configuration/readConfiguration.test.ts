@@ -96,13 +96,13 @@ suite('reading the configuration from an environment', () => {
   test('reads every variable into its field', () => {
     const configuration = readConfiguration(
       environmentWith({
-        administratorRole: 'ims-usher-admin',
         apiDocsClient: 'usher-ui',
         autoAccept: 'true',
         backChannelLogoutAudiences: 'portal-test, submission-test',
         baseline: 'view',
         databaseControlConnections: '3',
         databaseExchangeConnections: '12',
+        firstUserRole: 'ims-usher-first-user',
         heartbeatMilliseconds: '500',
         noticePageLimit: '20',
         noticeRereadMilliseconds: '250',
@@ -121,7 +121,6 @@ suite('reading the configuration from an environment', () => {
     );
 
     assert.deepEqual(fieldsOf(configuration), {
-      administratorRole: 'ims-usher-admin',
       apiDocsClient: 'usher-ui',
       autoAccept: true,
       backChannelLogoutAudiences: ['portal-test', 'submission-test'],
@@ -133,6 +132,7 @@ suite('reading the configuration from an environment', () => {
       databaseSchema: 'usher',
       databaseUrl: 'postgres://usher_controller@127.0.0.1:5432/usher',
       eventSource: 'https://usher.example.org/controller',
+      firstUserRole: 'ims-usher-first-user',
       heartbeatMilliseconds: 500,
       host: '127.0.0.1',
       identityProviderIssuer: 'https://auth.example.org/realms/usher',
@@ -164,12 +164,12 @@ suite('reading the configuration from an environment', () => {
 
     assert.deepEqual(
       {
-        administratorRole: configuration.administratorRole,
         apiDocsClient: configuration.apiDocsClient,
         autoAccept: configuration.autoAccept,
         baseline: configuration.baseline,
         databaseControlConnections: configuration.databaseControlConnections,
         databaseExchangeConnections: configuration.databaseExchangeConnections,
+        firstUserRole: configuration.firstUserRole,
         heartbeatMilliseconds: configuration.heartbeatMilliseconds,
         noticePageLimit: configuration.noticePageLimit,
         noticeRereadMilliseconds: configuration.noticeRereadMilliseconds,
@@ -187,12 +187,12 @@ suite('reading the configuration from an environment', () => {
         trustedProxies: configuration.trustedProxies,
       },
       {
-        administratorRole: 'usher-platform-admin',
         apiDocsClient: '',
         autoAccept: false,
         baseline: ['count', 'view', 'export'],
         databaseControlConnections: 5,
         databaseExchangeConnections: 10,
+        firstUserRole: 'usher-first-user',
         heartbeatMilliseconds: 10_000,
         noticePageLimit: 500,
         noticeRereadMilliseconds: 2000,
@@ -251,10 +251,10 @@ suite('reading the configuration from an environment', () => {
     assert.match(refusal.message, /USHER_SERVICE_ACCOUNT_ROLE is empty/u);
   });
 
-  test('refuses a service-account role naming the administrator role, naming its variable and the rule', () => {
+  test('refuses a service-account role naming the first-user role, naming its variable and the rule', () => {
     const refusal = refusalOf(
       environmentWith({
-        administratorRole: 'ims-usher',
+        firstUserRole: 'ims-usher',
         serviceAccountRole: 'ims-usher',
       }),
     );
@@ -264,13 +264,13 @@ suite('reading the configuration from an environment', () => {
     ]);
     assert.match(
       refusal.message,
-      /USHER_SERVICE_ACCOUNT_ROLE must name a role other than the one in USHER_ADMINISTRATOR_ROLE/u,
+      /USHER_SERVICE_ACCOUNT_ROLE must name a role other than the one in USHER_FIRST_USER_ROLE/u,
     );
   });
 
-  test('refuses an administrator role naming the default service-account role while the service-account role is unset', () => {
+  test('refuses a first-user role naming the default service-account role while the service-account role is unset', () => {
     const refusal = refusalOf(
-      environmentWith({ administratorRole: 'usher-service-account' }),
+      environmentWith({ firstUserRole: 'usher-service-account' }),
     );
 
     assert.deepEqual(refusal.variables, [
@@ -278,25 +278,51 @@ suite('reading the configuration from an environment', () => {
     ]);
     assert.match(
       refusal.message,
-      /USHER_SERVICE_ACCOUNT_ROLE must name a role other than the one in USHER_ADMINISTRATOR_ROLE/u,
+      /USHER_SERVICE_ACCOUNT_ROLE must name a role other than the one in USHER_FIRST_USER_ROLE/u,
     );
   });
 
-  test('reads an administrator role and a service-account role differing only in letter case as two roles', () => {
+  test('reads a first-user role and a service-account role differing only in letter case as two roles', () => {
     const configuration = readConfiguration(
       environmentWith({
-        administratorRole: 'Usher-Ops',
+        firstUserRole: 'Usher-Ops',
         serviceAccountRole: 'usher-ops',
       }),
     );
 
     assert.deepEqual(
       {
-        administratorRole: configuration.administratorRole,
+        firstUserRole: configuration.firstUserRole,
         serviceAccountRole: configuration.serviceAccountRole,
       },
-      { administratorRole: 'Usher-Ops', serviceAccountRole: 'usher-ops' },
+      { firstUserRole: 'Usher-Ops', serviceAccountRole: 'usher-ops' },
     );
+  });
+
+  test('refuses a start with USHER_ADMINISTRATOR_ROLE set, empty or not, naming USHER_FIRST_USER_ROLE as its replacement and never its value', () => {
+    const refusals = ['usher-platform-admin', ''].map((value) =>
+      refusalOf({ ...environmentWith({}), USHER_ADMINISTRATOR_ROLE: value }),
+    );
+    const beside = refusalOf({
+      ...environmentWith({ host: '' }),
+      USHER_ADMINISTRATOR_ROLE: 'usher-platform-admin',
+    });
+
+    assert.deepEqual(
+      refusals.map((refusal) => refusal.variables),
+      [['USHER_ADMINISTRATOR_ROLE'], ['USHER_ADMINISTRATOR_ROLE']],
+    );
+    refusals.forEach((refusal) => {
+      assert.match(
+        refusal.message,
+        /USHER_ADMINISTRATOR_ROLE is replaced by USHER_FIRST_USER_ROLE/u,
+      );
+      assert.doesNotMatch(shownBy(refusal), /usher-platform-admin/u);
+    });
+    assert.deepEqual(beside.variables.toSorted(), [
+      'USHER_ADMINISTRATOR_ROLE',
+      ENVIRONMENT_VARIABLES.host,
+    ]);
   });
 });
 

@@ -10,7 +10,6 @@ import type {
 export const ENVIRONMENT_VARIABLES: Readonly<
   Record<FieldWithVariable, string>
 > = Object.freeze({
-  administratorRole: 'USHER_ADMINISTRATOR_ROLE',
   apiDocsClient: 'USHER_API_DOCS_CLIENT',
   autoAccept: 'USHER_GRANT_AUTO_ACCEPT',
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
@@ -22,6 +21,7 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   databaseSchema: 'USHER_DATABASE_SCHEMA',
   databaseUrl: 'USHER_DATABASE_URL',
   eventSource: 'USHER_EVENT_SOURCE',
+  firstUserRole: 'USHER_FIRST_USER_ROLE',
   heartbeatMilliseconds: 'USHER_HEARTBEAT_MILLISECONDS',
   host: 'USHER_HOST',
   identityProviderIssuer: 'USHER_IDENTITY_PROVIDER_ISSUER',
@@ -47,6 +47,15 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   tokenLifetimeSeconds: 'USHER_TOKEN_LIFETIME_SECONDS',
   trustedProxies: 'USHER_TRUSTED_PROXIES',
 });
+
+/**
+ * The variables a start is refused with while set, empty or not, each by the variable replacing it:
+ * the controller reads none of them.
+ */
+export const REPLACED_VARIABLES: Readonly<Record<string, string>> =
+  Object.freeze({
+    USHER_ADMINISTRATOR_ROLE: ENVIRONMENT_VARIABLES.firstUserRole,
+  });
 
 /**
  * The environment variable each of the schema migration command's own fields is read from, by

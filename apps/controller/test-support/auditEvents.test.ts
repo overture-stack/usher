@@ -660,6 +660,52 @@ suite("the controller's events, as the document registers them", () => {
     assert.equal(fields.always.includes(CAUSED_BY_MEMBER), false);
   });
 
+  test("reads the first administrator's nomination as the first user's at warning and its acceptance as the nominee's at critical, each refused at warning carrying reason, and what each carries on success alone", () => {
+    const nomination = registered(AUDIT_EVENT_TYPES.adminNomination);
+    const acceptance = registered(AUDIT_EVENT_TYPES.adminAcceptance);
+
+    assert.deepEqual(
+      [nomination, acceptance].map(({ actor, fields, owner, severity }) => ({
+        actor,
+        fields,
+        owner,
+        severity,
+      })),
+      [
+        {
+          actor: { kind: 'roles', roles: ['first user'] },
+          fields: {
+            always: ['actorId'],
+            conditional: [],
+            onRefusal: ['reason'],
+            onSuccess: ['nomineeId', 'nominationId'],
+          },
+          owner: 'controller',
+          severity: {
+            kind: 'fixed',
+            severity: 'warning',
+            whenDenied: 'warning',
+          },
+        },
+        {
+          actor: { kind: 'roles', roles: ['nominee'] },
+          fields: {
+            always: ['actorId'],
+            conditional: ['nominationId'],
+            onRefusal: ['reason'],
+            onSuccess: ['nominatedById'],
+          },
+          owner: 'controller',
+          severity: {
+            kind: 'fixed',
+            severity: 'critical',
+            whenDenied: 'warning',
+          },
+        },
+      ],
+    );
+  });
+
   test("reads the baseline change as the system's, carrying both rules, at info at the store's first start and at warning at any later one", () => {
     const { actor, fields, severity } = registered(
       AUDIT_EVENT_TYPES.baselineChange,

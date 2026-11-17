@@ -36,9 +36,6 @@ export interface ControllerApplication {
  * leaves that variable unset.
  */
 export interface ControllerSettings {
-  /** The identity provider realm role that makes its holder a platform administrator; `usher-platform-admin` by default. */
-  administratorRole: string;
-
   /**
    * The client used by the API documentation page at `/api-docs` to sign people in, which must be one
    * of the management clients exactly: any other refuses the start. Empty, the default, for no page,
@@ -99,6 +96,13 @@ export interface ControllerSettings {
 
   /** The CloudEvents `source` every event carries: one per deployment, the same on every instance (#214). */
   eventSource: string;
+
+  /**
+   * The identity provider realm role naming its holder the first user, who nominates Usher's first
+   * administrator while none has accepted: `usher-first-user` by default. A start with
+   * `USHER_ADMINISTRATOR_ROLE` set is refused, naming this setting's variable as its replacement.
+   */
+  firstUserRole: string;
 
   /**
    * How long an open notice stream may stay silent before the controller writes a heartbeat comment,
@@ -526,7 +530,6 @@ export type FieldWithVariable = Exclude<
 >;
 
 const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
-  administratorRole: 'USHER_ADMINISTRATOR_ROLE',
   apiDocsClient: 'USHER_API_DOCS_CLIENT',
   autoAccept: 'USHER_GRANT_AUTO_ACCEPT',
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
@@ -538,6 +541,7 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   databaseSchema: 'USHER_DATABASE_SCHEMA',
   databaseUrl: 'USHER_DATABASE_URL',
   eventSource: 'USHER_EVENT_SOURCE',
+  firstUserRole: 'USHER_FIRST_USER_ROLE',
   heartbeatMilliseconds: 'USHER_HEARTBEAT_MILLISECONDS',
   host: 'USHER_HOST',
   identityProviderIssuer: 'USHER_IDENTITY_PROVIDER_ISSUER',
@@ -630,7 +634,6 @@ const loadExport = async <Exported>(
  * @param configuration the configuration to express.
  */
 export const environmentFor = ({
-  administratorRole,
   apiDocsClient,
   autoAccept,
   backChannelLogoutAudiences,
@@ -642,6 +645,7 @@ export const environmentFor = ({
   databaseSchema,
   databaseUrl,
   eventSource,
+  firstUserRole,
   heartbeatMilliseconds,
   host,
   identityProviderIssuer,
@@ -666,7 +670,6 @@ export const environmentFor = ({
   tokenLifetimeSeconds,
   trustedProxies,
 }: ControllerSettings): Readonly<Record<string, string>> => ({
-  [VARIABLE_NAMES.administratorRole]: administratorRole,
   [VARIABLE_NAMES.apiDocsClient]: apiDocsClient,
   [VARIABLE_NAMES.autoAccept]: String(autoAccept),
   [VARIABLE_NAMES.backChannelLogoutAudiences]:
@@ -683,6 +686,7 @@ export const environmentFor = ({
   [VARIABLE_NAMES.databaseSchema]: databaseSchema,
   [VARIABLE_NAMES.databaseUrl]: databaseUrl,
   [VARIABLE_NAMES.eventSource]: eventSource,
+  [VARIABLE_NAMES.firstUserRole]: firstUserRole,
   [VARIABLE_NAMES.heartbeatMilliseconds]: String(heartbeatMilliseconds),
   [VARIABLE_NAMES.host]: host,
   [VARIABLE_NAMES.identityProviderIssuer]: identityProviderIssuer,

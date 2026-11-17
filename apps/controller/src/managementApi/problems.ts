@@ -46,6 +46,18 @@ export const PROBLEMS = Object.freeze({
     'Credential unreadable',
     'Send exactly one Authorization header holding one Bearer credential, and no credential in the query.',
   ),
+  noAdministratorYet: problem(
+    'noAdministratorYet',
+    403,
+    'No administrator yet',
+    "Usher has no administrator yet, and answers only the first administrator's nomination and acceptance until one accepts: the first user nominates an administrator through POST /admin/nominations, and the nominee accepts through POST /admin/nominations/{id}/acceptance.",
+  ),
+  notFirstUser: problem(
+    'notFirstUser',
+    403,
+    'Not the first user',
+    "Only the first user nominates Usher's first administrator: a principal whose token holds the first-user role.",
+  ),
   outcomeUnknown: problem(
     'outcomeUnknown',
     503,

@@ -1636,6 +1636,7 @@ suite("the started store's template", () => {
     const scope = cleanupFor(context);
     const harness = await startHarness({
       applications: [],
+      seedsAdministrator: false,
       startsController: false,
       template: STARTED_STORE_TEMPLATE,
     });

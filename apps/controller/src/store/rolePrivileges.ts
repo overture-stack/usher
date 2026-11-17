@@ -26,6 +26,7 @@ export interface PermittedWrites {
  */
 export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
   Object.entries({
+    administrators: { deletes: false, updates: [] },
     application_keys: {
       deletes: false,
       updates: ['confirmed_at', 'revoked_at', 'revoked_by'],
@@ -49,6 +50,7 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
       ],
     },
     key_encryption_key_check: { deletes: false, updates: [] },
+    nominations: { deletes: false, updates: [] },
     notices: { deletes: false, updates: [] },
     notification_outbox: { deletes: false, updates: ['delivered_at'] },
     principal_revocations: {
@@ -107,6 +109,7 @@ const APPEND_ONLY_TABLES: ReadonlySet<string> = new Set([
   'change_records',
   'grant_decisions',
   'key_encryption_key_check',
+  'nominations',
   'notices',
 ]);
 

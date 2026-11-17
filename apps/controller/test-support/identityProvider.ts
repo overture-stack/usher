@@ -553,15 +553,16 @@ export interface ServiceAccountTokenOptions {
 }
 
 /**
- * Mints a service account's client-credentials token, signed by the stand-in's rightful key as every
- * token it mints is, shaped as Keycloak shapes one: `aud` the management API, `azp` and `client_id`
- * the client, `preferred_username` `service-account-` and the client, the realm's default roles, and
- * no address (#212 Q5). A configuration listing the client among its management clients reads it as
- * a credential rather than refusing it, and every Policy Management API operation then answers 403
- * `serviceAccountNotPermitted` before any lookup (ruled).
+ * Mints a service account's client-credentials token, signed by the stand-in's rightful key as
+ * every token it mints is, shaped as Keycloak shapes one: `aud` the management API, `azp` and
+ * `client_id` the client, `preferred_username` `service-account-` and the client, the realm's
+ * default roles, and no address (#212 Q5). A configuration listing the client among its management
+ * clients reads it as a credential rather than refusing it, and every Policy Management API
+ * operation then answers 403 `serviceAccountNotPermitted` before any lookup (ruled), or
+ * `noAdministratorYet` while Usher has no administrator.
  *
  * @param provider the stand-in.
- * @param configuration the management audience and clients, and the administrator role.
+ * @param configuration the management audience and clients, and the first-user role.
  * @param options the client, the subject, and anything over the claims.
  */
 export const mintServiceAccountToken = (

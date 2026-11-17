@@ -5,6 +5,11 @@ import type { CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS } from '@overture-stack/
 import type pg from 'pg';
 
 import {
+  createAdministratorRoutes,
+  readAdministratorStatus,
+  sqlAdministratorStore,
+} from '../administrators/index.js';
+import {
   createAdmission,
   SHARE_EXCEEDED_TALLY_INTERVAL_MILLISECONDS,
   shareExceededTallyEvent,
@@ -127,23 +132,25 @@ const READINESS_CONNECTIONS = 1;
  * reads this release's migrations once, checks the store before anything listens, refusing one
  * whose record of applied migrations holds a migration the release does not know, so a refused
  * start never accepts a connection, reads the live application keys into memory, and then serves
- * the Management API's application, resource and grant operations, each event they record written
- * to the audit log and the log stream, the revocation channel's poll and push, the token exchange,
- * and the identity provider's back-channel logout, and, while `apiDocsClient` names a client, the
- * API documentation page at `/api-docs`, taking no credential, its files read as the controller is
- * created. A change committed through an operation is held by the instance before it is answered:
- * the instance's streams are woken to its notices, as for a sign-out committed, and the live keys
- * are read again for an operation naming that step, as registering an application, issuing a key
- * and revoking one do. A failure in either step is written to the log and never changes the answer.
- * The live keys are read again too each time the configured clock passes the reload interval, and a
- * stored key that does not open is recorded as `applicationKey.unreadable`. A start finding that
- * its database role writes then runs the retention sweep until the stop, giving it the configured
- * clock; a run of it that fails changes no answer of any route, readiness's included. The
- * Management API, the exchange and the back-channel logout verify the identity provider's tokens
- * through one verifier, and the revocation channel and the exchange check channel assertions
- * through one verifier, counting those they cannot verify in one tally. Every unit of its store
- * work, a request's statement or transaction, a recorded event, a read of the keys or the notices,
- * a run of the sweep, or the start's transaction, runs within the store timeout.
+ * the Management API's application, resource, grant and administrator operations, each event they
+ * record written to the audit log and the log stream, the revocation channel's poll and push, the
+ * token exchange, and the identity provider's back-channel logout, and, while `apiDocsClient` names
+ * a client, the API documentation page at `/api-docs`, taking no credential, its files read as the
+ * controller is created. Every Management API request reads admin status from the store, by the
+ * caller's subject under the trusted issuer. A change committed through an operation is held by the
+ * instance before it is answered: the instance's streams are woken to its notices, as for a
+ * sign-out committed, and the live keys are read again for an operation naming that step, as
+ * registering an application, issuing a key and revoking one do. A failure in either step is
+ * written to the log and never changes the answer. The live keys are read again too each time the
+ * configured clock passes the reload interval, and a stored key that does not open is recorded as
+ * `applicationKey.unreadable`. A start finding that its database role writes then runs the
+ * retention sweep until the stop, giving it the configured clock; a run of it that fails changes no
+ * answer of any route, readiness's included. The Management API, the exchange and the back-channel
+ * logout verify the identity provider's tokens through one verifier, and the revocation channel and
+ * the exchange check channel assertions through one verifier, counting those they cannot verify in
+ * one tally. Every unit of its store work, a request's statement or transaction, a recorded event,
+ * a read of the keys or the notices, a run of the sweep, or the start's transaction, runs within
+ * the store timeout.
  *
  * It holds three pools of store connections, each with the same limits, so no one kind of work can
  * hold the connections another needs: the exchange pool, of `databaseExchangeConnections`, for the
@@ -360,6 +367,8 @@ export const createController = (
     trail: exchangeTrail,
   });
   const management: ManagementDependencies = {
+    administratorStatus: (identity) =>
+      readAdministratorStatus(reader, configuration.databaseSchema, identity),
     eventLog,
     refusalTally,
     runAfterCommit: (names) =>
@@ -414,6 +423,19 @@ export const createController = (
       {
         grantStoreOf: (connection) =>
           sqlGrantStore(connection, {
+            issuer: configuration.identityProviderIssuer,
+            schema: configuration.databaseSchema,
+          }),
+        settings: configuration,
+        store: reader,
+        trail: wakingTrail,
+      },
+      management,
+    ),
+    ...createAdministratorRoutes(
+      {
+        administratorStoreOf: (connection) =>
+          sqlAdministratorStore(connection, {
             issuer: configuration.identityProviderIssuer,
             schema: configuration.databaseSchema,
           }),

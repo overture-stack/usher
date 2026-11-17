@@ -103,6 +103,16 @@ const granting =
     }));
 
 suite("the privileges of the controller's database role", () => {
+  test('takes inserts alone into the nominations and the administrators, beside reading them', () => {
+    assert.deepEqual(
+      ['administrators', 'nominations'].map((name) => RUNTIME_WRITES.get(name)),
+      [
+        { deletes: false, updates: [] },
+        { deletes: false, updates: [] },
+      ],
+    );
+  });
+
   test('finds nothing beyond need in the privileges the migrations and the schema migration command grant the runtime role, nor in reading alone', () => {
     assert.deepEqual(privilegesBeyondNeed(MIGRATED_ROLE), []);
     assert.deepEqual(privilegesBeyondNeed(READ_ONLY_ROLE), []);
@@ -130,6 +140,18 @@ suite("the privileges of the controller's database role", () => {
       {
         change: granting('key_encryption_key_check', 'DELETE'),
         found: 'DELETE on key_encryption_key_check',
+      },
+      {
+        change: granting('nominations', 'DELETE'),
+        found: 'DELETE on nominations',
+      },
+      {
+        change: (held) =>
+          withRelation(held, 'nominations', (relation) => ({
+            ...relation,
+            updatable: ['note'],
+          })),
+        found: 'UPDATE (note) on nominations',
       },
       {
         change: (held) =>

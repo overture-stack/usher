@@ -296,6 +296,10 @@ const routeThrough = (
         },
       },
       {
+        administratorStatus: async () => ({
+          administrator: true,
+          anyAdministrator: true,
+        }),
         eventLog: { error: () => undefined },
         refusalTally: { count: () => undefined },
         runAfterCommit: (names) =>
@@ -307,8 +311,8 @@ const routeThrough = (
             })),
           }),
         settings: {
-          administratorRole: 'usher-platform-admin',
           clock: { now: () => NOW },
+          firstUserRole: 'usher-first-user',
           identityProviderIssuer: ISSUER,
           managementAudience: 'usher-management',
           managementClients: ['usher-ui'],

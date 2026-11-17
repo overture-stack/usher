@@ -18,9 +18,6 @@ export type ConfigurationEnvironment = Readonly<
  * environment leaves that variable unset, and a field naming none is required.
  */
 export interface ControllerConfiguration {
-  /** The identity provider realm role making its holder a platform administrator; `usher-platform-admin` by default. */
-  administratorRole: string;
-
   /**
    * The client used by the API documentation page at `/api-docs` to sign people in, which must be one
    * of the management clients exactly; empty, the default, for no page.
@@ -71,6 +68,13 @@ export interface ControllerConfiguration {
   /** The CloudEvents `source` every event carries: the same on every instance sharing the store, never one per instance. */
   eventSource: string;
 
+  /**
+   * The identity provider realm role naming its holder the first user, who nominates Usher's first
+   * administrator while none has accepted, and holds no power in Usher once one has;
+   * `usher-first-user` by default.
+   */
+  firstUserRole: string;
+
   /** How long an open notice stream may stay silent before a heartbeat, in milliseconds; 10,000 by default. */
   heartbeatMilliseconds: number;
 
@@ -116,7 +120,10 @@ export interface ControllerConfiguration {
   /** The margin the notice retention floor adds beyond the token lifetime and the grace period, in seconds; 30 by default. */
   retentionMarginSeconds: number;
 
-  /** The identity provider realm role marking its holder's token as a service account's; a role other than the administrator role, `usher-service-account` by default. */
+  /**
+   * The identity provider realm role marking its holder's token as a service account's; a role
+   * other than the first-user role, `usher-service-account` by default.
+   */
   serviceAccountRole: string;
 
   /** The longest lifetime of a sign-in token the controller accepts, in seconds. */

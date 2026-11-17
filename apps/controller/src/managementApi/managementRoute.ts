@@ -62,7 +62,13 @@ const TALLY_REASONS = {
 type Body = Readonly<Record<string, unknown>> | undefined;
 
 type Admission =
-  | { kind: 'admitted'; principal: Principal }
+  | {
+      /** Whether Usher has any administrator yet, as the store read it for this request. */
+      anyAdministrator: boolean;
+
+      kind: 'admitted';
+      principal: Principal;
+    }
   | {
       kind: 'refused';
       problem: Problem;
@@ -137,12 +143,16 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * counted nor recorded; a verified token refused for its claims, or by a revocation of the person
  * or the platform or a sign-out in the store, is refused 401, or 400 for a subject or session that
  * cannot be stored, and recorded as `managementToken.refusal`, its actor anonymous, before the
- * operation begins; a service account is refused 403, and so is anyone but a platform administrator
- * for an operation of theirs alone. Then the query, refused 400 for an operation taking none, and
- * the body are read, and the operation run. What the operation answers is sent once the steps it
- * names to run after its commit have run, as is the answer to a change whose `COMMIT` went
- * unconfirmed; a refusal or any other failure runs none. A success carrying no content is answered
- * with no body.
+ * operation begins. Admin status is then read from the store, by the token's subject under the
+ * trusted issuer, on every request and never from the token; a store that cannot say is answered
+ * 503, recording nothing. Until Usher has an administrator, every operation but those answered
+ * before the first one is refused 403 `noAdministratorYet`, a service account included; a service
+ * account is refused 403, and so is anyone but a platform administrator for an operation of theirs
+ * alone, and anyone whose token lacks the first-user role for an operation of the first user's
+ * alone. Then the query, refused 400 for an operation taking none, and the body are read, and the
+ * operation run. What the operation answers is sent once the steps it names to run after its commit
+ * have run, as is the answer to a change whose `COMMIT` went unconfirmed; a refusal or any other
+ * failure runs none. A success carrying no content is answered with no body.
  *
  * A refusal from admission on records the operation's own event, `denied`, at warning. Its reason
  * is the code answered, or the reason the operation gives in its place, as where a `404` stands in
@@ -157,14 +167,16 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * the request named.
  *
  * @param operation the operation.
- * @param dependencies the verifier, the tally, the store's reading of a principal's standing, the
- *   trail, the runner of the steps after a commit, the log and the settings every operation shares.
+ * @param dependencies the verifier, the tally, the store's readings of a principal's standing and
+ *   of admin status, the trail, the runner of the steps after a commit, the log and the settings
+ *   every operation shares.
  */
 export const managementRoute = <Input>(
   operation: ManagementOperation<Input>,
   dependencies: ManagementDependencies,
 ): RouteOptions => {
   const {
+    administratorStatus,
     eventLog,
     refusalTally,
     runAfterCommit,
@@ -313,17 +325,46 @@ export const managementRoute = <Input>(
       await recordTokenRefusal(request, stored.refusal, principal.subject);
       return refusedWith(PROBLEMS.credentialRefused);
     }
-    return { kind: 'admitted', principal };
+    const status = await administratorStatus({
+      issuer: settings.identityProviderIssuer,
+      subject: principal.subject,
+    }).then(
+      (read) => ({ kind: 'read' as const, read }),
+      (failure: unknown) => ({ failure, kind: 'failed' as const }),
+    );
+    if (status.kind === 'failed') {
+      eventLog.error(STORE_FAILED, {
+        ...codeOf(status.failure),
+        method: operation.method,
+        route: operation.route,
+      });
+      return refusedWith(PROBLEMS.storeUnavailable);
+    }
+    return {
+      anyAdministrator: status.read.anyAdministrator,
+      kind: 'admitted',
+      principal: { ...principal, administrator: status.read.administrator },
+    };
   };
 
   // The principal's standing for the operation, judged before any lookup, so the answer is the same
-  // whether or not anything the request names exists.
-  const authorityProblem = (principal: Principal): Problem | undefined => {
+  // whether or not anything the request names exists. Until an administrator has accepted, only the
+  // operations answered before the first one go on to the rest.
+  const authorityProblem = (
+    principal: Principal,
+    anyAdministrator: boolean,
+  ): Problem | undefined => {
+    if (!anyAdministrator && operation.beforeFirstAdministrator !== true) {
+      return PROBLEMS.noAdministratorYet;
+    }
     if (principal.type === 'serviceAccount') {
       return PROBLEMS.serviceAccountNotPermitted;
     }
-    return operation.administratorOnly && !principal.administrator
-      ? PROBLEMS.administratorOnly
+    if (operation.administratorOnly && !principal.administrator) {
+      return PROBLEMS.administratorOnly;
+    }
+    return operation.firstUserOnly === true && !principal.firstUser
+      ? PROBLEMS.notFirstUser
       : undefined;
   };
 
@@ -481,7 +522,10 @@ export const managementRoute = <Input>(
           admission.retryAfterSeconds,
         );
       }
-      const problem = authorityProblem(admission.principal);
+      const problem = authorityProblem(
+        admission.principal,
+        admission.anyAdministrator,
+      );
       if (problem !== undefined) {
         return refuse(request, reply, admission.principal, {
           body: undefined,

@@ -37,8 +37,8 @@ import { POLICY_TABLES, qualified } from '../policy.js';
 // from admin.ts, and every table from policy.ts. The harness of these suites registers no application
 // of its own, so every application read by a test is one registered by it, or by a harness the test
 // started to register one. The people are the shared
-// cast: the administrator and the second administrator are each one by the management token's realm
-// role alone, and the outsider holds no administrator role.
+// cast: the administrator and the second administrator are each one as the harness seeds them,
+// once a test acts as them through an administrator's token, and the outsider is never one.
 
 /** The people named by the tests, by their parts. */
 export const CAST = Object.freeze({
@@ -73,7 +73,8 @@ export const REALM_ADMINISTRATOR = 'registrar@example.org';
 /**
  * A Keycloak realm for a harness registering its applications as the realm's own administrator: the
  * harness's management client, naming the management API; {@link REALM_ADMINISTRATOR}, holding the
- * configured administrator role; and a person holding none.
+ * configured first-user role, which marks the person the harness seeds as an administrator once
+ * signed in; and a person holding none.
  */
 export const REGISTRAR_REALM: KeycloakRealmOptions = Object.freeze({
   clients: [
@@ -83,11 +84,11 @@ export const REGISTRAR_REALM: KeycloakRealmOptions = Object.freeze({
     },
   ],
   people: [
-    realmPerson(REALM_ADMINISTRATOR, [REGISTERING.administratorRole]),
+    realmPerson(REALM_ADMINISTRATOR, [REGISTERING.firstUserRole]),
     realmPerson('bystander@example.org', []),
   ],
   realm: 'usher-applications-test',
-  realmRoles: [REGISTERING.administratorRole],
+  realmRoles: [REGISTERING.firstUserRole],
 });
 
 /** A uuid in its text form, as every application's id and every key's id is generated. */
@@ -232,7 +233,7 @@ export const applicationRowCounts = async (
 
 /**
  * A service account's client-credentials token in Keycloak's shape, without and with the
- * administrator role, each refused 403 `serviceAccountNotPermitted` on every operation.
+ * first-user role, each refused 403 `serviceAccountNotPermitted` on every operation.
  *
  * @param harness the harness, its configuration listing the service account's client.
  */
@@ -247,7 +248,7 @@ export const serviceAccountTokens = async (
     ),
   },
   {
-    label: 'a client-credentials token with the administrator role',
+    label: 'a client-credentials token with the first-user role',
     token: await mintServiceAccountToken(
       harness.identityProvider,
       harness.configuration,

@@ -272,9 +272,13 @@ const PATHS = {
     `admin/grants/${segment(id)}/decisions`,
   grants: 'admin/grants',
   liveness: 'health/live',
+  nominationAcceptance: (id: string): string =>
+    `admin/nominations/${segment(id)}/acceptance`,
+  nominations: 'admin/nominations',
   identityRevocationLifts: 'admin/people/revocations/lifts',
   identityRevocations: 'admin/people/revocations',
   ownGrants: 'admin/me/grants',
+  ownNominations: 'admin/me/nominations',
   personGrants: 'admin/people/grants',
   readiness: 'health/ready',
   resource: (externalId: string): string =>
@@ -321,7 +325,10 @@ export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
   ...routes('/admin/grants/{id}', ['DELETE', 'PATCH']),
   ...routes('/admin/grants/{id}/decisions', ['POST']),
   ...routes('/admin/me/grants', ['GET']),
+  ...routes('/admin/me/nominations', ['GET']),
   ...routes('/admin/imports/ego', ['POST']),
+  ...routes('/admin/nominations', ['POST']),
+  ...routes('/admin/nominations/{id}/acceptance', ['POST']),
   ...routes('/admin/people/grants', ['POST']),
   ...routes('/admin/people/revocations', ['POST']),
   ...routes('/admin/people/revocations/lifts', ['POST']),
@@ -1155,6 +1162,56 @@ export const listOwnGrants = (
   send(caller, { method: 'GET', path: PATHS.ownGrants }, overrides);
 
 /**
+ * Nominates Usher's first administrator, as the first user: `POST /admin/nominations`, taking
+ * `{ nominee: { subject } }`.
+ *
+ * @param caller the controller and the caller's token.
+ * @param nomination the nominee, by subject.
+ * @param overrides departures from the request.
+ */
+export const nominate = (
+  caller: AdminCaller,
+  nomination: { nominee: { subject: string } },
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  send(
+    caller,
+    { json: { ...nomination }, method: 'POST', path: PATHS.nominations },
+    overrides,
+  );
+
+/**
+ * Accepts a nomination naming the caller: `POST /admin/nominations/{id}/acceptance`, taking no
+ * body.
+ *
+ * @param caller the controller and the caller's token.
+ * @param nominationId the nomination's id.
+ * @param overrides departures from the request.
+ */
+export const acceptNomination = (
+  caller: AdminCaller,
+  nominationId: string,
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  send(
+    caller,
+    { method: 'POST', path: PATHS.nominationAcceptance(nominationId) },
+    overrides,
+  );
+
+/**
+ * Lists the nominations naming the caller: `GET /admin/me/nominations`.
+ *
+ * @param caller the controller and the caller's token.
+ * @param overrides departures from the request.
+ */
+export const listOwnNominations = (
+  caller: AdminCaller,
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  send(caller, { method: 'GET', path: PATHS.ownNominations }, overrides);
+
+/**
  * Revokes a principal's identity entirely (#210 Q1, #212): `POST /admin/people/revocations`, the
  * subject in the body.
  *
@@ -1449,28 +1506,29 @@ export const mintLogoutToken = (
 /** What a management token needs from the configuration. */
 export type ManagementTokenConfiguration = Pick<
   ControllerConfiguration,
-  'administratorRole' | 'managementAudience' | 'managementClients'
+  'firstUserRole' | 'managementAudience' | 'managementClients'
 >;
 
 /**
- * The claims of a management token over the stand-in's Keycloak-shaped defaults (#212 Q3): `aud` the
- * management API, `azp` the first configured management client, the person's subject and address,
- * and Keycloak's default realm roles, with the administrator role beside them for an administrator.
+ * The claims of a management token over the stand-in's Keycloak-shaped defaults (#212 Q3): `aud`
+ * the management API, `azp` the first configured management client, the person's subject and
+ * address, and Keycloak's default realm roles, with the first-user role beside them for the first
+ * user. A token makes no administrator: the store holds who administers.
  *
  * @param provider the stand-in, whose realm names the default roles.
- * @param configuration the management audience and clients, and the administrator role.
+ * @param configuration the management audience and clients, and the first-user role.
  * @param person who calls.
- * @param administrator whether the token carries the administrator role.
+ * @param firstUser whether the token carries the first-user role.
  */
 export const managementClaims = (
   provider: IdentityProvider,
   {
-    administratorRole,
+    firstUserRole,
     managementAudience,
     managementClients,
   }: ManagementTokenConfiguration,
   person: Person,
-  administrator: boolean,
+  firstUser: boolean,
 ): Readonly<Record<string, unknown>> => {
   const [client] = managementClients;
   if (client !== undefined) {
@@ -1485,7 +1543,7 @@ export const managementClaims = (
           `default-roles-${realm}`,
           'offline_access',
           'uma_authorization',
-          ...(administrator ? [administratorRole] : []),
+          ...(firstUser ? [firstUserRole] : []),
         ],
       },
       sub: person.subject,
@@ -1498,23 +1556,23 @@ export const managementClaims = (
  * Mints a management token from the identity provider stand-in.
  *
  * @param provider the stand-in.
- * @param configuration the management audience and clients, and the administrator role.
+ * @param configuration the management audience and clients, and the first-user role.
  * @param person who calls.
- * @param options whether the token carries the administrator role, and anything over its claims.
+ * @param options whether the token carries the first-user role, and anything over its claims.
  */
 export const mintManagementToken = (
   provider: IdentityProvider,
   configuration: ManagementTokenConfiguration,
   person: Person,
   {
-    administrator = false,
+    firstUser = false,
     mint = {},
-  }: { administrator?: boolean; mint?: MintOptions } = {},
+  }: { firstUser?: boolean; mint?: MintOptions } = {},
 ): Promise<string> =>
   provider.mint({
     ...mint,
     claims: {
-      ...managementClaims(provider, configuration, person, administrator),
+      ...managementClaims(provider, configuration, person, firstUser),
       ...mint.claims,
     },
   });
@@ -1529,34 +1587,42 @@ const problem = <Code extends string, Status extends number>(
  * C2's mapping as the rulings amend it. Every refusal is RFC 9457 problem details carrying a `code`
  * and no internal detail, and never repeats a value the caller sent.
  *
- * - 400, no code ruled: a body or query unreadable by its shape (not JSON, not an object, a required
- *   member missing, a member of the wrong type, or a member the operation does not take, other than
- *   those named in its 422), but for a resource registration naming no `accessLevel`, which is
- *   refused 422 (ruled).
+ * - 400, no code ruled: a body or query unreadable by its shape (not JSON, not an object, a
+ *   required member missing, a member of the wrong type, or a member the operation does not take,
+ *   other than those named in its 422), but for a resource registration naming no `accessLevel`,
+ *   which is refused 422 (ruled).
  * - 401, no code ruled: any refused credential, with `WWW-Authenticate: Bearer`.
- * - 403: `serviceAccountNotPermitted`, a service account's token, on every operation before any
- *   lookup; `administratorOnly`, an administrator-only operation (retiring, deleting, serving, a
- *   category's update, asking for revoked grants or retired resources), to everyone else before any
- *   lookup, so identical whether or not the resource exists; `ownersAndAdministratorsOnly`, the
- *   category listing, to a caller neither owning a resource nor administering;
- *   `administratorGrantsNoConsumerAccess`, an administrator granting someone consumer access, which is
- *   the owner's (#212 Q4); `administratorSelfOwnership`, an administrator naming themself owner;
- *   `noAuthorityOnResource`, a caller who may see the resource and holds no authority for the
- *   operation on it.
+ * - 403: `noAdministratorYet`, every operation but nominating, accepting and a nominee's listing,
+ *   to everyone, a service account included, until Usher's first administrator has accepted;
+ *   `notFirstUser`, a nomination by a principal whose token lacks the first-user role, before its
+ *   body is read; `serviceAccountNotPermitted`, a service account's token, on every operation
+ *   before any lookup; `administratorOnly`, an administrator-only operation (retiring, deleting,
+ *   serving, a category's update, asking for revoked grants or retired resources), to everyone
+ *   else before any lookup, so identical whether or not the resource exists;
+ *   `ownersAndAdministratorsOnly`, the category listing, to a caller neither owning a resource nor
+ *   administering; `administratorGrantsNoConsumerAccess`, an administrator granting someone
+ *   consumer access, which is the owner's (#212 Q4); `administratorSelfOwnership`, an
+ *   administrator naming themself owner; `noAuthorityOnResource`, a caller who may see the resource
+ *   and holds no authority for the operation on it.
  * - 404: `resourceNotFound`, a resource the caller may not see or that does not exist;
  *   `holderNotFound`, no account, only once the caller's authority on the resource is established;
  *   `grantNotFound`, any grant id the caller may not act on; `applicationNotFound`, an unregistered
  *   application in a path, its id unknown or malformed, after the 403 for a non-administrator;
  *   `applicationKeyNotFound`, a key id in a revocation's path that is unknown, malformed or names
- *   another application's key, one answer for all three.
+ *   another application's key, one answer for all three; `nomineeNotFound`, a nominee who is
+ *   neither the caller nor a person Usher has met; `nominationNotFound`, a nomination id that is
+ *   malformed, unknown or names someone other than the caller, one answer for all three.
  * - 409: `alreadyExists`; `alreadyHolds`; `doesNotHold`, a key revoked already among them;
- *   `grantsOrInvitationsRemain`, retiring while a non-owner live grant or a pending invitation remains,
- *   its text saying to revoke them first; `resourceNeedsAnOwner`, revoking or declining a resource's
- *   last owner grant; `importInProgress`, a run of the EGO import while another holds its lock;
- *   `applicationKeyLimit`, an issue for an application holding {@link APPLICATION_LIVE_KEY_LIMIT} live
- *   keys already.
- * - 413: `bodyTooLarge`, a body over its endpoint's limit ({@link BODY_LIMIT_BYTES}), the detail naming
- *   the limit and holding nothing of the body (ruled, "#216: faults mid-run, 401 and 413" 4).
+ *   `grantsOrInvitationsRemain`, retiring while a non-owner live grant or a pending invitation
+ *   remains, its text saying to revoke them first; `resourceNeedsAnOwner`, revoking or declining a
+ *   resource's last owner grant; `importInProgress`, a run of the EGO import while another holds
+ *   its lock; `applicationKeyLimit`, an issue for an application holding
+ *   {@link APPLICATION_LIVE_KEY_LIMIT} live keys already; `firstAdministratorAccepted`, a
+ *   nomination or an acceptance once Usher's first administrator has accepted;
+ *   `nominationSuperseded`, an acceptance of a nomination a later one replaced.
+ * - 413: `bodyTooLarge`, a body over its endpoint's limit ({@link BODY_LIMIT_BYTES}), the detail
+ *   naming the limit and holding nothing of the body (ruled, "#216: faults mid-run, 401 and 413"
+ *   4).
  * - 415: `unsupportedMediaType`, a body in a media type other than `application/json`, or in none.
  * - 422, a well-formed request breaking a rule, a member named by the operation's 422 included:
  *   `registrationHasHistory`, deleting a registration that ever held a grant or an invitation, its
@@ -1567,8 +1633,9 @@ const problem = <Code extends string, Status extends number>(
  *   name.
  * - 503: `directoryUnavailable`, an address operation the directory cannot answer;
  *   `importNotConfigured`, a run of the EGO import while its settings are missing, before its
- *   export is read; `storeUnavailable`, an operation that would write on a controller whose database
- *   role may only read, failing closed with no partial effect (#216's refusals and the read-only role).
+ *   export is read; `storeUnavailable`, an operation that would write on a controller whose
+ *   database role may only read, failing closed with no partial effect (#216's refusals and the
+ *   read-only role).
  */
 export const PROBLEMS = Object.freeze({
   administratorGrantsNoConsumerAccess: problem(
@@ -1585,13 +1652,19 @@ export const PROBLEMS = Object.freeze({
   bodyTooLarge: problem('bodyTooLarge', 413),
   directoryUnavailable: problem('directoryUnavailable', 503),
   doesNotHold: problem('doesNotHold', 409),
+  firstAdministratorAccepted: problem('firstAdministratorAccepted', 409),
   grantNotFound: problem('grantNotFound', 404),
   grantsOrInvitationsRemain: problem('grantsOrInvitationsRemain', 409),
   holderNotFound: problem('holderNotFound', 404),
   importInProgress: problem('importInProgress', 409),
   importNeedsAnAudience: problem('importNeedsAnAudience', 422),
   importNotConfigured: problem('importNotConfigured', 503),
+  noAdministratorYet: problem('noAdministratorYet', 403),
   noAuthorityOnResource: problem('noAuthorityOnResource', 403),
+  nominationNotFound: problem('nominationNotFound', 404),
+  nominationSuperseded: problem('nominationSuperseded', 409),
+  nomineeNotFound: problem('nomineeNotFound', 404),
+  notFirstUser: problem('notFirstUser', 403),
   ownerGrantsDoNotExpire: problem('ownerGrantsDoNotExpire', 422),
   ownersAndAdministratorsOnly: problem('ownersAndAdministratorsOnly', 403),
   registrationHasHistory: problem('registrationHasHistory', 422),
@@ -3105,8 +3178,8 @@ export interface CallerOptions {
 }
 
 /**
- * An administrator calling the API, with a fresh management token carrying the configured
- * administrator role.
+ * An administrator calling the API, with a fresh management token, the person seeded as an
+ * administrator in the harness's store first, since a token makes no administrator.
  *
  * @param harness the harness.
  * @param options who calls, the cast's administrator by default; claims over the token's; and the
@@ -3125,7 +3198,25 @@ export const administratorCaller = async (
 });
 
 /**
- * A person calling the API, with a fresh management token carrying no administrator role.
+ * The first user calling the API, with a fresh management token carrying the configured first-user
+ * role.
+ *
+ * @param harness the harness.
+ * @param person who calls.
+ * @param options claims over the token's, and the instance called.
+ */
+export const firstUserCaller = async (
+  harness: Pick<Harness, 'tokens' | 'url'>,
+  person: Person,
+  { mint = {}, url }: CallerOptions = {},
+): Promise<AdminCaller> => ({
+  token: await harness.tokens.firstUser(person, mint),
+  url: url ?? harness.url,
+});
+
+/**
+ * A person calling the API, with a fresh management token carrying no role beyond Keycloak's
+ * defaults, so an administrator only where the store holds them as one.
  *
  * @param harness the harness.
  * @param person who calls.

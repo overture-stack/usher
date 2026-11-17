@@ -1,5 +1,8 @@
 import { StartRefusal } from '../failures/index.js';
-import { ENVIRONMENT_VARIABLES } from './environmentVariables.js';
+import {
+  ENVIRONMENT_VARIABLES,
+  REPLACED_VARIABLES,
+} from './environmentVariables.js';
 import { readRecordRule } from './readRecordRule.js';
 import { readRetentionDurations } from './retention.js';
 import type {
@@ -60,12 +63,11 @@ export const readConfiguration = (
     value: environment[ENVIRONMENT_VARIABLES[field]],
   });
   const retention = readRetentionDurations(variable);
-  const administratorRole = readText(variable('administratorRole'), {
-    fallback: 'usher-platform-admin',
+  const firstUserRole = readText(variable('firstUserRole'), {
+    fallback: 'usher-first-user',
   });
   const managementClients = readList(variable('managementClients'));
   const readings = {
-    administratorRole,
     // The page's tokens are management tokens, so its client is one of the management clients, as listed.
     apiDocsClient: then(
       readText(variable('apiDocsClient'), { emptyAllowed: true, fallback: '' }),
@@ -100,6 +102,7 @@ export const readConfiguration = (
       roleDescription: CONTROLLER_ROLE_DESCRIPTION,
     }),
     eventSource: readText(variable('eventSource')),
+    firstUserRole,
     heartbeatMilliseconds: readInteger(variable('heartbeatMilliseconds'), {
       fallback: 10_000,
       maximum: LONGEST_TIMER_MILLISECONDS,
@@ -123,16 +126,16 @@ export const readConfiguration = (
     port: readInteger(variable('port'), { maximum: 65_535, minimum: 0 }),
     retentionGraceSeconds: retention.retentionGraceSeconds,
     retentionMarginSeconds: retention.retentionMarginSeconds,
-    // Equal names would mark every administrator as a service account.
+    // Equal names would mark the first user as a service account.
     serviceAccountRole: then(
       readText(variable('serviceAccountRole'), {
         fallback: 'usher-service-account',
       }),
       (role): Reading<string> =>
-        administratorRole.kind === 'read' && role === administratorRole.value
+        firstUserRole.kind === 'read' && role === firstUserRole.value
           ? refused(
               variable('serviceAccountRole'),
-              `must name a role other than the one in ${ENVIRONMENT_VARIABLES.administratorRole}`,
+              `must name a role other than the one in ${ENVIRONMENT_VARIABLES.firstUserRole}`,
             )
           : read(role),
     ),
@@ -164,12 +167,20 @@ export const readConfiguration = (
     tokenLifetimeSeconds: retention.tokenLifetimeSeconds,
     trustedProxies: readAddresses(variable('trustedProxies')),
   } satisfies Record<FieldWithVariable, Reading<unknown>>;
-  const problems = Object.values(readings).flatMap((reading) =>
-    reading.kind === 'refused' ? [reading.problem] : [],
+  const replaced = Object.entries(REPLACED_VARIABLES).flatMap(
+    ([variable, replacement]) =>
+      environment[variable] === undefined
+        ? []
+        : [{ rule: `is replaced by ${replacement}: unset it`, variable }],
   );
+  const problems = [
+    ...Object.values(readings).flatMap((reading) =>
+      reading.kind === 'refused' ? [reading.problem] : [],
+    ),
+    ...replaced,
+  ];
   if (problems.length === 0) {
     return {
-      administratorRole: valueOf(readings.administratorRole),
       apiDocsClient: valueOf(readings.apiDocsClient),
       autoAccept: valueOf(readings.autoAccept),
       backChannelLogoutAudiences: valueOf(readings.backChannelLogoutAudiences),
@@ -184,6 +195,7 @@ export const readConfiguration = (
       databaseSchema: valueOf(readings.databaseSchema),
       databaseUrl: valueOf(readings.databaseUrl),
       eventSource: valueOf(readings.eventSource),
+      firstUserRole: valueOf(readings.firstUserRole),
       heartbeatMilliseconds: valueOf(readings.heartbeatMilliseconds),
       host: valueOf(readings.host),
       identityProviderIssuer: valueOf(readings.identityProviderIssuer),

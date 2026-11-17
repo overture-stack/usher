@@ -61,12 +61,16 @@ const standUp = (context: TestContext): Stand => {
       },
     },
     {
+      administratorStatus: async ({ subject }) => ({
+        administrator: subject === 'subject-administrator',
+        anyAdministrator: true,
+      }),
       eventLog: { error: () => undefined },
       refusalTally: { count: () => undefined },
       runAfterCommit: async () => undefined,
       settings: {
-        administratorRole: 'usher-platform-admin',
         clock: { now: () => NOW },
+        firstUserRole: 'usher-first-user',
         identityProviderIssuer: ISSUER,
         managementAudience: 'usher-management',
         managementClients: ['usher-ui'],
@@ -82,7 +86,6 @@ const standUp = (context: TestContext): Stand => {
             exp: SECONDS + 300,
             iat: SECONDS - 10,
             iss: ISSUER,
-            realm_access: { roles: ['usher-platform-admin'] },
             sub: 'subject-administrator',
             typ: 'Bearer',
           },

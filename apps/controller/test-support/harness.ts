@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { TestContext } from 'node:test';
 
+import { decodeJwt } from 'jose';
 import type pg from 'pg';
 
 import {
@@ -48,6 +49,7 @@ import {
   inTurn,
   type PolicyFixture,
   restoreStoreSnapshot,
+  seedAdministrator,
   type SeededPolicy,
   seedPolicy,
   setEpoch,
@@ -59,7 +61,8 @@ import { type Cleanup, cleanupFor, suiteCleanup } from './waiting.js';
 
 /**
  * What gives the harness a platform administrator's management token for registering its
- * applications and issuing their first keys, given the configuration its controller runs with.
+ * applications and issuing their first keys, given the configuration its controller runs with. The
+ * harness seeds the person the token names as an administrator before using it.
  */
 export type AdministratorTokenSource = (
   configuration: ControllerConfiguration,
@@ -115,6 +118,17 @@ export interface HarnessOptions {
   postgresql?: DedicatedContainer;
 
   /**
+   * Whether the harness seeds its administrator, `PEOPLE.administrator` under the configured
+   * issuer, once its own controller first listens and before it registers anything: true by
+   * default, so a test acting as an administrator, or as any other principal, finds Usher with an
+   * administrator. False leaves the store holding none, as before the first user's nomination is
+   * accepted, so every operation but nominating, accepting and a nominee's listing is refused: a
+   * harness registering applications then seeds the administrator whose token registers them, and
+   * no other. A harness starting no controller seeds none until it first starts one.
+   */
+  seedsAdministrator?: boolean;
+
+  /**
    * Whether the harness starts a controller: true by default. A test starting its own instances
    * passes false and starts them from the harness's configuration, or calls
    * {@link Harness.restart}; the fixture is then seeded whole before anything starts, its
@@ -133,10 +147,17 @@ export interface HarnessOptions {
 
 /** What the harness mints tokens with: every one from the identity provider stand-in. */
 export interface HarnessTokens {
-  /** An administrator's management token, carrying the configured administrator role. */
+  /**
+   * An administrator's management token: the person is seeded as an administrator in the harness's
+   * store first, under the configured issuer, since a token makes no administrator, and the token
+   * carries no role beyond Keycloak's defaults.
+   */
   administrator(person: Person, options?: MintOptions): Promise<string>;
 
-  /** A management token without the administrator role. */
+  /** The first user's management token, carrying the configured first-user role. */
+  firstUser(person: Person, options?: MintOptions): Promise<string>;
+
+  /** A management token carrying no role beyond Keycloak's defaults. */
   management(person: Person, options?: MintOptions): Promise<string>;
 
   /**
@@ -389,7 +410,6 @@ export const harnessConfiguration = ({
   overrides,
 }: HarnessSettings): ControllerConfiguration =>
   passwordsApart({
-    administratorRole: 'usher-platform-admin',
     allowedCharactersExtra: '',
     apiDocsClient: '',
     autoAccept: false,
@@ -412,6 +432,7 @@ export const harnessConfiguration = ({
     egoImportBaseTier: null,
     egoImportPrefixes: [],
     eventSource: HARNESS_EVENT_SOURCE,
+    firstUserRole: 'usher-first-user',
     grantRateThreshold: { operationCount: 100, windowSeconds: 60 },
     heartbeatMilliseconds: 10_000,
     host: '127.0.0.1',
@@ -524,10 +545,17 @@ const tokensFor = (
   identityProvider: IdentityProvider,
   configuration: () => ControllerConfiguration,
   applications: () => readonly HarnessApplication[],
+  seedAdministratorOf: (subject: string) => Promise<unknown>,
 ): HarnessTokens => ({
-  administrator: (person, mint = {}) =>
+  administrator: async (person, mint = {}) => {
+    await seedAdministratorOf(person.subject);
+    return mintManagementToken(identityProvider, configuration(), person, {
+      mint,
+    });
+  },
+  firstUser: (person, mint = {}) =>
     mintManagementToken(identityProvider, configuration(), person, {
-      administrator: true,
+      firstUser: true,
       mint,
     }),
   management: (person, mint = {}) =>
@@ -597,21 +625,18 @@ export const withRegisteredIds = (
 
 /**
  * The harness's default {@link AdministratorTokenSource}: a management token minted by the stand-in
- * for `PEOPLE.administrator`, carrying the configured administrator role, for a controller trusting
- * the stand-in's issuer.
+ * for `PEOPLE.administrator`, for a controller trusting the stand-in's issuer.
  *
  * @param identityProvider the stand-in.
  */
 export const standInAdministrator =
   (identityProvider: IdentityProvider): AdministratorTokenSource =>
   (configuration) =>
-    mintManagementToken(identityProvider, configuration, PEOPLE.administrator, {
-      administrator: true,
-    });
+    mintManagementToken(identityProvider, configuration, PEOPLE.administrator);
 
 /**
  * An {@link AdministratorTokenSource} for a controller trusting a Keycloak realm: the realm's own
- * administrator, the first of its people holding the configured administrator role, signed in through
+ * administrator, the first of its people holding the configured first-user role, signed in through
  * the first of its clients that is a configured management client and carries the management API's
  * audience. The token is Keycloak's own, from a real sign-in.
  *
@@ -625,14 +650,14 @@ export const realmAdministrator =
     keycloak: KeycloakRealm;
     options: KeycloakRealmOptions;
   }): AdministratorTokenSource =>
-  async ({ administratorRole, managementAudience, managementClients }) => {
+  async ({ firstUserRole, managementAudience, managementClients }) => {
     const client = options.clients.find(
       ({ audiences, clientId }) =>
         audiences.includes(managementAudience) &&
         managementClients.includes(clientId),
     );
     const administrator = options.people.find(({ realmRoles = [] }) =>
-      realmRoles.includes(administratorRole),
+      realmRoles.includes(firstUserRole),
     );
     if (client === undefined || administrator === undefined) {
       throw new Error(
@@ -739,6 +764,12 @@ interface Started {
   port: number | undefined;
 
   running: RunningController | undefined;
+
+  /**
+   * The last seeding of an administrator, settled or not: each seeding waits for the one before it,
+   * since each runs a transaction of its own on the harness's migration connection.
+   */
+  seeding: Promise<unknown>;
 }
 
 const startedWith = async (
@@ -750,6 +781,7 @@ const startedWith = async (
     applications: givenNames = DEFAULT_APPLICATIONS,
     configuration: overrides = {},
     fixture,
+    seedsAdministrator = true,
     startsController = true,
   }: HarnessOptions,
 ): Promise<Harness> => {
@@ -766,6 +798,7 @@ const startedWith = async (
     port: undefined,
     running: undefined,
     seededIds: new Map(),
+    seeding: Promise.resolve(),
   };
   const stopController = async (): Promise<void> => {
     const { running } = state;
@@ -777,8 +810,11 @@ const startedWith = async (
       return;
     }
     try {
+      if (seedsAdministrator) {
+        await seedAdministratorOf(PEOPLE.administrator.subject);
+      }
       state.applications = await boundApplications(
-        administratorToken,
+        seededAdministratorToken,
         state.configuration,
         withTrailingSlash(running.url),
         displayNames,
@@ -815,6 +851,31 @@ const startedWith = async (
     database.connect('migration'),
     database.connect('runtime'),
   ]);
+  // A token makes no administrator, so whoever acts as one is seeded as one first, under the issuer
+  // the controller trusts as the token is asked for.
+  const seedAdministratorOf = (subject: string): Promise<string> => {
+    const seeded = state.seeding
+      .catch(() => undefined)
+      .then(() =>
+        seedAdministrator(migration, {
+          issuer: state.configuration.identityProviderIssuer,
+          subject,
+        }),
+      );
+    state.seeding = seeded;
+    return seeded;
+  };
+  const seededAdministratorToken: AdministratorTokenSource = async (
+    configuration,
+  ) => {
+    const token = await administratorToken(configuration);
+    const { sub } = decodeJwt(token);
+    if (sub === undefined) {
+      throw new Error("the administrator's token names no subject to seed");
+    }
+    await seedAdministratorOf(sub);
+    return token;
+  };
   const seeding: PolicyFixture | undefined =
     fixture === undefined
       ? undefined
@@ -873,6 +934,7 @@ const startedWith = async (
         identityProvider,
         () => state.configuration,
         registered,
+        seedAdministratorOf,
       ),
       get url(): URL {
         return url();

@@ -30,7 +30,6 @@ const syntheticKey = (fill: number): string =>
 const freshSecret = (): string => randomBytes(32).toString('base64url');
 
 const CONFIGURATION: ControllerConfiguration = {
-  administratorRole: 'usher-platform-admin',
   allowedCharactersExtra: '',
   apiDocsClient: '',
   autoAccept: false,
@@ -53,6 +52,7 @@ const CONFIGURATION: ControllerConfiguration = {
   egoImportBaseTier: null,
   egoImportPrefixes: [],
   eventSource: 'https://usher.example.org/controller',
+  firstUserRole: 'usher-first-user',
   grantRateThreshold: { operationCount: 100, windowSeconds: 60 },
   heartbeatMilliseconds: 10_000,
   host: '127.0.0.1',
@@ -84,7 +84,6 @@ const CONFIGURATION: ControllerConfiguration = {
 const OTHER_VALUES: {
   [Field in FieldWithVariable]: ControllerConfiguration[Field];
 } = {
-  administratorRole: 'ims-usher-admin',
   apiDocsClient: 'usher-ui-test',
   autoAccept: true,
   backChannelLogoutAudiences: ['portal-test', 'submission-test'],
@@ -96,6 +95,7 @@ const OTHER_VALUES: {
   databaseSchema: 'usher_other',
   databaseUrl: 'postgres://usher_controller@127.0.0.1:5433/usher_test',
   eventSource: 'https://usher-two.example.org/controller',
+  firstUserRole: 'ims-usher-first-user',
   heartbeatMilliseconds: 500,
   host: '::1',
   identityProviderIssuer: 'https://auth.example.org/realms/usher',

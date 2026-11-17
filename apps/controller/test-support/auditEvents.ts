@@ -22,6 +22,8 @@ export const EVENT_TYPE_PREFIX = 'bio.overture.';
  * the Events table.
  */
 export const AUDIT_EVENT_TYPES = Object.freeze({
+  adminAcceptance: 'admin.acceptance',
+  adminNomination: 'admin.nomination',
   adminOverride: 'admin.override',
   admissionShareExceededTally: 'admission.shareExceededTally',
   applicationKeyConfirmation: 'applicationKey.confirmation',

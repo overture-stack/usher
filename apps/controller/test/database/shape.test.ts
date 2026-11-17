@@ -4,6 +4,7 @@ import { suite, test } from 'node:test';
 
 import { USHER_SCHEMA } from '../../test-support/database.js';
 import {
+  administratorRow,
   auditEntryRow,
   BASE_FIXTURE,
   checksOn,
@@ -13,6 +14,7 @@ import {
   identityRow,
   insertRow,
   invitationRow,
+  nominationRow,
   noticeRow,
   openDatabase,
   openSeededDatabase,
@@ -39,6 +41,7 @@ import {
 } from '../../test-support/policy.js';
 
 const {
+  administrators,
   applicationKeys,
   applications,
   auditLog,
@@ -52,6 +55,7 @@ const {
   groups,
   invitations,
   keyEncryptionKeyCheck,
+  nominations,
   notices,
   notificationOutbox,
   principalRevocations,
@@ -80,6 +84,7 @@ const UUID_KEYED_TABLES = [
   grants,
   groups,
   invitations,
+  nominations,
   notificationOutbox,
   principalRevocations,
   POLICY_TABLES.resourceFields,
@@ -198,6 +203,22 @@ suite("the schema's shape", () => {
       );
       await insertRow(owner, auditLog, auditEntryRow({ grantId }));
       await insertRow(owner, auditLog, auditEntryRow({ grantId: steward }));
+      await inTurn(
+        [
+          { at: new Date(Date.now() - 1000), name: 'bo' },
+          { at: new Date(), name: 'cy' },
+        ],
+        ({ at, name }) =>
+          insertRow(
+            owner,
+            nominations,
+            nominationRow({
+              nominatedAt: at,
+              nominatedBy: steward,
+              nomineeId: seededId(seeded.users, name),
+            }),
+          ),
+      );
       await inTurn(['bo', 'cy'], (name) =>
         insertRow(owner, notificationOutbox, {
           [notificationOutbox.columns.createdAt]: new Date(),
@@ -263,6 +284,7 @@ suite("the schema's shape", () => {
         columns.map(([column, minute]) => [column, inRepeatedHour(minute)]),
       );
     const times = {
+      administrators: [[administrators.columns.acceptedAt, 13]],
       applicationKeys: [
         [applicationKeys.columns.confirmedAt, 8],
         [applicationKeys.columns.issuedAt, 7],
@@ -285,6 +307,7 @@ suite("the schema's shape", () => {
         [invitations.columns.invitedAt, 10],
       ],
       keyEncryptionKeyCheck: [[keyEncryptionKeyCheck.columns.recordedAt, 11]],
+      nominations: [[nominations.columns.nominatedAt, 12]],
       notices: [[notices.columns.createdAt, 30]],
       notificationOutbox: [
         [notificationOutbox.columns.createdAt, 32],
@@ -324,6 +347,17 @@ suite("the schema's shape", () => {
         const identity = await insertRow(toronto, userIdentities, {
           ...identityRow(userId, 'instant-probe-subject'),
           ...timed(times.userIdentities),
+        });
+        const nomination = await insertRow(toronto, nominations, {
+          ...nominationRow({ nominatedBy: steward, nomineeId: userId }),
+          ...timed(times.nominations),
+        });
+        await insertRow(toronto, administrators, {
+          ...administratorRow({
+            nominationId: String(nomination[nominations.columns.id]),
+            userId,
+          }),
+          ...timed(times.administrators),
         });
         const resource = await insertRow(toronto, resources, {
           ...resourceRow('STUDY-T9', steward),
@@ -544,6 +578,18 @@ suite("the schema's shape", () => {
             key: exchangedSids.columns.sid,
             keyValue: 'instant-probe-exchanged-sid',
             table: exchangedSids,
+          },
+          {
+            columns: times.nominations,
+            key: nominations.columns.id,
+            keyValue: nomination[nominations.columns.id],
+            table: nominations,
+          },
+          {
+            columns: times.administrators,
+            key: administrators.columns.userId,
+            keyValue: userId,
+            table: administrators,
           },
         ];
       },

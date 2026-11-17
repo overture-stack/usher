@@ -78,6 +78,9 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  *   its subject (R7, option a).
  * - `global_revocations`: who revoked globally, when, and a fixed reason code; its insert writes the
  *   global notice and raises the policy generation in its transaction.
+ * - `nominations` and `administrators`: each nomination of a person to be an administrator, kept as
+ *   written, its `nominated_at` later than every nomination's before it, and each administrator, by
+ *   the nomination they accepted (ruled).
  * - `schema_migrations`: each applied migration's name, a checksum of its content, and when it was
  *   applied.
  * - `change_records`: `old_row` and `new_row` hold a row's values as a JSON object keyed by column
@@ -95,6 +98,14 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  * - `audit_log.severity`: the event's severity as its line carries it (#214 Q2).
  */
 export const POLICY_TABLES = {
+  administrators: {
+    columns: {
+      acceptedAt: 'accepted_at',
+      nominationId: 'nomination_id',
+      userId: 'user_id',
+    },
+    name: 'administrators',
+  },
   applicationKeys: {
     columns: {
       applicationId: 'application_id',
@@ -254,6 +265,15 @@ export const POLICY_TABLES = {
       recordedAt: 'recorded_at',
     },
     name: 'key_encryption_key_check',
+  },
+  nominations: {
+    columns: {
+      id: 'id',
+      nominatedAt: 'nominated_at',
+      nominatedBy: 'nominated_by',
+      nomineeId: 'nominee_id',
+    },
+    name: 'nominations',
   },
   noticeRetention: {
     columns: { floorSeconds: 'floor_seconds', singleton: 'singleton' },
@@ -898,6 +918,7 @@ type Cell =
 type Row = Readonly<Record<string, Cell>>;
 
 const {
+  administrators,
   applicationResources,
   applications,
   capabilities,
@@ -907,6 +928,7 @@ const {
   groupUsers,
   groups,
   invitations,
+  nominations,
   principalRevocations,
   resourceCategories,
   resourceFieldValues,
@@ -1772,6 +1794,37 @@ export const usersWithSubject = async (
   );
   return rows[0]?.count ?? 0;
 };
+
+/**
+ * Seeds a person as one of Usher's administrators by SQL, under the system actor, in a transaction
+ * of its own: the person holding the identity, written with it where none holds it yet, a
+ * nomination naming them, by themself, later than every nomination before it, and their acceptance
+ * of it. A person who is an administrator already is left as they are.
+ *
+ * @param client a connection under the migration role, holding no transaction.
+ * @param identity the issuer and the subject of the person's identity.
+ * @returns the person's `users.id`.
+ */
+export const seedAdministrator = (
+  client: pg.ClientBase,
+  identity: { issuer: string; subject: string },
+): Promise<string> =>
+  inTransactionAs(client, SYSTEM_ACTOR, async () => {
+    const userId = await heldOrWrittenPerson(client, identity);
+    const column = (name: string): string => pg.escapeIdentifier(name);
+    await client.query(
+      `WITH nominated AS (
+         INSERT INTO ${qualified(nominations)} (${column(nominations.columns.nominatedAt)}, ${column(nominations.columns.nominatedBy)}, ${column(nominations.columns.nomineeId)})
+         SELECT greatest(clock_timestamp(), (SELECT max(${column(nominations.columns.nominatedAt)}) + interval '1 millisecond' FROM ${qualified(nominations)})), $1, $1
+          WHERE NOT EXISTS (SELECT 1 FROM ${qualified(administrators)} WHERE ${column(administrators.columns.userId)} = $1)
+         RETURNING ${column(nominations.columns.id)} AS id
+       )
+       INSERT INTO ${qualified(administrators)} (${column(administrators.columns.acceptedAt)}, ${column(administrators.columns.nominationId)}, ${column(administrators.columns.userId)})
+       SELECT clock_timestamp(), nominated.id, $1 FROM nominated`,
+      [userId],
+    );
+    return userId;
+  });
 
 /**
  * An id seeding wrote, by the fixture's name for it.

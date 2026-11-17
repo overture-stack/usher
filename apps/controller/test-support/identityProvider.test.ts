@@ -346,7 +346,7 @@ suite("a service account's token", () => {
     const provider = await started(context);
 
     const token = await mintServiceAccountToken(provider, {
-      administratorRole: 'usher-platform-admin',
+      firstUserRole: 'usher-first-user',
       managementAudience: 'usher-management-test',
       managementClients: ['usher-ui-test'],
     });

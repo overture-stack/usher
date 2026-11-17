@@ -20,7 +20,7 @@ export const GRANT_PROBLEMS = Object.freeze({
     'administratorRoleNotGranted',
     422,
     'The administrator role is not granted',
-    'No one grants the admin role: a platform administrator holds it through the identity provider.',
+    'No one grants the admin role: a person becomes an administrator by accepting a nomination.',
   ),
   administratorSelfOwnership: problem(
     'administratorSelfOwnership',

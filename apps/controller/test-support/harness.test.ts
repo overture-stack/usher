@@ -207,14 +207,14 @@ suite("the harness's configuration", () => {
     assert.equal(new URL(configuration.databaseUrl).password, '');
   });
 
-  test("names the management API and its client, the administrator and service-account roles and the rulings' defaults", () => {
+  test("names the management API and its client, the first-user and service-account roles and the rulings' defaults", () => {
     const configuration = harnessConfiguration(SETTINGS);
 
     assert.deepEqual(
       {
-        administratorRole: configuration.administratorRole,
         autoAccept: configuration.autoAccept,
         baseline: configuration.baseline,
+        firstUserRole: configuration.firstUserRole,
         host: configuration.host,
         issuer: configuration.issuer,
         managementAudience: configuration.managementAudience,
@@ -225,9 +225,9 @@ suite("the harness's configuration", () => {
         tokenLifetimeSeconds: configuration.tokenLifetimeSeconds,
       },
       {
-        administratorRole: 'usher-platform-admin',
         autoAccept: false,
         baseline: ['count', 'view', 'export'],
+        firstUserRole: 'usher-first-user',
         host: '127.0.0.1',
         issuer: 'https://usher.example.org',
         managementAudience: 'usher-management-test',
@@ -427,7 +427,8 @@ const realmPerson = (
 });
 
 // A realm of the harness's own: its management client, an administrator holding the configured
-// administrator role, and a person holding none.
+// first-user role, which marks the person the harness seeds as an administrator, and a person
+// holding none.
 const REGISTRAR_REALM: KeycloakRealmOptions = Object.freeze({
   clients: [
     {
@@ -436,17 +437,17 @@ const REGISTRAR_REALM: KeycloakRealmOptions = Object.freeze({
     },
   ],
   people: [
-    realmPerson('registrar@example.org', [REGISTERING.administratorRole]),
+    realmPerson('registrar@example.org', [REGISTERING.firstUserRole]),
     realmPerson('bystander@example.org', []),
   ],
   realm: 'usher-harness-test',
-  realmRoles: [REGISTERING.administratorRole],
+  realmRoles: [REGISTERING.firstUserRole],
 });
 
 const REALM_ADMINISTRATOR = 'registrar@example.org';
 
 suite("the platform administrator registering a harness's applications", () => {
-  test("is by default the stand-in's, its token carrying the stand-in's issuer, the management API, the first management client and the administrator role", async (context) => {
+  test("is by default the stand-in's, its token carrying the stand-in's issuer, the management API, the first management client and no role beyond Keycloak's defaults", async (context) => {
     const provider = await startIdentityProvider();
     context.after(() => provider.stop());
     const configuration = harnessConfiguration({
@@ -461,7 +462,7 @@ suite("the platform administrator registering a harness's applications", () => {
       provider,
       configuration,
       PEOPLE.administrator,
-      true,
+      false,
     );
 
     assert.equal(claims.iss, provider.issuer);
@@ -488,7 +489,7 @@ suite("the platform administrator registering a harness's applications", () => {
         ...REGISTRAR_REALM,
         people: REGISTRAR_REALM.people.filter(
           ({ realmRoles = [] }) =>
-            !realmRoles.includes(REGISTERING.administratorRole),
+            !realmRoles.includes(REGISTERING.firstUserRole),
         ),
       },
     });
@@ -506,13 +507,94 @@ suite("the platform administrator registering a harness's applications", () => {
         realmAccess !== null &&
         'roles' in realmAccess &&
         Array.isArray(realmAccess.roles) &&
-        realmAccess.roles.includes(REGISTERING.administratorRole),
-      'the token carries the administrator role',
+        realmAccess.roles.includes(REGISTERING.firstUserRole),
+      'the token carries the first-user role',
     );
     await assert.rejects(withoutAdministrator(REGISTERING), {
       message:
         'the realm holds no management client or no administrator to sign in',
     });
+  });
+});
+
+suite("a harness's administrators", () => {
+  const administratorSubjects = async (
+    client: pg.ClientBase,
+  ): Promise<readonly string[]> => {
+    const { administrators, userIdentities } = POLICY_TABLES;
+    const { rows } = await client.query<{ subject: string }>(
+      `SELECT identity.${userIdentities.columns.idpSubjectId} AS subject
+         FROM ${qualified(administrators)} held
+         JOIN ${qualified(userIdentities)} identity
+           ON identity.${userIdentities.columns.userId} = held.${administrators.columns.userId}
+        ORDER BY held.${administrators.columns.acceptedAt}`,
+    );
+    return rows.map(({ subject }) => subject);
+  };
+
+  test("seeds PEOPLE.administrator once its controller first listens, then each person an administrator's token is asked for, once", async () => {
+    await withHarness({ applications: [] }, async (harness) => {
+      const seeded = await administratorSubjects(harness.clients.migration);
+
+      await harness.tokens.administrator(PEOPLE.eli);
+      await harness.tokens.administrator(PEOPLE.eli);
+      await harness.tokens.firstUser(PEOPLE.ana);
+      await harness.tokens.management(PEOPLE.bo);
+
+      assert.deepEqual(seeded, [PEOPLE.administrator.subject]);
+      assert.deepEqual(await administratorSubjects(harness.clients.migration), [
+        PEOPLE.administrator.subject,
+        PEOPLE.eli.subject,
+      ]);
+    });
+  });
+
+  test('seeds none when told not to, as before the first user nominates one, nor before its controller first listens', async () => {
+    await withHarness(
+      { applications: [], seedsAdministrator: false },
+      async (told) => {
+        assert.deepEqual(
+          await administratorSubjects(told.clients.migration),
+          [],
+        );
+      },
+    );
+    await withHarness(
+      { applications: [], startsController: false },
+      async (harness) => {
+        assert.deepEqual(
+          await administratorSubjects(harness.clients.migration),
+          [],
+        );
+      },
+    );
+  });
+
+  test("gives the first user's token the configured first-user role, and no other token any role beyond Keycloak's defaults", async () => {
+    await withHarness(
+      { applications: [], startsController: false },
+      async (harness) => {
+        const rolesOf = (token: string): unknown =>
+          Reflect.get(Object(decodeJwt(token)['realm_access']), 'roles');
+
+        const roles = [
+          rolesOf(await harness.tokens.firstUser(PEOPLE.ana)),
+          rolesOf(await harness.tokens.administrator(PEOPLE.eli)),
+          rolesOf(await harness.tokens.management(PEOPLE.bo)),
+        ];
+
+        const defaults = [
+          'default-roles-usher-test',
+          'offline_access',
+          'uma_authorization',
+        ];
+        assert.deepEqual(roles, [
+          [...defaults, harness.configuration.firstUserRole],
+          defaults,
+          defaults,
+        ]);
+      },
+    );
   });
 });
 

@@ -28,11 +28,11 @@ const principalOf = (
   claims: TokenClaims,
   subject: string,
   {
-    administratorRole,
+    firstUserRole,
     serviceAccountRole,
-  }: Pick<ManagementTokenSettings, 'administratorRole' | 'serviceAccountRole'>,
-): Principal => ({
-  administrator: realmRolesOf(claims).includes(administratorRole),
+  }: Pick<ManagementTokenSettings, 'firstUserRole' | 'serviceAccountRole'>,
+): Omit<Principal, 'administrator'> => ({
+  firstUser: realmRolesOf(claims).includes(firstUserRole),
   subject,
   type: isServiceAccount(claims, serviceAccountRole)
     ? 'serviceAccount'
@@ -50,19 +50,19 @@ const principalOf = (
  * Any `nbf` must be reached, within the clock tolerance. Its `aud`, a string or a list, must name the
  * management API, and its `azp` must name a configured management client. Each refusal from the
  * access-token check on names the token's subject. A token that {@link isServiceAccount} marks as a
- * service account's is read as one, whether or not it also holds the administrator realm role. A
- * principal holding the administrator realm role, compared by its exact name, is read as a platform
- * administrator.
+ * service account's is read as one, whether or not it also holds the first-user realm role. Whether
+ * the token holds the first-user realm role, compared by its exact name, is read; a token says
+ * nothing of admin status, which the store holds.
  *
  * @param token the token's verified claims and protected header.
- * @param settings the management API's audience and clients, the administrator and service-account
+ * @param settings the management API's audience and clients, the first-user and service-account
  *   roles, and the longest lifetime a sign-in token may have.
  * @param now the instant, in milliseconds since the Unix epoch.
  */
 export const readManagementClaims = (
   token: TokenContents,
   {
-    administratorRole,
+    firstUserRole,
     managementAudience,
     managementClients,
     serviceAccountRole,
@@ -99,7 +99,7 @@ export const readManagementClaims = (
     return {
       kind: 'accepted',
       principal: principalOf(claims, subject, {
-        administratorRole,
+        firstUserRole,
         serviceAccountRole,
       }),
       session: sessionOf(claims),

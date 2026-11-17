@@ -4,6 +4,7 @@ export { refusalTallyEvent } from './refusalTallyEvent.js';
 export { REFUSAL_TALLY_INTERVAL_MILLISECONDS } from './refusalTallyIntervalMilliseconds.js';
 export { readTextMembers } from './requestBody.js';
 export type {
+  AdministratorStatus,
   AfterCommitStepName,
   EventMembers,
   InputContext,

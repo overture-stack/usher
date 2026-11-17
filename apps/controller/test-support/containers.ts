@@ -1119,7 +1119,7 @@ export interface KeycloakPerson {
 
   password: string;
 
-  /** Realm roles beside Keycloak's defaults, such as the administrator role. */
+  /** Realm roles beside Keycloak's defaults, such as the first-user role. */
   realmRoles?: readonly string[];
 
   username: string;
@@ -1155,7 +1155,7 @@ export interface KeycloakRealmOptions {
   people: readonly KeycloakPerson[];
   realm: string;
 
-  /** Realm roles the realm defines, such as the administrator role. */
+  /** Realm roles the realm defines, such as the first-user role. */
   realmRoles?: readonly string[];
 }
 
@@ -1248,21 +1248,21 @@ export const DEFAULT_KEYCLOAK_REALM: KeycloakRealmOptions = Object.freeze({
  * controller's directory; and people at example.org: Bo verified (`sub.bo@`), his near misses
  * (`bo.smith@`, `abo@`), non-ASCII text (`zoë@`), plus-addressing (`bo+ims@`), an unverified address
  * (`una@`), a disabled account (`disabled@`), two accounts sharing `dup@` (the realm allowing it), an
- * administrator (`admin.one@`) holding the administrator role, an owner (`owner.ana@`) and an outsider
+ * administrator (`admin.one@`) holding the first-user role, an owner (`owner.ana@`) and an outsider
  * (`outsider.cy@`) for the grants suites, and two accounts a test disables (`paused@`) or deletes
  * (`leaving@`) while it runs, each its own so a realm a suite shares stays as imported for every other
  * test. Usernames are the addresses, the two sharing one apart.
  *
- * @param options the administrator role, the management API's audience and client, and the realm's
+ * @param options the first-user role, the management API's audience and client, and the realm's
  *   name, each the harness's by default.
  */
 export const addressKeycloakRealm = ({
-  administratorRole = 'usher-platform-admin',
+  firstUserRole = 'usher-first-user',
   managementAudience = 'usher-management-test',
   managementClient = 'usher-ui-test',
   realm = 'overture',
 }: {
-  administratorRole?: string;
+  firstUserRole?: string;
   managementAudience?: string;
   managementClient?: string;
   realm?: string;
@@ -1304,7 +1304,7 @@ export const addressKeycloakRealm = ({
       person('dup.one', 'dup@example.org'),
       person('dup.two', 'dup@example.org'),
       person('admin.one@example.org', 'admin.one@example.org', {
-        realmRoles: [administratorRole],
+        realmRoles: [firstUserRole],
       }),
       person('owner.ana@example.org', 'owner.ana@example.org', {
         firstName: 'Ana',
@@ -1324,7 +1324,7 @@ export const addressKeycloakRealm = ({
       }),
     ],
     realm,
-    realmRoles: [administratorRole],
+    realmRoles: [firstUserRole],
   };
 };
 

@@ -7,6 +7,7 @@ import { suite, type TestContext, test } from 'node:test';
 import { decodeJwt, decodeProtectedHeader } from 'jose';
 
 import {
+  acceptNomination,
   addSubmitter,
   type AdminCaller,
   administratorCaller,
@@ -43,6 +44,7 @@ import {
   deleteResource,
   deniedEventReason,
   EXTERNAL_ID_MAXIMUM_LENGTH,
+  firstUserCaller,
   GRANT_REVOCATION_REASONS,
   IDENTITY_REVOCATION_REASONS,
   instantOf,
@@ -54,6 +56,7 @@ import {
   listedGrants,
   listedResources,
   listOwnGrants,
+  listOwnNominations,
   MANAGEMENT_ROUTES,
   managementRouteOf,
   managementRouteOfOperation,
@@ -67,6 +70,7 @@ import {
   namesBodyLimit,
   nextCursor,
   pageMembersBeside,
+  nominate,
   personCaller,
   PLATFORM_REVOCATION_REASONS,
   postBackChannelLogout,
@@ -421,6 +425,25 @@ const OPERATIONS: readonly Expected[] = [
     target: '/admin/me/grants',
   },
   {
+    call: (caller) => listOwnNominations(caller),
+    method: 'GET',
+    name: 'listOwnNominations',
+    target: '/admin/me/nominations',
+  },
+  {
+    body: { nominee: { subject: 'bo-0001' } },
+    call: (caller) => nominate(caller, { nominee: { subject: 'bo-0001' } }),
+    method: 'POST',
+    name: 'nominate',
+    target: '/admin/nominations',
+  },
+  {
+    call: (caller) => acceptNomination(caller, GRANT),
+    method: 'POST',
+    name: 'acceptNomination',
+    target: `/admin/nominations/${GRANT}/acceptance`,
+  },
+  {
     body: { reason: 'compromised account', subject: 'auth0|bo+test/=' },
     call: (caller) =>
       revokeIdentity(caller, {
@@ -727,11 +750,11 @@ suite('the back-channel logout endpoint', () => {
 });
 
 suite('management tokens', () => {
-  test('address the management API from the first management client, and carry the administrator role only for an administrator', async (context) => {
+  test('address the management API from the first management client, and carry the first-user role only for the first user', async (context) => {
     const provider = await startIdentityProvider();
     context.after(() => provider.stop());
     const configuration = {
-      administratorRole: 'ims-usher-admin',
+      firstUserRole: 'ims-usher-first-user',
       managementAudience: 'usher-management-test',
       managementClients: ['usher-ui-test', 'usher-cli-test'],
     };
@@ -739,7 +762,7 @@ suite('management tokens', () => {
 
     const administrator = decodeJwt(
       await mintManagementToken(provider, configuration, person, {
-        administrator: true,
+        firstUser: true,
       }),
     );
     const owner = decodeJwt(
@@ -757,7 +780,7 @@ suite('management tokens', () => {
         'default-roles-usher-test',
         'offline_access',
         'uma_authorization',
-        'ims-usher-admin',
+        'ims-usher-first-user',
       ],
     });
     assert.deepEqual(owner['realm_access'], {
@@ -923,7 +946,9 @@ suite('the problem codes and reason vocabularies', () => {
         'administratorGrantsNoConsumerAccess',
         'administratorOnly',
         'administratorSelfOwnership',
+        'noAdministratorYet',
         'noAuthorityOnResource',
+        'notFirstUser',
         'ownersAndAdministratorsOnly',
         'serviceAccountNotPermitted',
       ],
@@ -932,6 +957,8 @@ suite('the problem codes and reason vocabularies', () => {
         'applicationNotFound',
         'grantNotFound',
         'holderNotFound',
+        'nominationNotFound',
+        'nomineeNotFound',
         'resourceNotFound',
       ],
       409: [
@@ -939,8 +966,10 @@ suite('the problem codes and reason vocabularies', () => {
         'alreadyHolds',
         'applicationKeyLimit',
         'doesNotHold',
+        'firstAdministratorAccepted',
         'grantsOrInvitationsRemain',
         'importInProgress',
+        'nominationSuperseded',
         'resourceNeedsAnOwner',
       ],
       413: ['bodyTooLarge'],
@@ -1664,13 +1693,17 @@ suite('internal detail in an answer', () => {
 });
 
 suite('callers', () => {
-  test("gives an administrator's and a person's token for the harness's controller, or another instance", async () => {
+  test("gives an administrator's, the first user's and a person's token for the harness's controller, or another instance", async () => {
     const minted: string[] = [];
     const harness = {
       tokens: {
         administrator: async (person: { subject: string }) => {
           minted.push(`administrator ${person.subject}`);
           return 'administrator-token';
+        },
+        firstUser: async (person: { subject: string }) => {
+          minted.push(`first user ${person.subject}`);
+          return 'first-user-token';
         },
         management: async (person: { subject: string }) => {
           minted.push(`person ${person.subject}`);
@@ -1691,6 +1724,11 @@ suite('callers', () => {
       email: 'bo@example.org',
       subject: 'bo-0001',
     });
+    const firstUser = await firstUserCaller(
+      harness,
+      { email: 'ana@example.org', subject: 'ana-0001' },
+      { url: beside },
+    );
 
     assert.deepEqual(administrator, {
       token: 'administrator-token',
@@ -1698,10 +1736,12 @@ suite('callers', () => {
     });
     assert.deepEqual(elsewhere, { token: 'administrator-token', url: beside });
     assert.deepEqual(person, { token: 'person-token', url: harness.url });
+    assert.deepEqual(firstUser, { token: 'first-user-token', url: beside });
     assert.deepEqual(minted, [
       'administrator admin-0001',
       'administrator eli-0001',
       'person bo-0001',
+      'first user ana-0001',
     ]);
   });
 });

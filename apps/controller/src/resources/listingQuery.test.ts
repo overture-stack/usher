@@ -12,12 +12,14 @@ import {
 
 const ADMINISTRATOR: Principal = Object.freeze({
   administrator: true,
+  firstUser: false,
   subject: 'subject-administrator',
   type: 'human',
 });
 
 const PERSON: Principal = Object.freeze({
   administrator: false,
+  firstUser: false,
   subject: 'subject-ana',
   type: 'human',
 });

@@ -90,6 +90,15 @@
           "type": "integer"
         }
       },
+      "NominationId": {
+        "description": "The nomination's id.",
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
       "NoticeVersions": {
         "description": "The notice versions read by the bridge, comma-separated. A request without it, or listing no version served by the controller, is refused with `406`.",
         "examples": {
@@ -1344,6 +1353,89 @@
           }
         ]
       },
+      "Nomination": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "nominatedAt": {
+            "$ref": "#/components/schemas/Instant"
+          },
+          "nominatedBy": {
+            "$ref": "#/components/schemas/PrincipalBySubject"
+          },
+          "nominee": {
+            "$ref": "#/components/schemas/PrincipalBySubject"
+          }
+        },
+        "required": ["id", "nominatedAt", "nominatedBy", "nominee"],
+        "type": "object"
+      },
+      "NominationAcceptance": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptedAt": {
+            "$ref": "#/components/schemas/Instant"
+          },
+          "administrator": {
+            "$ref": "#/components/schemas/PrincipalBySubject"
+          },
+          "nominationId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["acceptedAt", "administrator", "nominationId"],
+        "type": "object"
+      },
+      "NominationRequest": {
+        "additionalProperties": false,
+        "description": "A nomination of Usher's first administrator. A member other than `nominee`, or a `nominee` holding anything but `subject`, is refused with `400`.",
+        "properties": {
+          "nominee": {
+            "$ref": "#/components/schemas/PrincipalBySubject",
+            "description": "The nominee: the first user themself, or a person Usher has met through the trusted identity provider, by subject."
+          }
+        },
+        "required": ["nominee"],
+        "type": "object"
+      },
+      "OwnNomination": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "latest": {
+            "description": "Whether no later nomination has replaced it, so it is the one that may be accepted.",
+            "type": "boolean"
+          },
+          "nominatedAt": {
+            "$ref": "#/components/schemas/Instant"
+          },
+          "nominatedBy": {
+            "$ref": "#/components/schemas/PrincipalBySubject"
+          }
+        },
+        "required": ["id", "latest", "nominatedAt", "nominatedBy"],
+        "type": "object"
+      },
+      "OwnNominationList": {
+        "additionalProperties": false,
+        "properties": {
+          "nominations": {
+            "items": {
+              "$ref": "#/components/schemas/OwnNomination"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["nominations"],
+        "type": "object"
+      },
       "PrincipalBySubject": {
         "additionalProperties": false,
         "properties": {
@@ -1884,7 +1976,7 @@
       },
       "managementToken": {
         "bearerFormat": "JWT",
-        "description": "An access token from the identity provider, naming the management API's configured audience in `aud` and a configured management client in `azp`. A principal holding the configured administrator realm role, read from each request's token, is a platform administrator. A service account's token is refused on every operation with `serviceAccountNotPermitted`, whether or not it also holds the administrator role: a token carrying a `client_id` claim that is text, a `preferred_username` starting `service-account-`, or the configured service-account realm role is a service account's.",
+        "description": "An access token from the identity provider, naming the management API's configured audience in `aud` and a configured management client in `azp`. A platform administrator is one Usher's own list of administrators holds, read from the store by the token's subject on every request, never from the token. A principal holding the configured first-user realm role, read from each request's token, is the first user, who nominates Usher's first administrator while none has accepted; the role confers nothing once one has. A service account's token is refused on every operation with `serviceAccountNotPermitted`, whether or not it also holds the first-user role: a token carrying a `client_id` claim that is text, a `preferred_username` starting `service-account-`, or the configured service-account realm role is a service account's.",
         "scheme": "bearer",
         "type": "http"
       }
@@ -1947,6 +2039,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -1957,7 +2050,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "413": {
             "$ref": "#/components/responses/BodyTooLarge"
@@ -2042,6 +2135,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -2052,7 +2146,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -2136,6 +2230,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -2146,7 +2241,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -2267,6 +2362,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -2277,7 +2373,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -2473,6 +2569,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -2483,7 +2580,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "503": {
             "$ref": "#/components/responses/ReadUnavailable"
@@ -2521,6 +2618,7 @@
                       "properties": {
                         "code": {
                           "enum": [
+                            "noAdministratorYet",
                             "ownersAndAdministratorsOnly",
                             "serviceAccountNotPermitted"
                           ]
@@ -2532,7 +2630,7 @@
                 }
               }
             },
-            "description": "The principal neither administers the platform nor owns a resource; `ownersAndAdministratorsOnly`. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal neither administers the platform nor owns a resource; `ownersAndAdministratorsOnly`. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "503": {
             "$ref": "#/components/responses/ReadUnavailable"
@@ -2590,6 +2688,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -2600,7 +2699,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "409": {
             "content": {
@@ -2703,6 +2802,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -2713,7 +2813,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "413": {
             "$ref": "#/components/responses/BodyTooLarge"
@@ -2783,6 +2883,7 @@
                           "enum": [
                             "administratorGrantsNoConsumerAccess",
                             "administratorSelfOwnership",
+                            "noAdministratorYet",
                             "noAuthorityOnResource",
                             "serviceAccountNotPermitted"
                           ]
@@ -2794,7 +2895,7 @@
                 }
               }
             },
-            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorGrantsNoConsumerAccess`: a platform administrator grants access that is the owners' to grant, answered alike whether or not the resource exists. `administratorSelfOwnership`: a platform administrator names themself an owner. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorGrantsNoConsumerAccess`: a platform administrator grants access that is the owners' to grant, answered alike whether or not the resource exists. `administratorSelfOwnership`: a platform administrator names themself an owner. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -2944,6 +3045,7 @@
                         "code": {
                           "enum": [
                             "administratorSelfOwnership",
+                            "noAdministratorYet",
                             "noAuthorityOnResource",
                             "serviceAccountNotPermitted"
                           ]
@@ -2955,7 +3057,7 @@
                 }
               }
             },
-            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorSelfOwnership`: a platform administrator names the `owner` role. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorSelfOwnership`: a platform administrator names the `owner` role. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -3078,7 +3180,10 @@
                     {
                       "properties": {
                         "code": {
-                          "enum": ["serviceAccountNotPermitted"]
+                          "enum": [
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
                         }
                       },
                       "type": "object"
@@ -3087,7 +3192,7 @@
                 }
               }
             },
-            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -3208,7 +3313,10 @@
                     {
                       "properties": {
                         "code": {
-                          "enum": ["serviceAccountNotPermitted"]
+                          "enum": [
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
                         }
                       },
                       "type": "object"
@@ -3217,7 +3325,7 @@
                 }
               }
             },
-            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -3333,7 +3441,10 @@
                     {
                       "properties": {
                         "code": {
-                          "enum": ["serviceAccountNotPermitted"]
+                          "enum": [
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
                         }
                       },
                       "type": "object"
@@ -3342,7 +3453,7 @@
                 }
               }
             },
-            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -3455,6 +3566,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -3465,7 +3577,7 @@
                 }
               }
             },
-            "description": "`administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "422": {
             "content": {
@@ -3529,6 +3641,65 @@
         "tags": ["People"]
       }
     },
+    "/admin/me/nominations": {
+      "get": {
+        "description": "Lists the nominations naming the principal, oldest first, each with its nominator by subject, when it was made, and whether it is the latest, the one that may be accepted. A principal named by none receives an empty list. It is answered before and after an administrator has accepted, and records no event.",
+        "operationId": "listOwnNominations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnNominationList"
+                }
+              }
+            },
+            "description": "The nominations naming the principal."
+          },
+          "400": {
+            "$ref": "#/components/responses/Unreadable"
+          },
+          "401": {
+            "$ref": "#/components/responses/CredentialRefused"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["serviceAccountNotPermitted"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ReadUnavailable"
+          }
+        },
+        "security": [
+          {
+            "managementToken": []
+          }
+        ],
+        "summary": "Lists my own nominations",
+        "tags": ["Administrators"]
+      }
+    },
     "/admin/imports/ego": {
       "post": {
         "description": "Imports EGO's study groups from an export, for platform administrators. The administrator is checked before the body is read, and the body may be up to 10 MiB.\n\nA run is dry unless `apply: true` is sent beside the export. A dry run writes nothing and reports exactly what a real run on the same data then does. A real run writes all of its changes or none of them, and holds a lock that refuses a second run until it ends.\n\nEach resource registered by a run takes the instance's configured base tier and is served by every application named in `audiences`. The prefixes that read a study's id from a policy's name, and the policies granting every study, come from the instance's configuration.\n\nEither run answers its report to the administrator alone. The report is never written to the log stream.",
@@ -3574,6 +3745,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -3584,7 +3756,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "409": {
             "content": {
@@ -3687,6 +3859,243 @@
         "tags": ["Imports"]
       }
     },
+    "/admin/nominations": {
+      "post": {
+        "description": "Nominates Usher's first administrator, for the first user alone: a principal whose token holds the configured first-user role. The nominee is the first user themself, or a person Usher has met through the trusted identity provider, named by subject. The first user is recorded on first meeting, as a base user holding no grant. They may nominate again while no administrator has accepted, and each nomination replaces every earlier one, so only the latest may be accepted.\n\nThe rules are judged in this order, so only the first user, before any administrator has accepted, reaches the nominee's lookup: a token lacking the first-user role, `403` `notFirstUser`, before the body is read; an administrator accepted already, `409` `firstAdministratorAccepted`; a nominee who is neither the caller nor a person Usher has met, `404` `nomineeNotFound`.\n\nThe audit event `admin.nomination` records the nomination, at `warning`.",
+        "operationId": "nominateAdministrator",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NominationRequest"
+              }
+            }
+          },
+          "description": "The nominee.",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Nomination"
+                }
+              }
+            },
+            "description": "The nomination, naming the nominee and the nominator by subject."
+          },
+          "400": {
+            "$ref": "#/components/responses/Unreadable"
+          },
+          "401": {
+            "$ref": "#/components/responses/CredentialRefused"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["notFirstUser", "serviceAccountNotPermitted"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`notFirstUser`: the principal's token lacks the first-user role, before the body is read. `serviceAccountNotPermitted`: a service account calls, before any lookup."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["nomineeNotFound"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`nomineeNotFound`: the nominee is neither the caller nor a person Usher has met through the trusted identity provider."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["firstAdministratorAccepted"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`firstAdministratorAccepted`: Usher's first administrator has accepted a nomination, and no first administrator is nominated after that."
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/JsonOnly"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ChangeUnavailable"
+          }
+        },
+        "security": [
+          {
+            "managementToken": []
+          }
+        ],
+        "summary": "Nominates the first administrator",
+        "tags": ["Administrators"]
+      }
+    },
+    "/admin/nominations/{id}/acceptance": {
+      "post": {
+        "description": "Accepts a nomination naming the principal, making them Usher's first administrator. Only the latest nomination may be accepted, and only while no administrator has accepted. Nominations and acceptances run one at a time across every instance, so no two first administrators are made and no nomination a later one replaced is accepted.\n\nA malformed id, an id naming no nomination, and a nomination naming someone other than the principal are answered `404` `nominationNotFound` alike. Then an administrator accepted already is refused with `409` `firstAdministratorAccepted`, and a nomination a later one has replaced with `409` `nominationSuperseded`.\n\nThe audit event `admin.acceptance` records the acceptance, at `critical`.",
+        "operationId": "acceptNomination",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/NominationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NominationAcceptance"
+                }
+              }
+            },
+            "description": "The new administrator, by subject, the nomination accepted, and when."
+          },
+          "400": {
+            "$ref": "#/components/responses/Unreadable"
+          },
+          "401": {
+            "$ref": "#/components/responses/CredentialRefused"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["serviceAccountNotPermitted"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": ["nominationNotFound"]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The id is malformed, names no nomination, or names a nomination of someone other than the principal; `nominationNotFound` for each."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "firstAdministratorAccepted",
+                            "nominationSuperseded"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`firstAdministratorAccepted`: Usher's first administrator has accepted a nomination already. `nominationSuperseded`: a later nomination has replaced this one, and only the latest may be accepted."
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/JsonOnly"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ChangeUnavailable"
+          }
+        },
+        "security": [
+          {
+            "managementToken": []
+          }
+        ],
+        "summary": "Accepts a nomination",
+        "tags": ["Administrators"]
+      }
+    },
     "/admin/people/grants": {
       "post": {
         "description": "Lists, a page at a time, the grants of the principal holding an address. The principal is found by exact address in any letter case, the address in the body.\n\nA platform administrator receives every grant across resources, and a resource's owner the grants on resources they own. Revoked grants are listed only to an administrator asking with `includeRevoked=true`.\n\nTo a platform administrator, an address held by no single account is refused with `holderNotFound`. To an owner, it is answered as an account holding nothing on their resources.",
@@ -3733,6 +4142,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -3743,7 +4153,7 @@
                 }
               }
             },
-            "description": "`administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -3870,6 +4280,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -3880,7 +4291,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "413": {
             "$ref": "#/components/responses/BodyTooLarge"
@@ -3949,6 +4360,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -3959,7 +4371,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "413": {
             "$ref": "#/components/responses/BodyTooLarge"
@@ -4005,7 +4417,10 @@
                     {
                       "properties": {
                         "code": {
-                          "enum": ["serviceAccountNotPermitted"]
+                          "enum": [
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
                         }
                       },
                       "type": "object"
@@ -4014,7 +4429,7 @@
                 }
               }
             },
-            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "503": {
             "$ref": "#/components/responses/ReadUnavailable"
@@ -4072,6 +4487,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -4082,7 +4498,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "413": {
             "$ref": "#/components/responses/BodyTooLarge"
@@ -4141,6 +4557,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -4151,7 +4568,7 @@
                 }
               }
             },
-            "description": "`administratorOnly`: a principal other than a platform administrator asks for retired resources. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`administratorOnly`: a principal other than a platform administrator asks for retired resources. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "422": {
             "content": {
@@ -4249,6 +4666,7 @@
                           "enum": [
                             "administratorOnly",
                             "administratorSelfOwnership",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -4259,7 +4677,7 @@
                 }
               }
             },
-            "description": "`administratorOnly`: the principal is no platform administrator. `administratorSelfOwnership`: the administrator names themself an owner. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`administratorOnly`: the principal is no platform administrator. `administratorSelfOwnership`: the administrator names themself an owner. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "409": {
             "content": {
@@ -4381,6 +4799,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -4391,7 +4810,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -4478,7 +4897,10 @@
                     {
                       "properties": {
                         "code": {
-                          "enum": ["serviceAccountNotPermitted"]
+                          "enum": [
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
                         }
                       },
                       "type": "object"
@@ -4487,7 +4909,7 @@
                 }
               }
             },
-            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+            "description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -4600,6 +5022,7 @@
                       "properties": {
                         "code": {
                           "enum": [
+                            "noAdministratorYet",
                             "noAuthorityOnResource",
                             "serviceAccountNotPermitted"
                           ]
@@ -4611,7 +5034,7 @@
                 }
               }
             },
-            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to update it. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to update it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -4699,6 +5122,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -4709,7 +5133,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -4779,6 +5203,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -4789,7 +5214,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -4867,6 +5292,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "noAuthorityOnResource",
                             "serviceAccountNotPermitted"
                           ]
@@ -4878,7 +5304,7 @@
                 }
               }
             },
-            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority on its grants. `administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority on its grants. `administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -5003,6 +5429,7 @@
                       "properties": {
                         "code": {
                           "enum": [
+                            "noAdministratorYet",
                             "noAuthorityOnResource",
                             "serviceAccountNotPermitted"
                           ]
@@ -5014,7 +5441,7 @@
                 }
               }
             },
-            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to restore it. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to restore it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -5099,6 +5526,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -5109,7 +5537,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -5211,6 +5639,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -5221,7 +5650,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -5316,6 +5745,7 @@
                       "properties": {
                         "code": {
                           "enum": [
+                            "noAdministratorYet",
                             "noAuthorityOnResource",
                             "serviceAccountNotPermitted"
                           ]
@@ -5327,7 +5757,7 @@
                 }
               }
             },
-            "description": "`noAuthorityOnResource`: the principal may see the study and holds no authority on its submitters. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`noAuthorityOnResource`: the principal may see the study and holds no authority on its submitters. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -5474,6 +5904,7 @@
                       "properties": {
                         "code": {
                           "enum": [
+                            "noAdministratorYet",
                             "noAuthorityOnResource",
                             "serviceAccountNotPermitted"
                           ]
@@ -5485,7 +5916,7 @@
                 }
               }
             },
-            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to suppress it. `serviceAccountNotPermitted`: a service account calls."
+            "description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to suppress it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "404": {
             "content": {
@@ -5576,6 +6007,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -5586,7 +6018,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "413": {
             "$ref": "#/components/responses/BodyTooLarge"
@@ -5660,6 +6092,7 @@
                         "code": {
                           "enum": [
                             "administratorOnly",
+                            "noAdministratorYet",
                             "serviceAccountNotPermitted"
                           ]
                         }
@@ -5670,7 +6103,7 @@
                 }
               }
             },
-            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`."
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
           },
           "413": {
             "$ref": "#/components/responses/BodyTooLarge"
@@ -6278,6 +6711,10 @@
     {
       "description": "The whole instance: a global revocation and a role's capabilities.",
       "name": "Instance"
+    },
+    {
+      "description": "Usher's first administrator: the first user's nomination, its acceptance, and a nominee's own nominations.",
+      "name": "Administrators"
     },
     {
       "description": "Applications and their keys.",

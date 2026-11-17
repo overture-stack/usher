@@ -83,7 +83,8 @@ above.
 
 **Keycloak** serves the realm `overture` at http://127.0.0.1:8080, imported from
 `compose/overture-realm.json` each time its container is created. The realm is for local development
-only. It holds the `usher-platform-admin` role and `usher-ui`, a management client issuing tokens
+only. It holds the `usher-first-user` role, whose holder nominates the controller's first
+administrator through `POST /admin/nominations`, and `usher-ui`, a management client issuing tokens
 for the audience `usher-management`. The realm holds no people: add them in the admin console at
 http://127.0.0.1:8080/admin, signing in as `usher-dev-admin` with `KEYCLOAK_ADMIN_PASSWORD` from
 `.env`. People added there last until Keycloak's container is removed. A person's management token

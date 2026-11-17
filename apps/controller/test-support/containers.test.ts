@@ -1102,7 +1102,7 @@ suite('a real Keycloak holding the people the address suites look up', () => {
     assert.ok(
       (
         Reflect.get(Object(management['realm_access']), 'roles') as unknown[]
-      ).includes('usher-platform-admin'),
+      ).includes('usher-first-user'),
     );
     assert.deepEqual(
       disabledNow.map(({ enabled }) => enabled),

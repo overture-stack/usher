@@ -24,6 +24,6 @@
   "enabled": true,
   "realm": "overture",
   "roles": {
-    "realm": [{ "name": "usher-platform-admin" }]
+    "realm": [{ "name": "usher-first-user" }]
   }
 }

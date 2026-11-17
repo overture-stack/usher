@@ -197,14 +197,13 @@ const fakeStore = (world: World, calls: Call[]): GrantStore => {
   };
 };
 
-const tokenOf = (subject: string, administrator: boolean) => ({
+const tokenOf = (subject: string) => ({
   claims: {
     aud: ['usher-management'],
     azp: 'usher-ui',
     exp: SECONDS + 300,
     iat: SECONDS - 10,
     iss: ISSUER,
-    realm_access: { roles: administrator ? ['usher-platform-admin'] : [] },
     sub: subject,
     typ: 'Bearer',
   },
@@ -212,13 +211,16 @@ const tokenOf = (subject: string, administrator: boolean) => ({
   kind: 'verified' as const,
 });
 
-// The bearer credential each caller sends: its subject, and `admin` for a platform administrator's.
+// The bearer credential each caller sends, by the caller's name.
 const TOKENS: Readonly<Record<string, ReturnType<typeof tokenOf>>> = {
-  administrator: tokenOf('subject-administrator', true),
-  ana: tokenOf('subject-ana', false),
-  bo: tokenOf('subject-bo', false),
-  cy: tokenOf('subject-cy', false),
+  administrator: tokenOf('subject-administrator'),
+  ana: tokenOf('subject-ana'),
+  bo: tokenOf('subject-bo'),
+  cy: tokenOf('subject-cy'),
 };
+
+// The one platform administrator the store holds.
+const ADMINISTRATOR_SUBJECT = 'subject-administrator';
 
 const standUp = (
   context: TestContext,
@@ -278,12 +280,16 @@ const standUp = (
       },
     },
     {
+      administratorStatus: async ({ subject }) => ({
+        administrator: subject === ADMINISTRATOR_SUBJECT,
+        anyAdministrator: true,
+      }),
       eventLog: { error: () => undefined },
       refusalTally: { count: () => undefined },
       runAfterCommit: async () => undefined,
       settings: {
-        administratorRole: 'usher-platform-admin',
         clock: { now: () => NOW },
+        firstUserRole: 'usher-first-user',
         identityProviderIssuer: ISSUER,
         managementAudience: 'usher-management',
         managementClients: ['usher-ui'],

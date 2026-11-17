@@ -97,6 +97,8 @@ export type Actor =
  * `audit-events.md`, each without the `bio.overture.` prefix its line and row carry.
  */
 export type AuditEventType =
+  | 'admin.acceptance'
+  | 'admin.nomination'
   | 'admin.override'
   | 'admission.shareExceededTally'
   | 'application.registration'

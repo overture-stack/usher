@@ -8,6 +8,7 @@ import type {
   JsonValue,
   TrailConnection,
 } from '../eventLog/index.js';
+import type { PersonIdentity } from '../findOrRecordPerson.js';
 import type { Problem } from '../http/index.js';
 import type { TokenVerification } from '../identityProvider/index.js';
 import type {
@@ -19,8 +20,14 @@ import type {
 
 /** Who an accepted management token speaks for. */
 export interface Principal {
-  /** Whether the token carries the configured administrator realm role, read from each request's token. */
+  /**
+   * Whether the store records the person holding the token's subject under the trusted issuer as an
+   * administrator, read on each request and never from the token.
+   */
   administrator: boolean;
+
+  /** Whether the token carries the configured first-user realm role, compared by its exact name. */
+  firstUser: boolean;
 
   /** The identity provider's subject, the token's `sub`. */
   subject: string;
@@ -28,10 +35,19 @@ export interface Principal {
   type: 'human' | 'serviceAccount';
 }
 
+/**
+ * The admin status the store holds for one request: whether Usher has any administrator yet, and
+ * whether the person holding the principal's identity is one.
+ */
+export interface AdministratorStatus {
+  administrator: boolean;
+  anyAdministrator: boolean;
+}
+
 /** What the management API reads of the configuration to judge a management token. */
 export type ManagementTokenSettings = Pick<
   ControllerConfiguration,
-  | 'administratorRole'
+  | 'firstUserRole'
   | 'managementAudience'
   | 'managementClients'
   | 'serviceAccountRole'
@@ -63,7 +79,14 @@ export interface TokenVerifier {
  * stored.
  */
 export type ClaimsReading =
-  | { kind: 'accepted'; principal: Principal; session: Session }
+  | {
+      kind: 'accepted';
+
+      /** The principal as the token's claims say, its admin status being the store's. */
+      principal: Omit<Principal, 'administrator'>;
+
+      session: Session;
+    }
   | {
       kind: 'refused';
       reason: 'otherAudience' | 'otherType' | CurrencyRefusal;
@@ -215,11 +238,23 @@ export interface ManagementOperation<Input> {
    */
   afterCommit?: readonly AfterCommitStepName[];
 
+  /**
+   * Whether it is answered before Usher's first administrator has accepted, as nominating and
+   * accepting the first are; every other operation is refused 403 `noAdministratorYet` until then.
+   */
+  beforeFirstAdministrator?: boolean;
+
   /** Whether it takes a body: never, when the request sends one, or always. */
   body: 'none' | 'optional' | 'required';
 
   /** The event it records; an operation recording none, such as a read, records no refusal. */
   event?: OperationEvent;
+
+  /**
+   * Whether it is for the first user alone, refusing a principal whose token lacks the first-user
+   * role before its body is read.
+   */
+  firstUserOnly?: boolean;
 
   method: 'DELETE' | 'GET' | 'POST' | 'PUT';
 
@@ -247,6 +282,12 @@ export interface ManagementOperation<Input> {
 
 /** What every management operation's route is built on. */
 export interface ManagementDependencies {
+  /**
+   * Reads, from the store, whether Usher has an administrator yet and whether the person holding an
+   * identity is one: on every request, and never from a cache.
+   */
+  administratorStatus(identity: PersonIdentity): Promise<AdministratorStatus>;
+
   /** Where an operational line is written. */
   eventLog: Pick<EventLog, 'error'>;
 

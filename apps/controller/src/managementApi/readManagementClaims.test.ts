@@ -16,7 +16,7 @@ const SECONDS = Math.floor(NOW / 1000);
 const MAXIMUM_LIFETIME_SECONDS = 3600;
 
 const SETTINGS = Object.freeze({
-  administratorRole: 'usher-platform-admin',
+  firstUserRole: 'usher-first-user',
   managementAudience: 'usher-management',
   managementClients: ['usher-ui', 'usher-cli'],
   serviceAccountRole: 'usher-service-account',
@@ -41,7 +41,7 @@ const claimsWith = (
       exp: SECONDS + 300,
       iat: SECONDS - 10,
       preferred_username: 'ana@example.org',
-      realm_access: { roles: ['offline_access', 'usher-platform-admin'] },
+      realm_access: { roles: ['offline_access', 'usher-first-user'] },
       sid: 'session-1',
       sub: 'subject-ana',
       typ: 'Bearer',
@@ -66,11 +66,11 @@ const refusal = (reason: string, subject = 'subject-ana') => ({
 });
 
 suite("reading a verified management token's claims", () => {
-  test('accepts a person holding the administrator role, with the session the token names', () => {
+  test('accepts a person holding the first-user role as the first user, with the session the token names', () => {
     assert.deepEqual(read(), {
       kind: 'accepted',
       principal: {
-        administrator: true,
+        firstUser: true,
         subject: 'subject-ana',
         type: 'human',
       },
@@ -78,30 +78,42 @@ suite("reading a verified management token's claims", () => {
     });
   });
 
-  test('reads a person without the administrator role as no administrator', () => {
-    const reading = read({ realm_access: { roles: ['offline_access'] } });
+  test('reads a person without the first-user role, or holding it in another letter case, as no first user', () => {
+    const readings = [
+      read({ realm_access: { roles: ['offline_access'] } }),
+      read({ realm_access: { roles: ['Usher-First-User'] } }),
+    ];
 
-    assert.equal(
-      reading.kind === 'accepted' ? reading.principal.administrator : undefined,
-      false,
+    assert.deepEqual(
+      readings.map((reading) =>
+        reading.kind === 'accepted' ? reading.principal.firstUser : undefined,
+      ),
+      [false, false],
     );
   });
 
-  test('reads a token holding the service-account realm role beside the administrator role as a service account', () => {
+  test('reads no admin status from a token, whatever realm role it holds', () => {
+    const reading = read({
+      realm_access: { roles: ['usher-platform-admin', 'usher-first-user'] },
+    });
+
+    assert.deepEqual(
+      reading.kind === 'accepted' ? Object.keys(reading.principal) : [],
+      ['firstUser', 'subject', 'type'],
+    );
+  });
+
+  test('reads a token holding the service-account realm role beside the first-user role as a service account', () => {
     const reading = read({
       realm_access: {
-        roles: [
-          'offline_access',
-          'usher-platform-admin',
-          'usher-service-account',
-        ],
+        roles: ['offline_access', 'usher-first-user', 'usher-service-account'],
       },
     });
 
     assert.deepEqual(
       reading.kind === 'accepted' ? reading.principal : undefined,
       {
-        administrator: true,
+        firstUser: true,
         subject: 'subject-ana',
         type: 'serviceAccount',
       },

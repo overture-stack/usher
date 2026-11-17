@@ -25,6 +25,7 @@ import { managementRoute, STORE_FAILED } from './managementRoute.js';
 import { BODY_LIMIT_BYTES } from './problems.js';
 import { readTextMembers } from './requestBody.js';
 import type {
+  AdministratorStatus,
   AfterCommitStepName,
   ManagementDependencies,
   ManagementOperation,
@@ -38,8 +39,8 @@ const SECONDS = Math.floor(NOW / 1000);
 const ISSUER = 'https://auth.example.org/realms/usher';
 
 const SETTINGS = Object.freeze({
-  administratorRole: 'usher-platform-admin',
   clock: { now: () => NOW },
+  firstUserRole: 'usher-first-user',
   identityProviderIssuer: ISSUER,
   managementAudience: 'usher-management',
   managementClients: ['usher-ui'],
@@ -64,7 +65,7 @@ const claimsOf = (
       exp: SECONDS + 300,
       iat: SECONDS - 10,
       iss: ISSUER,
-      realm_access: { roles: ['usher-platform-admin'] },
+      realm_access: { roles: ['offline_access'] },
       sub: 'subject-ana',
       typ: 'Bearer',
       ...departures,
@@ -90,6 +91,9 @@ interface Line {
 }
 
 interface Stand {
+  /** Whose admin status each request asked the store for, in turn. */
+  administratorQuestions: { issuer: string; subject: string }[];
+
   /** What each request asked to run after its commit, by the names given. */
   afterCommit: (readonly AfterCommitStepName[])[];
 
@@ -104,11 +108,30 @@ interface Stand {
 type OperationDepartures = Partial<
   Pick<
     ManagementOperation<{ title: string }>,
-    'body' | 'event' | 'method' | 'readInput' | 'takesQuery'
+    | 'administratorOnly'
+    | 'beforeFirstAdministrator'
+    | 'body'
+    | 'event'
+    | 'firstUserOnly'
+    | 'method'
+    | 'readInput'
+    | 'takesQuery'
   >
 >;
 
+// Ana is an administrator, and the only one.
+const ANA_ADMINISTERS = async ({
+  subject,
+}: {
+  subject: string;
+}): Promise<AdministratorStatus> => ({
+  administrator: subject === 'subject-ana',
+  anyAdministrator: true,
+});
+
 interface StandOptions {
+  /** What the store says of administrators, or a failure to say. */
+  administrators?: ManagementDependencies['administratorStatus'];
   /** The steps the operation names to run after its commit. */
   afterCommit?: readonly AfterCommitStepName[];
 
@@ -164,6 +187,7 @@ const shelving = (
 const standUp = async (
   context: TestContext,
   {
+    administrators = ANA_ADMINISTERS,
     afterCommit,
     departures,
     outcome = async () => ({
@@ -178,6 +202,7 @@ const standUp = async (
   }: StandOptions = {},
 ): Promise<Stand> => {
   const stand: Omit<Stand, 'server'> = {
+    administratorQuestions: [],
     afterCommit: [],
     counted: [],
     lines: [],
@@ -191,6 +216,10 @@ const standUp = async (
   });
   server.route(
     managementRoute(shelving(stand.ran, outcome, afterCommit, departures), {
+      administratorStatus: (identity) => {
+        stand.administratorQuestions.push(identity);
+        return administrators(identity);
+      },
       eventLog: {
         error: (message, fields) => {
           stand.lines.push({ fields, message });
@@ -720,10 +749,14 @@ suite(
         return { actor, data: event.data };
       });
 
-    test('refuses a service account, the administrator role notwithstanding, and anyone else not an administrator 403, recording each denied under its actor and naming the shelf', async (context) => {
+    test('refuses a service account, an administrator notwithstanding, and anyone else not an administrator 403, recording each denied under its actor and naming the shelf', async (context) => {
       const stand = await standUp(context, {
+        administrators: async ({ subject }) => ({
+          administrator: subject !== 'subject-bo',
+          anyAdministrator: true,
+        }),
         verifications: {
-          reader: verified({ realm_access: { roles: [] } }),
+          reader: verified({ sub: 'subject-bo' }),
           service: verified({ client_id: 'lyric-svc', sub: 'service-1' }),
         },
       });
@@ -751,7 +784,7 @@ suite(
           },
         },
         {
-          actor: { id: 'subject-ana', type: 'human' },
+          actor: { id: 'subject-bo', type: 'human' },
           data: {
             reason: 'administratorOnly',
             result: 'denied',
@@ -818,7 +851,7 @@ suite(
         },
         verifications: {
           ...ADMIN,
-          reader: verified({ realm_access: { roles: [] } }),
+          reader: verified({ sub: 'subject-bo' }),
         },
       });
 
@@ -850,7 +883,7 @@ suite(
           },
         },
         {
-          actor: { id: 'subject-ana', type: 'human' },
+          actor: { id: 'subject-bo', type: 'human' },
           data: {
             reason: 'administratorOnly',
             result: 'denied',
@@ -1071,6 +1104,229 @@ const turnsUntil = async (
   await turnsUntil(condition, turns - 1);
 };
 
+suite(
+  "a management operation's admin status and its first administrator",
+  () => {
+    const NO_ADMINISTRATOR = async (): Promise<AdministratorStatus> => ({
+      administrator: false,
+      anyAdministrator: false,
+    });
+
+    const bodyOf = (answer: { body: string }): unknown =>
+      JSON.parse(answer.body);
+
+    test("reads admin status from the store on every request, by the trusted issuer and the token's subject, and never from the token", async (context) => {
+      const answers: AdministratorStatus[] = [
+        { administrator: false, anyAdministrator: true },
+        { administrator: true, anyAdministrator: true },
+      ];
+      const stand = await standUp(context, {
+        administrators: async () =>
+          answers.shift() ?? { administrator: false, anyAdministrator: true },
+        verifications: {
+          admin: verified({
+            realm_access: {
+              roles: ['usher-first-user', 'usher-platform-admin'],
+            },
+          }),
+        },
+      });
+
+      const refused = await post(stand);
+      const admitted = await post(stand);
+
+      assert.deepEqual(
+        [refused, admitted].map((answer) => [
+          answer.statusCode,
+          codeOf(answer),
+        ]),
+        [
+          [403, 'administratorOnly'],
+          [201, undefined],
+        ],
+      );
+      assert.deepEqual(stand.administratorQuestions, [
+        { issuer: ISSUER, subject: 'subject-ana' },
+        { issuer: ISSUER, subject: 'subject-ana' },
+      ]);
+    });
+
+    test('refuses every operation 403 noAdministratorYet while no administrator has accepted, service accounts included, recording each denied and saying how the first is made', async (context) => {
+      const stand = await standUp(context, {
+        administrators: NO_ADMINISTRATOR,
+        departures: { administratorOnly: false },
+        verifications: {
+          ...ADMIN,
+          first: verified({ realm_access: { roles: ['usher-first-user'] } }),
+          service: verified({ client_id: 'lyric-svc', sub: 'service-1' }),
+        },
+      });
+
+      const answers = [
+        await post(stand),
+        await post(stand, { token: 'first' }),
+        await post(stand, { token: 'service' }),
+      ];
+
+      assert.deepEqual(
+        answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+        [
+          [403, 'noAdministratorYet'],
+          [403, 'noAdministratorYet'],
+          [403, 'noAdministratorYet'],
+        ],
+      );
+      assert.match(
+        String(
+          Reflect.get(Object(bodyOf(answers[0] ?? { body: '{}' })), 'detail'),
+        ),
+        /POST \/admin\/nominations/u,
+      );
+      assert.deepEqual(
+        stand.recorded.map(({ actor, event }) => [
+          actor,
+          event.type,
+          event.data['reason'],
+          event.data['result'],
+          event.severity,
+        ]),
+        [
+          [
+            { id: 'subject-ana', type: 'human' },
+            'application.registration',
+            'noAdministratorYet',
+            'denied',
+            'warning',
+          ],
+          [
+            { id: 'subject-ana', type: 'human' },
+            'application.registration',
+            'noAdministratorYet',
+            'denied',
+            'warning',
+          ],
+          [
+            { id: 'service-1', type: 'serviceAccount' },
+            'application.registration',
+            'noAdministratorYet',
+            'denied',
+            'warning',
+          ],
+        ],
+      );
+      assert.deepEqual(stand.ran, []);
+    });
+
+    test('answers an operation served before the first administrator while none has accepted, and refuses a service account 403 serviceAccountNotPermitted there', async (context) => {
+      const stand = await standUp(context, {
+        administrators: NO_ADMINISTRATOR,
+        departures: {
+          administratorOnly: false,
+          beforeFirstAdministrator: true,
+        },
+        verifications: {
+          ...ADMIN,
+          service: verified({ client_id: 'lyric-svc', sub: 'service-1' }),
+        },
+      });
+
+      const answers = [
+        await post(stand),
+        await post(stand, { token: 'service' }),
+      ];
+
+      assert.deepEqual(
+        answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+        [
+          [201, undefined],
+          [403, 'serviceAccountNotPermitted'],
+        ],
+      );
+      assert.equal(stand.ran.length, 1);
+    });
+
+    test("refuses a token lacking the first-user role 403 notFirstUser for the first user's operation, before its body is read, and gives the principal whether it holds the role", async (context) => {
+      const read: unknown[] = [];
+      const stand = await standUp(context, {
+        administrators: NO_ADMINISTRATOR,
+        departures: {
+          administratorOnly: false,
+          beforeFirstAdministrator: true,
+          firstUserOnly: true,
+          readInput: (_body, { principal }) => {
+            read.push(principal);
+            return { input: { title: 'nominated' }, kind: 'read' };
+          },
+        },
+        verifications: {
+          ...ADMIN,
+          first: verified({ realm_access: { roles: ['usher-first-user'] } }),
+          recased: verified({ realm_access: { roles: ['Usher-First-User'] } }),
+        },
+      });
+
+      const answers = [
+        await post(stand, { body: '{"title":' }),
+        await post(stand, { body: '{"title":', token: 'recased' }),
+        await post(stand, { token: 'first' }),
+      ];
+
+      assert.deepEqual(
+        answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+        [
+          [403, 'notFirstUser'],
+          [403, 'notFirstUser'],
+          [201, undefined],
+        ],
+      );
+      assert.deepEqual(
+        stand.recorded.map(({ event }) => [
+          event.data['reason'],
+          event.severity,
+        ]),
+        [
+          ['notFirstUser', 'warning'],
+          ['notFirstUser', 'warning'],
+        ],
+      );
+      assert.deepEqual(read, [
+        {
+          administrator: false,
+          firstUser: true,
+          subject: 'subject-ana',
+          type: 'human',
+        },
+      ]);
+    });
+
+    test('answers a store that cannot read admin status 503 storeUnavailable with a line naming its code, recording nothing and running nothing', async (context) => {
+      const stand = await standUp(context, {
+        administrators: async () => {
+          throw Object.assign(new Error('the store is down'), {
+            code: 'ECONNREFUSED',
+          });
+        },
+        verifications: ADMIN,
+      });
+
+      const answer = await post(stand);
+
+      assert.deepEqual(
+        [answer.statusCode, codeOf(answer)],
+        [503, 'storeUnavailable'],
+      );
+      assert.deepEqual(stand.lines, [
+        {
+          fields: { code: 'ECONNREFUSED', method: 'POST', route: ROUTE },
+          message: STORE_FAILED,
+        },
+      ]);
+      assert.deepEqual(stand.recorded, []);
+      assert.deepEqual(stand.ran, []);
+    });
+  },
+);
+
 suite('the steps a management operation names to run after its commit', () => {
   test('are run once the operation has answered its change, the answer sent only once they have', async (context) => {
     const release: { steps: (() => void) | undefined } = { steps: undefined };
@@ -1208,6 +1464,7 @@ suite(
         {
           principal: {
             administrator: true,
+            firstUser: false,
             subject: 'subject-ana',
             type: 'human',
           },
