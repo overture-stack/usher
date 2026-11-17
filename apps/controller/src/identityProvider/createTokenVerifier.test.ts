@@ -677,10 +677,6 @@ suite('verifying a token under the keys already held, fetching nothing', () => {
   });
 });
 
-// The developer writes these cases by hand: a token unsigned, signed HS256 with a published key as the
-// secret, signed by a key the provider never published or has replaced under the same kid, or signed
-// by an algorithm other than its key's own. Each must be refused as invalidSignature, a token whose
-// key is held but whose signature fails under it whether or not the latest fetch of the key set failed.
 suite(
   'refuses as invalidSignature a token not signed by a published key under its own algorithm, whatever became of the latest fetch',
   { todo: true },
