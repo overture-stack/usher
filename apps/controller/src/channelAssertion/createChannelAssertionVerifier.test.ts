@@ -206,8 +206,6 @@ suite('the channel assertion verifier', () => {
     assert.equal(digests.includes(undefined), false);
   });
 
-  // The developer writes this case by hand, since it needs an assertion re-encoded after signing,
-  // which agents do not build.
   test.todo('one assertion presented in two encodings is one assertion');
 
   test('verifies under either live key of an application holding two, answering with the one that verified', async () => {
@@ -460,7 +458,7 @@ suite('the channel assertion verifier', () => {
 });
 
 suite(
-  'refuses an assertion verified under none of its application live keys as invalidSignature: the developer writes these cases by hand, since each needs an assertion signed by a wrong key or algorithm, or altered after signing',
+  "refuses an assertion verified under none of its application's live keys as invalidSignature",
   { todo: true },
   () => {},
 );
