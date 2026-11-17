@@ -157,8 +157,7 @@ export const startContainers = async (
 // while the container is stopped, so it is drawn from below 32768, where a Linux daemon's assigned
 // ports and Linux's default ephemeral range begin (macOS's begins at 49152): a port in them can be
 // taken meanwhile, by another container or as the source port of an outbound connection, and the
-// restart then fails to bind it. The range is the part below 32768 that the shared CI Docker host
-// admits from the Jenkins agents.
+// restart then fails to bind it. The range is the part below 32768 that the CI Docker host admits.
 const HOST_PORTS = { first: 30_000, last: 32_767 };
 
 // How many ports are drawn before giving up, each reported taken by the daemon.
