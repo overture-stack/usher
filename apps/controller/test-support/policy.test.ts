@@ -1632,7 +1632,7 @@ suite('a snapshot of the store, and its restore', () => {
 });
 
 suite("the started store's template", () => {
-  test("holds what a controller's first start writes under the harness's configuration, so a start on it writes nothing but the key-encryption key's check value", async (context) => {
+  test("holds what a controller's first start writes under the harness's configuration, so a start on it writes nothing but the key-encryption key's fingerprint", async (context) => {
     const scope = cleanupFor(context);
     const harness = await startHarness({
       applications: [],
@@ -1641,17 +1641,17 @@ suite("the started store's template", () => {
       template: STARTED_STORE_TEMPLATE,
     });
     scope.defer(() => harness.stop());
-    const { keyEncryptionKeyCheck } = POLICY_TABLES;
+    const { keyFingerprints } = POLICY_TABLES;
     const before = await takeSnapshot(harness);
 
     await harness.startController();
 
     const after = await takeSnapshot(harness);
     assert.deepEqual(
-      tablesOf(after, [keyEncryptionKeyCheck]),
-      tablesOf(before, [keyEncryptionKeyCheck]),
+      tablesOf(after, [keyFingerprints]),
+      tablesOf(before, [keyFingerprints]),
     );
-    assert.equal(rowsIn(after, keyEncryptionKeyCheck).length, 1);
+    assert.equal(rowsIn(after, keyFingerprints).length, 1);
   });
 
   test("records the first start's baseline.change at info, naming the harness's rules, event source and instance", async (context) => {

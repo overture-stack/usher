@@ -54,7 +54,7 @@ const {
   grants,
   groups,
   invitations,
-  keyEncryptionKeyCheck,
+	keyFingerprints,
   nominations,
   notices,
   notificationOutbox,
@@ -306,7 +306,7 @@ suite("the schema's shape", () => {
         [invitations.columns.expiresAt, 55],
         [invitations.columns.invitedAt, 10],
       ],
-      keyEncryptionKeyCheck: [[keyEncryptionKeyCheck.columns.recordedAt, 11]],
+			keyFingerprints: [[keyFingerprints.columns.recordedAt, 11]],
       nominations: [[nominations.columns.nominatedAt, 12]],
       notices: [[notices.columns.createdAt, 30]],
       notificationOutbox: [
@@ -379,9 +379,10 @@ suite("the schema's shape", () => {
           [applicationKeys.columns.revokedBy]: steward,
           ...timed(times.applicationKeys),
         });
-        await insertRow(toronto, keyEncryptionKeyCheck, {
-          [keyEncryptionKeyCheck.columns.checkValue]: randomBytes(32),
-          ...timed(times.keyEncryptionKeyCheck),
+			await insertRow(toronto, keyFingerprints, {
+				[keyFingerprints.columns.fingerprint]: randomBytes(32),
+				[keyFingerprints.columns.keyName]: 'keyEncryptionKey',
+				...timed(times.keyFingerprints),
         });
         const group = await insertRow(toronto, groups, {
           [groups.columns.createdBy]: steward,
@@ -496,10 +497,10 @@ suite("the schema's shape", () => {
             table: applicationKeys,
           },
           {
-            columns: times.keyEncryptionKeyCheck,
-            key: keyEncryptionKeyCheck.columns.onlyRow,
-            keyValue: true,
-            table: keyEncryptionKeyCheck,
+					columns: times.keyFingerprints,
+					key: keyFingerprints.columns.keyName,
+					keyValue: 'keyEncryptionKey',
+					table: keyFingerprints,
           },
           {
             columns: times.groups,
@@ -664,6 +665,11 @@ suite("the schema's shape", () => {
         table: categories,
         values: ['global', 'resource'],
       },
+			{
+				column: keyFingerprints.columns.keyName,
+				table: keyFingerprints,
+				values: ['keyEncryptionKey'],
+			},
       {
         column: roles.columns.plane,
         table: roles,

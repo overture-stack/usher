@@ -1835,9 +1835,9 @@ export const DESIGNED_COLUMNS: {
     resourceId: required(UUID),
     roleId: required(UUID),
   },
-  keyEncryptionKeyCheck: {
-    checkValue: required(BYTES),
-    onlyRow: required(BOOLEAN),
+	keyFingerprints: {
+		fingerprint: required(BYTES),
+		keyName: required(TEXT),
     recordedAt: required(INSTANT),
   },
   nominations: {

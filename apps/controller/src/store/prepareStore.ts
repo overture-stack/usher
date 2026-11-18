@@ -134,15 +134,16 @@ const refusalFor = (failure: unknown): unknown => {
  * nothing beyond, reading the record of applied migrations among what it needs. That record is read
  * before any other table of the schema and must hold no migration this release does not know: none
  * that `migrations` lacks, and none whose checksum differs from this release's file. A migration of
- * this release the record lacks is no such migration. Next, the key-encryption key must be the one
- * the store's first start recorded, recorded now when none is. Then the start writes the policy it
- * seeds: the capability vocabulary and the seeded roles the store lacks, and the digest of the
- * baseline and the signed-in rule when it differs from the one recorded, with its `baseline.change`
- * event, whose line the trail writes once the transaction commits. A start on a role that may only
- * read writes nothing, and is refused only when it would have to. Once the transaction commits,
- * each grant the role holds beyond the release's, which the start tolerates, is written to the log
- * at warning as {@link GRANT_BEYOND_USE}, carrying its `privilege`, its `object` and, for a grant
- * on one column, its `column`, so a reader matches any of them without parsing a sentence.
+ * this release the record lacks is no such migration. Next, the key-encryption key must match its
+ * fingerprint recorded at the store's first start, recorded now when none is. Then the start writes
+ * the policy it seeds: the capability vocabulary and the seeded roles the store lacks, and the
+ * digest of the baseline and the signed-in rule when it differs from the one recorded, with its
+ * `baseline.change` event, whose line the trail writes once the transaction commits. A start on a
+ * role that may only read writes nothing, and is refused only when it would have to. Once the
+ * transaction commits, each grant the role holds beyond the release's, which the start tolerates,
+ * is written to the log at warning as {@link GRANT_BEYOND_USE}, carrying its `privilege`, its
+ * `object` and, for a grant on one column, its `column`, so a reader matches any of them without
+ * parsing a sentence.
  *
  * The start is refused, naming the database URL, when its connection's session lacks either limit
  * the Controller sets to the store timeout, when the store does not answer the transaction within

@@ -258,13 +258,13 @@ export const POLICY_TABLES = {
     },
     name: 'invitations',
   },
-  keyEncryptionKeyCheck: {
+  keyFingerprints: {
     columns: {
-      checkValue: 'check_value',
-      onlyRow: 'only_row',
+      fingerprint: 'fingerprint',
+      keyName: 'key_name',
       recordedAt: 'recorded_at',
     },
-    name: 'key_encryption_key_check',
+    name: 'key_fingerprints',
   },
   nominations: {
     columns: {
@@ -1606,7 +1606,7 @@ export const STARTED_STORE_SETTINGS: Readonly<
  * The Controller's template with the policy a start seeds written by the Controller's own code
  * (#207 Q11), under {@link STARTED_STORE_SETTINGS}: the capability vocabulary, {@link SEEDED_ROLES}
  * with their capabilities, and the digest of the rules with the first start's `baseline.change` row.
- * It is a store as a started Controller leaves it, but for the key-encryption key's check value, which
+ * It is a store as a started Controller leaves it, but for the key-encryption key's fingerprint, which
  * the first start under a key records: for a test seeding a fixture that names the seeded roles while
  * starting no Controller. Run again on a clone, it sets the retention floor alone, as the migrations
  * do, since the Controller's writes leave a store holding them untouched.
@@ -2791,7 +2791,7 @@ const rowsOf = async (
 ): Promise<readonly Readonly<Record<string, unknown>>[]> =>
   (await client.query<Record<string, unknown>>(text, [...parameters])).rows;
 
-const { applicationKeys, changeRecords, keyEncryptionKeyCheck } = POLICY_TABLES;
+const { applicationKeys, changeRecords, keyFingerprints } = POLICY_TABLES;
 
 /**
  * Alters one stored application key by SQL, as someone tampering with the store would: the last bit
@@ -2853,20 +2853,23 @@ export const copyEncryptedKey = async (
 };
 
 /**
- * Every check value of the key-encryption key held by the store, as hex: one once a Controller has
- * started, none before.
+ * Every fingerprint held by the store, a key's one-way identifier, as hex beside its key's name,
+ * ordered by that name: the key-encryption key's once a Controller has started, none before.
  *
  * @param client a connection under the migration role.
  */
-export const keyEncryptionKeyChecks = async (
+export const storedKeyFingerprints = async (
   client: pg.ClientBase,
-): Promise<readonly string[]> =>
+): Promise<readonly { fingerprint: string; keyName: string }[]> =>
   (
     await rowsOf(
       client,
-      `SELECT encode(${quotedColumn(keyEncryptionKeyCheck.columns.checkValue)}, 'hex') AS value FROM ${qualified(keyEncryptionKeyCheck)}`,
+      `SELECT encode(${quotedColumn(keyFingerprints.columns.fingerprint)}, 'hex') AS fingerprint, ${quotedColumn(keyFingerprints.columns.keyName)} AS key_name FROM ${qualified(keyFingerprints)} ORDER BY key_name`,
     )
-  ).map((row) => String(row['value']));
+  ).map((row) => ({
+    fingerprint: String(row['fingerprint']),
+    keyName: String(row['key_name']),
+  }));
 
 /** What the policy tables the resource operations write hold, for a test showing that a refusal wrote nothing. */
 export interface PolicySnapshot {

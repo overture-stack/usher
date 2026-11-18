@@ -174,7 +174,7 @@ node --eval "process.stdout.write(require('node:crypto').randomBytes(32).toStrin
 
 The same commands make passwords needing no quoting in a shell or an environment file.
 
-- **The key-encryption key encrypts every stored application key.** The store's first start records a check value derived from it, and a later start under any other key is refused. Every instance uses the same key, and without it no stored application key can be read.
+- **The key-encryption key encrypts every stored application key.** The store's first start records a fingerprint derived from it, and a later start under any other key is refused. Every instance uses the same key, and without it no stored application key can be read.
 - **The cursor key encrypts the cursors handed to Bridges reading the notice stream.** Every instance uses the same key, since any instance may answer a Bridge's next poll.
 
 ---
@@ -254,7 +254,7 @@ At each start, before anything listens, the Controller reads every privilege hel
 - `CREATE` on the database, or on any of its schemas;
 - ownership of the Controller's schema or of anything in it, or the right to grant on any of them;
 - `TRUNCATE` or `TRIGGER` on any table in the schema;
-- any write beyond what the migrations grant, `INSERT` included, on an append-only table: `audit_log`, `change_records`, `grant_decisions`, `key_encryption_key_check` or `notices`.
+- any write beyond what the migrations grant, `INSERT` included, on an append-only table: `audit_log`, `change_records`, `grant_decisions`, `key_fingerprints` or `notices`.
 
 It also refuses a role allowed to write some table but not to insert into `audit_log`, since a change could then go unrecorded. A missing schema, or one unusable by the role, is refused naming `USHER_DATABASE_SCHEMA`. So is a schema holding no record of applied migrations, `schema_migrations`, or one whose record the role may not read: run the schema migration command, which creates the record and grants the runtime role reading it.
 

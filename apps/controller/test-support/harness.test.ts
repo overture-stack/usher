@@ -94,15 +94,16 @@ const refusalNaming = (variable: string): { message: RegExp } => ({
   message: new RegExp(`\\b${variable}\\b`, 'u'),
 });
 
-// A check value no key the harness makes derives, recorded as a first start records one, so every
-// later start on the store is refused, naming the key-encryption key's variable.
-const recordForeignCheckValue = async (
+// Random bytes recorded as the key-encryption key's fingerprint, as a first start records one, so
+// every later start on the store is refused, naming the key-encryption key's variable: no key made
+// by the harness derives them.
+const recordForeignFingerprint = async (
   client: pg.ClientBase,
 ): Promise<void> => {
-  const { keyEncryptionKeyCheck } = POLICY_TABLES;
-  const { checkValue, recordedAt } = keyEncryptionKeyCheck.columns;
+  const { keyFingerprints } = POLICY_TABLES;
+  const { fingerprint, keyName, recordedAt } = keyFingerprints.columns;
   await client.query(
-    `INSERT INTO ${qualified(keyEncryptionKeyCheck)} (${pg.escapeIdentifier(checkValue)}, ${pg.escapeIdentifier(recordedAt)}) VALUES ($1, now())`,
+    `INSERT INTO ${qualified(keyFingerprints)} (${pg.escapeIdentifier(keyName)}, ${pg.escapeIdentifier(fingerprint)}, ${pg.escapeIdentifier(recordedAt)}) VALUES ('keyEncryptionKey', $1, now())`,
     [randomBytes(32)],
   );
 };
@@ -726,7 +727,7 @@ suite('a harness starting no controller', () => {
           message: 'the harness registered no application to sign in to',
         },
       );
-      await recordForeignCheckValue(harness.clients.migration);
+      await recordForeignFingerprint(harness.clients.migration);
       await assert.rejects(
         harness.restart({ autoAccept: true }),
         refusalNaming(ENVIRONMENT_VARIABLES.keyEncryptionKey),
@@ -1039,7 +1040,7 @@ suite("a harness's controller, stopped and started apart", () => {
       template: STARTED_STORE_TEMPLATE,
     });
     context.after(() => harness.stop());
-    await recordForeignCheckValue(harness.clients.migration);
+    await recordForeignFingerprint(harness.clients.migration);
 
     await harness.stopController();
 
@@ -1055,7 +1056,7 @@ suite("a harness's controller, stopped and started apart", () => {
 });
 
 suite('a snapshot of a running harness, restored', () => {
-  test('restores the store, writes a new epoch, and starts a controller after, which the restored check value refuses', async (context) => {
+  test('restores the store, writes a new epoch, and starts a controller after, which the restored fingerprint refuses', async (context) => {
     const harness = await startHarness({
       fixture: NOTICES_TABLE_FIXTURE,
       startsController: false,
@@ -1063,7 +1064,7 @@ suite('a snapshot of a running harness, restored', () => {
     });
     context.after(() => harness.stop());
     const { migration } = harness.clients;
-    await recordForeignCheckValue(migration);
+    await recordForeignFingerprint(migration);
     await insertNotices(migration, [{ kind: 'baseline' }]);
     const positions = await noticePositions(migration);
     const stream = await readNoticeStream(migration);
@@ -1090,7 +1091,7 @@ suite('a snapshot of a running harness, restored', () => {
     });
     context.after(() => harness.stop());
     const { migration } = harness.clients;
-    await recordForeignCheckValue(migration);
+    await recordForeignFingerprint(migration);
     const stream = await readNoticeStream(migration);
     const snapshot = await takeSnapshot(harness);
     await insertNotices(migration, [{ kind: 'baseline' }]);
@@ -1106,7 +1107,7 @@ suite('a snapshot of a running harness, restored', () => {
 });
 
 suite('the read-only role', () => {
-  test('reads the store and writes nothing, refuses an instance on it whose start would record the check value, and starts one writing nothing once a start under the runtime role has recorded it', async (context) => {
+  test('reads the store and writes nothing, refuses an instance on it whose start would record the fingerprint, and starts one writing nothing once a start under the runtime role has recorded it', async (context) => {
     const scope = cleanupFor(context);
     const harness = await startHarness({
       fixture: NOTICES_TABLE_FIXTURE,

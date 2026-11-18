@@ -9,7 +9,7 @@ import {
 import type { ApplicationKeyCipher, ApplicationKeyIdentity } from './types.js';
 
 // The HKDF label of the subkey stored keys are encrypted under, apart from every other use of the
-// key-encryption key, its check value's among them.
+// key-encryption key, its fingerprint's among them.
 const SEAL_LABEL = 'usher/v1/application-key-seal';
 
 // The first byte of every sealed key, naming this form, so a later form can be told from it.

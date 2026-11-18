@@ -133,8 +133,8 @@ port to refuse.
   retires a resource and ends its owner grants in one transaction. The store readers: `policySnapshot`,
   `storedExternalIds`, `resourceIdOf`, `userIdOf`, `internalIdsInStore`, `grantCountOn`,
   `isRetiredInStore`, `servedByInStore`, `changeRecordCount`, `storedCapabilities`, and
-  `storedResourceTimes` with `setResourceTimesInStore`, and `keyEncryptionKeyChecks`, the
-  key-encryption key's check values. Every reader naming a person by subject
+  `storedResourceTimes` with `setResourceTimesInStore`, and `storedKeyFingerprints`, each key's
+  fingerprint beside the key's name. Every reader naming a person by subject
   reads it through `user_identities`, and `storedGrants`, which reads one identity per person, fails
   saying so on a person holding two. `noticesAfter`'s `transaction` is the row's `xmin`, which
   cannot show that rows share a top-level transaction (its TSDoc says how to show that).
@@ -147,7 +147,7 @@ port to refuse.
   policy a start seeds written by the Controller's own code, through the seam's `writeSeededPolicy`
   under `STARTED_STORE_SETTINGS` (the harness's default rules, event source and instance): the
   vocabulary, the seeded roles, and the rules digest with the first start's `baseline.change` row,
-  all a started store holds but the key-encryption key's check value, for a test seeding a fixture
+  all a started store holds but the key-encryption key's fingerprint, for a test seeding a fixture
   that names those roles while starting no Controller. `storedGrants` reads the store's grants by
   holder, id, resource and role, and `rowCountOf` and `rowCounts` (with `GRANT_WRITTEN_TABLES`)
   count rows. `failNthInsert` fails the Nth insert into a table of a test's own database, through a

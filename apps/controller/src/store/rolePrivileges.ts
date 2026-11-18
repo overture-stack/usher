@@ -49,7 +49,7 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
         'role_id',
       ],
     },
-    key_encryption_key_check: { deletes: false, updates: [] },
+		key_fingerprints: { deletes: false, updates: [] },
     nominations: { deletes: false, updates: [] },
     notices: { deletes: false, updates: [] },
     notification_outbox: { deletes: false, updates: ['delivered_at'] },
@@ -102,13 +102,13 @@ const AUDIT_LOG = 'audit_log';
 
 // The tables whose rows are history, written as the migrations grant and in no other way, so any
 // write beyond those grants, an insert included, is refused: a change record inserted by anything but
-// its trigger would be forged. The key-encryption key's check value is among them, since rewriting it
-// would let a start under another key pass.
+// its trigger would be forged. The key fingerprints are among them, since rewriting the
+// key-encryption key's would let a start under another key pass.
 const APPEND_ONLY_TABLES: ReadonlySet<string> = new Set([
   AUDIT_LOG,
   'change_records',
   'grant_decisions',
-  'key_encryption_key_check',
+	'key_fingerprints',
   'nominations',
   'notices',
 ]);

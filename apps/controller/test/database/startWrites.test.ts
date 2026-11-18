@@ -38,6 +38,7 @@ import {
   qualified,
   SEEDED_ROLES,
   STEWARD_SUBJECT,
+  storedKeyFingerprints,
 } from '../../test-support/policy.js';
 import { type Cleanup, cleanupFor } from '../../test-support/waiting.js';
 
@@ -287,6 +288,20 @@ suite('what the controller writes at its start', () => {
 
     assert.equal(digests.length, 1);
     assert.equal(await noticeCount(migration), 0);
+  });
+
+  test('records one fingerprint at its first start, of 32 bytes, under the name keyEncryptionKey', async (context) => {
+    const { harness } = await startedStore(cleanupFor(context));
+
+    const stored = await storedKeyFingerprints(harness.clients.migration);
+
+    assert.deepEqual(
+      stored.map(({ fingerprint, keyName }) => ({
+        keyName,
+        thirtyTwoBytes: /^[\da-f]{64}$/u.test(fingerprint),
+      })),
+      [{ keyName: 'keyEncryptionKey', thirtyTwoBytes: true }],
+    );
   });
 
   test("records one baseline.change at info at the store's first start, its row and its line alike, naming the rules it starts under", async (context) => {

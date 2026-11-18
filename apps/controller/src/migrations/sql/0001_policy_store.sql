@@ -118,7 +118,8 @@ CREATE TABLE resource_field_values (
 CREATE INDEX resource_field_values_field_id ON resource_field_values (field_id);
 
 -- Applications, each id the audience a token names, and the keys they sign with, stored only
--- encrypted under the key-encryption key, whose check value the controller records at its first start.
+-- encrypted under the key-encryption key. The Controller records that key's fingerprint, its one-way
+-- identifier, at the store's first start.
 
 CREATE TABLE applications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -142,9 +143,9 @@ CREATE TABLE application_keys (
 
 CREATE INDEX application_keys_application_id ON application_keys (application_id);
 
-CREATE TABLE key_encryption_key_check (
-  only_row boolean PRIMARY KEY DEFAULT true CHECK (only_row),
-  check_value bytea NOT NULL,
+CREATE TABLE key_fingerprints (
+  key_name text PRIMARY KEY CHECK (key_name IN ('keyEncryptionKey')),
+  fingerprint bytea NOT NULL,
   recorded_at timestamptz NOT NULL
 );
 
@@ -464,7 +465,7 @@ GRANT UPDATE (description, display_name) ON applications TO :"runtime_role";
 GRANT SELECT, INSERT ON application_keys TO :"runtime_role";
 GRANT UPDATE (confirmed_at, revoked_at, revoked_by) ON application_keys TO :"runtime_role";
 
-GRANT SELECT, INSERT ON key_encryption_key_check TO :"runtime_role";
+GRANT SELECT, INSERT ON key_fingerprints TO :"runtime_role";
 
 GRANT SELECT, INSERT, DELETE ON application_resources TO :"runtime_role";
 

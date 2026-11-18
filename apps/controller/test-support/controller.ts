@@ -135,9 +135,9 @@ export interface ControllerSettings {
   /**
    * The key-encryption key encrypting every stored application key, shared by every instance:
    * 32 bytes as 43 base64url characters in canonical form, an application key's format. Whitespace
-   * around it is ignored. A missing or malformed one refuses the start, and so does one failing the
-   * check value recorded in the database at the first start; each refusal names the variable and
-   * never its value.
+	 * around it is ignored. A missing or malformed one refuses the start, and so does one not matching
+	 * the fingerprint, the key's one-way identifier, recorded in the database at the first start; each
+	 * refusal names the variable and never its value.
    */
   keyEncryptionKey: string;
 

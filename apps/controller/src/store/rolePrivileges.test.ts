@@ -138,8 +138,8 @@ suite("the privileges of the controller's database role", () => {
         found: 'DELETE on grant_decisions',
       },
       {
-        change: granting('key_encryption_key_check', 'DELETE'),
-        found: 'DELETE on key_encryption_key_check',
+				change: granting('key_fingerprints', 'DELETE'),
+				found: 'DELETE on key_fingerprints',
       },
       {
         change: granting('nominations', 'DELETE'),
