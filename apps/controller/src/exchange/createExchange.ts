@@ -46,7 +46,7 @@ import { recordExchangedSession } from './recordExchangedSession.js';
 import { signedInPayload } from './signedInPayload.js';
 import type { Exchange, ExchangeKey, ExchangeSettings } from './types.js';
 
-/** The path bridges exchange credentials at. */
+/** The path Bridges exchange credentials at. */
 export const EXCHANGE_PATH = '/exchange';
 
 /** The line naming a failure of the store while an exchange was answered. */
@@ -55,7 +55,7 @@ export const EXCHANGE_STORE_FAILED = 'exchange.storeFailed';
 /** The line naming an exchange whose token would pass the token limit, answered `503 tokenOverResponseCap`. */
 export const EXCHANGE_TOKEN_OVER_RESPONSE_CAP = 'exchange.tokenOverResponseCap';
 
-/** The line naming a failure the controller did not expect, answered `500 internalError`. */
+/** The line naming a failure the Controller did not expect, answered `500 internalError`. */
 export const EXCHANGE_UNEXPECTED_FAILURE = 'exchange.unexpectedFailure';
 
 /** The line naming a request that arrived too late to be answered by its deadline, answered `408 requestTimeout`. */
@@ -241,7 +241,7 @@ const acceptedCredentialOf = (
 
 // What a judged credential is answered, and how its exchange is recorded: refused alike and denied
 // under its own reason; denied too while its signing key is not confirmed yet, since a made-up key id
-// or a routine key rotation produces that and neither is a fault in the controller; kept from being
+// or a routine key rotation produces that and neither is a fault in the Controller; kept from being
 // judged by an identity provider that cannot be reached, and failed; or, accepted, issued for unless
 // refused before the store is read.
 const judgedCredentialOf = (
@@ -326,7 +326,7 @@ const judgedCredentialOf = (
  * `503 identityProviderUnavailable` and recorded `failed` under that code. A signing key not confirmed
  * yet is answered `503 signingKeyUnconfirmed` with its seconds in `Retry-After` and recorded `denied`
  * under that code, since a made-up key id or a routine key rotation produces it and neither is a fault
- * in the controller. The judgement is waited for until the deadline less
+ * in the Controller. The judgement is waited for until the deadline less
  * {@link RECORDING_RESERVE_MILLISECONDS}, which is kept for recording its outcome, a budget of at least
  * {@link MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS} for any request not answered as late; a judgement not
  * given by then is answered and recorded exactly as keys that cannot be had are. It is never
@@ -413,7 +413,7 @@ export const createExchange = ({
   const confirming = new WeakMap<FastifyRequest, Promise<void>>();
 
   // A refusal's record is store work like any other, so it takes a place in its application's share:
-  // recorded outside it, a flood of refusals through one application's bridge would hold the pool's
+  // recorded outside it, a flood of refusals through one application's Bridge would hold the pool's
   // connections outside every share, and the shares would no longer keep the other applications
   // served. A credential's refusal and a refused assertion's rejection both go through here.
   const recordRefusalWithinShare = <Result>(

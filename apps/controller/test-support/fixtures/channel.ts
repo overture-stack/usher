@@ -81,7 +81,7 @@ import {
 import { type Cleanup, eventually, nowSeconds } from '../waiting.js';
 
 // The revocation channel's own fixture (#210): its audiences, resources and policy, ways to read what
-// the controller writes on both channels, and small wrappers deferring each shared helper's cleanup.
+// the Controller writes on both channels, and small wrappers deferring each shared helper's cleanup.
 
 /**
  * The three audiences served in every channel test, by role in the fixture, each by its label,
@@ -142,7 +142,7 @@ export const LONGEST_EXTERNAL_ID = 'S'.padEnd(128, 'a1.b2_c3-');
 /** The page limit (#210 Q13). */
 export const PAGE_LIMIT = 500;
 
-/** The bridge's poll deadline, the iMS default (O14). */
+/** The Bridge's poll deadline, the iMS default (O14). */
 export const POLL_DEADLINE_MS = 10_000;
 
 /** How often each instance re-reads the stream with no wake-up (#210 Q14). */
@@ -151,7 +151,7 @@ export const REREAD_INTERVAL_MS = 2_000;
 /** The heartbeat interval, fixed (#210 Q15). */
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 
-/** The bridge's response cap on a poll page (`configuration.ts` `responseCapBytes`). */
+/** The Bridge's response cap on a poll page (`configuration.ts` `responseCapBytes`). */
 export const RESPONSE_CAP_BYTES = 1_048_576;
 
 /** A day, in milliseconds. */
@@ -378,9 +378,9 @@ export const audienceIdsOf = (
 ): readonly string[] => labels.map((label) => harness.application(label).id);
 
 /**
- * Has the harness's own controller listen once, then stops it, for a test running instances alone: a
+ * Has the harness's own Controller listen once, then stops it, for a test running instances alone: a
  * harness started with `startsController: false` holds its applications without keys until its own
- * controller first listens, when it issues each its first key, and an instance registers none.
+ * Controller first listens, when it issues each its first key, and an instance registers none.
  *
  * @param harness a harness started with `startsController: false`.
  */
@@ -390,14 +390,14 @@ export const issueFirstKeys = async (harness: Harness): Promise<void> => {
 };
 
 // The store connections the channel harness's instance holds for the token exchange: enough for the
-// bursts of exchanges a channel test sends at once, beyond the controller's default of 10.
+// bursts of exchanges a channel test sends at once, beyond the Controller's default of 10.
 const CHANNEL_EXCHANGE_CONNECTIONS = 20;
 
 /**
  * The harness options of a channel test: the three audiences, the channel's fixture, and an
  * exchange pool of 20 connections unless the test's configuration sets another.
  *
- * @param options configuration, policy, PostgreSQL and whether a controller starts.
+ * @param options configuration, policy, PostgreSQL and whether a Controller starts.
  */
 export const channelHarnessOptions = ({
   configuration = {},
@@ -420,7 +420,7 @@ export const channelHarnessOptions = ({
  * stop.
  *
  * @param scope the test's cleanup.
- * @param options configuration, policy, PostgreSQL and whether a controller starts.
+ * @param options configuration, policy, PostgreSQL and whether a Controller starts.
  */
 export const startChannelHarness = async (
   scope: Cleanup,
@@ -494,7 +494,7 @@ export const keycloakFor = async (
  *
  * @param scope the test's cleanup.
  * @param url the instance.
- * @param request the application, the cursor and any departure from the bridge's request.
+ * @param request the application, the cursor and any departure from the Bridge's request.
  */
 export const rawStreamFrom = async (
   scope: Cleanup,
@@ -518,7 +518,7 @@ export const instantIn = (milliseconds: number): string =>
  * The administrator's caller of the Policy Management API, with a fresh token.
  *
  * @param harness the harness.
- * @param url the instance called: the harness's controller by default.
+ * @param url the instance called: the harness's Controller by default.
  */
 export const administratorCaller = async (
   harness: Harness,
@@ -532,7 +532,7 @@ export const administratorCaller = async (
  * The owner of every fixture resource, as a caller with a fresh token.
  *
  * @param harness the harness.
- * @param url the instance called: the harness's controller by default.
+ * @param url the instance called: the harness's Controller by default.
  */
 export const ownerCaller = async (
   harness: Harness,
@@ -547,7 +547,7 @@ export const ownerCaller = async (
  *
  * @param harness the harness.
  * @param person who calls.
- * @param url the instance called: the harness's controller by default.
+ * @param url the instance called: the harness's Controller by default.
  */
 export const personCaller = async (
   harness: Harness,
@@ -558,7 +558,7 @@ export const personCaller = async (
   url: url ?? harness.url,
 });
 
-/** A controller instance a test started beside the harness's, on the same database, cache and keys. */
+/** A Controller instance a test started beside the harness's, on the same database, cache and keys. */
 export interface ControllerInstance {
   /** Stops it, settling once its work has ended; stopping again does nothing. */
   stop(): Promise<void>;
@@ -568,7 +568,7 @@ export interface ControllerInstance {
 }
 
 /**
- * Starts a controller instance through the seam, on the harness's configuration with any fields over
+ * Starts a Controller instance through the seam, on the harness's configuration with any fields over
  * it, and defers its stop.
  *
  * @param scope the test's cleanup.
@@ -604,7 +604,7 @@ export interface CollectedLog {
   stream: Writable;
 }
 
-/** A log stream keeping everything written to it, for a controller whose log output a test reads. */
+/** A log stream keeping everything written to it, for a Controller whose log output a test reads. */
 export const collectedLog = (): CollectedLog => {
   const chunks: Buffer[] = [];
   return {
@@ -673,8 +673,8 @@ export const signInToken = (
   });
 
 /**
- * Exchanges a credential for an audience and reads the payload as the bridge reads it, throwing
- * with the status or the bridge's reason when no payload is issued.
+ * Exchanges a credential for an audience and reads the payload as the Bridge reads it, throwing
+ * with the status or the Bridge's reason when no payload is issued.
  *
  * @param harness the harness.
  * @param url the instance exchanged with.
@@ -760,12 +760,12 @@ export const tagOfSubject = async (
   subjectTag(await importApplicationKey(application.key), subject);
 
 /**
- * The tag each audience's bridge computes for a person: the subject tag of the `sub` in the Usher
- * token the controller issues that person for that audience.
+ * The tag each audience's Bridge computes for a person: the subject tag of the `sub` in the Usher
+ * token the Controller issues that person for that audience.
  *
  * @param harness the harness.
  * @param person who signs in.
- * @param url the instance exchanged with: the harness's controller by default.
+ * @param url the instance exchanged with: the harness's Controller by default.
  */
 export const tagsOf = async (
   harness: Harness,
@@ -819,7 +819,7 @@ export const tagsOfSubject = async (
  * The cursor each audience reads with a head poll, the plan's c0.
  *
  * @param harness the harness.
- * @param url the instance polled: the harness's controller by default.
+ * @param url the instance polled: the harness's Controller by default.
  */
 export const headCursors = async (
   harness: Harness,
@@ -846,7 +846,7 @@ export const headCursors = async (
  *
  * @param harness the harness.
  * @param cursors each audience's cursor, as {@link headCursors} reads them.
- * @param url the instance polled: the harness's controller by default.
+ * @param url the instance polled: the harness's Controller by default.
  */
 export const polledAfter = async (
   harness: Harness,
@@ -957,7 +957,7 @@ export const everyAudience = <Value>(
   Object.fromEntries(AUDIENCE_LABELS.map((audience) => [audience, value]));
 
 /**
- * A notice as the bridge acts on it: its kind, and the tag or resource it names.
+ * A notice as the Bridge acts on it: its kind, and the tag or resource it names.
  *
  * @param notice the notice.
  */
@@ -1002,13 +1002,13 @@ export interface CollectedStream {
 }
 
 /**
- * Opens the notice stream as the bridge's push opens it and reads it through `nextWithin` whenever
+ * Opens the notice stream as the Bridge's push opens it and reads it through `nextWithin` whenever
  * the test waits, each read keeping the arrival time the stream gave it; the stream is closed once
  * the test ends.
  *
  * @param scope the test's cleanup.
  * @param url the instance.
- * @param request the application, the cursor and any departure from the bridge's request.
+ * @param request the application, the cursor and any departure from the Bridge's request.
  */
 export const collectStream = async (
   scope: Cleanup,
@@ -1087,7 +1087,7 @@ export interface TimedPage {
 /**
  * Polls page by page from a cursor, or from head, while each page answers 200 and asks for more,
  * keeping every page and its timing. Stops at the first page that is not a readable 200, and throws
- * past the most pages given, so a controller that never stops asking for more ends the test.
+ * past the most pages given, so a Controller that never stops asking for more ends the test.
  *
  * @param url the instance.
  * @param application the application polling.
@@ -1161,7 +1161,7 @@ export const sseFields = (block: string): readonly SseField[] =>
     });
 
 /**
- * Every notice in a raw stream's text, read as the bridge reads a pushed notice; a notice event that
+ * Every notice in a raw stream's text, read as the Bridge reads a pushed notice; a notice event that
  * does not read throws.
  *
  * @param text the stream's body so far.
@@ -1220,9 +1220,9 @@ export const comparableHeaders = (
 export const mediaType = (contentType: string | null | undefined): string =>
   (contentType ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
 
-/** The departures from the bridge's channel assertion a refusal test needs, signed under the rightful key. */
+/** The departures from the Bridge's channel assertion a refusal test needs, signed under the rightful key. */
 export interface AssertionDepartures {
-  /** Claims over the bridge's; one set to `undefined` is left out. */
+  /** Claims over the Bridge's; one set to `undefined` is left out. */
   claims?: Readonly<Record<string, unknown>>;
 
   /** Protected header members over `typ`; one set to `undefined` is left out. `alg` stays HS256. */
@@ -1238,7 +1238,7 @@ const defined = (
 
 /**
  * A channel assertion the application signs itself, HS256 under its own assertion subkey, with the
- * bridge's claims (`iss` the application, `aud` `usher:controller`, `iat`, an `exp` 60 s on, a fresh
+ * Bridge's claims (`iss` the application, `aud` `usher:controller`, `iat`, an `exp` 60 s on, a fresh
  * `jti`) and `typ` `usher-channel+jwt`, and a test's departures in its claims or `typ`.
  *
  * @param application the application.
@@ -1270,7 +1270,7 @@ export const signedAssertion = (
     .sign(subkeyBytes(application.key, SUBKEY_LABELS.channelAssertion));
 };
 
-/** A channel request's credential departing from the bridge's, named for the message of a failing check. */
+/** A channel request's credential departing from the Bridge's, named for the message of a failing check. */
 export interface RefusedCredential {
   /** A channel assertion in place of a fresh one, or `null` for no `authorization` header. */
   assertion?: string | null;
@@ -1282,7 +1282,7 @@ export interface RefusedCredential {
 }
 
 /**
- * The channel credentials the controller must refuse that need no forged signature: none; another
+ * The channel credentials the Controller must refuse that need no forged signature: none; another
  * scheme; and assertions the application signed itself with `typ` absent, `JWT`, `usher+jwt` or
  * `USHER-CHANNEL+JWT`, `aud` absent or another, an unknown `iss`, `exp` past or `iat` ahead by more
  * than the clock tolerance of at most 30 s, or an `exp` more than 60 s after `iat` (#210 Q12).
@@ -1374,11 +1374,11 @@ export const pastTheFloor = (harness: Harness): Date =>
   );
 
 /**
- * Runs the trimming function as the controller's role, the one role it is granted to (R3), in a
+ * Runs the trimming function as the Controller's role, the one role it is granted to (R3), in a
  * transaction left open until `commit` is called, so a test can look from another connection before
  * the transaction ends.
  *
- * @param runtime a connection under the controller's runtime role, holding no transaction.
+ * @param runtime a connection under the Controller's runtime role, holding no transaction.
  * @returns the watermark the function returned, and the commit.
  */
 export const trimNoticesOpen = async (
@@ -1402,9 +1402,9 @@ export const trimNoticesOpen = async (
 };
 
 /**
- * Runs the trimming function as the controller's role and commits.
+ * Runs the trimming function as the Controller's role and commits.
  *
- * @param runtime a connection under the controller's runtime role, holding no transaction.
+ * @param runtime a connection under the Controller's runtime role, holding no transaction.
  * @returns the watermark the function returned.
  */
 export const trimNotices = async (runtime: pg.ClientBase): Promise<bigint> => {
@@ -1436,7 +1436,7 @@ export const commitTimesByPosition = async (
 };
 
 /**
- * The records of a `sid` the controller keeps from the sign-in exchanges whose tokens carried it.
+ * The records of a `sid` the Controller keeps from the sign-in exchanges whose tokens carried it.
  *
  * @param client a connection under the migration role.
  * @param sid the session id.

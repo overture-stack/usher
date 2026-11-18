@@ -102,7 +102,7 @@ Programmatic access runs on API keys from a Keycloak plugin maintained by the te
 
 Introspection needs Usher's first credential to Keycloak, a basic-auth one able to check anybody's key, since the endpoint requires a bearer token's subject to own the key it checks. The format must be settled before the first key is issued in it, because an unparseable scope makes the whole key unreadable rather than one entry unrecognized. See [API keys](docs/atlas/roadmap/api-keys.md).
 
-**Keys gain a watermark the controller checks before any lookup** ([decisions.md](design/decisions.md), "The controller admits each application within a share of its own"), minted by the plugin. Open: how the plugin and the controller share its MAC keys and rotate them; the date after which an unwatermarked key is refused, and how key holders are told to rotate, since keys are issued for years and junk shaped like an old key costs a lookup until then.
+**Keys gain a watermark the Controller checks before any lookup** ([decisions.md](design/decisions.md), "The Controller admits each application within a share of its own"), minted by the plugin. Open: how the plugin and the Controller share its MAC keys and rotate them; the date after which an unwatermarked key is refused, and how key holders are told to rotate, since keys are issued for years and junk shaped like an old key costs a lookup until then.
 
 ### Move ownership from a single owner to a set
 
@@ -140,7 +140,7 @@ it is not Keycloak, which holds no grants and knows nothing of an invitation's l
 
 ### Step-up authentication for controlled categories
 
-A second factor for the people with controlled access, which only Usher knows, rather than for everyone. The shape follows RFC 9470, the OAuth step-up challenge: a category is marked as needing a stronger sign-in, and a principal whose token's `acr` falls short has it left out, with the bridge answering a challenge that names the level. The portal then signs the person in again at that level, and the identity provider's level-of-authentication flow asks for the second factor. Usher reads `acr` alone, as the connector design in [admin-model.md](design/admin-model.md) already expects, and the same mechanism serves the self-grant step-up recorded there. Until it exists, a deployment holding controlled data requires a second factor of everyone, which Overture's Keycloak standard now asks of every password sign-in in the `overture` realm. What the step-up adds is therefore narrower: letting a deployment drop that realm-wide requirement for people without controlled access, and giving a self-grant its re-prompt at the moment of granting, which a second factor at sign-in does not. Not designed: the category's marking, the challenge's form at the bridge, and how a portal shows a request it can satisfy only after a stronger sign-in.
+A second factor for the people with controlled access, which only Usher knows, rather than for everyone. The shape follows RFC 9470, the OAuth step-up challenge: a category is marked as needing a stronger sign-in, and a principal whose token's `acr` falls short has it left out, with the Bridge answering a challenge that names the level. The portal then signs the person in again at that level, and the identity provider's level-of-authentication flow asks for the second factor. Usher reads `acr` alone, as the connector design in [admin-model.md](design/admin-model.md) already expects, and the same mechanism serves the self-grant step-up recorded there. Until it exists, a deployment holding controlled data requires a second factor of everyone, which Overture's Keycloak standard now asks of every password sign-in in the `overture` realm. What the step-up adds is therefore narrower: letting a deployment drop that realm-wide requirement for people without controlled access, and giving a self-grant its re-prompt at the moment of granting, which a second factor at sign-in does not. Not designed: the category's marking, the challenge's form at the Bridge, and how a portal shows a request it can satisfy only after a stronger sign-in.
 
 ### Authorization for long-running operations
 
@@ -220,9 +220,9 @@ Eleven items surfaced by preparing the first adapter integration, none of them w
 
 Usher must publish the vocabulary expressing own-sets-by-default, an administrator listing across users, and no reliance on an unguessable set identifier. Recorded as a cycle deliberately: the integration lists this as a prerequisite for Usher while its central fix depends on Usher, and Usher publishing the vocabulary first is what breaks it. Bounded by the derived-artifact constraint, so per-principal set scoping cannot be an end-to-end property on its own. See [Arranger integration blockers](docs/atlas/roadmap/arranger-integration-blockers.md).
 
-### Admission control at the controller
+### Admission control at the Controller
 
-**Decided (developer, 2026-11-06)** in [decisions.md](design/decisions.md), "The controller admits each application within a share of its own", and built: each instance divides its exchange connections equally among the registered applications, answers an exchange past its share `503` with `Retry-After`, and counts those refusals in `admission.shareExceededTally`; the bridge's option for the bound is gone, and it backs off as `Retry-After` tells it. Still to do: check Fastify's load-shedding and rate-limit plugins against what was built, and measure what verifying the identity provider's signature costs. The API key watermark is designed with the API keys, under "API keys stay opaque" above. Research beyond it: keeping sign-ins served within the application a flood targets, which an admission-priority lane in the bridge did against every measured flood shape; see [sign-in signature precheck](docs/atlas/bridge/signin-signature-precheck.md).
+**Decided (developer, 2026-11-06)** in [decisions.md](design/decisions.md), "The Controller admits each application within a share of its own", and built: each instance divides its exchange connections equally among the registered applications, answers an exchange past its share `503` with `Retry-After`, and counts those refusals in `admission.shareExceededTally`; the Bridge's option for the bound is gone, and it backs off as `Retry-After` tells it. Still to do: check Fastify's load-shedding and rate-limit plugins against what was built, and measure what verifying the identity provider's signature costs. The API key watermark is designed with the API keys, under "API keys stay opaque" above. Research beyond it: keeping sign-ins served within the application a flood targets, which an admission-priority lane in the Bridge did against every measured flood shape; see [sign-in signature precheck](docs/atlas/bridge/signin-signature-precheck.md).
 
 ### Federation posture
 
@@ -250,7 +250,7 @@ it only ever subtracts.
 
 **An approach meeting all four requirements is recorded as research, and is not in the first
 release:** embargo as a local category with a deadline, which on open data needs no both-grants check
-but needs every bridge serving the study to enforce local categories before one is set. See
+but needs every Bridge serving the study to enforce local categories before one is set. See
 [conditions beyond the data](docs/atlas/roadmap/conditions-beyond-the-data.md).
 
 ### The token calculation, and the schema that should follow it
@@ -358,13 +358,13 @@ Three sequences are recorded in design documents and nowhere an operator reads, 
 
 - **Break-glass access.** If every platform administrator is unavailable, recovery is an IdP operation. Overture's own deployment documents it beside its Keycloak configuration: who may run it, and the events it relies on as its audit trail. A deployment of Usher elsewhere has nothing of Usher's to start from. See [admin-model.md](design/admin-model.md).
 - **Establishing a category.** Define the category, appoint whoever governs it, and only then accept data carrying it. The decision to treat a custodian vacancy as a governance failure rather than a system state depends on this sequence being followed. See [decisions.md](design/decisions.md) § Granting is one function.
-- **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the controller, and both before any record carrying it is indexed, since the check compares registrations with what Usher declares and never reads the data. The reverse order withholds each resource offering the category from the catalogues not yet mapping it, the whole resource rather than the affected records, until the application catches up. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
+- **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the Controller, and both before any record carrying it is indexed, since the check compares registrations with what Usher declares and never reads the data. The reverse order withholds each resource offering the category from the catalogues not yet mapping it, the whole resource rather than the affected records, until the application catches up. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
 A design document that says an operator must do something, without an operator-facing document, has moved the responsibility rather than discharged it.
 
 ### Category dictionary introspection
 
-Adapter configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher, so every instance transcribes it into each adapter's configuration by hand. The proposal is an introspection endpoint on the controller returning the list, reachable only by a bridge and encrypted to that application's key like an Usher token, so configuration is generated rather than copied. Post-MVP: a convenience only, since the check protecting `unmarked` from an unmapped category runs in the bridge from the offered categories carried in the payload, from the first release. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
+Adapter configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher, so every instance transcribes it into each adapter's configuration by hand. The proposal is an introspection endpoint on the Controller returning the list, reachable only by a Bridge and encrypted to that application's key like an Usher token, so configuration is generated rather than copied. Post-MVP: a convenience only, since the check protecting `unmarked` from an unmapped category runs in the Bridge from the offered categories carried in the payload, from the first release. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
 It carries names only, since what a category selects is defined per schema and Usher never learns it, so it does not weaken data-agnosticism, and it must not become a route to enumerate resources, grants or principals.
 
@@ -382,27 +382,27 @@ answer: a study whose records sit in two catalogues under different access.
 
 **Drafted in [design/schema.md](design/schema.md), for review.** It turns the logical model into
 tables, reads them against the token calculation's steps, and adds the notice stream that the
-bridge's test plan fixes for the controller. Eight decisions await review there, among them how a
+Bridge's test plan fixes for the Controller. Eight decisions await review there, among them how a
 principal's revocation is stored, how a group is confined to one resource, and the data access
 layer, where the recommendation is Kysely.
 
 ### JWE algorithm selection
 
-**Settled.** `dir` with A256GCM, symmetric, one key per controller-and-application pair, held in Vault and injected by the secrets operator. Per application is what makes `aud` a cryptographic boundary rather than a claim. See the JWE decision in [decisions.md](design/decisions.md).
+**Settled.** `dir` with A256GCM, symmetric, one key per Controller-and-application pair, held in Vault and injected by the secrets operator. Per application is what makes `aud` a cryptographic boundary rather than a claim. See the JWE decision in [decisions.md](design/decisions.md).
 
 ### Deployment architecture
 
 High-availability design for stateless Usher instances sharing a policy database as source of truth: replica configuration, and how many push connections a surviving instance must absorb when another fails.
 
-**Container strategy decided (developer, 2026-11-06).** One image on distroless Node 26 with two commands: serving, and the migrate command, which runs before each rollout under the schema migration role, so the controller's pods never hold that role's password. Local development runs on docker compose, with Keycloak importing a committed dev realm. Health endpoints exist: `/health/live` and `/health/ready`. Built in the controller's deployability units, whose operator page gives "Deployment runbook has no home" its home. The first deployment target is overture-dev, reached by Arranger once the exchange exists.
+**Container strategy decided (developer, 2026-11-06).** One image on distroless Node 26 with two commands: serving, and the migrate command, which runs before each rollout under the schema migration role, so the Controller's pods never hold that role's password. Local development runs on docker compose, with Keycloak importing a committed dev realm. Health endpoints exist: `/health/live` and `/health/ready`. Built in the Controller's deployability units, whose operator page gives "Deployment runbook has no home" its home. The first deployment target is overture-dev, reached by Arranger once the exchange exists.
 
-**Asked of the Jenkins pipeline library: build the controller's image and run its schema migration before each rollout.** The build and runtime contract:
+**Asked of the Jenkins pipeline library: build the Controller's image and run its schema migration before each rollout.** The build and runtime contract:
 
 - **Build:** `apps/controller/Dockerfile`, with the repository's root as context, to its default final stage, `runtime`, for linux/amd64, with no build arguments. linux/arm64 is added when a deployment needs it. The build reaches the npm registry, Docker Hub and gcr.io.
-- **Serving:** the controller listens on `USHER_PORT`, which has no default, and answers `GET /health/live` and `GET /health/ready` without authentication.
-- **Schema migration:** before each rollout, a Job runs the same image with `args: ["dist/migrate.js"]` and `command` unset. It receives the `USHER_SCHEMA_MIGRATION_*` variables, `USHER_DATABASE_URL` for the runtime role's name, `USHER_DATABASE_SCHEMA` and the retention durations. The controller's pods never receive the schema migration variables.
-- **Rollback:** rolling the image back one release skips the schema migration Job, since an earlier release's command refuses a database recording a later migration, and the earlier controller runs on the later schema.
-- **Store:** PostgreSQL 15 or later, reached directly, or through a pooler only where each connection keeps one server session carrying the controller's two startup parameters. The schema migration Job needs one server session throughout.
+- **Serving:** the Controller listens on `USHER_PORT`, which has no default, and answers `GET /health/live` and `GET /health/ready` without authentication.
+- **Schema migration:** before each rollout, a Job runs the same image with `args: ["dist/migrate.js"]` and `command` unset. It receives the `USHER_SCHEMA_MIGRATION_*` variables, `USHER_DATABASE_URL` for the runtime role's name, `USHER_DATABASE_SCHEMA` and the retention durations. The Controller's pods never receive the schema migration variables.
+- **Rollback:** rolling the image back one release skips the schema migration Job, since an earlier release's command refuses a database recording a later migration, and the earlier Controller runs on the later schema.
+- **Store:** PostgreSQL 15 or later, reached directly, or through a pooler only where each connection keeps one server session carrying the Controller's two startup parameters. The schema migration Job needs one server session throughout.
 
 ### Keycloak realm configuration via Terraform
 
@@ -410,7 +410,7 @@ Overture's own deployments configure Keycloak through Terraform's Keycloak provi
 
 ### Usher ↔ portal-ui API contract
 
-Portal-facing API covering user-visible flows (access request, token exchange, denied-access states) in addition to the shared bridge protocol. Depends on the system context diagram; draft before portal-ui begins implementation against a mock.
+Portal-facing API covering user-visible flows (access request, token exchange, denied-access states) in addition to the shared Bridge protocol. Depends on the system context diagram; draft before portal-ui begins implementation against a mock.
 
 ### Researcher experience design
 
@@ -452,7 +452,7 @@ In the first release, decided 2026-09-25: the onboarding document already promis
 tier, and it adds no new mechanism. Every resource has an implicit `unmarked` category covering the
 records not covered by its other categories, and a setting says who reaches them: open, through the
 baseline; registered, through a rule giving every signed-in principal the `unmarked` grant; or by
-grant. The controller evaluates both rules at the exchange, so the bridge sees ordinary grants. See
+grant. The Controller evaluates both rules at the exchange, so the Bridge sees ordinary grants. See
 "Who holds a grant can follow a rule" and "Records not covered by any category are `unmarked`" in
 [decisions.md](design/decisions.md).
 
@@ -476,7 +476,7 @@ notices at the retention floor.
 
 ## Implementation: Core service
 
-The controller lives in `apps/controller` in this repository as the private package
+The Controller lives in `apps/controller` in this repository as the private package
 `@overture-stack/usher-controller`, since it is deployed as a service rather than published.
 
 ### Technology stack
@@ -489,7 +489,7 @@ OIDC token validation: discovery endpoint consumption, public key caching and ro
 
 ### Permissions computation engine
 
-Resolve current permissions from the policy database and compute the `PermissionsPayload`. Supports the fast-path refresh, whose one test is the controller's own: the principal's cached payload still being present, since any change to a resource's categories clears it.
+Resolve current permissions from the policy database and compute the `PermissionsPayload`. Supports the fast-path refresh, whose one test is the Controller's own: the principal's cached payload still being present, since any change to a resource's categories clears it.
 
 ### JWE token issuance
 
@@ -509,12 +509,12 @@ Two parts of this are design prerequisites rather than implementation, and their
 
 Schema implementation and migration tooling. Integrity controls: transactions, foreign key constraints, audit triggers for policy changes.
 
-### What the controller's later units carry
+### What the Controller's later units carry
 
 Requirements that surfaced while earlier units were reviewed, held here so each later unit's brief starts from them.
 
 - **EGO import.** It is the first unit to give its transaction a timeout of its own, so it commits a test against a real store showing that timeout, not the store's, is the one applied.
-- **Every unit, for its settings (decided by the developer, 2026-11-09).** The controller reads a setting only once code uses it. Each unit adds its variables, the operator page's rows and their local-development values in the commit that brings the code using them. The grants unit's `USHER_GRANT_RATE_THRESHOLD` is optional, defaulting to 10 operations within 60 seconds.
+- **Every unit, for its settings (decided by the developer, 2026-11-09).** The Controller reads a setting only once code uses it. Each unit adds its variables, the operator page's rows and their local-development values in the commit that brings the code using them. The grants unit's `USHER_GRANT_RATE_THRESHOLD` is optional, defaulting to 10 operations within 60 seconds.
 - **Every unit building a Management API operation.** The contract already lists each operation's `503` codes, from the design. The unit checks that list against what its code can answer, and corrects whichever is wrong.
 - **A contract test, once the exchange has landed.** Every `$ref` in `openapi.json` resolves, and every code an implemented route can answer appears among its responses, so the contract and the code cannot drift apart unnoticed.
 - **Back-channel logout.** The identity provider calls it, so it follows OIDC Back-Channel Logout: a failed logout answers `400`, carrying `storeUnavailable`, `outcomeUnknown` or `identityProviderUnavailable` in its problem body, and a token naming an audience outside the configured list is refused.
@@ -522,9 +522,9 @@ Requirements that surfaced while earlier units were reviewed, held here so each 
 - **Application keys.** The key ring's remaining work: waking through Valkey, the token key, and reload hooks precise to the change they follow. The channel's held refusal test for an application with no live key resumes there, since `noLiveKey` is now tallied.
 - **The log stream, in whichever unit next changes it.** It holds a bounded amount for a sink that falls behind, so a slow sink cannot grow the process's memory without limit. What the stream does at that bound is decided with the unit. If it refuses further lines, that counts as a failed write and takes liveness down.
 - **Service accounts, decided (developer, 2026-11-09 and 2026-11-16).** A service account's permissions are held against its registered subject, which the identity provider's user lookup confirms as a service-account user at registration; where no lookup can say, the registration is recorded as unconfirmed at `warning`. Removing a registration sends a principal's revocation. No claim grants anything, and the signs of a service account only refuse, as the Management API already does. At the exchange a service account holds the baseline and its own grants; until this unit, the exchange refuses its token outright. See [admin-model.md](design/admin-model.md) § Service accounts.
-- **Admin membership, its first slice (decided by the developer, 2026-11-15 and 2026-11-16), built for the first release.** Per [decisions.md](design/decisions.md) § Usher keeps its own admins, and a first user only nominates the first: Usher's list of admins; the first user, marked by the realm role `usher-first-user`, recorded as a base user and nominating the first admin; the nominee's acceptance, recorded at `critical`; every Management API operation answering `403` until then, but those two; and admin status read from the list rather than the token. The realm role and the controller's settings change with it, once.
-- **Admin membership, after the first release.** Admins nominating and removing admins, recovery when no admin can sign in, an admin owning a resource they registered, and adding grants from a list of email addresses, each a forward migration. Recovery is a command in the controller's image, run once like the schema migration command with no particular pipeline required, and its standard procedure goes in docs/deployment.md § Break-glass access for any platform. Removing an admin reads admin status inside the operation's own transaction: the first slice reads it before the transaction, which holds only while no admin is ever removed. A refused nomination records the nominee it named wherever the body was read.
-- **The rollback guard, before the controller's first versioned release (decided by the developer, 2026-11-16).** Per [decisions.md](design/decisions.md) § A release that cannot honour a recorded restriction does not serve: each migration declares whether it records a restriction, with its sentence, and the runner records both; the controller refuses to start, and stops reporting ready, on a database holding such a migration it does not know; and the forced-rollback command runs once from the image, as the migration command does, with no particular pipeline required and its procedure in docs/deployment.md for any platform, recording at `critical`. Every existing migration recording a restriction declares it, the sign-out records among them.
+- **Admin membership, its first slice (decided by the developer, 2026-11-15 and 2026-11-16), built for the first release.** Per [decisions.md](design/decisions.md) § Usher keeps its own admins, and a first user only nominates the first: Usher's list of admins; the first user, marked by the realm role `usher-first-user`, recorded as a base user and nominating the first admin; the nominee's acceptance, recorded at `critical`; every Management API operation answering `403` until then, but those two; and admin status read from the list rather than the token. The realm role and the Controller's settings change with it, once.
+- **Admin membership, after the first release.** Admins nominating and removing admins, recovery when no admin can sign in, an admin owning a resource they registered, and adding grants from a list of email addresses, each a forward migration. Recovery is a command in the Controller's image, run once like the schema migration command with no particular pipeline required, and its standard procedure goes in docs/deployment.md § Break-glass access for any platform. Removing an admin reads admin status inside the operation's own transaction: the first slice reads it before the transaction, which holds only while no admin is ever removed. A refused nomination records the nominee it named wherever the body was read.
+- **The rollback guard, before the Controller's first versioned release (decided by the developer, 2026-11-16).** Per [decisions.md](design/decisions.md) § A release that cannot honour a recorded restriction does not serve: each migration declares whether it records a restriction, with its sentence, and the runner records both; the Controller refuses to start, and stops reporting ready, on a database holding such a migration it does not know; and the forced-rollback command runs once from the image, as the migration command does, with no particular pipeline required and its procedure in docs/deployment.md for any platform, recording at `critical`. Every existing migration recording a restriction declares it, the sign-out records among them.
 - **Unconfirmed service-account registrations, to tighten.** Where no user lookup can confirm a subject, an administrator's typed subject is trusted and only recorded. Find a way to confirm it without the lookup; one candidate takes the subject from a verified token issued to the client rather than from typed text.
 
 ---
@@ -533,15 +533,15 @@ Requirements that surfaced while earlier units were reviewed, held here so each 
 
 ### `@overture-stack/usher-types`
 
-Types and runtime validators shared by the controller, the bridge and adapters: the permissions payload, the enforcement result, the request's access value and the notices. Lives in `modules/types`. Built and tested on the bridge's branch, awaiting review; unpublished.
+Types and runtime validators shared by the Controller, the Bridge and adapters: the permissions payload, the enforcement result, the request's access value and the notices. Lives in `modules/types`. Built and tested on the Bridge's branch, awaiting review; unpublished.
 
 ### `@overture-stack/usher-express-bridge`
 
-Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/express-bridge`, with its core free of Express so a bridge for another framework can reuse it. Built and tested on the bridge's branch, awaiting review; unpublished.
+Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/express-bridge`, with its core free of Express so a Bridge for another framework can reuse it. Built and tested on the Bridge's branch, awaiting review; unpublished.
 
 ### First publish of the two packages
 
-Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Arranger's adapter is built and reviewed and merges only once both packages are published, so the first publish is its last step. Also before the first publish: lifting `private: true` from both packages, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, and real versions, since the packed bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies. Pre-releases are `0.0.1-beta.N` under the `next` dist-tag, and main keeps `0.0.0-dev` (developer, 2026-11-03).
+Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Arranger's adapter is built and reviewed and merges only once both packages are published, so the first publish is its last step. Also before the first publish: lifting `private: true` from both packages, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, and real versions, since the packed Bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies. Pre-releases are `0.0.1-beta.N` under the `next` dist-tag, and main keeps `0.0.0-dev` (developer, 2026-11-03).
 
 - The first publish is `0.0.0-alpha.1` under the `rc` dist-tag, for the initial overture-dev deployment alone (developer, 2026-11-13).
 - The review of both packages and the publishing-integrity choice come when the packages move off beta into `0.0.1` proper, so betas publish before that review (developer, 2026-11-13).
@@ -554,11 +554,11 @@ Defined when the packages reach v1, as part of the MVP launch (developer, 2026-1
 
 ### `@overture-stack/arranger-usher-adapter`
 
-Adapter for `arranger-graphql-router`. Applies the bridge's enforcement results as server-side SQON filters. First integration target. Arranger-specific design in `arranger/.dev/docs/arranger-auth/usher-adapter.md`.
+Adapter for `arranger-graphql-router`. Applies the Bridge's enforcement results as server-side SQON filters. First integration target. Arranger-specific design in `arranger/.dev/docs/arranger-auth/usher-adapter.md`.
 
 ### Additional per-app adapters
 
-The Lyric adapter and others, each applying the bridge's enforcement results in the app's native query format.
+The Lyric adapter and others, each applying the Bridge's enforcement results in the app's native query format.
 
 ---
 
@@ -570,14 +570,14 @@ Design not yet started; see `.dev/design/management-ui.md`. High-level scope: re
 
 ## Testing
 
-### Finding untested code, settled before the bridge is built
+### Finding untested code, settled before the Bridge is built
 
-To be worked out before implementation of `@overture-stack/usher-express-bridge` begins, so the bridge and the controller are measured from their first commit.
+To be worked out before implementation of `@overture-stack/usher-express-bridge` begins, so the Bridge and the Controller are measured from their first commit.
 
 A whole-suite coverage report misses the gaps that matter. A branch that one module's own test never reaches still reads as covered when another test runs it incidentally, and a file no test imports may not appear at all. Two layers find them mechanically:
 
 - **Code a module's own test never reaches:** run each co-located test file alone, measuring only the source file beside it, so whatever stays uncovered is a gap whatever else executes it. `c8 --all` also lists files no test loads, at 0%. The built-in `node --test --experimental-test-coverage` omits them even with an include filter, and with `tsx` it misreports lines either way: 100% without source maps, and wrong lines with them. See the coverage table in [packaging-and-toolchain.md](docs/atlas/bridge/packaging-and-toolchain.md).
-- **Code a test runs but never checks:** mutation testing scoped to the same pairs, which changes the code and reruns only its own test. A change no test notices is a gap. It is slower, so it is for the security-critical modules: the bridge's rendering and validation, and the controller's token calculation.
+- **Code a test runs but never checks:** mutation testing scoped to the same pairs, which changes the code and reruns only its own test. A change no test notices is a gap. It is slower, so it is for the security-critical modules: the Bridge's rendering and validation, and the Controller's token calculation.
 
 To decide: built-in coverage or `c8`; whether CI fails a build when a security-critical file gains uncovered branches, rather than chasing a total percentage; and whether the pairing script is proposed to the agentics testing convention.
 
@@ -585,7 +585,7 @@ To decide: built-in coverage or `c8`; whether CI fails a build when a security-c
 
 The workspace formats with Prettier and checks types with `tsc`, and nothing yet reads the code for mistakes the compiler accepts. Add ESLint across every package, run by one workspace script beside `format:check` and `typecheck`, and in CI once the pipeline runs these.
 
-The configuration starts from Arranger's, so code moving between the repositories meets the same checks, and improves on it where Usher can: typed rules, which need each package's `tsconfig.json`, and a security plugin, given the bridge's and controller's code paths are security-critical. An improvement worth having in both repositories goes back to Arranger too.
+The configuration starts from Arranger's, so code moving between the repositories meets the same checks, and improves on it where Usher can: typed rules, which need each package's `tsconfig.json`, and a security plugin, given the Bridge's and Controller's code paths are security-critical. An improvement worth having in both repositories goes back to Arranger too.
 
 ### Load and latency testing
 
@@ -598,7 +598,7 @@ is the natural choice for a Fastify service (Fastify itself uses it for benchmar
 the alternative if the team wants a more expressive scripting model or cross-service scenarios.
 
 The test must cover at minimum: token exchange throughput under concurrent load, SSE connection
-count at the expected bridge-per-instance ceiling, and latency distribution (p50/p95/p99) on
+count at the expected Bridge-per-instance ceiling, and latency distribution (p50/p95/p99) on
 the critical path. Define acceptable thresholds before implementation so regressions are caught
 rather than discovered in integration testing.
 
@@ -674,7 +674,7 @@ surveyor](docs/atlas/roadmap/bounded-surveyor.md).
 An owner creates a category that exists only in their resource, so a study divides its own records
 without growing the list seen by every other study. The scope prefix on every category name ships in
 the first release, so this adds a scope without renaming anything. A local category only ever adds a
-restriction, and the bridge enforces resource categories since categories became conditions. What
+restriction, and the Bridge enforces resource categories since categories became conditions. What
 remains is an owner creating one: its condition lives in the category mapping, a deployed
 configuration, which decides whether owners can create one themselves. See [local
 categories](docs/atlas/roadmap/local-categories.md).

@@ -5,7 +5,7 @@ export const PAGE_ELEMENT_ID = 'swagger-ui';
 
 /**
  * The API documentation page: Swagger UI's icons, stylesheet and bundle, then the initializer, each
- * named by an absolute path under the page's own, so each loads from the controller's origin. It
+ * named by an absolute path under the page's own, so each loads from the Controller's origin. It
  * holds no inline script, no style element or attribute, and no event handler attribute.
  */
 export const API_DOCS_PAGE = `<!doctype html>

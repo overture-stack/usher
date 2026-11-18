@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import type { UserConfig } from 'tsdown';
 
-/** An entry the controller's build gives, by the name of the file it builds: the controller, and its schema migration command. */
+/** An entry the Controller's build gives, by the name of the file it builds: the Controller, and its schema migration command. */
 export type BuiltEntry = 'main' | 'migrate';
 
 const APP_ROOT = new URL('../', import.meta.url);
@@ -14,7 +14,7 @@ const APP_ROOT = new URL('../', import.meta.url);
 const BUILD_VARIABLE = 'USHER_TEST_CONTROLLER_BUILD';
 
 /**
- * Builds the controller with its committed configuration, the output folder alone changed, into a
+ * Builds the Controller with its committed configuration, the output folder alone changed, into a
  * folder of its own inside the app, as `dist/` is, so the app's package type and its dependencies
  * apply to what is built; the folder's name ends in `.tmp`, which the repository ignores. tsdown is
  * loaded only here, so a test file reading the build loads none of it.
@@ -51,7 +51,7 @@ export const removeBuild = (folder: URL): Promise<void> =>
 /**
  * The environment variable that hands the run's build to the test files. The global setup sets it
  * before any test file starts, and each test file inherits it; a wrapper script building the
- * controller could set the same one instead.
+ * Controller could set the same one instead.
  *
  * @param folder the folder holding the build.
  */
@@ -62,7 +62,7 @@ export const environmentForBuild = (
 });
 
 /**
- * One file of the run's build of the controller, read from the environment the global setup
+ * One file of the run's build of the Controller, read from the environment the global setup
  * published, to run under Node alone.
  *
  * @param entry the entry, by the name of the file it builds.

@@ -21,7 +21,7 @@ import { HEARTBEAT, noticeEvent, noticeOf, reaches } from './wireFormat.js';
 /** The line naming a stream closed because its reader stopped reading. */
 export const SLOW_STREAM_CLOSED = 'noticeChannel.slowStreamClosed';
 
-/** The line naming a stream ended by a failure the controller did not expect. */
+/** The line naming a stream ended by a failure the Controller did not expect. */
 export const STREAM_FAILED = 'noticeChannel.streamFailed';
 
 /** The headers every stream is opened with. */
@@ -48,7 +48,7 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * whose reader stops reading while more than the queue limit of the tail's notices wait for it is
  * closed at once; one silent for the heartbeat interval is sent a comment alone, unless it waits for
  * its reader; and each ends at its maximum lifetime, or when its replay finds history no longer
- * reaching it, its bridge to open it again from its own cursor.
+ * reaching it, its Bridge to open it again from its own cursor.
  *
  * @param settings what reads, seals and tails the stream, the log, and the limits and timings.
  */

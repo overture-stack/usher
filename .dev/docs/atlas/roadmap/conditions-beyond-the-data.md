@@ -14,7 +14,7 @@ document: facts about the person, the data and the situation.
 
 ## Rules about the person beyond signing in
 
-The mechanism is decided: a rule decides who holds a grant, the controller evaluates it at the
+The mechanism is decided: a rule decides who holds a grant, the Controller evaluates it at the
 exchange, it reads only provider-verified claims, and its result is recorded at each exchange. See
 "Who holds a grant can follow a rule" in [decisions.md](../../../design/decisions.md). What remains
 research is which rules to offer beyond signing in, such as an affiliation verified by the identity
@@ -33,7 +33,7 @@ On open data, one iMS study with an embargoed submission:
 | 1    | HEART_STUDY's unmarked records are open, and it carries `resource.embargo-S7`, which selects the records of submission S7                   |
 | 2    | S7's records belong to `resource.embargo-S7` alone, since `unmarked` covers only what no other category claims                              |
 | 3    | anonymous visitors reach the unmarked records, and holders of the embargo grant, S7's submitters, reach S7's records as well                |
-| 4    | at the deadline the controller removes the embargo category and announces it as a category change, and S7's records fall back to `unmarked` |
+| 4    | at the deadline the Controller removes the embargo category and announces it as a category change, and S7's records fall back to `unmarked` |
 
 No record belongs to two categories at any step, so embargo on open data needs no both-grants check.
 Embargo on controlled data does: an S7 record that is "controlled" belongs to both.
@@ -50,8 +50,8 @@ It meets the four requirements recorded under "Embargo" in
 
 **What it would take**, and why it is not in the first release:
 
-1. **Every bridge serving the study enforces the narrow kind of local category first.** A first-release
-   bridge drops `resource.` entries, so an adapter behind one never learns the embargo exists, renders
+1. **Every Bridge serving the study enforces the narrow kind of local category first.** A first-release
+   Bridge drops `resource.` entries, so an adapter behind one never learns the embargo exists, renders
    `unmarked` as the whole study, and serves S7's records to everyone. That covers search and every file
    path: SONG, Score's downloads and Lyric.
 2. **The mapping check is mandatory before an embargo can be set.** "Open" renders as "not

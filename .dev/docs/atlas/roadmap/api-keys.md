@@ -22,7 +22,7 @@ paste them into scripts and pipelines. Keeping the format costs nothing and is n
 went this way.
 
 **What it costs, stated plainly.** The check runs in Usher's exchange path, so Keycloak and the
-plugin become an availability dependency. The rate is the mitigating fact: a bridge exchanges once
+plugin become an availability dependency. The rate is the mitigating fact: a Bridge exchanges once
 per TTL window per principal rather than once per request, so a hundred requests a minute is one
 check every five minutes, not five hundred.
 

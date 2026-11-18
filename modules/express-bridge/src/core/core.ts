@@ -67,7 +67,7 @@ import { isReadablePayloadVersion } from './tokenReader.js';
 type TokenRejectionReason = BridgeEventData['token.rejection']['reason'];
 
 /**
- * What the controller answered an exchange with, as the controller client reads it. Two answers
+ * What the Controller answered an exchange with, as the Controller client reads it. Two answers
  * carry the seconds of a valid `Retry-After`:
  * - `admissionShareExceeded`, a 503 shedding the application's exchanges, with `undefined` when it
  *   carried no valid `Retry-After`;
@@ -82,10 +82,10 @@ export type ExchangeAnswer =
   | { kind: 'token'; token: string }
   | { kind: 'unreadable'; reason: TokenRejectionReason };
 
-/** Asks the controller to exchange a credential, or nothing for the anonymous exchange. */
+/** Asks the Controller to exchange a credential, or nothing for the anonymous exchange. */
 export interface ControllerClient {
   /**
-   * Exchanges `credential`, or nothing when it is `null`, for the controller's answer. `signal`
+   * Exchanges `credential`, or nothing when it is `null`, for the Controller's answer. `signal`
    * aborts once the exchange timeout has passed.
    */
   exchange(request: {
@@ -140,7 +140,7 @@ export interface CoreSeams {
    */
   createChannel?(context: ChannelContext): Channel;
 
-  /** Builds the client that exchanges credentials with the controller. */
+  /** Builds the client that exchanges credentials with the Controller. */
   createControllerClient(context: SeamContext): ControllerClient;
 
   /** Builds the reader that decrypts and validates each Usher token. */
@@ -165,7 +165,7 @@ export type ResolveOutcome =
   | { kind: 'unavailable' };
 
 /**
- * The bridge's core, free of any web framework: it turns each request's credential into that
+ * The Bridge's core, free of any web framework: it turns each request's credential into that
  * request's access.
  */
 export interface BridgeCore {
@@ -176,7 +176,7 @@ export interface BridgeCore {
   applyNotice(notice: Notice): void;
 
   /**
-   * The bridge's mode now, logging any change since the last reading:
+   * The Bridge's mode now, logging any change since the last reading:
    * - `normal` while the latest confirmed check started no more than the grace period ago;
    * - `uncertain` past the grace period while an anonymous payload is held;
    * - `cold` before start, after stop, until an anonymous payload has been accepted and a check
@@ -193,7 +193,7 @@ export interface BridgeCore {
    * - `true` when one arrived, whether kept or used only as the self-test;
    * - `false` when the fetch failed, when a reset overtook it, or when a notice overtook both it and
    *   the one fetch made again after it;
-   * - `false`, fetching nothing, while the bridge backs off or the anonymous fetch is held for
+   * - `false`, fetching nothing, while the Bridge backs off or the anonymous fetch is held for
    *   `Retry-After`; the fetch is made once both have ended.
    * @throws {UsherContractError} as a rejection, naming `START_REFUSAL_RULES.notRegistered` before
    * `register`, and `CORE_RULES.startFirst` before `start` has finished or after `stop`.
@@ -244,14 +244,14 @@ export interface BridgeCore {
   /**
    * Resolves one request's credential, or `null` for none, to one of:
    * - `access`: the principal's access, or the open tier for no credential; or the open tier,
-   *   suspended, when the exchange fails or is held, when the bridge backs off, or when the
+   *   suspended, when the exchange fails or is held, when the Bridge backs off, or when the
    *   revocation channel is uncertain;
-   * - `refused`: the controller refused the credential, or it is a signed token past its own `exp`;
-   * - `unavailable`: the core is not running or is cold, the controller's answer could not be read,
+   * - `refused`: the Controller refused the credential, or it is a signed token past its own `exp`;
+   * - `unavailable`: the core is not running or is cold, the Controller's answer could not be read,
    *   the in-flight bound is reached, or no open tier is held to serve.
    *
-   * How the controller's 503 is honoured:
-   * - `503 admissionShareExceeded` opens the back-off window for the whole bridge, lasting its
+   * How the Controller's 503 is honoured:
+   * - `503 admissionShareExceeded` opens the back-off window for the whole Bridge, lasting its
    *   `Retry-After`, or 1 s without a valid one, capped at 5 s, plus jitter drawn uniformly from 0 to
    *   half of that. A later one extends the window, and none shortens it. Until it ends no exchange
    *   starts: exchanges already running finish, an answer a notice overtakes meanwhile is discarded
@@ -260,7 +260,7 @@ export interface BridgeCore {
    *   60 s, plus the same jitter, and it is exchanged once the hold ends.
    * - Any other failed exchange holds the credential for `stores.failureHoldMs`.
    *
-   * It rejects when the controller client or the token reader throws, or when tagging the payload's
+   * It rejects when the Controller client or the token reader throws, or when tagging the payload's
    * subject fails.
    */
   resolve(credential: string | null): Promise<ResolveOutcome>;
@@ -277,9 +277,9 @@ export interface BridgeCore {
    * - when a listed payload version cannot be read, naming each at its index, as in
    *   `payloadVersions[1]`;
    * - when `register` has not run;
-   * - when another bridge in this process already serves the audience;
+   * - when another Bridge in this process already serves the audience;
    * - when the application key cannot be imported;
-   * - when building the controller client, the token reader or the revocation channel throws, or
+   * - when building the Controller client, the token reader or the revocation channel throws, or
    *   starting the channel does, once whatever had started has stopped.
    *
    * Every refusal but `startOnce` is logged as `bridge.startRefusal`; a refused configuration is
@@ -297,7 +297,7 @@ export interface BridgeCore {
    * promise.
    *
    * @returns a promise settled once the seams are closed, which is when the audience is freed for
-   * another bridge in this process.
+   * another Bridge in this process.
    */
   stop(): Promise<void>;
 }
@@ -408,8 +408,8 @@ const answeredBy = (
   });
 
 /**
- * The most new exchanges in flight at once, a bound on the bridge's own memory: the controller paces
- * the bridge's exchanges by `Retry-After`.
+ * The most new exchanges in flight at once, a bound on the Bridge's own memory: the Controller paces
+ * the Bridge's exchanges by `Retry-After`.
  */
 const IN_FLIGHT_MAX = 64;
 
@@ -432,7 +432,7 @@ const LOGGED_GAPS_MAX = 4_096;
 const NOTICE_LOG_MAX = 1_024;
 
 /**
- * The audiences of every bridge running in this process: at most one bridge serves each audience.
+ * The audiences of every Bridge running in this process: at most one Bridge serves each audience.
  */
 const audiencesInUse = new Set<string>();
 
@@ -828,7 +828,7 @@ const createRuntime = ({
    * Fetches the anonymous payload in its own single flight, outside the in-flight bound. Each
    * reset generation has a flight of its own, so a fetch after a reset never joins one started
    * before it. A defect in the client or the reader is logged and retried like any failed fetch, so
-   * retrying never stops. While the bridge backs off, or the anonymous fetch is held, nothing is
+   * retrying never stops. While the Bridge backs off, or the anonymous fetch is held, nothing is
    * fetched, and the fetch is scheduled for when both have ended.
    */
   const runAnonymous = (): Promise<AnonymousFetch> => {
@@ -1096,7 +1096,7 @@ const createRuntime = ({
   };
 
   /**
-   * The open tier, suspended, for a credential: naming the subject vouched for by the controller,
+   * The open tier, suspended, for a credential: naming the subject vouched for by the Controller,
    * for attribution alone, and unconfirmed when it vouched for none.
    */
   const suspendedFor = (
@@ -1334,7 +1334,7 @@ const needsResourceList = (key: CompiledKey): boolean =>
   key.kind === 'record' && key.resources?.length === 0;
 
 /**
- * Creates the bridge's core on the seams given. Creating it checks nothing: `start` checks the
+ * Creates the Bridge's core on the seams given. Creating it checks nothing: `start` checks the
  * configuration.
  */
 export const createBridgeCoreWithSeams = (

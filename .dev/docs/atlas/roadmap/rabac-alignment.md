@@ -51,7 +51,7 @@ computes is flattened to one of three values on the way out.
 **A role-to-permission table inside an adapter would put policy in the enforcement layer.** The
 architecture requires that applications make no policy decisions. Deciding which permissions the
 `viewer` role carries is a policy decision, so an adapter holding that mapping holds policy. In RABAC
-the role check is evaluated where the roles live, which here is the controller.
+the role check is evaluated where the roles live, which here is the Controller.
 
 **`public` is a permission set wearing a role's clothes.** The token schema documents it as
 equivalent to the minimum read permission with no management actions, which is a permission set
@@ -75,7 +75,7 @@ permission, never a role.
 And an instance can define its own roles without every adapter having to learn them.
 
 **Usher ships the capability vocabulary as defaults, and an instance may add to it.** The
-controller and every adapter have to agree on what `download` means, which is what the shipped
+Controller and every adapter have to agree on what `download` means, which is what the shipped
 defaults provide. That agreement does not require the list to be closed.
 
 **`edit` belongs in the shipped defaults.** An existing Overture consumer already draws the line,
@@ -125,7 +125,7 @@ and only `view` on `controlled` says exactly that. No resource-level slot is nee
 would reintroduce a baseline, and additive rendering exists to do without one.
 
 Whether the originating role name travels alongside the permissions is a separate and smaller
-question. It is not needed for enforcement, and audit events are emitted by the controller, which
+question. It is not needed for enforcement, and audit events are emitted by the Controller, which
 knows the role already, so the default should be to leave it out rather than to carry two
 representations that can disagree.
 
@@ -136,7 +136,7 @@ permission acts on what Usher holds; a data-plane one acts on records held by an
 live at each plane, and a principal holds roles at both independently.
 
 **The plane names what a permission targets, not where it is enforced.** Both are enforced in the
-control plane: the controller checks a control-plane permission on an admin call, and the adapter
+control plane: the Controller checks a control-plane permission on an admin call, and the adapter
 checks a data-plane one before a query runs. The adapter is a control-plane component that happens to
 run inside an application, which is why enforcing there does not put policy there.
 
@@ -240,7 +240,7 @@ the vocabulary: defining a role is not assigning one.
 
 **Attribute evaluation is split across two components, which is the one structural departure.** In
 RABAC, and in attribute-based models generally, the decision point evaluates the attributes and
-reaches a decision. Usher's controller cannot: it names categories and deliberately never learns what
+reaches a decision. Usher's Controller cannot: it names categories and deliberately never learns what
 they select, because it does not know an instance's fields. So the evaluation divides:
 
     the controller   which (resource, category) pairs does this principal hold?
@@ -250,7 +250,7 @@ Neither half is the decision on its own. This sits close to the rule that a PEP 
 decides, and the distinction that keeps it true is that the adapter has no say in who may reach what:
 it resolves what a category means locally, which is translation rather than policy.
 
-**It is what makes the model deployable here rather than a compromise on it.** Keeping the controller
+**It is what makes the model deployable here rather than a compromise on it.** Keeping the Controller
 ignorant of field names is what allows one service across applications with unrelated schemas, and
 what removes the per-request call back to it. Stated here because it is a departure by structure
 rather than by omitting a feature, and the other three are omissions.

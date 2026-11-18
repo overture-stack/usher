@@ -1,8 +1,8 @@
 // The schema migration command's process entry, and the one place it reads its environment. It runs
-// apart from the controller's processes, which never hold the schema migration role's password. A
+// apart from the Controller's processes, which never hold the schema migration role's password. A
 // refusal writes one structured line naming the variables at fault to standard error, as the
-// controller's start does, and ends the process with a non-zero code; a run that applies its
-// migrations writes one line at info naming them to standard output, where the controller writes
+// Controller's start does, and ends the process with a non-zero code; a run that applies its
+// migrations writes one line at info naming them to standard output, where the Controller writes
 // its own, and ends with zero. A failure nothing caught writes its line and ends the process at once.
 import { constants } from 'node:os';
 

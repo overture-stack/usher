@@ -95,7 +95,7 @@ export const REGISTRAR_REALM: KeycloakRealmOptions = Object.freeze({
 export const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
-/** The controller's clock and the test's may differ by the container host's drift. */
+/** The Controller's clock and the test's may differ by the container host's drift. */
 export const CLOCK_TOLERANCE_MS = 30_000;
 
 /**
@@ -170,7 +170,7 @@ export const issued = async (
  * default.
  *
  * @param application the registration's answer.
- * @param key the key held by the bridge.
+ * @param key the key held by the Bridge.
  */
 export const heldBy = (
   application: Pick<RegisteredApplication, 'id' | 'key'>,
@@ -178,7 +178,7 @@ export const heldBy = (
 ): ControllerApplication => ({ id: application.id, key: key.value });
 
 /**
- * Sends the anonymous exchange through an application, as its bridge sends one: no credential, and a
+ * Sends the anonymous exchange through an application, as its Bridge sends one: no credential, and a
  * fresh channel assertion signed under the key given unless the request names another assertion.
  *
  * @param url the instance exchanged with, its URL ending in `/`.
@@ -206,7 +206,7 @@ export const WAKE_WITHIN_MS = 10_000;
 
 /**
  * How long, in real time, an instance may take to reload its keys once its configured clock has passed
- * the reload interval, in milliseconds: the controller reads its clock on a timer of its own, with a
+ * the reload interval, in milliseconds: the Controller reads its clock on a timer of its own, with a
  * period fixed by nothing, so this allows for it while staying far below the interval itself.
  */
 export const RELOAD_WITHIN_MS = 5_000;

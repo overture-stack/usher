@@ -103,7 +103,7 @@ const ANA_SUSPENDED = Object.freeze({
 
 const KEY = Buffer.alloc(32, 7).toString('base64url');
 
-/** A subject's tag, computed apart from the core, as the controller computes it for a notice. */
+/** A subject's tag, computed apart from the core, as the Controller computes it for a notice. */
 const tagFor = async (subject: string): Promise<string> =>
   subjectTag(await importApplicationKey(KEY), subject);
 
@@ -158,7 +158,7 @@ const segment = (value: unknown): string =>
   Buffer.from(JSON.stringify(value)).toString('base64url');
 
 /**
- * A three-part signed sign-in token with a placeholder signature, since only the controller checks
+ * A three-part signed sign-in token with a placeholder signature, since only the Controller checks
  * signatures.
  */
 const signInToken = (claims: { exp?: number; sub?: string }): string =>
@@ -232,7 +232,7 @@ const harnessParts = () => {
     random: () => 0,
   };
 
-  /** Scripts the controller to answer a credential with a token carrying the payload. */
+  /** Scripts the Controller to answer a credential with a token carrying the payload. */
   const issue = (credential: string, payload: PermissionsPayload): void => {
     const token = `token:${credential}`;
     answers.set(credential, { kind: 'token', token });
@@ -266,7 +266,7 @@ type Harness = ReturnType<typeof harnessParts> & { core: BridgeCore };
 
 /**
  * Holds one exchange for each of `count` distinct opaque credentials until `release` is called, after
- * which the controller refuses each.
+ * which the Controller refuses each.
  */
 const holdingExchanges = (
   parts: Pick<Harness, 'answers'>,
@@ -289,7 +289,7 @@ const holdingExchanges = (
 };
 
 /**
- * Scripts the controller to answer a credential's exchange only once the test hands over the answer,
+ * Scripts the Controller to answer a credential's exchange only once the test hands over the answer,
  * through the function returned.
  */
 const answeringLater = (
@@ -1404,7 +1404,7 @@ suite('createBridgeCoreWithSeams', () => {
     };
 
     /**
-     * A signed-in credential with an exchange held by the controller until the test releases it.
+     * A signed-in credential with an exchange held by the Controller until the test releases it.
      */
     const holdExchange = (
       parts: Pick<Harness, 'answers' | 'issue'>,

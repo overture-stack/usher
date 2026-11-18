@@ -7,7 +7,7 @@ import {
 // modules/types/src/sqonEvaluator.ts, which the package keeps off its root, with the three helpers it
 // takes from modules/types/src/plainData.ts, which the package keeps internal too. It reads a filter
 // against one record as the search engine would, so a test judges what a rendered narrowing serves,
-// and throws for anything it does not evaluate rather than guess. When the bridge's file changes,
+// and throws for anything it does not evaluate rather than guess. When the Bridge's file changes,
 // change this copy to match; it goes once usher-types exports an evaluator.
 
 const hasPlainPrototype = (value: object): boolean => {

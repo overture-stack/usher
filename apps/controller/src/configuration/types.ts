@@ -13,7 +13,7 @@ export type ConfigurationEnvironment = Readonly<
 >;
 
 /**
- * The controller's configuration: what it is created from. Every field but the clock and the log
+ * The Controller's configuration: what it is created from. Every field but the clock and the log
  * stream is read from an environment variable of its own; a default named below is taken when the
  * environment leaves that variable unset, and a field naming none is required.
  */
@@ -36,7 +36,7 @@ export interface ControllerConfiguration {
   /** The record actions the baseline confers on everyone, anonymous visitors included; count, view and export by default. */
   baseline: readonly RecordAction[];
 
-  /** The controller's wall clock, which every duration it measures runs on; never read from the environment. */
+  /** The Controller's wall clock, which every duration it measures runs on; never read from the environment. */
   clock: Clock;
 
   /** The key cursors are encrypted under, shared by every instance: 32 bytes as 43 base64url characters in canonical form. */
@@ -59,10 +59,10 @@ export interface ControllerConfiguration {
   /** The runtime role's PostgreSQL password, read from a variable of its own and never shown. */
   databasePassword: string;
 
-  /** The schema the controller's tables live in. */
+  /** The schema the Controller's tables live in. */
   databaseSchema: string;
 
-  /** A connection URL under the controller's runtime role, which it names, carrying no password. */
+  /** A connection URL under the Controller's runtime role, which it names, carrying no password. */
   databaseUrl: string;
 
   /** The CloudEvents `source` every event carries: the same on every instance sharing the store, never one per instance. */
@@ -78,7 +78,7 @@ export interface ControllerConfiguration {
   /** How long an open notice stream may stay silent before a heartbeat, in milliseconds; 10,000 by default. */
   heartbeatMilliseconds: number;
 
-  /** The host the controller listens on. */
+  /** The host the Controller listens on. */
   host: string;
 
   /** The identity provider's issuer, exactly as its tokens carry it: https, or http to a loopback host only. */
@@ -87,7 +87,7 @@ export interface ControllerConfiguration {
   /** This instance's name, carried by every event it emits; unique among the instances sharing the store. */
   instanceName: string;
 
-  /** The controller's own issuer: every Usher token's `iss`. */
+  /** The Controller's own issuer: every Usher token's `iss`. */
   issuer: string;
 
   /**
@@ -96,7 +96,7 @@ export interface ControllerConfiguration {
    */
   keyEncryptionKey: string;
 
-  /** Where the controller writes its structured log lines; the process's standard output by default, never read from the environment. */
+  /** Where the Controller writes its structured log lines; the process's standard output by default, never read from the environment. */
   logStream: Writable;
 
   /** The `aud` a management token must name: the Policy Management API's identifier at the identity provider. */
@@ -111,7 +111,7 @@ export interface ControllerConfiguration {
   /** How often each instance reads the notice stream again with no wake-up, in milliseconds; 2,000 by default. */
   noticeRereadMilliseconds: number;
 
-  /** The port the controller listens on; 0 asks for any free port. */
+  /** The port the Controller listens on; 0 asks for any free port. */
   port: number;
 
   /** The grace period the notice retention floor counts beyond the token lifetime, in seconds; 60 by default. */
@@ -126,13 +126,13 @@ export interface ControllerConfiguration {
    */
   serviceAccountRole: string;
 
-  /** The longest lifetime of a sign-in token the controller accepts, in seconds. */
+  /** The longest lifetime of a sign-in token the Controller accepts, in seconds. */
   signInTokenMaximumLifetimeSeconds: number;
 
   /** The record actions the signed-in rule confers on every signed-in principal; count, view and export by default. */
   signedInRule: readonly RecordAction[];
 
-  /** How long the controller waits on the store for one request before answering it unavailable, in milliseconds; 5,000 by default. */
+  /** How long the Controller waits on the store for one request before answering it unavailable, in milliseconds; 5,000 by default. */
   storeTimeoutMilliseconds: number;
 
   /** The push streams one audience may hold open on one instance; 64 by default. */
@@ -153,7 +153,7 @@ export interface ControllerConfiguration {
   /** How long an Usher token lives, in seconds; 300 by default. */
   tokenLifetimeSeconds: number;
 
-  /** The addresses and CIDR ranges whose `X-Forwarded-For` the controller believes; none by default. */
+  /** The addresses and CIDR ranges whose `X-Forwarded-For` the Controller believes; none by default. */
   trustedProxies: readonly string[];
 }
 
@@ -165,8 +165,8 @@ export type FieldWithVariable = Exclude<
 
 /**
  * The schema migration command's configuration: what a migration run is given. Its connection is
- * read from variables of its own, which the controller never reads; the runtime role it grants to,
- * the schema and the durations the retention floor is made of are read from the controller's own
+ * read from variables of its own, which the Controller never reads; the runtime role it grants to,
+ * the schema and the durations the retention floor is made of are read from the Controller's own
  * variables, alike, so the two never disagree.
  */
 export interface SchemaMigrationConfiguration {
@@ -180,12 +180,12 @@ export interface SchemaMigrationConfiguration {
   retentionFloorSeconds: number;
 
   /**
-   * The controller's runtime role, created before the run, to which the migrations grant: the
-   * database role the controller's own URL names.
+   * The Controller's runtime role, created before the run, to which the migrations grant: the
+   * database role the Controller's own URL names.
    */
   runtimeRole: string;
 
-  /** The schema the controller's tables live in. */
+  /** The schema the Controller's tables live in. */
   schema: string;
 }
 
@@ -193,7 +193,7 @@ export interface SchemaMigrationConfiguration {
 export type SchemaMigrationFieldWithVariable =
   'databasePassword' | 'databaseUrl';
 
-/** The durations the notice retention floor is made of, read alike by the controller and its schema migration command. */
+/** The durations the notice retention floor is made of, read alike by the Controller and its schema migration command. */
 export type RetentionDurations = Pick<
   ControllerConfiguration,
   'retentionGraceSeconds' | 'retentionMarginSeconds' | 'tokenLifetimeSeconds'

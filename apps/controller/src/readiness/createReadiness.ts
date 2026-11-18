@@ -14,10 +14,10 @@ import type { ReadinessSettings, StoreProbe } from './types.js';
  */
 export const STORE_PROBE_INTERVAL_MILLISECONDS = 1000;
 
-/** The line written, at warning, when the controller becomes unready, naming the `cause`. */
+/** The line written, at warning, when the Controller becomes unready, naming the `cause`. */
 export const READINESS_LOST = 'readiness.lost';
 
-/** The line written, at info, when the controller is ready again. */
+/** The line written, at info, when the Controller is ready again. */
 export const READINESS_RESTORED = 'readiness.restored';
 
 // The cause naming a probe's failure that carries no code of its own.
@@ -62,7 +62,7 @@ const causeOf = (failure: unknown): string => {
 };
 
 /**
- * Creates the controller's readiness: ready while it has started and is not stopping, its log
+ * Creates the Controller's readiness: ready while it has started and is not stopping, its log
  * stream has taken every line, and its store answers within the store timeout, recording no
  * migration this release does not know and not reading as read-only when the instance's role
  * writes. Those are checked in that order, and the store asked only once the others hold. The store
@@ -148,7 +148,7 @@ export const createReadiness = ({
   };
 
   // Lines mark changes alone, so a run of failed probes writes one, and a run of probes finding
-  // unknown migrations one naming them; the controller counts as ready until judged otherwise, its
+  // unknown migrations one naming them; the Controller counts as ready until judged otherwise, its
   // start having proved the store.
   const noteChange = (judgement: Judgement): void => {
     const previous = state.judged ?? READY;

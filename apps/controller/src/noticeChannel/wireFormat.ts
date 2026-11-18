@@ -5,10 +5,10 @@ import { CompactEncrypt } from 'jose';
 
 import type { ChannelKey, StoredNotice } from './types.js';
 
-/** The request header listing the notice versions a bridge reads, comma-separated. */
+/** The request header listing the notice versions a Bridge reads, comma-separated. */
 export const NOTICE_VERSIONS_HEADER = 'usher-notice-versions';
 
-/** The one notice version the controller serves. */
+/** The one notice version the Controller serves. */
 export const SERVED_NOTICE_VERSION = 1;
 
 /** The `typ` of a pushed notice. */
@@ -58,7 +58,7 @@ export const reaches = (
 
 /**
  * A subject's tag for one audience: HMAC-SHA256 of the subject under that audience's subject-tag
- * subkey, base64url without padding, as the bridge computes it for the subjects it holds.
+ * subkey, base64url without padding, as the Bridge computes it for the subjects it holds.
  *
  * @param key the subject-tag subkey.
  * @param subject the identity provider's subject.

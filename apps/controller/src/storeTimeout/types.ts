@@ -6,7 +6,7 @@ export interface PooledConnection {
   release(destroy?: boolean): void;
 }
 
-/** Where a unit of store work takes its connection from: the controller's pool. */
+/** Where a unit of store work takes its connection from: the Controller's pool. */
 export interface ConnectionPool<Connection extends PooledConnection> {
   connect(): Promise<Connection>;
 }
@@ -52,7 +52,7 @@ export interface Lease<Connection> {
   sendingCommit(): void;
 }
 
-/** Where the controller reads the store outside any transaction, one statement at a time. */
+/** Where the Controller reads the store outside any transaction, one statement at a time. */
 export interface StoreReader {
   /**
    * Runs one statement on a connection of its own, within the store timeout.

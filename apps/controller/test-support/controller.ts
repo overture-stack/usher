@@ -18,8 +18,8 @@ export interface Clock {
 }
 
 /**
- * An application's id and one of its keys, as given to its bridge by the key's issue. The
- * controller's configuration names no application; the database is the only list of them.
+ * An application's id and one of its keys, as given to its Bridge by the key's issue. The
+ * Controller's configuration names no application; the database is the only list of them.
  */
 export interface ControllerApplication {
   /** The application's audience identifier: its `applications.id`, a generated uuid, and every Usher token's `aud` for it, verbatim. */
@@ -30,9 +30,9 @@ export interface ControllerApplication {
 }
 
 /**
- * The settings the controller reads, as the harness gives them: each field but the clock and the log
+ * The settings the Controller reads, as the harness gives them: each field but the clock and the log
  * stream travels in an environment variable of its own, written by {@link environmentFor}, and the
- * config module reads it from there. A default named below is the controller's when the environment
+ * config module reads it from there. A default named below is the Controller's when the environment
  * leaves that variable unset.
  */
 export interface ControllerSettings {
@@ -57,8 +57,8 @@ export interface ControllerSettings {
   baseline: readonly RecordAction[];
 
   /**
-   * The controller's wall clock. Set only through the configuration, never from the environment, so a
-   * test can fix now. Every duration the controller measures runs on it, the signing-key cache's
+   * The Controller's wall clock. Set only through the configuration, never from the environment, so a
+   * test can fix now. Every duration the Controller measures runs on it, the signing-key cache's
    * maximum age (10 min) and refetch cooldown (30 s) included (#208 Q5), so a test moves past either by
    * advancing this clock.
    */
@@ -85,11 +85,11 @@ export interface ControllerSettings {
    */
   databasePassword: string;
 
-  /** The schema the controller's tables live in. */
+  /** The schema the Controller's tables live in. */
   databaseSchema: string;
 
   /**
-   * A connection URL under the controller's runtime role, carrying no password: one carrying a
+   * A connection URL under the Controller's runtime role, carrying no password: one carrying a
    * password refuses the start.
    */
   databaseUrl: string;
@@ -105,13 +105,13 @@ export interface ControllerSettings {
   firstUserRole: string;
 
   /**
-   * How long an open notice stream may stay silent before the controller writes a heartbeat comment,
-   * in milliseconds: 10,000 by default (#210 Q15), short enough for the bridge's 25 s idle timer.
-   * Configurable so a test can run the bridge's compressed profile (#215 Q10, #217 Q2).
+   * How long an open notice stream may stay silent before the Controller writes a heartbeat comment,
+   * in milliseconds: 10,000 by default (#210 Q15), short enough for the Bridge's 25 s idle timer.
+   * Configurable so a test can run the Bridge's compressed profile (#215 Q10, #217 Q2).
    */
   heartbeatMilliseconds: number;
 
-  /** The host the controller listens on; a loopback address in tests. */
+  /** The host the Controller listens on; a loopback address in tests. */
   host: string;
 
   /** The identity provider's issuer, exactly as its discovery document and tokens carry it: https, or http to a loopback host only. */
@@ -120,7 +120,7 @@ export interface ControllerSettings {
   /** This instance's name, the `instance` every event it emits carries (#214 Q17); unique among the deployment's instances. */
   instanceName: string;
 
-  /** The controller's own issuer: every Usher token's `iss`. */
+  /** The Controller's own issuer: every Usher token's `iss`. */
   issuer: string;
 
   /**
@@ -133,7 +133,7 @@ export interface ControllerSettings {
   keyEncryptionKey: string;
 
   /**
-   * Where the controller writes its structured log lines: the process's standard output by default.
+   * Where the Controller writes its structured log lines: the process's standard output by default.
    * Set only through the configuration, never from the environment, so a test can read what is
    * logged.
    */
@@ -154,7 +154,7 @@ export interface ControllerSettings {
    */
   noticeRereadMilliseconds: number;
 
-  /** The port the controller listens on; 0 asks for any free port. */
+  /** The port the Controller listens on; 0 asks for any free port. */
   port: number;
 
   /** The grace period, in seconds, that the notice retention floor counts beyond the token lifetime. */
@@ -176,9 +176,9 @@ export interface ControllerSettings {
   signedInRule: readonly RecordAction[];
 
   /**
-   * How long the controller waits on the store for one request before it answers it unavailable, in
-   * milliseconds: half the bridge's poll deadline D, 5,000 by default against the bridge's 10 s
-   * (#210 Q13), so a poll waiting on a stalled store is answered 503 within the bridge's deadline.
+   * How long the Controller waits on the store for one request before it answers it unavailable, in
+   * milliseconds: half the Bridge's poll deadline D, 5,000 by default against the Bridge's 10 s
+   * (#210 Q13), so a poll waiting on a stalled store is answered 503 within the Bridge's deadline.
    */
   storeTimeoutMilliseconds: number;
 
@@ -186,12 +186,12 @@ export interface ControllerSettings {
   streamLimitPerAudience: number;
 
   /**
-   * The longest a notice stream stays open, in seconds, before the controller ends it. A value below
+   * The longest a notice stream stays open, in seconds, before the Controller ends it. A value below
    * {@link STREAM_MAXIMUM_LIFETIME_FLOOR_SECONDS} is refused.
    */
   streamMaximumLifetimeSeconds: number;
 
-  /** The notices queued for one stream before the controller closes a stream whose reader has stopped reading; 1,000 by default. */
+  /** The notices queued for one stream before the Controller closes a stream whose reader has stopped reading; 1,000 by default. */
   streamQueueLimit: number;
 
   /** The category a submitter grant naming none takes, as the payload names it: `global.unmarked` by default (#212 Q6). */
@@ -200,14 +200,14 @@ export interface ControllerSettings {
   /** How long an Usher token lives, in seconds; 300 by default. */
   tokenLifetimeSeconds: number;
 
-  /** The addresses and CIDR ranges whose `X-Forwarded-For` the controller believes when it records `sourceIp` (#214 Q15); none by default. */
+  /** The addresses and CIDR ranges whose `X-Forwarded-For` the Controller believes when it records `sourceIp` (#214 Q15); none by default. */
   trustedProxies: readonly string[];
 }
 
 /**
- * The settings the design names that the controller does not read yet. The harness holds them so the
+ * The settings the design names that the Controller does not read yet. The harness holds them so the
  * fixtures and tests written against the design keep their values, and puts none of them in the
- * controller's environment: {@link environmentFor} writes no variable for them, since the controller
+ * Controller's environment: {@link environmentFor} writes no variable for them, since the Controller
  * reads a setting only once code uses it. Each moves to {@link ControllerSettings}, with its variable,
  * in the unit whose code reads it.
  */
@@ -228,7 +228,7 @@ export interface PendingSettings {
   /** The cache's (Valkey) URL, carrying no password: one carrying a password refuses the start. */
   cacheUrl: string;
 
-  /** The client id of the service account the controller resolves addresses through (#212, #213 Q1). */
+  /** The client id of the service account the Controller resolves addresses through (#212, #213 Q1). */
   directoryClientId: string;
 
   /** That service account's secret, which no refusal, log line or answer ever shows. */
@@ -261,7 +261,7 @@ export interface PendingSettings {
    * The prefixes the EGO import reads a study id after in a policy's name, matched as literal text
    * in their configured letter case (#216 Q4, Q7): `PX-` and `PX-FILES-` in iMS. None by default, and a
    * import run while none is configured answers 503 `importNotConfigured` before it reads its
-   * export; an empty prefix, or one listed twice, refuses the controller's start, naming this field's
+   * export; an empty prefix, or one listed twice, refuses the Controller's start, naming this field's
    * variable (ruled, "#216's reasons, export size and prefixes" 3).
    */
   egoImportPrefixes: readonly string[];
@@ -276,7 +276,7 @@ export interface PendingSettings {
   selfGrantMaximumSeconds: number;
 }
 
-/** The controller's configuration as the harness holds it: the settings the controller reads, and those it does not read yet. */
+/** The Controller's configuration as the harness holds it: the settings the Controller reads, and those it does not read yet. */
 export interface ControllerConfiguration
   extends ControllerSettings, PendingSettings {}
 
@@ -293,16 +293,16 @@ export type ReadConfiguration = (
   environment: ControllerEnvironment,
 ) => ControllerConfiguration;
 
-/** A controller as the app creates it, not yet listening. */
+/** A Controller as the app creates it, not yet listening. */
 export interface Controller {
-  /** Starts listening, resolving to the URL the controller answers at. */
+  /** Starts listening, resolving to the URL the Controller answers at. */
   start(): Promise<{ url: URL }>;
 
-  /** Stops the controller, settling only once its work has ended, and also when it never started. */
+  /** Stops the Controller, settling only once its work has ended, and also when it never started. */
   stop(): Promise<void>;
 }
 
-/** The app's export: creates a controller from its configuration. */
+/** The app's export: creates a Controller from its configuration. */
 export type CreateController = (
   configuration: ControllerConfiguration,
 ) => Controller;
@@ -318,11 +318,11 @@ export interface MigrationOptions {
   /**
    * The notice retention floor in seconds, the token lifetime plus the grace period and the margin,
    * which the migrations store for the trimming function to read. The deployment sets it, so the
-   * controller's own role can never lower it (R3).
+   * Controller's own role can never lower it (R3).
    */
   retentionFloorSeconds: number;
 
-  /** The controller's runtime role, created by the deployment, to which the migrations grant. */
+  /** The Controller's runtime role, created by the deployment, to which the migrations grant. */
   runtimeRole: string;
 
   /** The schema the tables live in. */
@@ -339,7 +339,7 @@ export interface MigrationOptions {
 export type Migrate = (options: MigrationOptions) => Promise<void>;
 
 /**
- * The rules and settings the policy a controller's start seeds is written under: the baseline and the
+ * The rules and settings the policy a Controller's start seeds is written under: the baseline and the
  * signed-in rule whose digest it records, the schema, the clock its recording time is read from, and
  * the event source and instance its `baseline.change` event names.
  */
@@ -357,7 +357,7 @@ export interface SeedingConnection {
   query(text: string, values?: unknown[]): Promise<{ command: string }>;
 }
 
-// One of the controller's audit trail's transactions, as far as writing the seeded policy uses it.
+// One of the Controller's audit trail's transactions, as far as writing the seeded policy uses it.
 interface SeedingTransaction {
   connection: unknown;
   record(event: unknown): Promise<string>;
@@ -424,7 +424,7 @@ export interface TransactionOptions {
   timeoutMilliseconds?: number;
 }
 
-/** The controller's audit trail, as far as a test runs a transaction through it. */
+/** The Controller's audit trail, as far as a test runs a transaction through it. */
 export interface AuditTrail<Connection> {
   /**
    * Runs work in one transaction declaring its actor, committing the rows of the events the work
@@ -437,7 +437,7 @@ export interface AuditTrail<Connection> {
   ): Promise<Result>;
 }
 
-/** What the controller's audit trail is created from, as far as a test gives it. */
+/** What the Controller's audit trail is created from, as far as a test gives it. */
 export interface AuditTrailOptions<Connection extends TrailConnection> {
   /** Where each committed event's line is written, and the line naming an event whose row was not. */
   eventLog: { error(): void; writeEvent(envelope: EventEnvelope): void };
@@ -454,16 +454,16 @@ export interface AuditTrailOptions<Connection extends TrailConnection> {
   store: { connect(): Promise<Connection> };
 }
 
-/** A running controller, as a test holds it. */
+/** A running Controller, as a test holds it. */
 export interface RunningController {
-  /** Stops the controller, settling only once its work has ended. */
+  /** Stops the Controller, settling only once its work has ended. */
   stop(): Promise<void>;
 
-  /** The URL the controller answers at. */
+  /** The URL the Controller answers at. */
   url: URL;
 }
 
-/** How the controller's process ended, as {@link spawnController} saw it. */
+/** How the Controller's process ended, as {@link spawnController} saw it. */
 export interface ControllerExit {
   /** Whether the process ever accepted a connection on the probed port while it ran. */
   acceptedConnection: boolean;
@@ -523,7 +523,7 @@ const CONTROLLER_MODULES = {
 /** The least a stream's maximum lifetime may be configured to, in seconds; a lower one is refused. */
 export const STREAM_MAXIMUM_LIFETIME_FLOOR_SECONDS = 60;
 
-/** A setting the controller reads from an environment variable of its own: every one but the clock and the log stream. */
+/** A setting the Controller reads from an environment variable of its own: every one but the clock and the log stream. */
 export type FieldWithVariable = Exclude<
   keyof ControllerSettings,
   'clock' | 'logStream'
@@ -604,12 +604,12 @@ const presentModule = async ({ path }: ControllerModule): Promise<URL> => {
   throw new Error(`${NOT_IMPLEMENTED} ${path} is missing`);
 };
 
-// A missing module is the seam's to report, never a refusal by the controller.
+// A missing module is the seam's to report, never a refusal by the Controller.
 const isSeamMessage = (thrown: unknown): boolean =>
   thrown instanceof Error && thrown.message.startsWith(NOT_IMPLEMENTED);
 
 // The specifier is built at run time, so the type checker resolves nothing and this project
-// typechecks before the controller exists.
+// typechecks before the Controller exists.
 const loadExport = async <Exported>(
   module: ControllerExport,
 ): Promise<Exported> => {
@@ -625,11 +625,11 @@ const loadExport = async <Exported>(
 };
 
 /**
- * The environment the config module reads for a configuration: the one place the controller's
- * environment variable names live. Every setting the controller reads but `clock` and `logStream` has
+ * The environment the config module reads for a configuration: the one place the Controller's
+ * environment variable names live. Every setting the Controller reads but `clock` and `logStream` has
  * a variable; a list is comma-separated, empty for an empty list. The key-encryption key and the
  * database password travel as given, each in its own variable. The {@link PendingSettings}, which the
- * controller does not read yet, travel in none.
+ * Controller does not read yet, travel in none.
  *
  * @param configuration the configuration to express.
  */
@@ -718,7 +718,7 @@ export const environmentFor = ({
 
 /**
  * Reads a configuration through the app's config module. The clock of the configuration it returns
- * is the controller's own; a test needing a known now replaces it.
+ * is the Controller's own; a test needing a known now replaces it.
  *
  * @param environment the environment variables, such as {@link environmentFor} gives.
  * @throws the config module's refusal, naming the rule broken; or, until the module exists, the
@@ -734,11 +734,11 @@ export const readConfiguration = async (
 };
 
 /**
- * Creates and starts a controller. A start that rejects is followed by `stop`, so a refused start
+ * Creates and starts a Controller. A start that rejects is followed by `stop`, so a refused start
  * leaves nothing running.
  *
- * @param configuration the controller's configuration.
- * @returns the URL the controller answers at, and a `stop` settling once its work has ended.
+ * @param configuration the Controller's configuration.
+ * @returns the URL the Controller answers at, and a `stop` settling once its work has ended.
  */
 export const startController = async (
   configuration: ControllerConfiguration,
@@ -760,7 +760,7 @@ export const startController = async (
 };
 
 /**
- * Applies the controller's migrations up to a target, all of them by default: the in-process form
+ * Applies the Controller's migrations up to a target, all of them by default: the in-process form
  * of the deployment command, for a step-by-step run the command never makes.
  *
  * @param options the migration role's connection URL, the runtime role, the schema and the target.
@@ -771,7 +771,7 @@ export const migrate = async (options: MigrationOptions): Promise<void> => {
 };
 
 /**
- * Creates the controller's audit trail, through its own code, from the log stream's writes, the
+ * Creates the Controller's audit trail, through its own code, from the log stream's writes, the
  * settings and the store given.
  *
  * @param options where lines are written, the settings, and where connections are taken from.
@@ -786,12 +786,12 @@ export const createAuditTrail = async <Connection extends TrailConnection>(
   return create(options);
 };
 
-/** The controller's store timeout where its configuration names none, in milliseconds. */
+/** The Controller's store timeout where its configuration names none, in milliseconds. */
 export const DEFAULT_STORE_TIMEOUT_MILLISECONDS = 5000;
 
 /**
- * Writes the policy a controller's start seeds, through the controller's own code, on the connection
- * given: in one transaction its audit trail holds as the system, within the controller's default store
+ * Writes the policy a Controller's start seeds, through the Controller's own code, on the connection
+ * given: in one transaction its audit trail holds as the system, within the Controller's default store
  * timeout, the capability vocabulary and the seeded roles the store lacks, and the digest of the rules
  * with its `baseline.change` event's row when it differs from the one recorded. The event's line goes
  * nowhere, since there is no log stream. A store already holding all of it is written nothing, so it
@@ -1082,7 +1082,7 @@ const SCHEMA_MIGRATION_VARIABLE_NAMES = {
  * The environment variables of the schema migration command's own, by field: names only, so a test
  * names one through this map rather than spelling it. The command also reads the runtime role, the
  * database role `USHER_DATABASE_URL` names, and the schema and the durations the retention floor is
- * made of from the controller's own variables, in {@link ENVIRONMENT_VARIABLES}.
+ * made of from the Controller's own variables, in {@link ENVIRONMENT_VARIABLES}.
  */
 export const SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES: Readonly<
   Record<keyof typeof SCHEMA_MIGRATION_VARIABLE_NAMES, string>
@@ -1100,7 +1100,7 @@ export type SchemaMigrationCommandOptions = Omit<MigrationOptions, 'target'>;
 /**
  * The environment the schema migration command reads for a run's options. The URL's password, which
  * the command refuses inside a URL, travels in its own variable; the runtime role as the user of
- * the controller's own URL, `USHER_DATABASE_URL`, which is the schema migration role's URL under
+ * the Controller's own URL, `USHER_DATABASE_URL`, which is the schema migration role's URL under
  * that role, carrying no password; and the retention floor as a token lifetime with no grace period
  * or margin, which the command sums back to the floor.
  *
@@ -1163,7 +1163,7 @@ export const spawnSchemaMigrationCommand = async (
 };
 
 /**
- * Applies every one of the controller's migrations through the run's build of the schema migration
+ * Applies every one of the Controller's migrations through the run's build of the schema migration
  * command, run as a deployment runs it.
  *
  * @param options the schema migration role's connection URL, the retention floor, the runtime role
@@ -1242,7 +1242,7 @@ export const refusalText = (refusal: unknown): string =>
       ].join('\n')
     : String(refusal);
 
-/** What the controller wrote to a log stream a test gave it. */
+/** What the Controller wrote to a log stream a test gave it. */
 export interface LogCapture {
   /** Each line written so far, in order, empty lines left out. */
   lines(): readonly string[];
@@ -1251,7 +1251,7 @@ export interface LogCapture {
   stream: Writable;
 }
 
-/** A writable stream recording every line written to it, to configure as the controller's `logStream`. */
+/** A writable stream recording every line written to it, to configure as the Controller's `logStream`. */
 export const captureLog = (): LogCapture => {
   const chunks: string[] = [];
   const stream = new Writable({
@@ -1275,7 +1275,7 @@ export type StartOutcome =
   { kind: 'refused'; refusal: unknown } | { kind: 'started' };
 
 /**
- * Starts a controller and stops it at once, or gives the start's refusal. The seam's own message,
+ * Starts a Controller and stops it at once, or gives the start's refusal. The seam's own message,
  * while the app module is missing, is thrown on rather than taken for a refusal.
  *
  * @param configuration the configuration to start with.

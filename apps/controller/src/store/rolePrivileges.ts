@@ -9,7 +9,7 @@ import type {
   HeldSchema,
 } from './types.js';
 
-/** What the controller's runtime role may write in one table, beyond inserting into it and reading it. */
+/** What the Controller's runtime role may write in one table, beyond inserting into it and reading it. */
 export interface PermittedWrites {
   /** Whether it may delete rows. */
   deletes: boolean;
@@ -19,7 +19,7 @@ export interface PermittedWrites {
 }
 
 /**
- * Every table the release's migrations let the controller's runtime role write, and how: each takes
+ * Every table the release's migrations let the Controller's runtime role write, and how: each takes
  * inserts, and a table named nowhere here is granted for reading alone. Reading is outside this list,
  * since a read rewrites nothing, and a role that may only read starts. A grant beyond this list is
  * tolerated unless it would change the schema or rewrite history.
@@ -91,13 +91,13 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
 export const MIGRATION_RECORD = 'schema_migrations';
 
 /**
- * The functions of the controller's schema the release's migrations let its runtime role call, by
+ * The functions of the Controller's schema the release's migrations let its runtime role call, by
  * name, each name standing for every function of the schema so named: `trim_notices` for the trim
  * taking no argument and for the one taking the most notices it deletes.
  */
 export const RUNTIME_CALLS: ReadonlySet<string> = new Set(['trim_notices']);
 
-// Where every change the controller makes is recorded, so a role writing anywhere must insert here.
+// Where every change the Controller makes is recorded, so a role writing anywhere must insert here.
 const AUDIT_LOG = 'audit_log';
 
 // The tables whose rows are history, written as the migrations grant and in no other way, so any
@@ -125,7 +125,7 @@ const REFUSED_ON_ANY_TABLE: ReadonlySet<string> = new Set([
   'TRUNCATE',
 ]);
 
-// The predefined roles refused to the controller's role: reaching the server's own files and
+// The predefined roles refused to the Controller's role: reaching the server's own files and
 // programs, or writing every table without one grant naming it.
 const REFUSED_ROLES: ReadonlySet<string> = new Set([
   'pg_execute_server_program',
@@ -261,12 +261,12 @@ interface RoleRow {
 
 /**
  * Reads, from the catalogue, everything the role a connection runs as holds over the database, the
- * controller's schema and each of its relations and functions, whether granted to the role itself,
+ * Controller's schema and each of its relations and functions, whether granted to the role itself,
  * to a role it inherits from, or to everyone. It reads no table of the schema, so it waits on no
  * table's lock.
  *
- * @param client a connection under the role, as the controller connects.
- * @param schema the controller's schema.
+ * @param client a connection under the role, as the Controller connects.
+ * @param schema the Controller's schema.
  * @throws when the catalogue holds no row for the connected role.
  */
 export const readHeldPrivileges = async (
@@ -439,7 +439,7 @@ const writes = (relation: HeldRelation): boolean =>
     relation.privileges.some((privilege) => WRITES.has(privilege)));
 
 /**
- * Whether a role may write to some table of the controller's schema, so an instance under it serves
+ * Whether a role may write to some table of the Controller's schema, so an instance under it serves
  * writes; one that may only read serves none.
  *
  * @param held what the role holds.
@@ -506,9 +506,9 @@ const recordProblems = ({
   schema?.uses === true ? recordReadingProblems(relations) : [];
 
 /**
- * The rules a role breaks as the controller's database role, each naming the variable at fault and
+ * The rules a role breaks as the Controller's database role, each naming the variable at fault and
  * each refusing the start: a schema it cannot use, a record of applied migrations the schema lacks
- * or the role may not read, anything it holds beyond what the controller needs, and writing without
+ * or the role may not read, anything it holds beyond what the Controller needs, and writing without
  * recording.
  *
  * @param held what the role holds.

@@ -4,7 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { ControllerError } from '../failures/index.js';
 import type { Migration } from './types.js';
 
-/** The folder holding the controller's migrations, one SQL file each. */
+/** The folder holding the Controller's migrations, one SQL file each. */
 export const MIGRATIONS_FOLDER: URL = new URL('./sql/', import.meta.url);
 
 // Four digits giving the order, then words naming what the migration does.

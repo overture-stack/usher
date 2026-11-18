@@ -2,49 +2,49 @@
 
 Checked on Node 24.16 (undici 7.25.0, libuv 1.52.1) on macOS against the npm registry (jose 6.2.12,
 eventsource-parser 4.1.1, eventsource 5.1.2, ws 8.22.0, fastify 5.12.5, @fastify/sse 0.6.0),
-2026-10-04. Every behaviour stated here was run there, against models of the bridge and mock
-controllers on a local port, unless the sentence says it was read from source or documentation, or
+2026-10-04. Every behaviour stated here was run there, against models of the Bridge and mock
+Controllers on a local port, unless the sentence says it was read from source or documentation, or
 reasoned.
 
-This note sets out how the Usher bridge, the library each ushered application embeds, reads the
-controller's revocation notice stream. The stream carries every notice that drops cached access: a
+This note sets out how the Usher Bridge, the library each ushered application embeds, reads the
+Controller's revocation notice stream. The stream carries every notice that drops cached access: a
 principal's revocation or sign-out, a category change on a resource, a change to an audience's served
 set, a baseline change, and a global revocation.
 
 ## Decisions
 
 These state the design. [schema.md](../../../design/schema.md) "Decide E" leaves the subject tag, the
-notice encryption and the bridge's side of the stream to this note, so a decision with no other link
+notice encryption and the Bridge's side of the stream to this note, so a decision with no other link
 is recorded here. One that another design document records links it, and one still under review says
 proposed. The sections after them give the evidence.
 
 ### Transport
 
 - The push runs over Server-Sent Events (SSE), not WebSocket.
-- The bridge reads the push with undici's `fetch` through an Agent of its own, or the host's `fetch`
+- The Bridge reads the push with undici's `fetch` through an Agent of its own, or the host's `fetch`
   when it hands one over, and `eventsource-parser` 4.1.1.
-- The push is `GET notices/stream` under the controller URL, with `Accept: text/event-stream`, the
+- The push is `GET notices/stream` under the Controller URL, with `Accept: text/event-stream`, the
   channel assertion, `Last-Event-ID` and `Usher-Notice-Versions`.
-- The bridge owns every header, sees every status code, and runs its own reconnection.
-- On every push connection attempt, the first included, the bridge sends a fresh channel assertion
+- The Bridge owns every header, sees every status code, and runs its own reconnection.
+- On every push connection attempt, the first included, the Bridge sends a fresh channel assertion
   and resumes from its push position with `Last-Event-ID`. While it holds no push position, at start
   and after a reset, it opens from the head the poll read, and waits until the poll has read one.
-- The bridge reconnects with full-jitter exponential backoff and ignores any `retry` field. The
-  controller sends none. The ceiling starts at 1 s and doubles with each failed attempt, up to the
+- The Bridge reconnects with full-jitter exponential backoff and ignores any `retry` field. The
+  Controller sends none. The ceiling starts at 1 s and doubles with each failed attempt, up to the
   poll interval T, and starts again only once a connection applies a notice, so a stream that sends
   bytes but nothing applicable keeps backing off.
 - A push answered with anything but a 200 event stream reconnects with that backoff. A 410 resets as
   on the poll. A 406 is a malformed channel, and so is a 200 that is not an event stream, such as a
   proxy's own page. Nothing else is logged.
-- The bridge sets the parser's `maxBufferSize`, for example to 64 KiB, and treats an overflow as a
+- The Bridge sets the parser's `maxBufferSize`, for example to 64 KiB, and treats an overflow as a
   malformed stream.
-- The controller writes a heartbeat every H, at most half the shortest proxy timeout P on the path.
-  The bridge runs an idle timer I on the push, at least 2H plus jitter and at most T, and replaces a
+- The Controller writes a heartbeat every H, at most half the shortest proxy timeout P on the path.
+  The Bridge runs an idle timer I on the push, at least 2H plus jitter and at most T, and replaces a
   push that stays silent past it. The timer runs from the connection attempt's start, so a path that
   withholds even the headers is replaced the same way. The defaults are H = 10 s and I = 25 s,
   against nginx's default read timeout of 60 s.
 - The poll runs always, on its own schedule, whether or not the push is connected.
-- The bridge takes its `fetch`, or its undici dispatcher, as a typed parameter, and never inherits the
+- The Bridge takes its `fetch`, or its undici dispatcher, as a typed parameter, and never inherits the
   host's global dispatcher. It exposes `stop()` and keeps its timers unreferenced.
 
 ### Liveness
@@ -56,20 +56,20 @@ proposed. The sections after them give the evidence.
 - The anchored heartbeat, set out under "The anchored heartbeat, the fallback", was the alternative
   to that rule, and was not taken.
 - The poll deadline D is 10 s by default, which is proposed: [bridge-tests.md](../../bridge-tests.md)
-  "Open for review" sets the deadline's default with the controller, below the grace period less the
+  "Open for review" sets the deadline's default with the Controller, below the grace period less the
   poll interval.
 - A poll that fails is retried at once, and the poll interval T is jittered by 10%.
 - A retry that fails as well waits for the recovery interval R rather than T, and so does every poll
   after it until a check is recorded. The poll after a recorded check waits for T again. A 410 is the
-  exception: the bridge resets and asks for head at once.
+  exception: the Bridge resets and asks for head at once.
 - R is the smaller of 10 s and T by default, configurable as `pollRecoveryIntervalMs`, and at most T,
   so it only ever shortens the wait between failing polls. The grace period G still bounds how long
-  cached answers are served: the bridge leaves normal mode once G passes since the last check, as it
+  cached answers are served: the Bridge leaves normal mode once G passes since the last check, as it
   would without R.
-- R is jittered by 10% either way, as T is, so bridges that start failing together, as in a
-  controller outage, do not poll it in step once it returns. Under the same jitter, a poll timed at R
+- R is jittered by 10% either way, as T is, so Bridges that start failing together, as in a
+  Controller outage, do not poll it in step once it returns. Under the same jitter, a poll timed at R
   is never later than one timed at T would have been.
-- A controller failing at once gets two requests every R, the poll and its retry, and is never polled
+- A Controller failing at once gets two requests every R, the poll and its retry, and is never polled
   in a loop. One that never answers is asked again as each retry is aborted at D, since R at its
   default is no longer than D.
 - A 410 answering a request for head is a malformed answer, since such a request names no cursor to
@@ -80,7 +80,7 @@ proposed. The sections after them give the evidence.
   timer, and a forget or a 410 asks for head at once; that head check's outcome then times the next
   poll, at T once it is recorded and at R once it and its retry have failed.
 - A failed poll is logged as `revocationChannel.failure` with a `cause`: `status` for an answer
-  other than 200, 406 or 410, `network` when the request cannot reach the controller, `timeout` when
+  other than 200, 406 or 410, `network` when the request cannot reach the Controller, `timeout` when
   the deadline aborts it, and `defect` for a throw while signing, reading or applying a page. A
   malformed answer is logged as `revocationChannel.malformed` instead, and a 410 resets.
 - A defect thrown while applying a pushed notice, or while handing a 410 to the channel, is logged the
@@ -95,7 +95,7 @@ proposed. The sections after them give the evidence.
 - T runs from the start of the check the schedule joined to the next check's start, as the bound
   below assumes, and R runs the same way.
 - Each request and each read of an answer races the deadline, so a host's `fetch` that ignores its
-  signal still ends at D, and never holds a later check or the bridge's stop.
+  signal still ends at D, and never holds a later check or the Bridge's stop.
 - T + 2D stays below G with T taken at its jitter maximum: 1.1 T + 2D is below G, so one failed poll
   is retried within grace. [Core and Express layer](core-and-express-layer.md) refuses any other
   configuration at construction, and any R above T.
@@ -107,7 +107,7 @@ proposed. The sections after them give the evidence.
   is aborted then.
 - The pages answered before an abort are still applied, and the aborted request applies nothing.
 - A page that asks for more must name as `next` a cursor no page of its check has asked after, the
-  one the check started from included, so a controller looping its cursors cannot keep a check
+  one the check started from included, so a Controller looping its cursors cannot keep a check
   running until D. A page naming one is malformed: it applies nothing, the pages before it stay
   applied and keep the position they moved, `revocationChannel.malformed` is logged with a reason
   code of its own, and the check is no check, retried as any failure is.
@@ -122,16 +122,16 @@ proposed. The sections after them give the evidence.
 
 ### Positions and history
 
-- The bridge keeps two positions: a push position, sent as `Last-Event-ID` and moved by pushed
+- The Bridge keeps two positions: a push position, sent as `Last-Event-ID` and moved by pushed
   notices, and a poll position, moved only by poll answers, as
   [security-workflow.md](../../../design/security-workflow.md) "Propagation: push + poll" records.
 - A cursor that history no longer reaches gets 410 Gone on both channels, judged against a stored
   trim watermark and an epoch carried in every cursor, as [schema.md](../../../design/schema.md) "The
   notice stream" records.
-- A cursor the controller cannot decrypt, whether altered or issued under a cursor key since
+- A cursor the Controller cannot decrypt, whether altered or issued under a cursor key since
   replaced, gets 410 as a cursor from another epoch does. Replacing the cursor key therefore resets
-  every bridge at once, as a restore does (reasoned).
-- On a 410 the bridge drops every entry, the anonymous one included, logs `revocationChannel.reset`,
+  every Bridge at once, as a restore does (reasoned).
+- On a 410 the Bridge drops every entry, the anonymous one included, logs `revocationChannel.reset`,
   and asks for head explicitly. It never takes head from a 410's body, only from an authenticated
   answer.
 - A poll names its cursor or asks for head explicitly. An absent cursor is a request error, never an
@@ -139,12 +139,12 @@ proposed. The sections after them give the evidence.
 
 ### Startup
 
-- The bridge reads head with a timely poll and opens the push from it, as "Startup order" sets out.
+- The Bridge reads head with a timely poll and opens the push from it, as "Startup order" sets out.
 - The anonymous fetch is the application key's self-test, and runs at start without waiting for the
   head poll. A payload fetched before the head poll's check serves only as the self-test, and the
   check fetches it again.
 - At startup, a wrong application key shows first on the anonymous exchange, whose channel
-  assertion the controller refuses with 401: the bridge logs `token.exchangeFailure` with cause
+  assertion the Controller refuses with 401: the Bridge logs `token.exchangeFailure` with cause
   `assertionRefused` and `revocationChannel.modeChange` with reason `probableKeyMismatch`, and stays
   cold. An anonymous token failing decryption at startup is named the same way, after its
   `token.rejection` with reason `decryptionFailed`. [jose for the Usher token](jose-usher-token.md) records
@@ -167,25 +167,25 @@ proposed. The sections after them give the evidence.
 - A principal notice goes to every audience, and names the subject by a per-audience tag: an HMAC of
   the subject under a key derived for that audience. This is the recommendation of
   [schema.md](../../../design/schema.md) "Decide E", a draft for review, so it is proposed.
-- The bridge indexes its entries by that tag, which is proposed with it.
+- The Bridge indexes its entries by that tag, which is proposed with it.
 - Baseline and global notices go to every audience.
 - A servedResources notice goes only to the audience whose served set changed.
-- Cursors are opaque to the bridge, which never reads one and compares them only for equality.
-- Under the timely-poll rule the bridge compares a cursor only with a copy of the same string: an SSE
+- Cursors are opaque to the Bridge, which never reads one and compares them only for equality.
+- Under the timely-poll rule the Bridge compares a cursor only with a copy of the same string: an SSE
   `id` with the cursor inside its notice, and a poll answer's `after` with the cursor its request
-  sent. So the equality holds however the controller encrypts a cursor.
+  sent. So the equality holds however the Controller encrypts a cursor.
 - Cursors are opaque in fact, not only in form, since a readable global position would show each
-  bridge the gaps a category filter leaves. The controller makes them so by encrypting each cursor's
+  bridge the gaps a category filter leaves. The Controller makes them so by encrypting each cursor's
   epoch and position under a key of its own, which it never shares.
-- The bridge lists the notice versions it reads when it connects and when it polls, comma-separated
+- The Bridge lists the notice versions it reads when it connects and when it polls, comma-separated
   in an `Usher-Notice-Versions` request header, the same on the push connection as on the poll.
-- The controller refuses a version list it cannot serve, and the bridge treats the refusal as a
+- The Controller refuses a version list it cannot serve, and the Bridge treats the refusal as a
   malformed channel, with no check.
-- The refusal is a 406 Not Acceptable, which is proposed, answered only after the controller has
+- The refusal is a 406 Not Acceptable, which is proposed, answered only after the Controller has
   accepted the assertion.
 - A refused version list is logged as `revocationChannel.malformed` with a fixed reason code of its
   own.
-- A notice is malformed when its version or kind is not one the bridge listed, its SSE `id` differs
+- A notice is malformed when its version or kind is not one the Bridge listed, its SSE `id` differs
   from the cursor inside it, it fails to decrypt or validate, or the parser overflows.
 - A malformed notice is not applied, no position moves past it, and an answer carrying it is no check.
 - A malformed notice, or a poll answer that fails to read, is logged as
@@ -193,24 +193,24 @@ proposed. The sections after them give the evidence.
 
 ### Authentication and confidentiality
 
-- The bridge authenticates to the push, the poll and the exchange with an HS256 channel assertion,
+- The Bridge authenticates to the push, the poll and the exchange with an HS256 channel assertion,
   signed under the HKDF subkey of the application key with info `usher/v1/channel-assertion`.
 - The assertion's `typ` is `usher-channel+jwt` and its `aud` is `usher:controller`, naming the
-  controller rather than one of its endpoints. Its `iss` is the
-  application's identifier, from which the controller derives the same key. Its `exp` is no later
+  Controller rather than one of its endpoints. Its `iss` is the
+  application's identifier, from which the Controller derives the same key. Its `exp` is no later
   than `iat` plus 60 s, and its `jti` is unique.
 - The assertion carries no `kid`. A key version arrives with key rotation, which is open in
   [jose for the Usher token](jose-usher-token.md#open-questions).
-- The controller checks the assertion before it reads the version list or the cursor, and answers
+- The Controller checks the assertion before it reads the version list or the cursor, and answers
   every refusal of an assertion with the same 401.
-- The controller refuses a reused `jti` on a stream open, and closes a stream after a maximum lifetime
+- The Controller refuses a reused `jti` on a stream open, and closes a stream after a maximum lifetime
   of 15 min and whenever the application's key is revoked or rotated away.
 - The channel assertion does not sign the request's method, path or query. The encrypted echo of the
-  nonce and `after` already catches a rewritten request at the bridge.
+  nonce and `after` already catches a rewritten request at the Bridge.
 - Notices and poll answers are encrypted to the audience as compact JWEs under `dir` and A256GCM.
 - A notice has `typ` `usher-notice+jwt` and the subkey with info `usher/v1/notice-encryption`. A poll
   answer has `typ` `usher-poll+jwt` and the subkey with info `usher/v1/poll-answer`.
-- The bridge reads both with `compactDecrypt`, never `jwtDecrypt`, under the Usher token's header
+- The Bridge reads both with `compactDecrypt`, never `jwtDecrypt`, under the Usher token's header
   rules in [jose for the Usher token](jose-usher-token.md).
 - Every poll answer carries, inside its encryption, the nonce and the `after` cursor its request sent.
 - Poll answers are not padded in the first release. A record's length can show an observer on the
@@ -221,30 +221,30 @@ proposed. The sections after them give the evidence.
   ([adapter-integration.md](../../../design/adapter-integration.md) "Category dictionary
   introspection").
 
-### The controller and the bridge's caches
+### The Controller and the Bridge's caches
 
-- Valkey pub/sub only wakes controller instances to new notices, and the database is the source they
+- Valkey pub/sub only wakes Controller instances to new notices, and the database is the source they
   read ([schema.md](../../../design/schema.md) "What is stored where").
 - An exchange answer overtaken by a notice is judged by the affected-payload test in
   [Core and Express layer](core-and-express-layer.md).
-- On the controller, a payload recomputed from a snapshot read before a notice's commit is never
+- On the Controller, a payload recomputed from a snapshot read before a notice's commit is never
   written to the payload cache after that notice has cleared it.
 - When a notice drops the anonymous entry and fetching it again fails while the channel is healthy,
   anonymous and open-tier requests get 503 until the fetch succeeds; the rules for the rendering kept
   for uncertain mode are in [Core and Express layer](core-and-express-layer.md).
-- The controller sends to each push connection independently, with a timeout, never one connection
+- The Controller sends to each push connection independently, with a timeout, never one connection
   after another. Each connection has a bounded queue and is closed on overflow, and connections per
   audience are capped.
 
 ### Logging
 
 - The channel assertion, the `Authorization` header, a notice's body and a JWE are never logged. On
-  the controller this means redaction on the request logger.
+  the Controller this means redaction on the request logger.
 - No jose, zod or `JSON.parse` error is ever logged, since jose's claim errors carry the plaintext and
   a `JSON.parse` message can quote it.
 - An applied notice is logged as `notice.applied`, with its `kind` and `entriesDropped` only: no
   subject, tag or cursor.
-- Every event the bridge emits is registered in [audit-events.md](../../../design/audit-events.md).
+- Every event the Bridge emits is registered in [audit-events.md](../../../design/audit-events.md).
 
 ## Terms used here
 
@@ -252,27 +252,27 @@ proposed. The sections after them give the evidence.
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | notice            | one entry of the stream: a principal's revocation or relayed sign-out, a category change for one resource, a change to one audience's served set, a baseline change, or a global one                                                          |
 | served set        | an audience's served resources, held or not: the payload's `servedResources`                                                                                                                                                                  |
-| position          | a notice's place in the controller's one sequence, stored as `notices.position` and following commit order                                                                                                                                    |
-| cursor            | the opaque string the controller gives the bridge for a position; it carries the position and an epoch, encrypted under a key only the controller holds                                                                                       |
+| position          | a notice's place in the Controller's one sequence, stored as `notices.position` and following commit order                                                                                                                                    |
+| cursor            | the opaque string the Controller gives the Bridge for a position; it carries the position and an epoch, encrypted under a key only the Controller holds                                                                                       |
 | head              | the cursor of the newest committed notice                                                                                                                                                                                                     |
-| epoch             | a value the controller regenerates whenever its notice history restarts, as after a restore                                                                                                                                                   |
+| epoch             | a value the Controller regenerates whenever its notice history restarts, as after a restore                                                                                                                                                   |
 | push position     | the cursor the push resumes from, sent as `Last-Event-ID`; pushed notices advance it                                                                                                                                                          |
 | poll position     | the cursor the poll asks after; only poll answers advance it                                                                                                                                                                                  |
 | check             | a poll answered within its deadline, which renews the grace period                                                                                                                                                                            |
-| heartbeat         | a comment the controller writes on an idle push stream, so that proxies and the bridge see traffic                                                                                                                                            |
-| idle timeout      | how long the bridge waits for any byte on the push before it aborts the connection and reconnects                                                                                                                                             |
-| channel assertion | a short-lived signed token the bridge sends to the push and the poll, proving which application is asking                                                                                                                                     |
-| reset             | what the bridge does on a 410: drop every entry, then read head                                                                                                                                                                               |
-| malformed channel | a notice, poll answer or a 200 push answer the bridge cannot read, a poll page asking for more from a cursor its check already asked after, or the versions it lists refused: nothing applied, no check, `revocationChannel.malformed` logged |
+| heartbeat         | a comment the Controller writes on an idle push stream, so that proxies and the Bridge see traffic                                                                                                                                            |
+| idle timeout      | how long the Bridge waits for any byte on the push before it aborts the connection and reconnects                                                                                                                                             |
+| channel assertion | a short-lived signed token the Bridge sends to the push and the poll, proving which application is asking                                                                                                                                     |
+| reset             | what the Bridge does on a 410: drop every entry, then read head                                                                                                                                                                               |
+| malformed channel | a notice, poll answer or a 200 push answer the Bridge cannot read, a poll page asking for more from a cursor its check already asked after, or the versions it lists refused: nothing applied, no check, `revocationChannel.malformed` logged |
 
 **Position and cursor are not synonyms here.** The design files say position, and the contract says
-cursor. The bridge only ever holds a cursor, which encodes a position and an epoch. Where this note
-says the bridge holds a position, it holds the cursor for one.
+cursor. The Bridge only ever holds a cursor, which encodes a position and an epoch. Where this note
+says the Bridge holds a position, it holds the cursor for one.
 
 | Symbol | Meaning                                                    | Value                              |
 | ------ | ---------------------------------------------------------- | ---------------------------------- |
 | H      | heartbeat interval                                         | 10 s, the default                  |
-| I      | the bridge's idle timeout on the push                      | 25 s, the default                  |
+| I      | the Bridge's idle timeout on the push                      | 25 s, the default                  |
 | T      | poll interval                                              | 30 s, the decided default          |
 | R      | recovery interval: the poll interval while checks fail     | 10 s or T if shorter, the default  |
 | D      | poll deadline                                              | 10 s, a proposed default           |
@@ -283,8 +283,8 @@ says the bridge holds a position, it holds the cursor for one.
 
 ### One delay, traced twice
 
-The case: a principal P's grant is revoked. Something on the path between bridge and controller
-forwards the push stream's bytes in order, but slower than the controller writes them, and holds back
+The case: a principal P's grant is revoked. Something on the path between Bridge and Controller
+forwards the push stream's bytes in order, but slower than the Controller writes them, and holds back
 every poll answer. The last check started at t = 0 s, and the notice c42 commits at t = 1 s.
 
 **Rule A: the push connection proves liveness, read as "bytes within the idle timeout".**
@@ -302,7 +302,7 @@ every poll answer. The last check started at t = 0 s, and the notice c42 commits
 2. Bytes keep arriving, and push renews nothing.
 3. t = 30: the poll goes out and its answer is held back. At t = 40 it misses its deadline, and the
    immediate retry is held back too. No check.
-4. t = 60: the grace period since the check at t = 0 has run out. The bridge enters uncertain mode and
+4. t = 60: the grace period since the check at t = 0 has run out. The Bridge enters uncertain mode and
    logs `revocationChannel.modeChange`.
 5. From t = 60, P is served the open tier only, marked `openTierOnly` and `suspended`, naming P's
    subject as `attributionOnlySubject`, for attribution alone. Revocation is bounded by the grace
@@ -320,7 +320,7 @@ the content arriving grew from 2.2 s to 15.2 s and was still rising.
 - The heartbeat is transport only: a comment line with no id. It keeps proxies from cutting the
   stream, and lets the idle timer find a dead push. Without it, revocation latency falls silently from
   seconds to the poll interval whenever a push dies.
-- The poll runs always. A bridge polling only while push is down would let the grace period run out
+- The poll runs always. A Bridge polling only while push is down would let the grace period run out
   while push is up.
 - "An exchange failing while the channel is healthy" reads healthy as "within the grace period of the
   last check", never as "push connected".
@@ -332,36 +332,36 @@ open connection nor arriving bytes provide:
 
 | Property     | What it proves                                                 | Why arriving bytes fall short                                                                        |
 | ------------ | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| freshness    | the bridge can bound how old each heartbeat is when it arrives | a paced path delivers bytes on time while their content ages                                         |
+| freshness    | the Bridge can bound how old each heartbeat is when it arrives | a paced path delivers bytes on time while their content ages                                         |
 | completeness | a fresh heartbeat proves that no notice before it is missing   | an instance's push can miss a notice while its heartbeats stay fresh, and held polls recover nothing |
 
 One way to get both:
 
-1. The bridge opens the push with a fresh nonce in a request header, and notes its own monotonic time,
+1. The Bridge opens the push with a fresh nonce in a request header, and notes its own monotonic time,
    t0.
-2. The controller's first event, encrypted to the audience, echoes the nonce and starts a clock for
+2. The Controller's first event, encrypted to the audience, echoes the nonce and starts a clock for
    that connection at zero.
 3. Each heartbeat is an encrypted event carrying that clock's elapsed time, e, and the head cursor the
-   controller read from the database.
-4. When a heartbeat arrives, its age is at most the bridge's elapsed time since t0, less e, since it
+   Controller read from the database.
+4. When a heartbeat arrives, its age is at most the Bridge's elapsed time since t0, less e, since it
    cannot have been written before the request was sent.
 5. A heartbeat older than the bound, or naming a head that differs from the push position, is not a
-   liveness signal, and the bridge polls at once.
+   liveness signal, and the Bridge polls at once.
 
-Step 5 is the one place a bridge compares two cursors the controller encrypted separately. The
-comparison holds only if the controller encrypts one epoch and position to one cursor on every
+Step 5 is the one place a Bridge compares two cursors the Controller encrypted separately. The
+comparison holds only if the Controller encrypts one epoch and position to one cursor on every
 instance. With a fresh random IV for each encryption, every head would differ from the push position,
-and the bridge would poll on every heartbeat, which fails safe at the cost of a poll each time.
+and the Bridge would poll on every heartbeat, which fails safe at the cost of a poll each time.
 
 Both clocks are monotonic, so wall-clock skew never enters. Only the two clocks' rates can differ, and
 over a connection's maximum lifetime the difference is small. A heartbeat read just after a commit,
-before its notice arrives, names a head the bridge has not reached, and costs one extra poll. Under
+before its notice arrives, names a head the Bridge has not reached, and costs one extra poll. Under
 this rule the idle timeout plus the reconnect budget must also stay below the grace period.
 
 The heartbeat is then an `event: heartbeat` with an encrypted body and no id. The body needs a `typ`
 of its own, such as `usher-heartbeat+jwt`, for the reason the poll answer has one.
 
-The price is a database read of head for each heartbeat on each controller instance, an encrypted
+The price is a database read of head for each heartbeat on each Controller instance, an encrypted
 heartbeat and a clock per connection. The liveness rows in [bridge-tests.md](../../bridge-tests.md),
 written to the timely-poll rule, would change too. Rule B needs none of it. With the anchored
 heartbeat, rule A's step 2 changes: each heartbeat arrives older than the last, one older than the
@@ -370,13 +370,13 @@ heartbeat that counted.
 
 ## SSE against WebSocket
 
-The stream runs one way, from controller to bridge. SSE builds in the one thing the channel needs from
+The stream runs one way, from Controller to Bridge. SSE builds in the one thing the channel needs from
 a protocol: an id on every event, and a `Last-Event-ID` header to resume after it. WebSocket has no
 resume, and its upstream half would carry nothing.
 
 | Concern                | SSE                                                                                                                     | WebSocket                                                                                                                                                                                          |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| resume                 | built in: an id on each event and `Last-Event-ID` on reconnect; with a `fetch` client the bridge sets the header itself | none; it needs a custom first message or header, and a custom marker for the end of replay                                                                                                         |
+| resume                 | built in: an id on each event and `Last-Event-ID` on reconnect; with a `fetch` client the Bridge sets the header itself | none; it needs a custom first message or header, and a custom marker for the end of replay                                                                                                         |
 | reconnection           | a `fetch` client needs its own loop, about 20 lines in the model                                                        | nothing built in; its own loop                                                                                                                                                                     |
 | liveness               | no protocol ping; a heartbeat and an idle timer                                                                         | protocol ping and pong, but Node's global client cannot send pings and never shows server pings to JavaScript, though it answers them; the `ws` package can do both; an idle timer is still needed |
 | through proxies        | a plain streamed HTTP response, subject to read timeouts between reads and, in nginx, to response buffering             | the proxy must pass the upgrade; the same idle timeouts apply; nothing is buffered after the upgrade                                                                                               |
@@ -391,12 +391,12 @@ visibility rows are reasoned, except @fastify/sse's wait for `drain`, which is r
 
 What would reverse the choice:
 
-- the bridge needs to send messages upstream during a connection, such as an acknowledgement per
+- the Bridge needs to send messages upstream during a connection, such as an acknowledgement per
   notice, a subscription that changes at runtime, or repeated freshness challenges;
-- the deployed path between bridge and controller buffers or cuts streamed HTTP responses but passes
+- the deployed path between Bridge and Controller buffers or cuts streamed HTTP responses but passes
   upgraded connections, and cannot be configured otherwise;
 - notice volume or binary framing becomes a real constraint, which it is not;
-- the controller's SSE support proves unreliable under soak, though writing to the raw response stays
+- the Controller's SSE support proves unreliable under soak, though writing to the raw response stays
   simpler than adopting WebSocket.
 
 ## Node 24 clients
@@ -405,29 +405,29 @@ What would reverse the choice:
 | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | global `EventSource`                                                        | Stability 1, Experimental (read from Node's documentation); undefined without `--experimental-eventsource`, and warns `UNDICI-ES` when constructed | not in its API; possible through a non-standard undici dispatcher interceptor | not in its API; the same interceptor                    | the non-standard `node.reconnectionTime` or the server's `retry`; no backoff                                       | not visible; a non-200 answer fails the connection with no reconnect, as the SSE standard requires (read from the standard)               |
 | `eventsource` 5.1.2, published 2026-09-21; Node >=22.12.0                   | depends on `eventsource-parser` ^4.1.1                                                                                                             | only through a custom `fetch`                                                 | through a custom `fetch`; resent by itself on reconnect | a fixed 3 s floor, reopening after 3.0 s; the server's `retry` overrides it; a custom `fetch` can add delay on top | in `ErrorEvent.code`; by default any non-200, 503 included, closes it for good; a custom `fetch` that throws on 503 keeps it reconnecting |
-| `fetch` with `eventsource-parser` 4.1.1, published 2026-09-15; Node >=22.12 | no dependencies, ESM only                                                                                                                          | any header, fresh on every attempt                                            | set by the bridge from its applied cursor               | the bridge's own loop; `retry` ignored                                                                             | every status, each with its own handling                                                                                                  |
+| `fetch` with `eventsource-parser` 4.1.1, published 2026-09-15; Node >=22.12 | no dependencies, ESM only                                                                                                                          | any header, fresh on every attempt                                            | set by the Bridge from its applied cursor               | the Bridge's own loop; `retry` ignored                                                                             | every status, each with its own handling                                                                                                  |
 | global `WebSocket`                                                          | no flag and no warning; stable since v22.4.0 (read from Node's documentation)                                                                      | through undici's non-standard `{ headers }` init                              | a header with no meaning in the protocol                | none                                                                                                               | not visible: close code 1006 with an empty reason                                                                                         |
 | `ws` 8.22.0, published 2026-09-26                                           | no dependencies                                                                                                                                    | yes                                                                           | a header with no meaning in the protocol                | none; `ping()` exists                                                                                              | visible through `'unexpected-response'`                                                                                                   |
 
-The `eventsource` package can be bent to the bridge's needs through a custom `fetch`. Once the bridge
+The `eventsource` package can be bent to the Bridge's needs through a custom `fetch`. Once the Bridge
 writes that `fetch`, the package adds only the parser it already depends on.
 
-With the recommended client, a model of the bridge resumed after the controller dropped the stream. It
+With the recommended client, a model of the Bridge resumed after the Controller dropped the stream. It
 reopened within half a second, sent `Last-Event-ID` from its applied cursor with `Authorization`
 present, and applied six notices in order with no gap and no duplicate.
 
-**Two things the bridge must do with the parser.**
+**Two things the Bridge must do with the parser.**
 
 1. Set `maxBufferSize`. It defaults to unbounded in the bare parser (read from its type definitions;
    the `eventsource` package passes 100 MB).
 2. Handle overflow. On overflow the parser reports `max-buffer-size-exceeded` and stops, and a further
-   `feed()` throws synchronously. The bridge aborts the connection, treats the stream as malformed,
+   `feed()` throws synchronously. The Bridge aborts the connection, treats the stream as malformed,
    resumes from the push position, and never calls `feed()` where a throw would go uncaught in the
    host process.
 
 **Packaging.** The parser is ESM only, which fits Arranger's search-server, an ESM package. On Node
 24.16, `require()` of the parser from CommonJS also worked, so a CommonJS consumer is not blocked. The
-parser's engines floor is Node 22.12, so any package that ships the bridge declares a floor at or above
+parser's engines floor is Node 22.12, so any package that ships the Bridge declares a floor at or above
 that. Node 20 reached end of life on 2026-04-30, according to the Node.js release schedule.
 
 **One unexplained behaviour.** Node's global WebSocket client made two handshakes per construction
@@ -442,12 +442,12 @@ front of the mock where a scenario needs one.
 
 | Scenario                                                               | Defence tested                         | Without it                                                         | With it                                                                                                                           |
 | ---------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| the controller stops writing, socket open, and answers no new requests | heartbeat and idle timer               | not detected within 20 s                                           | detected after 4.5 s, with event or comment heartbeats; while the stall lasts, the bridge cycles abort and jittered reconnect     |
+| the Controller stops writing, socket open, and answers no new requests | heartbeat and idle timer               | not detected within 20 s                                           | detected after 4.5 s, with event or comment heartbeats; while the stall lasts, the Bridge cycles abort and jittered reconnect     |
 | a proxy that cuts connections idle for 5 s, watched for 16 s           | heartbeat                              | 3 cuts and 4 stream opens                                          | no cut, and 1 open                                                                                                                |
 | a frozen path: both sockets open, nothing forwarded                    | idle timer, with the heartbeat running | not detected within 15 s; a notice published into it never applied | detected after 4.5 s; the reconnect sent the last applied cursor as `Last-Event-ID`, and the held notice was replayed and applied |
 | a paced path: every chunk forwarded in order, at most one every 2.2 s  | idle timer, with H = 1 s and I = 2.5 s | not applicable                                                     | never trips, while the content's age keeps rising (see "One delay, traced twice")                                                 |
 
-Without a timer of its own, the bridge has two fallbacks, and both are too slow:
+Without a timer of its own, the Bridge has two fallbacks, and both are too slow:
 
 | Fallback      | When it acts                                                                                                                                                                      | Source                                      |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -462,7 +462,7 @@ side ever provokes a reset from a dead path.
 
 The timing rule:
 
-- H is at most half of P, so the controller writes something at least twice within any proxy's
+- H is at most half of P, so the Controller writes something at least twice within any proxy's
   timeout.
 - I is at least 2H plus jitter, so one late heartbeat does not trip the timer.
 - I is at most T, so a dead push is replaced within one poll interval.
@@ -472,7 +472,7 @@ standard suggests a comment line about every 15 s (read from the standard). @fas
 `: heartbeat` every 30 s by default (read from its source). That is only half of nginx's timeout, and
 should be shortened.
 
-### What the bridge does with silence
+### What the Bridge does with silence
 
 - Silent for longer than H: nothing. A late heartbeat is normal.
 - Silent for longer than I: abort the connection, log `revocationChannel.pushReconnect`, reconnect with
@@ -481,7 +481,7 @@ should be shortened.
 
 ### Inside a host application
 
-- The bridge takes its `fetch`, or its undici dispatcher, as a typed parameter. It never inherits the
+- The Bridge takes its `fetch`, or its undici dispatcher, as a typed parameter. It never inherits the
   host's global dispatcher, which a host can replace or route through a proxy.
 - It exposes `stop()`, which a host holding an `AbortSignal` calls when the signal fires, and its
   timers are unreferenced. A host can then shut down cleanly, and a co-located `node:test` run does
@@ -497,14 +497,14 @@ what recovers a notice an instance's push missed, since it asks after its own po
 
 Valkey's documentation says pub/sub delivers at most once, and that a message a subscriber cannot
 handle, as on a disconnect, is lost for good (read from Valkey's documentation). So pub/sub carries
-only a wake-up between controller instances, and each instance reads the notices from PostgreSQL on a
+only a wake-up between Controller instances, and each instance reads the notices from PostgreSQL on a
 wake-up or on a short timer, as [security-workflow.md](../../../design/security-workflow.md)
 "Multi-instance propagation" sets out. A lost message delays a push and loses no notice.
 
 ### Request and answer
 
-The bridge polls after its poll position, or asks for head explicitly. An absent cursor is a request
-error, never an implicit head. A bridge that loses its position while holding entries then cannot skip
+The Bridge polls after its poll position, or asks for head explicitly. An absent cursor is a request
+error, never an implicit head. A Bridge that loses its position while holding entries then cannot skip
 notices unnoticed.
 
 ```http
@@ -519,7 +519,7 @@ Accept: application/jose
 Usher-Notice-Versions: 1
 ```
 
-Both paths are relative to the controller URL, as the exchange's is, and each page carries a fresh
+Both paths are relative to the Controller URL, as the exchange's is, and each page carries a fresh
 nonce and a fresh channel assertion. The notice versions travel in the same request header as on the
 push connection.
 
@@ -542,22 +542,22 @@ type PollAnswer = {
 };
 ```
 
-| Answer         | Meaning                                                       | What the bridge does                                                                               |
+| Answer         | Meaning                                                       | What the Bridge does                                                                               |
 | -------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | 200            | notices after the cursor, bounded to a page (for example 500) | validate, apply, advance; when `more` is true, poll again at once from `next`                      |
 | 410            | history no longer reaches the cursor                          | reset                                                                                              |
 | 401            | the channel assertion was refused                             | no check; `revocationChannel.failure`, cause `status`; what else it logs is under "Open questions" |
-| 406 (proposed) | the controller cannot serve the notice versions listed        | a malformed channel: `revocationChannel.malformed` logged; no check                                |
-| 503, timeout   | the controller could not answer                               | no check; `revocationChannel.failure` logged; retry at once                                        |
+| 406 (proposed) | the Controller cannot serve the notice versions listed        | a malformed channel: `revocationChannel.malformed` logged; no check                                |
+| 503, timeout   | the Controller could not answer                               | no check; `revocationChannel.failure` logged; retry at once                                        |
 
-The controller checks the assertion first, and only then the version list and the cursor. It answers
+The Controller checks the assertion first, and only then the version list and the cursor. It answers
 every refusal of an assertion with the same 401. A client without a valid assertion then cannot tell
 from 410 against 200 how far history reaches or how many notices exist, and cannot learn from a 406
-which notice versions the controller serves (reasoned). The 406 is a status of its own, so the bridge
+which notice versions the Controller serves (reasoned). The 406 is a status of its own, so the Bridge
 never mistakes a refused version list for a refused assertion.
 
 **The echo of the nonce and `after` is what binds an answer to its request.** Without both, wherever
-TLS ends before the controller process, two attacks pass (measured against a model of the bridge):
+TLS ends before the Controller process, two attacks pass (measured against a model of the Bridge):
 
 - an old answer replayed to a new poll passes as a timely check;
 - an answer to a rewritten `after` passes as a check while skipping a notice for good.
@@ -572,12 +572,12 @@ up to 41.8 s, the retry's answer can arrive as late as 61.8 s, past G.
 
 1. t = 0: a poll starts and is answered in time. Check recorded at 0.
 2. t = 30: the next poll starts. Its answer is held back.
-3. t = 40: the deadline passes. The bridge aborts the poll and retries at once.
+3. t = 40: the deadline passes. The Bridge aborts the poll and retries at once.
 4. t = 50: the retry is answered in time. Check recorded at 40, the retry's start.
 5. The grace period was never exceeded: 50 is below 60. With the poll interval jittered up by 10%, the
    worst case is 33 + 20 = 53, still below 60.
 
-Without the immediate retry, the poll after a failure starts at t = 60, which equals G. The bridge is
+Without the immediate retry, the poll after a failure starts at t = 60, which equals G. The Bridge is
 then already uncertain before any answer can arrive.
 
 The poll that missed its deadline at step 3 is no check, and is aborted at D. Any abort counts as no
@@ -601,13 +601,13 @@ deadline, so the row holds only for the pages answered before D.
 Recording the moment the last page is applied, rather than the first page's start, would lengthen the
 grace period by up to D, which is the open side.
 
-An answer's arrival is timed where `fetch` resolves, not after the bridge's own processing, so a busy
+An answer's arrival is timed where `fetch` resolves, not after the Bridge's own processing, so a busy
 host's event-loop lag does not count against D. If it did count, it would fail closed, as a false
 uncertain mode (reasoned). A backlog too long to page through within D is still applied page by page,
 so a later poll starts nearer head and completes in time (reasoned).
 
 **The recovery interval shortens the wait while checks keep failing.** The defaults, with every
-jitter draw at its middle, against a controller that fails each poll at once (reasoned, from the
+jitter draw at its middle, against a Controller that fails each poll at once (reasoned, from the
 schedule the poll's tests hold):
 
 1. t = 0: a poll starts and is answered in time. Check recorded at 0.
@@ -617,7 +617,7 @@ schedule the poll's tests hold):
 4. t = 50: the next poll is answered in time. Check recorded at 50.
 5. The grace period was never exceeded: 50 is below 60. The next poll starts T later, at t = 80.
 
-Had no check been recorded by t = 60, the bridge would have entered uncertain mode then, as it would
+Had no check been recorded by t = 60, the Bridge would have entered uncertain mode then, as it would
 without R.
 
 ### The clock
@@ -630,7 +630,7 @@ drive it:
 - it moved 0.024 ms across a mocked hour;
 - listing `performance` among the mocked APIs throws `ERR_INVALID_ARG_VALUE`.
 
-A bridge reading it directly would leave the grace and deadline test rows waiting in real time. An
+A Bridge reading it directly would leave the grace and deadline test rows waiting in real time. An
 injected clock, monotonic in production and driven by the test in a suite, avoids both problems.
 
 A form with no clock reading was also modelled under mock timers: a candidate grace timer armed at a
@@ -642,38 +642,38 @@ earlier lapse at 60 s in place. Both forms record the check at its start.
 
 One shared position loses notices even with nobody attacking:
 
-1. The bridge's push and poll positions are both c41.
+1. The Bridge's push and poll positions are both c41.
 2. c42 and c43 commit. The push misses c42, through any fault of the push, and delivers c43.
-3. The bridge applies c43, and its push position moves to c43.
+3. The Bridge applies c43, and its push position moves to c43.
 4. With one shared position, the next poll asks after c43, and c42 is skipped for good.
 5. With two positions, the next poll asks after c41 and returns c42 and c43. Both are applied, c43 for
    the second time, which drops nothing new, and the poll position moves to c43.
 
 A wrong or forged pushed id can then only add drops. It cannot move the position the poll asks after,
-so a notice still rides in every answer until the bridge applies it.
+so a notice still rides in every answer until the Bridge applies it.
 
 ## When history no longer reaches a cursor
 
-The controller answers 410 on the poll, and on the push before any stream byte, in four cases:
+The Controller answers 410 on the poll, and on the push before any stream byte, in four cases:
 
 - a notice after the cursor has been trimmed;
 - the cursor belongs to another epoch;
 - the cursor is ahead of head;
-- the controller cannot decrypt the cursor, because it was altered or issued under a cursor key since
+- the Controller cannot decrypt the cursor, because it was altered or issued under a cursor key since
   replaced.
 
 The fourth fails closed, and recovers through a reset. Replacing the cursor key therefore resets
-every bridge at once, as a restore does: the herd that the oldest-kept test below would bring after
+every Bridge at once, as a restore does: the herd that the oldest-kept test below would bring after
 every quiet spell, here only when the key is replaced (reasoned).
 
 **"Trimmed" is tested against the watermark, the highest position ever trimmed, not against the oldest
-position kept.** The oldest-kept test resets every bridge at once after a quiet spell:
+position kept.** The oldest-kept test resets every Bridge at once after a quiet spell:
 
-1. A bridge holds c100, and nothing else commits for longer than the retention period.
+1. A Bridge holds c100, and nothing else commits for longer than the retention period.
 2. c100 is trimmed, and the table is empty.
 3. c101 commits, and is now the oldest kept.
-4. The bridge polls after c100. That is older than the oldest kept, so it is told to reset, though it
-   missed nothing. Every bridge on the platform resets together, and their exchanges meet each bridge's
+4. The Bridge polls after c100. That is older than the oldest kept, so it is told to reset, though it
+   missed nothing. Every Bridge on the platform resets together, and their exchanges meet each Bridge's
    bound on exchanges in flight: closed, at a cost.
 
 With the watermark at c100, nothing after c100 was trimmed, so the same poll gets c101. Identity
@@ -682,15 +682,15 @@ positions can have gaps, so "the position after c100 is still kept" is not a usa
 **Every cursor carries an epoch, because a restore reuses positions** (reasoned from the schema's
 `generated always as identity`, not run against a database):
 
-1. The bridge holds c50.
+1. The Bridge holds c50.
 2. The database is restored from a backup taken at c40.
 3. New notices commit as c41 to c55, reusing those positions.
-4. The bridge polls after c50 and gets c51 to c55.
+4. The Bridge polls after c50 and gets c51 to c55.
 5. The new c41 to c50 are skipped for good, and the grants they revoke stay cached until each entry's
    `exp`.
 
 "Ahead of head" catches step 4 only while head is still below c50. An epoch regenerated on every
-restore or history reset makes step 4 a 410. The cursor stays opaque to the bridge either way.
+restore or history reset makes step 4 a 410. The cursor stays opaque to the Bridge either way.
 
 **Recovery from uncertain mode, with the poll position at c41:**
 
@@ -701,24 +701,24 @@ restore or history reset makes step 4 a 410. The cursor stays opaque to the brid
    `revocationChannel.modeChange` is logged, and grants are honoured again. Requests that arrived before
    this step stay open tier only.
 4. If instead history no longer reaches c41, the answer to step 1 is 410.
-5. The bridge drops every entry, the anonymous one included, logs `revocationChannel.reset`, and asks
+5. The Bridge drops every entry, the anonymous one included, logs `revocationChannel.reset`, and asks
    for head explicitly. That answer, timely and authenticated, is the check, and sets both positions.
-6. The bridge fetches the anonymous payload again. Until it arrives, anonymous and open-tier requests
+6. The Bridge fetches the anonymous payload again. Until it arrives, anonymous and open-tier requests
    answer 503.
 
 The push follows the same path: a `Last-Event-ID` that history no longer reaches gets 410 before any
-stream byte, and the bridge resets. Fastify 5.12.5 with @fastify/sse 0.6.0 in its `manual` mode served
+stream byte, and the Bridge resets. Fastify 5.12.5 with @fastify/sse 0.6.0 in its `manual` mode served
 exactly this: a plain 410 for a cursor ahead of head, before any stream byte, and replay after a valid
 `Last-Event-ID`.
 
-The bridge never takes head from a 410's body. It reads head from an authenticated answer.
+The Bridge never takes head from a 410's body. It reads head from an authenticated answer.
 
-After a global drop or a reset, every request exchanges again, and the bridge fetches the anonymous
+After a global drop or a reset, every request exchanges again, and the Bridge fetches the anonymous
 payload first; beyond the bound on exchanges in flight, set out in
 [Core and Express layer](core-and-express-layer.md), requests answer 503, which fails closed.
 
 **Retention.** [schema.md](../../../design/schema.md) keeps notices for the token lifetime plus the
-grace period, with a margin. A bridge away longer than that holds no live signed-in entries, since
+grace period, with a margin. A Bridge away longer than that holds no live signed-in entries, since
 they expire by `exp`. It holds only the anonymous payload honoured past its `exp`, which the reset
 clears. A reset is safe at any retention, so the floor governs how often resets happen, not whether
 they are safe.
@@ -731,7 +731,7 @@ they are safe.
    self-test, as [jose for the Usher token](jose-usher-token.md) sets out.
 4. Serve once the anonymous payload is held and a check is recorded, as
    [security-workflow.md](../../../design/security-workflow.md) "Startup behaviour" requires. Until
-   then the bridge is cold, and answers 503 before any read path.
+   then the Bridge is cold, and answers 503 before any read path.
 
 Cold is set out in the "Modes" table of [Core and Express layer](core-and-express-layer.md). At
 start it holds until `start` has imported the application key, a check is confirmed and an anonymous
@@ -739,24 +739,24 @@ payload is accepted. It holds again when the grace period passes with no anonymo
 while the key's self-test fails.
 
 **Step 3 does not wait for step 1, so a wrong key always reaches the self-test** (run against the
-controller mock):
+Controller mock):
 
-1. The bridge starts with an application key that differs from the controller's.
-2. The controller refuses step 1's channel assertion with 401, since it is signed under a subkey of
+1. The Bridge starts with an application key that differs from the Controller's.
+2. The Controller refuses step 1's channel assertion with 401, since it is signed under a subkey of
    that key. No check is recorded, and step 2 does not run.
 3. Step 3 runs anyway. The anonymous exchange is authenticated by the same kind of assertion, so the
-   controller refuses it with 401 too, before any token is decrypted.
-4. The bridge logs `token.exchangeFailure` with cause `assertionRefused` and
+   Controller refuses it with 401 too, before any token is decrypted.
+4. The Bridge logs `token.exchangeFailure` with cause `assertionRefused` and
    `revocationChannel.modeChange` with reason `probableKeyMismatch`, and stays cold.
 5. No check has been recorded since start, so no grace period runs. The self-test, not a lapse of the
    grace period, is what names the key at startup.
 
-If step 3 waited for step 1, a wrong key would leave the bridge cold with only the refused head poll
+If step 3 waited for step 1, a wrong key would leave the Bridge cold with only the refused head poll
 to show for it, and what a refused channel assertion logs is open, under "Open questions". The
 refused exchange names the key instead.
 
 **A payload is kept only when fetched after step 1's check.** One fetched before it serves as the
-self-test and is not kept, and the check fetches it again. A notice committed between that early fetch and head would otherwise never reach the bridge
+self-test and is not kept, and the check fetches it again. A notice committed between that early fetch and head would otherwise never reach the Bridge
 (reasoned).
 
 A notice committed between steps 1 and 3 arrives after head and drops the fresh entry, which is fetched
@@ -781,11 +781,11 @@ type Notice =
 
 `subjectTag` is the per-audience HMAC of what the schema stores as `subject`; the field's name is
 proposed. `resource` holds what the schema stores as `resource_name`. There is no reason field: the
-bridge's action does not depend on one, and the controller's audit log holds it. A validator in
-`usher-types` checks each notice. The bridge lists the notice versions it reads when it connects and
+Bridge's action does not depend on one, and the Controller's audit log holds it. A validator in
+`usher-types` checks each notice. The Bridge lists the notice versions it reads when it connects and
 when it polls, as it lists payload versions at the exchange. The list travels in the same request
-header on the push connection as on the poll. The controller refuses a list it cannot serve, and the
-bridge treats the refusal as a malformed channel, with no check.
+header on the push connection as on the poll. The Controller refuses a list it cannot serve, and the
+Bridge treats the refusal as a malformed channel, with no check.
 
 One SSE event per notice:
 
@@ -800,14 +800,14 @@ The heartbeat is a comment line, `:`, with no id, so it never moves the resume p
 
 Rules:
 
-- The controller sends no `retry` field, and the bridge ignores one if it comes.
+- The Controller sends no `retry` field, and the Bridge ignores one if it comes.
 - The SSE `id` must equal the cursor inside the decrypted notice.
-- A mismatch, a decryption or validation failure, a parser overflow, or a version or kind the bridge
+- A mismatch, a decryption or validation failure, a parser overflow, or a version or kind the Bridge
   did not list is malformed. The notice is not applied, no position moves, the connection is aborted,
   `revocationChannel.malformed` is logged, and the push resumes from the last applied position.
-- On the poll, a malformed notice makes the whole answer no check. Every bridge reading it stalls there
+- On the poll, a malformed notice makes the whole answer no check. Every Bridge reading it stalls there
   until it is fixed, and enters uncertain mode after the grace period. That fails closed, and loudly.
-- The controller may send a marker after replay on each connection, so the push knows where it stands.
+- The Controller may send a marker after replay on each connection, so the push knows where it stands.
   The marker is optional, since push never counts as a check.
 - Revoking one opaque API key is a principal notice for that key's subject. It also drops that
   principal's other entries, which fails closed, and needs no new kind.
@@ -848,7 +848,7 @@ claim errors carry the plaintext. With `jwtDecrypt` and a mismatched `typ` optio
 
 ### The channel assertion
 
-On every push connection attempt and every poll, the bridge sends `Authorization: Bearer` with a JWS
+On every push connection attempt and every poll, the Bridge sends `Authorization: Bearer` with a JWS
 built from the application key it already holds.
 
 | Part                | Value                                                                 |
@@ -883,14 +883,14 @@ depending on its claim values, was accepted for its audience. It was refused for
 (`ERR_JWT_CLAIM_VALIDATION_FAILED`). It was refused under another application's derived key, the raw
 underived key, and the encryption subkey (`ERR_JWS_SIGNATURE_VERIFICATION_FAILED`). An assertion
 signed under a WebCrypto-derived subkey verified under the same subkey derived by `hkdfSync`, so a
-bridge and a controller can each use either API.
+Bridge and a Controller can each use either API.
 
-The platform alternatives each tie the controller to one platform: Kubernetes projected
+The platform alternatives each tie the Controller to one platform: Kubernetes projected
 service-account tokens with audience `usher`, checked through TokenReview, tie it to the cluster's
 API, and mutual TLS from a service mesh ties it to the mesh. The application-key path works anywhere
 the key already reaches, across clusters included.
 
-### Subkeys from the key the bridge holds
+### Subkeys from the key the Bridge holds
 
 | Use                    | HKDF info                                                | Imported as | Usage     |
 | ---------------------- | -------------------------------------------------------- | ----------- | --------- |
@@ -902,7 +902,7 @@ the key already reaches, across clusters included.
 
 The application key itself decrypts and signs nothing: the token key described in
 [jose for the Usher token](jose-usher-token.md) is one more subkey in the table above. So at start
-the bridge imports the raw bytes once, as an HKDF base key, non-extractable, with usage `deriveKey`
+the Bridge imports the raw bytes once, as an HKDF base key, non-extractable, with usage `deriveKey`
 only. A decrypt-only AES-GCM key could not serve as that base, since WebCrypto refused HKDF on one:
 `deriveBits` and `deriveKey` both threw `InvalidAccessError`.
 
@@ -913,9 +913,9 @@ What was run on Node 24.16:
 
 - The HKDF base key derived 32 bytes, and its bytes matched `hkdfSync` given the same salt and label.
 - WebCrypto refuses an extractable HKDF key, and refuses `decrypt` as an HKDF key's usage.
-- The derived notice key could not be exported, and decrypted a notice the controller encrypted under
+- The derived notice key could not be exported, and decrypted a notice the Controller encrypted under
   the `hkdfSync` subkey.
-- Zeroing the bridge's copy of the bytes after the imports left every derived key working, since
+- Zeroing the Bridge's copy of the bytes after the imports left every derived key working, since
   WebCrypto copies the bytes on import.
 
 ### Encryption to the audience
@@ -945,14 +945,14 @@ echoes both.
 
 A principal notice cannot be filtered: nothing records which applications hold a token for whom, and
 a stale record would withhold a revocation silently. Positions stay one sequence, and the cursors a
-bridge sees are opaque, so the gaps a filter leaves say nothing about other applications. With raw
-global positions as cursors, each bridge would see gaps revealing how many notices went to other
+Bridge sees are opaque, so the gaps a filter leaves say nothing about other applications. With raw
+global positions as cursors, each Bridge would see gaps revealing how many notices went to other
 applications, and when. Opaque must then hold in fact, not only in form: a cursor carries a position
 and an epoch, and an encoding that leaves the position readable still shows the gaps.
 [schema.md](../../../design/schema.md) "Decide E" compares the filtering options, and records only
-that the cursors a bridge sees are opaque. Two encodings would make them so: a cursor the controller
-encrypts, or a sequence the controller keeps per audience. The controller encrypts each cursor's
-epoch and position under a key of its own, which it never shares, and the bridge, which compares
+that the cursors a Bridge sees are opaque. Two encodings would make them so: a cursor the Controller
+encrypts, or a sequence the Controller keeps per audience. The Controller encrypts each cursor's
+epoch and position under a key of its own, which it never shares, and the Bridge, which compares
 cursors only for equality, is the same under either.
 
 ### Threats and defences
@@ -978,21 +978,21 @@ cursors only for equality, is the same under either.
 
 A notice applied while an exchange is in flight can leave that exchange's answer stale; the
 affected-payload test, its trace and its measurements are in
-[Core and Express layer](core-and-express-layer.md). The controller has a matching rule: a payload
+[Core and Express layer](core-and-express-layer.md). The Controller has a matching rule: a payload
 recomputed from a snapshot read before a notice's commit is never written to the payload cache after
 that notice has cleared it.
 
 ## Logging
 
 - Never log the channel assertion, the `Authorization` header, a notice's body, or a JWE. On the
-  controller this means redaction on the request logger.
+  Controller this means redaction on the request logger.
 - An applied notice is logged as `notice.applied`, with its `kind` and `entriesDropped` only: no
   subject, tag or cursor.
 - A notice or a poll answer that fails to read is logged as `revocationChannel.malformed`, whose one
   field is `reason`, a fixed code, never an error.
 - A refused version list is logged as `revocationChannel.malformed` too, with a reason code of its
   own. [audit-events.md](../../../design/audit-events.md) describes that event as a notice or a poll
-  answer the bridge could not read, and a refused list is an answer in no version the bridge reads.
+  answer the Bridge could not read, and a refused list is an answer in no version the Bridge reads.
 - So is a poll page asking for more from a cursor its check already asked after, with a reason code
   of its own.
 - So is a push answered with a 200 that is not an event stream, with a reason code of its own, so a
@@ -1004,15 +1004,15 @@ is here" is not valid JSON`.
 - The stream adds `revocationChannel.pushReconnect`, `revocationChannel.reset`,
   `revocationChannel.malformed` and `revocationChannel.failure` beside
   `revocationChannel.modeChange`. [audit-events.md](../../../design/audit-events.md) registers every
-  event the bridge emits, with its fields and severity, and
+  event the Bridge emits, with its fields and severity, and
   [Core and Express layer](core-and-express-layer.md) builds them.
 - A failed poll, or a defect thrown while applying a pushed notice or handing a 410 to the channel,
   is logged as `revocationChannel.failure`, whose fields are `cause` and `count`: one event for each
-  cause per interval, never one per failure, so a controller failing every poll cannot flood the log.
+  cause per interval, never one per failure, so a Controller failing every poll cannot flood the log.
 
 ## Proxies on the path
 
-A checklist for the controller's push route and every proxy on its path:
+A checklist for the Controller's push route and every proxy on its path:
 
 - `Content-Type: text/event-stream`;
 - `Cache-Control: no-store`;
@@ -1031,7 +1031,7 @@ What the defaults are (read from each project's documentation):
 No other proxy's default timeouts were checked, so the path a deployment actually uses must be
 checked rather than assumed.
 
-## The controller side, and the bridge's mock
+## The Controller side, and the Bridge's mock
 
 | Package            | Version and date   | Notes                                                                                                                                                                      |
 | ------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1041,7 +1041,7 @@ checked rather than assumed.
 | better-sse         | 0.16.1, 2025-12-29 | not examined beyond its version                                                                                                                                            |
 | @fastify/websocket | 11.3.3, 2026-10-03 | built on `ws` ^8.16.0; hooks that run before the upgrade can answer 401; a message handler attached after asynchronous work silently drops messages (read from its README) |
 
-What the controller must handle with @fastify/sse 0.6.0:
+What the Controller must handle with @fastify/sse 0.6.0:
 
 - It serializes `data` as JSON by default, so a compact JWE string arrives quoted unless it is
   serialized beforehand or the serializer is replaced.
@@ -1052,22 +1052,22 @@ What the controller must handle with @fastify/sse 0.6.0:
 - A `send()` on a connection destroyed in the same tick never settled, and was still pending after
   3 s. Fan-out must therefore send to each connection independently, with a timeout, never one
   connection after another.
-- One stalled bridge must not hold up the others. Each connection gets a bounded queue and is closed
-  on overflow, after which the bridge resumes through `Last-Event-ID` and the poll. Connections per
+- One stalled Bridge must not hold up the others. Each connection gets a bounded queue and is closed
+  on overflow, after which the Bridge resumes through `Last-Event-ID` and the poll. Connections per
   audience are capped.
 
-**The bridge's own tests use a mock on `node:http`, about 100 lines, with no framework dependency.**
+**The Bridge's own tests use a mock on `node:http`, about 100 lines, with no framework dependency.**
 Injecting faults is the mock's whole job: a dropped connection, a stall that accepts and never answers,
 trimmed history, a cursor ahead of head, a cursor from another epoch, and a TCP proxy in front that cuts
 idle connections, freezes both directions while keeping the sockets open, or paces what it forwards.
-The real controller can then use @fastify/sse or raw writes against the same contract.
+The real Controller can then use @fastify/sse or raw writes against the same contract.
 
 ## Test rows
 
 For the "Revocation and invalidation" and "Degraded modes" suites in
-[bridge-tests.md](../../bridge-tests.md). The bridge's own suites hold every row except the two
-naming the controller's answer to a cursor, from another epoch or one it cannot decrypt; those belong
-with the controller's tests, and the bridge's mock models only the first.
+[bridge-tests.md](../../bridge-tests.md). The Bridge's own suites hold every row except the two
+naming the Controller's answer to a cursor, from another epoch or one it cannot decrypt; those belong
+with the Controller's tests, and the Bridge's mock models only the first.
 
 | Given                                                                                 | Then                                                                                                                                                                                                                                        |
 | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1076,7 +1076,7 @@ with the controller's tests, and the bridge's mock models only the first.
 | a pushed id that differs from the decrypted cursor                                    | malformed: nothing applied, no position moved, the connection aborted and logged                                                                                                                                                            |
 | a parser overflow                                                                     | malformed, as above, and no further `feed()`                                                                                                                                                                                                |
 | a 200 on the push that is not an event stream                                         | malformed: `revocationChannel.malformed` logged with its own reason code, and a reconnect with backoff; the poll still carries every notice                                                                                                 |
-| a notice in a version the bridge did not list                                         | malformed; on the poll, no check                                                                                                                                                                                                            |
+| a notice in a version the Bridge did not list                                         | malformed; on the poll, no check                                                                                                                                                                                                            |
 | a pushed notice later returned by the poll                                            | applied twice, with nothing new dropped                                                                                                                                                                                                     |
 | a notice lost from the push, with a later one pushed                                  | the poll, from the poll position, returns the lost one                                                                                                                                                                                      |
 | a 410 on the poll or the push                                                         | every entry dropped, the anonymous one included, and `revocationChannel.reset` logged, before head is requested                                                                                                                             |
@@ -1087,7 +1087,7 @@ with the controller's tests, and the bridge's mock models only the first.
 | a poll aborted for any other reason                                                   | no check                                                                                                                                                                                                                                    |
 | a poll and its immediate retry both failed or malformed                               | the next poll at the recovery interval, and each after it until a check is recorded, then the poll interval again                                                                                                                           |
 | the listed notice versions refused, on the poll or the push                           | 406: a malformed channel, `revocationChannel.malformed` logged with its own reason code, and no check                                                                                                                                       |
-| a cursor the controller cannot decrypt                                                | 410                                                                                                                                                                                                                                         |
+| a cursor the Controller cannot decrypt                                                | 410                                                                                                                                                                                                                                         |
 | a notice naming the principal applied while its exchange is in flight                 | the answer discarded for every waiter, never cached, and exchanged once more, with `token.overtaken` logged, outcome `exchangedAgain`                                                                                                       |
 | a second notice naming the principal applied while the repeated exchange is in flight | that answer discarded too, the open tier served, marked `suspended` and naming its verified subject for attribution alone, and `token.overtaken` logged, outcome `servedOpenTier`                                                           |
 | a notice naming somebody else applied while an exchange is in flight                  | one exchange, and the answer cached                                                                                                                                                                                                         |
@@ -1096,16 +1096,16 @@ with the controller's tests, and the bridge's mock models only the first.
 | a check whose last page arrives within D of its first                                 | the grace period runs from the first page's start                                                                                                                                                                                           |
 | a global drop with more exchanges than the bound allows                               | 503 beyond the bound, and the anonymous payload fetched first                                                                                                                                                                               |
 | a baseline notice, and the anonymous refetch failing                                  | 503 for anonymous and open-tier requests until it succeeds                                                                                                                                                                                  |
-| an application key that differs from the controller's, at startup                     | the head poll refused with 401, the anonymous fetch still made and refused with 401, `token.exchangeFailure` with cause `assertionRefused` and `revocationChannel.modeChange` with reason `probableKeyMismatch` logged, and the bridge cold |
+| an application key that differs from the Controller's, at startup                     | the head poll refused with 401, the anonymous fetch still made and refused with 401, `token.exchangeFailure` with cause `assertionRefused` and `revocationChannel.modeChange` with reason `probableKeyMismatch` logged, and the Bridge cold |
 | an anonymous payload fetched before the head poll is answered                         | dropped, and fetched again once head is read                                                                                                                                                                                                |
 
 ## Not verified
 
-1. Nothing was measured through a real ingress, gateway or service mesh. Whether bridge-to-controller
+1. Nothing was measured through a real ingress, gateway or service mesh. Whether Bridge-to-Controller
    traffic goes directly or through a layer 7 proxy depends on the deployment, and so do that proxy's
    timeouts.
 2. HTTP/2 was not tested on either side.
-3. The multi-instance controller was not exercised: losing a Valkey subscription, pub/sub used only as
+3. The multi-instance Controller was not exercised: losing a Valkey subscription, pub/sub used only as
    a wake-up to read the database, or the rush of reconnections when one instance dies.
 4. No soak test was run for @fastify/sse 0.6.0, which is pre-1.0, or for the `fetch` client.
 5. The experiments ran without TLS. That a TLS record's size reveals whether a poll answer carries
@@ -1118,28 +1118,28 @@ with the controller's tests, and the bridge's mock models only the first.
 8. The anchored heartbeat is reasoned, not built.
 9. The restore trace is reasoned from the schema's identity column, not run against a restored
    database.
-10. The candidate grace timer ran as a model under node:test's mock timers, not inside a bridge.
-11. The controller side of the key derivation was modelled with `hkdfSync` in the same process.
-12. The per-audience subject tag is built on the bridge's side only; no controller computed one to
+10. The candidate grace timer ran as a model under node:test's mock timers, not inside a Bridge.
+11. The Controller side of the key derivation was modelled with `hkdfSync` in the same process.
+12. The per-audience subject tag is built on the Bridge's side only; no Controller computed one to
     compare with.
-13. The controller's cursor encryption was not built. Neither a 410 for a cursor it cannot decrypt nor
+13. The Controller's cursor encryption was not built. Neither a 410 for a cursor it cannot decrypt nor
     whether two instances encrypt one position to one cursor was run.
     [schema.md](../../../design/schema.md) "What is stored where" does not say where the cursor key
     is kept or when it is replaced.
-14. No controller answered 406 to a notice versions header; the bridge's reading of one was tested
-    against a fake controller only.
+14. No Controller answered 406 to a notice versions header; the Bridge's reading of one was tested
+    against a fake Controller only.
 
 ## Open questions
 
 1. **How does a restore change the epoch?** [schema.md](../../../design/schema.md) leaves it as a step
-   for the deployment runbook. The bridge needs only that every restore or history reset produces a
+   for the deployment runbook. The Bridge needs only that every restore or history reset produces a
    new epoch, so that a cursor from before it gets 410.
-2. **What does a refused channel assertion log?** The poll and the push answer 401, and the bridge
+2. **What does a refused channel assertion log?** The poll and the push answer 401, and the Bridge
    records no check. On the poll, the refusal is logged as `revocationChannel.failure` with
    cause `status`, counted with every other status the poll fails on, so no field names the 401 as its
    cause. After startup, a refusal that persists also shows as `revocationChannel.modeChange` once
    the grace period runs out (reasoned). At startup no check has been recorded, so no grace period
-   runs and the bridge stays cold; a refusal caused by a wrong key shows instead through the
-   self-test, as "Startup order" sets out. On the push, the bridge logs nothing for it and keeps
+   runs and the Bridge stays cold; a refusal caused by a wrong key shows instead through the
+   self-test, as "Startup order" sets out. On the push, the Bridge logs nothing for it and keeps
    reconnecting with its backoff, each attempt with a fresh assertion, as the transport decisions set
    out.

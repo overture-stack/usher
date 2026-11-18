@@ -35,7 +35,7 @@ export const CHANNEL_PATHS: Readonly<{ poll: string; stream: string }> =
 /** The line naming a failure of the store while a poll or a stream was answered. */
 export const CHANNEL_STORE_FAILED = 'noticeChannel.storeFailed';
 
-/** The line naming a failure the controller did not expect, answered 500. */
+/** The line naming a failure the Controller did not expect, answered 500. */
 export const CHANNEL_UNEXPECTED_FAILURE = 'noticeChannel.unexpectedFailure';
 
 const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
@@ -55,7 +55,7 @@ const headerOf = (
 };
 
 /**
- * Creates the revocation channel the bridge reads: the poll at `GET /notices` and the push at
+ * Creates the revocation channel the Bridge reads: the poll at `GET /notices` and the push at
  * `GET /notices/stream`, each answering one application's notices alone. Every request's channel
  * assertion is checked first, from memory, and refused `401`: an assertion that could not be verified
  * is counted, for `channelAssertion.rejectionTally`, and one that verified and is refused anyway is

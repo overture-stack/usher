@@ -26,7 +26,7 @@ const CURSOR_KEY = freshKey();
 // Passwords holding characters a URL escapes, and whitespace kept as given.
 const DATABASE_PASSWORD = ` ${randomBytes(12).toString('base64url')}/@:% `;
 
-// Every variable the controller requires, and no other.
+// Every variable the Controller requires, and no other.
 const REQUIRED: Readonly<Record<string, string>> = {
   backChannelLogoutAudiences: 'portal-test',
   cursorKey: CURSOR_KEY,

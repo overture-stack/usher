@@ -2,7 +2,7 @@ import { ControllerError } from './controllerError.js';
 import type { StartProblem } from './types.js';
 
 /**
- * Why the controller, or its schema migration command, refuses to start. Each problem names the
+ * Why the Controller, or its schema migration command, refuses to start. Each problem names the
  * environment variable at fault and the rule its value broke, never the value, so a refusal is safe
  * to print wherever the start's output goes, whatever the variable holds.
  */
@@ -14,7 +14,7 @@ export class StartRefusal extends ControllerError {
 
   /**
    * @param problems each rule broken, with the variable at fault; at least one.
-   * @param opening what refuses, opening the message: the controller's start by default.
+   * @param opening what refuses, opening the message: the Controller's start by default.
    */
   constructor(
     problems: readonly StartProblem[],

@@ -27,7 +27,7 @@ const { schemaMigrations } = POLICY_TABLES;
 /** The line naming the migrations a database records that the release does not know. */
 const MIGRATION_UNKNOWN = 'schema.migrationUnknown';
 
-/** The lines the controller writes as its readiness changes. */
+/** The lines the Controller writes as its readiness changes. */
 const READINESS_LINES = Object.freeze({
   lost: 'readiness.lost',
   restored: 'readiness.restored',
@@ -39,7 +39,7 @@ const NOT_IN_MIGRATION_FORM = 'a name not in migration form';
 // The log stream's numbering of error, which the line naming unknown migrations is written at.
 const ERROR_LEVEL = 50;
 
-/** How long the controller reuses one answer of the store's to readiness: a constant of its own. */
+/** How long the Controller reuses one answer of the store's to readiness: a constant of its own. */
 const STORE_PROBE_INTERVAL_MS = 1000;
 
 // Long enough for readiness to probe the store again and answer, on a loaded machine.
@@ -58,7 +58,7 @@ const RECORD = qualified(schemaMigrations);
 
 const RUNTIME_ROLE = pg.escapeIdentifier(DATABASE_ROLES.runtime);
 
-// A harness whose controller has started, writing its lines to the log given, stopped once the test
+// A harness whose Controller has started, writing its lines to the log given, stopped once the test
 // has ended.
 const startedHarness = async (
   context: TestContext,

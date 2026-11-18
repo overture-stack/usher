@@ -96,7 +96,7 @@ const storedNotice = (row: NoticeRow): StoredNotice => {
  * applications serving its resource then. A page holds at most its limit, and says whether more wait.
  *
  * @param store the reader every statement runs through, within the store timeout.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  */
 export const createNoticeReader = (
   store: NoticeStore,

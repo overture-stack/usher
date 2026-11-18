@@ -9,7 +9,7 @@ import {
 
 import { SUBKEY_LABELS } from './keys.js';
 
-/** The application key shared by the tests and their controller mock, as bytes. */
+/** The application key shared by the tests and their Controller mock, as bytes. */
 export const TEST_KEY_BYTES: Uint8Array = new Uint8Array(32).fill(7);
 
 /** {@link TEST_KEY_BYTES} as configured: 43 base64url characters. */

@@ -20,13 +20,13 @@ export interface MigrationOptions {
 
   /**
    * The notice retention floor in seconds, the token lifetime plus the grace period and the margin.
-   * The run stores it for the trimming function to read, so the controller's own role can never
+   * The run stores it for the trimming function to read, so the Controller's own role can never
    * lower it. A whole number of seconds, at least 1.
    */
   retentionFloorSeconds: number;
 
   /**
-   * The controller's runtime role, created before the run, to which the migrations grant, and the
+   * The Controller's runtime role, created before the run, to which the migrations grant, and the
    * run grants reading the record of applied migrations.
    */
   runtimeRole: string;

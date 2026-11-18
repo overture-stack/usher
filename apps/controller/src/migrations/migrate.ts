@@ -151,7 +151,7 @@ const appliedMigrations = async (
 };
 
 // The record is the runner's rather than a migration's, since it says which migrations have run.
-// The controller reads it before anything else in the schema, so every run grants the runtime role
+// The Controller reads it before anything else in the schema, so every run grants the runtime role
 // reading it, not only the run creating it.
 const ensureRecord = async (
   client: pg.ClientBase,
@@ -312,13 +312,13 @@ const migrateOn = async (
 };
 
 /**
- * Applies the controller's migrations to a database, through the target when one is named: the
+ * Applies the Controller's migrations to a database, through the target when one is named: the
  * schema migration command's work. Every refusal comes before anything is written. The run refuses
  * when no store answers at the URL within the connection timeout, when the runtime role does not
  * exist or could act as the schema's owner, when another role owns the schema, when the target
  * names no migration, and when the database records a migration this release does not hold, or
  * holds changed. Then it creates the record of applied migrations when the schema lacks one, and
- * grants the runtime role reading it, which the controller's start requires. A target already
+ * grants the runtime role reading it, which the Controller's start requires. A target already
  * passed applies nothing. Each migration commits with its record, so a failure keeps every
  * migration before it. Last, the run stores the retention floor, so on an up-to-date database a run
  * changes nothing but the floor and the record's grant. It settles once its connection has closed.

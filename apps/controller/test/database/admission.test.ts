@@ -52,15 +52,15 @@ import { type Cleanup, cleanupFor } from '../../test-support/waiting.js';
 
 /**
  * The exchange pool these tests give the controller: two connections, so a few exchanges fill it. A
- * constant of its own here, as the test reaches the controller through the seam.
+ * constant of its own here, as the test reaches the Controller through the seam.
  */
 const EXCHANGE_CONNECTIONS = 2;
 
-/** The control pool's connections at the controller's default. */
+/** The control pool's connections at the Controller's default. */
 const CONTROL_CONNECTIONS = 5;
 
 /**
- * The most rejection recordings the stream route holds waiting on the store, by the controller's
+ * The most rejection recordings the stream route holds waiting on the store, by the Controller's
  * rule: half the control pool's connections, rounded down, and at least one.
  */
 const STREAM_PENDING_LIMIT = Math.max(1, Math.floor(CONTROL_CONNECTIONS / 2));
@@ -77,7 +77,7 @@ const WAITING_MS = 300;
  */
 const BORROWER_LEAD_MS = 1000;
 
-/** A notice version no controller serves, so a stream presented it is refused before it opens. */
+/** A notice version no Controller serves, so a stream presented it is refused before it opens. */
 const UNSERVED_NOTICE_VERSION = '99';
 
 // A test-reserved pair of advisory lock keys, apart from every key the support code takes.

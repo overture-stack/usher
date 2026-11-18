@@ -16,14 +16,14 @@ const KEY_BYTES = randomBytes(32);
 
 const KEY = applicationSubkeys(KEY_BYTES);
 
-// A subkey as the bridge derives it from an application key's bytes.
+// A subkey as the Bridge derives it from an application key's bytes.
 const bridgeSubkey = (
   label: string,
   keyBytes: Uint8Array = KEY_BYTES,
 ): Uint8Array =>
   new Uint8Array(hkdfSync('sha256', keyBytes, Buffer.alloc(0), label, 32));
 
-// The bridge's token key, derived under the label written here rather than read from the ring.
+// The Bridge's token key, derived under the label written here rather than read from the ring.
 const TOKEN_SUBKEY = bridgeSubkey('usher/v1/token-encryption');
 
 // A principal's payload holding values JSON must escape, in a subject and a resource identifier.
@@ -48,7 +48,7 @@ const SIGNED_IN: VersionOnePayload = {
 
 const ANONYMOUS: VersionOnePayload = { ...SIGNED_IN, sub: null };
 
-// How the bridge's token reader decrypts: `dir` and A256GCM alone, and no decompression.
+// How the Bridge's token reader decrypts: `dir` and A256GCM alone, and no decompression.
 const DECRYPTION = {
   contentEncryptionAlgorithms: ['A256GCM'],
   keyManagementAlgorithms: ['dir'],

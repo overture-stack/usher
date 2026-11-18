@@ -64,7 +64,7 @@ const SWEPT_TABLES: readonly SweptTable[] = [
  * run begins {@link RETENTION_SWEEP_INTERVAL_MILLISECONDS} after the start, and each later one
  * that long after the one before it has ended, so no two overlap. A run that fails is written
  * as {@link RETENTION_SWEEP_FAILED} naming its `cause`: the failure's code, a SQLSTATE, a system
- * error's or the controller's own such as `storeTimeout`, or `storeFailed` for a failure carrying
+ * error's or the Controller's own such as `storeTimeout`, or `storeFailed` for a failure carrying
  * none. It is written as runs start failing and not again until a run has succeeded, and a run that
  * succeeds writes nothing.
  *

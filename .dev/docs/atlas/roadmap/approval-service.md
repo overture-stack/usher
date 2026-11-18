@@ -47,7 +47,7 @@ service may register (step 3).
 
 **What a type does.** Three things, all missing today:
 
-1. **Which ushered applications serve a resource.** `decisions.md` says the controller already knows
+1. **Which ushered applications serve a resource.** `decisions.md` says the Controller already knows
    which audiences serve which resources, and the token calculation has a case that depends on it,
    but nothing in the schema holds that knowledge. A type, with each application declaring the types
    it serves, is where it would live.

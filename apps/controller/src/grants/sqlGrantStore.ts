@@ -30,7 +30,7 @@ interface GrantRow extends Omit<StoredGrant, 'decision'> {
  * named by the subject of their identity under that issuer first.
  *
  * @param connection the transaction's connection.
- * @param settings the controller's schema and the trusted issuer.
+ * @param settings the Controller's schema and the trusted issuer.
  */
 export const sqlGrantStore = (
   connection: pg.ClientBase,

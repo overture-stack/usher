@@ -20,7 +20,7 @@ const DATABASE_PROTOCOLS: readonly string[] = ['postgres:', 'postgresql:'];
 
 const MISSING = 'is missing';
 
-// The form of every key the controller reads: 32 bytes, in the one encoding that gives them back.
+// The form of every key the Controller reads: 32 bytes, in the one encoding that gives them back.
 const CANONICAL_KEY = /^[A-Za-z0-9_-]{43}$/u;
 
 const WHOLE_NUMBER = /^\d+$/u;
@@ -349,7 +349,7 @@ const decodedUser = (username: string): string => {
 const roleNamedBy = (url: URL): string =>
   url.searchParams.getAll('user').at(-1) || decodedUser(url.username);
 
-/** How the role the controller connects as is named by the refusal of a URL naming no role. */
+/** How the role the Controller connects as is named by the refusal of a URL naming no role. */
 export const CONTROLLER_ROLE_DESCRIPTION =
   'the role the controller connects as';
 
@@ -414,9 +414,9 @@ export const readDatabaseRole = (
   then(readDatabaseConnection(variable, rules), ({ role }) => read(role));
 
 /**
- * Reads the URL of something the controller trusts or sends a secret to: https, or http to a loopback
+ * Reads the URL of something the Controller trusts or sends a secret to: https, or http to a loopback
  * host, where nothing it carries crosses a network in the clear, and carrying no password, as no URL
- * the controller holds does.
+ * the Controller holds does.
  *
  * @param variable the variable.
  */

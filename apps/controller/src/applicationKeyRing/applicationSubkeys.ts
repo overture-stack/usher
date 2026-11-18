@@ -2,7 +2,7 @@ import { createSecretKey, hkdfSync, type KeyObject } from 'node:crypto';
 
 import type { ApplicationSubkeys } from './types.js';
 
-/** The HKDF label of each subkey derived from an application key, as the bridge labels them. */
+/** The HKDF label of each subkey derived from an application key, as the Bridge labels them. */
 export const SUBKEY_LABELS: Readonly<Record<keyof ApplicationSubkeys, string>> =
   Object.freeze({
     channelAssertion: 'usher/v1/channel-assertion',

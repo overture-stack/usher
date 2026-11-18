@@ -34,10 +34,10 @@ export interface ChannelRequest {
   /** A channel assertion sent in place of a fresh one; `null` sends no `authorization` header. */
   assertion?: string | null;
 
-  /** Headers merged over the bridge's, by lower-case name; one set to `undefined` is left out. */
+  /** Headers merged over the Bridge's, by lower-case name; one set to `undefined` is left out. */
   headers?: Readonly<Record<string, string | undefined>>;
 
-  /** The notice versions header's value: the bridge's {@link NOTICE_VERSIONS}, comma-separated, by default. */
+  /** The notice versions header's value: the Bridge's {@link NOTICE_VERSIONS}, comma-separated, by default. */
   versions?: string;
 }
 
@@ -46,16 +46,16 @@ export interface PollRequest extends ChannelRequest {
   /** The cursor to continue after; a head poll when absent. */
   after?: string;
 
-  /** The nonce: 16 fresh random bytes, base64url, as the bridge makes it, by default. */
+  /** The nonce: 16 fresh random bytes, base64url, as the Bridge makes it, by default. */
   nonce?: string;
 
-  /** A raw query string, without its `?`, sent in place of the one the bridge builds. */
+  /** A raw query string, without its `?`, sent in place of the one the Bridge builds. */
   query?: string;
 
   signal?: AbortSignal;
 }
 
-/** A poll's answer: the response, and the answer read as the bridge reads it. */
+/** A poll's answer: the response, and the answer read as the Bridge reads it. */
 export interface PollResponse extends WireResponse {
   /** The answer read through the reproduced channel reader, for a 200; `undefined` for any other status. */
   answer: PollAnswerReading | undefined;
@@ -88,7 +88,7 @@ export interface StreamRequest extends ChannelRequest {
  * One read of the notice stream. An event is everything up to and including a blank line, a comment
  * alone (a heartbeat) included, carrying when its last chunk arrived (`performance.now()`), its
  * bytes as received, what eventsource-parser dispatched for it, and for a `notice` event, the notice
- * read as the bridge reads it. The stream ends, or overflows once the bridge's parser would buffer
+ * read as the Bridge reads it. The stream ends, or overflows once the Bridge's parser would buffer
  * more than {@link PUSH_BUFFER_CHARACTERS}; nothing is read after either.
  */
 export type StreamRead =
@@ -136,14 +136,14 @@ const pollQuery = (after: string | undefined, nonce: string): string =>
   ).toString();
 
 /**
- * Sends `GET notices`, relative to the controller's URL, exactly as the bridge's poll sends a page:
+ * Sends `GET notices`, relative to the Controller's URL, exactly as the Bridge's poll sends a page:
  * `head=true` or `after`, then a fresh `nonce`, as the query; `accept: application/jose`,
  * `authorization: Bearer` and a fresh channel assertion, and the notice versions header. A 200's
  * body is read, trimmed, through the reproduced channel reader. Follows `poll.ts` `createPoll`, its
  * `fetchPage` and `query`.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
- * @param request the application, the cursor and any departure from the bridge's request.
+ * @param controllerUrl the Controller's URL, ending in `/`.
+ * @param request the application, the cursor and any departure from the Bridge's request.
  */
 export const poll = async (
   controllerUrl: URL,
@@ -234,11 +234,11 @@ const pagesFrom = async (
 
 /**
  * Polls from a cursor, or from head when none is given, page by page while each answer asks for
- * more, as the bridge's check does. Each answer must be a 200 that reads, echoes its request, and
+ * more, as the Bridge's check does. Each answer must be a 200 that reads, echoes its request, and
  * never asks for more from a cursor already asked after; anything else throws, naming the status or
- * the bridge's reason. A head poll answers no notices, so its `next` is the cursor a test calls c0.
+ * the Bridge's reason. A head poll answers no notices, so its `next` is the cursor a test calls c0.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
+ * @param controllerUrl the Controller's URL, ending in `/`.
  * @param options the application, and the cursor to start after.
  */
 export const pollAll = (
@@ -461,16 +461,16 @@ const streamOf = (
 };
 
 /**
- * Opens `GET notices/stream`, relative to the controller's URL, exactly as the bridge's push opens
+ * Opens `GET notices/stream`, relative to the Controller's URL, exactly as the Bridge's push opens
  * it: `accept: text/event-stream`, `authorization: Bearer` and a fresh channel assertion,
- * `last-event-id`, and the notice versions header, through the global fetch as the bridge's default.
- * The body is read from the moment the headers arrive, as the bridge reads it: each chunk decoded as
- * streamed UTF-8 and fed to an eventsource-parser holding the bridge's buffer limit, so an overflow
- * ends the stream where the bridge's would end, its connection aborted as the bridge aborts it.
+ * `last-event-id`, and the notice versions header, through the global fetch as the Bridge's default.
+ * The body is read from the moment the headers arrive, as the Bridge reads it: each chunk decoded as
+ * streamed UTF-8 and fed to an eventsource-parser holding the Bridge's buffer limit, so an overflow
+ * ends the stream where the Bridge's would end, its connection aborted as the Bridge aborts it.
  * Follows `push.ts` `createPush`, its `connect` and `read`.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
- * @param request the application, the cursor and any departure from the bridge's request.
+ * @param controllerUrl the Controller's URL, ending in `/`.
+ * @param request the application, the cursor and any departure from the Bridge's request.
  */
 export const openStream = async (
   controllerUrl: URL,
@@ -529,7 +529,7 @@ export interface RawStream {
   /** When the response's headers arrived: `performance.now()`. */
   headersAt: number;
 
-  /** Stops reading from the socket, so the controller's writes back up. */
+  /** Stops reading from the socket, so the Controller's writes back up. */
   pause(): void;
 
   /** Reads from the socket again. */
@@ -544,19 +544,19 @@ export interface RawStream {
   text(): string;
 }
 
-/** What opening a raw stream sends: the bridge's request, with the departures a test needs. */
+/** What opening a raw stream sends: the Bridge's request, with the departures a test needs. */
 export interface RawStreamRequest extends ChannelRequest {
   /** The cursor sent as `last-event-id`; `null` leaves the header out. */
   lastEventId: string | null;
 }
 
 /**
- * Opens `GET notices/stream` with the bridge's own headers over a plain http connection of its own,
+ * Opens `GET notices/stream` with the Bridge's own headers over a plain http connection of its own,
  * below fetch, reading the body chunk by chunk as it arrives, each timed, and able to stop reading so
- * the controller's writes back up. The connection ends at {@link RawStream.close}.
+ * the Controller's writes back up. The connection ends at {@link RawStream.close}.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
- * @param request the application, the cursor and any departure from the bridge's request.
+ * @param controllerUrl the Controller's URL, ending in `/`.
+ * @param request the application, the cursor and any departure from the Bridge's request.
  */
 export const openRawStream = async (
   controllerUrl: URL,

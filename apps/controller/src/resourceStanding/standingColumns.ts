@@ -15,7 +15,7 @@ import type { StandingPlaceholders } from './types.js';
  * exactly; a subject no identity holds holds nothing. Only a grant held by the person themself
  * counts, never one held by a group.
  *
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param placeholders where the trusted issuer, the subject and the configured clock's instant are
  *   bound.
  */

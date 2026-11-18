@@ -8,13 +8,13 @@ query layer.
 
 Behind the middleware, the bridge:
 
-- exchanges each credential with Usher's controller for an Usher token, then decrypts and caches
-  the token, so a request within the token's lifetime needs no call to the controller;
-- keeps a revocation channel open to the controller, and drops a cached token once the controller
+- exchanges each credential with Usher's Controller for an Usher token, then decrypts and caches
+  the token, so a request within the token's lifetime needs no call to the Controller;
+- keeps a revocation channel open to the Controller, and drops a cached token once the Controller
   announces that its access was withdrawn;
-- fails closed: once the controller has been out of reach for longer than the grace period, it
+- fails closed: once the Controller has been out of reach for longer than the grace period, it
   serves only what is open to everyone, and marks each signed-in person suspended;
-- answers 503 until it has first reached the controller.
+- answers 503 until it has first reached the Controller.
 
 ## Who uses it
 
@@ -28,9 +28,9 @@ it serves, as its adapter describes them. The adapter reads each request's acces
 
 | Peer dependency                    | What it is for                                                                       |
 | ---------------------------------- | ------------------------------------------------------------------------------------ |
-| `@overture-stack/usher-types`      | the contract shared by the bridge and the adapter, installed once by the application |
+| `@overture-stack/usher-types`      | the contract shared by the Bridge and the adapter, installed once by the application |
 | `express`                          | the framework the middleware runs in, version 4 or 5                                 |
-| `@types/express-serve-static-core` | optional: the Express types named in the bridge's declarations, for TypeScript       |
+| `@types/express-serve-static-core` | optional: the Express types named in the Bridge's declarations, for TypeScript       |
 
 It is an ES module, for Node 24 or later.
 
@@ -80,7 +80,7 @@ app.listen(3000);
 ```
 
 The options naming this deployment come from these places, the first two from registering the
-application with the controller, as
+application with the Controller, as
 [Registering resources](https://github.com/overture-stack/usher/blob/main/docs/deployment.md#registering-resources)
 describes:
 
@@ -89,8 +89,8 @@ describes:
 | `audience`      | the application's `id`, in the answer registering it                                                                               |
 | `key`           | the `key.value` in that same answer, the only answer that shows it                                                                 |
 | `controllerUrl` | where the application reaches the controller: https, or plain http only to `127.0.0.1`, `localhost` or `[::1]`                     |
-| `issuer`        | the controller's `USHER_ISSUER`, the `iss` of every Usher token                                                                    |
-| `eventSource`   | the application's own: a URI reference naming this deployment rather than one replica, the `source` of every event the bridge logs |
+| `issuer`        | the Controller's `USHER_ISSUER`, the `iss` of every Usher token                                                                    |
+| `eventSource`   | the application's own: a URI reference naming this deployment rather than one replica, the `source` of every event the Bridge logs |
 
 Each route mounted after the middleware reads its request's access from `res.locals` with
 `readAccess` from `@overture-stack/usher-types`. On shutdown, `await bridge.stop()`, which settles
@@ -100,23 +100,23 @@ once every exchange in flight has ended.
 
 Three terms name the timing of an exchange with the controller:
 
-- the **deadline**: when the controller must have answered an exchange, measured from the
+- the **deadline**: when the Controller must have answered an exchange, measured from the
   request's arrival, `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` (4 s);
-- the **timeout**: how long the bridge waits for that answer, its `exchangeTimeoutMs`;
+- the **timeout**: how long the Bridge waits for that answer, its `exchangeTimeoutMs`;
 - the **margin**: the difference between them, left for the network and for writing the answer,
   `EXCHANGE_DEADLINE_MARGIN_MILLISECONDS` (1 s).
 
 `exchangeTimeoutMs` defaults to `BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS`, the deadline plus the
-margin (5 s), each exported by `@overture-stack/usher-types`. Keep it at least that: the controller
-answers every exchange by its deadline, so a bridge waiting the deadline plus the margin always
-receives the answer. A shorter timeout is accepted, since the bridge cannot see the controller's
-deadline, but the bridge may then give up on an exchange the controller answers in time, and its
+margin (5 s), each exported by `@overture-stack/usher-types`. Keep it at least that: the Controller
+answers every exchange by its deadline, so a Bridge waiting the deadline plus the margin always
+receives the answer. A shorter timeout is accepted, since the Bridge cannot see the Controller's
+deadline, but the Bridge may then give up on an exchange the Controller answers in time, and its
 start logs `bridge.exchangeTimeoutShort` at warning, naming the timeout and the minimum.
 
 ## Design
 
-- [Architecture: the bridge](https://github.com/overture-stack/usher/blob/main/.dev/design/architecture.md#bridge-overture-stackusher-express-bridge):
-  what the bridge owns, and what it leaves to the adapter
+- [Architecture: the Bridge](https://github.com/overture-stack/usher/blob/main/.dev/design/architecture.md#bridge-overture-stackusher-express-bridge):
+  what the Bridge owns, and what it leaves to the adapter
 - [Security workflow](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md):
   the token exchange, caching, revocation, and failing closed
 - [Adapter integration](https://github.com/overture-stack/usher/blob/main/.dev/design/adapter-integration.md):

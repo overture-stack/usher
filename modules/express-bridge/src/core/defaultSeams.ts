@@ -21,12 +21,12 @@ const assertionFor = ({
   });
 
 /**
- * Supplies the controller client, token reader and revocation channel. The client and the channel
+ * Supplies the Controller client, token reader and revocation channel. The client and the channel
  * share one fetch: the one given, or undici's through an Agent owned here, created on first use
  * and released by `close`. Owning the Agent keeps a global dispatcher set by the host, or one
- * routing through a proxy, from carrying the credentials sent to the controller.
+ * routing through a proxy, from carrying the credentials sent to the Controller.
  *
- * @param options `fetch` reaches the controller in place of the owned Agent.
+ * @param options `fetch` reaches the Controller in place of the owned Agent.
  */
 export const defaultSeams = ({
   fetch,

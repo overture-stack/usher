@@ -92,7 +92,7 @@ const recordCheckValue = async (
  * different keys, the one checking second is refused: run the check while holding the lock every
  * start takes.
  *
- * @param client a connection under the controller's role, in the start's transaction.
+ * @param client a connection under the Controller's role, in the start's transaction.
  * @param settings the key, the schema, and the clock the check value's recording time is read from.
  * @throws {StartRefusal} naming the key's variable when the key is not the recorded one, or when no
  *   check value is recorded and the role may not record one; naming the schema's variable when the

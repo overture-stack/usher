@@ -61,7 +61,7 @@ import { type Cleanup, cleanupFor, suiteCleanup } from './waiting.js';
 
 /**
  * What gives the harness a platform administrator's management token for registering its
- * applications and issuing their first keys, given the configuration its controller runs with. The
+ * applications and issuing their first keys, given the configuration its Controller runs with. The
  * harness seeds the person the token names as an administrator before using it.
  */
 export type AdministratorTokenSource = (
@@ -73,9 +73,9 @@ export interface HarnessOptions {
   /**
    * Where the harness gets the platform administrator's token for registering its applications and
    * issuing their first keys: {@link standInAdministrator}'s by default. A fixture whose
-   * controller trusts a Keycloak realm passes {@link realmAdministrator}'s, so registration runs as
+   * Controller trusts a Keycloak realm passes {@link realmAdministrator}'s, so registration runs as
    * production runs it, by an administrator of the trusted issuer, and each application's registrant
-   * is a principal the controller trusts. It is asked once, when the harness's own controller first
+   * is a principal the Controller trusts. It is asked once, when the harness's own Controller first
    * listens, and not at all when there is nothing to register.
    */
   administratorToken?: AdministratorTokenSource;
@@ -83,7 +83,7 @@ export interface HarnessOptions {
   /**
    * The harness's applications, by display name, in order: `arranger-test` and `lyric-test` by
    * default and none for an empty list, then each further one named by the fixture
-   * ({@link harnessApplicationNames}). Once its own controller first listens, the harness registers
+   * ({@link harnessApplicationNames}). Once its own Controller first listens, the harness registers
    * each through `POST /admin/applications` as the platform administrator
    * ({@link HarnessOptions.administratorToken}), or, for one seeded by SQL already, issues its first
    * key through `POST /admin/applications/{id}/keys`. Each answer's id and key are kept for
@@ -95,8 +95,8 @@ export interface HarnessOptions {
   configuration?: Partial<ControllerConfiguration>;
 
   /**
-   * Policy seeded by SQL, the stand-in's issuer its users' by default, once the controller has started
-   * and the harness has registered its applications, since the controller writes the seeded roles at
+   * Policy seeded by SQL, the stand-in's issuer its users' by default, once the Controller has started
+   * and the harness has registered its applications, since the Controller writes the seeded roles at
    * its start (#207 Q11): each of the fixture's applications is seeded under its registered id
    * ({@link withRegisteredIds}), so seeding writes only what each serves. Registered through the API,
    * an application takes its description from the fixture, and its registrant is the platform
@@ -107,7 +107,7 @@ export interface HarnessOptions {
 
   /**
    * A stand-in the test started itself, so a test can have the identity provider fail from before the
-   * controller's start: a fresh one by default. The harness leaves a given one running.
+   * Controller's start: a fresh one by default. The harness leaves a given one running.
    */
   identityProvider?: IdentityProvider;
 
@@ -119,12 +119,12 @@ export interface HarnessOptions {
 
   /**
    * Whether the harness seeds its administrator, `PEOPLE.administrator` under the configured
-   * issuer, once its own controller first listens and before it registers anything: true by
+   * issuer, once its own Controller first listens and before it registers anything: true by
    * default, so a test acting as an administrator, or as any other principal, finds Usher with an
    * administrator. False leaves the store holding none, as before the first user's nomination is
    * accepted, so every operation but nominating, accepting and a nominee's listing is refused: a
    * harness registering applications then seeds the administrator whose token registers them, and
-   * no other. A harness starting no controller seeds none until it first starts one.
+   * no other. A harness starting no Controller seeds none until it first starts one.
    */
   seedsAdministrator?: boolean;
 
@@ -133,13 +133,13 @@ export interface HarnessOptions {
    * passes false and starts them from the harness's configuration, or calls
    * {@link Harness.restart}; the fixture is then seeded whole before anything starts, its
    * applications under the fixture's ids, and each is issued its first key once the harness's own
-   * controller first listens.
+   * Controller first listens.
    */
   startsController?: boolean;
 
   /**
-   * The template the test file's database is cloned from: the controller's own by default, and for a
-   * harness starting no controller {@link STARTED_STORE_TEMPLATE}, so a fixture seeded before any start
+   * The template the test file's database is cloned from: the Controller's own by default, and for a
+   * harness starting no Controller {@link STARTED_STORE_TEMPLATE}, so a fixture seeded before any start
    * finds the roles a start writes. Another is for the harness's own tests.
    */
   template?: DatabaseTemplate;
@@ -179,7 +179,7 @@ export interface HarnessApplication extends ControllerApplication {
   keyId: string;
 }
 
-/** Everything a test needs from one running controller, stopped by one call. */
+/** Everything a test needs from one running Controller, stopped by one call. */
 export interface Harness {
   /**
    * An application registered by the harness, by its display name: its id, generated by its
@@ -191,7 +191,7 @@ export interface Harness {
 
   /**
    * Every application registered by the harness, in the order given by
-   * {@link harnessApplicationNames}; none before its controller first listens.
+   * {@link harnessApplicationNames}; none before its Controller first listens.
    */
   applications: readonly HarnessApplication[];
 
@@ -201,17 +201,17 @@ export interface Harness {
   /** Connections under each database role, ended at stop. */
   clients: Readonly<Record<DatabaseRole, pg.Client>>;
 
-  /** The configuration the controller runs with, or last ran with; a restart's overrides change it. */
+  /** The configuration the Controller runs with, or last ran with; a restart's overrides change it. */
   configuration: ControllerConfiguration;
 
   database: TestDatabase;
   identityProvider: IdentityProvider;
 
   /**
-   * Stops the controller, if one runs, then starts one on the same database, stand-in and keys, with
+   * Stops the Controller, if one runs, then starts one on the same database, stand-in and keys, with
    * the overrides given over the current configuration, settling once it listens: a stop, then
    * {@link Harness.startController}, so on the port it last listened on. A start refused leaves no
-   * controller running, and is thrown.
+   * Controller running, and is thrown.
    */
   restart(overrides?: Partial<ControllerConfiguration>): Promise<void>;
 
@@ -219,28 +219,28 @@ export interface Harness {
   seeded: SeededPolicy;
 
   /**
-   * Starts a controller on the same database, stand-in and keys, with the overrides given over the
+   * Starts a Controller on the same database, stand-in and keys, with the overrides given over the
    * current configuration, settling once it listens. While the configuration asks for any free port,
-   * it listens on the port the harness's controller last listened on, so a bridge pointed at its URL
-   * reaches the new start as it would a restarted deployment. A start refused leaves no controller
+   * it listens on the port the harness's Controller last listened on, so a Bridge pointed at its URL
+   * reaches the new start as it would a restarted deployment. A start refused leaves no Controller
    * running, and is thrown.
    *
-   * @throws when the harness already runs a controller.
+   * @throws when the harness already runs a Controller.
    */
   startController(overrides?: Partial<ControllerConfiguration>): Promise<void>;
 
   /**
-   * Stops the controller, the stand-in the harness started and the database, settling once each has
+   * Stops the Controller, the stand-in the harness started and the database, settling once each has
    * stopped.
    */
   stop(): Promise<void>;
 
-  /** Stops the controller alone, settling once its work has ended; nothing happens when none runs. */
+  /** Stops the Controller alone, settling once its work has ended; nothing happens when none runs. */
   stopController(): Promise<void>;
 
   tokens: HarnessTokens;
 
-  /** The controller's URL, ending in `/`; reading it while no controller runs throws. */
+  /** The Controller's URL, ending in `/`; reading it while no Controller runs throws. */
   url: URL;
 }
 
@@ -256,18 +256,18 @@ export type SharedHarness = () => Promise<Harness>;
  */
 export const HARNESS_LOGOUT_CLIENT = 'portal-ui-test';
 
-/** The one management client the harness's controller lists by default, `managementClients`. */
+/** The one management client the harness's Controller lists by default, `managementClients`. */
 export const HARNESS_MANAGEMENT_CLIENT = 'usher-ui-test';
 
-/** The CloudEvents `source` the harness's controller emits under, one for the whole deployment (#214). */
+/** The CloudEvents `source` the harness's Controller emits under, one for the whole deployment (#214). */
 export const HARNESS_EVENT_SOURCE = 'https://usher.example.org/controller';
 
 /**
- * The controller's half of #217's compressed timing profile (#217 Q2): a 0.5 s heartbeat, 10 s Usher
- * tokens, a 20 s notice retention floor, the token lifetime with the bridge's compressed 4 s grace
- * period and a 6 s margin, and a 250 ms store timeout, half the bridge's compressed 0.5 s poll
+ * The Controller's half of #217's compressed timing profile (#217 Q2): a 0.5 s heartbeat, 10 s Usher
+ * tokens, a 20 s notice retention floor, the token lifetime with the Bridge's compressed 4 s grace
+ * period and a 6 s margin, and a 250 ms store timeout, half the Bridge's compressed 0.5 s poll
  * deadline (#210 Q13). Give it as a harness's configuration, since the floor is set when the test's
- * database is created. The bridge's half, and the pair, are in `vendoredBridge.ts`.
+ * database is created. The Bridge's half, and the pair, are in `vendoredBridge.ts`.
  */
 export const COMPRESSED_CONTROLLER_TIMING: Readonly<
   Pick<
@@ -287,8 +287,8 @@ export const COMPRESSED_CONTROLLER_TIMING: Readonly<
 });
 
 /**
- * How often every controller instance reloads the live application keys into memory beside the
- * wake-ups through the cache, in milliseconds: 30 s, a constant of the controller's and no setting,
+ * How often every Controller instance reloads the live application keys into memory beside the
+ * wake-ups through the cache, in milliseconds: 30 s, a constant of the Controller's and no setting,
  * so a lost wake-up delays a registration, an issue or a revocation by at most this.
  */
 export const APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS = 30_000;
@@ -310,7 +310,7 @@ export interface HarnessSettings {
 const DEFAULT_APPLICATIONS = Object.freeze(['arranger-test', 'lyric-test']);
 
 /**
- * The controller's production defaults for an Usher token's lifetime and the notice retention
+ * The Controller's production defaults for an Usher token's lifetime and the notice retention
  * floor's grace period and margin, in seconds, which the harness configures unless a test sets its
  * own: 300 s tokens, a 60 s grace period and a 30 s margin.
  */
@@ -360,7 +360,7 @@ const passwordApart = (
  * A configuration with each store's password out of its URL and in a variable of its own, as in a
  * deployment: a URL carrying a password, as given by `containers.ts` and `database.ts`, moves it to
  * `databasePassword` or `cachePassword`, its user name kept; a URL carrying none leaves the password
- * field as it is. The harness starts every controller through it, so a test may hand it a URL with
+ * field as it is. The harness starts every Controller through it, so a test may hand it a URL with
  * its credentials.
  *
  * @param configuration the configuration.
@@ -386,7 +386,7 @@ export const passwordsApart = (
 };
 
 /**
- * The configuration of a harness's controller: the controller's issuer `https://usher.example.org`, a
+ * The configuration of a harness's controller: the Controller's issuer `https://usher.example.org`, a
  * fresh cursor key and key-encryption key, each store's password apart from its URL
  * ({@link passwordsApart}), a fresh one standing in where the URL carries none, the management API
  * `usher-management-test` with the client `usher-ui-test`, {@link HARNESS_LOGOUT_CLIENT} as the
@@ -397,7 +397,7 @@ export const passwordsApart = (
  * store timeout and a 15 min stream), the store connections at their defaults (10 for the exchange
  * and 5 for everything else), loopback on any free port, the system's clock and the process's
  * standard output as the log stream; then the test's overrides over all of it. The configuration
- * names no application: the harness registers its applications through the API once its controller
+ * names no application: the harness registers its applications through the API once its Controller
  * listens.
  *
  * @param settings the cache, the database and the identity provider, and the test's overrides.
@@ -463,7 +463,7 @@ export const harnessConfiguration = ({
   });
 
 /**
- * A configuration for the tests that only read one from an environment, or only start a controller
+ * A configuration for the tests that only read one from an environment, or only start a Controller
  * to see it refuse: the harness's defaults, with loopback addresses for the stores and the identity
  * provider, none of which reading connects to, then the test's overrides.
  *
@@ -497,10 +497,10 @@ export const retentionFloorSeconds = ({
   tokenLifetimeSeconds + retentionGraceSeconds + retentionMarginSeconds;
 
 /**
- * A controller's URL ending in `/`, as the bridge's client and the support modules resolve paths
+ * A Controller's URL ending in `/`, as the Bridge's client and the support modules resolve paths
  * against it.
  *
- * @param url the URL a controller answers at.
+ * @param url the URL a Controller answers at.
  */
 export const withTrailingSlash = (url: URL): URL =>
   url.pathname.endsWith('/') ? url : new URL(`${url.href}/`);
@@ -625,7 +625,7 @@ export const withRegisteredIds = (
 
 /**
  * The harness's default {@link AdministratorTokenSource}: a management token minted by the stand-in
- * for `PEOPLE.administrator`, for a controller trusting the stand-in's issuer.
+ * for `PEOPLE.administrator`, for a Controller trusting the stand-in's issuer.
  *
  * @param identityProvider the stand-in.
  */
@@ -635,7 +635,7 @@ export const standInAdministrator =
     mintManagementToken(identityProvider, configuration, PEOPLE.administrator);
 
 /**
- * An {@link AdministratorTokenSource} for a controller trusting a Keycloak realm: the realm's own
+ * An {@link AdministratorTokenSource} for a Controller trusting a Keycloak realm: the realm's own
  * administrator, the first of its people holding the configured first-user role, signed in through
  * the first of its clients that is a configured management client and carries the management API's
  * audience. The token is Keycloak's own, from a real sign-in.
@@ -688,7 +688,7 @@ export interface RealmRegistrar {
 /**
  * The administrator's token source of a harness started before its Keycloak realm, as a test starts
  * one so that it fails with the seam's message before any Keycloak starts: the harness asks it once
- * its controller first listens, after the restart trusting the realm, and registers its applications
+ * its Controller first listens, after the restart trusting the realm, and registers its applications
  * and issues their first keys as the realm's own administrator.
  */
 export const realmRegistrar = (): RealmRegistrar => {
@@ -749,18 +749,18 @@ const boundApplications = async (
 };
 
 interface Started {
-  /** The applications the harness registered, once its controller first listened. */
+  /** The applications the harness registered, once its Controller first listened. */
   applications: readonly HarnessApplication[] | undefined;
 
   configuration: ControllerConfiguration;
 
   /**
    * The fixture's applications seeded by SQL, by display name, each issued its first key rather than
-   * registered once the harness's controller first listens: none until the fixture is seeded.
+   * registered once the harness's Controller first listens: none until the fixture is seeded.
    */
   seededIds: ReadonlyMap<string, string>;
 
-  /** The port the harness's controller last listened on, kept for the next start. */
+  /** The port the harness's Controller last listened on, kept for the next start. */
   port: number | undefined;
 
   running: RunningController | undefined;
@@ -852,7 +852,7 @@ const startedWith = async (
     database.connect('runtime'),
   ]);
   // A token makes no administrator, so whoever acts as one is seeded as one first, under the issuer
-  // the controller trusts as the token is asked for.
+  // the Controller trusts as the token is asked for.
   const seedAdministratorOf = (subject: string): Promise<string> => {
     const seeded = state.seeding
       .catch(() => undefined)
@@ -886,9 +886,9 @@ const startedWith = async (
     if (startsController) {
       await startNow();
     }
-    // Its controller started, the harness has registered the fixture's applications, so seeding writes
+    // Its Controller started, the harness has registered the fixture's applications, so seeding writes
     // only what they serve; with none started, they are seeded under the fixture's ids, and issued
-    // their keys once the harness's controller first listens.
+    // their keys once the harness's Controller first listens.
     const seeded =
       seeding === undefined
         ? NOTHING_SEEDED
@@ -949,15 +949,15 @@ const startedWith = async (
  * Stands up everything a test file needs, in order: its own database, cloned through `database.ts`
  * with the retention floor its configuration gives, on the run's PostgreSQL or the test file's own;
  * an identity provider stand-in, or the test's own; a configuration from {@link harnessConfiguration}
- * and the test's overrides; the controller, started through `controller.ts`, unless the test starts
+ * and the test's overrides; the Controller, started through `controller.ts`, unless the test starts
  * its own, with the harness's applications, the fixture's among them, registered through the API
- * once it listens; and then the fixture, seeded by SQL under the registered ids, since the controller
+ * once it listens; and then the fixture, seeded by SQL under the registered ids, since the Controller
  * writes the seeded roles at its start (#207 Q11). Whatever started before a failure is stopped
- * before the failure is thrown, so while the controller is missing the harness fails with the seam's
+ * before the failure is thrown, so while the Controller is missing the harness fails with the seam's
  * message and leaves nothing running.
  *
  * @param options the applications, configuration overrides, a fixture, a stand-in and a PostgreSQL
- *   of the test file's own, whether to start a controller, and the template.
+ *   of the test file's own, whether to start a Controller, and the template.
  */
 export const startHarness = async (
   options: HarnessOptions = {},
@@ -993,7 +993,7 @@ export const startHarness = async (
 
 /**
  * Starts a harness, runs a test's work against it, and stops it whether or not the work succeeded,
- * so no test ends with a controller, a stand-in or a database still running.
+ * so no test ends with a Controller, a stand-in or a database still running.
  *
  * Given the test's context, the harness stops only once the test has ended, as a step of its
  * {@link cleanupFor} registry deferred when the harness started: a step the test defers after that,
@@ -1056,7 +1056,7 @@ export const suiteHarness = (
   };
 };
 
-/** A controller instance a test started beside the harness's, on the same database, cache and keys. */
+/** A Controller instance a test started beside the harness's, on the same database, cache and keys. */
 export interface ControllerInstance {
   /** Its configuration: the harness's, with the test's overrides. */
   configuration: ControllerConfiguration;
@@ -1069,7 +1069,7 @@ export interface ControllerInstance {
 }
 
 /**
- * Starts another controller instance through the seam, on the harness's configuration with the
+ * Starts another Controller instance through the seam, on the harness's configuration with the
  * overrides over it and each store's password apart from its URL ({@link passwordsApart}), its
  * `instanceName` the harness's with `-beside-` and a fresh suffix unless the overrides name one, and
  * defers its stop to the cleanup given. It registers no application: it serves those registered on
@@ -1103,10 +1103,10 @@ export const startInstance = async (
 };
 
 /**
- * Starts another controller instance beside the harness's, as {@link startInstance} does, on the
+ * Starts another Controller instance beside the harness's, as {@link startInstance} does, on the
  * database's read-only role ({@link TestDatabase.readOnlyUrl}): for the dry run of the EGO import,
  * which completes under a role that may only read (#216 Q16). Its start writes nothing, so it starts
- * once the harness's own controller has started on the database and written what a start writes.
+ * once the harness's own Controller has started on the database and written what a start writes.
  *
  * @param scope the cleanup stopping it.
  * @param harness the harness whose database, cache, stand-in and keys it shares.
@@ -1123,7 +1123,7 @@ export const startReadOnlyInstance = async (
   });
 
 /**
- * Takes a snapshot of a running harness's store, as a backup is taken while the controller serves:
+ * Takes a snapshot of a running harness's store, as a backup is taken while the Controller serves:
  * every table's rows and every sequence's state, in one consistent read under the migration role.
  *
  * @param harness the harness.
@@ -1132,9 +1132,9 @@ export const takeSnapshot = (harness: Harness): Promise<StoreSnapshot> =>
   takeStoreSnapshot(harness.clients.migration, harness.database.schema);
 
 /**
- * Restores a snapshot as a restore's runbook does (#215 Q12, #217 Q3): the harness's controller
+ * Restores a snapshot as a restore's runbook does (#215 Q12, #217 Q3): the harness's Controller
  * stopped, the snapshot restored over the store, a new `notice_stream.epoch` written unless the test
- * keeps the snapshot's, and a controller started again on the same configuration and port. Every
+ * keeps the snapshot's, and a Controller started again on the same configuration and port. Every
  * instance a test started beside the harness must be stopped first. A start refused is thrown, the
  * store restored all the same.
  *

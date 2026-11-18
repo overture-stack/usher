@@ -30,14 +30,14 @@ check as the thing that makes it loud:
    and is impossible to miss.
 
 **Nothing in this corpus specifies the protocol.** Not what each side declares, not when it runs, not
-what either does with a mismatch, not whether the controller retains what an adapter declared.
+what either does with a mismatch, not whether the Controller retains what an adapter declared.
 
-**Failure mode 1 now has one (decided 2026-10-05).** The controller declares what each resource
+**Failure mode 1 now has one (decided 2026-10-05).** The Controller declares what each resource
 offers, in the payload; the adapter declares each catalogue's mapping and absences, at registration
-with the bridge; the bridge compares them before rendering a resource for a catalogue, at startup for
+with the Bridge; the Bridge compares them before rendering a resource for a catalogue, at startup for
 the open tier; a mismatch withholds the resource from that catalogue with an error-level event; and
-the controller retains nothing an adapter declared. See [decisions.md](decisions.md), "A catalogue's
-category gap is found by the bridge". Modes 2 to 6 remain.
+the Controller retains nothing an adapter declared. See [decisions.md](decisions.md), "A catalogue's
+category gap is found by the Bridge". Modes 2 to 6 remain.
 
 **The category model changes modes 1, 2 and 6 (decided 2026-10-20).** Mode 1 closes structurally: a
 global category undefined in a catalogue denies its whole result, and a resource category withholds
@@ -56,17 +56,17 @@ test like every other category, and a record nobody recognizes would match no cl
 
 | Case                                                             | `unmarked` as a complement, today                            | `unmarked` as a declared positive test         |
 | ---------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
-| mode 1, a category offered and not mapped                        | served as unmarked, unless the bridge withholds the resource | hidden; the offerings check only makes it loud |
+| mode 1, a category offered and not mapped                        | served as unmarked, unless the Bridge withholds the resource | hidden; the offerings check only makes it loud |
 | mode 2, a value in the data nobody mapped                        | served as unmarked                                           | hidden                                         |
 | mode 6, a partitioning category set as an overlay                | served as unmarked                                           | no complement to drop it from                  |
 | unmarked records marked by a value the catalogue did not declare | served                                                       | hidden, which is visible as open data missing  |
 
 **What it costs.** Absence has no first-class test in SQON: the first application compiles a reserved
 `__missing__` value into an existence check, which is one compiler's convention rather than the query
-language's, so a bridge emitting it would tie every adapter to that convention or need a SQON
+language's, so a Bridge emitting it would tie every adapter to that convention or need a SQON
 operator added. It also reverses a modelled position, that `unmarked` has no value of its own, so the
 glossary and the `unmarked` decision would move with it. Raised for the developer as research, not
-built: the bridge renders the complement as planned, and the change would be local to one clause.
+built: the Bridge renders the complement as planned, and the change would be local to one clause.
 
 **Mode 2's data check needs the same declaration either way.** Comparing the values found in a
 catalogue's category field with its mapping can flag a value as unknown only if the catalogue says
@@ -160,17 +160,17 @@ story, and every finding that lands on it makes it more load-bearing rather than
 
 **The word covers three things.** An identity provider's session, a cached Usher token, and an
 upload in flight all appear in the corpus as a session, and none is defined. Usher controls the
-second: a session, in Usher's sense, is a cached Usher token in one bridge. It begins at the
-first exchange, is renewed at each refresh, and ends when the bridge drops it or it expires.
+second: a session, in Usher's sense, is a cached Usher token in one Bridge. It begins at the
+first exchange, is renewed at each refresh, and ends when the Bridge drops it or it expires.
 
 **Each open item below is an event that ends or changes one**, and each has been recorded separately
 with its own fix:
 
-| Event                          | What the bridges do                                                                                                                               | Status                           |
+| Event                          | What the Bridges do                                                                                                                               | Status                           |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| a grant is revoked             | the channel names the principal, and bridges drop that principal's token                                                                          | designed                         |
-| a resource's categories change | the stream names the resource to the applications serving it, whose bridges drop every token naming it                                            | decided, filtered by audience    |
-| a person signs out             | the controller receives the identity provider's back-channel logout and relays it as a principal notice, so every bridge drops the person's token | decided                          |
+| a grant is revoked             | the channel names the principal, and Bridges drop that principal's token                                                                          | designed                         |
+| a resource's categories change | the stream names the resource to the applications serving it, whose Bridges drop every token naming it                                            | decided, filtered by audience    |
+| a person signs out             | the Controller receives the identity provider's back-channel logout and relays it as a principal notice, so every Bridge drops the person's token | decided                          |
 | a person is revoked            | the exchange refuses them with `401`, and a principal notice drops their token everywhere                                                         | proposed: schema.md's decision A |
 | announcements arrive late      | only a poll answered within its deadline resets the grace clock, so the grace period bounds the delay                                             | decided                          |
 | an upload is in flight         | a different kind of session, revocable or not                                                                                                     | open, in its own item            |
@@ -181,7 +181,7 @@ must keep that property.
 
 **What stays open beyond the rows is whether Usher also keeps a view of live sessions**, meaning who
 holds a token in which application. It would give an administrator that view, at the cost of
-duplicating the bridges' state in Usher. The rows depend on identity-provider features, listed under
+duplicating the Bridges' state in Usher. The rows depend on identity-provider features, listed under
 the connector design in [admin-model.md](admin-model.md).
 
 **[MEDIUM] `revoked_at` is a scalar; reinstatement and multiple revocations are undefined.**
@@ -238,7 +238,7 @@ recorded in [decisions.md](decisions.md). Three remain, all header decisions, al
 them open while citing the BCP for the one that was taken is the part that needs closing.
 
 1. **§3.1, verify `alg` and `enc` rather than reading them.** The algorithm is pinned as what the
-   controller emits. Nothing says the bridge pins it on read, which is the shape of this class of
+   Controller emits. Nothing says the Bridge pins it on read, which is the shape of this class of
    bug: a JOSE library handed a token honours the header it finds.
 2. **§3.6, no compression before encryption.** `zip` is unstated. It must be explicitly never used,
    because compressing a payload before encrypting it leaks plaintext through ciphertext length.
@@ -492,7 +492,7 @@ Under the first, telling a browser what its principal may do would violate the r
 rendering would be impossible by design. Under the second it is fine. Omission satisfies both, since
 nothing about what is withheld is ever sent, so the rendering design does not have to wait on this.
 The contradiction still stands and wants one answer: the first reason is already strained, because
-the token never reaches the principal and the holder it guards against is the bridge.
+the token never reaches the principal and the holder it guards against is the Bridge.
 
 **Arranger's side separates into three seam changes**, costed rather than scheduled: projection,
 resolver identity, and metadata shaping. The third is independent of the other two and is what makes
@@ -529,7 +529,7 @@ it.**
 The fast path's promise, that a revoked grant is never reissued, holds only if a computation cannot
 outlive the change it missed:
 
-1. Ana asks for a token, and controller instance A computes her payload from the policy as it stands.
+1. Ana asks for a token, and Controller instance A computes her payload from the policy as it stands.
 2. Her grant is revoked. Instance B commits the revocation and deletes her cached payload.
 3. Instance A finishes, and writes the payload it computed in step 1 into the cache.
 4. Every later refresh reads that payload, and reissues the revoked grant, for as long as the entry is
@@ -540,7 +540,7 @@ counter in PostgreSQL is bumped in every transaction that changes what anyone ho
 reads it in the same snapshot as the policy and stores its payload under a key carrying it, so a late
 write lands under a generation nothing reads any more. Every cache entry also expires after a set
 lifetime, so no defect elsewhere can keep one alive indefinitely. Policy writes are rare, so one
-counter serializing them costs nothing measurable, and the cache refills on demand. The bridge has
+counter serializing them costs nothing measurable, and the cache refills on demand. The Bridge has
 its own side of this race, an exchange answer overtaken by a notice, and handles it already.
 
 **[MEDIUM] A restore puts the policy generation back, so a cache keyed by it alone can match a
@@ -548,7 +548,7 @@ payload from before the restore.** The generation is a counter in the database, 
 returns it to numbers already used for different policy. After writes resume, a payload cached under
 one of those numbers before the restore matches a key read after it, and is served although the
 policy beneath it differs, until the cache lifetime ends it. The notice stream meets the same problem
-with an epoch changed whenever its history restarts. To settle before the controller's payload cache.
+with an epoch changed whenever its history restarts. To settle before the Controller's payload cache.
 
 **Proposed: the cache key carries an epoch beside the generation**, changed on every restore as the
 notice stream's is, so no entry stored before a restore can match a key read after it.
@@ -588,18 +588,18 @@ office, per jurisdiction, and for any community whose data governance agreement 
 accountability. The schema does not depend on the answer, since `audit_log` keeps `data` as JSON.
 
 **[MEDIUM] Controller instance failure produces a thundering-herd reconnection.**
-Each controller instance maintains persistent SSE/WebSocket connections to its bridge subscribers.
-If an instance goes down, all its connected bridges simultaneously lose their push connections
+Each Controller instance maintains persistent SSE/WebSocket connections to its Bridge subscribers.
+If an instance goes down, all its connected Bridges simultaneously lose their push connections
 and attempt to reconnect to surviving instances within the 60-second grace period. Surviving
 instances may not be able to absorb the connection spike in time. This is both a denial-of-service
-vector (kill one instance, cause 503 on all its bridges) and a capacity planning question (how
-many concurrent bridge connections must surviving instances handle in a worst-case failover?).
-High-availability design for the controller is listed as not yet designed; this failure mode
+vector (kill one instance, cause 503 on all its Bridges) and a capacity planning question (how
+many concurrent Bridge connections must surviving instances handle in a worst-case failover?).
+High-availability design for the Controller is listed as not yet designed; this failure mode
 should be a named requirement for that design.
 
 **The denial-of-service half is bounded by the liveness rule (2026-10-04).** Only a poll answered in
 time proves the stream is live, and the load balancer sends polls to the surviving instances, so
-killing an instance does not put its bridges into the uncertain mode. Their push connections reconnect
+killing an instance does not put its Bridges into the uncertain mode. Their push connections reconnect
 with backoff and jitter, and the notices they missed arrive by poll meanwhile. The capacity question,
 how many push connections a surviving instance must absorb, stays a named requirement of the
 high-availability design.
@@ -613,7 +613,7 @@ be described: separate database roles, separate credential paths, and a policy f
 scripts are permitted to do with the audit table.
 
 **Proposed resolution: [schema.md](schema.md)'s decision H, with the policy added.** Migrations run
-at deployment under a role and credentials of their own, and the running controller's role cannot
+at deployment under a role and credentials of their own, and the running Controller's role cannot
 alter the schema or touch the audit log beyond inserting. The policy for migrations: one may add to
 the audit table's structure, columns or indexes, and never updates, deletes or rewrites its rows,
 which review of each migration checks.
@@ -796,9 +796,9 @@ of one.
 **[schema.md](schema.md)'s decision A is this mechanism (2026-10-04).** The `revoked` row is a
 principal revocation: one row written, the grants untouched, lifted to reverse it. The exchange then
 refuses the principal with `401`, as case 33 does, and a principal notice drops their entries at every
-bridge, so a freeze takes effect within the revocation bound rather than at the end of a TTL. The row
+Bridge, so a freeze takes effect within the revocation bound rather than at the end of a TTL. The row
 read `suspended` until that word was given to a different state: a principal whose grants are held
-back by a bridge in its uncertain mode, answered `503` and resuming by itself (see the glossary). A
+back by a Bridge in its uncertain mode, answered `503` and resuming by itself (see the glossary). A
 freeze is lifted by someone rather than resumed, so it is a revocation. Still open: who may revoke and
 lift, and whether `blocked` earns a state of its own.
 
@@ -814,25 +814,25 @@ same care as a global admin grant.
 **[MEDIUM] Cross-system audit correlation for admin self-grant data access is not addressed.**
 `admin-model.md` logs self-grant creation and revocation as discrete audit events. A PHI breach
 investigation requires answering: during admin X's self-grant window, what records did they
-query? Grant events are in the controller's audit log. Data access events (if logged at all) are
+query? Grant events are in the Controller's audit log. Data access events (if logged at all) are
 in the PEP adapter's log (Arranger, Lyric). Correlating these across systems requires a shared
 identifier (a self-grant ID, or a correlation token) that links the grant audit record to
 downstream data access records. Neither the identifier nor the correlation mechanism is described.
 
 **[LOW] Valkey failure mode is not described.**
 `architecture.md` documents Valkey's two roles (shared cache and revocation pub/sub backbone)
-but does not describe failure behaviour. If Valkey is unavailable: controller instances cannot
+but does not describe failure behaviour. If Valkey is unavailable: Controller instances cannot
 coordinate push revocation events; the fast-path cache is inaccessible (falls back to full
 policy recompute). Is the system in a degraded-but-safe mode (poll-only revocation, slower
-propagation, higher controller load)? Or does Valkey unavailability trigger fail-secure across
-all bridges? The failure mode should be a named design choice, not an implicit consequence of
+propagation, higher Controller load)? Or does Valkey unavailability trigger fail-secure across
+all Bridges? The failure mode should be a named design choice, not an implicit consequence of
 implementation.
 
 **[HIGH] How Usher learns about a person's identities, and how they relate over time, is not designed.**
 The question: Usher names every person by an identity provider's subject, and learns about that
 identity only when it asks. When an account in Keycloak is created, changed, disabled or deleted, or a
 person comes to hold more than one identity, what does Usher learn, when, and what does it do about it?
-Decide it before the controller's Policy Management API is final, since several answers need an entry
+Decide it before the Controller's Policy Management API is final, since several answers need an entry
 point there.
 
 **How Usher meets a person today.** Usher stores no name or email address. A person is a row keyed by
@@ -840,9 +840,9 @@ the provider's issuer and subject, under an internal identifier that never leave
 name that internal identifier. Usher records the row the first time it meets the subject, in one of
 three ways:
 
-1. The person signs in to an application, and the bridge exchanges their sign-in token with the
-   controller.
-2. A steward adds them by address before they ever sign in. The controller asks the directory which
+1. The person signs in to an application, and the Bridge exchanges their sign-in token with the
+   Controller.
+2. A steward adds them by address before they ever sign in. The Controller asks the directory which
    account holds that verified address and records the subject it answers.
 3. No account holds the address yet. Usher keeps an invitation by address until an account holding it,
    verified, claims it.
@@ -875,8 +875,8 @@ Keycloak is lost, so it deserves an end-to-end test of its own.
 
 | Route                                                                                                                                                                                          | What it covers                                                 | What it costs                                                                                                  |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **Usher asks Keycloak**: the controller polls Keycloak's stored admin events (account deleted, disabled, updated, role mappings changed) with the credential it already uses for the directory | each change, minutes behind, with no extension to build        | admin events turned on in the realm and kept long enough to be read; read access to events for that credential |
-| **Keycloak tells Usher**: an event listener extension in Keycloak posts the same events to the controller                                                                                      | each change within seconds                                     | an extension to build, deploy and keep compatible with each Keycloak version; an event lost in transit is gone |
+| **Usher asks Keycloak**: the Controller polls Keycloak's stored admin events (account deleted, disabled, updated, role mappings changed) with the credential it already uses for the directory | each change, minutes behind, with no extension to build        | admin events turned on in the realm and kept long enough to be read; read access to events for that credential |
+| **Keycloak tells Usher**: an event listener extension in Keycloak posts the same events to the Controller                                                                                      | each change within seconds                                     | an extension to build, deploy and keep compatible with each Keycloak version; an event lost in transit is gone |
 | **Reconciliation**: a nightly check of every subject holding a live grant against the directory                                                                                                | anything the event routes missed, and deployments with neither | one directory lookup per subject per run; it finds that an account is gone, not who it was                     |
 | **An operating rule**: accounts are disabled rather than deleted, except to carry out an erasure request, which goes through Usher first                                                       | keeps every subject resolvable                                 | a rule for operators, enforced by review rather than software                                                  |
 
@@ -911,7 +911,7 @@ which is what lets the EGO import resolve a member by subject first. The directi
 retention; brokered sign-ins linked to an existing account rather than creating a second one; a
 back-channel logout address on every client whose sign-ins reach Usher, with that client's front-channel
 logout off, since Keycloak sends no back-channel logout to a client with front-channel logout on; and the
-controller's directory credential limited to looking up users and reading events.
+Controller's directory credential limited to looking up users and reading events.
 
 **To verify first, against a real Keycloak**: what it sends and records when an account is deleted or
 disabled, when an administrator signs a person out, when a portal signs a person out from its server

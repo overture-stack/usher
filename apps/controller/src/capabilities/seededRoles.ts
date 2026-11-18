@@ -32,7 +32,7 @@ const seeded = (
   });
 
 /**
- * The roles the controller seeds, as the seeded matrix gives them. In the data plane, a staircase that
+ * The roles the Controller seeds, as the seeded matrix gives them. In the data plane, a staircase that
  * nothing walks: `viewer` reads, `editor` also creates and updates, `curator` also deletes, and
  * `submitter`, off the staircase, creates and updates and reads nothing. In the control plane, a
  * checklist: `owner` administers access to one resource, and `admin` holds all of an owner's

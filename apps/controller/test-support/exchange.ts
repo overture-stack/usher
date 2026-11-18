@@ -28,7 +28,7 @@ export interface WireResponse {
 }
 
 /**
- * What one exchange sends. Every member but the application defaults to what the bridge sends; the
+ * What one exchange sends. Every member but the application defaults to what the Bridge sends; the
  * rest are for the malformed-request tests.
  */
 export interface ExchangeRequest {
@@ -38,7 +38,7 @@ export interface ExchangeRequest {
   /** A channel assertion sent in place of a fresh one; `null` sends no `authorization` header. */
   assertion?: string | null;
 
-  /** A raw body sent in place of the JSON the bridge builds. */
+  /** A raw body sent in place of the JSON the Bridge builds. */
   body?: string;
 
   /**
@@ -50,7 +50,7 @@ export interface ExchangeRequest {
   /** Members merged over the body's own, so one can also replace `credential` or `payloadVersions`. */
   extraMembers?: Readonly<Record<string, unknown>>;
 
-  /** Headers merged over the bridge's, by lower-case name; one set to `undefined` is left out. */
+  /** Headers merged over the Bridge's, by lower-case name; one set to `undefined` is left out. */
   headers?: Readonly<Record<string, string | undefined>>;
 
   /** The payload versions listed: `[1]`, the version usher-types reads, by default. */
@@ -64,7 +64,7 @@ export interface UsherTokenReadOptions {
   /** The application the token was issued for: its id is the audience, its key decrypts. */
   application: ControllerApplication;
 
-  /** The controller's issuer, which the token's `iss` must be. */
+  /** The Controller's issuer, which the token's `iss` must be. */
   issuer: string;
 
   /** The payload versions the reader accepts: `[1]` by default. */
@@ -83,7 +83,7 @@ const person = (email: string, subject: string): Person =>
  * characters needing escaping (Bo), a pair differing only in letter case (Cy and Cy2), non-ASCII text
  * beyond what OpenID Connect allows, as a hostile provider could send (Émile), and the 255 ASCII
  * characters OpenID Connect allows at most (Long). The administrator is one by the management token's
- * realm role alone; Fen is for a subject the controller has never seen, so no fixture seeds Fen.
+ * realm role alone; Fen is for a subject the Controller has never seen, so no fixture seeds Fen.
  *
  * Four more carry subjects a generic provider can issue and an encoder or a query can mishandle: a
  * quote and a backslash (`quoted`); a quote, a backslash, a line break, U+2028 and markup (`markup`);
@@ -114,7 +114,7 @@ export const PEOPLE = Object.freeze({
 /** A person's name in {@link PEOPLE}. */
 export type PersonName = keyof typeof PEOPLE;
 
-/** The system's wall clock, as the bridge's own default reads it. */
+/** The system's wall clock, as the Bridge's own default reads it. */
 export const SYSTEM_CLOCK: Clock = Object.freeze({ now: () => Date.now() });
 
 /**
@@ -140,7 +140,7 @@ export const mergedHeaders = (
   );
 
 /**
- * Signs a fresh channel assertion for an application as the bridge signs one, under the HKDF subkey
+ * Signs a fresh channel assertion for an application as the Bridge signs one, under the HKDF subkey
  * of its key, against the system's clock.
  *
  * @param application the application the assertion names as its issuer.
@@ -176,14 +176,14 @@ export const authorizationFor = async (
 };
 
 /**
- * Sends `POST exchange`, relative to the controller's URL, exactly as the bridge's controller client
+ * Sends `POST exchange`, relative to the Controller's URL, exactly as the Bridge's Controller client
  * sends it: `accept: application/jwt`, `authorization: Bearer` and a fresh channel assertion,
  * `content-type: application/json`, and the body `{ credential, payloadVersions }`, `credential`
- * left out for the anonymous exchange. A redirect is answered back rather than followed, as the bridge
+ * left out for the anonymous exchange. A redirect is answered back rather than followed, as the Bridge
  * never follows one. Follows `controllerClient.ts` `createFetchControllerClient`, its `exchange`.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
- * @param request the application, the credential and any departure from the bridge's request.
+ * @param controllerUrl the Controller's URL, ending in `/`.
+ * @param request the application, the credential and any departure from the Bridge's request.
  */
 export const exchange = async (
   controllerUrl: URL,
@@ -273,7 +273,7 @@ export interface ComparableWireRefusal {
  * #215): the same status, the same body text, and the same headers, every name compared and every
  * value but those of {@link PER_ANSWER_HEADERS}, whose names alone are compared. A header one refusal
  * carries and the other lacks tells them apart, and so does a connection header's value, since it is
- * on the wire too and a controller sets it alike for every refusal; only a value that differs between
+ * on the wire too and a Controller sets it alike for every refusal; only a value that differs between
  * any two answers by its nature is left out.
  *
  * @param answer the exchange's or the poll's answer.
@@ -292,11 +292,11 @@ export const comparableWireRefusal = (
 });
 
 /**
- * Reads an exchange's answer as the bridge reads the Usher token in it: trimmed, then through the
+ * Reads an exchange's answer as the Bridge reads the Usher token in it: trimmed, then through the
  * reproduced token reader in `bridgeWire.ts`, under the application key's token subkey.
  *
  * @param body the answer's body.
- * @param options the application, the controller's issuer, and the reader's versions and clock.
+ * @param options the application, the Controller's issuer, and the reader's versions and clock.
  */
 export const readUsherToken = async (
   body: string,
@@ -363,7 +363,7 @@ export const applicationKeyBytes = (
 ): Uint8Array => new Uint8Array(Buffer.from(application.key, 'base64url'));
 
 /**
- * Imports 32 bytes as an AES-GCM key for decryption alone, the form in which the bridge holds its
+ * Imports 32 bytes as an AES-GCM key for decryption alone, the form in which the Bridge holds its
  * token key.
  *
  * @param bytes the key's bytes.
@@ -380,7 +380,7 @@ export const decryptionKey = (
   );
 
 /**
- * Reads an exchange's answer through the bridge's token reader under a key of the test's choosing,
+ * Reads an exchange's answer through the Bridge's token reader under a key of the test's choosing,
  * such as another application's, to show a token opens under its own application's token subkey
  * alone.
  *

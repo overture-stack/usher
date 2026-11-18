@@ -18,7 +18,7 @@ export interface ExchangedSession {
  * for it, and the later of its two expiries.
  *
  * @param connection a connection in a transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param session the issuer, the `sid`, the subject and the expiry.
  * @throws whatever the store throws.
  */

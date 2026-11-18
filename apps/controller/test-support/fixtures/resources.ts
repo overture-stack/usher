@@ -302,9 +302,9 @@ export const registration = (
 /**
  * Sends registrations at once while the resources table is held, releasing it once each waits on it
  * or when the wait's deadline passes, and fails unless at least one was seen waiting. When every one
- * waits, the race is forced: each is in flight before any can commit. A controller that serializes
+ * waits, the race is forced: each is in flight before any can commit. A Controller that serializes
  * registrations in its own process leaves only one waiting, which is as correct; the race is then as
- * close as the controller allows, and no more than probable.
+ * close as the Controller allows, and no more than probable.
  *
  * @param harness the harness, whose database is held.
  * @param caller who registers.

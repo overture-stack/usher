@@ -56,7 +56,7 @@ const cipher = createApplicationKeyCipher(
   randomBytes(32).toString('base64url'),
 );
 
-// An application key, sealed as the store holds it, and its bytes, to derive what the bridge derives.
+// An application key, sealed as the store holds it, and its bytes, to derive what the Bridge derives.
 const issuedKey = (applicationId: string): { bytes: Buffer; row: KeyRow } => {
   const keyId = randomUUID();
   const bytes = randomBytes(32);
@@ -172,7 +172,7 @@ const collectingTrail = (): {
   };
 };
 
-// A clock the test moves, as a test moves the controller's configured clock.
+// A clock the test moves, as a test moves the Controller's configured clock.
 const movableClock = (): {
   clock: ApplicationKeyRingSettings['clock'];
   move: (milliseconds: number) => void;
@@ -209,7 +209,7 @@ const unreadableEvent = ({ applicationId, keyId }: KeyRow): Recorded => ({
   },
 });
 
-// The HMAC the bridge signs a channel assertion with, derived from the key's bytes as keys.ts does.
+// The HMAC the Bridge signs a channel assertion with, derived from the key's bytes as keys.ts does.
 const bridgeSignature = (bytes: Buffer, text: string): string =>
   createHmac(
     'sha256',

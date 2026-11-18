@@ -40,7 +40,7 @@ export interface DirectoryNames {
  * The names the stand-in gives an account: those it was given, `null` for one given as `null`, and
  * otherwise a given name and a family name made from its id, `Given-` and `Family-` with six hex
  * digits of the id's digest, invented and unlike any other text a test writes, so a scan of what the
- * controller stored can show that no name ever reaches the store.
+ * Controller stored can show that no name ever reaches the store.
  *
  * @param account the account.
  */
@@ -70,11 +70,11 @@ export interface DirectoryLookup {
 
 /**
  * A stand-in for the identity provider's directory (#216 Q9), lighter than a Keycloak and set per
- * test: it answers the parts of Keycloak's admin API the controller's directory reads, behind a token
+ * test: it answers the parts of Keycloak's admin API the Controller's directory reads, behind a token
  * from the client credentials grant, as a realm does.
  */
 export interface DirectoryStandIn {
-  /** The configuration fields pointing the controller's directory at the stand-in. */
+  /** The configuration fields pointing the Controller's directory at the stand-in. */
   configuration: KeycloakDirectory;
 
   /**
@@ -109,7 +109,7 @@ export interface DirectoryOptions {
   realm?: string;
 }
 
-/** The client the controller's directory signs in as, through the client credentials grant. */
+/** The client the Controller's directory signs in as, through the client credentials grant. */
 const DIRECTORY_CLIENT = 'usher-directory';
 
 const json = (status: number, body: unknown): ScriptedAnswer => ({

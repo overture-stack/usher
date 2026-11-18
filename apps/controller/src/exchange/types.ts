@@ -137,9 +137,9 @@ export interface ExchangeSettings {
   assertions: ExchangeAssertionVerifier;
 
   /**
-   * The exchange's deadline, in milliseconds: when the controller must have answered an exchange,
-   * measured from the request's arrival. It must be shorter than the bridge's timeout, how long the
-   * bridge waits for the answer, by the margin left for the network and for writing the answer.
+   * The exchange's deadline, in milliseconds: when the Controller must have answered an exchange,
+   * measured from the request's arrival. It must be shorter than the Bridge's timeout, how long the
+   * Bridge waits for the answer, by the margin left for the network and for writing the answer.
    */
   deadlineMilliseconds: number;
 
@@ -166,7 +166,7 @@ export interface ExchangeSettings {
 
   /**
    * The baseline and the signed-in rule, the clock, the schema, the identity provider's issuer, the
-   * controller's own issuer, the service-account realm role, and the token lifetime.
+   * Controller's own issuer, the service-account realm role, and the token lifetime.
    */
   settings: Pick<
     ControllerConfiguration,

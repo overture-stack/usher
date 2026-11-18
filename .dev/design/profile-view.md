@@ -26,7 +26,7 @@ order is to read theirs first and specify only what is missing.
 [decisions.md](decisions.md) § Decrypted permissions never leave the service that decrypted them.
 
 This surface cannot design around that constraint. A profile view is built from permissions, so it
-needs a server side holding a bridge, and a browser calling the controller directly cannot host it.
+needs a server side holding a Bridge, and a browser calling the Controller directly cannot host it.
 That holds even though the person could work out what the view shows from what they can already
 reach.
 
@@ -35,7 +35,7 @@ resource identifiers never shown by the rendering; the view carries a list recog
 The decision exists to prevent one mistake: sending the payload on the grounds that the rendering
 would be harmless.
 
-**What that means per application today.** Stage has a server side and can host a bridge. Portal-ui
+**What that means per application today.** Stage has a server side and can host a Bridge. Portal-ui
 is the same framework and can host one, and is simply not set up to today. So the gap between them is
 configuration rather than architecture, and the work carries across rather than being invented twice:
 Stage proves the pattern, portal-ui adopts it. Until portal-ui is set up, this surface is available
@@ -85,8 +85,8 @@ their own policy state.
 ## Open questions
 
 - **Where the read comes from.** A profile view needs the person's own permissions, and the Usher
-  token issued to a data service is addressed to that service. Either the profile's own bridge
-  performs an exchange for its own audience, or the controller grows a read endpoint for a principal's
+  token issued to a data service is addressed to that service. Either the profile's own Bridge
+  performs an exchange for its own audience, or the Controller grows a read endpoint for a principal's
   own state. The first reuses the exchange and gets audience separation at no extra cost; the other opens a
   second read path into the policy store and would need its own authorization basis.
 - **What an API token resolves to.** The current path issues one through a Keycloak plugin, which
@@ -97,12 +97,12 @@ their own policy state.
 - **Whether a rendered view is a per-application concern or a shared contract.** If both applications
   render from the same payload, the positive-only rule has to hold in both, and a rule enforced
   separately by two codebases will eventually go unenforced in one of them. A shared component, or a
-  controller-side rendering, would make it structural. The neighbouring surface has already answered
+  Controller-side rendering, would make it structural. The neighbouring surface has already answered
   this for itself: the management UI ships as a package from this repository, mounted by portals.
   That is the same argument reaching the same place, so the burden here is on showing why this
   surface differs rather than on justifying a shared component. See
   [management-ui.md](management-ui.md).
-- **What the view says when the controller is unreachable.** The open tier is still served during an
+- **What the view says when the Controller is unreachable.** The open tier is still served during an
   outage, so a person may be looking at a reduced result set elsewhere in the application. Whether
   the profile reports that state, and how, is part of the same notification question recorded in
   [security-workflow.md](security-workflow.md).
@@ -112,7 +112,7 @@ their own policy state.
 ## Prior art to read before specifying
 
 Stage's existing profile covers the API token part, and its NextAuth session handling is the closer
-model for where a bridge would sit. The convergent finding from comparing both applications, that the
+model for where a Bridge would sit. The convergent finding from comparing both applications, that the
 session-validity check is client-side in each, matters here: under Usher that check stops governing
 data access, since the data service revalidates, but it still governs what the profile shows, and a
 profile that trusts a browser-side check will show stale state after a revocation.

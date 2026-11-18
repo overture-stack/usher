@@ -59,7 +59,7 @@ import {
 const { administrators, grants, nominations } = POLICY_TABLES;
 
 // A store holding no administrator, as before the first user's nomination is accepted, its
-// controller registering no application, which only an administrator may; Bo and Cy have met Usher.
+// Controller registering no application, which only an administrator may; Bo and Cy have met Usher.
 const BEFORE_THE_FIRST: HarnessOptions = {
   applications: [],
   fixture: {

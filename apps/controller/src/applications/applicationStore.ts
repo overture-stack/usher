@@ -53,7 +53,7 @@ const subjectOf = (schema: string, person: string): string =>
  * Inserts an application, the store generating its id.
  *
  * @param connection a connection in the registration's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param application its stored display name and description, and its registration.
  * @returns the application's id.
  */
@@ -88,7 +88,7 @@ export const insertApplication = async (
  * the sealed key is bound to it.
  *
  * @param connection a connection in the issue's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param cipher the cipher the key is sealed under.
  * @param issue the application's id as the store gives it, and the key's issue.
  * @returns the key's id and its value.
@@ -132,7 +132,7 @@ export const insertKey = async (
  * counted one at a time.
  *
  * @param connection a connection in a transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param applicationId the id as sent.
  * @returns the id as the store gives it, or `undefined` when no application has it.
  */
@@ -154,7 +154,7 @@ export const lockApplication = async (
  * Counts an application's live keys: those issued and not revoked.
  *
  * @param connection a connection in a transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param applicationId the application's id.
  */
 export const countLiveKeys = async (
@@ -173,7 +173,7 @@ export const countLiveKeys = async (
  * Finds whether an application exists, as the store gives its id.
  *
  * @param connection a connection in a transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param applicationId the id as sent.
  * @returns the id as the store gives it, or `undefined` when no application has it.
  */
@@ -196,7 +196,7 @@ export const findApplication = async (
  * judged one after the other.
  *
  * @param connection a connection in a transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param key the application's id as the store gives it, and the key's as sent.
  * @returns its id as the store gives it and whether it is revoked, or `undefined` when the application
  *   holds no such key.
@@ -219,7 +219,7 @@ export const lockKey = async (
  * Revokes a key, recording who revoked it and when.
  *
  * @param connection a connection in the revocation's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param revocation the key's id, and the revocation.
  */
 export const revokeKey = async (
@@ -242,7 +242,7 @@ export const revokeKey = async (
  * subject of the identity that acted.
  *
  * @param store where it is read.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param issuer the trusted issuer, whose identity names a principal holding several.
  * @param applicationId the id as sent.
  */
@@ -284,7 +284,7 @@ export const readStoredApplication = async (
  * recording the request's refusal: an id naming neither, a malformed one among them, is left out.
  *
  * @param store where they are read.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param named the application's id as sent, and the key's, or none.
  */
 export const readNamedEntities = async (

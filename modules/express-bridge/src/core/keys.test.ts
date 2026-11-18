@@ -19,7 +19,7 @@ import {
 const KEY_BYTES = Buffer.alloc(32, 7);
 const KEY = KEY_BYTES.toString('base64url');
 
-/** The subkey a controller derives with node:crypto, which the bridge's WebCrypto derivation must match. */
+/** The subkey a Controller derives with node:crypto, which the Bridge's WebCrypto derivation must match. */
 const controllerSubkey = (label: string): Buffer =>
   Buffer.from(hkdfSync('sha256', KEY_BYTES, new Uint8Array(0), label, 32));
 

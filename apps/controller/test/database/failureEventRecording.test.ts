@@ -128,7 +128,7 @@ const watchedConnection = (
   },
 });
 
-// Runs a test's use of a pool of one connection under the controller's role, ending the pool once
+// Runs a test's use of a pool of one connection under the Controller's role, ending the pool once
 // the use has settled. The listener keeps a connection lost while idle from ending the test process.
 const withControllerPool = async <Result>(
   database: TestDatabase,
@@ -146,7 +146,7 @@ const withControllerPool = async <Result>(
   }
 };
 
-// The controller's audit trail over the pool, each connection it takes watched, and each line it
+// The Controller's audit trail over the pool, each connection it takes watched, and each line it
 // writes kept in `written`.
 const trailOver = (
   database: TestDatabase,

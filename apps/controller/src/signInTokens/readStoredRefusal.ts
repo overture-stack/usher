@@ -38,7 +38,7 @@ const standingQuery = (schema: string): string => {
  * revocation and every sign-out of its subject, and one naming no `sid` as of no session signed out.
  *
  * @param store where the revocations and sign-outs are read.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param identity the trusted issuer, the token's subject, and its session.
  */
 export const readStoredRefusal = async (

@@ -102,8 +102,8 @@ const insertPermissions = async (
  * seeded role an administrator has changed since keeps the change, and a store holding them all is
  * written nothing.
  *
- * @param client a connection under the controller's role, in the start's transaction, its actor declared.
- * @param schema the controller's schema.
+ * @param client a connection under the Controller's role, in the start's transaction, its actor declared.
+ * @param schema the Controller's schema.
  * @throws {StartRefusal} naming the database URL's variable when the store lacks some of them and the
  *   database role may not write them.
  */

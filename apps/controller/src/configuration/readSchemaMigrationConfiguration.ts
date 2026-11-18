@@ -53,10 +53,10 @@ const valueOf = <Value>(reading: Reading<Value>): Value => {
  * before any is used: a refusal lists every rule broken, each naming the variable at fault and
  * never its value. The schema migration role's URL and its password are read from variables of the
  * command's own, {@link SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES}, the URL refused when it carries a
- * password or names no database role, as the controller's is. The runtime role is the database
- * role the controller's own URL names, read and refused as the controller reads it, and nothing else
- * of that URL is kept; the controller's password is never read. The schema and the retention
- * floor's durations are read from the controller's own variables, with the controller's defaults,
+ * password or names no database role, as the Controller's is. The runtime role is the database
+ * role the Controller's own URL names, read and refused as the Controller reads it, and nothing else
+ * of that URL is kept; the Controller's password is never read. The schema and the retention
+ * floor's durations are read from the Controller's own variables, with the Controller's defaults,
  * and the floor is their sum.
  *
  * @param environment the environment variables, such as `process.env`.

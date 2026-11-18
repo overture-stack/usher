@@ -24,17 +24,17 @@ import {
   SignJWT,
 } from 'jose';
 
-// Every export below reproduces the bridge's side of the wire from its source,
+// Every export below reproduces the Bridge's side of the wire from its source,
 // under modules/express-bridge/src/core/, or modules/types/src/ for what usher-types keeps internal,
 // because those functions are not exported. Each TSDoc names the file and function it follows; a
 // change there is a change to copy here.
 
 type CryptoKey = webcrypto.CryptoKey;
 
-/** A reason the token reader rejects an Usher token, as the bridge logs it. */
+/** A reason the token reader rejects an Usher token, as the Bridge logs it. */
 export type TokenRejectionReason = BridgeEventData['token.rejection']['reason'];
 
-/** A reason the channel reader refuses a notice or a poll answer, as the bridge logs it. */
+/** A reason the channel reader refuses a notice or a poll answer, as the Bridge logs it. */
 export type MalformedReason =
   BridgeEventData['revocationChannel.malformed']['reason'];
 
@@ -57,7 +57,7 @@ export const SUBKEY_LABELS: Readonly<{
 });
 
 /**
- * The application key's subkeys as the bridge holds them after start. Follows `keys.ts`
+ * The application key's subkeys as the Bridge holds them after start. Follows `keys.ts`
  * `ApplicationKeys`.
  */
 export interface ApplicationKeys {
@@ -108,7 +108,7 @@ const hkdf = (label: string): webcrypto.HkdfParams => ({
 });
 
 /**
- * Imports an application key as the bridge does at start: once, as an HKDF-SHA256 base key from
+ * Imports an application key as the Bridge does at start: once, as an HKDF-SHA256 base key from
  * which each subkey derives under its label in {@link SUBKEY_LABELS}, with an empty salt, the token
  * key among them as AES-GCM for decryption. The application key itself decrypts and signs nothing.
  * Every key is non-extractable. Follows `keys.ts` `importApplicationKey`.
@@ -157,10 +157,10 @@ export const importApplicationKey = async (
 };
 
 /**
- * The bytes of a subkey derived from an application key as the bridge derives each: HKDF-SHA256 over
- * the key's 32 bytes with an empty salt and the subkey's label, 32 bytes long. The bridge's own keys
+ * The bytes of a subkey derived from an application key as the Bridge derives each: HKDF-SHA256 over
+ * the key's 32 bytes with an empty salt and the subkey's label, 32 bytes long. The Bridge's own keys
  * are non-extractable, so a test that must hold the bytes, to sign as the application or to read
- * under a key the bridge never builds, derives them here. Follows `keys.ts` `importApplicationKey`.
+ * under a key the Bridge never builds, derives them here. Follows `keys.ts` `importApplicationKey`.
  *
  * @param key the application key, 43 base64url characters.
  * @param label the subkey's label, from {@link SUBKEY_LABELS}.
@@ -202,7 +202,7 @@ export const CHANNEL_ASSERTION_TYPE = 'usher-channel+jwt';
 export const CHANNEL_ASSERTION_LIFETIME_S = 60;
 
 /**
- * Creates a signer of channel assertions as the bridge signs them: an HS256 JWS under the assertion
+ * Creates a signer of channel assertions as the Bridge signs them: an HS256 JWS under the assertion
  * subkey, typed `usher-channel+jwt`, issued by the application for `usher:controller`, with a fresh
  * `jti` and an `exp` 60 s after its `iat`, and no `kid`. Follows `channelAssertion.ts`
  * `createChannelAssertion`.
@@ -324,12 +324,12 @@ const readPayload = (
 };
 
 /**
- * Creates a token reader that reads an Usher token as the bridge does. Before jose reads anything,
+ * Creates a token reader that reads an Usher token as the Bridge does. Before jose reads anything,
  * `typ` must be exactly `usher+jwt` and the protected header may carry only `alg`, `enc` and `typ`.
  * `jwtDecrypt` then runs with `dir` and A256GCM alone, no decompression, every payload member
  * required, the audience and issuer pinned, and a clock tolerance of 0 against the wall clock; the
  * payload goes to usher-types' `validatePayload` when its `payloadVersion` is one listed. Every
- * failure becomes the reason code the bridge logs. Follows `tokenReader.ts` `createTokenReader`.
+ * failure becomes the reason code the Bridge logs. Follows `tokenReader.ts` `createTokenReader`.
  *
  * @param options the audience, issuer and payload versions, the token key, and the wall clock.
  */
@@ -401,7 +401,7 @@ export interface ChannelReaderOptions {
 }
 
 /**
- * The notice versions the bridge reads, listed on every push connection and every poll. Follows
+ * The notice versions the Bridge reads, listed on every push connection and every poll. Follows
  * `channelReader.ts` `NOTICE_VERSIONS`.
  */
 export const NOTICE_VERSIONS: Readonly<NonEmpty<number>> = Object.freeze([
@@ -409,7 +409,7 @@ export const NOTICE_VERSIONS: Readonly<NonEmpty<number>> = Object.freeze([
 ] as const);
 
 /**
- * The request header listing the notice versions the bridge reads, on the poll and the push alike.
+ * The request header listing the notice versions the Bridge reads, on the poll and the push alike.
  * Follows `poll.ts` `NOTICE_VERSIONS_HEADER`.
  */
 export const NOTICE_VERSIONS_HEADER = 'usher-notice-versions';
@@ -466,10 +466,10 @@ const decrypted = async (
 };
 
 /**
- * A compact JWE's plaintext as UTF-8 text, decrypted as the bridge's channel reader decrypts a notice
+ * A compact JWE's plaintext as UTF-8 text, decrypted as the Bridge's channel reader decrypts a notice
  * or a poll answer: `dir` and A256GCM alone, no decompression, the plaintext decoded as strict UTF-8.
  * No header member is checked and nothing is validated, so a test can read what was written before
- * the bridge's reader judges it. Follows `channelReader.ts` `createChannelReader`, its decryption.
+ * the Bridge's reader judges it. Follows `channelReader.ts` `createChannelReader`, its decryption.
  *
  * @param jwe the compact JWE.
  * @param key the key it should open under, such as a notice or poll-answer subkey.
@@ -488,7 +488,7 @@ export const plaintextOf = async (
 };
 
 /**
- * Creates a channel reader that reads a pushed notice or a poll answer as the bridge does: `typ`
+ * Creates a channel reader that reads a pushed notice or a poll answer as the Bridge does: `typ`
  * exactly `usher-notice+jwt` or `usher-poll+jwt` and only `alg`, `enc` and `typ` in the protected
  * header, then `compactDecrypt` under each one's own subkey with `dir` and A256GCM alone and no
  * decompression, then usher-types' `validateNotice` or `validatePollAnswer`. A notice in a version
@@ -547,7 +547,7 @@ export type EventStreamRead =
   | { kind: 'ended' }
   | { kind: 'overflow' };
 
-/** Reads a notice stream's body chunk by chunk, as the bridge's push does. */
+/** Reads a notice stream's body chunk by chunk, as the Bridge's push does. */
 export interface EventStreamReader {
   /** Cancels the body, settling once it is cancelled. */
   cancel(): Promise<void>;
@@ -560,7 +560,7 @@ export interface EventStreamReader {
 }
 
 /**
- * Creates a reader of `GET /notices/stream`'s body as the bridge's push reads it: each chunk decoded
+ * Creates a reader of `GET /notices/stream`'s body as the Bridge's push reads it: each chunk decoded
  * as streamed UTF-8 and fed to eventsource-parser with a `maxBufferSize` of
  * {@link PUSH_BUFFER_CHARACTERS}, an overflow ending the stream as malformed. Follows `push.ts`
  * `createPush`, its `read`.

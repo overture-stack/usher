@@ -52,7 +52,7 @@ What actually needs specifying is what the package asks Usher for, plus how a po
 second is small and the first has one consumer.
 
 **The package renders and does not fetch, which puts the server side on the host.** Reading a
-decrypted token is the bridge's job and the bridge cannot run in a browser, so a package that fetched
+decrypted token is the Bridge's job and the Bridge cannot run in a browser, so a package that fetched
 for itself would need a server in every host before any host could use it. One that renders from data
 it is handed works in a server-rendered portal and a browser-only one alike, with each supplying the
 data by whatever means it has. The host decrypts, because the host holds the key.
@@ -76,7 +76,7 @@ Stage rather than preferences:
   custom-properties input is for, and without it the package would need retheming exactly when
   the host has the least attention to spare.
 
-  **On the older stack the host supplies the bridge**, which is work to expect rather than to
+  **On the older stack the host supplies the Bridge**, which is work to expect rather than to
   discover: a host themed by a JS object emits those values as custom properties on a root element,
   and the package reads them without knowing which stack produced them. Small, and it belongs to the
   host because only the host knows its own theme.

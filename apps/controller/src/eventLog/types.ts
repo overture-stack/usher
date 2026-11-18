@@ -47,7 +47,7 @@ export interface EventEnvelope {
 }
 
 /**
- * The controller's log stream: one JSON object per line, each member once, an event's line holding
+ * The Controller's log stream: one JSON object per line, each member once, an event's line holding
  * its envelope and any other line operational. Every line carries the logger's numeric level in
  * `level`. Nothing written throws: a line the stream cannot take is dropped, and the log reports
  * itself unwritable from then on, since a stream that has failed a write takes nothing more.
@@ -93,7 +93,7 @@ export type Actor =
   | { type: 'anonymous' | 'system' };
 
 /**
- * Every event the controller records: the controller's rows of the Events table in
+ * Every event the Controller records: the Controller's rows of the Events table in
  * `audit-events.md`, each without the `bio.overture.` prefix its line and row carry.
  */
 export type AuditEventType =
@@ -192,7 +192,7 @@ export interface TrailConnection {
   release(destroy?: boolean): void;
 }
 
-/** Where the audit trail takes each transaction's connection from: the controller's pool. */
+/** Where the audit trail takes each transaction's connection from: the Controller's pool. */
 export interface TrailStore<Connection extends TrailConnection> {
   connect(): Promise<Connection>;
 }

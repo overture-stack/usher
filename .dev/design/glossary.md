@@ -92,9 +92,16 @@ The component that intercepts requests and enforces the access decision at the p
 access. In Overture, each application has its own PEP implemented as an adapter. The PEP does not
 decide: it enforces what the PDP computed. See [adapter-integration.md](adapter-integration.md).
 
+**Controller**
+Usher's deployed service, and the one part of Usher reachable at a network address.
+
+It holds Usher's store of applications, resources, grants and Usher's own administrators, serves
+the Management API, answers each Bridge's token exchange and serves the revocation channel. It
+lives in `apps/controller` in Usher's repository. See [architecture.md](architecture.md).
+
 **Adapter** _(PEP adapter)_
-An application-specific library that applies the bridge's **enforcement result** at its
-application's own hook. It supplies the field names its mapping uses, and the bridge renders the
+An application-specific library that applies the Bridge's **enforcement result** at its
+application's own hook. It supplies the field names its mapping uses, and the Bridge renders the
 result from them. The first is the Arranger adapter, published as
 `@overture-stack/arranger-usher-adapter`, which hands each catalogue's result to Arranger's
 server-side filter; the Lyric adapter, applying it as Lyric query conditions, follows.
@@ -107,14 +114,14 @@ the Arranger adapter.
 
 **Bridge**
 The shared library that implements the Usher protocol in applications: token exchange with the
-controller, local caching, Usher token decryption and validation, revocation channel maintenance,
+Controller, local caching, Usher token decryption and validation, revocation channel maintenance,
 and fail-secure session suspension. Every adapter builds on it. Named for the drawbridge analogy:
-open when the controller connection is healthy, raised when it is not: anything needing a granted
+open when the Controller connection is healthy, raised when it is not: anything needing a granted
 permission then answers 503, while the open tier is still served.
 
 Published as `@overture-stack/usher-express-bridge`, from `modules/express-bridge` in Usher's own
 repository, which is created when implementation begins. The package and its directory name Express
-because the first bridge serves Express applications; prose calls it the bridge.
+because the first Bridge serves Express applications; prose calls it the Bridge.
 
 **Connector**
 The part of Usher that reads an identity provider's token and finds what it needs there, such as the
@@ -148,19 +155,19 @@ round-trip to Usher. See [security-workflow.md](security-workflow.md).
 A claim embedded in every Usher token recording when Usher computed the permissions payload.
 A reissue from cache deliberately does not change it, so the gap between it and `iat` is exactly how
 long the token has been served from cache. That makes it a diagnostic and an audit correlation rather
-than an input to the fast-path refresh, whose one test is the controller's own state: the principal's
+than an input to the fast-path refresh, whose one test is the Controller's own state: the principal's
 cached payload still being present.
 
 **`PermissionsPayload`**
-The decrypted contents of an Usher token, and the single definition consumed by the controller, the
-bridge and the conformance fixtures alike. Written member by member in
+The decrypted contents of an Usher token, and the single definition consumed by the Controller, the
+Bridge and the conformance fixtures alike. Written member by member in
 [security-workflow.md](security-workflow.md#the-payload-as-a-type). "The payload" and "the decrypted
-token" name the same object. It stays inside the bridge, which reads it to render each catalogue's
+token" name the same object. It stays inside the Bridge, which reads it to render each catalogue's
 **enforcement result**; an adapter never receives it.
 
 **`payloadVersion`**
 A claim naming the schema of the rest of the payload, agreed at the exchange from the set of versions
-declared by the bridge. A bridge never receives a version it did not list, so it reads this
+declared by the Bridge. A Bridge never receives a version it did not list, so it reads this
 to select a reader rather than to decide whether to tolerate the payload. Named for the payload
 rather than as `schemaVersion`, because "schema" names Lectern's job in this ecosystem and a
 `schemaVersion` inside an authorization payload reads as the version of the data's schema.
@@ -177,7 +184,7 @@ application to the PEP adapter, which presents it to Usher's token exchange endp
 
 **JWE (JSON Web Encryption)**
 An encrypted JWT. Usher tokens use JWE, encrypted to one application's key, so that only that
-application's bridge can decrypt them and their grants stay unreadable in logs and error reports.
+application's Bridge can decrypt them and their grants stay unreadable in logs and error reports.
 Contrast with JWS (signed but readable by anyone holding the token).
 
 **JWT (JSON Web Token)**
@@ -226,8 +233,8 @@ for compliance, which is why both are written out here.
 
 **Access enforcement**
 Usher's half of the access control plane: making each grant hold in every ushered application, on
-every request, until it expires or is revoked. Usher enforces as a system. The controller keeps the
-grants and computes each person's permissions, the bridge turns them into each request's
+every request, until it expires or is revoked. Usher enforces as a system. The Controller keeps the
+grants and computes each person's permissions, the Bridge turns them into each request's
 **enforcement result**, and the adapter applies that result at its application's own hook. Every
 application's switch for it is named for this half, `ENABLE_ACCESS_ENFORCEMENT`, since approval
 happens elsewhere.
@@ -522,7 +529,7 @@ not. "Uncertainty is not permission" uses the word in its ordinary English sense
 which needs no reservation.
 
 One vocabulary, reached two ways. A **role** bundles permissions and is how access is authored; a
-**grant entry** names the ones held on one category and is how access is enforced. The controller
+**grant entry** names the ones held on one category and is how access is enforced. The Controller
 resolves the first into the second at issuance, which is why no role name reaches an adapter.
 
 **Which permissions each role carries is an open design item**, so the resolution above describes a
@@ -582,7 +589,7 @@ this resource, acts in this role. So the same person can be a curator on one cat
 another. Where the holder is a group, the role is still the grant's, and every member of that group
 reaches the records named by that grant, at that role.
 
-A role is how access is authored rather than how it is enforced, so the controller resolves it to the
+A role is how access is authored rather than how it is enforced, so the Controller resolves it to the
 permissions it carries before writing an Usher token and no role name reaches an adapter.
 
 **A grant's permissions are held per category** rather than across a resource, which is what lets
@@ -686,10 +693,10 @@ midnight fall in one rolling hour, where two fixed hours would split them into s
 ## Integration concepts
 
 **Application key** _(and the key-encryption key protecting it)_
-The symmetric key one application shares with the controller. It encrypts that application's Usher
-tokens, and every other use derives a subkey from it. The controller generates it when the
+The symmetric key one application shares with the Controller. It encrypts that application's Usher
+tokens, and every other use derives a subkey from it. The Controller generates it when the
 application is registered and shows it once, for the application's own secrets. It stores the key
-encrypted under its **key-encryption key**, the one key the controller reads from its environment,
+encrypted under its **key-encryption key**, the one key the Controller reads from its environment,
 so the database holds no application key in readable form. See [schema.md](schema.md) § Applications.
 
 **Complement**
@@ -700,20 +707,20 @@ rather than platform-wide, which is what spares Usher from naming the complement
 [decisions.md](decisions.md) § A self-scoping predicate is not an access decision.
 
 **Confirmed** _(a credential's state)_
-A credential the controller vouched for: the bridge holds a live entry for it from an exchange, or
-this request's own exchange verified it. Only then is its subject trusted, since the bridge only
-decodes a sign-in token and the controller checks its signature. The state has a lifetime: an entry
+A credential the Controller vouched for: the Bridge holds a live entry for it from an exchange, or
+this request's own exchange verified it. Only then is its subject trusted, since the Bridge only
+decodes a sign-in token and the Controller checks its signature. The state has a lifetime: an entry
 that expired, or that a notice dropped, confirms nothing, and the principal falls back to
 `unconfirmed`. A principal's `credential` names the state outright, as `none`, `unconfirmed` or
 `confirmed`, so no adapter reads one from a missing subject.
 
 **Enforcement result** _(`deny`, `narrow` or `allow`)_
-What the bridge returns to the adapter for one catalogue: `deny` with a reason, `narrow` with the
+What the Bridge returns to the adapter for one catalogue: `deny` with a reason, `narrow` with the
 filter to apply, or `allow` for a catalogue open by configuration. Each arm has its own expression
 at the application and none is an absent filter, so an omission never reads as consent. See
 [decisions.md](decisions.md) § Holding no grants is a distinct state, never an empty filter.
 
-**Exchange connections** and **control connections** _(two of a controller instance's store pools)_
+**Exchange connections** and **control connections** _(two of a Controller instance's store pools)_
 **Exchange connections** serve the token exchange alone: its own transactions, its key confirmations
 and its recordings of refused channel assertions. Each application's admission share divides them.
 **Control connections** serve everything else: the Management API, the back-channel logout, the
@@ -722,11 +729,11 @@ beside both. See [deployment.md](../../docs/deployment.md) § Connections and po
 
 **Expiry** _(of a grant, and of a token)_
 Two things end on their own, and neither is anyone's act. A **grant's expiry** is the end of the
-period it was given, its `expires_at`, after which the controller leaves it out of every token it
+period it was given, its `expires_at`, after which the Controller leaves it out of every token it
 issues: the person keeps everything else and loses what that grant gave, with no refusal. A
 **token's expiry** is the `exp` of a sign-in token or an Usher token. A sign-in token past its `exp`
 is refused like any other refused identity, with one `401`, and a portal renews it with the identity
-provider without the person seeing it. The controller caps an Usher token's `exp` at the earliest
+provider without the person seeing it. The Controller caps an Usher token's `exp` at the earliest
 `expires_at` among the grants it carries and the sign-in token's own `exp`. So a grant's expiry
 narrows access, while a token's expiry, once renewed, changes nothing the person can reach. See
 [schema.md](schema.md).
@@ -758,7 +765,7 @@ object. They come apart at the second grant: the filter becomes a union of claus
 its own predicate, and each clause is itself a conjunction of a resource test and a category test.
 
 **Grace period**
-The configurable window after a bridge's last successful check before it enters
+The configurable window after a Bridge's last successful check before it enters
 revocation-uncertain mode. Exists to tolerate brief network interruptions without immediately
 suspending all user sessions. A successful check is a poll answered within its deadline; a pushed
 notice is applied but is not one, since nothing in it shows how long it was held.
@@ -770,17 +777,17 @@ condition it matches, and the two words are kept apart because the check compare
 with what a catalogue's category mapping defines, while enforcement tests what a record carries. A
 payload names every global category Usher defines, and each named resource's own resource
 categories, held or not. See [decisions.md](decisions.md), "A catalogue's category gap is found by
-the bridge".
+the Bridge".
 
 **Open access**
-A data tier in which records require no authentication. The controller issues an anonymous grants
-token (no IdP bearer required); bridge and adapter handle it identically to an authenticated token.
+A data tier in which records require no authentication. The Controller issues an anonymous grants
+token (no IdP bearer required); Bridge and adapter handle it identically to an authenticated token.
 See [security-workflow.md § Permission computation pipeline](security-workflow.md#permission-computation-pipeline).
 
 **Request access** _(`UsherRequestAccess`)_
-One request's access as a bridge hands it to an adapter: the principal, with whether the results
+One request's access as a Bridge hands it to an adapter: the principal, with whether the results
 hold the open tier alone and whether the principal is **suspended**, and an **enforcement result** for
-each key the adapter registered. Plain data, the same from every bridge, carried in each framework's
+each key the adapter registered. Plain data, the same from every Bridge, carried in each framework's
 own per-request store under the key `usher`. See [adapter-integration.md](adapter-integration.md).
 
 **Resource field**
@@ -800,9 +807,9 @@ Both are announced on the revocation channel, so each takes effect at the next r
 when a cached token expires. See [security-workflow.md](security-workflow.md) and
 [schema.md](schema.md).
 **Revoking an application key** concerns an application rather than a person. It sets the key's
-`revoked_at`, and every controller instance then refuses exchanges made with it, once Valkey wakes it
+`revoked_at`, and every Controller instance then refuses exchanges made with it, once Valkey wakes it
 or within 30 seconds. It is not announced on the revocation channel, so Usher tokens already issued
-under the key stay readable to that application's bridges until they expire. See
+under the key stay readable to that application's Bridges until they expire. See
 [schema.md](schema.md) § Applications.
 
 **Disambiguation note:** A data request never says which of these happened. Every refused identity,
@@ -813,14 +820,14 @@ person for a grant's expiry or revocation. Telling a person which of their own g
 is the [profile view](profile-view.md)'s job.
 
 **Revocation channel**
-The notice stream from the controller to each bridge: one sequence of positions carrying every kind
+The notice stream from the Controller to each bridge: one sequence of positions carrying every kind
 of notice, a principal's revocation, a category change, the baseline change, a global revocation and
 a sign-out. Two ways to read it: push (SSE or WebSocket, positions as event ids), for speed, and a
 poll for the notices after a position, which recovers what push missed and is the only liveness
 check. Bridges maintain both.
 
 **Revocation-uncertain mode**
-A bridge's state when no poll has been answered within its deadline for longer than the grace
+A Bridge's state when no poll has been answered within its deadline for longer than the grace
 period. Every
 signed-in principal is **suspended**: requests are rendered from the last anonymous payload, so the
 open tier, which needs no grant, is still served, while anything only a grant could answer returns
@@ -837,12 +844,12 @@ and those compose with `or`, so a record matching no predicate is simply never r
 subtracted and no exclusion is computed.
 
 **SQON (Structured Query Object Notation)** _(Arranger-specific)_
-Arranger's filter expression format, and the wire format emitted by the bridge. The bridge builds the
+Arranger's filter expression format, and the wire format emitted by the Bridge. The Bridge builds the
 predicate and the Arranger adapter compiles it into Arranger's query, supplying the field name for
 the catalogue being queried, since which field names a resource differs between catalogues.
 
 **Suspended** _(a principal's state)_
-A signed-in principal whose grants are on hold, because the bridge is in its revocation-uncertain
+A signed-in principal whose grants are on hold, because the Bridge is in its revocation-uncertain
 mode or this principal's exchange failed while the notice stream is healthy. Distinct from holding
 only open data: a suspended principal's export, or a fetch only a grant could answer, returns 503
 rather than a reduced answer. A principal presenting no credential is never suspended, and one whose
@@ -877,7 +884,7 @@ This table is the index. A term whose collision needs more than a row is expande
 | group                     | Keycloak                  | a collection of users in a realm                                                  | a separate entity. A Keycloak group may be mapped onto an Usher group; the two stay distinct                                                                    |
 | role                      | Keycloak                  | a realm or client role, held in the IdP                                           | a separate entity. Usher's roles (`viewer`, `owner`) are named on `grants` rows in Usher's own store, and Keycloak's are coarse assignments it keeps for itself |
 | scope                     | OAuth 2.0                 | a string limiting what a token permits                                            | **nothing.** What a grant permits is carried as permissions per category                                                                                        |
-| authorization server      | OAuth 2.0                 | the component that authenticates a person and issues them an access token         | **Keycloak.** Usher's controller decides what an already-authenticated principal may reach, and issues tokens to applications                                   |
+| authorization server      | OAuth 2.0                 | the component that authenticates a person and issues them an access token         | **Keycloak.** Usher's Controller decides what an already-authenticated principal may reach, and issues tokens to applications                                   |
 | audience, `aud`           | OAuth 2.0 Token Exchange  | the service a token is issued for                                                 | the same, unchanged                                                                                                                                             |
 | subject, resource, action | XACML                     | three of the four request categories                                              | subject becomes principal; resource is unchanged; action becomes permission                                                                                     |
 | PDP, PAP, PEP             | XACML                     | decision, administration and enforcement points                                   | the same, and used as-is                                                                                                                                        |
@@ -967,17 +974,17 @@ it serves. What differs between instances is configuration rather than code, whi
 defined per instance's configuration rather than by Usher itself. In Usher's own documents this is
 the default reading and needs no qualifier.
 
-**Qualified, it names a running process.** A controller instance can go down and take its connected
-bridges' push connections with it; a configured Usher, not being a process, cannot. So a
+**Qualified, it names a running process.** A Controller instance can go down and take its connected
+Bridges' push connections with it; a configured Usher, not being a process, cannot. So a
 sentence about a process names the component it is an instance of.
 
-**A bridge needs no qualifier either way.** There is one per application process already, so "each
-bridge" and "per bridge" say what "bridge instance" was reaching for.
+**A Bridge needs no qualifier either way.** There is one per application process already, so "each
+Bridge" and "per Bridge" say what "Bridge instance" was reaching for.
 
 ### Migration and import
 
 **A migration** changes the policy store's structure. Each is one of the numbered SQL files carried
-by a controller release, applied before a rollout by the migration command, `dist/migrate.js`,
+by a Controller release, applied before a rollout by the migration command, `dist/migrate.js`,
 connected as the schema migration role, which owns the schema. Its settings are named for it, as
 `USHER_SCHEMA_MIGRATION_DATABASE_URL` is. "Schema migration" says the same where a reader could take
 the bare word in its everyday sense.
@@ -1014,7 +1021,7 @@ assignments for itself, and Usher reads exactly one of them: the claim that mark
 administrator.
 
 **Here:** a role is named on a `grants` row, `viewer` or `owner`, living in Usher's own store. The
-controller resolves it to permissions before writing an Usher token, so no role name ever reaches an
+Controller resolves it to permissions before writing an Usher token, so no role name ever reaches an
 adapter. The two are unrelated beyond sharing a word.
 
 ### Subject

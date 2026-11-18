@@ -25,7 +25,7 @@ interface Received {
 
 type Handler = (request: IncomingMessage, response: ServerResponse) => void;
 
-/** Runs the exchange against a scripted controller on 127.0.0.1, recording what it received. */
+/** Runs the exchange against a scripted Controller on 127.0.0.1, recording what it received. */
 const exchangingWith = async (
   handler: Handler,
   run: (controllerUrl: URL, received: Received[]) => Promise<ExchangeAnswer>,
@@ -78,7 +78,7 @@ const answering =
   };
 
 /**
- * A refusal of the exchange as the controller sends it: its problem details as JSON, `no-store`, and
+ * A refusal of the exchange as the Controller sends it: its problem details as JSON, `no-store`, and
  * `Retry-After` when the refusal names a time to wait.
  */
 const controllerRefusal = (

@@ -41,7 +41,7 @@ const APPLICATION = Object.freeze({
 
 const ISSUER = 'https://usher.example.org';
 
-// A poll's answer, sealed under the application's poll-answer subkey as the controller seals one,
+// A poll's answer, sealed under the application's poll-answer subkey as the Controller seals one,
 // echoing the request's own cursor and nonce.
 const pollAnswer = async (
   request: RecordedRequest,
@@ -64,7 +64,7 @@ const pollAnswer = async (
     .encrypt(subkeyBytes(APPLICATION.key, SUBKEY_LABELS.pollAnswer));
 };
 
-// A stand-in for the controller answering each poll by the cursor it asks after, each check from
+// A stand-in for the Controller answering each poll by the cursor it asks after, each check from
 // c-1 two pages long, and every other request 503.
 const pagedController = (request: RecordedRequest): ScriptedAnswer => {
   const url = new URL(request.target, 'http://127.0.0.1');

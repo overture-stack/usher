@@ -38,7 +38,7 @@ A pin of `main` follows the newest commit instead, and a clone then reads its wo
 - **Deny by default:** a role sets the ceiling of what a principal may do on a resource's records, and reaches nothing without a grant naming the categories it applies to; the absence of a grant is a denial.
 - **One word, one meaning:** a defined term keeps its one sense in every Usher text, code and identifiers included. Before naming anything, or writing a doc, comment, identifier or UI string, check the glossary and read `.dev/docs/atlas/roadmap/terminology-usage.md` in full: its reserved senses, its retired terms, and its rule that a term of art is either defined or not used.
 - **Migrations are forward-only:** a released schema migration is never edited; a change ships as a new migration.
-- **No telemetry the project did not add on purpose:** nothing in Usher, its packages or its controller image sends usage data anywhere. A dependency carrying telemetry is removed with a pnpm override whose comment names it and says why.
+- **No telemetry the project did not add on purpose:** nothing in Usher, its packages or its Controller image sends usage data anywhere. A dependency carrying telemetry is removed with a pnpm override whose comment names it and says why.
 
 ## When to read what in this project
 
@@ -49,7 +49,7 @@ A pin of `main` follows the newest commit instead, and a clone then reads its wo
 - Adding an audit event -> read `.dev/design/audit-events.md` § The envelope and § The shape of a type
 - Writing tests, mocks or fixtures -> read `.dev/docs/phase-1.md` § Conformance corpus, then run `python3 .dev/check-fixtures.py`
 - Adding a setting -> read `.dev/design/architecture.md` § Controller
-- Writing controller code -> read `.dev/docs/atlas/roadmap/technology-stack.md` § Architectural constraint: framework is a delivery mechanism only
+- Writing Controller code -> read `.dev/docs/atlas/roadmap/technology-stack.md` § Architectural constraint: framework is a delivery mechanism only
 - Writing a schema migration -> read `.dev/design/schema.md` § The data access layer
 - Adding a dependency -> read `.dev/docs/atlas/roadmap/technology-stack.md` § Decided: toolchain for this repository, then run `pnpm check:pack`
 

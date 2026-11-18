@@ -126,7 +126,7 @@ getting it wrong fails silently in one direction and loudly in the other.
 
 Categories are independent axes: holding a grant for one category does not imply holding a grant
 for another, even within the same resource. What a category name means in terms of actual records
-or fields is instance configuration that lives in the enforcement adapter, not in the controller.
+or fields is instance configuration that lives in the enforcement adapter, not in the Controller.
 
 ### Category grants
 
@@ -153,7 +153,7 @@ Local administrators can revoke an externally-originated grant. Local policy can
 access downward; it cannot grant access not covered by a Visa. The `granted_by` column records the
 origin (internal admin ID or external Visa issuer identifier) for auditability.
 
-**Grant expiry.** The `expires_at` field supports time-limited grants. The controller resolves
+**Grant expiry.** The `expires_at` field supports time-limited grants. The Controller resolves
 expiry when it computes a permissions payload, so a lapsed grant is absent from the next token rather
 than revoked, and the token is issued to expire with the first grant on it to lapse, so it stops
 being honoured when that grant lapses. No revocation event is emitted and nothing
@@ -702,7 +702,7 @@ acting on one becomes an action on whichever entity it joins.
 says whoever governs the category decides which resources carry it. `resource.associateCategory`
 says the resource's owner decides. Those are different answers, and choosing a name quietly chooses
 one, so it waits on custodian scoping. What does not wait: the act emits no audit event today, and
-it is the write that changes what every principal reaches and clears the controller's payload cache.
+it is the write that changes what every principal reaches and clears the Controller's payload cache.
 An event is owed whichever side wins.
 
 ## Entity schema
@@ -874,7 +874,7 @@ the grant records the granter's decision, and a decision row records a grantee's
 Bo rejecting the same grant is an ordinary outcome, and neither touches the grant. Revocation
 therefore acts in one place rather than requiring every path to be found and closed separately.
 
-**`capabilities` is a vocabulary rather than policy, and it lives in controller configuration.** Usher
+**`capabilities` is a vocabulary rather than policy, and it lives in Controller configuration.** Usher
 needs it only so that a permission can name a capability and a management interface can offer the
 right choices. Configuration rather than registration, because a service's capability set changes
 when the service is released rather than at runtime, and a release is already a reviewed change.
@@ -965,7 +965,7 @@ than their omission reading as oversight:
 - `audit_log`. Its events and common fields are listed in
   [audit-events.md](audit-events.md), and the open question is retention against erasure rather
   than shape.
-- **A category version on `resources`.** A change to a resource's categories clears the controller's
+- **A category version on `resources`.** A change to a resource's categories clears the Controller's
   payload cache instead, so nothing counts those changes; a per-principal last-policy-change
   timestamp was rejected earlier because a principal-scoped marker cannot see a resource gaining a
   category. See the fast-path decision in [decisions.md](decisions.md).
@@ -980,7 +980,7 @@ records, and never a description of the whole resource. Its unmarked records sit
 registered or by grant, and each of the resource's categories adds a restriction on top of it: a
 resource with base tier open can hold controlled records that need a grant of their own. Each
 registration names it; the platform holds no default. What the open and registered tiers grant,
-`read` unless narrowed, is the controller's runtime configuration and is stored nowhere.
+`read` unless narrowed, is the Controller's runtime configuration and is stored nowhere.
 `suppressed` hides the resource from results without touching any grant, set by `resource.suppress`
 and cleared by `resource.restore`.
 
@@ -1468,9 +1468,9 @@ categories using the same model that governs record-level access. A user's categ
 determine which fields they can see. A user who holds the `indigenous_data` grant sees fields tagged
 `indigenous_data`; without it, those fields are absent.
 
-**The tagging lives in adapter configuration, not in the controller.** An earlier sketch put it in a
+**The tagging lives in adapter configuration, not in the Controller.** An earlier sketch put it in a
 `field_categories(field_name, category_id)` table here, which would have contradicted the principle
-outright: the controller never learns a field name, and the resource field mapping already lives in adapter
+outright: the Controller never learns a field name, and the resource field mapping already lives in adapter
 config for exactly that reason. Column tagging belongs beside it. That deletes a table rather than
 adding one.
 
@@ -1493,7 +1493,7 @@ this design that exceeds what the seam can express. Established against the firs
 interface rather than inferred.
 
 **That relocates the work and raises its cost.** It is not a mapping added beside the resource field
-mapping; it is a second return channel from the bridge to the adapter, or a widened one, carrying what
+mapping; it is a second return channel from the Bridge to the adapter, or a widened one, carrying what
 to project alongside what to select. Anything that assumed field restriction was configuration should
 be read again with that in mind.
 
@@ -2003,12 +2003,12 @@ corresponding grants.
 specific subset of their category (e.g. "indigenous records from community X only"), a grant can
 optionally carry a SQON filter expression that further narrows the records it covers within the
 category. This is a data model extension (an optional `sqon` field on `grants`); it
-requires SQON evaluation permission in the bridge and is deferred to post-MVP.
+requires SQON evaluation permission in the Bridge and is deferred to post-MVP.
 
 ### Role permissions
 
 **Resolved.** A role carries a named set of permissions, and `role_permissions` records which.
-The permissions themselves divide by plane, which decides who enforces them: the controller checks
+The permissions themselves divide by plane, which decides who enforces them: the Controller checks
 a control-plane permission on an admin call, and an adapter checks a data-plane one before a query
 runs. The vocabulary and the roles at each plane are in
 [../docs/atlas/roadmap/rabac-alignment.md](../docs/atlas/roadmap/rabac-alignment.md).
@@ -2130,7 +2130,7 @@ This is a token schema change that must be coordinated with the change of identi
 
 **Current state (iMS submission service).** Read authorization is not implemented: GET requests
 bypass auth middleware entirely, `allowedReadOrganizations` is hardcoded empty, and read
-controllers have no per-organization check. This is a confirmed implementation gap, not a
+Controllers have no per-organization check. This is a confirmed implementation gap, not a
 deliberate design choice. References:
 [submission-service tech-debt](https://github.com/imicroseq/submission-service/blob/a7b6439aa420801939ab6190c75ff6de1ad6d8f9/.dev/tech-debt.md#L27-L29);
 [ego-integration-current-state.md](https://github.com/imicroseq/submission-service/blob/main/.dev/docs/auth/ego-integration-current-state.md).

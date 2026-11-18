@@ -108,7 +108,7 @@ export const B2_OWN_CATEGORY = 'resource.internal';
 /** The signing-key cache's refetch cooldown (#208 Q5), in milliseconds. */
 export const KEY_REFETCH_COOLDOWN_MS = 30_000;
 
-/** A clock a test moves forward, configured as the controller's own (#209 Q2). */
+/** A clock a test moves forward, configured as the Controller's own (#209 Q2). */
 export interface AdjustableClock {
   /** Moves the clock forward. */
   advance(milliseconds: number): void;
@@ -254,7 +254,7 @@ export const atOffset = (instant: Date, offsetMinutes: number): string => {
 
 /**
  * The harness's default applications, by label, serving nothing, since serving is not #212's: the
- * harness registers them through the API once its controller listens.
+ * harness registers them through the API once its Controller listens.
  */
 export const APPLICATIONS: Readonly<Record<string, FixtureApplication>> =
   Object.freeze({
@@ -695,7 +695,7 @@ export const rowCounts = async (harness: Harness): Promise<RowCounts> => {
 /**
  * Sends the same request several times at once with the grants table held, waits until every one of
  * them waits on it, then lets them go together: a race forced at the store, never hoped for. Assumes
- * the controller's pool admits that many requests at once.
+ * the Controller's pool admits that many requests at once.
  *
  * @param harness the harness.
  * @param count how many requests.
@@ -729,7 +729,7 @@ export const racedAtTheGrantsTable = async <Answer>(
 
 /**
  * Takes a capability from a role by SQL under the system actor, in a transaction of its own: what the
- * role confers changes with no write path of the controller's.
+ * role confers changes with no write path of the Controller's.
  *
  * @param harness the harness.
  * @param role the role's name.
@@ -830,7 +830,7 @@ export interface SignedIn {
 
 /** What a test in the address suite works with. */
 export interface AddressSession {
-  /** A caller holding a token, at the controller as it runs now. */
+  /** A caller holding a token, at the Controller as it runs now. */
   caller(signedIn: SignedIn): AdminCaller;
 
   harness: Harness;
@@ -845,7 +845,7 @@ export interface AddressSession {
 }
 
 /**
- * The client whose service account the controller's directory reads users through.
+ * The client whose service account the Controller's directory reads users through.
  *
  * @param options the realm.
  */
@@ -878,12 +878,12 @@ const signedInThrough = async (
 
 /**
  * Runs a test of the address suite: a harness whose database is cloned first, so a test fails with
- * the seam's message before any Keycloak starts; then the shared realm; the controller started
+ * the seam's message before any Keycloak starts; then the shared realm; the Controller started
  * trusting the realm's issuer and reading its directory; and the fixture seeded under the realm's
  * issuer: STUDY-A1 and STUDY-B2 at the `grant` tier, STUDY-C3 open, and Ana's accepted owner grant on
  * STUDY-A1 under the subject her own tokens carry. The harness holds no application: the suite
  * exchanges through none, and the harness registers applications under a token minted by the
- * stand-in, which a controller trusting the realm refuses. Stops the harness whether or not the work
+ * stand-in, which a Controller trusting the realm refuses. Stops the harness whether or not the work
  * succeeded.
  *
  * @param realm the shared realm.

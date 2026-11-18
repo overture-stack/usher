@@ -13,7 +13,7 @@ type MalformedReason = BridgeEventData['revocationChannel.malformed']['reason'];
 type ChannelFailureCause =
   BridgeEventData['revocationChannel.failure']['cause'];
 
-/** The request header carrying {@link NOTICE_VERSIONS} to the controller. */
+/** The request header carrying {@link NOTICE_VERSIONS} to the Controller. */
 export const NOTICE_VERSIONS_HEADER = 'usher-notice-versions';
 
 /** What an answer from head echoes in place of the cursor it continued from. */
@@ -35,13 +35,13 @@ export interface PollSink {
 
   /**
    * A check failed: `status` for an answer other than 200, 406 or 410, `network` for a request that
-   * could not reach the controller, `timeout` for a check aborted at the deadline, and `defect` for a
+   * could not reach the Controller, `timeout` for a check aborted at the deadline, and `defect` for a
    * throw while signing, reading or applying a page. A malformed answer is no failure, and a check
    * abandoned by a stop or a forget reports none.
    */
   failed(cause: ChannelFailureCause): void;
 
-  /** The controller answered 410: history does not reach the poll position, which has been dropped. */
+  /** The Controller answered 410: history does not reach the poll position, which has been dropped. */
   reset(): void;
 }
 
@@ -50,7 +50,7 @@ export interface PollOptions {
   /** Signs a fresh channel assertion on each call. */
   assertion: () => Promise<string>;
 
-  /** The controller's base URL, ending in `/`. */
+  /** The Controller's base URL, ending in `/`. */
   controllerUrl: URL;
 
   /** How long a check may run, from its first page's start, before it is aborted. */
@@ -141,7 +141,7 @@ const query = (after: string | undefined, nonce: string): string =>
   ).toString();
 
 /**
- * Creates the poll, which asks the controller's `notices` endpoint for every notice after its poll
+ * Creates the poll, which asks the Controller's `notices` endpoint for every notice after its poll
  * position, or for head explicitly while it holds none. Its timers are unreferenced.
  *
  * - Each page sends a fresh nonce and channel assertion and lists {@link NOTICE_VERSIONS}. Its answer

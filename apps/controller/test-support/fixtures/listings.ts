@@ -35,7 +35,7 @@ export const APPLICATION = 'arranger-test';
 /** The client the realm's management tokens are issued to, the harness's first management client. */
 export const MANAGEMENT_CLIENT = 'usher-ui-test';
 
-/** The realm client whose service account the controller's directory reads people through. */
+/** The realm client whose service account the Controller's directory reads people through. */
 export const DIRECTORY_CLIENT = 'usher-directory';
 
 /** The main world's studies, by externalId. */
@@ -183,7 +183,7 @@ export const listingRealmOptions = (): KeycloakRealmOptions => {
 
 /** A Keycloak holding the listing cast, each member's subject learned from it. */
 export interface ListingRealm {
-  /** The configuration fields pointing a controller's directory at the realm. */
+  /** The configuration fields pointing a Controller's directory at the realm. */
   directory: KeycloakDirectory;
 
   keycloak: KeycloakRealm;
@@ -725,7 +725,7 @@ export const untilInThePast = async (
   throw new Error(`the stored times are not ${spanMs} ms in the past`);
 };
 
-/** One controller seeded with a listing policy, the realm issuing its tokens and holding its directory. */
+/** One Controller seeded with a listing policy, the realm issuing its tokens and holding its directory. */
 export interface ListingWorld {
   /** A cast member as a caller of the Policy Management API, with a fresh token from the realm. */
   caller(name: CastName): Promise<AdminCaller>;
@@ -747,9 +747,9 @@ export interface ListingWorldOptions {
 }
 
 /**
- * Starts a controller trusting the realm as its identity provider and reading people through its
+ * Starts a Controller trusting the realm as its identity provider and reading people through its
  * directory client, seeded with a policy, and defers its stop. The harness registers its application
- * as the realm's own administrator ({@link realmAdministrator}), a principal the controller trusts.
+ * as the realm's own administrator ({@link realmAdministrator}), a principal the Controller trusts.
  *
  * @param scope the cleanup stopping it.
  * @param realm the realm.
@@ -815,12 +815,12 @@ export const suiteWorld = (
 };
 
 /**
- * Starts a controller on the identity provider stand-in's issuer whose directory still reads the
+ * Starts a Controller on the identity provider stand-in's issuer whose directory still reads the
  * realm, for the tests needing a token the stand-in signs normally with a claim no real sign-in
  * gives, such as an `exp` already past, and defers its stop.
  *
  * @param scope the cleanup stopping it.
- * @param realm the realm whose directory the controller reads.
+ * @param realm the realm whose directory the Controller reads.
  * @param fixture the policy, under the stand-in's issuer.
  * @param configuration fields over the configuration, such as a log stream the test reads.
  */

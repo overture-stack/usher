@@ -4,7 +4,7 @@ import type { Clock } from '../configuration/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
 
 /**
- * Why an assertion the controller could not verify was refused. One costs nothing to send, so it is
+ * Why an assertion the Controller could not verify was refused. One costs nothing to send, so it is
  * counted, as `channelAssertion.rejectionTally`, rather than recorded one by one.
  */
 export type UnverifiedRejectionReason =
@@ -49,7 +49,7 @@ export interface LiveKeys<Key extends AssertionKey> {
   liveKeysOf(applicationId: string): readonly Key[] | undefined;
 }
 
-/** A channel assertion the controller accepted. */
+/** A channel assertion the Controller accepted. */
 export interface VerifiedAssertion<Key> {
   /** The last instant it is accepted at, in milliseconds since the Unix epoch: its `exp` and the clock tolerance. */
   acceptedUntil: number;

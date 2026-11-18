@@ -66,11 +66,11 @@ Usher is Overture's [authorization](concepts.md#authentication-vs-authorization)
 
 **Grants** are explicit records: this holder acts in this role, on this category, within this resource. Usher enforces deny-by-default. No grant means no access, always.
 
-**[The Usher token](concepts.md#usher-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It carries, for each resource where the user holds a grant, the categories granted there and what they may do with each. A shared library called the bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The adapter then applies that decision before any query reaches the data layer. The token never reaches the user.
+**[The Usher token](concepts.md#usher-tokens)** is Usher's encrypted answer to the question "what can this user see or do?" It carries, for each resource where the user holds a grant, the categories granted there and what they may do with each. A shared library called the Bridge, running inside that application, decrypts it and decides one of three things: deny the request, narrow it with a filter, or allow it unrestricted. The adapter then applies that decision before any query reaches the data layer. The token never reaches the user.
 
-**The revocation channel** keeps a live connection open so Usher can announce a grant change immediately, with regular polling as a fallback if that connection drops. Each bridge subscribes to it.
+**The revocation channel** keeps a live connection open so Usher can announce a grant change immediately, with regular polling as a fallback if that connection drops. Each Bridge subscribes to it.
 
-If the channel goes quiet for longer than a configurable grace period, the bridge stops serving data and reports itself unavailable until the connection returns. That is deliberate: an attacker who silences the channel gains nothing, because silence denies access rather than preserving it.
+If the channel goes quiet for longer than a configurable grace period, the Bridge stops serving data and reports itself unavailable until the connection returns. That is deliberate: an attacker who silences the channel gains nothing, because silence denies access rather than preserving it.
 
 **Usher does not touch the underlying data.** It does not write to the data store, run data rewrites, or modify records. Access policy is applied at query time by the adapter. An instance can adopt Usher without touching the data it protects, and removing it leaves no data artifacts behind.
 
@@ -104,9 +104,9 @@ PDP/PEP/PAP) before Usher-specific vocabulary.
 - [Security model](https://github.com/overture-stack/usher/blob/main/.dev/design/security-threat-model.md): OWASP Top 10 mapping and security design decisions
 - [Glossary](https://github.com/overture-stack/usher/blob/main/.dev/design/glossary.md): quick-reference definitions
 
-**Deploying the controller** (operator)
+**Deploying the Controller** (operator)
 
-- [Deploying the controller](deployment.md): every variable it reads, its two database roles, the
+- [Deploying the Controller](deployment.md): every variable it reads, its two database roles, the
   schema migration before each rollout, readiness and liveness, and the identity provider's
   requirements
 

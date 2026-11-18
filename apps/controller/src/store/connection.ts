@@ -4,7 +4,7 @@ import { parseIntoClientConfig } from 'pg-connection-string';
 import type { StoreConnectionSettings, StoreLog } from './types.js';
 
 /**
- * How the controller connects to its store: the connection URL's settings, with the password from
+ * How the Controller connects to its store: the connection URL's settings, with the password from
  * its own variable and the store timeout's limits over them. The URL is parsed rather than handed to
  * the driver whole, since the driver lets a URL's own settings, its empty password included, override
  * any given beside it. The store timeout limits how long the pool waits to hand out a connection, and,
@@ -38,7 +38,7 @@ const failureOf = (error: Error): Readonly<Record<string, string>> => {
 };
 
 /**
- * Opens one of the controller's pools of store connections, holding at most the connections given and
+ * Opens one of the Controller's pools of store connections, holding at most the connections given and
  * connecting none until a query needs one, each connection limited as {@link storeConnection} gives,
  * so every pool carries the same limits. An idle connection lost, as when the store restarts, is
  * written to the log at error as {@link IDLE_CONNECTION_LOST}, naming the failure by its code where it

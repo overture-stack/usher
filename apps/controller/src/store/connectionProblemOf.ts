@@ -2,7 +2,7 @@ import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
 import type { StartProblem } from '../failures/index.js';
 import type { ConnectionVariables } from './types.js';
 
-// The controller's own: its runtime role's URL and password.
+// The Controller's own: its runtime role's URL and password.
 const CONTROLLER_CONNECTION: ConnectionVariables = {
   passwordVariable: ENVIRONMENT_VARIABLES.databasePassword,
   urlVariable: ENVIRONMENT_VARIABLES.databaseUrl,
@@ -64,7 +64,7 @@ const connectionProblems = ({
  * the failure's code, naming the variable at fault and never its value; none for any other failure.
  *
  * @param failure what the start or the run met.
- * @param variables the variables the connection was read from: the controller's own by default.
+ * @param variables the variables the connection was read from: the Controller's own by default.
  */
 export const connectionProblemOf = (
   failure: unknown,

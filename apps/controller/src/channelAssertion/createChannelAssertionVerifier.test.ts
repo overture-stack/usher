@@ -59,7 +59,7 @@ const verifierFor = (
     },
   });
 
-// An assertion signed as the bridge signs one, HS256 under the channel-assertion subkey of the key's
+// An assertion signed as the Bridge signs one, HS256 under the channel-assertion subkey of the key's
 // own bytes, with a test's departures in its claims or its `typ`.
 const signedBy = (
   keyBytes: Buffer,

@@ -7,7 +7,7 @@ export const BODY_LIMIT_BYTES = 65_536;
 
 /**
  * The refusals the back-channel logout route answers, each naming the rule broken or the cause, and no
- * value sent. Every one answers `400`, a body too large and a failure of the controller's included, as
+ * value sent. Every one answers `400`, a body too large and a failure of the Controller's included, as
  * OpenID Connect Back-Channel Logout 1.0 §2.8 has a logout that failed answered, so its code alone
  * tells the identity provider why.
  */

@@ -82,7 +82,7 @@ const UNCAUGHT_FAILED: Readonly<Record<BuiltEntry, string>> = {
   migrate: 'the schema migration command failed',
 };
 
-// The run's global setup builds the controller once, with its committed configuration, into a folder
+// The run's global setup builds the Controller once, with its committed configuration, into a folder
 // of the run's own, which every test of a built entry reads.
 suite("the controller's build", () => {
   test('gives a main entry that runs under Node alone and refuses an empty environment as the source does', async () => {

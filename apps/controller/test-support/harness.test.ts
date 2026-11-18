@@ -73,8 +73,8 @@ const isCanonicalKey = (key: string): boolean =>
   /^[\w-]{43}$/u.test(key) &&
   Buffer.from(key, 'base64url').toString('base64url') === key;
 
-// A stand-in migration building only the schema, which the controller's runtime role may not use, so
-// the controller refuses its start once the harness is past its database.
+// A stand-in migration building only the schema, which the Controller's runtime role may not use, so
+// the Controller refuses its start once the harness is past its database.
 const schemaOnly: DatabaseTemplate = {
   migrate: async ({ databaseUrl, schema }) => {
     const postgres = new pg.Client({ connectionString: databaseUrl });
@@ -89,7 +89,7 @@ const schemaOnly: DatabaseTemplate = {
   schema: USHER_SCHEMA,
 };
 
-// What a start the controller refuses rejects with: its refusal, naming the variable at fault.
+// What a start the Controller refuses rejects with: its refusal, naming the variable at fault.
 const refusalNaming = (variable: string): { message: RegExp } => ({
   message: new RegExp(`\\b${variable}\\b`, 'u'),
 });

@@ -31,7 +31,7 @@ const codeOf = (failure: unknown): unknown =>
  * meeting the same identity commits first, this one finds the person it recorded instead.
  *
  * @param connection a connection in a transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param identity the issuer and subject.
  * @param recordedAt when the person is met, for a first meeting.
  * @returns the person's `users.id`, which never leaves the store.

@@ -18,7 +18,7 @@ provider (Keycloak, Microsoft Entra ID, or any OIDC-compatible provider).
 ## The specification
 
 The design documents in `.dev/design/` are the primary specification, and the packages under
-`modules/`, usher-types and the Express bridge, implement it.
+`modules/`, usher-types and the Express Bridge, implement it.
 
 ## Repository structure
 

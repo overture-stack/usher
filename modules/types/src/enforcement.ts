@@ -29,7 +29,7 @@ import {
 } from './sqonPrimitives.js';
 
 /**
- * The bridge's decision for one key registered by the adapter, one of three kinds in order of
+ * The Bridge's decision for one key registered by the adapter, one of three kinds in order of
  * increasing reach:
  * - `deny`: the data layer is not queried for the key, and `reason` says why;
  * - `narrow`: the data layer is queried under `sqon`, which never holds an empty group, an
@@ -40,7 +40,7 @@ import {
  * - `filter-limit`: the principal's grants are more than can be expressed by this catalogue's
  *   filter, not a rule broken by the principal;
  * - `no-grants`: the principal holds no grants, a case that is always a `deny`, never a narrowing;
- * - `rendering-mismatch`: a fault of the bridge itself, whose rendered filter says something other
+ * - `rendering-mismatch`: a fault of the Bridge itself, whose rendered filter says something other
  *   than the payload it was rendered from;
  * - `unknown-resource`: a fault in the operator's configuration, not the principal's: a key
  *   registering no resources;

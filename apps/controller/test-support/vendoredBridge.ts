@@ -38,21 +38,21 @@ import { COMPRESSED_CONTROLLER_TIMING } from './harness.js';
 import { type EvaluatedRecord, matchesSqon } from './sqonEvaluator.js';
 import { type Cleanup, eventually } from './waiting.js';
 
-// The vendored bridge's public core and Express middleware, run against the controller as a host
+// The vendored Bridge's public core and Express middleware, run against the Controller as a host
 // runs them (#215's expectations and scenario suites, #217): reached through a fetch that records
 // each request, logging to a logger that records each event.
 
-/** The fetch the bridge reaches the controller through, as its options take one. */
+/** The fetch the Bridge reaches the Controller through, as its options take one. */
 export type ControllerFetch = NonNullable<BridgeOptions['fetch']>;
 
-/** A bridge event's name, without the `bio.overture.` prefix its envelope's `type` carries. */
+/** A Bridge event's name, without the `bio.overture.` prefix its envelope's `type` carries. */
 export type BridgeEventName = keyof BridgeEventData;
 
 /**
- * The bridge's timing settings, as its configuration names them (`configuration.ts`
+ * The Bridge's timing settings, as its configuration names them (`configuration.ts`
  * `BridgeConfiguration`): T `pollIntervalMs`, D `pollDeadlineMs`, G `graceMs`, R
  * `pollRecoveryIntervalMs`, I `pushIdleMs`, the exchange timeout `exchangeTimeoutMs`, the token TTL
- * `tokenTtlMs`, and the failure hold `stores.failureHoldMs`. One left out takes the bridge's default
+ * `tokenTtlMs`, and the failure hold `stores.failureHoldMs`. One left out takes the Bridge's default
  * (`CONFIGURATION_DEFAULTS`).
  */
 export type BridgeTiming = Pick<
@@ -67,7 +67,7 @@ export type BridgeTiming = Pick<
   | 'tokenTtlMs'
 >;
 
-/** One timing profile: the bridge's settings, and the controller's, which a harness's configuration takes. */
+/** One timing profile: the Bridge's settings, and the Controller's, which a harness's configuration takes. */
 export interface TimingProfile {
   bridge: Readonly<BridgeTiming>;
   controller: Readonly<Partial<ControllerConfiguration>>;
@@ -76,11 +76,11 @@ export interface TimingProfile {
 /**
  * #217's two timing profiles.
  *
- * - `compressed`: the bridge at T 2 s, D 0.5 s, G 4 s, R 1 s, I 1.5 s, a 1 s exchange timeout, a 10 s
- *   token TTL and a 1 s failure hold, and the controller at harness.ts's
- *   {@link COMPRESSED_CONTROLLER_TIMING}. It keeps the bridge's own order between them: I and R no
- *   more than T, 11 T + 20 D below 10 G, and I at least twice the controller's 0.5 s heartbeat.
- * - `ims`: the bridge's defaults (T 30 s, D 10 s, G 60 s, R 10 s, I 25 s) and the controller's
+ * - `compressed`: the Bridge at T 2 s, D 0.5 s, G 4 s, R 1 s, I 1.5 s, a 1 s exchange timeout, a 10 s
+ *   token TTL and a 1 s failure hold, and the Controller at harness.ts's
+ *   {@link COMPRESSED_CONTROLLER_TIMING}. It keeps the Bridge's own order between them: I and R no
+ *   more than T, 11 T + 20 D below 10 G, and I at least twice the Controller's 0.5 s heartbeat.
+ * - `ims`: the Bridge's defaults (T 30 s, D 10 s, G 60 s, R 10 s, I 25 s) and the Controller's
  *   production defaults, which the harness's configuration holds.
  */
 export const TIMING_PROFILES: Readonly<{
@@ -130,7 +130,7 @@ const timingOver = (
   };
 };
 
-/** A profile's bridge timing with every default filled in, in milliseconds, for a test's bounds. */
+/** A profile's Bridge timing with every default filled in, in milliseconds, for a test's bounds. */
 export interface ResolvedBridgeTiming {
   exchangeTimeoutMs: number;
   failureHoldMs: number;
@@ -143,8 +143,8 @@ export interface ResolvedBridgeTiming {
 }
 
 /**
- * A profile's bridge timing as the bridge resolves it: each setting the override gives, then each the
- * profile gives, and the bridge's default (`CONFIGURATION_DEFAULTS`) for the rest, the recovery
+ * A profile's Bridge timing as the Bridge resolves it: each setting the override gives, then each the
+ * profile gives, and the Bridge's default (`CONFIGURATION_DEFAULTS`) for the rest, the recovery
  * interval's being the smaller of 10 s and the poll interval, as `configuration.ts`
  * `checkConfiguration` resolves it.
  *
@@ -176,20 +176,20 @@ export const resolvedBridgeTiming = (
   };
 };
 
-/** A poll's answer as the bridge's channel reader reads it: the cursor it names, and whether it asks for more. */
+/** A poll's answer as the Bridge's channel reader reads it: the cursor it names, and whether it asks for more. */
 export interface RecordedPollPage {
   more: boolean;
   next: string;
 }
 
-/** How one request the bridge started was answered, as the recording fetch saw it. */
+/** How one request the Bridge started was answered, as the recording fetch saw it. */
 export interface RecordedAnswer {
   /** When the status and headers arrived, by `performance.now()`. */
   arrivedAt: number;
 
   /**
    * For a poll answered 200, its answer's `next` and `more`, read from a copy of the body through the
-   * bridge's channel reader (`bridgeWire.ts`) under the application's key; `null` when the copy could
+   * Bridge's channel reader (`bridgeWire.ts`) under the application's key; `null` when the copy could
    * not be read or the reader refuses it; `undefined` until the copy has been read, and for every
    * other request.
    */
@@ -198,13 +198,13 @@ export interface RecordedAnswer {
   status: number;
 }
 
-/** One request the bridge started, as the recording fetch saw it before passing it on, and its answer. */
+/** One request the Bridge started, as the recording fetch saw it before passing it on, and its answer. */
 export interface RecordedBridgeRequest {
   /** Its answer, once its status and headers have arrived; `undefined` before, and for a request that failed. */
   answer: RecordedAnswer | undefined;
 
   /**
-   * Its body's text, as the bridge sent it, up to {@link RECORDED_BODY_CHARACTERS} characters;
+   * Its body's text, as the Bridge sent it, up to {@link RECORDED_BODY_CHARACTERS} characters;
    * `undefined` for a request sending none.
    */
   body: string | undefined;
@@ -218,21 +218,21 @@ export interface RecordedBridgeRequest {
   method: string;
 
   /**
-   * The path relative to the controller's URL, as the bridge names it (`exchange`, `notices`,
-   * `notices/stream`); the whole path for a URL outside the controller's.
+   * The path relative to the Controller's URL, as the Bridge names it (`exchange`, `notices`,
+   * `notices/stream`); the whole path for a URL outside the Controller's.
    */
   path: string;
 
   /** The query, without its `?`: empty for none. */
   query: string;
 
-  /** When the bridge started it, by `performance.now()`. */
+  /** When the Bridge started it, by `performance.now()`. */
   startedAt: number;
 }
 
-/** A fetch on undici with an Agent of its own, recording every request the bridge makes through it. */
+/** A fetch on undici with an Agent of its own, recording every request the Bridge makes through it. */
 export interface RecordingFetch {
-  /** Closes the Agent, ending its connections, and settles once it has closed; a stopped bridge needs it no more. */
+  /** Closes the Agent, ending its connections, and settles once it has closed; a stopped Bridge needs it no more. */
   close(): Promise<void>;
 
   fetch: ControllerFetch;
@@ -270,8 +270,8 @@ const isBridgeUndici = (value: unknown): value is BridgeUndici =>
     .map((name) => Reflect.get(value, name))
     .every((member) => typeof member === 'function');
 
-// undici is the bridge's dependency, not this project's, so it is resolved from the
-// bridge's own location: the one the bridge's default fetch runs on (`defaultSeams.ts`).
+// undici is the Bridge's dependency, not this project's, so it is resolved from the
+// Bridge's own location: the one the Bridge's default fetch runs on (`defaultSeams.ts`).
 const bridgeUndici = (): BridgeUndici => {
   const loaded: unknown = createRequire(
     import.meta.resolve('@overture-stack/usher-express-bridge'),
@@ -286,11 +286,11 @@ const bridgeUndici = (): BridgeUndici => {
 
 /**
  * Sets a global dispatcher refusing every connection, as a host blocking its global dispatcher does,
- * on the bridge's own undici, and defers putting the host's back. The global dispatcher is
+ * on the Bridge's own undici, and defers putting the host's back. The global dispatcher is
  * the process's, so the test's own `fetch` is refused too until the cleanup runs; the recording
- * fetch, on an Agent of its own as the bridge's default fetch is, goes on reaching the controller.
+ * fetch, on an Agent of its own as the Bridge's default fetch is, goes on reaching the Controller.
  *
- * @param scope the test's cleanup, deferred to before the bridge starts so it runs after the bridge
+ * @param scope the test's cleanup, deferred to before the Bridge starts so it runs after the Bridge
  *   stops.
  */
 export const blockGlobalDispatcher = async (scope: Cleanup): Promise<void> => {
@@ -313,10 +313,10 @@ const headerIn = (
     ([header]) => header.toLowerCase() === name,
   )?.[1];
 
-/** What the recording fetch is told beyond the controller's URL. */
+/** What the recording fetch is told beyond the Controller's URL. */
 export interface RecordingFetchOptions {
   /**
-   * The application key the bridge holds, under whose poll-answer subkey a poll's answer is read for
+   * The application key the Bridge holds, under whose poll-answer subkey a poll's answer is read for
    * its `next` and `more`; without it, no poll's answer is read.
    */
   applicationKey?: string;
@@ -326,7 +326,7 @@ interface BodyCopy {
   text(): Promise<string>;
 }
 
-// The copy is taken before the answer is handed to the bridge, which reads its own body from then on.
+// The copy is taken before the answer is handed to the Bridge, which reads its own body from then on.
 const copyOf = (answered: UndiciResponse): BodyCopy | undefined => {
   try {
     return answered.clone();
@@ -355,16 +355,16 @@ const pollPageOf = async (
 };
 
 /**
- * Creates a fetch for the bridge, handed to `createBridgeCore` as its `fetch`, that runs on
- * the bridge's own undici with an Agent of its own, as the bridge's default fetch does
+ * Creates a fetch for the Bridge, handed to `createBridgeCore` as its `fetch`, that runs on
+ * the Bridge's own undici with an Agent of its own, as the Bridge's default fetch does
  * (`defaultSeams.ts`), so a global dispatcher never carries it. Each request is recorded as it starts:
  * its start time, method, path, query, `Last-Event-ID` and body. Its answer is recorded as its status
  * and headers arrive, with their arrival time; a poll answered 200 also has its `next` and `more`
- * read, from a copy of the body, so the bridge reads its own body untouched; a request that fails is
+ * read, from a copy of the body, so the Bridge reads its own body untouched; a request that fails is
  * recorded failed. The Agent is made at the first request and closed by
- * {@link RecordingFetch.close}, which the bridge never calls for a fetch it was handed.
+ * {@link RecordingFetch.close}, which the Bridge never calls for a fetch it was handed.
  *
- * @param controllerUrl the URL the bridge is configured with, which paths are recorded relative to.
+ * @param controllerUrl the URL the Bridge is configured with, which paths are recorded relative to.
  * @param options the application key a poll's answer is read under.
  */
 export const createRecordingFetch = (
@@ -453,8 +453,8 @@ export const createRecordingFetch = (
 };
 
 /**
- * The credential an exchange the bridge started carried, read from its recorded body as the bridge's
- * controller client writes it (`exchange.ts`): the person's credential, `null` for the anonymous exchange,
+ * The credential an exchange the Bridge started carried, read from its recorded body as the Bridge's
+ * Controller client writes it (`exchange.ts`): the person's credential, `null` for the anonymous exchange,
  * whose body carries none, or `undefined` for any other request, or a body cut short or unreadable.
  *
  * @param request a recorded request.
@@ -479,7 +479,7 @@ export const exchangedCredentialOf = (
   }
 };
 
-/** One event the bridge logged, as the recording logger received it. */
+/** One event the Bridge logged, as the recording logger received it. */
 export interface RecordedBridgeEvent {
   /** When it arrived, by `performance.now()`. */
   arrivedAt: number;
@@ -487,10 +487,10 @@ export interface RecordedBridgeEvent {
   /** Its `data`: `actorId`, `actorType` and the event's own fields. */
   data: Readonly<Record<string, unknown>>;
 
-  /** The whole CloudEvents envelope the bridge logged. */
+  /** The whole CloudEvents envelope the Bridge logged. */
   envelope: Readonly<Record<string, unknown>>;
 
-  /** The logger's method the bridge called: `warn` for a warning, `error` for an error or a critical event. */
+  /** The logger's method the Bridge called: `warn` for a warning, `error` for an error or a critical event. */
   level: 'error' | 'info' | 'warn';
 
   /** The event's name, without the `bio.overture.` prefix. */
@@ -509,7 +509,7 @@ export interface EventWait {
   where?: (event: RecordedBridgeEvent) => boolean;
 }
 
-/** A logger for the bridge, recording each event with its arrival time. */
+/** A logger for the Bridge, recording each event with its arrival time. */
 export interface RecordingLogger {
   /** Every event received so far, in order; of one name alone when given. */
   events(name?: BridgeEventName): readonly RecordedBridgeEvent[];
@@ -533,8 +533,8 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * Creates a logger for the bridge that records every event it is handed, with its arrival
- * time, and never throws, as the bridge requires of its logger (`events.ts` `BridgeLogger`).
+ * Creates a logger for the Bridge that records every event it is handed, with its arrival
+ * time, and never throws, as the Bridge requires of its logger (`events.ts` `BridgeLogger`).
  */
 export const createRecordingLogger = (): RecordingLogger => {
   const received: RecordedBridgeEvent[] = [];
@@ -584,14 +584,14 @@ export const createRecordingLogger = (): RecordingLogger => {
   };
 };
 
-/** The CloudEvents `source` the bridges started here log under: one deployment of a host application. */
+/** The CloudEvents `source` the Bridges started here log under: one deployment of a host application. */
 export const BRIDGE_EVENT_SOURCE = 'https://portal.example.org/usher-bridge';
 
 /** The record key {@link DEFAULT_KEY_REGISTRATIONS} registers, which {@link reaches} reads by default. */
 export const DEFAULT_RECORD_KEY = 'files';
 
 /**
- * The keys a bridge registers unless a test gives its own: one record key, `files`, on the field
+ * The keys a Bridge registers unless a test gives its own: one record key, `files`, on the field
  * `study_id`, defining `global.controlled` and `global.community-governed` on `data_category`, as the
  * conformance expectations register theirs.
  */
@@ -619,15 +619,15 @@ export const DEFAULT_KEY_REGISTRATIONS: Readonly<
   },
 });
 
-/** What a bridge is started with. */
+/** What a Bridge is started with. */
 export interface BridgeStart {
-  /** The application the bridge serves: its id is the audience, its key the application key. */
+  /** The application the Bridge serves: its id is the audience, its key the application key. */
   application: ControllerApplication;
 
-  /** The URL the bridge reaches the controller at: the controller's own, or a relay's in front of it. */
+  /** The URL the Bridge reaches the Controller at: the Controller's own, or a relay's in front of it. */
   controllerUrl: URL;
 
-  /** The controller's issuer, which every Usher token names. */
+  /** The Controller's issuer, which every Usher token names. */
   issuer: string;
 
   /** The timing profile in {@link TIMING_PROFILES}. */
@@ -639,16 +639,16 @@ export interface BridgeStart {
   /** Bridge settings over the profile's, such as a longer exchange timeout: none by default. */
   timing?: BridgeTimingOverride;
 
-  /** The bridge's wall clock, such as one running ahead of the controller's: the system's by default. */
+  /** The Bridge's wall clock, such as one running ahead of the Controller's: the system's by default. */
   wallClock?: Clock;
 }
 
-/** A vendored bridge running against the controller, with what it recorded, stopped by one call. */
+/** A vendored Bridge running against the Controller, with what it recorded, stopped by one call. */
 export interface StartedBridge {
-  /** The bridge's public core: `resolve`, `mode`, `applyNotice`, `reset`, `refreshAnonymous`. */
+  /** The Bridge's public core: `resolve`, `mode`, `applyNotice`, `reset`, `refreshAnonymous`. */
   core: BridgeCore;
 
-  /** The fetch it reaches the controller through, and every request it started. */
+  /** The fetch it reaches the Controller through, and every request it started. */
   fetch: RecordingFetch;
 
   /** The logger it logs to, and every event it logged. */
@@ -660,11 +660,11 @@ export interface StartedBridge {
    */
   stop(): Promise<void>;
 
-  /** The bridge's timing as it resolves it: the profile's, the override over it, and the defaults. */
+  /** The Bridge's timing as it resolves it: the profile's, the override over it, and the defaults. */
   timing: ResolvedBridgeTiming;
 
   /**
-   * A loopback Express app running the bridge's middleware, which answers every request it lets
+   * A loopback Express app running the Bridge's middleware, which answers every request it lets
    * through 200 with the request's access, read through usher-types' `readAccess`, as JSON.
    */
   url: URL;
@@ -690,14 +690,14 @@ const closed = (server: Server): Promise<void> =>
     : Promise.resolve();
 
 /**
- * Starts a bridge as a host does: `createBridgeCore` given the controller's URL, the
+ * Starts a Bridge as a host does: `createBridgeCore` given the Controller's URL, the
  * application's id and key, the payload version usher-types reads, the event source, the recording
  * fetch and logger, and the profile's timing with any override over it; its keys registered; its
  * Express middleware mounted in a loopback app; then its start awaited, which imports the key and
- * fetches the anonymous payload. The monotonic clock is the bridge's default. A start that fails stops
+ * fetches the anonymous payload. The monotonic clock is the Bridge's default. A start that fails stops
  * everything it started before the failure is thrown.
  *
- * @param start the application, the controller's URL and issuer, the profile, and the keys, the
+ * @param start the application, the Controller's URL and issuer, the profile, and the keys, the
  *   timing override and the wall clock when not the defaults.
  */
 export const startBridge = async ({
@@ -756,16 +756,16 @@ export const startBridge = async ({
   }
 };
 
-/** The jitter the bridge applies to its poll and recovery intervals, either way (`poll.ts`). */
+/** The jitter the Bridge applies to its poll and recovery intervals, either way (`poll.ts`). */
 export const INTERVAL_JITTER = 0.1;
 
-/** What timers and loopback round trips may add to a bound computed from the bridge's timing. */
+/** What timers and loopback round trips may add to a bound computed from the Bridge's timing. */
 export const SCHEDULING_SLACK_MS = 250;
 
 /**
- * The requests a bridge started to one of its paths, at or after an instant.
+ * The requests a Bridge started to one of its paths, at or after an instant.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param path one of `containers.ts`'s `RELAYED_PATHS`.
  * @param since the earliest start, by `performance.now()`: every request by default.
  */
@@ -795,9 +795,9 @@ export const afterCursorOf = (request: RecordedBridgeRequest): string | null =>
   new URLSearchParams(request.query).get('after');
 
 /**
- * The events of one name a bridge logged at or after an instant.
+ * The events of one name a Bridge logged at or after an instant.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param name the event's name.
  * @param since the earliest arrival, by `performance.now()`.
  */
@@ -809,9 +809,9 @@ export const eventsSince = (
   bridge.logger.events(name).filter(({ arrivedAt }) => arrivedAt >= since);
 
 /**
- * Every mode change a bridge logged at or after an instant.
+ * Every mode change a Bridge logged at or after an instant.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param since the earliest arrival.
  */
 export const modeChangesSince = (
@@ -823,7 +823,7 @@ export const modeChangesSince = (
 /**
  * The first mode change into a mode arriving at or after an instant, waiting for it.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param toMode the mode changed into.
  * @param since the earliest arrival.
  * @param timeoutMs how long to wait.
@@ -842,9 +842,9 @@ export const nextModeChange = (
   });
 
 /**
- * The first notice of a kind a bridge applied at or after an instant, waiting for it.
+ * The first notice of a kind a Bridge applied at or after an instant, waiting for it.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param kind the notice's kind.
  * @param since the earliest arrival.
  * @param timeoutMs how long to wait.
@@ -873,13 +873,13 @@ export const entriesDropped = (event: RecordedBridgeEvent): number => {
 };
 
 /**
- * Waits until a bridge reads as a mode, and gives when it first did.
+ * Waits until a Bridge reads as a mode, and gives when it first did.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param mode the mode.
  * @param timeoutMs how long to wait.
- * @returns when the bridge was seen in the mode, by `performance.now()`.
- * @throws naming the mode, when the bridge never reads as it in time.
+ * @returns when the Bridge was seen in the mode, by `performance.now()`.
+ * @throws naming the mode, when the Bridge never reads as it in time.
  */
 export const untilMode = async (
   bridge: StartedBridge,
@@ -970,15 +970,15 @@ const firstCheckFrom = (
 };
 
 /**
- * Waits for the first check a bridge begins from now, through every page it asks for, and gives the
+ * Waits for the first check a Bridge begins from now, through every page it asks for, and gives the
  * check's start: the start of its first page, a poll the page before it did not continue. The check
- * must succeed, each page answered 200 and read as the bridge reads it until one asks for no more, so
- * on a healthy channel it is the last check the bridge confirmed: its grace period runs from this
- * start, give or take the moment the bridge reads its clock before it signs the page's assertion, and
+ * must succeed, each page answered 200 and read as the Bridge reads it until one asks for no more, so
+ * on a healthy channel it is the last check the Bridge confirmed: its grace period runs from this
+ * start, give or take the moment the Bridge reads its clock before it signs the page's assertion, and
  * its next poll comes a poll interval's jitter after it.
  *
- * @param bridge the bridge.
- * @param timing its timing: the bridge's own by default.
+ * @param bridge the Bridge.
+ * @param timing its timing: the Bridge's own by default.
  * @returns the check's start, by `performance.now()`.
  * @throws naming the failure, when the check fails, or none is confirmed within a poll interval and
  *   its jitter, a poll deadline and {@link SCHEDULING_SLACK_MS}.
@@ -1014,7 +1014,7 @@ export const settledPollStart = async (
  * The principal an outcome carries, copied as a plain object, or `undefined` when the request was
  * refused or answered unavailable.
  *
- * @param outcome what the bridge resolved.
+ * @param outcome what the Bridge resolved.
  */
 export const principalOf = (
   outcome: ResolveOutcome,
@@ -1026,7 +1026,7 @@ export const principalOf = (
  * suspended, `null` for any other principal, or `undefined` when the request was refused
  * or answered unavailable.
  *
- * @param outcome what the bridge resolved.
+ * @param outcome what the Bridge resolved.
  */
 export const subjectInForce = (
   outcome: ResolveOutcome,
@@ -1070,10 +1070,10 @@ export const suspendedAs = (subject: string): UsherPrincipal =>
 
 /**
  * Whether an outcome serves a record through a record key, as the search engine would read the
- * narrowing the bridge rendered: an allow serves it, a narrowing when usher-types' SQON evaluator
+ * narrowing the Bridge rendered: an allow serves it, a narrowing when usher-types' SQON evaluator
  * matches it; never a refused or unavailable outcome, nor a key it holds no result for.
  *
- * @param outcome what the bridge resolved.
+ * @param outcome what the Bridge resolved.
  * @param record the record's values by field name.
  * @param key the record key: {@link DEFAULT_RECORD_KEY} by default.
  */

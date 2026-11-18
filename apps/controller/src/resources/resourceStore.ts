@@ -66,7 +66,7 @@ const resourceColumns = (schema: string): string => {
  * here.
  *
  * @param store where it is read.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param read the externalId as sent, the trusted issuer, whose identity names a principal holding
  *   several and under whose identity the principal is found, the principal's subject, and the
  *   configured clock's instant.
@@ -104,7 +104,7 @@ export const readResource = async (
  * follows.
  *
  * @param store where they are read.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param issuer the trusted issuer, whose identity names a principal holding several.
  * @param query where the page starts, its size, and whether it lists retired resources.
  */
@@ -131,7 +131,7 @@ export const readResourcePage = async (
  * once: an id naming none, a malformed one among them, is left out.
  *
  * @param connection a connection in the registration's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param ids the ids sent.
  */
 export const registeredApplications = async (
@@ -156,7 +156,7 @@ export const registeredApplications = async (
  * a registration racing another for it waits until that one ends, and writes nothing once it commits.
  *
  * @param connection a connection in the registration's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param resource what is registered, when, and by whom.
  * @returns the resource's id, which never leaves the store's own statements, or `undefined` when the
  *   externalId is held already.
@@ -197,7 +197,7 @@ export const insertResource = async (
  * Finds a resource by its externalId, matched exactly.
  *
  * @param connection a connection in a transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param externalId the externalId as sent.
  * @returns its id and its externalId as stored, or `undefined` when no resource has it.
  */
@@ -219,7 +219,7 @@ export const findResource = async (
  * left as it is.
  *
  * @param connection a connection in the change's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param served the resource's id, and the applications' ids as the store gives them.
  * @returns the applications added, in order of their ids: none for each the set held already.
  */
@@ -248,7 +248,7 @@ export const serveResource = async (
  * Removes one application from a resource's served set.
  *
  * @param connection a connection in the change's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param served the resource's id, and the application's id as the store gives it.
  * @returns whether the set held the application.
  */
@@ -271,7 +271,7 @@ export const stopServingResource = async (
  * left out.
  *
  * @param store where they are read.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param named the resource's externalId as sent, and the application's id.
  */
 export const readNamedServing = async (

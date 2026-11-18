@@ -26,7 +26,7 @@ export interface RetentionSweepSettings {
   /** Where a run that fails, once runs start failing, is written. */
   log: SweepLog;
 
-  /** The controller's schema. */
+  /** The Controller's schema. */
   schema: string;
 
   /** Where each run's transaction runs, as the system, recording no event, within the store timeout. */

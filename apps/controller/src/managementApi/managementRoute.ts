@@ -41,7 +41,7 @@ import type {
 /** The line naming a failure of the store while an operation, or the standing of its caller, was read. */
 export const STORE_FAILED = 'managementApi.storeFailed';
 
-/** The line naming a failure the controller did not expect, answered 500. */
+/** The line naming a failure the Controller did not expect, answered 500. */
 export const UNEXPECTED_FAILURE = 'managementApi.unexpectedFailure';
 
 const BODY_TOO_LARGE = 'FST_ERR_CTP_BODY_TOO_LARGE';

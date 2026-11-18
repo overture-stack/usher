@@ -2,7 +2,7 @@ import type { Problem } from '../http/index.js';
 import { readStrictJson } from '../strictJson/index.js';
 import { EXCHANGE_PROBLEMS, unreadableBody } from './exchangeProblems.js';
 
-/** The one payload version the controller serves. */
+/** The one payload version the Controller serves. */
 export const SERVED_PAYLOAD_VERSION = 1;
 
 /**

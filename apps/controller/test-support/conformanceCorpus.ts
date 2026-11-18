@@ -38,7 +38,7 @@ export type ConformanceConfigurationName =
  * The corpus's cases, from #215's plan as the rulings settle it, so a test file registers its tests
  * from this list and never from the corpus file:
  *
- * - `replayed`: every case run against the controller, with the configuration it runs under;
+ * - `replayed`: every case run against the Controller, with the configuration it runs under;
  * - `unreachable`: every entry `principals.json` holds that no test replays, with why;
  * - `omitted`: every case the corpus lists under `omitted`, holding no payload, with what tests it.
  *
@@ -212,8 +212,8 @@ const grantsViewAlone = (entry: unknown): boolean => {
 
 // The corrected corpus holds expectations.json beside principals.json, and its baseline grants read
 // (#215 Q2). The form this branch held before the branches meet lacks both, and every payload replayed
-// against it would differ from what a correct controller issues, so it is refused before any is
-// compared, and no difference can be read as the controller's.
+// against it would differ from what a correct Controller issues, so it is refused before any is
+// compared, and no difference can be read as the Controller's.
 const currentPrincipals = (directory: URL): unknown => {
   const principals = readCorpusFile(CORPUS_FILES.principals, directory);
   readCorpusFile(CORPUS_FILES.expectations, directory);
@@ -439,12 +439,12 @@ export interface CorpusAudiences {
 }
 
 /**
- * Asserts that a payload the controller issued conforms to the corpus's (#215's payload comparison):
+ * Asserts that a payload the Controller issued conforms to the corpus's (#215's payload comparison):
  * usher-types' `validatePayload` accepts it, and its {@link comparablePayload} equals the corpus
  * payload's, the corpus's `aud`, an application's label, read as the id that application was
  * registered under. Temporal claims are never compared here; the temporal test bounds them.
  *
- * @param issued the payload the controller issued, decrypted and not yet trusted.
+ * @param issued the payload the Controller issued, decrypted and not yet trusted.
  * @param entry the corpus's entry.
  * @param audiences what gives the registered id of the application the corpus names: the harness.
  * @throws an assertion error naming the problems `validatePayload` found, or the difference.
@@ -472,7 +472,7 @@ export const assertConformsToCorpus = (
   );
 };
 
-/** The controller's issuer, which every corpus payload names. */
+/** The Controller's issuer, which every corpus payload names. */
 export const CONFORMANCE_ISSUER = 'https://usher.example.org';
 
 /**

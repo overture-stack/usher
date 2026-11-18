@@ -5,7 +5,7 @@ import type pg from 'pg';
 import type { Clock } from '../configuration/index.js';
 import type { AuditTrail, TrailConnection } from '../eventLog/index.js';
 
-/** The subkeys derived from one application key, each for one use, as the bridge derives them. */
+/** The subkeys derived from one application key, each for one use, as the Bridge derives them. */
 export interface ApplicationSubkeys {
   /** Verifies the channel assertion: HMAC-SHA256. */
   channelAssertion: KeyObject;
@@ -114,7 +114,7 @@ export interface ApplicationKeyRingSettings {
   /** Where a read that fails, a failure of what a change calls, and a recording that fails are written. */
   log: KeyRingLog;
 
-  /** The controller's schema. */
+  /** The Controller's schema. */
   schema: string;
 
   /** Where the keys are read, within the store timeout. */

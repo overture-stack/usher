@@ -107,7 +107,7 @@ export const RATE_THRESHOLD: ControllerConfiguration['grantRateThreshold'] =
 export const BOUNDARY_RATE_THRESHOLD: ControllerConfiguration['grantRateThreshold'] =
   Object.freeze({ operationCount: 3, windowSeconds: 5 });
 
-/** A fixed code's form, as the bridge's reasons and the API's problem codes take it: camelCase ASCII. */
+/** A fixed code's form, as the Bridge's reasons and the API's problem codes take it: camelCase ASCII. */
 export const FIXED_CODE = /^[a-z][A-Za-z0-9]*$/u;
 
 /** The CloudEvents attributes an event carries, `severity` beside the standard's own (#214 Q2). */
@@ -131,7 +131,7 @@ export const RECURRING_PROPERTIES = Object.freeze({
 });
 
 /**
- * The observations among the controller's events: noticed by the system, so carrying no `result` and,
+ * The observations among the Controller's events: noticed by the system, so carrying no `result` and,
  * being system-generated, no `sourceIp` (`audit-events.md` § Two families of event; #214 Q19).
  */
 export const OBSERVATION_TYPES: readonly AuditEventType[] = Object.freeze([
@@ -172,7 +172,7 @@ const FIXTURE_PEOPLE = Object.freeze([
 /**
  * The applications alone, serving nothing, for a test seeding nothing else before it starts its own
  * controller: seeded by SQL under the fixture's ids, each is issued its first key once the harness's
- * own controller first listens, and holds none until then.
+ * own Controller first listens, and holds none until then.
  */
 export const APPLICATIONS_ONLY: PolicyFixture = Object.freeze({
   applications: {
@@ -258,12 +258,12 @@ export const decided = (
   decision: FixtureDecision['decision'] = 'accepted',
 ): FixtureDecision => ({ decision, grant });
 
-/** What a test's controller runs with, over the audit harness's own. */
+/** What a test's Controller runs with, over the audit harness's own. */
 export interface AuditHarnessOptions {
   /**
    * Where the harness gets the platform administrator's token for registering its applications and
    * issuing their first keys: the stand-in's by default, and a realm's own administrator's for a
-   * controller trusting a Keycloak realm (`realmRegistrar`, in `harness.ts`).
+   * Controller trusting a Keycloak realm (`realmRegistrar`, in `harness.ts`).
    */
   administratorToken?: AdministratorTokenSource;
 
@@ -280,7 +280,7 @@ export interface AuditHarnessOptions {
   startsController?: boolean;
 }
 
-/** A harness whose controller writes its log stream where the test reads it. */
+/** A harness whose Controller writes its log stream where the test reads it. */
 export interface AuditHarness {
   harness: Harness;
   log: LogCapture;
@@ -340,14 +340,14 @@ export const sharedAuditHarness = (
   return async () => ({ harness: await shared(), log });
 };
 
-/** A second controller instance a test started, with its own log stream. */
+/** A second Controller instance a test started, with its own log stream. */
 export interface LoggedInstance {
   instance: ControllerInstance;
   log: LogCapture;
 }
 
 /**
- * Starts another controller instance beside the harness's, on its store and keys, its log stream
+ * Starts another Controller instance beside the harness's, on its store and keys, its log stream
  * captured, its stop deferred to the cleanup given.
  *
  * @param scope the cleanup stopping it.
@@ -381,12 +381,12 @@ export interface ExchangeBy {
   /** Claims and options over a fresh sign-in token's. */
   mint?: MintOptions;
 
-  /** The instance exchanged with: the harness's controller by default. */
+  /** The instance exchanged with: the harness's Controller by default. */
   url?: URL;
 }
 
 /**
- * Sends one exchange as the bridge sends it: the person's fresh sign-in token for the application, a
+ * Sends one exchange as the Bridge sends it: the person's fresh sign-in token for the application, a
  * given one, or none for `null`, the anonymous exchange.
  *
  * @param harness the harness.
@@ -420,8 +420,8 @@ export const expiredClaims = (): MintOptions => {
 };
 
 /**
- * A channel assertion the application signed normally, as the bridge signs one, ten minutes ago, so it
- * has long expired: a channel credential the controller refuses with no forged signature.
+ * A channel assertion the application signed normally, as the Bridge signs one, ten minutes ago, so it
+ * has long expired: a channel credential the Controller refuses with no forged signature.
  *
  * @param application the application signing.
  */
@@ -637,14 +637,14 @@ export const operationalLines = (log: LogCapture): readonly string[] =>
 export const markOf = (log: LogCapture): number => log.lines().length;
 
 /**
- * A mark after the first keys the harness issued once its own controller first listened, for a
+ * A mark after the first keys the harness issued once its own Controller first listened, for a
  * harness whose applications were all seeded by SQL before it, as {@link APPLICATIONS_ONLY}'s are: it
  * waits until the log stream holds one `applicationKey.issuance` for each of the harness's
  * applications, so a test marking after the harness's first listen reads only the events of its own
  * act.
  *
  * @param log the captured log stream.
- * @param harness the harness, its controller listening.
+ * @param harness the harness, its Controller listening.
  */
 export const markAfterFirstKeys = async (
   log: LogCapture,
@@ -935,7 +935,7 @@ export const principalRevocationCount = async (
 };
 
 /**
- * Grants or revokes one privilege on `audit_log` for the controller's runtime role, as the schema's
+ * Grants or revokes one privilege on `audit_log` for the Controller's runtime role, as the schema's
  * owner, for the integrity tests.
  *
  * @param client a connection under the migration role.
@@ -1012,7 +1012,7 @@ const LOWEST_NUMERIC_WARNING = 40;
 
 /**
  * Whether a log line is at the warning level or above: an event by its severity, any other line by
- * its logger's level, named or numbered as common loggers write it. How the controller's logger writes
+ * its logger's level, named or numbered as common loggers write it. How the Controller's logger writes
  * its level is not fixed: an assumption for the README's table, beside `auditEvents.ts`'s `LOG_LEVEL_MEMBER`.
  *
  * @param line a log line.

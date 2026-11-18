@@ -2,7 +2,7 @@ import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
 import type { StartProblem } from '../failures/index.js';
 import type { StoreReader } from '../storeTimeout/index.js';
 
-/** The limits the store applies to a session, each of which the controller sets to its store timeout. */
+/** The limits the store applies to a session, each of which the Controller sets to its store timeout. */
 export const STATEMENT_LIMITS: readonly string[] = Object.freeze([
   'idle_in_transaction_session_timeout',
   'statement_timeout',
@@ -19,7 +19,7 @@ export interface StatementLimit {
 }
 
 // Each unit the store may report a time in, in milliseconds; a value in any other counts as no limit
-// the controller set.
+// the Controller set.
 const UNIT_MILLISECONDS: ReadonlyMap<string, number> = new Map([
   ['d', 86_400_000],
   ['h', 3_600_000],
@@ -53,7 +53,7 @@ export const readStatementLimits = async (
   ).rows;
 
 /**
- * The rule broken when the store does not apply both of the controller's limits to a session, each
+ * The rule broken when the store does not apply both of the Controller's limits to a session, each
  * equal to the store timeout once read in milliseconds, whatever unit the store reports: none when it
  * does, and otherwise one naming the database URL, since a connection that drops the limits leaves a
  * statement whose client has gone holding its locks.

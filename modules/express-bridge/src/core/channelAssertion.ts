@@ -5,7 +5,7 @@ import { SignJWT } from 'jose';
 import type { Clock } from './clocks.js';
 import type { CryptoKey } from './keys.js';
 
-/** The audience named by every channel assertion: the controller, for its exchange, push and poll. */
+/** The audience named by every channel assertion: the Controller, for its exchange, push and poll. */
 export const CHANNEL_ASSERTION_AUDIENCE = 'usher:controller';
 
 /** The `typ` of every channel assertion. */
@@ -14,9 +14,9 @@ export const CHANNEL_ASSERTION_TYPE = 'usher-channel+jwt';
 const LIFETIME_S = 60;
 
 /**
- * Creates the signer of channel assertions, the short-lived tokens that tell the controller which
+ * Creates the signer of channel assertions, the short-lived tokens that tell the Controller which
  * application is asking. Each call signs a new HS256 JWS under `assertionKey`, issued by
- * `application`, the bridge's own audience, and carrying no `kid`.
+ * `application`, the Bridge's own audience, and carrying no `kid`.
  *
  * @returns the signer; each promise it returns rejects when jose cannot sign under `assertionKey`.
  */

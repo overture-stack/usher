@@ -56,7 +56,7 @@ Instances that do not include SONG are fully supported; Usher has no dependency 
 ## Which plane each component sits in
 
 **Usher sits in the access control plane; the applications are the data plane.** All three of Usher's own
-components sit in the control plane, the bridge and the adapter included, even though both run inside
+components sit in the control plane, the Bridge and the adapter included, even though both run inside
 an application's own process: they carry and apply a decision rather than serve data. Keycloak sits
 there with them, governing identity rather than access, so the control plane is wider than Usher.
 The access control plane is the part of it where access is approved and enforced: Usher, and an
@@ -92,11 +92,11 @@ of an application that runs queries, and the data plane is that layer plus the r
 
 **Does not own:**
 
-- Data access decisions (which records or fields a user may see) → **controller**
-- Categories, cohorts, or the grant model → **controller** (policy store)
-- Usher token issuance → **controller**; Usher token validation and decryption → **bridge**
-- Any awareness of bridges or adapters: Keycloak is not aware they exist; the controller validates
-  IdP tokens against Keycloak on the bridge's behalf
+- Data access decisions (which records or fields a user may see) → **Controller**
+- Categories, cohorts, or the grant model → **Controller** (policy store)
+- Usher token issuance → **Controller**; Usher token validation and decryption → **Bridge**
+- Any awareness of Bridges or adapters: Keycloak is not aware they exist; the Controller validates
+  IdP tokens against Keycloak on the Bridge's behalf
 
 ---
 
@@ -105,7 +105,7 @@ of an application that runs queries, and the data plane is that layer plus the r
 **Role:** The control plane's central service. It holds the resources, their categories and the
 grants over them, computes what each principal may reach, and distributes that to the
 applications. Implements the PDP (Policy Decision Point) and
-PAP (Policy Administration Point). The controller is the central service; the bridge is the library
+PAP (Policy Administration Point). The Controller is the central service; the Bridge is the library
 that connects applications to it.
 
 **Disambiguation note:** In this architecture, Keycloak fits better in what OAuth calls
@@ -125,14 +125,14 @@ application. Two components, two jobs, and our modular design depends on keeping
   [security-workflow.md](security-workflow.md)
 - Generating one symmetric JWE key per ushered application when it is registered, keeping it
   encrypted under the key-encryption key, and encrypting every token to the one application it is
-  issued for, so no bridge can read another application's tokens
+  issued for, so no Bridge can read another application's tokens
 - Writing `revoked_at` timestamps to the policy database on revocation
-- Publishing a wake-up to Valkey pub/sub after writing a notice, so every controller instance reads
-  the new notices and pushes them to its connected bridges (see [Multi-instance propagation](security-workflow.md#multi-instance-propagation))
+- Publishing a wake-up to Valkey pub/sub after writing a notice, so every Controller instance reads
+  the new notices and pushes them to its connected Bridges (see [Multi-instance propagation](security-workflow.md#multi-instance-propagation))
 - Hosting the management API (PAP: registering applications and issuing or revoking their keys,
   writing and revoking grants, category management, revocation)
-- Hosting the notice stream's poll endpoint, which returns the notices after a position, for bridge
-  fallback and as the bridge's liveness check
+- Hosting the notice stream's poll endpoint, which returns the notices after a position, for Bridge
+  fallback and as the Bridge's liveness check
 - Future: management UI (visual PAP interface)
 
 **Does not own:**
@@ -140,10 +140,10 @@ application. Two components, two jobs, and our modular design depends on keeping
 - User authentication → **Keycloak**
 - Querying the data layer or executing data queries → the **application's** own data layer
 - Applying each catalogue's enforcement result in application-native form → **adapter**
-- Holding an application's key alone: each application's **bridge** holds the same key, received
+- Holding an application's key alone: each application's **Bridge** holds the same key, received
   once through the application's own secrets
 
-**Configuration.** The database is the only list of applications. The controller's environment holds
+**Configuration.** The database is the only list of applications. The Controller's environment holds
 its secrets, all read once at start:
 
 - `USHER_KEY_ENCRYPTION_KEY`, the key-encryption key: 43 base64url characters decoding to 32 bytes,
@@ -158,7 +158,7 @@ A key-encryption key other than the one the stored keys were encrypted under als
 see [schema.md](schema.md) § Applications.
 
 Registering an application, or issuing or revoking its key, is a database write, so none of them
-changes the environment or restarts the controller, whether it runs as one process on a host or as
+changes the environment or restarts the Controller, whether it runs as one process on a host or as
 many replicas.
 
 **Liveness and readiness are two answers.** `/health/live` says the process runs and its log stream
@@ -173,12 +173,12 @@ write. Valkey is not part of readiness, since an instance without it still answe
 picks up new keys through its 30-second reload. Neither answer carries a body, so neither says
 anything about the instance to whoever asks.
 
-**The controller connects to its store directly, or through a pooler only where each of its
+**The Controller connects to its store directly, or through a pooler only where each of its
 connections keeps one server session carrying both of its limits.** Each connection carries the
 store's statement and idle-in-transaction limits as startup parameters, and those limits are what
-end a statement or transaction the controller has abandoned, since the server goes on running it
+end a statement or transaction the Controller has abandoned, since the server goes on running it
 after its client has gone. Each start reads both limits back and is refused when either is missing
-or differs. So a pooler in transaction mode cannot serve the controller, and neither can one that
+or differs. So a pooler in transaction mode cannot serve the Controller, and neither can one that
 refuses or drops startup parameters it does not track, in any mode.
 
 ---
@@ -187,20 +187,20 @@ refuses or drops startup parameters it does not track, in any mode.
 
 **Role:** Shared authorization library embedded in applications. Connects the application to the
 controller: token exchange, Usher token caching, decryption, and revocation channel maintenance.
-Think of it as a drawbridge: when the connection to the controller is healthy, the bridge is open
-and requests flow. When the controller is unreachable past the grace period, the bridge raises and
+Think of it as a drawbridge: when the connection to the Controller is healthy, the Bridge is open
+and requests flow. When the Controller is unreachable past the grace period, the Bridge raises and
 blocks every request needing a granted permission (fail-secure, 503), while the open tier keeps
 being served, until connectivity is restored.
 
 **Owns:**
 
-- Holding its own application's JWE key, held by no other application's bridge
-- Presenting the user's IdP bearer token to the controller's token exchange endpoint
+- Holding its own application's JWE key, held by no other application's Bridge
+- Presenting the user's IdP bearer token to the Controller's token exchange endpoint
 - Receiving and locally caching the JWE Usher token per user
 - Decrypting Usher tokens and rendering each request's access for the adapter: adapters never see
   the raw JWE, any key or the payload
 - Validating the Usher token on every request within the TTL window (no network call to the
-  controller in the common case)
+  Controller in the common case)
 - Maintaining the revocation channel: SSE or WebSocket push subscription with reconnection
   logic, and poll fallback on a 30-second interval
 - Immediately dropping the cached token for a user when a revocation event is received
@@ -212,26 +212,26 @@ being served, until connectivity is restored.
   granted permission, while the open tier is still served, until connectivity is restored
 
 **Its logic does not depend on the web framework.** Everything above lives in a core that knows
-nothing of Express, and the Express layer only wires it into middleware and routes, so a bridge for
+nothing of Express, and the Express layer only wires it into middleware and routes, so a Bridge for
 another framework is another thin layer over the same core.
 
 **Does not own:**
 
 - Compiling a filter into a backend query dialect (Elasticsearch DSL, SQL) → **adapter**
-- Access decisions (grant existence, which categories the principal holds) → **controller**; the bridge only
+- Access decisions (grant existence, which categories the principal holds) → **Controller**; the Bridge only
   confirms the token is valid, current, and not revoked
 - Any stored knowledge of the application's data schema: index or table layout, or what a category
-  means in terms of records → **adapter**. A field name reaches the bridge as a per-query parameter
-  supplied by the adapter, which is not the same as holding a schema: the bridge is told which field
+  means in terms of records → **adapter**. A field name reaches the Bridge as a per-query parameter
+  supplied by the adapter, which is not the same as holding a schema: the Bridge is told which field
   names the resource for the catalogue being queried and forgets it
 
-**On query languages specifically.** The bridge may know SQON; what must stay out of it is the
+**On query languages specifically.** The Bridge may know SQON; what must stay out of it is the
 backend. SQON is a shared Overture language
 rather than one application's dialect: Arranger owns the module (`@overture-stack/sqon`), and Lyric
 consumes SQON as well, so a SQON-shaped filter is portable across the read path and the
-submission path without translation. What must stay out of the bridge is the _backend_, since
+submission path without translation. What must stay out of the Bridge is the _backend_, since
 Arranger compiles SQON to Elasticsearch DSL and Lyric compiles it to SQL. Rendering a resolved grant
-set into SQON is generic and lives in the bridge; compiling SQON into a backend query is
+set into SQON is generic and lives in the Bridge; compiling SQON into a backend query is
 application-specific and belongs in the adapter. That split is decided rather than open, and the reason
 is that every fail-open defect found so far has been in constructing a predicate and none in
 compiling one.
@@ -240,7 +240,7 @@ compiling one.
 
 ### App adapter
 
-**Role:** Policy Enforcement Point (PEP). A thin layer, built on the bridge, that
+**Role:** Policy Enforcement Point (PEP). A thin layer, built on the Bridge, that
 translates Usher's permissions payload into the application's native query format. Named per
 integration target: the Arranger adapter first, published as `@overture-stack/arranger-usher-adapter`,
 and the Lyric adapter after it.
@@ -248,39 +248,39 @@ and the Lyric adapter after it.
 **Owns:**
 
 - Intercepting incoming data requests before they reach the data layer
-- Calling the bridge to get the current `PermissionsPayload` for the requesting user
+- Calling the Bridge to get the current `PermissionsPayload` for the requesting user
 - Translating that payload into the application's query filter format:
   - The Arranger adapter: SQON filter object injected as a server-side filter in Arranger's GraphQL
     layer
   - The Lyric adapter: query conditions injected into Lyric's data access layer
-- Returning 401 or 503 to the principal when the bridge signals an invalid or uncertain session
+- Returning 401 or 503 to the principal when the Bridge signals an invalid or uncertain session
 
 **Does not own:**
 
 - Token exchange, grants caching, revocation channel management, or JWE decryption →
-  **bridge**
-- Access decisions and grant logic → **controller**
-- Knowledge of how grants are defined or computed → **controller** (policy store)
+  **Bridge**
+- Access decisions and grant logic → **Controller**
+- Knowledge of how grants are defined or computed → **Controller** (policy store)
 
 ---
 
 ### Ushered service
 
-**Role:** The service that embeds the bridge and an adapter (Arranger, Lyric, or similar).
+**Role:** The service that embeds the Bridge and an adapter (Arranger, Lyric, or similar).
 Not part of Usher itself; described here to complete the picture.
 
 The application is **stateless with respect to authorization**. It:
 
 - Receives requests from end users carrying an IdP bearer token
-- Delegates all auth decisions to the bridge and the adapter
-- Has no awareness of the controller, Usher tokens, revocation state, or the grant model
+- Delegates all auth decisions to the Bridge and the adapter
+- Has no awareness of the Controller, Usher tokens, revocation state, or the grant model
 
-All authorization state lives in the bridge (per-user Usher token cache, revocation
-channel state) and the controller (policy database, revocation timestamps). The application
-carries no auth state itself. If it restarts, the bridge initializes fresh and obtains new
+All authorization state lives in the Bridge (per-user Usher token cache, revocation
+channel state) and the Controller (policy database, revocation timestamps). The application
+carries no auth state itself. If it restarts, the Bridge initializes fresh and obtains new
 Usher tokens on the first request from each user.
 
-This is the intended design: **the controller and the bridge together own the auth state;
+This is the intended design: **the Controller and the Bridge together own the auth state;
 applications enforce decisions derived from it, without managing that state themselves.**
 
 ---
@@ -299,13 +299,13 @@ applications enforce decisions derived from it, without managing that state them
 - `revoked_at` timestamps per user (for emergency revocation)
 - Audit log: access decisions, grant changes, and revocation events
 
-**Does not handle:** real-time signaling or pub/sub between controller instances → **Valkey**.
+**Does not handle:** real-time signaling or pub/sub between Controller instances → **Valkey**.
 
 ---
 
 ### Valkey
 
-**Role:** Shared in-process state and event bus across controller instances.
+**Role:** Shared in-process state and event bus across Controller instances.
 
 **Two distinct uses:**
 
@@ -326,9 +326,9 @@ per resource, and it is recorded as rejected in
 was authoritative in Valkey or cached from PostgreSQL, closed with it: there is no timestamp to
 place.
 
-2. **Revocation wake-ups.** When one controller instance writes a notice, it publishes a wake-up
+2. **Revocation wake-ups.** When one Controller instance writes a notice, it publishes a wake-up
    to a Valkey pub/sub channel. Every instance subscribes, reads the notices after the last position
-   it pushed from PostgreSQL, and pushes them to its connected bridges over SSE. Pub/sub delivers at
+   it pushed from PostgreSQL, and pushes them to its connected Bridges over SSE. Pub/sub delivers at
    most once, so it carries no notice itself: a lost wake-up costs a delay, never a notice. This is
    how revocation propagates across a horizontally scaled instance without direct
    instance-to-instance coordination. See [Multi-instance propagation](security-workflow.md#multi-instance-propagation).
@@ -356,7 +356,7 @@ distributes events; PostgreSQL is the source of truth.
 | Subscribe to revocation channel                        |          |            | ✓      |         |
 | Publish revocation events (cross-instance, via Valkey) |          | ✓          |        |         |
 | Dismiss revoked session                                |          |            | ✓      |         |
-| Raise on controller loss (fail-secure)                 |          |            | ✓      |         |
+| Raise on Controller loss (fail-secure)                 |          |            | ✓      |         |
 | Apply enforcement results as query filters             |          |            |        | ✓       |
 | Filter data requests at the application's hook         |          |            |        | ✓       |
 | Manage policy (grants, resource users, categories)     |          | ✓          |        |         |

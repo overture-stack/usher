@@ -116,7 +116,7 @@ const clockAt = (
   };
 };
 
-// A controller that serves, whose log stream takes its lines and whose role writes, over the store
+// A Controller that serves, whose log stream takes its lines and whose role writes, over the store
 // and clock given.
 const serving = (
   overrides: Partial<ReadinessSettings> & Pick<ReadinessSettings, 'probeStore'>,

@@ -15,11 +15,11 @@ export interface Capability {
   plane: Plane;
 }
 
-/** The name of a role the controller seeds, as the seeded matrix names it. */
+/** The name of a role the Controller seeds, as the seeded matrix names it. */
 export type SeededRoleName =
   'admin' | 'curator' | 'editor' | 'owner' | 'submitter' | 'viewer';
 
-/** A role the controller seeds: its plane, and every capability it carries as `entity.action` names, sorted. */
+/** A role the Controller seeds: its plane, and every capability it carries as `entity.action` names, sorted. */
 export interface SeededRole {
   capabilities: readonly string[];
   plane: Plane;

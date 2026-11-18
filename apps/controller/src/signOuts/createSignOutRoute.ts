@@ -31,7 +31,7 @@ export const SIGN_OUT_PATH = '/backchannel-logout';
 /** The line naming a failure of the store while a sign-out was recorded. */
 export const SIGN_OUT_STORE_FAILED = 'signOuts.storeFailed';
 
-/** The line naming a failure the controller did not expect, answered `400 internalError`. */
+/** The line naming a failure the Controller did not expect, answered `400 internalError`. */
 export const SIGN_OUT_UNEXPECTED_FAILURE = 'signOuts.unexpectedFailure';
 
 const BODY_TOO_LARGE = 'FST_ERR_CTP_BODY_TOO_LARGE';

@@ -26,7 +26,7 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * and at every reread interval besides, so a notice another instance committed is pushed within that
  * interval; wakes arriving during a read are answered by one read after it. A read finding the epoch
  * replaced, the watermark past the tail's position, or the newest notice below it, as after a restore,
- * ends every live stream, each bridge to open its stream again from its own cursor; a read that fails
+ * ends every live stream, each Bridge to open its stream again from its own cursor; a read that fails
  * is written to the log by its code, and tried again at the next wake.
  *
  * @param settings the reader, the page limit, the reread interval and the log.

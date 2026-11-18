@@ -3,7 +3,7 @@ import { problem, type Problem } from '../http/index.js';
 /**
  * The one refusal every route reading a channel assertion answers a refused one with, whatever its
  * cause: `401 channelAssertionRefused`, naming the rules an assertion keeps and no cause, so the answer
- * tells no check from another and the cause is in the controller's log alone.
+ * tells no check from another and the cause is in the Controller's log alone.
  */
 export const CHANNEL_ASSERTION_REFUSED: Problem = problem(
   'channelAssertionRefused',

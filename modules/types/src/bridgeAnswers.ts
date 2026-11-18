@@ -8,7 +8,7 @@ export const SUSPENDED_HEADER = 'Usher-Suspended';
 export const SUSPENDED_VALUE = 'true';
 
 /**
- * The `error` values of the bridge's `WWW-Authenticate: Bearer` challenge:
+ * The `error` values of the Bridge's `WWW-Authenticate: Bearer` challenge:
  * - `invalidToken` comes with a 401 refusing the credential, whatever the reason. A 401 that
  *   persists after one successful renewal of the sign-in token is final for that token.
  * - `invalidRequest` comes with a 400 refusing a request that carried more than one credential, or

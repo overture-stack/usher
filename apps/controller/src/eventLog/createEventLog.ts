@@ -34,7 +34,7 @@ interface Sink {
 
 // A stream emitting an error with nobody listening ends the process, so the sink listens while any
 // line it wrote is in flight, and lets go once it is closed and every one has settled: the stream is
-// the configuration's, and other controllers may be writing to it.
+// the configuration's, and other Controllers may be writing to it.
 const createSink = (stream: Writable): Sink => {
   const state = { listening: false, open: true, pending: 0, writable: true };
   const fail = (): void => {
@@ -86,7 +86,7 @@ const createSink = (stream: Writable): Sink => {
 };
 
 /**
- * Creates the controller's log stream over the configured stream, connecting nothing until its first
+ * Creates the Controller's log stream over the configured stream, connecting nothing until its first
  * line. An operational line carries its fields, `message` naming it and `time` read from the clock;
  * an event's line carries its envelope alone. Every line is one JSON object holding each member
  * once, with the logger's numeric level in `level`.

@@ -10,17 +10,17 @@ import {
 } from './containers.js';
 import { migrate, type MigrationOptions } from './controller.js';
 
-/** The two roles a deployment creates: the migration role owning the schema, and the controller's runtime role. */
+/** The two roles a deployment creates: the migration role owning the schema, and the Controller's runtime role. */
 export type DatabaseRole = 'migration' | 'runtime';
 
-/** Each role's name, as the tests and the controller's configuration name it. */
+/** Each role's name, as the tests and the Controller's configuration name it. */
 export const DATABASE_ROLES: Readonly<Record<DatabaseRole, string>> =
   Object.freeze({
     migration: 'usher_migration',
     runtime: 'usher_controller',
   });
 
-/** The schema named for Usher, which the controller's tables live in. */
+/** The schema named for Usher, which the Controller's tables live in. */
 export const USHER_SCHEMA = 'usher';
 
 /**
@@ -84,13 +84,13 @@ export interface TestDatabase {
   /**
    * Gives {@link READ_ONLY_ROLE} `USAGE` on the schema and `SELECT` on every table it holds now,
    * granted by the migration role, which owns them, creating the role on this PostgreSQL first if no
-   * test has, and settles to a connection URL under it, for a controller started on it.
+   * test has, and settles to a connection URL under it, for a Controller started on it.
    */
   readOnlyUrl(): Promise<string>;
 
   schema: string;
 
-  /** A connection URL under a role, such as the controller's `databaseUrl` for `runtime`. */
+  /** A connection URL under a role, such as the Controller's `databaseUrl` for `runtime`. */
   urlFor(role: DatabaseRole): string;
 }
 
@@ -254,7 +254,7 @@ const withFloor = async (
  * call's alone, so the test file asking gets that failure and every other file runs on. The
  * superuser does this work and is never handed out.
  *
- * @param template the template to clone; the controller's own by default. Another is for the harness's
+ * @param template the template to clone; the Controller's own by default. Another is for the harness's
  *   own tests.
  * @param options the retention floor, and the PostgreSQL to create the database on.
  */
@@ -346,7 +346,7 @@ export interface DedicatedTestDatabase extends TestDatabase {
  * file, for an outage test, or for a server setting. Its `close` drops the database, then removes the
  * PostgreSQL.
  *
- * @param template the template to clone; the controller's own by default.
+ * @param template the template to clone; the Controller's own by default.
  * @param options the retention floor, and the server settings the PostgreSQL starts with, such as
  *   `{ track_commit_timestamp: 'on' }`.
  */

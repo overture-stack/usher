@@ -18,7 +18,7 @@ const SHIPPED_FILES = [
 ];
 
 /**
- * The bridge's manifest as pnpm 12.9.1 packs it with usher-types at 0.1.0, less `private`, with
+ * The Bridge's manifest as pnpm 12.9.1 packs it with usher-types at 0.1.0, less `private`, with
  * `overrides` spread over it.
  */
 const packedManifest = (

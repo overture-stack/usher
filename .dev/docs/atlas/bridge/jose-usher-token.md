@@ -5,22 +5,22 @@ registry (jose 6.2.12, zod 4.6.5, tsx 4.23.15, TypeScript 7.0.2, pino 10.4.0), 2
 behaviour stated here was run there unless the sentence says it was read from source, from a
 specification, or reasoned. Every timing is that machine's.
 
-Every application that Usher protects embeds a shared library, the bridge, which receives an
-encrypted token from the Usher controller and reads the principal's permissions out of it. This note
-covers how the bridge decrypts and validates that token with the jose library, and how the controller
-mock encrypts one for the bridge's tests. jose's defaults are permissive, its errors carry the
+Every application that Usher protects embeds a shared library, the Bridge, which receives an
+encrypted token from the Usher Controller and reads the principal's permissions out of it. This note
+covers how the Bridge decrypts and validates that token with the jose library, and how the Controller
+mock encrypts one for the Bridge's tests. jose's defaults are permissive, its errors carry the
 decrypted payload, and its type parameter erases a null subject. Each rule below closes one of those.
 
 ## Decisions
 
 **Decrypting**
 
-- The bridge calls `jwtDecrypt` with its one decryption key and every option in
+- The Bridge calls `jwtDecrypt` with its one decryption key and every option in
   [Each option closes a default](#each-option-closes-a-default) set, and passes no `crit` option.
 - The Usher token's clock tolerance is 0.
-- Before jose reads anything, the bridge reads the protected header with `decodeProtectedHeader` and
+- Before jose reads anything, the Bridge reads the protected header with `decodeProtectedHeader` and
   rejects the token unless `typ` is exactly `usher+jwt`.
-- Before decryption, the bridge rejects a protected header carrying any member other than `alg`,
+- Before decryption, the Bridge rejects a protected header carrying any member other than `alg`,
   `enc` and `typ`.
 - `kid` joins that allowlist only together with key rotation, and with it a key resolver taking the
   key from a `Map` keyed by `kid`. Until then the one key is passed directly, and the allowlist
@@ -28,19 +28,19 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 
 **The key**
 
-- The bridge's API takes the key as a 43-character base64url string in canonical form, and the bridge
+- The Bridge's API takes the key as a 43-character base64url string in canonical form, and the Bridge
   does not start on any other value. Whitespace around the key is ignored, since it is never part of a
   key and a pasted value often carries it.
 - On any other value, `start()` rejects with a fixed-text `UsherContractError` naming the rule, and
-  the bridge stays cold and logs `bridge.startRefusal`, which
+  the Bridge stays cold and logs `bridge.startRefusal`, which
   [audit-events.md](../../../design/audit-events.md) registers as critical.
-- After import the bridge holds the key only as `CryptoKey`s and keeps no reference to the raw bytes.
+- After import the Bridge holds the key only as `CryptoKey`s and keeps no reference to the raw bytes.
 - The key that decrypts the Usher token is a non-extractable AES-GCM `CryptoKey` whose only usage is
   decrypt.
 - The application key is only ever the HKDF input: every use, the Usher token included, gets an
   HKDF subkey of its own, as [Revocation notice stream](revocation-notice-stream.md) sets out. The
   token key is the subkey with info `usher/v1/token-encryption`.
-- The bridge therefore imports the bytes once, as a non-extractable HKDF key, and derives the token
+- The Bridge therefore imports the bytes once, as a non-extractable HKDF key, and derives the token
   key from it.
 - The anonymous exchange at startup is the key's self-test.
 
@@ -61,7 +61,7 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 - The `Map` keys its one reader by usher-types' `PAYLOAD_VERSION`, the version `validatePayload`
   reads, rather than by the number written again.
 - `start` refuses any listed version with no reader in that `Map`, as `payloadVersionUnreadable`, so
-  a bridge never starts listing a version it would then reject.
+  a Bridge never starts listing a version it would then reject.
 - `sub` is bound to the kind of exchange: a non-null `sub` answering an anonymous exchange, or a null
   `sub` answering an exchange that carried a credential, rejects the token.
 - An Usher token whose `sub` differs from the subject of a three-part sign-in token is rejected.
@@ -79,20 +79,20 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 - Rejected tokens and failed exchanges are held in the short failure store of
   [Bridge core and Express layer](core-and-express-layer.md), apart from refusals, for a fixed
   interval that is configurable and bounded.
-- A broken controller is therefore not asked on every request, and the bridge still recovers quickly
-  once the controller is fixed.
+- A broken Controller is therefore not asked on every request, and the Bridge still recovers quickly
+  once the Controller is fixed.
 - When the anonymous refresh is rejected while the channel is healthy, the anonymous entry is still
   served as ordinary cache while it is unexpired and no notice has dropped it.
 - Once that entry has expired or a notice has dropped it, anonymous and open-tier requests get 503.
 - A notice that drops the anonymous entry discards it for good, so it is never revived as the
   uncertain-mode fallback, which serves the anonymous results even past the payload's `exp`
   ([Bridge core and Express layer](core-and-express-layer.md)).
-- A bridge is cold until it has accepted an anonymous payload since start, so a rejected startup token
+- A Bridge is cold until it has accepted an anonymous payload since start, so a rejected startup token
   leaves it cold, answering 503 before any read path.
 - Each rejection is logged as a `token.rejection` event carrying one of the fixed
   [reason codes](#reason-codes).
 - At startup, a wrong application key shows first on the anonymous exchange, whose channel
-  assertion the controller refuses with 401: the bridge logs `token.exchangeFailure` with cause
+  assertion the Controller refuses with 401: the Bridge logs `token.exchangeFailure` with cause
   `assertionRefused` and `revocationChannel.modeChange` with reason `probableKeyMismatch`, and stays
   cold. An anonymous token failing decryption at startup is named the same way, after its
   `token.rejection` with reason `decryptionFailed`.
@@ -100,7 +100,7 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 
 **Logging**
 
-- A rejection is logged by its fixed reason code alone. The bridge never logs a jose error, a zod
+- A rejection is logged by its fixed reason code alone. The Bridge never logs a jose error, a zod
   error or the `jwtDecrypt` result.
 - Neither the exchange's request body nor its response body reaches a log on any path: answers other
   than 2xx, parse failures, retries and the HTTP client's debug output.
@@ -115,16 +115,16 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 - Decryption and validation run once per exchange, never per request; where rendering runs is set out
   in [Bridge core and Express layer](core-and-express-layer.md).
 - An entry ends at the earliest of its Usher token's `exp`, its receipt plus the TTL timed on the
-  monotonic clock, and its sign-in token's `exp`. The receipt bound holds even if a controller defect
+  monotonic clock, and its sign-in token's `exp`. The receipt bound holds even if a Controller defect
   issues a long `exp`.
 - No store keeps the Usher token or a decrypted payload; the [core note](core-and-express-layer.md)
   lists what each store holds.
 
-**The exchange response and the controller mock**
+**The exchange response and the Controller mock**
 
 - The exchange's HTTP layer caps the response body before jose reads it, at 1 MiB unless configured
   as `responseCapBytes`. An answer past the cap is rejected unread, as `tokenTooLarge`.
-- The controller mock mints whole corpus payloads with `new EncryptJWT(payload)` under the header
+- The Controller mock mints whole corpus payloads with `new EncryptJWT(payload)` under the header
   `{ alg: 'dir', enc: 'A256GCM', typ: 'usher+jwt' }`.
 - The mock never sets the IV, the content encryption key, the subject by its setter, or `zip`.
 - The mock's own tests assert that two mints of one payload have different IV segments.
@@ -136,7 +136,7 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 
 The `typ` value, `dir` with A256GCM and the key per application are recorded in
 [decisions.md](../../../design/decisions.md). The 503 for a failed decryption is in
-[adapter-integration.md](../../../design/adapter-integration.md) ("Fail-secure when the bridge cannot
+[adapter-integration.md](../../../design/adapter-integration.md) ("Fail-secure when the Bridge cannot
 deliver a resolved permissions payload"), and the single 401 for a refused identity is in
 decisions.md ("A refused identity gets one 401, whatever the reason"). No design document records
 the clock tolerance of 0: [to-discuss.md](../../../design/to-discuss.md) lists clock skew for `exp`
@@ -146,17 +146,17 @@ and `iat` among the token-spec details with no stated answer.
 
 | Term                  | Meaning in this note                                                                                                                                                                                                                                |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Usher token           | the controller's answer to the exchange, a JWE carrying the principal's payload                                                                                                                                                                     |
-| reject (a token)      | the bridge fails to read an Usher token, at any step from the header check to the validator; the token is treated as not received and the request gets 503. [Bridge core and Express layer](core-and-express-layer.md) names this outcome malformed |
-| reject (a library)    | a library throws on an input. Inside token reading the libraries are jose and WebCrypto, and a throw from either makes the bridge reject the token                                                                                                  |
-| reject (a promise)    | JavaScript's sense, used only of `start()`: the promise it returns settles with an `UsherContractError` when the bridge refuses to start. It is never a rejected token                                                                              |
+| Usher token           | the Controller's answer to the exchange, a JWE carrying the principal's payload                                                                                                                                                                     |
+| reject (a token)      | the Bridge fails to read an Usher token, at any step from the header check to the validator; the token is treated as not received and the request gets 503. [Bridge core and Express layer](core-and-express-layer.md) names this outcome malformed |
+| reject (a library)    | a library throws on an input. Inside token reading the libraries are jose and WebCrypto, and a throw from either makes the Bridge reject the token                                                                                                  |
+| reject (a promise)    | JavaScript's sense, used only of `start()`: the promise it returns settles with an `UsherContractError` when the Bridge refuses to start. It is never a rejected token                                                                              |
 | malformed (a payload) | the validator rejects the decrypted payload; one cause of a rejected token, with the same 503                                                                                                                                                       |
-| refuse (an identity)  | the identity outcome: the controller refuses the identity at the exchange, or the bridge refuses locally a signed sign-in token whose own `exp` has passed; the request gets the one fixed 401                                                      |
-| refuse (to start)     | the bridge does not start, for an unusable key, a second bridge for one audience, a refused configuration or a seam that throws. It stays cold, answers 503 and logs `bridge.startRefusal`. It is neither an identity outcome nor a rejected token  |
+| refuse (an identity)  | the identity outcome: the Controller refuses the identity at the exchange, or the Bridge refuses locally a signed sign-in token whose own `exp` has passed; the request gets the one fixed 401                                                      |
+| refuse (to start)     | the Bridge does not start, for an unusable key, a second Bridge for one audience, a refused configuration or a seam that throws. It stays cold, answers 503 and logs `bridge.startRefusal`. It is neither an identity outcome nor a rejected token  |
 
 **A rejected token is never a refusal.** A refused identity says something about the person, and a
-refusal to start says something about how the bridge was set up. A rejected token says something
-about the controller or the deployment.
+refusal to start says something about how the Bridge was set up. A rejected token says something
+about the Controller or the deployment.
 
 ## The package
 
@@ -171,8 +171,8 @@ The [technology stack](../roadmap/technology-stack.md) says jose runs on Node's 
 cryptography. In version 6 that means WebCrypto. jose accepts a `node:crypto` `KeyObject` but
 converts it on every call.
 
-jose's ESM-only build, and keeping its types and `CryptoKey` out of the bridge's public declarations,
-belong to [Packaging the bridge](packaging-and-toolchain.md), which covers both.
+jose's ESM-only build, and keeping its types and `CryptoKey` out of the Bridge's public declarations,
+belong to [Packaging the Bridge](packaging-and-toolchain.md), which covers both.
 
 ## The decrypt call
 
@@ -200,26 +200,26 @@ Each row was shown by decrypting a token with the option left out.
 | `typ`                         | not checked                                     | `typ: "JWT"`                                                                                                | `'usher+jwt'`, as a backstop |
 | `crit`                        | no extension recognized                         | nothing: any `crit` header is rejected before the resolver runs                                             | leave unset                  |
 
-`audience` is the application's audience, `issuer` the controller's, and `clockTolerance` is 0.
+`audience` is the application's audience, `issuer` the Controller's, and `clockTolerance` is 0.
 
 **jose reads a numeric `clockTolerance` in seconds.** It also takes a time-span string such as
 `'30s'`. A tolerance of 30000, meant as 30 seconds written in milliseconds, accepted a token eight
 hours past its `exp` and rejected one nine hours past. `30` and `'30s'` rejected a token one hour
 past. A configuration that holds a tolerance in milliseconds converts it to seconds before it
-reaches `jwtDecrypt`. A `NaN` tolerance makes every call throw a `TypeError`, so a bridge that passed
+reaches `jwtDecrypt`. A `NaN` tolerance makes every call throw a `TypeError`, so a Bridge that passed
 one would reject every token. The Usher token's tolerance is 0, so the unit matters only where a
 nonzero tolerance reaches jose.
 
 **A tolerance of 0 makes acceptance and the per-request drop use the same rule.** Skew can then only
-shorten an entry. A bridge clock ahead of the controller's by more than a token's life rejects every
+shorten an entry. A Bridge clock ahead of the Controller's by more than a token's life rejects every
 token, which fails closed and visibly. The local refusal of an expired three-part sign-in token
 takes its tolerance from a separate setting in configuration, `localRefusalClockToleranceMs`,
-60000 ms by default. It must never be set below the controller's own tolerance, or the bridge would
-refuse what the controller accepts
+60000 ms by default. It must never be set below the Controller's own tolerance, or the Bridge would
+refuse what the Controller accepts
 ([Bridge core and Express layer](core-and-express-layer.md), "Configuration").
 
 **The key's usage restriction does not pin the algorithm.** Without `keyManagementAlgorithms`, jose
-accepted an `A256GCMKW` token under the bridge's own non-extractable, decrypt-only key. The allowlist
+accepted an `A256GCMKW` token under the Bridge's own non-extractable, decrypt-only key. The allowlist
 is what pins `dir`.
 
 **jose's `audience` check accepts an `aud` array that contains the expected audience.** The validator
@@ -291,7 +291,7 @@ The code around `readUsherToken` turns every other error into a reason code, as
 **jose's own `typ` check is late and loose** (read from source). It runs after decryption, once the
 plaintext has been parsed as a JSON object. It lowercases both sides and adds an `application/` prefix
 when there is no slash, so `USHER+JWT` and `application/usher+jwt` both pass it. The exact pre-check
-rejects both. No token emitted by the controller fails the exact check.
+rejects both. No token emitted by the Controller fails the exact check.
 
 **The resolver is not first either.** jose calls it only after these steps (read from source):
 
@@ -318,7 +318,7 @@ the checks is therefore authenticated the moment decryption succeeds.
 `jwk` and `x5u`, and any `iss`, `sub` or `aud` copied into the header. A `crit` header never reaches
 it, because jose rejects any `crit` before the resolver runs. With the two algorithm
 allowlists, it makes RFC 8725 §3.1 (pin `alg` and `enc` on read) and §3.6 (never compress) hold in the
-bridge. Both are listed open in [to-discuss.md](../../../design/to-discuss.md). Any future header
+Bridge. Both are listed open in [to-discuss.md](../../../design/to-discuss.md). Any future header
 member becomes a deliberate change on both sides.
 
 **After decryption, jose checks in this order** (read from source): the decompression limit, the
@@ -338,7 +338,7 @@ reported as `aud`.
 | JWK of type oct | yes                   | caught only at the first decrypt, as `JWEInvalid`; `importJWK` returns the bytes unchecked                                     |
 | `CryptoKey`     | yes                   | raw import accepts 16, 24 and 32 bytes and throws on any other length; a 16-byte key fails at decrypt with a plain `TypeError` |
 
-Neither library guarantees a 32-byte key, so the bridge checks it itself.
+Neither library guarantees a 32-byte key, so the Bridge checks it itself.
 
 ### The startup check
 
@@ -355,7 +355,7 @@ Neither library guarantees a 32-byte key, so the bridge checks it itself.
    `usher/v1/token-encryption`, as `{ name: 'AES-GCM', length: 256 }`, non-extractable, with
    `['decrypt']` alone.
 
-**The bridge does not lean on a decoder's strictness.** jose's base64url decoder throws on invalid
+**The Bridge does not lean on a decoder's strictness.** jose's base64url decoder throws on invalid
 characters but tolerates padding and whitespace. On Node 24.16 that tolerance comes from a fallback
 through `atob`, used because `Uint8Array.fromBase64` is absent there (read from source), so it depends
 on the runtime. Node's `Buffer` base64url decoding silently drops an invalid character, so a mistyped
@@ -369,7 +369,7 @@ on the runtime. Node's `Buffer` base64url decoding silently drops an invalid cha
   [decisions.md](../../../design/decisions.md) already accepts.
 - `jwtDecrypt` returns the resolved key in its result, beside `payload` and `protectedHeader`. With a
   `Uint8Array` or a `KeyObject`, that is the raw secret as bytes. With this key it cannot be exported.
-  The bridge takes `payload` alone from the result either way, so no log, spread or return carries the
+  The Bridge takes `payload` alone from the result either way, so no log, spread or return carries the
   key.
 - It is the fastest form on the corpus-sized token: 21 µs per decrypt, against 26 µs for a
   `Uint8Array`, which jose imports again on every call, and 28 µs for a `KeyObject` created once.
@@ -386,7 +386,7 @@ on the runtime. Node's `Buffer` base64url decoding silently drops an invalid cha
 - The HKDF key cannot decrypt an Usher token: jose throws a `TypeError` naming the wrong algorithm.
   Each key serves one role.
 
-The subkeys derived from it, and their agreement with a controller deriving through `hkdfSync`, are
+The subkeys derived from it, and their agreement with a Controller deriving through `hkdfSync`, are
 in [Revocation notice stream](revocation-notice-stream.md).
 
 ### A wrong key, and the self-test
@@ -394,15 +394,15 @@ in [Revocation notice stream](revocation-notice-stream.md).
 Any wrong 32-byte key, another application's included, fails as `JWEDecryptionFailed`. Altered
 ciphertext, tag or IV fails identically. The failure tells nobody which part was wrong.
 
-The bridge fetches the anonymous payload at startup. The exchange is authenticated by a channel
+The Bridge fetches the anonymous payload at startup. The exchange is authenticated by a channel
 assertion signed under a subkey of the application key, so a key mismatch shows first as that
 assertion refused with 401, before any token is decrypted; a token encrypted under another key still
-fails as `JWEDecryptionFailed`. Either way the bridge stays cold, since it holds no accepted anonymous
+fails as `JWEDecryptionFailed`. Either way the Bridge stays cold, since it holds no accepted anonymous
 payload.
 
 **One mismatch passes the self-test.** If the same wrong key is configured for this application on
 both sides, decryption succeeds. The audience check is then the only defence, so it stays mandatory.
-Key distinctness across applications is a deployment check that the bridge cannot make.
+Key distinctness across applications is a deployment check that the Bridge cannot make.
 
 ## What jose checks, and what the validator must
 
@@ -413,7 +413,7 @@ validator, therefore includes both category members and `servedResources`, so a 
 them is rejected before the validator runs. `globalCategories` lists every concrete global category
 Usher defines, never `global.unmarked`, once for the whole payload, since a global category applies
 to every resource whose records match it. `resourceCategories` lists each resource's own
-`resource.` categories, under exactly the resources named in `permissions`. The bridge compares the categories each resource
+`resource.` categories, under exactly the resources named in `permissions`. The Bridge compares the categories each resource
 offers with each catalogue's mapping and declared absences, which it reads from the adapter's
 registration
 ([adapter-integration.md](../../../design/adapter-integration.md), "Category dictionary
@@ -421,7 +421,7 @@ introspection"). A resource offering a category neither mapped nor declared abse
 withheld from that catalogue
 ([decisions.md](../../../design/decisions.md#a-catalogues-category-gap-is-found-by-the-bridge-from-the-categories-each-resource-offers)).
 The check stays generic: the adapter turns its application's configuration, whatever its shape, into
-the one registration read by the bridge. `servedResources` lists every resource served by the
+the one registration read by the Bridge. `servedResources` lists every resource served by the
 audience, held or not. A key knows each of them, together with its own resource list when it has one, so a
 record holding a known resource the principal does not hold is withheld.
 
@@ -435,7 +435,7 @@ record holding a known resource the principal does not hold is withheld.
 | `iss`                                                                                     | equal to the configured issuer                                                                    | a string                                                                                                                            |
 | `aud`                                                                                     | accepts an array containing the audience                                                          | a string, so an array is malformed                                                                                                  |
 | `exp`, `iat`, `nbf`                                                                       | times checked only when present; `iat`'s time only with `maxTokenAge`; fractional values accepted | integers for `iat`, `exp` and `generatedAt`                                                                                         |
-| `payloadVersion`                                                                          | presence only                                                                                     | one of the versions listed by the bridge                                                                                            |
+| `payloadVersion`                                                                          | presence only                                                                                     | one of the versions listed by the Bridge                                                                                            |
 | `sub`                                                                                     | presence only                                                                                     | a non-empty string or `null`, then bound to the kind of exchange                                                                    |
 | members at the root                                                                       | ignored                                                                                           | a strict object: any member outside the type, `nbf` and `jti` included, is malformed                                                |
 | category names in `permissions` and in `field`                                            | none                                                                                              | `global.<name>` or `resource.<name>`; a bare name or another prefix is malformed                                                    |
@@ -474,17 +474,17 @@ Three further rules:
 
 ### Binding sub to the exchange
 
-jose and the type both accept a `sub` of either kind. Only the bridge knows which exchange it made.
+jose and the type both accept a `sub` of either kind. Only the Bridge knows which exchange it made.
 
 - **An anonymous exchange answered with a non-null `sub`.** Serving it would put one principal's
   grants and subject into the shared anonymous entry, which serves every visitor. That fails open.
 - **An exchange carrying a credential answered with a null `sub`.** Serving it would treat the
   principal silently as anonymous, and notices naming them would never find the entry. The contract
   already refuses an invalid identity at the exchange rather than serving it as anonymous.
-- **A `sub` that differs from a three-part sign-in token's own subject.** The bridge can read that
+- **A `sub` that differs from a three-part sign-in token's own subject.** The Bridge can read that
   subject without verifying the signature. A mismatch catches a coalescing or caching defect that pairs
   one credential with another's answer. Opaque API keys carry no readable subject, so this covers
-  sign-in tokens only. It relies on the controller's `sub` being the identity provider's subject
+  sign-in tokens only. It relies on the Controller's `sub` being the identity provider's subject
   unchanged, as the type says.
 
 ## When a token is rejected
@@ -508,7 +508,7 @@ the same way.
 - jose's messages can include header parameter names taken from the token, line breaks included.
   Logging a message lets a token's author write into the log.
 
-So the bridge logs a reason code alone. It never logs an error's message, payload, cause, stack or
+So the Bridge logs a reason code alone. It never logs an error's message, payload, cause, stack or
 issue paths.
 
 ### Reason codes
@@ -517,7 +517,7 @@ The codes are camelCase, like the other reason values in
 [audit-events.md](../../../design/audit-events.md). `token.rejection` is registered there, with
 `reason` as a fixed code and no other field, so `claimRejected` names neither the failing claim nor
 jose's check. [Bridge core and Express layer](core-and-express-layer.md) holds the complete list of
-events the bridge emits.
+events the Bridge emits.
 
 | Where reading fails                                                                                 | Reason                   |
 | --------------------------------------------------------------------------------------------------- | ------------------------ |
@@ -534,7 +534,7 @@ events the bridge emits.
 | `JWTExpired`                                                                                        | `expired`                |
 | `JWTClaimValidationFailed` naming `aud` as its `claim`, a value not naming this application         | `audienceRejected`       |
 | `JWTClaimValidationFailed` otherwise: another claim, or a missing `aud`                             | `claimRejected`          |
-| a `payloadVersion` not listed by the bridge                                                         | `payloadVersionUnlisted` |
+| a `payloadVersion` not listed by the Bridge                                                         | `payloadVersionUnlisted` |
 | the validator rejects the payload                                                                   | `payloadMalformed`       |
 | `sub` does not match the kind of exchange, or differs from a three-part sign-in token's own subject | `subjectMismatch`        |
 | anything else                                                                                       | `unexpected`             |
@@ -606,7 +606,7 @@ from the token: `token.rejection` carries only fixed values.
 NIST plans to revise). jose draws a fresh random 12-byte IV for each encryption. At a sustained 100
 tokens a second, one key reaches 2^32 in about 1.36 years; at 10 a second, in about 13.6 years.
 
-## The controller mock
+## The Controller mock
 
 ```ts
 const usherToken = await new EncryptJWT(payload) // the whole corpus payload, sub, iat and exp rewritten
@@ -641,23 +641,23 @@ const usherToken = await new EncryptJWT(payload) // the whole corpus payload, su
 
 - The timings come from the machine named at the top, not from the machines that run the
   applications. Memory use was not measured here.
-- The cap on the exchange response was tested against a controller mock on a local port, not against
-  the controller. The eleven-member token's size was not measured again: the 1 MiB default rests on
+- The cap on the exchange response was tested against a Controller mock on a local port, not against
+  the Controller. The eleven-member token's size was not measured again: the 1 MiB default rests on
   the 186 KB measured for 500 resources without the category members or `servedResources`.
-- Stage, a Next.js application whose server side would embed a bridge, was not tested. jose's build is
+- Stage, a Next.js application whose server side would embed a Bridge, was not tested. jose's build is
   universal, so it should load there; that is unverified, as are edge runtimes.
 - The zod schemas were written for these checks. They are not the `usher-types` validators, and the
   rules for the category members and `servedResources` were not run through them.
-- Whether the controller can hold an encrypt-only, non-extractable `CryptoKey` for `EncryptJWT`, as
-  the bridge holds a decrypt-only one, was not run.
+- Whether the Controller can hold an encrypt-only, non-extractable `CryptoKey` for `EncryptJWT`, as
+  the Bridge holds a decrypt-only one, was not run.
 - Whether a draft revision of NIST SP 800-38D changes the 2^32 bound was not checked.
 
 ## Open questions
 
-1. **Key rotation**, open on the controller side. How often a key rotates, and how a bridge picks up a
+1. **Key rotation**, open on the Controller side. How often a key rotates, and how a Bridge picks up a
    new key without dropping in-flight tokens, are open in
    [adapter-integration.md](../../../design/adapter-integration.md) ("Decryption key distribution").
-   Two triggers fit the 2^32 bound: the controller counts encryptions per application key and rotates
+   Two triggers fit the 2^32 bound: the Controller counts encryptions per application key and rotates
    well before the bound, or rotation runs on a schedule short enough that no plausible rate reaches
    it. `kid` arrives with the mechanism, as [to-discuss.md](../../../design/to-discuss.md) says ("the
    rule and the mechanism arrive together or neither does").

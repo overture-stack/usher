@@ -58,12 +58,12 @@ import {
 } from '../vendoredBridge.js';
 import { type Cleanup, eventually } from '../waiting.js';
 
-// #217's own fixture: the real bridge, through a relay, against the controller. Its applications, its
-// resources and policy, the keys every bridge registers, the outage conditions the plan's causes table
+// #217's own fixture: the real Bridge, through a relay, against the Controller. Its applications, its
+// resources and policy, the keys every Bridge registers, the outage conditions the plan's causes table
 // names, and the waits and probes its suites share.
 
 /**
- * The two applications each integration harness registers, by label, each with a bridge of its own
+ * The two applications each integration harness registers, by label, each with a Bridge of its own
  * when a test runs two.
  */
 export const APPLICATIONS = Object.freeze({
@@ -105,7 +105,7 @@ const CONTROLLED_VALUE = 'controlled';
 const UNMARKED_VALUE = 'general';
 
 /**
- * The keys every integration bridge registers: one record key, `vendoredBridge.ts`'s default record
+ * The keys every integration Bridge registers: one record key, `vendoredBridge.ts`'s default record
  * key, its resource in `study_id`, defining `global.controlled` on `data_category`, the one global
  * category the fixture registers.
  */
@@ -145,11 +145,11 @@ export const unmarkedRecord = (resource: string): EvaluatedRecord => ({
   [RESOURCE_FIELD]: resource,
 });
 
-/** The compressed profile's bridge timing, each letter of #217's plan resolved. */
+/** The compressed profile's Bridge timing, each letter of #217's plan resolved. */
 export const COMPRESSED: ResolvedBridgeTiming =
   resolvedBridgeTiming('compressed');
 
-/** The iMS profile's bridge timing: the bridge's defaults. */
+/** The iMS profile's Bridge timing: the Bridge's defaults. */
 export const IMS: ResolvedBridgeTiming = resolvedBridgeTiming('ims');
 
 /** The bound O13's "within seconds" takes on loopback (#217 Q8). */
@@ -159,18 +159,18 @@ export const DELIVERY_BOUND_MS = 2_000;
 export const LAPSE_TOLERANCE_MS = 100;
 
 /**
- * How much earlier than its recorded request a check's start may be read: the bridge reads its
+ * How much earlier than its recorded request a check's start may be read: the Bridge reads its
  * monotonic clock, then signs a channel assertion, then starts the request the fetch records.
  */
 export const CHECK_START_TOLERANCE_MS = 100;
 
-/** How soon after a reason to poll at once the bridge's poll starts. */
+/** How soon after a reason to poll at once the Bridge's poll starts. */
 export const AT_ONCE_MS = 100;
 
-/** How long a bridge may take from its start to normal while the controller answers. */
+/** How long a Bridge may take from its start to normal while the Controller answers. */
 export const STARTUP_BOUND_MS = 5_000;
 
-/** How long a restarted or restored controller and a bridge's next check may take to bring the bridge back to normal. */
+/** How long a restarted or restored Controller and a Bridge's next check may take to bring the Bridge back to normal. */
 export const RECOVERY_BOUND_MS = 15_000;
 
 /** A sign-in token's lifetime long enough that it never expires in a test, within what the harness accepts. */
@@ -266,7 +266,7 @@ export const pendingViewerGrant = (
 
 /** What an integration harness is started with beyond the fixture. */
 export interface IntegrationOptions {
-  /** Fields over the profile's controller half, last, so a test can set any of them. */
+  /** Fields over the profile's Controller half, last, so a test can set any of them. */
   configuration?: Partial<ControllerConfiguration>;
 
   /** The test's own policy, merged over {@link integrationPolicy}'s. */
@@ -275,21 +275,21 @@ export interface IntegrationOptions {
   /** A PostgreSQL of the test's own, for a test pausing or stopping the database. */
   postgresql?: DedicatedContainer;
 
-  /** The timing profile whose controller half the harness takes: `compressed` by default. */
+  /** The timing profile whose Controller half the harness takes: `compressed` by default. */
   profile?: TimingProfileName;
 }
 
-/** A harness serving the integration fixture, and the relay every bridge reaches it through. */
+/** A harness serving the integration fixture, and the relay every Bridge reaches it through. */
 export interface Integration {
   harness: Harness;
   relay: Relay;
 }
 
 /**
- * A loopback HTTP relay to a controller, aware of the bridge's paths, stopped once the test ends.
+ * A loopback HTTP relay to a Controller, aware of the Bridge's paths, stopped once the test ends.
  *
  * @param scope the test's cleanup.
- * @param url the controller's URL.
+ * @param url the Controller's URL.
  */
 export const relayTo = async (scope: Cleanup, url: URL): Promise<Relay> => {
   const relay = await startRelay(url.href, { protocol: 'http' });
@@ -298,13 +298,13 @@ export const relayTo = async (scope: Cleanup, url: URL): Promise<Relay> => {
 };
 
 // The store connections the integration harness's instance holds for the token exchange: enough for
-// the largest burst of exchanges an integration test sends at once, 50, beyond the controller's
+// the largest burst of exchanges an integration test sends at once, 50, beyond the Controller's
 // default of 10.
 const INTEGRATION_EXCHANGE_CONNECTIONS = 60;
 
 /**
  * Starts a harness serving both applications, seeded with the integration fixture, on a profile's
- * controller timing from the typed configuration (#217 Q2) and an exchange pool of 60 connections
+ * Controller timing from the typed configuration (#217 Q2) and an exchange pool of 60 connections
  * unless the test's configuration sets another, and a relay in front of it; defers their stops.
  *
  * @param scope the test's cleanup.
@@ -334,7 +334,7 @@ export const startIntegration = async (
   return { harness, relay };
 };
 
-/** What a relayed bridge is started with beyond the harness and the relay. */
+/** What a relayed Bridge is started with beyond the harness and the relay. */
 export interface RelayedBridgeOptions {
   /** The application it serves: `arranger-prod` by default. */
   application?: string;
@@ -345,17 +345,17 @@ export interface RelayedBridgeOptions {
   /** Settings over the profile's, such as a longer exchange timeout: none by default. */
   timing?: BridgeTimingOverride;
 
-  /** Its wall clock, such as one running ahead of the controller's: the system's by default. */
+  /** Its wall clock, such as one running ahead of the Controller's: the system's by default. */
   wallClock?: { now(): number };
 }
 
 /**
- * Starts the bridge through support's starter, with the recording fetch and logger,
- * reaching the controller through the relay, registering {@link INTEGRATION_KEYS}; defers its stop.
+ * Starts the Bridge through support's starter, with the recording fetch and logger,
+ * reaching the Controller through the relay, registering {@link INTEGRATION_KEYS}; defers its stop.
  *
  * @param scope the test's cleanup.
  * @param harness the harness whose application, key and issuer it takes.
- * @param relay the relay it reaches the controller through.
+ * @param relay the relay it reaches the Controller through.
  * @param options the application, the profile, a timing override and the wall clock.
  */
 export const startRelayedBridge = async (
@@ -383,11 +383,11 @@ export const startRelayedBridge = async (
 };
 
 /**
- * Starts an integration harness and one bridge for `arranger-prod` through its relay, and waits for
- * the bridge to turn normal.
+ * Starts an integration harness and one Bridge for `arranger-prod` through its relay, and waits for
+ * the Bridge to turn normal.
  *
  * @param scope the test's cleanup.
- * @param options the harness's options, and the bridge's.
+ * @param options the harness's options, and the Bridge's.
  */
 export const startNormalBridge = async (
   scope: Cleanup,
@@ -422,17 +422,17 @@ export const signInFor = (
   harness.tokens.signIn(person, { application, mint: { lifetimeSeconds } });
 
 /**
- * The owner of every fixture resource, as a caller of the controller itself, never the relay. A test
+ * The owner of every fixture resource, as a caller of the Controller itself, never the relay. A test
  * timing a change builds its caller first, so minting the token falls outside the time measured.
  *
  * @param harness the harness.
- * @param url the instance called: the harness's controller by default.
+ * @param url the instance called: the harness's Controller by default.
  */
 export const ownerOf = (harness: Harness, url?: URL): Promise<AdminCaller> =>
   personCaller(harness, PEOPLE.owner, url === undefined ? {} : { url });
 
 /**
- * Revokes a fixture holder's viewer grant on `STUDY-A1` as the caller given, at the controller itself,
+ * Revokes a fixture holder's viewer grant on `STUDY-A1` as the caller given, at the Controller itself,
  * and fails unless the revocation succeeded.
  *
  * @param caller the resource's owner, from {@link ownerOf}.
@@ -451,7 +451,7 @@ export const revokeHeldGrant = async (
 };
 
 /**
- * Accepts a fixture grant as its holder, shown what the seeded `viewer` carries, at the controller
+ * Accepts a fixture grant as its holder, shown what the seeded `viewer` carries, at the Controller
  * itself, and fails unless the decision succeeded.
  *
  * @param caller the holder.
@@ -473,8 +473,8 @@ export const acceptAsHolder = async (
 };
 
 /**
- * The anonymous payload the controller issues an application now, exchanged with it directly: a
- * probe of what a bridge would have fetched, never a bridge's own request.
+ * The anonymous payload the Controller issues an application now, exchanged with it directly: a
+ * probe of what a Bridge would have fetched, never a Bridge's own request.
  *
  * @param harness the harness.
  * @param application the application's label.
@@ -497,7 +497,7 @@ export const anonymousPayloadNow = async (
   );
 };
 
-/** How the bridge's Express layer answered one request, its body read to the end. */
+/** How the Bridge's Express layer answered one request, its body read to the end. */
 export interface LayerAnswer {
   status: number;
 
@@ -506,10 +506,10 @@ export interface LayerAnswer {
 }
 
 /**
- * Sends one request to a bridge's loopback app, as a client of the host would, and reads its answer
+ * Sends one request to a Bridge's loopback app, as a client of the host would, and reads its answer
  * to the end.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param credential the bearer credential, or `null` for an anonymous request.
  */
 export const requestThrough = async (
@@ -528,9 +528,9 @@ export const requestThrough = async (
 };
 
 /**
- * Waits until a bridge has started a number of requests to one of its paths since an instant.
+ * Waits until a Bridge has started a number of requests to one of its paths since an instant.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param path one of `RELAYED_PATHS`.
  * @param since the earliest start, by `performance.now()`.
  * @param count how many.
@@ -557,10 +557,10 @@ export const untilRequests = async (
 };
 
 /**
- * How many exchanges a bridge started since an instant carried one of the credentials given, read
+ * How many exchanges a Bridge started since an instant carried one of the credentials given, read
  * from each exchange's recorded body.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param credentials the credentials looked for.
  * @param since the earliest start, by `performance.now()`.
  */
@@ -602,7 +602,7 @@ export const runsOf = (
 export const gapsOf = (starts: readonly number[]): readonly number[] =>
   starts.slice(1).map((start, index) => start - (starts[index] ?? start));
 
-/** One way the controller becomes unreachable, slow or degraded, from #217's causes table. */
+/** One way the Controller becomes unreachable, slow or degraded, from #217's causes table. */
 export interface OutageCondition {
   /** Causes it. */
   cause(): Promise<void>;
@@ -676,13 +676,13 @@ const inForceOnce = (
 
 /**
  * Every condition of #217's causes table but a restore and trimmed history, each caused through
- * support's relay, the harness's controller, the stand-in or a container of the test's own, and each
+ * support's relay, the harness's Controller, the stand-in or a container of the test's own, and each
  * ended, if still in force, once the test ends, before anything deferred earlier stops:
- * - `stopped`: the controller stopped through the harness;
- * - `crashed`: the relay resetting every connection, then the controller stopped;
+ * - `stopped`: the Controller stopped through the harness;
+ * - `crashed`: the relay resetting every connection, then the Controller stopped;
  * - `frozen`: the relay freezing every path (hung, or a network cut);
- * - `databasePaused`: the controller running with its PostgreSQL paused (hung);
- * - `databaseStopped`: the controller running with its PostgreSQL stopped, refusing connections;
+ * - `databasePaused`: the Controller running with its PostgreSQL paused (hung);
+ * - `databaseStopped`: the Controller running with its PostgreSQL stopped, refusing connections;
  * - `refused`: the relay closing what is open and refusing every connection (a network cut);
  * - `reset`: the relay resetting every connection (a network cut);
  * - `delayedWithinDeadline` and `delayedBeyondDeadline`: every answer's start held 0.6 D, or 2 D (slow);
@@ -694,7 +694,7 @@ const inForceOnce = (
  *
  * @param scope the test's cleanup.
  * @param targets the harness, the relay, and the containers of the test's own.
- * @param timing the bridge's timing, which the slow conditions are measured against.
+ * @param timing the Bridge's timing, which the slow conditions are measured against.
  */
 export const outageConditions = (
   scope: Cleanup,
@@ -789,23 +789,23 @@ export const passAllButThePush = async (relay: Relay): Promise<void> => {
 
 /** The stand-in's signing key rotated, and the stand-in refusing connections, until restored. */
 export interface IdentityProviderOutage {
-  /** Accepts connections again, then moves the controller's clock past the signing-key cache's refetch cooldown once more. */
+  /** Accepts connections again, then moves the Controller's clock past the signing-key cache's refetch cooldown once more. */
   restore(): Promise<void>;
 }
 
 /**
- * Takes the identity provider away from the controller with a key it lacks: the stand-in rotates to a
- * new signing key, published as Keycloak publishes one, which the controller has not fetched, then
- * refuses every connection, and the controller's clock moves past the refetch cooldown (#208 Q5), so a
- * sign-in token signed with the new key sends the controller to the provider it can't reach. Restoring
+ * Takes the identity provider away from the Controller with a key it lacks: the stand-in rotates to a
+ * new signing key, published as Keycloak publishes one, which the Controller has not fetched, then
+ * refuses every connection, and the Controller's clock moves past the refetch cooldown (#208 Q5), so a
+ * sign-in token signed with the new key sends the Controller to the provider it can't reach. Restoring
  * accepts connections again and moves the clock past the cooldown once more, so the next exchange
- * fetches the key. The controller's clock then runs about 61 s ahead: inside a channel assertion's
- * 60 s life and the controller's 30 s tolerance on it (#215 Q9), so the bridge's assertions are still
+ * fetches the key. The Controller's clock then runs about 61 s ahead: inside a channel assertion's
+ * 60 s life and the Controller's 30 s tolerance on it (#215 Q9), so the Bridge's assertions are still
  * accepted. Connections are accepted again once the test ends, if still refused.
  *
  * @param scope the test's cleanup.
  * @param provider the harness's stand-in.
- * @param advance moves the controller's configured clock forward.
+ * @param advance moves the Controller's configured clock forward.
  */
 export const identityProviderOutage = async (
   scope: Cleanup,
@@ -832,10 +832,10 @@ export const identityProviderOutage = async (
 };
 
 /**
- * The accepted or refused `token.exchange` events among the controller's log lines that name a
- * subject as their actor: every exchange of a signed-in credential the controller answered.
+ * The accepted or refused `token.exchange` events among the Controller's log lines that name a
+ * subject as their actor: every exchange of a signed-in credential the Controller answered.
  *
- * @param lines the controller's log lines.
+ * @param lines the Controller's log lines.
  * @param subjects the subjects looked for.
  */
 export const exchangesNaming = (

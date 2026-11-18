@@ -22,12 +22,12 @@ export interface ReadinessLog {
   warning(message: string, fields?: Readonly<Record<string, string>>): void;
 }
 
-/** What the controller's readiness is judged from. */
+/** What the Controller's readiness is judged from. */
 export interface ReadinessSettings {
   /** Whether every line so far has reached the log stream. */
   isLogWritable(): boolean;
 
-  /** Whether the controller has started and is not stopping. */
+  /** Whether the Controller has started and is not stopping. */
   isServing(): boolean;
 
   /** Where each change of readiness is written. */

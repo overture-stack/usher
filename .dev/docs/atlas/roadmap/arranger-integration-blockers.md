@@ -76,7 +76,7 @@ apart. See "A refusal carries no
 exception, and expiry is announced rather than inferred" in `.dev/design/decisions.md`. A status code
 is an implementation detail of the first case rather than the goal of it.
 
-So the open question is whether the bridge-to-adapter result grows to give the adapter an actionable
+So the open question is whether the Bridge-to-adapter result grows to give the adapter an actionable
 reason, and if so which reasons are safe to expose to a principal who may not hold the resource at
 all.
 

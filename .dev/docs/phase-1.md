@@ -15,9 +15,9 @@ in phases after this one. Nothing below is scoped to the deliverable.
 
 Four pieces must be working together for the iMS UAC integration phase to start on time:
 
-1. Keycloak issuing a token, and the controller validating it (no usher code in the portal itself)
-2. The Arranger adapter running in Arranger's search-server, with the bridge as an in-process library (Usher token cache, revocation polling, Usher API call)
-3. The Arranger adapter injecting per-resource SQON filters at query time, derived from the grants fetched from Usher by the bridge
+1. Keycloak issuing a token, and the Controller validating it (no usher code in the portal itself)
+2. The Arranger adapter running in Arranger's search-server, with the Bridge as an in-process library (Usher token cache, revocation polling, Usher API call)
+3. The Arranger adapter injecting per-resource SQON filters at query time, derived from the grants fetched from Usher by the Bridge
 4. Enforcement composed at a boundary inherited by every Arranger read path (hits, aggregations, saved sets and download), verified by a shared test asserting a denied principal sees nothing on each of them
 
 **Moving the portal off EGO is not among them.** Phase 1 runs on `overture-dev`, which has no
@@ -26,7 +26,7 @@ EGO at all, so the move belongs to a later phase.
 Working backwards: two weeks of integration buffer means implementation must be functionally
 complete by Nov 1.
 
-**Resourcing:** Usher and its integration pieces (the bridge, the Arranger adapter) are implemented
+**Resourcing:** Usher and its integration pieces (the Bridge, the Arranger adapter) are implemented
 by the developer and AI agents working from a complete spec and a thorough test suite. Code
 review support may be requested from the wider softeng team, but implementation ownership is
 here. Given this model, implementation velocity is high once the spec settles, so the open design
@@ -48,25 +48,25 @@ order mocks them.
 
 **Why Stage rather than the portal that has the flows.** Stage already runs a server side in
 overture-dev: three API routes, a server-side token exchange, and an httpOnly cookie encrypted with a
-server-only secret. A bridge sits inside a trust boundary that exists. Portal-ui is the same framework
+server-only secret. A Bridge sits inside a trust boundary that exists. Portal-ui is the same framework
 and simply not configured for one, so the setup carries across rather than being invented twice, which
 is why the order pays twice rather than once.
 
 ## The build order, and why it runs backwards
 
 Settled plan. Each piece is tested and built before the piece it depends on, against mocks of
-everything behind it, so the consumer side comes first and the controller last.
+everything behind it, so the consumer side comes first and the Controller last.
 
     1. The Arranger adapter, in the Arranger repository: tests for the requests it will
        actually receive, with the bridge and the controller mocked, then the adapter itself.
-    2. The bridge, in this repository: tests with the controller mocked, then the bridge,
+    2. The Bridge, in this repository: tests with the Controller mocked, then the Bridge,
        then the adapter and the bridge tested together.
-    3. The controller: tests for whatever the bridge's tests do not already cover, then the
+    3. The controller: tests for whatever the Bridge's tests do not already cover, then the
        controller itself.
-    4. Integration tests across the bridge and the controller, without Arranger's adapter.
-    5. The profile surface, the management UI, and the submission bridge and adapter.
+    4. Integration tests across the Bridge and the Controller, without Arranger's adapter.
+    5. The profile surface, the management UI, and the submission Bridge and adapter.
 
-Keycloak and Stage are integrated when a step needs them, not first. Until the bridge package and
+Keycloak and Stage are integrated when a step needs them, not first. Until the Bridge package and
 `@overture-stack/usher-types` are published, the adapter installs them from `pnpm pack` tarballs,
 never a committed local path, so both exist from the first step.
 
@@ -75,7 +75,7 @@ from Usher's side, since the queries and responses are Usher's concern as much a
 reviewed from Arranger's until they are ready to code against. The enforcement itself is then
 implemented from Arranger's side, with review from Usher's. The plan for those tests is in Arranger's
 repository at `.dev/docs/arranger-auth/usher-adapter-tests.md`, beside the adapter's design. The
-bridge's plan, step 2, is [bridge-tests.md](bridge-tests.md).
+Bridge's plan, step 2, is [bridge-tests.md](bridge-tests.md).
 
 **Data filtering comes first.** The adapter's logging tests are written with the rest, and its
 logging logic is filled in once the filtering works.
@@ -87,10 +87,10 @@ type-checked the same way when the adapter first installs them. Neither is publi
 ready, so Arranger's CI cannot run the adapter's tests until both resolve from the registry.
 
 **Each step defines the contract of the one behind it**, by consuming it rather than by specifying it
-in advance: the adapter's tests fix what it needs from the bridge, and the bridge's tests fix what it
-needs from the controller. How a filter is actually applied, what each side needs and when, and which
+in advance: the adapter's tests fix what it needs from the Bridge, and the Bridge's tests fix what it
+needs from the Controller. How a filter is actually applied, what each side needs and when, and which
 blindspots the design has are all discovered by building the path instead of reviewing it. The real
-controller then has a proven contract to implement rather than a proposed one.
+Controller then has a proven contract to implement rather than a proposed one.
 
 **Signed in against anonymous is the acceptance test for enforcement, once Stage is integrated.** The
 same query both ways is the smallest thing that proves the whole chain, and it fails visibly rather
@@ -107,36 +107,36 @@ category is a condition over fields the data already carries, a synthetic defini
 controlled meaning published before a chosen date, closes that. overture-dev is a
 playground, so this is cheap.
 
-This order asks four things of the mocks, the bridge's for the adapter step and the controller's for
-the bridge step, and each is a way a mock could quietly fail to prove anything.
+This order asks four things of the mocks, the Bridge's for the adapter step and the Controller's for
+the Bridge step, and each is a way a mock could quietly fail to prove anything.
 
 **Seed them from the case table rather than from what the consumer asks for.** The consumer's tests
 decide the shape of the interface; the case table decides its answers. `token-calculation.md` holds
 the cases with expected outputs, and the count moves as the model does, so it is read there rather
 than written here. A mock grown to answer whatever the consumer needs lets the consumer define the
 contract by its own appetite, and every case left unexercised ships unproven. Driven the other way
-the mock is the specification, and building the controller becomes a matter of matching known
+the mock is the specification, and building the Controller becomes a matter of matching known
 answers.
 
 **They must not be accommodating.** Each holds a fixed, hand-written set of answers and refuses
 anything outside it, because a mock answering a question does not mean the real piece can.
 
-**The controller mock must issue real tokens.** The token is a JWE and the bridge exists to decrypt
-it. The bridge step is meant to exercise that component, and a mock handing over a plain object
+**The Controller mock must issue real tokens.** The token is a JWE and the Bridge exists to decrypt
+it. The Bridge step is meant to exercise that component, and a mock handing over a plain object
 skips it.
 
-**Stop the controller mock during the bridge step, while that is free.** The bridge's most
-distinctive behaviour is raising when the controller is unreachable past the grace period, and with
-a mock the test is to turn the mock off. Left to the controller step this arrives as a large
+**Stop the Controller mock during the Bridge step, while that is free.** The Bridge's most
+distinctive behaviour is raising when the Controller is unreachable past the grace period, and with
+a mock the test is to turn the mock off. Left to the Controller step this arrives as a large
 unexercised body of fail-secure behaviour, which is the worst kind to meet late.
 
-**Whether the mocks outlive the controller decides whether any of this survives.** A throwaway
-harness loses the contract knowledge as soon as the real controller lands. Wired to the conformance
-corpus, whose approved location is below, the controller mock becomes what keeps the real controller
-honest afterwards: the same cases run against the mock until the controller lands and against the
+**Whether the mocks outlive the Controller decides whether any of this survives.** A throwaway
+harness loses the contract knowledge as soon as the real Controller lands. Wired to the conformance
+corpus, whose approved location is below, the Controller mock becomes what keeps the real Controller
+honest afterwards: the same cases run against the mock until the Controller lands and against the
 real thing after, and a divergence is a defect rather than a surprise.
 
-**One bridge case needs an input never produced by this release's controller**, so the bridge's own
+**One Bridge case needs an input never produced by this release's Controller**, so the Bridge's own
 tests build it rather than the mock issuing it: a version 1 payload carrying a `resource.` entry (see
 "Category names carry their scope from the first release" in
 [decisions.md](../design/decisions.md)).
@@ -147,7 +147,7 @@ tests build it rather than the mock issuing it: a version 1 payload carrying a `
 | a bare `open` on HEART_STUDY                                                            | the payload is malformed: treated as not received, the application reports unavailable rather than an empty answer, and the rejection is logged                                                                   |
 | an unknown prefix, `local.pilot`                                                        | the same as a bare name                                                                                                                                                                                           |
 
-Inverting proves each assertion load-bearing: a bridge passing `resource.pilot` through fails the
+Inverting proves each assertion load-bearing: a Bridge passing `resource.pilot` through fails the
 first row, one recording the event per request rather than per payload fails it too, and one
 dropping a bare name instead of rejecting the payload fails the second. The first release can also
 produce the first row's event on demand, which gives the audit path something to test against before
@@ -210,7 +210,7 @@ submission provenance is `organization`.
 metadata about who submitted), not a property of the data being submitted. Access control for
 the Arranger adapter should operate on fields within the submitted data records themselves,
 not on Lyric's submission metadata. The boundary between "submission" and "data being submitted"
-is the responsibility of a Lyric adapter for Usher, not the bridge.
+is the responsibility of a Lyric adapter for Usher, not the Bridge.
 
 This reopens the blocker in a different form: what access-relevant fields exist within the
 indexed data records, and how does Usher's grant model map to SQON filters on those fields?
@@ -372,7 +372,7 @@ application logic is framework-independent and must be unit-testable without sta
 
 ### 3. Permissions payload schema and JWE algorithm
 
-**What it gates:** the bridge, the Arranger adapter, and any future adapter. The bridge decrypts
+**What it gates:** the Bridge, the Arranger adapter, and any future adapter. The Bridge decrypts
 the token; the adapter reads its fields. Neither can be implemented without a stable schema.
 
 Core shape is clear: resource grants (resource ID, categories), open-tier grants (anonymous
@@ -381,16 +381,16 @@ access), `generatedAt` and `exp`. Open sub-questions:
 - ~~Schema versioning mechanism~~ **settled: negotiated at the exchange, never tolerated at read
   time. See the payload-versioning decision in [decisions.md](../design/decisions.md).**
 - ~~JWE algorithm~~ **settled: `dir` with A256GCM, symmetric, one key per
-  controller-and-application pair, held in Vault and injected by the secrets operator. Per
+  Controller-and-application pair, held in Vault and injected by the secrets operator. Per
   application is what makes `aud` a cryptographic boundary rather than a claim. See the JWE decision
   in [decisions.md](../design/decisions.md).**
 
 **Encryption is confirmed, and the reason changed.** The original rationale for JWE assumed the
 user held and forwarded the Usher token; that is false under the current architecture, where the
-bridge is a library inside the ushered service and fetches the token from the controller itself.
+Bridge is a library inside the ushered service and fetches the token from the Controller itself.
 Encryption is retained on a different and stronger basis: audience scoping becomes cryptographic,
 so a payload issued for the wrong application fails to decrypt instead of leaking. The algorithm is
-`dir` with A256GCM and the key is symmetric, one per controller-and-application pair, so
+`dir` with A256GCM and the key is symmetric, one per Controller-and-application pair, so
 per-application scoping costs one secret written once and injected into two pods. Recorded in
 [`decisions.md`](../design/decisions.md) under the JWE decision. Nothing remains open here but
 rotation.
@@ -411,7 +411,7 @@ All recorded in [`decisions.md`](../design/decisions.md).
 
 The rendering was first additive, a union of positive predicates with no exclusions, and requiring
 every category a record matches made it exclusionary. The table below is why the released rendering
-carries guards: the bridge checks the rendered filter against its payload, and an undefined
+carries guards: the Bridge checks the rendered filter against its payload, and an undefined
 global category denies the catalogue. The decision depended on failure direction: in a subtractive model, losing a term widens access; in
 an additive model, losing a term narrows it.
 
@@ -438,7 +438,7 @@ Three things follow for the payload:
 - **A role in a resource becomes an explicit positive grant.** There is no implicit baseline for untagged
   records any more, so a role must render to a predicate of its own. The exact shape is open
   and is tracked in `roadmap.md`.
-- **Zero grants never becomes a filter.** The bridge returns the `Enforcement` discriminated
+- **Zero grants never becomes a filter.** The Bridge returns the `Enforcement` discriminated
   result; see the zero-grant decision in `decisions.md`.
 
 The earlier exploration of a two-part grants-and-restrictions payload (from the "open data except
@@ -452,18 +452,18 @@ categories. The worked example at `permissions-model.md` is that exact scenario.
 **Status:** CLOSED. Payload shape, rendering direction, the JWE algorithm and payload versioning are
 all resolved, so this no longer gates anything: a mock can issue real tokens. The first release
 carries one schema, and the negotiation handshake is built alongside it so that a second version is a
-controller-side addition rather than a coordinated upgrade at both ends.
+Controller-side addition rather than a coordinated upgrade at both ends.
 
 Members were added after closing, before anything shipped: `globalCategories` and
-`resourceCategories`, what Usher defines, which the bridge checks a catalogue's category mapping
+`resourceCategories`, what Usher defines, which the Bridge checks a catalogue's category mapping
 against. They are decided in [`decisions.md`](../design/decisions.md), "A catalogue's category gap
-is found by the bridge", and the fixtures move to them with the bridge's code.
+is found by the Bridge", and the fixtures move to them with the Bridge's code.
 
 ---
 
 ### 4. Adapter API contract spec
 
-**What it gates:** the bridge and all adapter implementations.
+**What it gates:** the Bridge and all adapter implementations.
 
 Concrete HTTP shapes are still missing: token exchange request/response bodies, error codes,
 the notice stream's poll endpoint (the notices after a position) and its deadline, push subscription
@@ -511,7 +511,7 @@ narrower than what is designed, and the line between them is not drawn by import
 what a later change costs.
 
 **A column added later is a migration. A wire format changed later is a negotiated payload version
-and a coordinated deploy of every bridge.** So the two are future-proofed differently, and
+and a coordinated deploy of every Bridge.** So the two are future-proofed differently, and
 deliberately:
 
 |                                             | First release                                        | Arrives later, and how                                                    |
@@ -525,7 +525,7 @@ deliberately:
 **The nesting ships even though the first release has one entity in it.**
 `{"global.unmarked": {"record": ["view"]}}` gains nothing over `{"global.unmarked": ["view"]}` while
 `record` is alone. Adding the level later costs a payload version negotiated at the exchange and a
-bridge and controller rolled out in step, which is the mechanism built for unforeseeable changes.
+Bridge and Controller rolled out in step, which is the mechanism built for unforeseeable changes.
 Spending it on the first change that was foreseen would be the waste.
 
 **The column keeps its final name from the start** for the same reason inverted: renaming
@@ -565,7 +565,7 @@ differently and that is worth deciding rather than inheriting.
 **Action:** review the draft in [schema.md](../design/schema.md) and settle its eight decisions.
 
 **Status:** DRAFTED. All three of its dependencies closed: 3 settled the payload, 5 closed by scope,
-and 8 closed with no new field. The bridge's test plan then fixed the channel half, so the draft
+and 8 closed with no new field. The Bridge's test plan then fixed the channel half, so the draft
 covers the whole store.
 
 ---
@@ -588,7 +588,7 @@ trade rather than inheriting it. See the lifetime-versus-duration decision in
 [../design/decisions.md](../design/decisions.md) and the long-running operation item in
 [../roadmap.md](../roadmap.md).
 
-**What it gated:** the bridge's cache window sizing, and the EGO replacement baseline, since Usher's
+**What it gated:** the Bridge's cache window sizing, and the EGO replacement baseline, since Usher's
 token lifetime should not exceed what it replaces without a reason.
 
 **The baseline is satisfied by a wide margin.** The designed Usher token lifetime is five minutes,
@@ -663,12 +663,12 @@ above and one external dependency outside this project's control:
 | Risk                                                                               | Gate                                           | Status                                                                                       |
 | ---------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | The open design blockers resolved                                                  | Implementation start                           | Carried per blocker in its own **Status** line above, so there is one copy of it to maintain |
-| Keycloak deployed as the portal's token issuer, JWKS reachable from the controller | The controller can validate the bridge's token | Unknown; DevOps and infra owned                                                              |
+| Keycloak deployed as the portal's token issuer, JWKS reachable from the Controller | The Controller can validate the Bridge's token | Unknown; DevOps and infra owned                                                              |
 | Resource field confirmed per catalogue                                             | the Arranger adapter config                    | Resolved for the first integration; recorded on that side                                    |
 
-Keycloak's own token exchange endpoint is not a dependency: the bridge calls the controller's
-exchange endpoint, and the controller validates the presented token against Keycloak's JWKS. The
-bridge is a library inside the ushered service rather than inside the portal.
+Keycloak's own token exchange endpoint is not a dependency: the Bridge calls the Controller's
+exchange endpoint, and the Controller validates the presented token against Keycloak's JWKS. The
+Bridge is a library inside the ushered service rather than inside the portal.
 
 If the Keycloak work lands before Nov 1, the timeline holds. If it slips, the integration buffer
 shrinks or disappears, so it is worth raising as an explicit dependency with its owners.

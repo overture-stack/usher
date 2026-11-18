@@ -8,8 +8,8 @@ export type RetentionReadings = {
 
 /**
  * Reads the durations the notice retention floor is made of, each with its default: a 300 s token
- * lifetime, a 60 s grace period and a 30 s margin. The controller and its schema migration command
- * both read them here, so the floor the command stores is the one the controller's own reading
+ * lifetime, a 60 s grace period and a 30 s margin. The Controller and its schema migration command
+ * both read them here, so the floor the command stores is the one the Controller's own reading
  * gives.
  *
  * @param variable the variable each is read from, by field.

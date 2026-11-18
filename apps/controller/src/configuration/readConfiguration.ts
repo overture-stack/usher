@@ -45,7 +45,7 @@ const valueOf = <Value>(reading: Reading<Value>): Value => {
 };
 
 /**
- * Reads the controller's configuration from an environment, every variable checked before any is
+ * Reads the Controller's configuration from an environment, every variable checked before any is
  * used: a refusal lists every rule broken, each naming the variable at fault and never its value.
  * The keys are 32 bytes as 43 base64url characters in canonical form, any whitespace around them left
  * out; the database's password is read from its own variable, as given, and a database URL carrying

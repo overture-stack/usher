@@ -10,7 +10,7 @@ export interface AnonymousIssuing {
   /** The instant of issue and of the computation, in whole seconds since the Unix epoch. */
   issuedAt: number;
 
-  /** The controller's own issuer, its `iss`. */
+  /** The Controller's own issuer, its `iss`. */
   issuer: string;
 
   /** How long the token lives, in seconds. */

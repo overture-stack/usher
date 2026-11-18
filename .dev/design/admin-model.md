@@ -176,7 +176,7 @@ recorded at `critical`.
 
 **Built after the first release, each as a forward migration:** admins nominating and removing
 admins, recovery when no admin can sign in, an admin owning a resource they registered, and adding
-grants from a list of email addresses. Recovery is a command in the controller's image, run once the
+grants from a list of email addresses. Recovery is a command in the Controller's image, run once the
 way the schema migration command is, so it needs no particular pipeline, and its procedure in
 docs/deployment.md § Break-glass access serves any platform.
 
@@ -429,7 +429,7 @@ handles fine-grained authorization.
   `actorType` `serviceAccount`, distinguishable from human admin actions in the audit trail.
 - Admins can revoke all permissions for a service account by removing or disabling its
   registration. Its next request fails the permission check, and the removal sends a principal's
-  revocation on the notice stream, so every bridge drops the Usher tokens it holds for the account
+  revocation on the notice stream, so every Bridge drops the Usher tokens it holds for the account
   before they expire.
 
 ### Lyric use case

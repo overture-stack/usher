@@ -89,13 +89,13 @@ const REFUSED_ON_ITS_ROLE = Object.freeze({
   message: new RegExp(`\\b${ENVIRONMENT_VARIABLES.databaseUrl}\\b`, 'u'),
 });
 
-/** A store a controller has started on once, and the log stream that controller writes to. */
+/** A store a Controller has started on once, and the log stream that Controller writes to. */
 interface StartedStore {
   harness: Harness;
   log: LogCapture;
 }
 
-// A store a controller started on once under the runtime role, with no application registered, so
+// A store a Controller started on once under the runtime role, with no application registered, so
 // nothing but what a start writes is in it beyond what the migrations write.
 const startedStore = async (scope: Cleanup): Promise<StartedStore> => {
   const log = captureLog();

@@ -23,16 +23,16 @@ const UNREADABLE_PATH = JSON.stringify({
 });
 
 /**
- * Creates the controller's HTTP server, not yet listening, with its health endpoints: liveness
- * answers 200 while the controller is live and 503 once it is not, whatever readiness answers, and
- * readiness 200 while the controller can serve and 503 while it cannot. Each asks at every request.
+ * Creates the Controller's HTTP server, not yet listening, with its health endpoints: liveness
+ * answers 200 while the Controller is live and 503 once it is not, whatever readiness answers, and
+ * readiness 200 while the Controller can serve and 503 while it cannot. Each asks at every request.
  * Neither carries any detail in its body, and a path the server does not serve is answered 404 with
  * none either, so no answer repeats what a request sent; a path that cannot be decoded is answered
  * 400 in problem details naming that rule alone. A path parameter of any length a request head can
  * carry reaches its route. A route is given each request body as its bytes, whatever its media type,
  * to read as it rules. A request's address is the nearest its trusted proxies did not add.
  *
- * @param settings whether the controller is live, whether it can serve now, and the trusted proxies.
+ * @param settings whether the Controller is live, whether it can serve now, and the trusted proxies.
  */
 export const createServer = ({
   isLive,

@@ -6,7 +6,7 @@ import type { EventLog } from '../eventLog/index.js';
 /**
  * Why a token was not verified, each a fixed code naming its fault: it could not be read as a signed
  * token, it names an issuer other than the trusted one, or no published key of the trusted issuer
- * verifies its signature under an algorithm the controller accepts.
+ * verifies its signature under an algorithm the Controller accepts.
  */
 export type UnverifiedReason =
   'invalidSignature' | 'otherIssuer' | 'unreadableToken';

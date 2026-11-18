@@ -3,22 +3,22 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import type { Clock } from './controller.js';
 
-// The clocks a test configures the controller with, the durations the controller measures on its
+// The clocks a test configures the Controller with, the durations the Controller measures on its
 // configured clock that a test moves past, and the waits until an instant of either of the process's
-// own clocks: the monotonic one the bridge times its checks and its grace period on, and the wall clock
+// own clocks: the monotonic one the Bridge times its checks and its grace period on, and the wall clock
 // tokens and the store's rows are dated by. The two are kept apart by name, since an instant of one
 // read as an instant of the other is off by decades. A timer may fire a fraction of a millisecond
 // before its clock reads the instant, so each wait reads its clock again before it settles.
 
 /**
- * The signing-key cache's refetch cooldown (#208 Q5), in milliseconds: the controller fetches the
+ * The signing-key cache's refetch cooldown (#208 Q5), in milliseconds: the Controller fetches the
  * identity provider's keys again for a key it lacks at most once in this long, measured on its
  * configured clock, so a test moves past it by advancing an {@link adjustableClock}.
  */
 export const KEY_REFETCH_COOLDOWN_MS = 30_000;
 
 /**
- * A clock fixed at one instant, for the tests needing a known now (#209 Q2), given to the controller
+ * A clock fixed at one instant, for the tests needing a known now (#209 Q2), given to the Controller
  * through its configuration and never the environment.
  *
  * @param instant milliseconds since the Unix epoch.
@@ -26,7 +26,7 @@ export const KEY_REFETCH_COOLDOWN_MS = 30_000;
 export const fixedClock = (instant: number): Clock =>
   Object.freeze({ now: () => instant });
 
-/** A clock a test moves forward, configured as the controller's own (#209 Q2). */
+/** A clock a test moves forward, configured as the Controller's own (#209 Q2). */
 export interface AdjustableClock {
   /** Moves the clock forward. */
   advance(milliseconds: number): void;
@@ -46,7 +46,7 @@ export const adjustableClock = (): AdjustableClock => {
 };
 
 /**
- * Waits until an instant of the monotonic clock, `performance.now()`, as the bridge's recording fetch
+ * Waits until an instant of the monotonic clock, `performance.now()`, as the Bridge's recording fetch
  * and logger time what they record: the end of a window a test observes, never a guess at how long
  * something takes. An instant already past settles at once.
  *

@@ -31,7 +31,7 @@ import type { Cleanup } from './waiting.js';
 // erasable syntax and imports no sibling's values.
 
 /**
- * The PostgreSQL images a run can use, each an exact tag: the floor, the oldest major the controller
+ * The PostgreSQL images a run can use, each an exact tag: the floor, the oldest major the Controller
  * supports, and the newest major released, for `pnpm test:newest`.
  */
 export const POSTGRESQL_IMAGES = {
@@ -668,7 +668,7 @@ export interface CacheWatch {
  * Watches every channel of a cache through a subscription of the test's own (`PSUBSCRIBE *`), as an
  * instance waiting for wake-ups does (`architecture.md`: a wake-up is published on Valkey's pub/sub
  * after a notice is written), with a second connection publishing its marks. Both connections end with
- * the test's cleanup. The cache must be the test's own, since every other test's controller publishes
+ * the test's cleanup. The cache must be the test's own, since every other test's Controller publishes
  * on the run's shared one.
  *
  * @param scope the cleanup ending its connections.
@@ -746,8 +746,8 @@ export type RelayMode =
   | { kind: 'status'; status: number };
 
 /**
- * The paths the bridge reaches the controller at, relative to the controller's URL, which an HTTP
- * relay treats one by one. They are the bridge's own: follows `controllerClient.ts`, `poll.ts` and
+ * The paths the Bridge reaches the Controller at, relative to the Controller's URL, which an HTTP
+ * relay treats one by one. They are the Bridge's own: follows `controllerClient.ts`, `poll.ts` and
  * `push.ts`.
  */
 export const RELAYED_PATHS = Object.freeze({
@@ -764,7 +764,7 @@ export interface Relay {
   /**
    * Sets how the relay treats traffic from now on, connections and answers already open included. For
    * an HTTP relay, a path given narrows it to the requests for that path alone: one of
-   * {@link RELAYED_PATHS}, relative to the relay's URL as the bridge resolves it, or an absolute path
+   * {@link RELAYED_PATHS}, relative to the relay's URL as the Bridge resolves it, or an absolute path
    * such as `/notices/stream`. The latest mode set wins: a mode for every path replaces each path's
    * own, and a path's own set after it wins for that path. The relay stops listening, so a connection
    * is refused, only while the mode for every path refuses or closes and no path's own lets anything
@@ -772,7 +772,7 @@ export interface Relay {
    */
   setMode(mode: RelayMode, path?: string): Promise<void>;
 
-  /** Points every connection or request from now on at another server, such as another controller instance. */
+  /** Points every connection or request from now on at another server, such as another Controller instance. */
   setTarget(target: string): void;
 
   /** Ends every connection and the relay itself, settling once both are done. */
@@ -1077,7 +1077,7 @@ const relayFor = (
 
 /**
  * Starts a loopback relay to a server: plain TCP, such as a Valkey's, or HTTP, aware of each
- * request's path, such as the controller's, between it and the bridge. Every network fault a test
+ * request's path, such as the Controller's, between it and the Bridge. Every network fault a test
  * causes goes through one, so the test cuts one client off without touching the server the others
  * use.
  *
@@ -1133,7 +1133,7 @@ export interface KeycloakClient {
 
   /**
    * The `realm-management` roles its service account holds, such as `view-users` and `query-users` for
-   * the controller's directory; none by default.
+   * the Controller's directory; none by default.
    */
   directoryRoles?: readonly string[];
 
@@ -1158,7 +1158,7 @@ export interface KeycloakRealmOptions {
   realmRoles?: readonly string[];
 }
 
-/** What the controller's directory is configured with to read a Keycloak realm's users. */
+/** What the Controller's directory is configured with to read a Keycloak realm's users. */
 export type KeycloakDirectory = Pick<
   ControllerConfiguration,
   | 'directoryClientId'
@@ -1181,7 +1181,7 @@ export interface KeycloakRealm {
   /** Deletes a person's account, by username, while the test runs. */
   deleteUser(username: string): Promise<void>;
 
-  /** The configuration fields pointing the controller's directory at this realm through a client's service account. */
+  /** The configuration fields pointing the Controller's directory at this realm through a client's service account. */
   directoryFor(clientId: string): KeycloakDirectory;
 
   /** Disables a key, so the realm neither signs with it nor publishes it. */
@@ -1244,7 +1244,7 @@ export const DEFAULT_KEYCLOAK_REALM: KeycloakRealmOptions = Object.freeze({
  * A realm for the suites resolving addresses (#212, #213): realm `overture`; a public client issuing
  * management tokens, its `azp` a management client and an audience mapper naming the management API;
  * `usher-directory`, a confidential client whose service account may view and query users, for the
- * controller's directory; and people at example.org: Bo verified (`sub.bo@`), his near misses
+ * Controller's directory; and people at example.org: Bo verified (`sub.bo@`), his near misses
  * (`bo.smith@`, `abo@`), non-ASCII text (`zoë@`), plus-addressing (`bo+ims@`), an unverified address
  * (`una@`), a disabled account (`disabled@`), two accounts sharing `dup@` (the realm allowing it), an
  * administrator (`admin.one@`) holding the first-user role, an owner (`owner.ana@`) and an outsider

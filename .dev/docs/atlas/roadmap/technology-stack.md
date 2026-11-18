@@ -6,9 +6,9 @@
 
 **Policy store:** PostgreSQL. Handles grants, resource users, categories, `revoked_at` timestamps, and the audit log; requires transactions and foreign-key integrity.
 
-**Valkey client: iovalkey (decided by the developer, 2026-11-09).** It is the Valkey project's fork of ioredis, with no native code, so the controller's image carries none for it. It was chosen over ioredis and node-redis, both built for Redis, and over Valkey GLIDE, which ships a native binary for each platform. Usher's use is basic: values with an expiry, and publish and subscribe for wake-ups. It is pre-1.0, so a minor release may change its API; when it is added to the catalogue, its caret range admits patch releases alone.
+**Valkey client: iovalkey (decided by the developer, 2026-11-09).** It is the Valkey project's fork of ioredis, with no native code, so the Controller's image carries none for it. It was chosen over ioredis and node-redis, both built for Redis, and over Valkey GLIDE, which ships a native binary for each platform. Usher's use is basic: values with an expiry, and publish and subscribe for wake-ups. It is pre-1.0, so a minor release may change its API; when it is added to the catalogue, its caret range admits patch releases alone.
 
-**Supported PostgreSQL: 15 or later, documented for operators.** The schema needs 15: two of its uniqueness rules use `NULLS NOT DISTINCT`, new in that release. The schema migration command refuses an older server by name before it writes anything, and the controller's suites run against 15 and 18. Which version a deployment runs is its own pin, kept in the deployment's own infrastructure repository.
+**Supported PostgreSQL: 15 or later, documented for operators.** The schema needs 15: two of its uniqueness rules use `NULLS NOT DISTINCT`, new in that release. The schema migration command refuses an older server by name before it writes anything, and the Controller's suites run against 15 and 18. Which version a deployment runs is its own pin, kept in the deployment's own infrastructure repository.
 
 **Shared cache and revocation pub/sub:** Valkey (already deployed in the Overture environment; protocol-compatible with Redis). Two roles: caching computed permissions payloads across Usher instances, which is what the fast-path refresh reads, and pub/sub that wakes every instance to read new notices from PostgreSQL and push them to its SSE subscribers. Pub/sub delivers at most once, so it carries a wake-up rather than the notice, and a lost message costs a delay, never a notice. See Kafka in Future scope for external consumer fan-out.
 
@@ -23,7 +23,7 @@ is created, rather than copied from here.
 
 - **Node 24 for the libraries**, the version Arranger's images build on, since Arranger imports
   them.
-- **Node 26 in the controller's image** (developer decision, 2026-11-06). The controller is a
+- **Node 26 in the Controller's image** (developer decision, 2026-11-06). The Controller is a
   deployed service that nothing imports, so it does not wait on Arranger's version. Node 26 is
   supported until 2029-04-30, by the Node.js release schedule as checked on 2026-11-09.
 - **pnpm** workspaces, at version 12 or later (developer decision, 2026-10-05). A pnpm 11 older than
@@ -41,7 +41,7 @@ is created, rather than copied from here.
   given, when, then shape.
 - **jose** for the encrypted Usher token: a widely used library implementing the JOSE standards
   (JWT, JWE, JWS, JWK) on Node's built-in cryptography, with no dependencies of its own. Only the
-  controller, which encrypts, and the bridge, which decrypts, use it.
+  Controller, which encrypts, and the Bridge, which decrypts, use it.
 
 ## Decided: HTTP framework: Fastify
 
@@ -59,7 +59,7 @@ Node are less documented. For a service that must maintain persistent SSE revoca
 this was the deciding gap.
 
 Note: adapters (the Arranger adapter, the Lyric adapter) run inside their own applications and are
-unaffected by this choice; the bridge they use talks to the Usher controller over HTTP regardless of
+unaffected by this choice; the Bridge they use talks to the Usher Controller over HTTP regardless of
 framework.
 
 ## Architectural constraint: framework is a delivery mechanism only

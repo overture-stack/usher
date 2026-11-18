@@ -1,5 +1,5 @@
 // Writes every secret read by compose.yaml into .env beside it, each made fresh: the database
-// passwords, the controller's key-encryption key and cursor key, and Keycloak's administrator
+// passwords, the Controller's key-encryption key and cursor key, and Keycloak's administrator
 // password. Git ignores the file, and only its owner may read it. An existing file is replaced only
 // when --force is given, since the database volume keeps the passwords it was created with. Nothing
 // written to the terminal holds a value.
@@ -21,7 +21,7 @@ const SECRET_NAMES: readonly string[] = [
   'USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD',
 ];
 
-// 32 random bytes as 43 unpadded base64url characters: the canonical form of the controller's keys,
+// 32 random bytes as 43 unpadded base64url characters: the canonical form of the Controller's keys,
 // and a password needing no quoting in a URL, a shell or an environment file.
 const freshSecret = (): string => randomBytes(32).toString('base64url');
 

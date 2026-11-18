@@ -6,7 +6,7 @@ import type { NamesReading } from './types.js';
  * Reads the names a sign-in token gives, alike on every route reading one. Its subject, in `sub`, must
  * be non-empty text, else it is refused as `missingSubject`. That subject, and any `sid` the token
  * carries, must be text the store can hold, else it is refused as `unrepresentableSubject`; a `sid`
- * that is not text counts as such, since a session the controller cannot name cannot be matched
+ * that is not text counts as such, since a session the Controller cannot name cannot be matched
  * against a sign-out of that session.
  *
  * @param claims the token's claims.

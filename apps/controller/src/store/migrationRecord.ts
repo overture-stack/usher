@@ -41,7 +41,7 @@ const isUnreadableRecord = (failure: unknown): boolean =>
  * Reads the migrations the schema records as applied, in the order of their names.
  *
  * @param connection the connection, or the pool's reader, to read on.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @throws {MigrationRecordUnreadable} when the store gives no answer.
  * @throws any failure of the statement, as it was thrown.
  */
@@ -75,7 +75,7 @@ export interface StoreProbeAnswer {
  * whose answer cannot be read never passes.
  *
  * @param reader the pool's reader, of readiness's own pool.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @throws {MigrationRecordUnreadable} when the schema holds no record, the database role may not
  *   read it, or the store gives no answer.
  * @throws any other failure of the statement, as it was thrown.

@@ -46,7 +46,7 @@ interface IdRow {
  * and whether that person is one. It reads the store each time it is asked.
  *
  * @param store the store reader.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param identity the trusted issuer and the principal's subject.
  */
 export const readAdministratorStatus = async (
@@ -75,7 +75,7 @@ export const readAdministratorStatus = async (
  * nominator's subject, its instant and whether it is the latest; none for a person never met.
  *
  * @param store the store reader.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param identity the trusted issuer and the nominee's subject.
  */
 export const listNominations = async (
@@ -103,7 +103,7 @@ export const listNominations = async (
  * naming the schema's tables.
  *
  * @param connection the transaction's connection.
- * @param settings the controller's schema and the trusted issuer.
+ * @param settings the Controller's schema and the trusted issuer.
  */
 export const sqlAdministratorStore = (
   connection: pg.ClientBase,

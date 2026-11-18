@@ -269,11 +269,11 @@ export interface ExchangeAs extends Omit<
 }
 
 /**
- * Sends one exchange through the bridge's client: the person's fresh sign-in token for the
+ * Sends one exchange through the Bridge's client: the person's fresh sign-in token for the
  * application, a given one, or none for the anonymous exchange.
  *
  * @param harness the running harness.
- * @param request who exchanges, through which application, and any departure from the bridge's request.
+ * @param request who exchanges, through which application, and any departure from the Bridge's request.
  */
 export const exchangeAs = async (
   harness: Harness,
@@ -296,12 +296,12 @@ export const exchangeAs = async (
   });
 
 /**
- * Reads a 200's token as the bridge does, failing the test with the reader's reason when the bridge
+ * Reads a 200's token as the Bridge does, failing the test with the reader's reason when the Bridge
  * would refuse it.
  *
  * @param response the exchange's answer.
  * @param application the application the token was issued for.
- * @param issuer the controller's configured issuer.
+ * @param issuer the Controller's configured issuer.
  */
 export const readPayload = async (
   response: WireResponse,
@@ -337,7 +337,7 @@ export const payloadOf = (
   );
 
 /**
- * Exchanges and reads the token the bridge would accept, asserting its `sub` is the signed-in
+ * Exchanges and reads the token the Bridge would accept, asserting its `sub` is the signed-in
  * subject, or `null` for the anonymous exchange, which is core.ts's subject check the token reader
  * omits. A test sending a credential of its own asserts the subject itself through
  * {@link exchangeAs} and {@link payloadOf}.
@@ -365,7 +365,7 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * The token's claims exactly as the controller wrote them, decrypted under the application key's
+ * The token's claims exactly as the Controller wrote them, decrypted under the application key's
  * token subkey and parsed, before any validator copies them: for the tests that search what the
  * token holds.
  *
@@ -479,7 +479,7 @@ export const fixedClock = (instant: number): Clock =>
  * An instant a given number of milliseconds into the second after the one this is called in: a known
  * now for {@link fixedClock}. It is read before the harness starts, so the system clock has moved past
  * it by the time an exchange runs; a test that needs the sign-in token to stay valid against this
- * fixed now pairs it with a long-lived sign-in token, and reads only what the controller decides from
+ * fixed now pairs it with a long-lived sign-in token, and reads only what the Controller decides from
  * its own clock.
  *
  * @param milliseconds the offset into that second, below 1 000.
@@ -488,7 +488,7 @@ export const intoNextSecond = (milliseconds: number): number =>
   (nowSeconds() + 1) * 1000 + milliseconds;
 
 /**
- * A channel assertion's departures from the bridge's own, each a claim or an ordinary header field.
+ * A channel assertion's departures from the Bridge's own, each a claim or an ordinary header field.
  * The signing key is always the application's own channel-assertion subkey and the algorithm HS256,
  * so the assertion is genuinely the application's; what a test varies is what it carries.
  */
@@ -496,18 +496,18 @@ export interface AssertionDepartures {
   /** `usher:controller` by default. */
   audience?: string;
 
-  /** Seconds since the Unix epoch: the bridge's lifetime after `issuedAt` by default. */
+  /** Seconds since the Unix epoch: the Bridge's lifetime after `issuedAt` by default. */
   expiresAt?: number;
 
   /** Seconds since the Unix epoch: now by default. */
   issuedAt?: number;
 
-  /** The header's `typ`: the bridge's assertion type by default. */
+  /** The header's `typ`: the Bridge's assertion type by default. */
   type?: string;
 }
 
 /**
- * Signs a channel assertion as the bridge signs one, under the application's own channel-assertion
+ * Signs a channel assertion as the Bridge signs one, under the application's own channel-assertion
  * subkey with HS256, with the claim or header departures given. Follows `channelAssertion.ts`
  * `createChannelAssertion` for every member left at its default.
  *
@@ -726,7 +726,7 @@ export type StartOutcome =
   { kind: 'refused'; refusal: unknown } | { kind: 'started' };
 
 /**
- * Starts a controller and stops it at once, or reports the start's refusal. A test proves the seam
+ * Starts a Controller and stops it at once, or reports the start's refusal. A test proves the seam
  * is there with a start through `startController` itself first, since a missing module would read
  * here as a refusal.
  *

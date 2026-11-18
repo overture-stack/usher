@@ -22,13 +22,13 @@ const { channelAssertionRejection, channelAssertionRejectionTally } =
   AUDIT_EVENT_TYPES;
 
 /**
- * The connections the controller's exchange pool holds: `USHER_DATABASE_EXCHANGE_CONNECTIONS` at its
- * default. A constant of its own here, as the test reaches the controller through the seam.
+ * The connections the Controller's exchange pool holds: `USHER_DATABASE_EXCHANGE_CONNECTIONS` at its
+ * default. A constant of its own here, as the test reaches the Controller through the seam.
  */
 const POOL_CONNECTIONS = 10;
 
 /**
- * The most rejection recordings the exchange route holds waiting on the store, by the controller's
+ * The most rejection recordings the exchange route holds waiting on the store, by the Controller's
  * rule: half its pool's connections, rounded down, and at least one. The one application registered
  * has the whole pool as its share, so its share never bounds these recordings below that.
  */
@@ -40,7 +40,7 @@ const PRESENTED = PENDING_LIMIT + 5;
 /** Long enough for an answer given from memory, and far shorter than any wait on the store. */
 const ANSWER_WITHIN_MS = 1000;
 
-/** An audience other than the controller's, so each assertion verifies and is refused as `otherAudience`. */
+/** An audience other than the Controller's, so each assertion verifies and is refused as `otherAudience`. */
 const ANOTHER_AUDIENCE = 'usher:elsewhere';
 
 const APPLICATION = 'Refused assertions';

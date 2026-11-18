@@ -12,12 +12,12 @@ import { startRecordingServer } from './recordingServer.js';
 // API and the back-channel logout endpoint lives here. The README's table of assumptions lists those
 // no design document or ruling fixes.
 
-/** Who calls the API, and where: the controller's URL and the caller's management token. */
+/** Who calls the API, and where: the Controller's URL and the caller's management token. */
 export interface AdminCaller {
   /** The bearer credential; `null` sends no `authorization` header. */
   token: string | null;
 
-  /** The controller's URL, ending in `/`. */
+  /** The Controller's URL, ending in `/`. */
   url: URL;
 }
 
@@ -71,7 +71,7 @@ export interface GrantCreated extends AdminResponse {
 /** A resource's access level, its base tier, as the API names it. */
 export type AccessLevel = 'grant' | 'open' | 'registered';
 
-/** A grant's holder: a person by subject, or by address, which the controller resolves and never stores. */
+/** A grant's holder: a person by subject, or by address, which the Controller resolves and never stores. */
 export type Holder = { email: string } | { subject: string };
 
 /**
@@ -210,7 +210,7 @@ export interface AuditQuery {
 
 /** What a logout token names, for {@link mintLogoutToken}. */
 export interface LogoutTokenOptions {
-  /** The client the logout token is addressed to, one of the controller's back-channel logout audiences. */
+  /** The client the logout token is addressed to, one of the Controller's back-channel logout audiences. */
   audience: string;
 
   /** Claims and header members over the logout token's own, and the key and lifetime. */
@@ -358,7 +358,7 @@ const isParameter = (segment: string): boolean =>
  * `/admin/grants/self` is over `/admin/grants/{id}`; `undefined` for a request matching none.
  *
  * @param method the request's method.
- * @param target the request's path, from the controller's root, with or without a query.
+ * @param target the request's path, from the Controller's root, with or without a query.
  */
 export const managementRouteOf = (
   method: string,
@@ -380,7 +380,7 @@ export const managementRouteOf = (
 
 /**
  * The Management API route an operation of this module reaches, read from the request it sends: the
- * operation is sent once to a recording server, never to the controller, and its method and path
+ * operation is sent once to a recording server, never to the Controller, and its method and path
  * matched with {@link managementRouteOf}.
  *
  * @param operation the operation, sending through the principal it is given.
@@ -536,9 +536,9 @@ export const assertSucceeded = (
 
 /**
  * The back-channel logout endpoint's URL (#210 Q8), as an identity provider is configured with it:
- * `backchannel-logout`, relative to the controller's URL.
+ * `backchannel-logout`, relative to the Controller's URL.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
+ * @param controllerUrl the Controller's URL, ending in `/`.
  */
 export const backChannelLogoutUrl = (controllerUrl: URL): URL =>
   new URL(PATHS.backChannelLogout, controllerUrl);
@@ -549,7 +549,7 @@ export const backChannelLogoutUrl = (controllerUrl: URL): URL =>
  * and `Cache-Control: no-store`. The key's value is in this answer alone;
  * {@link registeredApplicationOf} reads it.
  *
- * @param caller the controller and the principal's token.
+ * @param caller the Controller and the principal's token.
  * @param registration the display name and the description.
  * @param overrides departures from the request.
  */
@@ -569,7 +569,7 @@ export const registerApplication = (
  * `POST /admin/applications/{id}/keys`, the id percent-encoded, answered 201 with `{ id, value }` and
  * `Cache-Control: no-store`. An application holds at most {@link APPLICATION_LIVE_KEY_LIMIT} live keys.
  *
- * @param caller the controller and the principal's token.
+ * @param caller the Controller and the principal's token.
  * @param applicationId the application's id.
  * @param overrides departures from the request.
  */
@@ -589,7 +589,7 @@ export const issueApplicationKey = (
  * `DELETE /admin/applications/{id}/keys/{keyId}`, each id percent-encoded, carrying a body only when a
  * reason is given. Answered 200 naming the key's id, the revoker and the time, never the key's value.
  *
- * @param caller the controller and the principal's token.
+ * @param caller the Controller and the principal's token.
  * @param applicationId the application's id.
  * @param keyId the key's id.
  * @param options the reason, one of {@link APPLICATION_KEY_REVOCATION_REASONS}, which is optional.
@@ -617,7 +617,7 @@ export const revokeApplicationKey = (
  * `GET /admin/applications/{id}`, the id percent-encoded. No answer holds a key's value;
  * {@link applicationViewOf} reads it.
  *
- * @param caller the controller and the principal's token.
+ * @param caller the Controller and the principal's token.
  * @param applicationId the application's id.
  * @param overrides departures from the request.
  */
@@ -635,7 +635,7 @@ export const readApplication = (
 /**
  * Registers a resource: `POST /admin/resources`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param registration the resource.
  * @param overrides departures from the request.
  */
@@ -653,7 +653,7 @@ export const registerResource = (
 /**
  * Reads a resource: `GET /admin/resources/{externalId}`, the externalId percent-encoded.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param overrides departures from the request.
  */
@@ -668,7 +668,7 @@ export const readResource = (
  * Updates a resource's details, access level and field values: `PATCH /admin/resources/{externalId}`
  * as a JSON Merge Patch.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param update the members changed.
  * @param overrides departures from the request.
@@ -693,7 +693,7 @@ export const updateResource = (
 /**
  * Lists the resources the caller may see: `GET /admin/resources`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param overrides departures from the request, its paging parameters included.
  */
 export const listResources = (
@@ -710,9 +710,9 @@ export interface ReasonedOverrides extends AdminOverrides {
 
 /**
  * Suppresses a resource: `POST /admin/resources/{externalId}/suppression`, carrying a body only when
- * a reason is given. With none, the controller records `unspecified` (ruled).
+ * a reason is given. With none, the Controller records `unspecified` (ruled).
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param request the reason, one of {@link SUPPRESSION_REASONS}, which is optional, and departures
  *   from the request.
@@ -734,9 +734,9 @@ export const suppressResource = (
 
 /**
  * Restores a suppressed resource: `POST /admin/resources/{externalId}/restoration`, carrying a body
- * only when a reason is given. With none, the controller records `unspecified` (ruled).
+ * only when a reason is given. With none, the Controller records `unspecified` (ruled).
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param request the reason, one of {@link RESTORATION_REASONS}, which is optional, and departures
  *   from the request.
@@ -760,7 +760,7 @@ export const restoreResource = (
  * Retires a resource no live grant or pending invitation names (#320 B):
  * `POST /admin/resources/{externalId}/retirement`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param overrides departures from the request.
  */
@@ -779,7 +779,7 @@ export const retireResource = (
  * Deletes a registration that never held a grant or an invitation (#320 D):
  * `DELETE /admin/resources/{externalId}`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param overrides departures from the request.
  */
@@ -798,7 +798,7 @@ export const deleteResource = (
  * Adds one application to a resource's served set (#211 Q5), succeeding without a write when it is
  * already there: `PUT /admin/resources/{externalId}/applications/{applicationId}`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param application the application's id.
  * @param overrides departures from the request.
@@ -819,7 +819,7 @@ export const serveResource = (
  * Removes one application from a resource's served set:
  * `DELETE /admin/resources/{externalId}/applications/{applicationId}`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param application the application's id.
  * @param overrides departures from the request.
@@ -842,7 +842,7 @@ export const stopServingResource = (
 /**
  * Registers a global category (#211 Q8): `POST /admin/categories`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param registration the category.
  * @param overrides departures from the request.
  */
@@ -860,7 +860,7 @@ export const registerCategory = (
 /**
  * Updates a category (#211 Q8): `PATCH /admin/categories/{scopedName}` as a JSON Merge Patch.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param scopedName the category, as `global.controlled`.
  * @param update the members changed.
  * @param overrides departures from the request.
@@ -885,7 +885,7 @@ export const updateCategory = (
 /**
  * Lists the categories (#211 Q8): `GET /admin/categories`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
  */
 export const listCategories = (
@@ -898,7 +898,7 @@ export const listCategories = (
  * Defines a resource field, instance-wide (#207 Q8): `POST /admin/resource-fields`. A resource's
  * values are set and cleared through {@link updateResource}.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param definition the field.
  * @param overrides departures from the request.
  */
@@ -916,7 +916,7 @@ export const defineResourceField = (
 /**
  * Lists the resource fields: `GET /admin/resource-fields`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
  */
 export const listResourceFields = (
@@ -928,7 +928,7 @@ export const listResourceFields = (
 /**
  * Creates a grant, its holder by subject or by address (#212 Q1): `POST /admin/grants`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param creation the grant.
  * @param overrides departures from the request.
  * @returns the answer, with the new grant's id read from its body's `id`.
@@ -950,7 +950,7 @@ export const createGrant = async (
  * Adds a submitter to a study by address: a grant of the `submitter` role naming no category, which
  * takes the instance's submitter category (#212 Q6), through `POST /admin/grants`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the study.
  * @param email the submitter's address.
  * @param overrides departures from the request.
@@ -971,7 +971,7 @@ export const addSubmitter = (
  * Removes a submitter from a study by address, the address in the body (#212 Q1):
  * `POST /admin/resources/{externalId}/submitters/removal`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the study.
  * @param email the submitter's address.
  * @param overrides departures from the request.
@@ -995,7 +995,7 @@ export const removeSubmitter = (
 /**
  * Creates the caller's own grant, which is its acceptance (#212 Q14): `POST /admin/grants/self`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param creation the grant.
  * @param overrides departures from the request.
  * @returns the answer, with the new grant's id read from its body's `id`.
@@ -1016,7 +1016,7 @@ export const createSelfGrant = async (
 /**
  * Revokes a grant: `DELETE /admin/grants/{id}`, carrying a body only when a reason is given.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param grantId the grant's id.
  * @param options the reason, which is optional (#212 Q11).
  * @param overrides departures from the request.
@@ -1040,7 +1040,7 @@ export const revokeGrant = (
 /**
  * Answers a grant as its recipient: `POST /admin/grants/{id}/decisions`.
  *
- * @param caller the controller and the recipient's token.
+ * @param caller the Controller and the recipient's token.
  * @param grantId the grant's id.
  * @param decision the answer, and the capabilities shown.
  * @param overrides departures from the request.
@@ -1065,7 +1065,7 @@ export const answerGrant = (
  * Changes a grant's expiry, or removes it with `null`: `PATCH /admin/grants/{id}` as a JSON Merge
  * Patch.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param grantId the grant's id.
  * @param expiresAt an instant with an offset, or `null` for none.
  * @param overrides departures from the request.
@@ -1090,7 +1090,7 @@ export const changeGrantExpiry = (
 /**
  * Changes a grant's role: `PATCH /admin/grants/{id}` as a JSON Merge Patch.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param grantId the grant's id.
  * @param role the role's name.
  * @param overrides departures from the request.
@@ -1115,7 +1115,7 @@ export const changeGrantRole = (
 /**
  * Lists the grants on a resource (#213): `GET /admin/resources/{externalId}/grants`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param overrides departures from the request, its paging parameters included.
  */
@@ -1134,7 +1134,7 @@ export const listResourceGrants = (
  * Lists a person's grants by exact address, the address in the body (#213 Q2):
  * `POST /admin/people/grants`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param email the person's address.
  * @param overrides departures from the request.
  */
@@ -1152,7 +1152,7 @@ export const listPersonGrants = (
 /**
  * Lists the caller's own grants (#213 Q3): `GET /admin/me/grants`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
  */
 export const listOwnGrants = (
@@ -1165,7 +1165,7 @@ export const listOwnGrants = (
  * Nominates Usher's first administrator, as the first user: `POST /admin/nominations`, taking
  * `{ nominee: { subject } }`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param nomination the nominee, by subject.
  * @param overrides departures from the request.
  */
@@ -1184,7 +1184,7 @@ export const nominate = (
  * Accepts a nomination naming the caller: `POST /admin/nominations/{id}/acceptance`, taking no
  * body.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param nominationId the nomination's id.
  * @param overrides departures from the request.
  */
@@ -1202,7 +1202,7 @@ export const acceptNomination = (
 /**
  * Lists the nominations naming the caller: `GET /admin/me/nominations`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
  */
 export const listOwnNominations = (
@@ -1215,7 +1215,7 @@ export const listOwnNominations = (
  * Revokes a principal's identity entirely (#210 Q1, #212): `POST /admin/people/revocations`, the
  * subject in the body.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param revocation the principal's subject, and the reason.
  * @param overrides departures from the request.
  */
@@ -1238,7 +1238,7 @@ export const revokeIdentity = (
  * Lifts a principal's standing revocation: `POST /admin/people/revocations/lifts`, the subject in
  * the body.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param subject the principal's subject.
  * @param overrides departures from the request.
  */
@@ -1256,7 +1256,7 @@ export const liftIdentityRevocation = (
 /**
  * Revokes every user of a resource at once (#210 Q1): `POST /admin/resources/{externalId}/revocations`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param externalId the resource.
  * @param revocation the reason.
  * @param overrides departures from the request.
@@ -1280,7 +1280,7 @@ export const revokeResourceUsers = (
 /**
  * Revokes globally, confirmed in the request (#210 Q1): `POST /admin/revocations/global`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param revocation the reason.
  * @param overrides departures from the request, such as a body without the confirmation.
  */
@@ -1302,7 +1302,7 @@ export const revokeGlobally = (
 /**
  * Replaces the capabilities a role carries: `PUT /admin/roles/{name}/capabilities`.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param role the role's name.
  * @param capabilities every capability it carries afterwards, as `entity.action` names.
  * @param overrides departures from the request.
@@ -1326,7 +1326,7 @@ export const changeRoleCapabilities = (
 /**
  * Reads the audit log (#214): `GET /admin/audit`, with the parameters given.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param query the filters and the page.
  * @param overrides departures from the request, such as a parameter the API does not know.
  */
@@ -1357,7 +1357,7 @@ export const readAudit = (
  * its audit row included (#216 Q16). The export is sent as given, so this function holds no view of
  * its format.
  *
- * @param caller the controller and an administrator's token.
+ * @param caller the Controller and an administrator's token.
  * @param egoExport the export, sent unchanged as the request's `export` member.
  * @param run the audiences, by id, and `apply: true` for a real run.
  * @param overrides departures from the request.
@@ -1389,7 +1389,7 @@ export const importFromEgo = (
  * Posts a logout token to the back-channel logout endpoint (#210 Q8): `POST /backchannel-logout`,
  * form-encoded as one `logout_token` parameter, with no `authorization` header.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
+ * @param controllerUrl the Controller's URL, ending in `/`.
  * @param logoutToken the logout token.
  * @param overrides departures from the request, such as a JSON body or the token in the query.
  */
@@ -1427,7 +1427,7 @@ const unauthenticatedGet = async (
 /**
  * Asks for the API documentation page: `GET /api-docs`, unauthenticated.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
+ * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
  */
 export const readApiDocsPage = (
@@ -1440,7 +1440,7 @@ export const readApiDocsPage = (
  * Asks for the contract the API documentation page shows: `GET /api-docs/openapi.json`,
  * unauthenticated.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
+ * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
  */
 export const readApiDocsContract = (
@@ -1450,10 +1450,10 @@ export const readApiDocsContract = (
   unauthenticatedGet(controllerUrl, PATHS.apiDocsContract, overrides);
 
 /**
- * Asks whether the controller is ready to serve (#214 Q18): `GET /health/ready`, unauthenticated,
+ * Asks whether the Controller is ready to serve (#214 Q18): `GET /health/ready`, unauthenticated,
  * answered 200 or 503 with no detail in the body.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
+ * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
  */
 export const readReadiness = (
@@ -1463,11 +1463,11 @@ export const readReadiness = (
   unauthenticatedGet(controllerUrl, PATHS.readiness, overrides);
 
 /**
- * Asks whether the controller's process should go on running (#214 Q18): `GET /health/live`,
- * unauthenticated, answered 200 until the controller's log stream fails a write and 503 after, with
+ * Asks whether the Controller's process should go on running (#214 Q18): `GET /health/live`,
+ * unauthenticated, answered 200 until the Controller's log stream fails a write and 503 after, with
  * no detail in the body.
  *
- * @param controllerUrl the controller's URL, ending in `/`.
+ * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
  */
 export const readLiveness = (
@@ -1633,7 +1633,7 @@ const problem = <Code extends string, Status extends number>(
  *   name.
  * - 503: `directoryUnavailable`, an address operation the directory cannot answer;
  *   `importNotConfigured`, a run of the EGO import while its settings are missing, before its
- *   export is read; `storeUnavailable`, an operation that would write on a controller whose
+ *   export is read; `storeUnavailable`, an operation that would write on a Controller whose
  *   database role may only read, failing closed with no partial effect (#216's refusals and the
  *   read-only role).
  */
@@ -1721,7 +1721,7 @@ export const GRANT_REVOCATION_REASONS = Object.freeze({
 } as const);
 
 /**
- * The reasons the controller alone assigns, each refused when a caller sends it (ruled): `unspecified`,
+ * The reasons the Controller alone assigns, each refused when a caller sends it (ruled): `unspecified`,
  * recorded for a grant revocation, a suppression or a restoration given no reason; and
  * `resourceRetired`, recorded for each owner grant a retirement ends.
  */
@@ -2078,7 +2078,7 @@ export interface IssuedApplicationKey {
   /** The key's id, a uuid. */
   id: string;
 
-  /** The key: 32 bytes as 43 base64url characters, for the application's bridge. */
+  /** The key: 32 bytes as 43 base64url characters, for the application's Bridge. */
   value: string;
 }
 
@@ -2394,7 +2394,7 @@ export const pageMembersBeside = (
  * Every page of the resource listing, each of a given size at most, from the first to the one naming
  * no next page, following each page's cursor.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param options the page size, and the most pages read before the listing is taken to never end.
  */
 export const resourcePages = async (
@@ -2886,7 +2886,7 @@ interface ReplayedRequest {
 }
 
 // The operation is first sent to a recording server, so its path, its other headers and its body
-// stay this module's, then replayed to the controller with the departures.
+// stay this module's, then replayed to the Controller with the departures.
 const recordedOperation = async (
   caller: AdminCaller,
   operation: (recorded: AdminCaller) => Promise<AdminResponse>,
@@ -2931,10 +2931,10 @@ const recordedOperation = async (
  * Sends one operation with departures `fetch` cannot make: several `authorization` lines, which
  * `fetch` would join into one, or a body with no `content-type` at all, where `fetch` would add its
  * own. The operation is first sent to a recording server, so its path, its other headers and its body
- * stay this module's, then replayed to the controller at the socket with the departures, and its
+ * stay this module's, then replayed to the Controller at the socket with the departures, and its
  * answer read as every other operation's is.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param operation the operation, as a call through this module given a caller.
  * @param departures the `authorization` lines and the `content-type` sent in place of the operation's.
  */
@@ -2991,7 +2991,7 @@ export interface SlowlySent extends AdminResponse {
  * operation's path and headers are its own, recorded as {@link sendRaw} records them, with the
  * departures given.
  *
- * @param caller the controller and the caller's token.
+ * @param caller the Controller and the caller's token.
  * @param operation the operation, as a call through this module given a caller.
  * @param slow the body, its chunks and their spacing, and the `authorization` lines and the
  *   `content-type` sent in place of the operation's.
@@ -3074,7 +3074,7 @@ export const sendSlowly = async (
 };
 
 /**
- * What an answer would show only by leaking the controller's internals, anchored to the wording of
+ * What an answer would show only by leaking the Controller's internals, anchored to the wording of
  * the software that writes it so plain English never matches, "the description violates the length
  * rule" included: PostgreSQL's errors (a constraint broken, a key's detail, a relation, a default
  * constraint or index name, `SQLSTATE`, a catalogue), SQL itself, a JSON parser's own texts, a stack
@@ -3108,7 +3108,7 @@ export const INTERNAL_DETAIL: readonly RegExp[] = Object.freeze([
 ]);
 
 /**
- * What a text shows of the controller's internals: each {@link INTERNAL_DETAIL} pattern it matches,
+ * What a text shows of the Controller's internals: each {@link INTERNAL_DETAIL} pattern it matches,
  * and each internal identifier it holds, in any letter case.
  *
  * @param text an answer's body, or any text a caller receives.
@@ -3173,7 +3173,7 @@ export interface CallerOptions {
   /** Claims and options over the management token's. */
   mint?: MintOptions;
 
-  /** The instance called: the harness's controller by default. */
+  /** The instance called: the harness's Controller by default. */
   url?: URL;
 }
 

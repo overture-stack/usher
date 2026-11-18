@@ -121,7 +121,7 @@ const OTHER_VALUES: {
   trustedProxies: ['127.0.0.1', '::1'],
 };
 
-// A value other than the configuration's for each setting the controller does not read yet.
+// A value other than the configuration's for each setting the Controller does not read yet.
 const PENDING_VALUES: {
   [Field in keyof PendingSettings]: PendingSettings[Field];
 } = {

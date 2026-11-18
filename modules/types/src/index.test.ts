@@ -161,7 +161,7 @@ suite('the package root', () => {
 
   test("keeps the controller's exchange deadline a literal type, which the controller's own copy of it is typed by", () => {
     // True for a number literal type alone: widened to `number`, the deadline would let the
-    // controller's copy hold any value, so the assignment below fails to compile.
+    // Controller's copy hold any value, so the assignment below fails to compile.
     type IsNumberLiteral<Type> = number extends Type
       ? false
       : Type extends number

@@ -188,7 +188,7 @@ authorization policy does not become a single point of failure for both layers. 
 Keycloak invites using Keycloak's store and collapses that separation by convenience rather than by
 decision.
 
-The revocation channel holds long-lived push connections out to every bridge, with fail-secure
+The revocation channel holds long-lived push connections out to every Bridge, with fail-secure
 suspension when it goes quiet. That is not what an identity provider's process is shaped for, and
 putting it there makes Keycloak's availability into the data plane's availability by a new route.
 
@@ -274,7 +274,7 @@ first release:
   or no for one request, and also returns a map of every resource reachable by a user, with the
   actions allowed on each.
 - Guppy, its search service over Elasticsearch, applies that map as a filter on a field carried by
-  every document, which is the bridge's job here. Each index sits at one of three access levels:
+  every document, which is the Bridge's job here. Each index sits at one of three access levels:
   authorized records only; aggregations over everything, subject to a minimum count; or everything.
 - Requestor, its access-request service, lets an approver act for one project's resource path without
   administrator rights.
@@ -394,7 +394,7 @@ application's query language and schema, and Usher cannot have it.
 
 ### Decrypted permissions never leave the service that decrypted them
 
-**Decision.** A bridge decrypts an Usher token inside the service it belongs to, and the payload goes
+**Decision.** A Bridge decrypts an Usher token inside the service it belongs to, and the payload goes
 no further. It is not forwarded to another service, not returned to a browser, and not logged. Where
 an interface must show someone their own permissions, it is served a view rendered from the payload
 rather than the payload.
@@ -416,7 +416,7 @@ list that has to be remembered, and the list is exactly what was missing.
 
 **Deletion replaces it, per principal and per resource.**
 
-**A cached payload per principal and audience, invalidated by deletion.** The controller writes the
+**A cached payload per principal and audience, invalidated by deletion.** The Controller writes the
 computed payload to the shared cache when it issues a token. Anything that changes what that
 principal holds deletes the entry. Absence means recompute, which, unlike a comparison, cannot be
 subtly stale.
@@ -424,7 +424,7 @@ subtly stale.
 **A change to a resource's categories clears the whole cache.** A principal-scoped marker cannot see
 it, and it can change what every principal reaches. Finding exactly the entries
 naming the resource would need an index from each resource to its entries, which is a list to
-maintain, so the controller clears every cached payload instead. Category changes are rare and
+maintain, so the Controller clears every cached payload instead. Category changes are rare and
 computing a payload is meant to be cheap, so the cost is one wave of recomputation, and clearing
 leaves the cache's retention policy, not yet defined, with nothing to reconcile.
 
@@ -433,21 +433,21 @@ leaves the cache's retention policy, not yet defined, with nothing to reconcile.
 clearing the cache at the price of a persisted counter kept only for that comparison, an
 optimization ahead of any measured cost.
 
-**What the fast path then does.** On refresh the controller looks for the cached payload. Present
+**What the fast path then does.** On refresh the Controller looks for the cached payload. Present
 means reissue from it without recomputing; absent means a full recomputation.
 
 Three things follow. **The cache entry holds the earliest grant expiry alongside the payload**, which
 bounds every reissue. **The freshness test reads nothing supplied by the request**, which closes a
 narrow substitution: presenting a valid IdP token together with some other principal's expired token
 must not let the expired token decide whether a cached payload is current. It is low severity, since
-forging a token needs the per-application key and a bridge holding that key can already mint payloads
+forging a token needs the per-application key and a Bridge holding that key can already mint payloads
 directly, but a freshness decision should not rest on an input supplied by the request. **And the
 payload carries no category version**: no adapter would read it, and omitting it spares a validator
 a key-set invariant to enforce against `permissions`.
 
 **A refresh is therefore the same call as the first exchange**, since the expired token had no other
-stated purpose. The bridge sends an IdP token and its audience identifier in both cases. One
-operation for the bridge rather than two, and the fast path becomes entirely internal.
+stated purpose. The Bridge sends an IdP token and its audience identifier in both cases. One
+operation for the Bridge rather than two, and the fast path becomes entirely internal.
 
 **Reissue is not renewal, and the distinction is load-bearing.** What the cache saves is the
 computation, never the expiry. A token's `exp` is no later than the earliest expiry among the grants
@@ -460,8 +460,8 @@ token names what the principal already had and nothing about the new grant inval
 Losing access is immediate and gaining it waits, which is the right direction for health data.
 
 **"At once" holds end to end for a category change too, because it is announced like a revocation.**
-A revocation names the principal and a category change names the resource, and on either a bridge
-drops every cached token affected, signed in or not. The cleared cache is what a bridge that missed
+A revocation names the principal and a category change names the resource, and on either a Bridge
+drops every cached token affected, signed in or not. The cleared cache is what a Bridge that missed
 the announcement meets at its next refresh, so a lost announcement costs at most one token lifetime
 rather than correctness. See [the decision on announcing a category
 change](#a-category-change-is-announced-to-the-applications-that-serve-the-resource).
@@ -474,49 +474,49 @@ check. Anything proposed here that has no counterpart in that shape is worth a s
 
 **Payload versions are negotiated at the exchange and never tolerated at read time.**
 
-The bridge sends the set of payload versions it supports. The controller emits the highest version in
+The Bridge sends the set of payload versions it supports. The Controller emits the highest version in
 the intersection, or refuses the exchange with a version mismatch. It never emits a version outside
-the bridge's list, including a lower one it believes compatible.
+the Bridge's list, including a lower one it believes compatible.
 
 **Read-time tolerance is what this avoids, and the reason is specific to an authorization payload.**
 The usual rule, reject an unknown major and ignore an unknown minor, assumes an unknown field is
 additive capability. Here an added field can **narrow**: a future version carrying a withholding
-marker needed by embargo would be silently ignored by an older bridge and the failure direction is
+marker needed by embargo would be silently ignored by an older Bridge and the failure direction is
 open. Ignoring what you do not understand is safe for a document and unsafe for a
 restriction.
 
-**The directionality is asymmetric, and not in the intuitive way.** A newer bridge with an older
-controller is benign: the payload declares its own version, the bridge reads it as that version, and
-if the newer version had a restriction, the older controller does not know about it either, so
-nothing is skipped. A newer controller with an older bridge is the dangerous direction, and it is
+**The directionality is asymmetric, and not in the intuitive way.** A newer Bridge with an older
+Controller is benign: the payload declares its own version, the Bridge reads it as that version, and
+if the newer version had a restriction, the older Controller does not know about it either, so
+nothing is skipped. A newer Controller with an older Bridge is the dangerous direction, and it is
 dangerous only because of the narrowing case above.
 
 **A set rather than a single number**, because "highest common" otherwise rests on supporting version
 N implying support for N minus one, which holds until someone drops an old reader. A set makes the
 overlap a fact rather than an inference.
 
-**Two consequences accepted.** The controller supports more than one payload version during a
+**Two consequences accepted.** The Controller supports more than one payload version during a
 rollout, so retiring one is a deprecation policy rather than a field. And anonymous access negotiates
 like everything else, since an unauthenticated request still triggers an exchange, so there is no
 special case.
 
 **The first release has one schema, so the negotiation has nothing to choose between. Build it
 anyway.** The handshake costs almost nothing while the intersection is always a single version, and
-building it later costs a coordinated change at both ends: a bridge that never sent its supported set
-cannot start being asked for one without being upgraded in step with the controller, and this whole
-decision exists to avoid that lockstep. Built now, the second version is a controller-side
+building it later costs a coordinated change at both ends: a Bridge that never sent its supported set
+cannot start being asked for one without being upgraded in step with the Controller, and this whole
+decision exists to avoid that lockstep. Built now, the second version is a Controller-side
 addition and nothing else.
 
 **How a new version comes to exist is post-MVP and needs no answer yet**, because there will be one
 schema until there is a reason for a second. What already governs it is the rule above: if an older
-bridge could misread a change, the change is a new version rather than an amendment, and every added
+Bridge could misread a change, the change is a new version rather than an amendment, and every added
 field that narrows is such a change. Whether the process borrows an existing convention or gets one
 of its own is a question for whoever writes version two.
 
 **The payload is a type, and every member has to justify the layer it sits in.**
 
 `PermissionsPayload` is in [security-workflow.md](security-workflow.md#the-payload-as-a-type), member
-by member with the reasoning attached. The controller, the bridge and the conformance fixtures all
+by member with the reasoning attached. The Controller, the Bridge and the conformance fixtures all
 consume that single definition, which stops a mock from being right in an untested way.
 
 **A member described in prose but never placed is a member whose placement nobody has had to defend.**
@@ -533,32 +533,32 @@ and fails open. Tolerance is safe exactly where ignorance narrows.
 
 ### A category change is announced to the applications that serve the resource
 
-**Their bridges drop every cached token naming that resource**, signed in or not, and each affected
+**Their Bridges drop every cached token naming that resource**, signed in or not, and each affected
 principal's next request exchanges for a token computed under the new categories. No list of
-sessions is needed in Usher, since a bridge's token cache is the set of live tokens for its
+sessions is needed in Usher, since a Bridge's token cache is the set of live tokens for its
 application.
 
     1. An administrator adds `controlled` to some of a resource's records
-    2. The controller clears its cached payloads, and the change is announced
-    3. Every bridge of an application serving the resource drops the tokens naming it
+    2. The Controller clears its cached payloads, and the change is announced
+    3. Every Bridge of an application serving the resource drops the tokens naming it
     4. Each affected principal's next request exchanges for a fresh token
     5. Nobody who lost access keeps it past the announcement
 
 **Only the applications that serve the resource hear it.** A token names only the resources managed
-by its audience, so an announcement reaching every bridge would tell applications about resources
-they do not serve, and audience separation exists to prevent that. The controller already knows which
+by its audience, so an announcement reaching every Bridge would tell applications about resources
+they do not serve, and audience separation exists to prevent that. The Controller already knows which
 audiences serve which resources, so the fan-out is filtered by audience rather than broadcast.
 
 **A change to the baseline drops every entry, not only the anonymous one.** Every signed-in payload
 carries the baseline's grants as well, so dropping the anonymous entry alone would leave a narrowed
-baseline reaching signed-in principals for up to a token lifetime. The controller clears its payload
+baseline reaching signed-in principals for up to a token lifetime. The Controller clears its payload
 cache with it. Baseline changes are rare, and the rush of exchanges that follows is held by the
 in-flight bound.
 
 **Gaining access waits, which is the safe direction.** Someone who gains access, because a resource
 opened or a category left it, holds no token naming it yet and gains it at the next refresh.
 
-**The cleared cache is the backstop.** A bridge that missed the announcement meets a recomputed
+**The cleared cache is the backstop.** A Bridge that missed the announcement meets a recomputed
 payload at its next refresh, so a lost announcement costs at most one token lifetime rather than
 correctness.
 
@@ -588,7 +588,7 @@ payload already rejected the array once, when the resource list became a map.
 
 **The deciding argument is what the token is for.** RAR's value is discoverability by relying
 parties outside the issuer's control. This token is encrypted to one application's key, travels
-controller to bridge, is never presented by a client and is never read by a third party.
+Controller to Bridge, is never presented by a client and is never read by a third party.
 Standardizing an interface with one implementation on each side gains nothing. **If a third party
 ever reads this payload, revisit this**, since that is the argument's premise rather than its
 conclusion.
@@ -604,12 +604,12 @@ part.** The JWT profile for OAuth access tokens requires seven claims. Five are 
 | `jti`                      | absent                         |
 
 **`client_id` has no meaning here.** In OAuth it names the client that requested the token, distinct
-from `aud`, the resource server that receives it. The bridge requests a token for the application it
+from `aud`, the resource server that receives it. The Bridge requests a token for the application it
 runs inside, and the token is encrypted to that application's key, so the two would always name the
 same thing. A claim permanently equal to another claim is noise.
 
 **`jti` is required there to let a resource server detect a token replayed by a client.** No client
-presents this token. The bridge receives it from the controller and never accepts one from anywhere
+presents this token. The Bridge receives it from the Controller and never accepts one from anywhere
 else, so there is no presentation to replay, and revocation acts on the principal over the push
 channel rather than on a token identifier. Absent by reason rather than by omission.
 
@@ -617,7 +617,7 @@ channel rather than on a token identifier. Absent by reason rather than by omiss
 `client_id`. An anonymous principal here is genuinely nobody.
 
 **`roles`, `groups` and `entitlements` (§2.2.3.1) look applicable and are not.** No role name travels
-in this token, because the controller resolves a role to capabilities at issuance so that an adapter
+in this token, because the Controller resolves a role to capabilities at issuance so that an adapter
 never learns what an instance means by `viewer`. Carrying `roles` would undo that.
 
 ### `typ` is `usher+jwt`, and deliberately not `at+jwt`
@@ -627,7 +627,7 @@ access tokens with that same rationale. This token misses three of that profile'
 using `at+jwt` here would falsely assert conformance to it: the parameter would cause the very
 confusion it exists to prevent rather than defend against it.
 
-`usher+jwt` says what the token is: a bridge reading it knows it is not an access token and must not
+`usher+jwt` says what the token is: a Bridge reading it knows it is not an access token and must not
 be validated as one. The `<thing>+jwt` shape follows `at+jwt` and BCP 225's own `secevent+jwt`.
 
 **This is defence in depth rather than a hole being closed.** Usher issues one JWT kind, API keys are
@@ -651,29 +651,29 @@ record, and reusing a registered name to mean something else is what BCP 225 §3
 
 **The algorithm is `dir` with A256GCM, and the key is symmetric and per application.**
 
-**Per application is the part that is load-bearing.** One key shared by every bridge would let any
-bridge decrypt any other application's tokens, which makes the `aud` claim a string comparison rather
-than a boundary. Distinct keys per controller-and-application pair make audience isolation
-cryptographic: a compromised bridge cannot read another application's tokens at all.
+**Per application is the part that is load-bearing.** One key shared by every Bridge would let any
+Bridge decrypt any other application's tokens, which makes the `aud` claim a string comparison rather
+than a boundary. Distinct keys per Controller-and-application pair make audience isolation
+cryptographic: a compromised Bridge cannot read another application's tokens at all.
 
 **An audience identifier is per deployed instance.** Two independently deployed instances of one
 application cannot share one, since sharing an identifier would mean sharing a key, and audience
 separation is cryptographic rather than a comparison of strings.
 
-**Symmetric, because the controller generates each key and asymmetry adds nothing here.** The
-controller generates an application's key when the application is registered and shows it once, for
+**Symmetric, because the Controller generates each key and asymmetry adds nothing here.** The
+Controller generates an application's key when the application is registered and shows it once, for
 the application's own secrets, so asymmetry would solve no provisioning problem, no key-exchange
-endpoint is needed, and the controller fetches no public key from an application. `dir` also carries no wrapped key, which is the smallest
+endpoint is needed, and the Controller fetches no public key from an application. `dir` also carries no wrapped key, which is the smallest
 token and the fastest decrypt on the only cryptographic operation in the request path.
 
-**The objection to symmetric, and why it does not bite.** A bridge holding the key can mint tokens as
+**The objection to symmetric, and why it does not bite.** A Bridge holding the key can mint tokens as
 well as read them. It is the enforcement point for its own application, so an attacker holding that
 key is already inside the process deciding what that application's store returns, and forging a token
 grants nothing that ignoring enforcement would not. It cannot forge for another application, because
 that key differs.
 
 **What is given up, stated so a later reader can weigh it.** With asymmetric keys every token that
-exists was issued by the controller and is therefore in the controller's exchange log, which sits
+exists was issued by the Controller and is therefore in the Controller's exchange log, which sits
 outside a compromised application's control. Symmetric allows access with no exchange event, so that
 detection surface is weaker. It is accepted because the audit trail is a detection surface rather
 than evidence against a compromised ushered application, and because such an application can read its
@@ -681,7 +681,7 @@ own store without any token at all. **Revisit if a less-trusted application is e
 the argument turns on the trust assumption rather than on the cryptography.
 
 **Consequence for user interfaces.** An interface wanting Usher state needs a server side that holds
-a key, which is a backend-for-frontend holding a bridge rather than a browser calling the controller
+a key, which is a backend-for-frontend holding a Bridge rather than a browser calling the Controller
 directly. A browser-only application can still be served data, since enforcement happens in the data
 service, but it cannot host a surface built on permissions without gaining that server side.
 
@@ -699,8 +699,8 @@ convenience, and the design chose an encrypted token over a signed one for that 
 **Primary rationale: audience separation is enforced cryptographically, and fails closed.**
 Usher tokens are audience-scoped per application. Encrypting each token to the target
 application's own key means an application physically cannot read a payload issued for a
-different one. A controller defect that computes or routes a payload to the wrong audience
-becomes a decryption failure at the receiving bridge rather than a silent cross-application
+different one. A Controller defect that computes or routes a payload to the wrong audience
+becomes a decryption failure at the receiving Bridge rather than a silent cross-application
 grant leak. With a signed token, the same defect produces a readable payload and the audience
 claim is enforced only by whatever code remembers to check it.
 
@@ -713,16 +713,16 @@ payload is readable wherever it happens to land: request logs, error reports, cr
 tracing spans. An encrypted payload in any of those places discloses nothing. This does not
 depend on the token reaching an untrusted party; it only requires that something logged it.
 
-**The token never transits the user agent.** The bridge is a library embedded in client data
-services and obtains the Usher token from the controller directly, so the two rationales above are
+**The token never transits the user agent.** The Bridge is a library embedded in client data
+services and obtains the Usher token from the Controller directly, so the two rationales above are
 the whole of the case: neither depends on where the user sits.
 
-**Tradeoffs accepted.** Each bridge needs a decryption key provisioned at deploy
+**Tradeoffs accepted.** Each Bridge needs a decryption key provisioned at deploy
 time, and audience scoping makes those keys per-application rather than instance-wide. Key
 rotation is an operational concern that would not exist with a signed token. The cost is smaller than
-it first appears: the controller generates each application's key at registration, keeps it encrypted
+it first appears: the Controller generates each application's key at registration, keeps it encrypted
 in its own store, and shows it once, so onboarding an application is one secret written to that
-application, with nothing in the controller's deployment changed or restarted. For the full
+application, with nothing in the Controller's deployment changed or restarted. For the full
 mechanism, see [security-workflow.md: Usher token format](security-workflow.md#usher-token-format-jwe)
 and [schema.md](schema.md) § Applications.
 
@@ -730,7 +730,7 @@ and [schema.md](schema.md) § Applications.
 
 ### A category is a condition over records, and a record needs every category it matches
 
-**Decided 2026-10-20, once the adapter's and the bridge's changes had been sized.** A category is a named
+**Decided 2026-10-20, once the adapter's and the Bridge's changes had been sized.** A category is a named
 condition over a catalogue's records, written in SQON in the catalogue's **category mapping**: the
 Usher registration kept beside the catalogue's configuration. "This field holds this value" is the
 simplest condition. Usher holds only the names, the category mapping says which records each name
@@ -810,7 +810,7 @@ category is defined or declared absent in every catalogue's mapping before it is
 **The rendering excludes what is not held, one clause per category.** For each resource R the
 principal holds, with H(R) the categories held on it and C(R) the global categories plus R's own,
 lacking(c) is the held resources R with c in C(R) but not in H(R), and lacking(unmarked) the held
-resources whose unmarked records are not held. The bridge renders:
+resources whose unmarked records are not held. The Bridge renders:
 
     and( in(<resource field>, [the resources held]),
          not( in(<resource field>, [the known resources not held]) ),
@@ -840,11 +840,11 @@ never what they may not. Turning the categories held into the exclusion of every
 is the rendering's job, since "every category a record matches is held" is a statement about the
 categories not held. That brings back the hazard recorded in the decision on additive rendering
 below: a lost exclusion widens access. The outcome rule, that a dropped or broken piece only narrows,
-is kept three ways. The bridge's rendering guard reads its own filter back and checks it against the
+is kept three ways. The Bridge's rendering guard reads its own filter back and checks it against the
 payload and registration it came from, the resources held, the complement and every lacking list,
 denying the catalogue's result on any mismatch. Arranger refuses an access filter holding an empty
 group. And a search engine refusing part of a query fails the request rather than answering with
-records missing. Separately, the bridge's clause guard denies a filter weighing more than the
+records missing. Separately, the Bridge's clause guard denies a filter weighing more than the
 catalogue's clause limit, weighed so that OpenSearch's own limit, which counts across the whole
 query, binds no earlier.
 
@@ -948,14 +948,14 @@ field before using it.
 
 ---
 
-### A catalogue's category gap is found by the bridge, from the categories each resource offers
+### A catalogue's category gap is found by the Bridge, from the categories each resource offers
 
 **Decided 2026-10-05; revised 2026-10-20, when categories became conditions.** The adapter's job is
 unchanged: it turns its application's configuration, whatever its shape, into the one registration
-the bridge reads, and the bridge compares that registration with the payload, the same way for every
+the Bridge reads, and the Bridge compares that registration with the payload, the same way for every
 application.
 
-**The bridge checks, catalogue by catalogue, on every payload.** Every global category Usher defines
+**The Bridge checks, catalogue by catalogue, on every payload.** Every global category Usher defines
 must be defined or declared absent in the catalogue's category mapping. A global in neither state
 denies the catalogue's whole result, and a critical `category.unmapped` event names the catalogue and
 the category. A global the catalogue defines and Usher does not is never held, so its records are
@@ -975,9 +975,9 @@ declared absence is the last resort, for a catalogue whose records cannot match 
 global category Usher defines, never `global.unmarked`, and may be empty. `resourceCategories` names,
 for each resource named in `permissions`, the resource's own `resource.` categories, held or not, and
 may hold an empty list. Both are required: a payload missing either, holding null, or carrying the
-earlier `offeredCategories` is refused. The controller reads them when it computes the payload, so
+earlier `offeredCategories` is refused. The Controller reads them when it computes the payload, so
 they come from the same snapshot as the grants. A change to a resource's categories already clears
-the controller's payload cache and announces the resource on the notice stream, which drops every
+the Controller's payload cache and announces the resource on the notice stream, which drops every
 entry naming it, so they are refreshed by what refreshes the grants. Nothing is disclosed about a
 resource not already named in the payload, but the payload names categories the principal does not
 hold, so these members are enforcement input only: never rendered, never returned in any view, the
@@ -994,12 +994,12 @@ For resource categories, where the check runs was weighed this way:
 
 | Where the check runs, and what it reads                          | Withholds from one catalogue only                                                    | What it costs                                                                                                                                        |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| the controller, omitting the resource from the token             | no: a token covers every catalogue of its application                                | the controller would hold adapter configuration, which Usher never holds                                                                             |
-| the bridge, against Usher's category names alone                 | no: it cannot tell which resources offer the gap, so the catalogue's `unmarked` goes | nothing new in the payload                                                                                                                           |
-| the bridge, against offerings read from an endpoint of their own | yes                                                                                  | a second cache to keep in step with the grants, and a read that fails apart from the exchange                                                        |
-| **the bridge, against offerings carried in the payload**         | yes                                                                                  | each payload grows by the categories offered by the resources it names, and outside the open tier a gap is found at first use rather than at startup |
+| the Controller, omitting the resource from the token             | no: a token covers every catalogue of its application                                | the Controller would hold adapter configuration, which Usher never holds                                                                             |
+| the Bridge, against Usher's category names alone                 | no: it cannot tell which resources offer the gap, so the catalogue's `unmarked` goes | nothing new in the payload                                                                                                                           |
+| the Bridge, against offerings read from an endpoint of their own | yes                                                                                  | a second cache to keep in step with the grants, and a read that fails apart from the exchange                                                        |
+| **the Bridge, against offerings carried in the payload**         | yes                                                                                  | each payload grows by the categories offered by the resources it names, and outside the open tier a gap is found at first use rather than at startup |
 
-**The open tier is checked at startup.** The bridge fetches the anonymous payload at startup, so a
+**The open tier is checked at startup.** The Bridge fetches the anonymous payload at startup, so a
 gap on a resource whose unmarked records are open to everyone, which exposes the most, is found
 before any request is served. A gap on a resource only signed-in principals reach is found the first
 time a payload names it.
@@ -1035,10 +1035,10 @@ than being stored twice.
 categories of their own once local categories exist: `category.create` bounded to one resource like
 every other owner capability, and never reaching the global scope.
 
-**The bridge enforces both scopes.** A `resource.` category's condition sits under its resource in the
+**The Bridge enforces both scopes.** A `resource.` category's condition sits under its resource in the
 category mapping, and the payload's `resourceCategories` names each resource's own, so a grant on one
-renders like a grant on a global category. A bare name or an unknown prefix means the controller
-and the bridge disagree about the format, so the payload is treated as not received, which the
+renders like a grant on a global category. A bare name or an unknown prefix means the Controller
+and the Bridge disagree about the format, so the payload is treated as not received, which the
 application reports as unavailable rather than serving as an empty answer, and the rejection is
 logged.
 
@@ -1112,7 +1112,7 @@ without the prefix, since the prefix is a key for software rather than vocabular
 > category** is what these preconditions block. **Narrowing by predicate** is not blocked by any of
 > them.
 
-As first decided, the bridge rendered a resolved grant set as a union of positive predicates, one
+As first decided, the Bridge rendered a resolved grant set as a union of positive predicates, one
 branch per grant held, composed with `or`, and computed no exclusions. The released model reverses
 that for categories, for the reason in the scope note above, and the rationale below is why the
 released rendering carries its guards.
@@ -1140,7 +1140,7 @@ under either model.
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Category exists in Usher, undefined in the category mapping | a global category denies the catalogue's whole result; a resource category withholds its resource                 |
 | Data arrives carrying a value no condition expects          | `unmarked`, unless a catch-all negation covers it, which is governance                                            |
-| A bug drops or shortens a clause in the composed filter     | the bridge's guard compares the filter with its payload and denies on a mismatch; Arranger refuses an empty group |
+| A bug drops or shortens a clause in the composed filter     | the Bridge's guard compares the filter with its payload and denies on a mismatch; Arranger refuses an empty group |
 | A condition names a field the catalogue lacks               | the adapter's startup check refuses it                                                                            |
 | Principal holds zero grants                                 | denies                                                                                                            |
 
@@ -1225,7 +1225,7 @@ than one person can see it.
 
 **Where the boundary actually falls.** A collection of records assembled by a user is their artifact
 and stays self-scoped. A body of data with a custodian, a category, and an approval process is a
-resource. Revocation still reaches the first, because a revoked principal fails at the bridge before
+resource. Revocation still reaches the first, because a revoked principal fails at the Bridge before
 any query runs, so keeping user artifacts out of the grant model costs nothing in enforcement.
 
 **The carve-out: widening who may read an artifact is not itself a self-scoping act.**
@@ -1345,7 +1345,7 @@ that belongs in the admin API rather than in a read-path filter.
 
 ### Catalogue-level denial is an empty `in`, and never a negation
 
-Request-level denials (no valid token, revoked, bridge unreachable) are decided in middleware before
+Request-level denials (no valid token, revoked, Bridge unreachable) are decided in middleware before
 the resolver runs, as the 503 case already is. Catalogue-level denials cannot be, because the
 application's hook is supplied per catalogue and one request can span catalogues whose answers differ.
 Denying the whole request because one catalogue is denied would take the permitted ones with it.
@@ -1434,7 +1434,7 @@ appear as an inline literal, because `{ value: [] }` reads like an oversight, an
 of it is the one form that inverts.
 
 **Decision.** Holding no grants is represented as a distinct state that never becomes a SQON
-value. The bridge returns a discriminated result to the adapter rather than a filter:
+value. The Bridge returns a discriminated result to the adapter rather than a filter:
 
     type Enforcement =
       | { kind: 'deny';   reason: 'no-grants' | 'unknown-resource' | 'unmapped-category'
@@ -1469,7 +1469,7 @@ The alternative considered was enumerating every open resource into a positive `
 keeps a single code path but puts a catalogue's entire resource list into every token and grows
 without bound.
 
-A `revoked` reason was considered and dropped as unreachable: the bridge drops a user's cached
+A `revoked` reason was considered and dropped as unreachable: the Bridge drops a user's cached
 token on a revocation event, so the next request re-fetches and receives a payload with no grants
 for that resource, which surfaces as `no-grants`.
 
@@ -1489,7 +1489,7 @@ flow. Holding no grants and a misconfiguration are different events. Whether a g
 or was withdrawn is recorded by the grant's own `grant.revocation` event rather than by the deny,
 so the revocation case stays countable.
 
-The unavailable case is deliberately absent. The bridge must return 503 upstream before the
+The unavailable case is deliberately absent. The Bridge must return 503 upstream before the
 translation callback is invoked, so this type describes only the branch where a payload
 resolved.
 
@@ -1518,20 +1518,20 @@ than that anyone preferred it.
 
 ---
 
-### The bridge's cache is keyed by the sign-in token, never by a claim inside it
+### The Bridge's cache is keyed by the sign-in token, never by a claim inside it
 
-**The threat.** The bridge never validates a sign-in token itself; the controller does, at the
+**The threat.** The Bridge never validates a sign-in token itself; the Controller does, at the
 exchange. A cache looked up by the subject read from an incoming sign-in token would serve a cached
 principal's access to anyone who mints a token carrying that subject, without an exchange ever
 happening:
 
 1. Ana's Usher token is cached.
 2. Mallory sends a sign-in token she made herself, signed with any key, whose subject is Ana's.
-3. The bridge finds Ana's entry and attaches Ana's access.
+3. The Bridge finds Ana's entry and attaches Ana's access.
 4. Nothing ever validates Mallory's token.
 
 **Decision.** The cache is keyed by a SHA-256 digest of the whole sign-in token, and entries are
-indexed by the subject read from the decrypted Usher payload, which the bridge can trust, so a
+indexed by the subject read from the decrypted Usher payload, which the Bridge can trust, so a
 notice naming a principal still finds every entry of theirs. A forged token is a new digest, so it
 goes to the exchange and is refused there.
 
@@ -1541,59 +1541,59 @@ goes to the exchange and is refused there.
   token lifetime, so repeated junk costs no exchanges and can only ever evict other junk.
 - A principal notice does not lift a cached refusal: a restored principal is refused on the
   credential refused before, until it expires, and is granted on the fresh token a renewal brings. A
-  refused credential carries no subject the bridge has verified, so no notice can name it.
+  refused credential carries no subject the Bridge has verified, so no notice can name it.
 - Concurrent requests carrying one sign-in token share one exchange, and the exchanges in flight are
-  bounded, beyond which the bridge answers 503.
-- The bridge refuses locally only a three-part signed token whose own `exp` has passed, by the
-  controller's clock tolerance. Every other credential goes to the exchange, since API keys are
+  bounded, beyond which the Bridge answers 503.
+- The Bridge refuses locally only a three-part signed token whose own `exp` has passed, by the
+  Controller's clock tolerance. Every other credential goes to the exchange, since API keys are
   opaque strings checked there.
 - An entry ends at the earlier of its Usher token's `exp` and its sign-in token's `exp`, and the
-  controller caps the Usher token's `exp` at the sign-in token's, so access never outlives the sign-in.
+  Controller caps the Usher token's `exp` at the sign-in token's, so access never outlives the sign-in.
 
-**The bridge never refuses a credential the controller would accept.** The local `exp` refusal keeps
-to this, since the controller refuses the same token by the same tolerance, and any later local check
-has to show it keeps to it before it is built. Checking a sign-in token's signature at the bridge
+**The Bridge never refuses a credential the Controller would accept.** The local `exp` refusal keeps
+to this, since the Controller refuses the same token by the same tolerance, and any later local check
+has to show it keeps to it before it is built. Checking a sign-in token's signature at the Bridge
 does not: a key the provider rotated in minutes ago looks the same as an invented one until the
 provider is asked, API keys carry no signature at all, and every way a second validator can disagree
-with the controller refuses a person the controller would admit. It would also put identity provider
-configuration into every ushered application, which the design gives to the controller's connector
-alone. So the bridge does not check signatures (decided 2026-10-06; the research is the bridge's
+with the Controller refuses a person the Controller would admit. It would also put identity provider
+configuration into every ushered application, which the design gives to the Controller's connector
+alone. So the Bridge does not check signatures (decided 2026-10-06; the research is the Bridge's
 [sign-in signature precheck](../docs/atlas/bridge/signin-signature-precheck.md)).
 
 **A flood of unique junk credentials is answered by the in-flight bound, and that trade is accepted
-for the first release.** The bound keeps the controller up, and cached principals keep their access
+for the first release.** The bound keeps the Controller up, and cached principals keep their access
 until their entries end, while new sign-ins and refreshes are answered 503 for as long as the flood
 lasts. The anonymous refresh runs outside the bound, so the open tier stays fresh. Admission control
 that keeps sign-ins served through a flood is on the roadmap as research. Decided 2026-10-06, and
-narrowed on 2026-11-06 by § The controller admits each application within a share of its own: a
+narrowed on 2026-11-06 by § The Controller admits each application within a share of its own: a
 flood aimed at one application leaves every other application's sign-ins served, and a credential
 failing a check that needs no database is refused before any database work on it.
 
-**The controller sets the bound, and tells its bridges.** A bound each bridge sets for itself
-multiplies with the replicas: 64 exchanges per bridge across twenty replicas is 1,280 at once against
-one controller, a number nobody chose and one that grows with every scale-out. The bound exists to
-protect the controller, so the controller owns it. Decided 2026-10-06; the number, and how it reaches
-a bridge, are open on the roadmap, and the bridge's own default stands in until then.
+**The Controller sets the bound, and tells its Bridges.** A bound each Bridge sets for itself
+multiplies with the replicas: 64 exchanges per Bridge across twenty replicas is 1,280 at once against
+one Controller, a number nobody chose and one that grows with every scale-out. The bound exists to
+protect the Controller, so the Controller owns it. Decided 2026-10-06; the number, and how it reaches
+a Bridge, are open on the roadmap, and the Bridge's own default stands in until then.
 
-**Superseded in mechanism, not in principle: the controller bounds its own work.** The controller
-announces no number for bridges to keep. It divides its own exchange connections into a share per
+**Superseded in mechanism, not in principle: the Controller bounds its own work.** The Controller
+announces no number for Bridges to keep. It divides its own exchange connections into a share per
 application and answers an exchange past its share `503` with `Retry-After`, so the bound that
-protects the controller is the controller's own pool, and a bridge's bound only limits the bridge's
-memory. Decided 2026-11-06, in § The controller admits each application within a share of its own.
+protects the Controller is the Controller's own pool, and a Bridge's bound only limits the Bridge's
+memory. Decided 2026-11-06, in § The Controller admits each application within a share of its own.
 
 ---
 
-### The controller admits each application within a share of its own
+### The Controller admits each application within a share of its own
 
-**The threat.** A bound each bridge keeps is a bound the controller does not have. Twenty replicas of
-one application at 64 exchanges each put 1,280 against the controller at once, and a bridge that
+**The threat.** A bound each Bridge keeps is a bound the Controller does not have. Twenty replicas of
+one application at 64 exchanges each put 1,280 against the Controller at once, and a Bridge that
 ignores its bound, through a defect or a compromise, meets no limit at all. Each fix that adds a cap in
 another layer leaves the same gap one layer down.
 
-**Decision (2026-11-06): the controller enforces its own admission, and refuses every credential at
+**Decision (2026-11-06): the Controller enforces its own admission, and refuses every credential at
 its cheapest failing check.**
 
-1. **A share per application, on each instance.** The controller knows the calling bridge by its
+1. **A share per application, on each instance.** The Controller knows the calling Bridge by its
    channel assertion, signed under a key every replica of an application shares, so it budgets the
    application as a whole and never tells replicas apart. Each instance holds three pools of store
    connections: exchange connections, for the exchange's own transactions, key confirmations and
@@ -1607,28 +1607,28 @@ its cheapest failing check.**
    fresh during a flood.
 2. **Checks ordered by cost.** A credential failing a check that needs no database is refused before
    any database work on it. Recording that refusal takes a place in its application's share, so a
-   flood of junk through one application's bridge fills that application's share and no other's.
+   flood of junk through one application's Bridge fills that application's share and no other's.
 
    | Order | Check                                                                                                           | Cost                  |
    | ----- | --------------------------------------------------------------------------------------------------------------- | --------------------- |
-   | 1     | the bridge's channel assertion                                                                                  | one signature check   |
+   | 1     | the Bridge's channel assertion                                                                                  | one signature check   |
    | 2     | the credential's shape; for a sign-in token, its issuer, audience, expiry and key id against the cached key set | string comparisons    |
    | 3     | the credential's own mark: a sign-in token's signature                                                          | one signature, no I/O |
    | 4     | admission into the application's share                                                                          | a counter             |
    | 5     | the identity lookup, revocation and the token calculation                                                       | the database          |
 
-3. **Bridges cooperate rather than configure.** A bridge keeps a fixed bound only on its own memory,
+3. **Bridges cooperate rather than configure.** A Bridge keeps a fixed bound only on its own memory,
    honours `Retry-After` with jitter, and offers no option for the bound.
 4. **Counted, never banned.** Each instance counts the exchanges it refuses over a share, per
    application, and records one `admission.shareExceededTally` for each every 60 seconds. A rule over
    the tallies, such as a count in several intervals in a row, belongs downstream with the other rules
-   over the audit stream, so the controller sets no alert threshold of its own. Banning an
-   application is revoking its key, which a person does. A ban the controller imposed itself would
+   over the audit stream, so the Controller sets no alert threshold of its own. Banning an
+   application is revoking its key, which a person does. A ban the Controller imposed itself would
    let an attacker lock an application out by flooding its search server.
 
 **An API key has no mark of its own**, so junk shaped like one costs a lookup. A watermark closes
 that: a key minted by the platform reads `<prefix>_<version><random><mac>`, a MAC over the rest under
-a key of this instance, which the controller checks before any lookup. The MAC proves where a key was
+a key of this instance, which the Controller checks before any lookup. The MAC proves where a key was
 minted, never that it is still valid, so expiry, revocation and scope stay with the lookup and keys
 stay opaque. The Keycloak API key plugin mints the keys, so the watermark is designed with the API
 keys, on the roadmap.
@@ -1663,7 +1663,7 @@ answer, so the text never promises more than it gives.
 ### A suspended principal is answered by what the open tier can settle
 
 Past the grace period, or when one principal's exchange fails while the notice stream is healthy,
-the bridge renders from the last anonymous payload and marks the signed-in principal suspended. An
+the Bridge renders from the last anonymous payload and marks the signed-in principal suspended. An
 application then answers each operation by whether the open tier settles it: a search is served the
 open tier with a notice, while an export, a fetch only a grant could answer and a write answer 503.
 A missing object answers 503 too, so a 503 never tells a protected object from a missing one.
@@ -1685,7 +1685,7 @@ possible improvement, since it would only help where a portal reads the marker.
 
 ### A principal states its credential, and a suspended one keeps a confirmed identity for attribution alone
 
-The bridge hands an adapter one of four principals: no credential, an unconfirmed credential, a
+The Bridge hands an adapter one of four principals: no credential, an unconfirmed credential, a
 confirmed one whose grants hold, and a confirmed one suspended by an outage. The last carries its
 identity as `attributionOnlySubject`, never as `subject`, so an ownership check cannot act on a
 principal whose grants are on hold. Decided 2026-11-02; the shape is in
@@ -1696,7 +1696,7 @@ principal whose grants are on hold. Decided 2026-11-02; the shape is in
 | a null subject for every suspended principal       | an outage's activity cannot be attributed, and an audit by creator finds nothing for it                        |
 | a suspended principal's identity kept as `subject` | a check such as "a submitter may edit their own submission" would act while the principal's grants are on hold |
 | anonymous read from a null subject                 | a state read from a missing value, which is where an unconfirmed or misbuilt principal passes for anonymous    |
-| an unconfirmed credential's `sub` trusted          | the bridge only decodes a sign-in token, so anyone could write any `sub` into one                              |
+| an unconfirmed credential's `sub` trusted          | the Bridge only decodes a sign-in token, so anyone could write any `sub` into one                              |
 
 ---
 
@@ -1736,13 +1736,13 @@ it. Decided 2026-11-02; who reaches which is in [adapter-integration.md](adapter
 ### A client compares against exported values, and no header names the layer that answered
 
 `@overture-stack/usher-types` exports the suspended header's name and value and the challenge's
-error values, so a client and the bridge compare against one source. Statuses and `Retry-After` are
+error values, so a client and the Bridge compare against one source. Statuses and `Retry-After` are
 standard HTTP and are not exported. Decided 2026-10-30; what a client does with each answer is in
 [client-integration.md](client-integration.md).
 
 | Alternative                                   | Why not                                                                                                                                 |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| a marker header naming the answering layer    | the application, not the bridge, refuses a suspended principal's grant-only read, so the marker would mislead in the case it exists for |
+| a marker header naming the answering layer    | the application, not the Bridge, refuses a suspended principal's grant-only read, so the marker would mislead in the case it exists for |
 | export the statuses and `Retry-After` seconds | HTTP already fixes them, and a constant would be a second source for the same value                                                     |
 
 ---
@@ -1837,8 +1837,8 @@ is never adjusted for how long an operation takes. Where an operation cannot fin
 operation changes.
 
 **Most of the exposure is absent here by accident of shape.** A principal never holds a grants
-token; the bridge fetches it and caches it. So its expiry aborts nothing. The bridge re-exchanges,
-and the controller re-evaluates current policy when it does. Re-evaluating on every exchange is
+token; the Bridge fetches it and caches it. So its expiry aborts nothing. The Bridge re-exchanges,
+and the Controller re-evaluates current policy when it does. Re-evaluating on every exchange is
 what the whole revocation design rests on.
 
 **One exposure does remain.** A principal's own identity token sits in a client for the duration of an
@@ -1862,7 +1862,7 @@ A short token TTL limits the staleness window but requires frequent token refres
 round-trip latency. A long TTL reduces round-trips but widens the window where a revoked grant is
 still honoured.
 
-Usher uses a push revocation channel, Server-Sent Events beside a poll that always runs: bridges
+Usher uses a push revocation channel, Server-Sent Events beside a poll that always runs: Bridges
 subscribe and receive notification when grants change. Only a poll answered within its deadline
 proves the channel live, which bounds an attacker who delays notices rather than dropping them (decided 2026-10-06; the rule is in [security-workflow.md § Revocation channel integrity and fail-secure behaviour](security-workflow.md#revocation-channel-integrity-and-fail-secure-behaviour)). Cached tokens are invalidated on notification rather than
 on expiry. The TTL is a backstop, not the primary revocation mechanism. This is about revocation
@@ -1882,7 +1882,7 @@ If a revoked grant notification is never delivered, the adapter would continue h
 has been withdrawn. An adversary who can silence the revocation channel would preserve stale access
 indefinitely with pure TTL fallback.
 
-When the revocation channel is unavailable beyond the configured grace period, the bridge suspends
+When the revocation channel is unavailable beyond the configured grace period, the Bridge suspends
 every granted permission until connectivity is restored: anything a grant alone could answer gets 503
 (service unavailable), while the open tier, which needs no grant, is still served. An adversary who
 silences the channel gains no access; they only cause a service disruption.
@@ -1896,7 +1896,7 @@ design choice rather than an oversight. For the failure behaviour and grace peri
 
 ### A release that cannot honour a recorded restriction does not serve
 
-**The threat.** A rollback moves the controller back to an older release and leaves the schema as the
+**The threat.** A rollback moves the Controller back to an older release and leaves the schema as the
 newer release left it, since migrations go forward only. Where the newer release added a kind of
 restriction, the older release never reads where it is recorded, and every restriction of that kind
 is lifted with nothing to show it:
@@ -1906,7 +1906,7 @@ is lifted with nothing to show it:
 3. Release 2 has an unrelated defect, and operators roll back to release 1.
 4. Release 1 never reads the suspensions table, so the account's exchanges succeed again.
 
-**Decision (2026-11-16): a controller holding a database with a migration it does not know, which
+**Decision (2026-11-16): a Controller holding a database with a migration it does not know, which
 records a restriction, refuses to serve.**
 
 - **A migration says whether it records a restriction.** A migration whose table or column records
@@ -1918,12 +1918,12 @@ records a restriction, refuses to serve.**
   declaration with its migration's row, filling in rows applied before declarations existed, and
   refuses a list whose declaration for an applied migration differs from the one recorded. Review of
   each migration checks its declaration as it checks the rest.
-- **The controller checks at start and at readiness.** A controller finding such a migration outside
+- **The Controller checks at start and at readiness.** A Controller finding such a migration outside
   its own list refuses to start, and one already running stops reporting ready, so an older release
   stops taking exchanges as soon as a newer release's migration recording a restriction is applied.
   Each logs the migrations it does not know, with their sentences. An upgrade across such a
   migration leaves no instance serving from the moment the migration is applied until the newer
-  instances are ready, so the deployment pipeline applies the migration and moves the controller in
+  instances are ready, so the deployment pipeline applies the migration and moves the Controller in
   one step to keep that short, and the downtime is scheduled and announced, through the portals'
   banners among other ways. Fail-secure accepts it.
 - **A rollback across such a migration is refused, so a defective release is fixed forward.**
@@ -1934,10 +1934,10 @@ records a restriction, refuses to serve.**
   where the incident is recorded. It needs no particular pipeline, and docs/deployment.md gives its
   procedure for any platform. The reference is never a description of the incident, since the
   arguments a deployment passes, through a pipeline's parameters or an infrastructure repository,
-  are usually readable more widely than the incident's own record. The command runs before the controller moves, and changes only what the database records:
+  are usually readable more widely than the incident's own record. The command runs before the Controller moves, and changes only what the database records:
   the schema stays as it is, and so does the schema migration Job's version. It is recorded at
   `critical` in the audit log with each migration it sets aside and its sentence, so the trail says
-  what stopped being enforced and where to read why. The controller's own database role cannot write
+  what stopped being enforced and where to read why. The Controller's own database role cannot write
   a forced rollback, so forcing one takes the same access as deploying a release. A forced rollback
   lasts until a release that knows every applied migration starts again, which ends it through a
   function able only to end the forced rollback in force, and records that.
@@ -1950,7 +1950,7 @@ return to it is refused outright and its problems are fixed forward. Later relea
 to migrations declaring a restriction.
 
 **What it leaves as it was.** A migration removing anything still ships one release after the code
-stops reading it, per [schema.md](schema.md) § Decide G. A rollback moves the controller alone,
+stops reading it, per [schema.md](schema.md) § Decide G. A rollback moves the Controller alone,
 without its migration step, so the runner keeps refusing a record ahead of its own release.
 
 ---
@@ -2052,7 +2052,7 @@ fail and creates policy synchronization risk with no long-term benefit.
 The replacement strategy: enumerate EGO's `STUDY-*` groups, map each to an Usher resource, and
 map EGO group memberships to Usher `grants` rows. The studies management service (which orchestrated
 EGO) is retired; its operations become Usher admin API calls. Backend services in iMS that
-currently call EGO's authorization endpoints are updated to use Usher's bridge and token exchange.
+currently call EGO's authorization endpoints are updated to use Usher's Bridge and token exchange.
 
 **Tradeoffs accepted.** A full replacement requires an import and a coordinated cutover
 for iMS backend services. This is harder than an incremental integration but avoids indefinite
@@ -2140,7 +2140,7 @@ already was.
 
 ---
 
-### Who holds a grant can follow a rule, and the controller evaluates it
+### Who holds a grant can follow a rule, and the Controller evaluates it
 
 **Some grants are conferred by a rule rather than recorded one per holder.** The baseline is the
 first: it gives every principal the `unmarked` grant on each resource whose unmarked records are
@@ -2158,9 +2158,9 @@ reaches them. A setting applies to a whole resource's unmarked records, since mi
 them would need a field on each record holding an access decision, which is prescriptive. No record
 belongs to two categories through it, so the rule needs no both-grants check.
 
-**The controller evaluates rules at the exchange, and no bridge does.** The controller already
-verifies the identity provider's token and computes the grants there, so a rule hands the bridge an
-ordinary grant and the bridge needs no change. Evaluated in bridges, the same rule would live in
+**The Controller evaluates rules at the exchange, and no Bridge does.** The Controller already
+verifies the identity provider's token and computes the grants there, so a rule hands the Bridge an
+ordinary grant and the Bridge needs no change. Evaluated in Bridges, the same rule would live in
 every application and drift between them, and a single decision point exists to prevent exactly that.
 
 **A rule reads only what the identity provider verifies.** "Signed in" needs nothing but a valid
@@ -2195,7 +2195,7 @@ real tier difference: an anonymous principal holding `view` on `unmarked` where 
 holds `view` and `download`, same resource, same category.
 
 **No role name and no ownership travel in the token.** A role is how access is authored; the
-controller resolves it to permissions at issuance, so no adapter learns what an instance means by
+Controller resolves it to permissions at issuance, so no adapter learns what an instance means by
 `viewer`. Ownership is a management permission enforced by Usher's own API, so an enforcement
 payload has no use for it.
 
@@ -2226,9 +2226,9 @@ categories became conditions, it matches both.
 
 ---
 
-### The bridge emits SQON; adapters translate it into their own enforcement
+### The Bridge emits SQON; adapters translate it into their own enforcement
 
-The bridge builds the predicate, so every application must be able to receive it in one form. That
+The Bridge builds the predicate, so every application must be able to receive it in one form. That
 form is SQON, the shared Overture query language, and the consequence is accepted rather than avoided:
 **an application whose enforcement is not SQON-shaped has to translate.**
 
@@ -2253,13 +2253,13 @@ Pushing the mechanical work outward to keep construction central is the delibera
 
 ---
 
-### The adapter supplies the field name, and the bridge builds the predicate
+### The adapter supplies the field name, and the Bridge builds the predicate
 
-**Being told a field name for one query is not holding schema knowledge.** One bridge serves an
+**Being told a field name for one query is not holding schema knowledge.** One Bridge serves an
 application, an application serves several catalogues, and the resource field name differs between
-them, so it cannot be resolved once at startup. The adapter passes the bridge a map of catalogue to
+them, so it cannot be resolved once at startup. The adapter passes the Bridge a map of catalogue to
 field name and receives a map of catalogue to enforcement, since catalogue-level denial already
-makes the answer differ by catalogue. The bridge is never provisioned with an instance's schema and
+makes the answer differ by catalogue. The Bridge is never provisioned with an instance's schema and
 never kept in step with one, which is what excluding schema knowledge from it protects.
 
 **The deciding reason is where fail-open defects concentrate.** Every enforcement defect recorded in
@@ -2268,12 +2268,12 @@ this design is a predicate-construction defect: denial expressed as a negation i
 test for any element rather than every element on a flat field, and a filter composing disjunctively
 on the aggregation path. None is a compilation defect. Had each adapter built its own predicate from
 resource names, that whole class would be reimplemented once per adapter, and drift between
-applications is what the shared bridge exists to prevent.
+applications is what the shared Bridge exists to prevent.
 
 **It trusts the adapter with strictly less**, since supplying one field name is a smaller surface
 than constructing a predicate, and a wrong field name is checkable at startup beside the
 mapping-shape check. **And the conformance corpus tests one implementation** rather than one per
-adapter. The cost is one input on the bridge interface, and an adapter obligation to supply it
+adapter. The cost is one input on the Bridge interface, and an adapter obligation to supply it
 correctly.
 
 **This governs the narrowing arm only.** The enforcement result is a union of deny, narrow and
@@ -2300,12 +2300,12 @@ narrowing as specified belongs to the search application rather than to the plat
 predicate's meaning depends on the backend, that reasoning belongs in the one component that can
 vary or refuse on a declared capability.
 
-### The bridge's filters carry no empty group, no empty exclusion and no pivot
+### The Bridge's filters carry no empty group, no empty exclusion and no pivot
 
 What a SQON means is defined once, in Arranger's reference: an empty group adds no condition and so
 matches every document searched, while an empty `in` matches nothing. See
 [SQONs In Detail](https://github.com/overture-stack/arranger/blob/main/docs/reference/04-sqon-in-detail.md#filters-that-restrict-access).
-The bridge produces access filters, so it follows the rules for them there, and four stricter ones
+The Bridge produces access filters, so it follows the rules for them there, and four stricter ones
 of its own.
 
 **Zero grants is a deny before any filter is built**, as "Holding no grants is a distinct state,
@@ -2328,7 +2328,7 @@ Usher's filters test single-valued fields, so they need no pivot, and until pivo
 covered by their own conformance cases none is emitted. If Usher ever needs a pivoted filter, its
 rules are settled before it is designed.
 
-**The bridge's output is checked before it leaves the bridge.** The validator in
+**The Bridge's output is checked before it leaves the Bridge.** The validator in
 `@overture-stack/usher-types` refuses an empty group, every exclusion operator, a pivot, a null one
 included, and every shape Arranger's guard refuses, and Arranger's guard checks again on arrival. So a defect on either side
 fails closed, and neither side relies on the other.
@@ -2350,33 +2350,33 @@ keep the earlier rule: a `not` sits only directly inside an `and` that also hold
 
 **After MVP, a grant carrying its own SQON is checked when it is written**, against the same rules,
 so a grant that could only widen is never stored. The wildcard and `not` rules may need revisiting
-then, since a grant's own filter may want what the bridge's never does.
+then, since a grant's own filter may want what the Bridge's never does.
 
-### The enforcement component is an adapter, and the bridge ships from Usher's repository
+### The enforcement component is an adapter, and the Bridge ships from Usher's repository
 
 **Adapter rather than plugin.** An Usher plugin reads as something that extends Usher itself. Usher
 may genuinely have such a thing one day, but it is not what is being built: the component extends an
-application, applying the bridge's enforcement result at that application's own hook. The identity
+application, applying the Bridge's enforcement result at that application's own hook. The identity
 provider side, previously also called an adapter, is a connector, so each word faces one way.
 
-**The bridge's code lives in Usher's repository and is published from there**, and every adapter
+**The Bridge's code lives in Usher's repository and is published from there**, and every adapter
 imports it. It belongs with the protocol it implements rather than with the first application to use
 it, and the conformance fixtures it has to satisfy sit beside it.
 
 | Component            | Package                                  | Where it lives                                   |
 | -------------------- | ---------------------------------------- | ------------------------------------------------ |
-| the bridge           | `@overture-stack/usher-express-bridge`   | `modules/express-bridge` in Usher's repository   |
+| the Bridge           | `@overture-stack/usher-express-bridge`   | `modules/express-bridge` in Usher's repository   |
 | the Arranger adapter | `@overture-stack/arranger-usher-adapter` | `modules/usher-adapter` in Arranger's repository |
 
-**The bridge's logic does not depend on Express.** Token exchange, caching, the revocation channel
+**The Bridge's logic does not depend on Express.** Token exchange, caching, the revocation channel
 and dropping tokens live in a core that knows nothing of the web framework, and the Express layer
-only wires that core into middleware and routes. A bridge for another framework is then another thin
-layer over the same core rather than a rewrite, and the controller already follows that rule with
+only wires that core into middleware and routes. A Bridge for another framework is then another thin
+layer over the same core rather than a rewrite, and the Controller already follows that rule with
 Fastify.
 
 **Names in prose are the simple ones.** A package and its directory say more than the prose name,
-here that the first bridge serves Express applications and that the adapter belongs to both Arranger
-and Usher, and the documents call them the bridge and the Arranger adapter.
+here that the first Bridge serves Express applications and that the adapter belongs to both Arranger
+and Usher, and the documents call them the Bridge and the Arranger adapter.
 
 ### Usher reuses the identity provider through the connector, and every reused feature has a fallback
 
@@ -2688,7 +2688,7 @@ acceptance. From then on the role confers nothing, whoever holds it. The trace i
 
 **The first slice ships before the first release (decided 2026-11-16)**: the list, the first user's
 nomination and its acceptance, and the `403` before an admin exists. Those decide the identity
-provider's role and the controller's settings, so building them first leaves a deployment's
+provider's role and the Controller's settings, so building them first leaves a deployment's
 configuration unchanged by everything after: admins nominating and removing admins, recovery when no
 admin can sign in, an admin owning a resource they registered, and adding grants from a list of
 email addresses. Each of those is a forward migration.
@@ -2836,7 +2836,7 @@ designed yet.
 
 ### A grant's expiry is resolved before the token is written, and enforced by the token's own lifetime
 
-A category grant carries an expiry. The controller applies it when computing a permissions payload, so a
+A category grant carries an expiry. The Controller applies it when computing a permissions payload, so a
 grant past its date is absent from the next token. No per-grant expiry travels on the wire, the
 grants structure is unchanged, and an adapter never learns the concept exists: it sees a shorter list
 of categories than it saw before.
@@ -2873,7 +2873,7 @@ principal with several grants expiring in sequence gets one short token per dead
 by the number of grants and is not a load consideration.
 
 **What it does not close.** The deadline is enforced against each side's own clock, so skew between
-the controller and an adapter shifts the moment by that skew. That is the ordinary JWT concern rather
+the Controller and an adapter shifts the moment by that skew. That is the ordinary JWT concern rather
 than anything specific here, and it wants a stated tolerance during implementation rather than a
 mechanism.
 
@@ -2884,12 +2884,12 @@ and access recorded after it lapsed is a finding whatever its duration. Shorteni
 one exchange, so there is nothing to trade against.
 
 **An expiring grant writes nothing and announces nothing.** It sets no `revoked_at` and fires no
-event: the controller leaves it out of the next payload it computes, so the person's other grants
+event: the Controller leaves it out of the next payload it computes, so the person's other grants
 and roles are untouched and nothing per person is invalidated.
 
 **A person inactive past an expiry needs nothing either.** A token is issued to expire with the
 first grant on it to lapse, so one issued before the deadline is already invalid when presented
-after it, and the bridge rejects it on the `exp` check it makes anyway. An inactive bridge misses no
+after it, and the Bridge rejects it on the `exp` check it makes anyway. An inactive Bridge misses no
 event.
 
 **Expiring a grant narrows access and never widens it.** A principal or group loses permissions when
@@ -2907,8 +2907,8 @@ token exchange occurs, and open access is unlogged. This creates two code paths 
 vs. anonymous) and leaves open access invisible to the audit trail.
 
 Usher issues an Usher token for every request, including unauthenticated ones. For anonymous
-users the controller computes only the open-data tier (no IdP token validation, no role
-lookup): the result is an Usher token containing only open-resource grants. The bridge and
+users the Controller computes only the open-data tier (no IdP token validation, no role
+lookup): the result is an Usher token containing only open-resource grants. The Bridge and
 adapter handle this token identically to an authenticated one.
 
 Permission computation is additive across three tiers, always in order:
@@ -2923,8 +2923,8 @@ NIST SP 800-162 (ABAC), NIST SP 800-207 (Zero Trust).
 **Every anonymous principal receives the same token, one per application.** Each receives exactly
 the baseline's grants, and a token is wrapped to one application's key, so anonymous principals of
 the search service and of the submission service cannot share one. Dropping it needs no version on
-the baseline: a notice telling each bridge to drop the entry it holds for principals with no `sub`
-evicts exactly one thing and carries no payload, since a bridge that exchanges again receives
+the baseline: a notice telling each Bridge to drop the entry it holds for principals with no `sub`
+evicts exactly one thing and carries no payload, since a Bridge that exchanges again receives
 whatever is correct now.
 
 **A category change is announced by resource instead**, and only to the applications that serve that
@@ -2932,9 +2932,9 @@ resource, so no application learns of a resource it does not serve. See [the dec
 a category change](#a-category-change-is-announced-to-the-applications-that-serve-the-resource).
 
 **Tradeoffs accepted.** Every unauthenticated request triggers a token exchange call to the
-controller. For high-traffic open-access instances this is additional load compared to a
+Controller. For high-traffic open-access instances this is additional load compared to a
 static exclusion filter. The cost is mitigated by the fast-path refresh and by the Valkey-backed
-payload cache shared across controller instances; it is accepted in exchange for audit
+payload cache shared across Controller instances; it is accepted in exchange for audit
 completeness and a single code path across all access tiers.
 
 ---
@@ -3399,7 +3399,7 @@ means no partition rather than no columns, so the absence is honest rather than 
 and field restriction is a seam change rather than a configuration one, so a service cannot be
 half-way to having it.
 
-**And it is the strongest argument for the controller retaining what each adapter declared.**
+**And it is the strongest argument for the Controller retaining what each adapter declared.**
 Without retention, a grant naming a capability unimplemented by its audience is writable, and the
 mistake surfaces at query time as an unenforced restriction rather than at authoring time as a
 refusal. The same holds one level down for a grant naming a field absent from every catalogue: the
@@ -3468,7 +3468,7 @@ decision rather than a naming one.** `resource_categories` is the live case. `ca
 says whoever governs the category chooses which resources carry it; `resource.associateCategory`
 says the resource's owner chooses. Picking a name picks an answer, so this one is held until
 custodian scoping is settled. The audit event it owes is not held: that write changes what every
-principal reaches and clears the controller's payload cache, and nothing records it today.
+principal reaches and clears the Controller's payload cache, and nothing records it today.
 
 **Answering a grant is an action with no capability**, deliberately. The authority to accept or
 decline is inherent in being the person reached by the grant, so `grant_decisions` has no segment and

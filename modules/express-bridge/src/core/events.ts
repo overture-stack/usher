@@ -18,7 +18,7 @@ export interface BridgeLogger {
 }
 
 /**
- * The bridge's mode, derived from the revocation channel's checks and the anonymous payload:
+ * The Bridge's mode, derived from the revocation channel's checks and the anonymous payload:
  *
  * - `cold` from start until an anonymous payload has been accepted and a check recorded, and again
  *   once the grace period has lapsed with no anonymous payload held;
@@ -27,7 +27,7 @@ export interface BridgeLogger {
  */
 export type BridgeMode = 'cold' | 'normal' | 'uncertain';
 
-/** Where inside the bridge an unexpected failure happened. */
+/** Where inside the Bridge an unexpected failure happened. */
 export const INTERNAL_ERROR_STAGES = [
   'attach',
   'extract',
@@ -144,14 +144,14 @@ type OneOf<Values extends readonly string[]> = Values[number];
 /** The fields carried by each event, keyed by the event's name. */
 export interface BridgeEventData {
   /**
-   * Logged once at start when the configured exchange timeout is below the controller's exchange
-   * deadline plus the margin, so the bridge may give up on an answer the controller gives in time.
+   * Logged once at start when the configured exchange timeout is below the Controller's exchange
+   * deadline plus the margin, so the Bridge may give up on an answer the Controller gives in time.
    */
   'bridge.exchangeTimeoutShort': {
-    /** The exchange timeout the bridge runs with, in milliseconds. */
+    /** The exchange timeout the Bridge runs with, in milliseconds. */
     exchangeTimeoutMs: number;
 
-    /** The least exchange timeout that waits out the controller's deadline and the margin, in milliseconds. */
+    /** The least exchange timeout that waits out the Controller's deadline and the margin, in milliseconds. */
     minimumMs: number;
   };
   'bridge.internalError': { stage: OneOf<typeof INTERNAL_ERROR_STAGES> };
@@ -591,7 +591,7 @@ const createTally = <Cause extends string>(
 /**
  * A cause of `token.exchangeFailure` counted rather than logged one by one:
  * - `admissionShareExceeded`, an exchange answered `503 admissionShareExceeded`;
- * - `backedOff`, a request answered without an exchange while the bridge backs off;
+ * - `backedOff`, a request answered without an exchange while the Bridge backs off;
  * - `overloaded`, a request turned away by the in-flight bound;
  * - `retryAfter`, a credential, or the anonymous fetch, held for the `Retry-After` of any other 503.
  */

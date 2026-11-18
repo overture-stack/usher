@@ -1,6 +1,6 @@
 # The token calculation
 
-_The controller's calculation for producing a token: the rule it implements, the five steps, the
+_The Controller's calculation for producing a token: the rule it implements, the five steps, the
 cases that force each branch, and what remains open._
 
 **The associative tables follow from this document rather than the other way round.** Everything
@@ -136,11 +136,11 @@ While field restriction is post-MVP, a grant naming a field category confers not
 resource in the token for it, and it counts neither in `token.exchange`'s `grantCount` nor towards
 the token's `exp`.
 
-Step 5 decides what the token says, and the bridge renders what that reaches: one filter per
+Step 5 decides what the token says, and the Bridge renders what that reaches: one filter per
 catalogue, reaching the resources held and excluding, category by category, the records of each held
 resource where that category is not held with `record` and `view`. So a resource of mixed sensitivity serves each principal the records reached by their
 categories, rather than being present in full or absent in full. The payload's `globalCategories`
-and `resourceCategories` are what the bridge checks a catalogue's category mapping against, since a
+and `resourceCategories` are what the Bridge checks a catalogue's category mapping against, since a
 category it does not define could not be excluded.
 
 Where a record carries more than one category, every one of them must be held. That conjunction is
@@ -263,8 +263,8 @@ can follow a rule" and "Records not covered by any category are `unmarked`" in
 | 30  | Signed in, no grants. Baseline on                                          | Case 28, plus `MEMBERS_ARCHIVE: {unmarked: [view]}`. This is the only effect of a present `sub` alone                                                                                                                                                                       |
 | 31  | Signed in, no grants. Baseline off                                         | `MEMBERS_ARCHIVE: {unmarked: [view]}` alone. An empty baseline reaches nobody on an open resource, signed in or not, because registration gating is the registered setting rather than an empty baseline                                                                    |
 | 32  | Signed in. Accepted a viewer grant on HEART_STUDY/controlled. Baseline on  | Case 30, with `HEART_STUDY: {unmarked: [view], controlled: [view]}`. The rule's grants and her own accumulate, and neither replaces the other                                                                                                                               |
-| 33  | Signed in, and her identity has been revoked                               | Refused. A revoked principal fails at the bridge before any query runs, so no rule reaches her: a rule's grant cannot outlive the identity it was conferred on                                                                                                              |
-| 34  | Carries an expired identity token                                          | Refused at the exchange, as case 33 is at the bridge. Serving case 28 instead would reach less, never more, but it would record a signed-in person as anonymous and hide the failed sign-in. A portal shows the anonymous view with a notice that the person was signed out |
+| 33  | Signed in, and her identity has been revoked                               | Refused. A revoked principal fails at the Bridge before any query runs, so no rule reaches her: a rule's grant cannot outlive the identity it was conferred on                                                                                                              |
+| 34  | Carries an expired identity token                                          | Refused at the exchange, as case 33 is at the Bridge. Serving case 28 instead would reach less, never more, but it would record a signed-in person as anonymous and hide the failed sign-in. A portal shows the anonymous view with a notice that the person was signed out |
 | 35  | Signed in. Accepted a viewer grant on SEALED_ARCHIVE/unmarked. Baseline on | Case 30, plus `SEALED_ARCHIVE: {unmarked: [view]}`. Records not covered by any category, on a resource that is not open, are reachable once someone is granted them                                                                                                         |
 
 A resource set to registered may carry a restricting category as well: the setting reaches its

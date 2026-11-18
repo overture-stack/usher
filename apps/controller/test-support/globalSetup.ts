@@ -17,7 +17,7 @@ const run: {
 };
 
 /**
- * Starts the run's containers and builds the controller, at once, and publishes both to the test files
+ * Starts the run's containers and builds the Controller, at once, and publishes both to the test files
  * through the environment. Whichever is ready when the other fails is stopped or removed. Node's test
  * runner calls it once, before any test file starts, when given `--test-global-setup`.
  */

@@ -30,7 +30,7 @@ import { cleanupFor, eventually } from '../../test-support/waiting.js';
 const { tokenExchange } = AUDIT_EVENT_TYPES;
 
 /**
- * The harness's own store timeout, the controller's default: longer than the exchange's deadline, so
+ * The harness's own store timeout, the Controller's default: longer than the exchange's deadline, so
  * the deadline, not the store timeout, bounds every unit of an exchange here.
  */
 const HARNESS_STORE_TIMEOUT_MS = 5000;
@@ -42,7 +42,7 @@ const HARNESS_STORE_TIMEOUT_MS = 5000;
  * - 300 ms before: issued, the store taking the whole transaction with time to spare;
  * - 100 ms before and 20 ms before: storeUnavailable, the transaction reaching its COMMIT with less
  *   than the commit window left, or not reaching it by the deadline; issued or outcomeUnknown only
- *   should the request reach the controller late enough to leave the window open;
+ *   should the request reach the Controller late enough to leave the window open;
  * - 100 ms after: storeUnavailable, the store still paused at the deadline, the one ending possible.
  */
 const RESUMED_FROM_DEADLINE_MS: readonly number[] = [-300, -100, -20, 100];
@@ -188,7 +188,7 @@ suite("the exchange's deadline on a paused store", () => {
           );
           const rowsBefore = await tokenExchangeRows(migration);
           const since = log.lines().length;
-          // Signed before the clock starts, so the request reaches the controller at once.
+          // Signed before the clock starts, so the request reaches the Controller at once.
           const assertion = await freshAssertion(application);
 
           await postgresql.pause();

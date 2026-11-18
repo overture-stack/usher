@@ -44,7 +44,7 @@ import {
 import { type Cleanup, eventually } from '../waiting.js';
 
 // The fixture and helpers of #215's tests alone: the conformance corpus replayed against the
-// controller, its expectations rendered by the bridge, the bridge's own scenarios and the
+// Controller, its expectations rendered by the Bridge, the Bridge's own scenarios and the
 // mock's cues caused for real, under test/conformance/, and the gap tests #215 adds beside #209's and
 // #210's (B1). The corpus, its configurations and Ana come from conformanceCorpus.ts, and every path,
 // table and wire shape from the shared support modules. The people are the corpus's Ana and the
@@ -250,7 +250,7 @@ export interface ConformanceHarness {
   /** A Valkey of the suite's own, flushed for the case: the run's shared one by default. */
   cacheUrl?: string;
 
-  /** Fields over the configuration's own, such as a timing profile's controller half. */
+  /** Fields over the configuration's own, such as a timing profile's Controller half. */
   configuration?: Partial<ControllerConfiguration>;
 
   /** Policy seeded by SQL over the configuration's. */
@@ -391,7 +391,7 @@ export interface ReplayedExchange {
 }
 
 /**
- * Exchanges as the bridge's client does and reads the token as the bridge's reader does, failing the
+ * Exchanges as the Bridge's client does and reads the token as the Bridge's reader does, failing the
  * test with the status or the reader's reason when no payload is issued.
  *
  * @param harness the running harness.
@@ -425,11 +425,11 @@ export const replayedPayload = async (
   );
 };
 
-/** The key a conformance expectation's registration is registered under at the bridge. */
+/** The key a conformance expectation's registration is registered under at the Bridge. */
 export const EXPECTATION_KEY = 'files';
 
 /**
- * A conformance expectation's key, as the bridge registers keys: usher-types' `validateRegistration`
+ * A conformance expectation's key, as the Bridge registers keys: usher-types' `validateRegistration`
  * accepting it, under {@link EXPECTATION_KEY}.
  *
  * @param keyRegistration the expectation's `keyRegistration`, as the corpus holds it.
@@ -452,7 +452,7 @@ export const registeredKey = (
 export type RecordOutcome = 'denied' | 'served' | 'withheld';
 
 /**
- * What the bridge's enforcement does to one record, as the bridge's own conformance test reads it
+ * What the Bridge's enforcement does to one record, as the Bridge's own conformance test reads it
  * (`rendering.conformance.test.ts` `outcomeOf`): an allow serves it, a deny refuses the catalogue,
  * and a narrowing serves it only when usher-types' SQON evaluator matches it (B3). A test asserts the
  * access holds a result for the key before reading one, since an adapter reads a missing result as a
@@ -488,12 +488,12 @@ export const defaultKeyRecord = (
   category: string,
 ): EvaluatedRecord => ({ data_category: category, study_id: resource });
 
-/** The timing profile the conformance suites start their bridges on: the bridge's own defaults. */
+/** The timing profile the conformance suites start their Bridges on: the Bridge's own defaults. */
 export const CONFORMANCE_PROFILE: TimingProfileName = 'ims';
 
-/** What starting a conformance bridge takes beyond the harness. */
+/** What starting a conformance Bridge takes beyond the harness. */
 export interface ConformanceBridge {
-  /** The application the bridge serves: `arranger-prod` by default. */
+  /** The application the Bridge serves: `arranger-prod` by default. */
   application?: string;
 
   /** The keys registered before the start: the support's default by default. */
@@ -501,10 +501,10 @@ export interface ConformanceBridge {
 }
 
 /**
- * Starts a bridge against the harness's controller, on {@link CONFORMANCE_PROFILE}, with the
+ * Starts a Bridge against the harness's Controller, on {@link CONFORMANCE_PROFILE}, with the
  * recording fetch and logger, and defers its stop to the cleanup given.
  *
- * @param scope the test's cleanup, which stops the bridge before the harness.
+ * @param scope the test's cleanup, which stops the Bridge before the harness.
  * @param harness the running harness.
  * @param bridge the application and the keys.
  */
@@ -525,10 +525,10 @@ export const startConformanceBridge = async (
 };
 
 /**
- * Waits until a bridge has started its push, failing the test when it has not within the time given.
+ * Waits until a Bridge has started its push, failing the test when it has not within the time given.
  * A notice committed from then on reaches the push, live or in its replay from the head it opened at.
  *
- * @param bridge the bridge.
+ * @param bridge the Bridge.
  * @param timeoutMs the most to wait.
  */
 export const untilPushStarted = async (

@@ -85,7 +85,7 @@ export const createCursorCipher = (cursorKey: string): CursorCipher => {
   return {
     open: (cursor) => {
       const sealed = Buffer.from(cursor, 'base64url');
-      // Anything decoding to the right length but written otherwise is no cursor of the controller's.
+      // Anything decoding to the right length but written otherwise is no cursor of the Controller's.
       if (
         sealed.length !== CURSOR_BYTES ||
         sealed.toString('base64url') !== cursor

@@ -6,7 +6,7 @@ import { applicationSubkeys, SUBKEY_LABELS } from './applicationSubkeys.js';
 
 const KEY_BYTES = randomBytes(32);
 
-// A subkey's bytes as the bridge derives them from the application key's bytes.
+// A subkey's bytes as the Bridge derives them from the application key's bytes.
 const bridgeSubkey = (label: string): Buffer =>
   Buffer.from(hkdfSync('sha256', KEY_BYTES, Buffer.alloc(0), label, 32));
 

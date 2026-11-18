@@ -116,7 +116,7 @@ const principalPolicyQuery = (schema: string): string => {
  * read as any other.
  *
  * @param connection where the statement runs: the exchange's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param audience the application's id.
  * @throws whatever the store throws.
  */
@@ -150,7 +150,7 @@ export const readAudiencePolicy = async (
  * rejected, expired, at a control-plane role or naming a field category, are read as any other.
  *
  * @param connection where the statement runs: the exchange's transaction.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param audience the application's id.
  * @param person the person's `users.id`.
  * @throws whatever the store throws.

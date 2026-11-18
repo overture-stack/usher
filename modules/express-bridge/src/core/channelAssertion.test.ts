@@ -11,7 +11,7 @@ import { TEST_KEY, TEST_KEY_BYTES } from './testTokens.js';
 const AUDIENCE = 'arranger-search';
 const NOW_MS = 1_767_225_600_500;
 
-/** The assertion key as the controller derives it, from the application named by `iss`. */
+/** The assertion key as the Controller derives it, from the application named by `iss`. */
 const controllerKey = new Uint8Array(
   hkdfSync(
     'sha256',

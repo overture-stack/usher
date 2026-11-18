@@ -19,7 +19,7 @@ import type {
 /** The `typ` every channel assertion carries, matched exactly. */
 export const CHANNEL_ASSERTION_TYPE = 'usher-channel+jwt';
 
-/** The `aud` every channel assertion names: the controller, for its exchange, push and poll. */
+/** The `aud` every channel assertion names: the Controller, for its exchange, push and poll. */
 export const CHANNEL_ASSERTION_AUDIENCE = 'usher:controller';
 
 /** The longest a channel assertion may live, from its `iat` to its `exp`, in seconds. */

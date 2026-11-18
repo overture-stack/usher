@@ -111,7 +111,7 @@ export interface NoticeReader {
   head(): Promise<StreamPlace>;
 }
 
-/** How the channel turns places into cursors, opaque to every holder but the controller, and back. */
+/** How the channel turns places into cursors, opaque to every holder but the Controller, and back. */
 export interface CursorCipher {
   /**
    * Reads a cursor.
@@ -202,7 +202,7 @@ export interface LiveStream {
   /** The epoch the stream's cursor belongs to. */
   epoch: string;
 
-  /** Ends the stream, its bridge to open it again from its own cursor. */
+  /** Ends the stream, its Bridge to open it again from its own cursor. */
   end(): void;
 
   /** Hands the stream every notice the tail read in one page, oldest first, for each audience alike. */

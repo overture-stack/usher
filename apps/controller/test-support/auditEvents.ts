@@ -18,7 +18,7 @@ export const AUDIT_EVENTS_DOCUMENT = new URL(
 export const EVENT_TYPE_PREFIX = 'bio.overture.';
 
 /**
- * Every event type the tests name, by a name for it, without the prefix: the controller's rows of
+ * Every event type the tests name, by a name for it, without the prefix: the Controller's rows of
  * the Events table.
  */
 export const AUDIT_EVENT_TYPES = Object.freeze({
@@ -73,8 +73,8 @@ export type AuditEventType =
   (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT_TYPES];
 
 /**
- * The bridge's events, the keys of its catalogue. The bridge keeps the catalogue internal, so its
- * names are copied here; when the bridge adds one, add it. Follows `events.ts` `EVENT_CATALOGUE`.
+ * The Bridge's events, the keys of its catalogue. The Bridge keeps the catalogue internal, so its
+ * names are copied here; when the Bridge adds one, add it. Follows `events.ts` `EVENT_CATALOGUE`.
  */
 export const BRIDGE_EVENT_TYPES: readonly string[] = Object.freeze([
   'bridge.exchangeTimeoutShort',
@@ -106,7 +106,7 @@ export const POST_MVP_EVENT_TYPES: readonly string[] = Object.freeze([
   'grant.unguarded',
 ]);
 
-/** A severity, as the table and the bridge name them. */
+/** A severity, as the table and the Bridge name them. */
 export type Severity = 'critical' | 'error' | 'info' | 'warning';
 
 /** One row of the Events table, each cell as written, the event type without its backticks. */
@@ -170,12 +170,12 @@ export type EventActor =
   | { kind: 'anonymous' | 'system' }
   | { kind: 'roles'; roles: readonly string[] };
 
-/** Whose event a row is: the bridge's, or the controller's, every row neither the bridge's nor post-MVP. */
+/** Whose event a row is: the Bridge's, or the Controller's, every row neither the Bridge's nor post-MVP. */
 export type EventOwner = 'bridge' | 'controller';
 
 /**
  * What one row registers, read, with the note's rule for a refused request applied to every
- * controller row whose Actor cell names a role: the principal whose request the controller answers.
+ * Controller row whose Actor cell names a role: the principal whose request the Controller answers.
  * Such an event, refused, carries `reason` and records at `warning`, unless its cells say otherwise.
  */
 export interface AuditEventRegistration {
@@ -198,7 +198,7 @@ const SEVERITIES: readonly Severity[] = [
  * The severity cells telling their cases apart in prose rather than by a value a fields cell lists:
  * category.unmapped's, by whether the event carries the resource, which only a resource category's
  * does; the mode change's, by the mode it enters; and the baseline change's, by whether the start
- * recording it is the store's first. The bridge's two follow its `events.test.ts`
+ * recording it is the store's first. The Bridge's two follow its `events.test.ts`
  * `PER_CASE_SEVERITIES`.
  */
 const PROSE_CASE_SEVERITIES: readonly {
@@ -540,9 +540,9 @@ export const actorIn = (cell: string): EventActor => {
 };
 
 /**
- * Whose event a type is, or `undefined` for a post-MVP row: the bridge's when its catalogue names it,
- * the controller's otherwise. The table partitions the same way where every bridge row's description
- * begins "Bridge", as the bridge's copy of it does.
+ * Whose event a type is, or `undefined` for a post-MVP row: the Bridge's when its catalogue names it,
+ * the Controller's otherwise. The table partitions the same way where every Bridge row's description
+ * begins "Bridge", as the Bridge's copy of it does.
  *
  * @param event the event type, without the prefix.
  */
@@ -631,7 +631,7 @@ export const IMPORT_RUN_COUNTS = Object.freeze({
 } as const);
 
 /**
- * The controller's rows of the Events table no operation of this epic produces, each with why, so a
+ * The Controller's rows of the Events table no operation of this epic produces, each with why, so a
  * table-driven suite tells them from a row nothing scripts.
  */
 export const NOT_EMITTED_IN_THIS_EPIC: Readonly<
@@ -648,7 +648,7 @@ export const NOT_EMITTED_IN_THIS_EPIC: Readonly<
 
 /**
  * The CloudEvents extension attribute an event's line carries its severity in (#214 Q2), as the
- * bridge names it.
+ * Bridge names it.
  */
 export const SEVERITY_ATTRIBUTE = 'severity';
 
@@ -712,7 +712,7 @@ export const DRY_RUN_LOG_LINE = Object.freeze({
 } as const);
 
 /**
- * How the exchange's event names a token past the bridge's response cap (ruled, "#215's role route
+ * How the exchange's event names a token past the Bridge's response cap (ruled, "#215's role route
  * and the held-grant scale" 2: the limit, the principal's held count and the token's size, never an
  * id; the names assumed until Usher's docs pass): the `token.exchange` event, its `reason` this limit's
  * fixed code, with the principal's held resource count and the token's size in bytes, never a
@@ -817,7 +817,7 @@ export const MANAGEMENT_TOKEN_TALLY_REASONS: readonly string[] = Object.freeze([
  * A refused `token.exchange` for a token whose signature does not verify (`unreadableToken`,
  * `otherIssuer`, `invalidSignature`) or for an opaque credential (`apiKeyVerifierNotConfigured`)
  * leaves it out, never empty and never `null`, so a forged token cannot put anyone's subject in the
- * trail. A `managementToken.refusalTally` carries no subject, and neither does the bridge's
+ * trail. A `managementToken.refusalTally` carries no subject, and neither does the Bridge's
  * `credential.refusal`.
  */
 export const REFUSED_SUBJECT_MEMBER = 'refusedSubject';
@@ -830,13 +830,13 @@ export const REFUSED_SUBJECT_MAXIMUM_LENGTH = 255;
 
 /**
  * The interval each instance records its `managementToken.refusalTally` events over (ruled): 60 s,
- * measured on its configured clock, as is every duration measured by the controller.
+ * measured on its configured clock, as is every duration measured by the Controller.
  */
 export const REFUSAL_TALLY_INTERVAL_MILLISECONDS = 60_000;
 
 /**
- * How soon after a test moves the controller's clock past a tally interval it expects the interval's
- * tallies, in real time: 5 s, since nothing fixes how often the controller reads its clock (assumed).
+ * How soon after a test moves the Controller's clock past a tally interval it expects the interval's
+ * tallies, in real time: 5 s, since nothing fixes how often the Controller reads its clock (assumed).
  */
 export const TALLY_WITHIN_MS = 5_000;
 
@@ -958,11 +958,11 @@ export const credentialRefusalsElsewhere = (
  * - `otherAudience`: an `aud` other than `usher:controller`;
  * - `excessiveLifetime`: a lifetime over 60 s;
  * - `expiredAssertion`: an assertion past its `exp`, though signed under a live key;
- * - `notYetValid`: an assertion whose `iat` is ahead of the controller's clock, though signed under a
+ * - `notYetValid`: an assertion whose `iat` is ahead of the Controller's clock, though signed under a
  *   live key;
  * - `reusedAssertion`: an assertion presented a second time, which only a copy of it can be.
  *
- * Every such refusal is answered with one identical 401, so the code is in the controller's log
+ * Every such refusal is answered with one identical 401, so the code is in the Controller's log
  * alone. {@link CHANNEL_ASSERTION_TALLY_REASONS} are always counted, and
  * {@link CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS} recorded on each instance's first refusal of
  * each assertion and counted on every later one. `unknownApplication` and

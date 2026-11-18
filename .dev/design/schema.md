@@ -1,12 +1,12 @@
 # The database schema
 
-_The controller's PostgreSQL store, physically: tables, columns, keys, the indexes the token
+_The Controller's PostgreSQL store, physically: tables, columns, keys, the indexes the token
 calculation needs, and the decisions the logical model left to this document._
 
 **Status: a draft for review.** It turns the logical model in
 [permissions-model.md](permissions-model.md) § Entity schema into tables, reads each against the five
 steps of [token-calculation.md](token-calculation.md), and adds the channel half that
-[bridge-tests.md](../docs/bridge-tests.md) fixes for the controller. Eight decisions are marked
+[bridge-tests.md](../docs/bridge-tests.md) fixes for the Controller. Eight decisions are marked
 **Decide** below, each with a recommendation. Nothing here is built yet.
 
 ---
@@ -15,7 +15,7 @@ steps of [token-calculation.md](token-calculation.md), and adds the channel half
 
 | Store                    | Holds                                                                                           | Why there                                                                              |
 | ------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| PostgreSQL               | the policy model, the applications and their keys, the notice stream, and the audit log         | the source of truth: transactional, and read by every controller instance              |
+| PostgreSQL               | the policy model, the applications and their keys, the notice stream, and the audit log         | the source of truth: transactional, and read by every Controller instance              |
 | Valkey                   | the payload cache behind the refresh fast path, and the pub/sub waking instances to new notices | shared between instances, and disposable: losing it costs recomputation, never truth   |
 | Controller configuration | the capability vocabulary's defaults, token lifetime, grace period, poll interval               | changes with a release or a deployment, never at runtime                               |
 | Controller secrets       | the key-encryption key, and the credentials for PostgreSQL and Valkey                           | read once at start; registering an application or changing its keys never touches them |
@@ -40,10 +40,10 @@ encrypted under the key-encryption key, so a read of the database or of a backup
   the grant exists, and grants are never deleted, only revoked or expired. PostgreSQL 18 reports a
   delete refused by such a key as `23001`, `restrict_violation`, where earlier releases report
   `23503`, `foreign_key_violation`, so code turning the refusal into an answer accepts either.
-- **Append-only tables are append-only by privilege**, not only by convention: the controller's
+- **Append-only tables are append-only by privilege**, not only by convention: the Controller's
   database role holds `INSERT` and `SELECT` alone on `grant_decisions`, `notices` and `audit_log`,
   and on `principal_revocations` may update only `lifted_by` and `lifted_at`. A defect in the
-  controller then cannot rewrite history, which is the property the audit trail rests on.
+  Controller then cannot rewrite history, which is the property the audit trail rests on.
 
 ---
 
@@ -142,7 +142,7 @@ creation". Registration accepts a name only from an allowed set of characters, b
 digits, dot, underscore and hyphen, which an instance can widen in configuration. It also refuses a
 name holding a marker that a search application reads as an instruction in a filter value, `*`,
 `__missing__` or `set_id:`, using the list `usher-types` exports, since `__missing__` is made only of
-allowed characters, and a name differing from an existing one only in letter case. The bridge lists
+allowed characters, and a name differing from an existing one only in letter case. The Bridge lists
 resource names in its filters and refuses any such value, so every narrowing naming that resource
 would otherwise fail.
 
@@ -163,7 +163,7 @@ would otherwise fail.
 The uniqueness treats a null `resource_id` as equal to another, so two global categories cannot share
 a name; PostgreSQL otherwise counts nulls as distinct. `unmarked` is a seeded global category. A payload names a category with its scope, `global.unmarked`,
 which is `scope` and `name` joined. That every live resource offers at least one category is enforced
-by the controller when a resource is registered, since a constraint across two tables at commit would
+by the Controller when a resource is registered, since a constraint across two tables at commit would
 cost a deferred trigger for a rule the registration path already holds.
 
 ### Applications
@@ -200,8 +200,8 @@ cost a deferred trigger for a rule the registration path already holds.
 stored trimmed and normalized to NFC, the form in which its length is counted. `description` says
 what the application is for. See the glossary's "Name, display name, description".
 
-**The controller generates each application's key, and a registration issues the first one.** The
-controller stores the key encrypted under the key-encryption key and shows it once, for the
+**The Controller generates each application's key, and a registration issues the first one.** The
+Controller stores the key encrypted under the key-encryption key and shows it once, for the
 application's own secrets; it never logs it and never shows it again. The encryption is
 authenticated, with the application's and the key's identifiers bound into it, so a key copied onto
 another application's row fails to decrypt rather than letting one application pass as another. A
@@ -219,21 +219,21 @@ start records a check value derived from the key-encryption key through a subkey
 reveals nothing about it, and every start compares it. A mismatch refuses startup, naming the
 variable, however many applications are registered, none included. The table holds one row, so of
 two instances first started with different keys, the second refuses. With the check passed, a stored
-key that fails to decrypt was altered: the controller starts, logs the key's identifier, and refuses
+key that fails to decrypt was altered: the Controller starts, logs the key's identifier, and refuses
 that application with the same `401` as every other refusal. A reload treats such a key the same
-way, so a row altered while the controller runs is caught at the next reload.
+way, so a row altered while the Controller runs is caught at the next reload.
 
-**Every controller instance holds the live keys in memory**, loaded at start and reloaded when a
+**Every Controller instance holds the live keys in memory**, loaded at start and reloaded when a
 registration, an issue or a revocation wakes it through Valkey, and every 30 seconds besides, so a
-missed wake-up delays a revocation by at most 30 seconds, the same worst case a bridge's 30-second
+missed wake-up delays a revocation by at most 30 seconds, the same worst case a Bridge's 30-second
 poll sets for a notice when push is down. The instance answering a registration or an issue holds
 the new key before it answers, so the key works there at once. An exchange naming an application
 with no live key, or none at all, is refused from memory with the same `401` as a bad signature, its
-reason only in the controller's log, as one of `unknownApplication`, `noLiveKey`, `invalidSignature`
+reason only in the Controller's log, as one of `unknownApplication`, `noLiveKey`, `invalidSignature`
 or `expiredAssertion`. A flood of invented identifiers then costs no database read. Revoking a key
 also ends every push stream opened under it, on each instance as it learns of the revocation, so a
 key revoked as compromised receives no further notice. None of registering, issuing or revoking
-restarts the controller, however it is deployed.
+restarts the Controller, however it is deployed.
 
 A table rather than a column, so a rotation can hold two live keys for one application while its
 replicas move over; how keys rotate, the key-encryption key's included, is open in
@@ -302,7 +302,7 @@ not columns.
 
 **Decide D: a null `record_category_id` is the control-plane wildcard.** An owner's grant reads
 `(HEART_STUDY, *, user, Ana, owner)`; storing `*` as a null keeps the foreign key on every real
-category. The controller refuses a null on a data-plane role and a field category on a grant whose
+category. The Controller refuses a null on a data-plane role and a field category on a grant whose
 role carries `record.delete` (case 25) when the grant is written, since both rules cross into
 `roles` and `role_permissions`, which a `CHECK` cannot reach.
 
@@ -350,8 +350,8 @@ written.
       check ((kind = 'category') = (resource_external_id is not null))
       check ((kind = 'servedResources') = (audience is not null))
 
-One table carries every kind the bridge's notice stream does. A principal's revocation and a sign-out
-relayed from the identity provider are both `principal` notices naming the subject, since a bridge
+One table carries every kind the Bridge's notice stream does. A principal's revocation and a sign-out
+relayed from the identity provider are both `principal` notices naming the subject, since a Bridge
 treats them alike. A category change names the resource by its external id, as the payload names it.
 A change to the set served by an application names that application as `audience`, and the
 baseline and global kinds name nothing.
@@ -363,14 +363,14 @@ so positions are assigned and committed in the same order. Notices are rare enou
 serialization costs nothing measurable.
 
 **A poll answers from a cursor, and a cursor history no longer reaches answers `410`.** A cursor is
-opaque to the bridge and carries a position and an epoch. Notices are kept for the longest a bridge
+opaque to the Bridge and carries a position and an epoch. Notices are kept for the longest a Bridge
 may lag and still act on them: the token lifetime plus the grace period, with a margin. Trimming
 records how far it reached, so the answer is judged against that watermark rather than against the
 oldest notice left, and the epoch changes whenever history restarts, as after a restore, so restored
 positions are never read as the old ones. A cursor also carries the creation time of the notice at
 its position, so a position a restore gave to another notice answers `410` even where a runbook
 kept the epoch. A `410` drops every cached entry, which fails closed: the
-bridge exchanges again for everyone, and nothing revoked survives. How a restore changes the epoch is
+Bridge exchanges again for everyone, and nothing revoked survives. How a restore changes the epoch is
 a step for the deployment runbook.
 
     notice_stream
@@ -382,19 +382,19 @@ a step for the deployment runbook.
       singleton          boolean      primary key  default true  check (singleton)
       floor_seconds      integer      not null  check (floor_seconds > 0)
 
-**The retention floor is set by the migration, never by the controller.** Each migration run stores
-it, and the controller's role may read it and not write it, so a defect in the controller can never
-trim a notice a bridge may still act on.
+**The retention floor is set by the migration, never by the Controller.** Each migration run stores
+it, and the Controller's role may read it and not write it, so a defect in the Controller can never
+trim a notice a Bridge may still act on.
 
 **Decide E: category notices are filtered by audience, and principal notices are tagged per
-audience.** The controller holds which applications serve which resources, since a token names only
+audience.** The Controller holds which applications serve which resources, since a token names only
 those, so filtering a category change costs a join the token calculation already makes, and an
 application never learns of changes to resources it does not serve. A principal notice cannot be
 filtered: nothing records which applications hold a token for whom, and a stale record would withhold
 a revocation silently. It goes to every audience, naming the subject by a tag, an HMAC of the subject
-under a key derived for that audience, which a bridge computes for the subjects it holds. An
+under a key derived for that audience, which a Bridge computes for the subjects it holds. An
 application then recognizes only the people it already serves. Baseline and global notices go to
-every audience. Positions stay one sequence, and the cursors a bridge sees are opaque, so the gaps a
+every audience. Positions stay one sequence, and the cursors a Bridge sees are opaque, so the gaps a
 filter leaves say nothing about other applications.
 
 | Option                                                      | What an application learns                                                           | What it costs                                                                               |
@@ -404,7 +404,7 @@ filter leaves say nothing about other applications.
 | **category notices filtered, subject tagged (recommended)** | changes to its own resources, and no person it does not serve                        | the HMAC, and a join already made for the token                                             |
 | every kind filtered                                         | the same                                                                             | a record of which applications hold tokens for whom, whose staleness withholds a revocation |
 
-The tag, the notice encryption and the bridge's side of the stream are set out in the bridge's
+The tag, the notice encryption and the Bridge's side of the stream are set out in the Bridge's
 [revocation notice stream](../docs/atlas/bridge/revocation-notice-stream.md) research.
 
 ### The audit log
@@ -443,7 +443,7 @@ decided here.
 
 **Every change to a policy table is recorded by the database itself.** A trigger on each policy
 table writes the operation, the row's key, its values before and after, and the actor the changing
-transaction declared, so a change made outside the controller's code still leaves a record. The
+transaction declared, so a change made outside the Controller's code still leaves a record. The
 audit log says what a person did; the change record says what each row became. A secret column is
 never copied: an application key's record leaves out `encrypted_key`.
 
@@ -462,7 +462,7 @@ never copied: an application key's record leaves out `encrypted_key`.
 | 5        | which resources this audience serves                        | the primary key of `application_resources`; the payload, `resourceCategories` included, names only those, and is stored in Valkey |
 
 Expiry is read at issuance, as `expires_at > now()`, rather than indexed: a principal holds few
-grants, and an index on a moving comparison does not help. The controller caps an Usher token's `exp`
+grants, and an index on a moving comparison does not help. The Controller caps an Usher token's `exp`
 at the earliest of the kept grants' `expires_at` and the sign-in token's own `exp`.
 
 ---
@@ -471,7 +471,7 @@ at the earliest of the kept grants' `expires_at` and the sign-in token's own `ex
 
 **Decide F: Kysely, a typed query builder, over an ORM or raw SQL, for queries.** The threat model
 requires parameterized statements or a layer that binds parameters, and that constrains the choice
-without making it. Migrations are outside it: they run through the controller's own runner, below
+without making it. Migrations are outside it: they run through the Controller's own runner, below
 Decide G.
 
 | Option                             | Better                                                           | Worse                                                                                     |
@@ -483,8 +483,8 @@ Decide G.
 The access-deciding queries are few and must read as plainly as the calculation they implement, so a
 builder that emits exactly the SQL written suits them better than a model that decides it. The
 management interface's queries, a custodian seeing only the grants they govern, are the same
-residual-filter problem the bridge solves, and may want the same machinery later. Versions are
-checked when the controller is built, not recorded here.
+residual-filter problem the Bridge solves, and may want the same machinery later. Versions are
+checked when the Controller is built, not recorded here.
 
 **Decide G: migrations are numbered, forward-only and reviewed.** Each runs in a transaction of its
 own, none is edited once released, and a correction is a new migration. Rolling back a deployment
@@ -498,15 +498,15 @@ restriction does not serve.
       checksum           text         not null
       applied_at         timestamptz  not null
 
-**The controller's own runner applies them, since no library's runner keeps this record.** Each
+**The Controller's own runner applies them, since no library's runner keeps this record.** Each
 migration commits together with its row, which holds the SHA-256 of the file applied, and the runner
 refuses before writing anything when a recorded migration has changed, is missing, or is out of
 order, or when the runtime role could act as the schema's owner. Kysely's runner records a name and a
 time alone, and runs a batch in one transaction.
 
-**Decide H: the controller's database role cannot alter the schema.** Migrations run under a separate
-role at deployment, and the running controller holds only the privileges its queries need, the
-append-only tables above included. A compromised controller can then read and write policy, which it
+**Decide H: the Controller's database role cannot alter the schema.** Migrations run under a separate
+role at deployment, and the running Controller holds only the privileges its queries need, the
+append-only tables above included. A compromised Controller can then read and write policy, which it
 must, but cannot widen its own privileges or drop the audit log.
 
 **Every function a migration creates starts closed to everyone but its grantees.** The first
@@ -514,7 +514,7 @@ migration revokes `EXECUTE` on new functions from `PUBLIC` as the schema migrati
 later migration need not remember to. The default is the role's, not the schema's, since a default
 set for one schema only adds to the role's and cannot remove `PUBLIC`'s.
 
-**At start, the controller refuses a role that could change the schema or rewrite history.** It
+**At start, the Controller refuses a role that could change the schema or rewrite history.** It
 refuses a role attribute such as superuser or `BYPASSRLS`, and membership in a predefined role that
 writes every table or reaches the server itself: `pg_write_all_data`, `pg_execute_server_program`,
 `pg_read_server_files` and `pg_write_server_files`. It also refuses ownership of anything in the
@@ -538,4 +538,4 @@ it changes nothing and so has nothing to record.
 | group rows                        | every share in the flows names a person                  | rows                                             |
 | custodian scoping                 | the custodian role is post-MVP                           | a migration adding its own table                 |
 | embargo, the withholding layer    | its mechanism is unbuilt, and case 21 pins its behaviour | a migration, holding a deadline below a resource |
-| `resource.` scoped categories     | version 1 bridges render `global.` alone                 | rows; `categories.scope` already admits it       |
+| `resource.` scoped categories     | version 1 Bridges render `global.` alone                 | rows; `categories.scope` already admits it       |

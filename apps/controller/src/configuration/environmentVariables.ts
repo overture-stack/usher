@@ -5,7 +5,7 @@ import type {
 
 /**
  * The environment variable each configuration field is read from, by field: the one place the
- * controller names them. A refusal names the variable at fault and never its value.
+ * Controller names them. A refusal names the variable at fault and never its value.
  */
 export const ENVIRONMENT_VARIABLES: Readonly<
   Record<FieldWithVariable, string>
@@ -50,7 +50,7 @@ export const ENVIRONMENT_VARIABLES: Readonly<
 
 /**
  * The variables a start is refused with while set, empty or not, each by the variable replacing it:
- * the controller reads none of them.
+ * the Controller reads none of them.
  */
 export const REPLACED_VARIABLES: Readonly<Record<string, string>> =
   Object.freeze({
@@ -59,10 +59,10 @@ export const REPLACED_VARIABLES: Readonly<Record<string, string>> =
 
 /**
  * The environment variable each of the schema migration command's own fields is read from, by
- * field: the schema migration role's connection. The controller never reads them, so its processes
+ * field: the schema migration role's connection. The Controller never reads them, so its processes
  * never hold the schema migration role's password. The command reads the runtime role it grants to,
  * the database role `USHER_DATABASE_URL` names, and the schema and the retention floor's durations
- * from the controller's own variables, in {@link ENVIRONMENT_VARIABLES}.
+ * from the Controller's own variables, in {@link ENVIRONMENT_VARIABLES}.
  */
 export const SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES: Readonly<
   Record<SchemaMigrationFieldWithVariable, string>

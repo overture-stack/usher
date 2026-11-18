@@ -118,7 +118,7 @@ const urlOf = (address: unknown): URL => {
 
 // The exchange's deadline, which must equal usher-types'
 // `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS`. It is typed as that constant's literal, so any other
-// value here fails the type check. It is written here rather than imported, since the controller
+// value here fails the type check. It is written here rather than imported, since the Controller
 // takes only types from the libraries.
 const EXCHANGE_DEADLINE_MILLISECONDS: typeof CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS = 4000;
 
@@ -128,7 +128,7 @@ const EXCHANGE_DEADLINE_MILLISECONDS: typeof CONTROLLER_EXCHANGE_DEADLINE_MILLIS
 const READINESS_CONNECTIONS = 1;
 
 /**
- * Creates a controller from its configuration, connecting to nothing until it starts. Its start
+ * Creates a Controller from its configuration, connecting to nothing until it starts. Its start
  * reads this release's migrations once, checks the store before anything listens, refusing one
  * whose record of applied migrations holds a migration the release does not know, so a refused
  * start never accepts a connection, reads the live application keys into memory, and then serves
@@ -136,7 +136,7 @@ const READINESS_CONNECTIONS = 1;
  * record written to the audit log and the log stream, the revocation channel's poll and push, the
  * token exchange, and the identity provider's back-channel logout, and, while `apiDocsClient` names
  * a client, the API documentation page at `/api-docs`, taking no credential, its files read as the
- * controller is created. Every Management API request reads admin status from the store, by the
+ * Controller is created. Every Management API request reads admin status from the store, by the
  * caller's subject under the trusted issuer. A change committed through an operation is held by the
  * instance before it is answered: the instance's streams are woken to its notices, as for a
  * sign-out committed, and the live keys are read again for an operation naming that step, as
@@ -180,7 +180,7 @@ const READINESS_CONNECTIONS = 1;
  * fails to take a line, which only a restart recovers from, and writes nothing as it stops being
  * live.
  *
- * @param configuration the controller's configuration.
+ * @param configuration the Controller's configuration.
  */
 export const createController = (
   configuration: ControllerConfiguration,

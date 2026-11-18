@@ -9,7 +9,7 @@ export interface ConnectionVariables {
   urlVariable: string;
 }
 
-/** What the database role may do with one function of the controller's schema. */
+/** What the database role may do with one function of the Controller's schema. */
 export interface HeldFunction {
   /** Whether it may call the function. */
   executes: boolean;
@@ -23,7 +23,7 @@ export interface HeldFunction {
   owns: boolean;
 }
 
-/** What the database role may do with one relation of the controller's schema: a table, a view or a sequence. */
+/** What the database role may do with one relation of the Controller's schema: a table, a view or a sequence. */
 export interface HeldRelation {
   /** Every column the relation has. */
   columns: readonly string[];
@@ -51,7 +51,7 @@ export interface HeldRelation {
   updatable: readonly string[];
 }
 
-/** What the database role may do with the controller's schema itself. */
+/** What the database role may do with the Controller's schema itself. */
 export interface HeldSchema {
   /** Whether it may grant using or creating in the schema to another role. */
   grants: boolean;
@@ -63,15 +63,15 @@ export interface HeldSchema {
   uses: boolean;
 }
 
-/** Everything the database role a controller connects as holds, as the catalogue reports it. */
+/** Everything the database role a Controller connects as holds, as the catalogue reports it. */
 export interface HeldPrivileges {
-  /** The schemas of the database, the controller's among them, in which it may create objects. */
+  /** The schemas of the database, the Controller's among them, in which it may create objects. */
   creatableSchemas: readonly string[];
 
   /** Whether it may create schemas in the database. */
   createsSchemas: boolean;
 
-  /** What it may do with each function of the controller's schema. */
+  /** What it may do with each function of the Controller's schema. */
   functions: readonly HeldFunction[];
 
   /**
@@ -80,13 +80,13 @@ export interface HeldPrivileges {
    */
   memberships: readonly string[];
 
-  /** What it may do with each relation of the controller's schema. */
+  /** What it may do with each relation of the Controller's schema. */
   relations: readonly HeldRelation[];
 
   /** The role attributes beyond logging in that it holds, such as SUPERUSER or BYPASSRLS. */
   roleAttributes: readonly string[];
 
-  /** What it may do with the controller's schema; none when the database holds no such schema. */
+  /** What it may do with the Controller's schema; none when the database holds no such schema. */
   schema: HeldSchema | undefined;
 }
 
@@ -97,7 +97,7 @@ export type RecordRules = Pick<
 >;
 
 /**
- * What writing the policy a start seeds needs of the controller's configuration: the rules whose
+ * What writing the policy a start seeds needs of the Controller's configuration: the rules whose
  * digest it records, the schema, and the clock the recording time is read from.
  */
 export type SeededPolicySettings = Pick<
@@ -105,13 +105,13 @@ export type SeededPolicySettings = Pick<
   'baseline' | 'clock' | 'databaseSchema' | 'signedInRule'
 >;
 
-/** What connecting to the store needs of the controller's configuration. */
+/** What connecting to the store needs of the Controller's configuration. */
 export type StoreConnectionSettings = Pick<
   ControllerConfiguration,
   'databasePassword' | 'databaseUrl' | 'storeTimeoutMilliseconds'
 >;
 
-/** What the start needs of the controller's configuration to check and prepare the store. */
+/** What the start needs of the Controller's configuration to check and prepare the store. */
 export type StoreSettings = SeededPolicySettings &
   Pick<
     ControllerConfiguration,

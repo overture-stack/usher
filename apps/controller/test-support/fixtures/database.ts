@@ -105,7 +105,7 @@ export const ANA_ACTING: Actor = Object.freeze({
  * offering `unmarked`), two applications labelled `ims-arranger`, serving `STUDY-A1` and `STUDY-B2`,
  * and `ims-lyric`, serving `STUDY-A1`, each under the id derived from its label by
  * `policy.ts`'s `fixtureApplicationId`, the roles `owner`, `submitter` and `viewer` (written by the
- * controller at start, so a freshly migrated store holds none), Ana's accepted `viewer` grant on
+ * Controller at start, so a freshly migrated store holds none), Ana's accepted `viewer` grant on
  * `STUDY-A1` under `controlled`, and Bo's `owner` grant there on the whole resource.
  */
 export const BASE_FIXTURE: PolicyFixture = Object.freeze<PolicyFixture>({
@@ -170,7 +170,7 @@ export const BASE_FIXTURE: PolicyFixture = Object.freeze<PolicyFixture>({
 });
 
 /**
- * Opens a database of the test's own, cloned from the template the controller's migrations build,
+ * Opens a database of the test's own, cloned from the template the Controller's migrations build,
  * and drops it once the test has ended.
  *
  * @param context the test the database belongs to.
@@ -238,7 +238,7 @@ export interface MigrationRun {
   /** The retention floor the run stores: {@link TEMPLATE_RETENTION_FLOOR_SECONDS} by default. */
   retentionFloorSeconds?: number;
 
-  /** The runtime role the migrations grant to: the controller's, which the deployment creates, by default. */
+  /** The runtime role the migrations grant to: the Controller's, which the deployment creates, by default. */
   runtimeRole?: string;
 
   /** The last migration to apply; every migration when absent. Only a run in-process takes one. */
@@ -261,7 +261,7 @@ const migrationOptionsFor = (
 });
 
 /**
- * Runs every one of the controller's migrations on a database through the run's build of the schema
+ * Runs every one of the Controller's migrations on a database through the run's build of the schema
  * migration command, as a deployment runs it: under the schema migration role, granting to the
  * runtime role, in the schema named for Usher.
  *
@@ -277,7 +277,7 @@ export const migrateDatabase = (
   migrateThroughCommand(migrationOptionsFor(database, run));
 
 /**
- * Runs the controller's migrations on a database in-process, through the seam's `migrate`, as
+ * Runs the Controller's migrations on a database in-process, through the seam's `migrate`, as
  * {@link migrateDatabase} does through the command but for one thing: a target, for a step-by-step
  * run the command never makes.
  *

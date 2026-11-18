@@ -7,7 +7,7 @@ answer, and what a portal adds for the person using it._
 
 ## Concept
 
-An Usher-protected service answers its clients through the bridge and the application's adapter,
+An Usher-protected service answers its clients through the Bridge and the application's adapter,
 and a client never sees the Usher token or the permissions inside it. This document is the client's
 side of that boundary, as [adapter-integration.md](adapter-integration.md) is the service's.
 
@@ -63,7 +63,7 @@ is reachable again, and the second holds whatever token is sent.
 ### Values to import rather than retype
 
 `@overture-stack/usher-types` exports the wire values, so a client compares answers against the same
-constants the bridge sends. Its exports import neither Express nor any Node built-in, so a portal's
+constants the Bridge sends. Its exports import neither Express nor any Node built-in, so a portal's
 browser code can use them:
 
 | Export             | Value                                                                |
@@ -76,7 +76,7 @@ Statuses and `Retry-After` are standard HTTP and are not exported. No header nam
 answered: a client running its own server, such as a portal's proxy, tells its own failures from the
 service's by its own means, for example a code in its own response body.
 
-**Every header above is readable by browser script.** The bridge lists `WWW-Authenticate` and
+**Every header above is readable by browser script.** The Bridge lists `WWW-Authenticate` and
 `Usher-Suspended` in `Access-Control-Expose-Headers`, so a page calling from another origin can read
 them.
 

@@ -45,12 +45,12 @@ const { portal, search, submission } = AUDIENCES;
 
 const WAIT_MS = 10_000;
 
-/** How often the controller reads the stream with no wake-up, in the harness's configuration. */
+/** How often the Controller reads the stream with no wake-up, in the harness's configuration. */
 const REREAD_MS = 2_000;
 
 const SCHEDULING_SLACK_MS = 1_500;
 
-/** The connections the controller's store pool holds at most: the driver's default. */
+/** The connections the Controller's store pool holds at most: the driver's default. */
 const POOL_CONNECTIONS = 10;
 
 const SUBJECT = 'subject-of-a-notice-written-directly';

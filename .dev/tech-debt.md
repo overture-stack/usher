@@ -8,7 +8,7 @@ Open design questions are tracked in `.dev/design/` and the OWASP gap analysis i
 
 ---
 
-The packaging checks the bridge's packaging note requires run by hand only: that the packed
+The packaging checks the Bridge's packaging note requires run by hand only: that the packed
 declarations name neither `jose` nor `CryptoKey` and import only names they use, that the
 packed JavaScript imports `jose` and `@overture-stack/usher-types` rather than inlining them, and
 that the tarballs load through both `require()` and `import()`.
@@ -19,11 +19,11 @@ With a custom `extract`, a host reading credentials from cookies or service head
 with Bearer challenges: the 400 says `Bearer error="invalid_request"`, and its fixed text asks for a
 Bearer token in the Authorization header.
 fix: the host declares its challenges as a list of `{ scheme, params }`, defaulting to Bearer, which
-the bridge serializes, quoting each value; `error` goes on the Bearer challenge only, and only when
+the Bridge serializes, quoting each value; `error` goes on the Bearer challenge only, and only when
 the refused credential was a bearer token (RFC 6750 § 3.1); the 400's text names the host's
 credential source.
 standalone: no
-context: waits on the first host with its own credential source adopting the bridge.
+context: waits on the first host with its own credential source adopting the Bridge.
 
 The Express layer logs a synchronous throw from `core.resolve`, and a throw while answering, under
 `bridge.internalError` stages naming other steps, `extract` or `resolve`.
@@ -34,7 +34,7 @@ standalone: yes
 A throw while signing the channel assertion is reported as a network failure on the exchange and as
 a close on the push, but as a defect on the poll.
 fix: sign before each request's `try` in `controllerClient.ts` and `push.ts`, as the poll does, and
-report the throw as a defect, adding that cause to the exchange's failure causes and to the bridge's
+report the throw as a defect, adding that cause to the exchange's failure causes and to the Bridge's
 list of events.
 standalone: yes
 
@@ -48,16 +48,16 @@ standalone: yes
 
 Two support modules in `apps/controller/test-support/` copy code the packages keep internal:
 `sqonEvaluator.ts` copies usher-types' test-only SQON evaluator, and `bridgeWire.ts` reproduces the
-bridge's side of the wire from `modules/express-bridge/src/core/` and `modules/types/src/`. Nothing
-compares a copy with its source, so a change to the source leaves the controller's suites checking
+Bridge's side of the wire from `modules/express-bridge/src/core/` and `modules/types/src/`. Nothing
+compares a copy with its source, so a change to the source leaves the Controller's suites checking
 the old behaviour without failing.
-fix: import the evaluator from the private workspace package planned with the bridge refactor, and
+fix: import the evaluator from the private workspace package planned with the Bridge refactor, and
 give the functions `bridgeWire.ts` reproduces an import the suites can use, in that package or as a
 test-only export, so neither copy remains.
 standalone: no
 context: the evaluator waits on that package.
 
-The controller's dedicated test containers draw their fixed host ports (`HOST_PORTS` in
+The Controller's dedicated test containers draw their fixed host ports (`HOST_PORTS` in
 `apps/controller/test-support/containers.ts`) from 30000 to 32767 alone, the part below the
 daemon's assigned ports that the CI Docker host admits today, which leaves fewer ports to draw from
 when many test files start their own containers at once.

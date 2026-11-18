@@ -14,7 +14,7 @@ export type ExchangeFault = 'identityProviderUnavailable' | 'storeUnavailable';
 
 /**
  * Why a credential's exchange was denied: the judgement's refusal; a signing key not confirmed yet,
- * which a made-up key id or a routine key rotation produces, so no fault in the controller; a service
+ * which a made-up key id or a routine key rotation produces, so no fault in the Controller; a service
  * account's token (`serviceAccountNotPermitted`); or the store's refusal of the principal.
  */
 export type ExchangeDenial =

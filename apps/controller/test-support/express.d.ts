@@ -1,6 +1,6 @@
 /**
  * Types for Express, which ships none of its own, so `vendoredBridge.ts` can mount the
- * bridge's middleware in an app. Follows
+ * Bridge's middleware in an app. Follows
  * `modules/express-bridge/src/express/testExpress.d.ts`, whose layer imports only types from
  * express-serve-static-core.
  */

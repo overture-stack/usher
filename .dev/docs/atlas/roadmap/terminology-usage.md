@@ -155,7 +155,7 @@ reserved sense and the word to use for the other one.
 | record                | one row of data                                                                                                                | **grant**, or **approval** in a reader-facing document. "Grant record" is unambiguous and stays                                                                                                                                                                                                                         |
 | permission            | the vocabulary entry, at either layer                                                                                          | nothing. There is no separate word for the role-level set                                                                                                                                                                                                                                                               |
 | approval              | the process preceding a grant                                                                                                  | **grant**, for the act and its record inside Usher                                                                                                                                                                                                                                                                      |
-| state                 | a value in a defined set held by Usher's own store: a grant's `pending` or `active`, a revocation recorded against a principal | **status**, for a condition read or derived when asked, and which can come back unknown: revocation status when the bridge cannot confirm it, admin status read from the IdP token, an HTTP status code                                                                                                                 |
+| state                 | a value in a defined set held by Usher's own store: a grant's `pending` or `active`, a revocation recorded against a principal | **status**, for a condition read or derived when asked, and which can come back unknown: revocation status when the Bridge cannot confirm it, admin status read from the IdP token, an HTTP status code                                                                                                                 |
 | authorization         | holding permission, the standing state a grant creates                                                                         | **access**, for the request-time result. The thing resolved is an **access decision**, and enforcement carries it out                                                                                                                                                                                                   |
 | holder                | uses that name what is held: a **grant holder**, a **token holder**, an account holder                                         | **principal**, **group** or **owner**, wherever the word would stand alone. Bare, it does not say what is being held, and the corpus had it meaning four different things, an owner most often                                                                                                                          |
 | burst                 | a spike in traffic, and cache behaviour under one                                                                              | **rate**, wherever what is meant is how many grant operations one actor performs within a window                                                                                                                                                                                                                        |
@@ -340,7 +340,7 @@ an ushered data service is one that serves data. Usher exists only to put a deci
 that class.
 
 **It also draws the plane boundary for free.** Usher is a service and is not a data service, so the
-term separates the two sides without a sentence explaining the separation. The controller, bridge and
+term separates the two sides without a sentence explaining the separation. The Controller, Bridge and
 adapter are not data services either.
 
 **Use it where the precision earns its place, not everywhere.** Most sentences do not depend on which
@@ -407,9 +407,9 @@ name them, then say what happened.
 | Subject                                             | When                                     | Example                                                                      |
 | --------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
 | **Usher**                                           | the software behaves this way everywhere | Usher never learns the field name                                            |
-| **the controller**, **the bridge**, **the adapter** | the component matters                    | the controller defines it, the bridge receives it, the adapter enforces it   |
+| **the Controller**, **the Bridge**, **the adapter** | the component matters                    | the Controller defines it, the Bridge receives it, the adapter enforces it   |
 | **an instance**                                     | the point is that installs differ        | roles are defined per instance's configuration, not by Usher itself          |
-| **a controller instance**                           | the point is a running process           | a controller instance going down takes its bridges' push connections with it |
+| **a Controller instance**                           | the point is a running process           | a Controller instance going down takes its Bridges' push connections with it |
 
 **The third line is the one that goes wrong.** Writing "Usher defines its own roles" says the
 software ships them, which is the opposite of what the sentence means. Where a per-install choice is
@@ -423,12 +423,18 @@ values.
 
 ## Naming Usher and its parts
 
-**Usher** is the whole: controller, bridge and adapter. **The controller** is the deployed service,
-and the only one of the three reachable at a network address, since the bridge and the adapter are
+**Usher** is the whole: Controller, Bridge and adapter. **The Controller** is the deployed service,
+and the only one of the three reachable at a network address, since the Bridge and the adapter are
 libraries running inside an ushered service's own process. So a bare "the service" resolves to the
-controller where a process is meant and to Usher where Overture's offering is meant, which is why it
-should not stand alone in a sentence that could be either. Name the controller when a component is
+Controller where a process is meant and to Usher where Overture's offering is meant, which is why it
+should not stand alone in a sentence that could be either. Name the Controller when a component is
 meant and Usher when the system is.
+
+**Controller and Bridge are capitalized wherever they name Usher's components**, singular or
+plural: the Controller, a Controller instance, each application's Bridge, the Bridges a Controller
+instance serves. The capital is what separates a component from the ordinary word, so a lowercase
+controller or bridge, or the verb to bridge, never refers to Usher. Identifiers, paths and package
+names keep their own spelling: `apps/controller`, `usher-express-bridge`, a `bridge` parameter.
 
 **The control plane is a third scope, and wider than Usher**, holding Keycloak as well: an identity
 provider governs identity rather than serving records, and the data plane is the only other side to
@@ -569,7 +575,7 @@ defect.
 | Term     | Uses                                                                        | Entry | What is wrong                                                                                                                                                                                                                                                                                                                                                                                                                            | Order |
 | -------- | --------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
 | artifact | 51                                                                          | none  | two live senses, and one is security-relevant: a derived artifact is what enforcement fails open on, while the onboarding artifact is a published document                                                                                                                                                                                                                                                                               | 2     |
-| ceiling  | 32 across 9 files                                                           | none  | the central term of the two-stage structure, load-bearing on the token calculation, and defined nowhere. It reaches published `docs/concepts.md`. Added to this list because a reader asked what "the ceiling clause" meant and nothing in the corpus answers. A second sense is already present: `roadmap.md:376` has a `bridge-per-instance ceiling`, a numeric capacity limit rather than a permission maximum                        | 3     |
+| ceiling  | 32 across 9 files                                                           | none  | the central term of the two-stage structure, load-bearing on the token calculation, and defined nowhere. It reaches published `docs/concepts.md`. Added to this list because a reader asked what "the ceiling clause" meant and nothing in the corpus answers. A second sense is already present: `roadmap.md:601` has a `Bridge-per-instance ceiling`, a numeric capacity limit rather than a permission maximum                        | 3     |
 | payload  | 122                                                                         | none  | **two unrelated referents**: an Usher token's claim set, and the CloudEvents `data` object of an audit event, which share no field, lifecycle or consumer. Separately, the corpus contradicts itself on whether a permissions payload is the token or a field inside it, and `enforcement payload` is a third label related to neither in writing                                                                                        | 1     |
 | corpus   | 40                                                                          | none  | two unrelated referents: 24 uses are a set of executable conformance cases living in another repository, 15 are these documents. Bare `the corpus` appears 14 times and resolves only from context, and only 7 of those 24 carry the qualifier `conformance`. Neither sense is data, so the word is also unavailable for the data sense it reads as                                                                                      | 4     |
 | plane    | 87                                                                          | none  | one meaning and no defect, but a settled concept carrying no definition, which the term-of-art rule forbids. Its definition sits in an `architecture.md` disambiguation note while the word reaches `README.md` and the onboarding document. One stray compound, `policy-plane`, appears once and is never defined                                                                                                                       | 5     |

@@ -3,7 +3,7 @@ import type { PollRequest } from './types.js';
 /** What a poll answer echoes as `after` when the poll asked for head. */
 export const HEAD = 'head';
 
-// A nonce as the bridge makes one: 16 to 128 base64url characters, unpadded.
+// A nonce as the Bridge makes one: 16 to 128 base64url characters, unpadded.
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/u;
 
 const POLL_PARAMETERS: ReadonlySet<string> = new Set([

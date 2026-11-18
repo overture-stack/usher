@@ -128,9 +128,9 @@ const refusalFor = (failure: unknown): unknown => {
 };
 
 /**
- * Checks the store and writes what a start writes before the controller serves from it, in one
+ * Checks the store and writes what a start writes before the Controller serves from it, in one
  * transaction the audit trail holds as the system, taking first the lock every start takes, so
- * starts check and write one at a time. The database role must hold what the controller needs and
+ * starts check and write one at a time. The database role must hold what the Controller needs and
  * nothing beyond, reading the record of applied migrations among what it needs. That record is read
  * before any other table of the schema and must hold no migration this release does not know: none
  * that `migrations` lacks, and none whose checksum differs from this release's file. A migration of
@@ -145,7 +145,7 @@ const refusalFor = (failure: unknown): unknown => {
  * on one column, its `column`, so a reader matches any of them without parsing a sentence.
  *
  * The start is refused, naming the database URL, when its connection's session lacks either limit
- * the controller sets to the store timeout, when the store does not answer the transaction within
+ * the Controller sets to the store timeout, when the store does not answer the transaction within
  * the store timeout, or when it does not confirm the transaction's `COMMIT` within one more. It is
  * refused naming the schema's variable when the schema holds no record of applied migrations or the
  * role may not read it, the rule sending the operator to the schema migration command; and when the
@@ -156,7 +156,7 @@ const refusalFor = (failure: unknown): unknown => {
  * too, naming the variable at fault by the failure's kind: the password for a password the store
  * refuses, the database URL otherwise.
  *
- * @param trail the audit trail over the controller's store connections.
+ * @param trail the audit trail over the Controller's store connections.
  * @param settings the schema, the key-encryption key, the baseline, the signed-in rule, the clock and
  *   the store timeout.
  * @param log where the migrations the start refuses, and each tolerated grant, are written.
@@ -189,7 +189,7 @@ export const prepareStore = async <Connection extends pg.ClientBase>(
 };
 
 /**
- * Checks, at the controller's start, that the store applies both of the controller's limits to the
+ * Checks, at the Controller's start, that the store applies both of the Controller's limits to the
  * sessions of one more of its pools, as {@link prepareStore} checks them on the pool its transaction
  * runs on, so a pool reaching the store through a pooler that drops them is found before anything
  * listens. The limits are read in one statement, as a unit of its own within the store timeout.

@@ -33,7 +33,7 @@ const KEY_BYTES = randomBytes(32);
 
 const KEY = applicationSubkeys(KEY_BYTES);
 
-// A subkey as the bridge derives it from the application key's bytes.
+// A subkey as the Bridge derives it from the application key's bytes.
 const bridgeSubkey = (label: string): Uint8Array =>
   new Uint8Array(hkdfSync('sha256', KEY_BYTES, Buffer.alloc(0), label, 32));
 

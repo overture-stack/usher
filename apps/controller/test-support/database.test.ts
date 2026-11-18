@@ -23,7 +23,7 @@ import {
 } from './database.js';
 
 // The harness proves its cloning on a stand-in migration that builds one table and grants it to the
-// runtime role, as the controller's migrations do, so these tests need none of the controller's
+// runtime role, as the Controller's migrations do, so these tests need none of the Controller's
 // schema.
 const standInTemplate = (
   migrations: MigrationOptions[] = [],

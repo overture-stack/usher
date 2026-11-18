@@ -26,7 +26,7 @@ provider (Keycloak, Microsoft Entra ID, or any OIDC-compatible provider).
 
 ## Documentation
 
-These explain the problem and the model, and how to deploy the controller. The design behind them
+These explain the problem and the model, and how to deploy the Controller. The design behind them
 is in the [Design Index](.dev/design/README.md).
 
 | Document                                       | For                                                                                                                                                                                                                                                  |
@@ -36,7 +36,7 @@ is in the [Design Index](.dev/design/README.md).
 | [Why Usher](docs/why-usher.md)                 | Why a separate service, rather than access logic inside each application                                                                                                                                                                             |
 | [Concepts and vocabulary](docs/concepts.md)    | RABAC terms, security primitives, and the permissions model entities                                                                                                                                                                                 |
 | [IAM primer](docs/iam-primer.md)               | Login, tokens and access control basics, for readers meeting them for the first time                                                                                                                                                                 |
-| [Deploying the controller](docs/deployment.md) | For an operator: the steps of a first deployment, every variable the controller reads, its database roles, the identity provider's setup, the schema migration before each rollout, registering applications and resources, and its health endpoints |
+| [Deploying the Controller](docs/deployment.md) | For an operator: the steps of a first deployment, every variable the Controller reads, its database roles, the identity provider's setup, the schema migration before each rollout, registering applications and resources, and its health endpoints |
 
 For internal contributor documentation (project structure, working documents, AI tooling, security
 principles), see [DEVELOPMENT.md](DEVELOPMENT.md).

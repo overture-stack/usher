@@ -62,16 +62,16 @@ const { storeTimeoutMilliseconds: STORE_TIMEOUT_MS } =
 // a loaded machine, and what a test times is measured from it.
 const PROXIED_STORE_TIMEOUT_MS = 4 * STORE_TIMEOUT_MS;
 
-/** How long the controller reuses one answer of the store's to readiness: a constant of its own. */
+/** How long the Controller reuses one answer of the store's to readiness: a constant of its own. */
 const STORE_PROBE_INTERVAL_MS = 1000;
 
-/** The line the controller writes for a store failing a Management API request. */
+/** The line the Controller writes for a store failing a Management API request. */
 const STORE_FAILED = 'managementApi.storeFailed';
 
 /** The line naming the events of a transaction whose commit the store did not confirm. */
 const COMMIT_UNCONFIRMED = 'audit.commitUnconfirmed';
 
-/** The lines the controller writes as its readiness changes. */
+/** The lines the Controller writes as its readiness changes. */
 const READINESS_LINES = Object.freeze({
   lost: 'readiness.lost',
   restored: 'readiness.restored',
@@ -188,7 +188,7 @@ const failingLog = (): FailingLog => {
   };
 };
 
-// The lines a controller wrote as its readiness changed, in order.
+// The lines a Controller wrote as its readiness changed, in order.
 const readinessLines = (
   log: LogCapture,
 ): readonly Readonly<Record<string, unknown>>[] =>
@@ -213,8 +213,8 @@ const applicationsNamed = async (
     )
   )[0]?.count ?? 0;
 
-// The controller's sessions on the test's database still waiting on a lock or idle inside a
-// transaction, read under the controller's own role, which sees its sessions' state.
+// The Controller's sessions on the test's database still waiting on a lock or idle inside a
+// transaction, read under the Controller's own role, which sees its sessions' state.
 const heldSessions = async (runtime: pg.ClientBase): Promise<number> =>
   (
     await selectRows<{ count: number }>(
@@ -225,11 +225,11 @@ const heldSessions = async (runtime: pg.ClientBase): Promise<number> =>
     )
   )[0]?.count ?? 0;
 
-// What the readiness probe's statement reads, which tells it from the controller's other statements.
+// What the readiness probe's statement reads, which tells it from the Controller's other statements.
 const READINESS_PROBE_READS = "current_setting('transaction_read_only')";
 
-// The readiness probes the controller's sessions on the test's database began after an instant on
-// the store's clock, each as its session and its start, read under the controller's own role.
+// The readiness probes the Controller's sessions on the test's database began after an instant on
+// the store's clock, each as its session and its start, read under the Controller's own role.
 const probesSince = async (
   runtime: pg.ClientBase,
   since: string,
@@ -244,7 +244,7 @@ const probesSince = async (
     )
   ).map(({ began, pid }) => `${pid} ${began}`);
 
-// Every readiness probe the controller's sessions began after an instant, read every few
+// Every readiness probe the Controller's sessions began after an instant, read every few
 // milliseconds until a deadline: a session keeps showing its last statement until it begins another.
 const sampledUntil = async (
   runtime: pg.ClientBase,
@@ -283,7 +283,7 @@ const askedUntil = async (
   return { asked, unready };
 };
 
-// The parameters of a startup message the controller's limits travel in.
+// The parameters of a startup message the Controller's limits travel in.
 const STARTUP_LIMITS: ReadonlySet<string> = new Set([
   'idle_in_transaction_session_timeout',
   'statement_timeout',
@@ -292,7 +292,7 @@ const STARTUP_LIMITS: ReadonlySet<string> = new Set([
 // The protocol's code for a query sent as text, the way a transaction's COMMIT is sent.
 const SIMPLE_QUERY = 0x51;
 
-/** A proxy between a controller and its store, speaking the store's protocol as far as it needs. */
+/** A proxy between a Controller and its store, speaking the store's protocol as far as it needs. */
 interface StoreProxy {
   /** The database URL given, at the proxy's address. */
   databaseUrl: string;
@@ -313,7 +313,7 @@ const messageLength = (
   return buffer.length >= 4 ? buffer.readInt32BE(0) : undefined;
 };
 
-// A startup message without the controller's limits: its length and protocol version, then each
+// A startup message without the Controller's limits: its length and protocol version, then each
 // parameter as a name and a value, each ended by a zero byte, and a closing zero byte.
 const withoutLimits = (startup: Buffer): Buffer => {
   const fields = startup

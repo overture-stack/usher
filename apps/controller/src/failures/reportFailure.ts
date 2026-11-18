@@ -38,8 +38,8 @@ export const failureNameOf = (failure: unknown): string =>
     ? (identifierOf(failure.name) ?? 'Error')
     : typeof failure;
 
-// A failure line carries codes and the controller's own messages only. A refusal is written with the
-// variables it names and its message, and any other error of the controller's own with its name and
+// A failure line carries codes and the Controller's own messages only. A refusal is written with the
+// variables it names and its message, and any other error of the Controller's own with its name and
 // its message, beside the code of the failure it wraps when that carries one; any other failure by
 // its code when it carries one, else by its name alone, under the fixed message naming what failed.
 // A code or a name is written only when it is an identifier. The members come in the log stream's

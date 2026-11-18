@@ -5,17 +5,17 @@ zod 4.6.5, lru-cache 11.5.3, TypeScript 7.0.2, 5.9.3 and 5.8.3, `@types/express-
 4.19.9 and 5.1.3, tsx 4.23.15), 2026-10-04. Every behaviour stated here was run there, against a
 prototype of the core and its Express layer or against a standalone check, neither of them published,
 unless the sentence says it was read from source, from a specification or from the design, or
-reasoned. The core and its Express layer are built in the Express bridge package, test first; "Not
+reasoned. The core and its Express layer are built in the Express Bridge package, test first; "Not
 built or not run" lists what no run covered.
 
-The bridge is the shared library that each application protected by Usher, Overture's access
+The Bridge is the shared library that each application protected by Usher, Overture's access
 enforcement system, embeds to turn a request's credential into that request's access. This note settles its
 structure: one core with no web framework in it, a thin Express layer over that core, and the core's
 state, stores, clocks, rendering, events and handling of concurrent requests. Four neighbouring topics
 have notes of their own: [jose for the Usher token](jose-usher-token.md),
 [Revocation notice stream](revocation-notice-stream.md),
 [Sign-in signature precheck](signin-signature-precheck.md) and
-[Packaging the bridge](packaging-and-toolchain.md).
+[Packaging the Bridge](packaging-and-toolchain.md).
 
 ## Decisions
 
@@ -26,22 +26,22 @@ carry.
 
 **Structure and surface**
 
-- The core sits inside the Express bridge package, under a framework-free directory that a test keeps
-  free of Express imports, as [Packaging the bridge](packaging-and-toolchain.md) sets out.
-- The core moves to a package of its own when a second framework's bridge starts.
+- The core sits inside the Express Bridge package, under a framework-free directory that a test keeps
+  free of Express imports, as [Packaging the Bridge](packaging-and-toolchain.md) sets out.
+- The core moves to a package of its own when a second framework's Bridge starts.
 - `createBridgeCoreWithSeams(configuration, seams)` holds the typed configuration, which `start`
   checks, and returns nine members: `applyNotice`, `mode`, `refreshAnonymous`, `register`, `report`,
   `reset`, `resolve`, `start` and `stop`. `report` carries the Express layer's own two events through
   the core's event log. None of the nine renews the grace period. `confirmChannel`, which renews
-  it, reaches the revocation channel seam alone, so no host can hold the bridge in normal mode. The package exports `createBridgeCore(configuration, options)` instead, which builds the core
-  over the default seams and takes an optional `fetch` in `options` to reach the controller with.
-- The controller client, the token reader and the revocation channel are seams: factories built at
+  it, reaches the revocation channel seam alone, so no host can hold the Bridge in normal mode. The package exports `createBridgeCore(configuration, options)` instead, which builds the core
+  over the default seams and takes an optional `fetch` in `options` to reach the Controller with.
+- The Controller client, the token reader and the revocation channel are seams: factories built at
   start from the imported keys and the checked configuration. The configuration they receive leaves
   out the application key, which only the imported keys carry. `defaultSeams` supplies the defaults:
-  a controller client posting each exchange over fetch, signed by a fresh channel assertion; jose's
+  a Controller client posting each exchange over fetch, signed by a fresh channel assertion; jose's
   token reader; and the channel's poll and push. The client and the channel fetch through undici on
-  an Agent of the bridge's own, created on first use and closed when the core stops, so a global
-  dispatcher the host sets never carries the bridge's traffic. A fetch the host hands
+  an Agent of the Bridge's own, created on first use and closed when the core stops, so a global
+  dispatcher the host sets never carries the Bridge's traffic. A fetch the host hands
   `createBridgeCore` replaces undici's.
 - A stop landing during `start` leaves the core stopped: no fetch runs, and the audience is free once
   `stop` settles.
@@ -49,27 +49,27 @@ carry.
   promise settles once a `start` still running, every exchange and anonymous fetch in flight, and the
   revocation channel's own stop have ended and the seams are closed. Every exchange and fetch in
   flight is left to finish rather than aborted. Only once `stop` settles is the audience free, so a
-  host that awaits `stop` can then start another bridge on the same audience, while one started
+  host that awaits `stop` can then start another Bridge on the same audience, while one started
   before `stop` settles is refused with `audienceInUse`. `stop` never rejects.
 - `resolve(credential | null)` is the one operation per request, and it answers access, refused or
   unavailable.
-- The bridge provides no category dictionary. The category checks read the global categories Usher
+- The Bridge provides no category dictionary. The category checks read the global categories Usher
   defines and the categories each resource offers, both from the payload, as "Rendering" sets out,
   and category dictionary introspection is a post-MVP proposal in
   [adapter-integration.md](../../../design/adapter-integration.md#category-dictionary-introspection).
 - A host creates the core, calls `register`, mounts the middleware and then awaits `start`, which
   imports the application key and fetches the anonymous payload.
-- A refusal to start, for a second bridge on one audience, an unusable key, a configuration value
-  the bridge refuses, or a seam that throws as `start` builds it or starts the channel, rejects
-  `start()` with a fixed-text `UsherContractError` naming the rule. The bridge then stays cold and
+- A refusal to start, for a second Bridge on one audience, an unusable key, a configuration value
+  the Bridge refuses, or a seam that throws as `start` builds it or starts the channel, rejects
+  `start()` with a fixed-text `UsherContractError` naming the rule. The Bridge then stays cold and
   logs `bridge.startRefusal`, registered as critical in
   [audit-events.md](../../../design/audit-events.md).
 - The core runs on Node only, keeping `node:crypto` and `Buffer`.
-- The bridge imports no zod at runtime and has no zod peer. A package has zod as a peer only when its
+- The Bridge imports no zod at runtime and has no zod peer. A package has zod as a peer only when its
   shipped source imports it, and usher-types validates by hand, never through zod at runtime, keeping
   zod as a devDependency for its tests
   ([technology-stack.md](../roadmap/technology-stack.md#decided-toolchain-for-this-repository)).
-- The application key arrives as 43 base64url characters. After import the bridge holds it only as
+- The application key arrives as 43 base64url characters. After import the Bridge holds it only as
   non-extractable `CryptoKey`s: the decrypt-only AES-GCM key for the Usher token, and the four
   subkeys derived at start from an HKDF import of the same bytes, whose base key and bytes are not
   kept, as [jose for the Usher token](jose-usher-token.md) sets out. Nothing past the import receives
@@ -79,11 +79,11 @@ carry.
 
 - The layer reads every `Authorization` line through `req.headersDistinct`.
 - Every bearer value the layer can read goes to the exchange, with no grammar check.
-- API keys are presented as `Bearer`, so a key of any shape reaches the controller, and the
+- API keys are presented as `Bearer`, so a key of any shape reaches the Controller, and the
   [test plan](../../bridge-tests.md) answers 400 to any other scheme.
-- The bridge never refuses a credential the controller would accept
+- The Bridge never refuses a credential the Controller would accept
   ([decisions.md](../../../design/decisions.md#the-bridges-cache-is-keyed-by-the-sign-in-token-never-by-a-claim-inside-it)).
-- The bridge therefore checks no signature (decided in decisions.md on 2026-10-06). The research is
+- The Bridge therefore checks no signature (decided in decisions.md on 2026-10-06). The research is
   in
   [Sign-in signature precheck](signin-signature-precheck.md).
 - Two `Authorization` lines, a scheme other than `Bearer`, or an `access_token` query parameter get
@@ -96,10 +96,10 @@ carry.
 - `readAccess` accepts only a member shaped as `attachAccess` leaves it, never runs an accessor, and
   returns a fresh frozen copy it has validated, so a replaced value fails closed.
 - `resultFor(access, key)` reads results by own member only.
-- `usher-types` is a peer dependency of the bridge, declared `workspace:^` and also as a
+- `usher-types` is a peer dependency of the Bridge, declared `workspace:^` and also as a
   devDependency, so a host holds one copy of the contract and of `SqonSchema`. There is no `WeakSet`
   and no provenance check: two copies interoperate, and the peer plus the host's own dependency is
-  enough to hold one copy under pnpm, as [Packaging the bridge](packaging-and-toolchain.md) sets out.
+  enough to hold one copy under pnpm, as [Packaging the Bridge](packaging-and-toolchain.md) sets out.
 - The layer never hands Express a promise and never calls `next(error)`, so an internal error becomes
   a 503 with fixed text and an event naming only the stage.
 - A host mounts the layer after its health routes and CORS, and before body parsing.
@@ -114,17 +114,17 @@ carry.
 **Exchanges**
 
 - Concurrent requests on one digest share one exchange.
-- A bound of 64 exchanges in flight for each bridge answers 503 beyond it. It is a constant with no
-  setting, and bounds only the bridge's own memory. The controller paces exchanges and tells its
-  bridges to back off with `Retry-After`, since a bound each bridge set for itself would multiply
+- A bound of 64 exchanges in flight for each Bridge answers 503 beyond it. It is a constant with no
+  setting, and bounds only the Bridge's own memory. The Controller paces exchanges and tells its
+  Bridges to back off with `Retry-After`, since a bound each Bridge set for itself would multiply
   with the replicas ([decisions.md](../../../design/decisions.md), decided on 2026-10-06).
 - Each exchange carries its own timeout, from an `AbortController` that a `setTimeout` aborts, never
   tied to one request.
 - The anonymous refresh runs outside the bound, in its own single flight.
-- A controller's 403 is a refused identity. Its 401 refuses the channel assertion, not the identity,
+- A Controller's 403 is a refused identity. Its 401 refuses the channel assertion, not the identity,
   so it is unavailable and never cached as a refusal. A timeout, a network failure, a 408, and a 5xx
   are a failure, except a 503 naming `admissionShareExceeded` or carrying a valid `Retry-After`.
-- A `503 admissionShareExceeded` opens one back-off window for the whole bridge. It lasts the
+- A `503 admissionShareExceeded` opens one back-off window for the whole Bridge. It lasts the
   answer's `Retry-After`, or 1 s without a valid one, capped at 5 s, plus jitter drawn uniformly from
   0 to half of that. A later one extends the window, and none shortens it. Until it ends no exchange
   starts, signed-in or anonymous. Exchanges already running finish, and an answer a notice overtakes
@@ -135,7 +135,7 @@ carry.
 - Any other 503 carrying a valid `Retry-After` holds that credential alone, or the anonymous
   refresh, for that `Retry-After`, capped at 60 s, plus the same jitter. Meanwhile the credential is
   served as a failed exchange is, and it is exchanged once the hold ends.
-- The bridge reads a 503's problem code from no more than 2 KiB of its body, or the response cap when
+- The Bridge reads a 503's problem code from no more than 2 KiB of its body, or the response cap when
   that is smaller, and cancels the rest. It compares the code with `admissionShareExceeded` alone and
   logs neither the body nor the code.
 - A valid `Retry-After` is the whole header value as fetch returns it: 1 to 6 ASCII digits naming at
@@ -143,18 +143,18 @@ carry.
   absent.
 - A 429, and every other status, is unavailable: 503, not cached, and logged as
   `token.exchangeFailure` with cause `status`.
-- An Usher token the bridge cannot read, whose `sub` does not match the kind of exchange, or whose
+- An Usher token the Bridge cannot read, whose `sub` does not match the kind of exchange, or whose
   `sub` differs from a three-part sign-in token's own subject, is treated as not received: 503, and
   never served as suspended, as [jose for the Usher token](jose-usher-token.md) sets out.
 - A failed exchange serves that principal the anonymous results, marked `openTierOnly` and
   `suspended`, with its credential `unconfirmed`.
 - A grant answered after the grace period lapsed during its exchange is served as the open tier,
-  suspended and naming its subject for attribution alone, and answered 503 once the bridge is cold,
+  suspended and naming its subject for attribution alone, and answered 503 once the Bridge is cold,
   since the mode is read again when the answer arrives.
 - Each exchange is raced against its own timeout, so a client that ignores the abort signal cannot
   hold a flight, or its place in the bound, for good.
 - A rejected token is held briefly in a short failure store, apart from refusals, so a broken
-  controller is not asked again on every request (the [test plan](../../bridge-tests.md),
+  Controller is not asked again on every request (the [test plan](../../bridge-tests.md),
   "Exchange").
 - The failure store holds each for a fixed interval that is configurable and bounded.
 - A failed exchange is held in the same store, so a credential whose exchange keeps failing does not
@@ -172,23 +172,23 @@ carry.
 
 **Stores**
 
-- Each store is a bounded map written for the bridge, not lru-cache.
+- Each store is a bounded map written for the Bridge, not lru-cache.
 - Positive entries are keyed by the SHA-256 digest of the whole credential.
 - Positive entries are indexed by the subject read from the decrypted payload
   ([decisions.md](../../../design/decisions.md#the-bridges-cache-is-keyed-by-the-sign-in-token-never-by-a-claim-inside-it)).
 - The index holds that subject's per-audience tag, the tag principal notices carry (proposed in
   [schema.md](../../../design/schema.md#the-notice-stream), Decide E), as
   [Revocation notice stream](revocation-notice-stream.md) sets out.
-- The controller's refusals live in a bound of their own, failures in the short failure store, and
+- The Controller's refusals live in a bound of their own, failures in the short failure store, and
   the anonymous entry outside all of them.
 - A token refused for its own `exp` is never stored, since its `exp` refuses it again on every
-  request, so a stream of such tokens cannot push the controller's refusals out.
+  request, so a stream of such tokens cannot push the Controller's refusals out.
 - No store keeps a decrypted payload.
 - The anonymous slot keeps the set of grants named in its payload, for `openTierOnly`.
 - A positive entry ends at the earliest of its Usher token's `exp`, its receipt plus the TTL timed on
   the monotonic clock, and its sign-in token's `exp`.
   [decisions.md](../../../design/decisions.md#the-bridges-cache-is-keyed-by-the-sign-in-token-never-by-a-claim-inside-it)
-  records the two `exp` bounds, and the receipt bound holds even if a controller defect issues a long
+  records the two `exp` bounds, and the receipt bound holds even if a Controller defect issues a long
   `exp`.
 - A category notice is handled by scanning the positive store rather than by a resource index.
 - A baseline-change notice drops every positive entry and the anonymous entry
@@ -196,17 +196,17 @@ carry.
 
 **Modes and time**
 
-- The bridge has three modes, cold, normal and uncertain, and one per-principal degraded state
+- The Bridge has three modes, cold, normal and uncertain, and one per-principal degraded state
   inside normal mode.
-- The bridge is cold until a check is confirmed and it has accepted an anonymous payload since start, again when the grace
+- The Bridge is cold until a check is confirmed and it has accepted an anonymous payload since start, again when the grace
   period lapses with none held, and while the key's self-test fails.
 - Cold answers 503 to every request.
 - At startup, a wrong application key shows first on the anonymous exchange, whose channel
-  assertion the controller refuses with 401: the bridge logs `token.exchangeFailure` with cause
+  assertion the Controller refuses with 401: the Bridge logs `token.exchangeFailure` with cause
   `assertionRefused` and `revocationChannel.modeChange` with reason `probableKeyMismatch`, and stays
   cold. An anonymous token failing decryption at startup is named the same way, after its
   `token.rejection` with reason `decryptionFailed`.
-- Uncertain mode never exchanges, so it adds no load on the controller during an outage.
+- Uncertain mode never exchanges, so it adds no load on the Controller during an outage.
 - In uncertain mode, a presented credential gets the anonymous results, marked `openTierOnly` and
   `suspended`. A live cached entry for it names its subject for attribution alone; without one, its
   credential is `unconfirmed`. Reading the entry never extends its expiry.
@@ -224,7 +224,7 @@ carry.
   ([adapter-integration.md](../../../design/adapter-integration.md#decided);
   [decisions.md](../../../design/decisions.md#a-suspended-principal-is-answered-by-what-the-open-tier-can-settle)).
 - A principal states its credential. One presenting none is `none` and never suspended. One the
-  controller vouched for, through a live cached entry or this request's own exchange, is
+  Controller vouched for, through a live cached entry or this request's own exchange, is
   `confirmed`, and names its subject as `subject` while its grants hold and as
   `attributionOnlySubject` while suspended. Any other is `unconfirmed`: signed in, identity
   unconfirmed, suspended and served the open tier. This covers uncertain mode, where no exchange
@@ -257,13 +257,13 @@ carry.
 - Rendering runs once per exchange and interns its results. A record key's narrowing is usher-types'
   `canonicalRecordNarrowing`, which excludes what is not held, one clause per category
   ([decisions.md](../../../design/decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches)).
-- A record key's narrowing is served only past the bridge's two guards. The rendering guard reads it
+- A record key's narrowing is served only past the Bridge's two guards. The rendering guard reads it
   back and compares what it says with what the payload and the key's registration say, computed
   apart from rendering, and denies the key with `rendering-mismatch` on any difference
   ([decisions.md](../../../design/decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches)).
   The clause guard then denies it with `filter-limit` when its clause count exceeds
   `filterClauseLimit`.
-- usher-types exports the one condition normalizer, `normalizedCondition`, which both the bridge's
+- usher-types exports the one condition normalizer, `normalizedCondition`, which both the Bridge's
   compiled form and usher-types' rendering use, so the rendering guard never finds a difference of
   spelling alone.
 - An entry carrying `field`, `field: {}` included, counts for nothing, and `category.unenforced`
@@ -277,7 +277,7 @@ carry.
   resource `permissions` names, is never held, so its records are always excluded, and
   `category.unknown` names it.
 - Those checks stay generic. The adapter turns its application's configuration, whatever its shape,
-  into the one registration read by the bridge, and the bridge only compares that registration with
+  into the one registration read by the Bridge, and the Bridge only compares that registration with
   the categories named in the payload.
 - `register` refuses a category both declared absent and defined. Absence is the last resort, for a
   catalogue whose records cannot match the category.
@@ -306,7 +306,7 @@ carry.
   no grant can name it, and is known, so a record holding it is withheld through the complement even
   beside a held one. Nothing is logged for it.
 - `register` refuses an artifact key, at its `kind` and with a rule of its own, because a download
-  service checks each file's own recorded sources and so needs no filter from the bridge.
+  service checks each file's own recorded sources and so needs no filter from the Bridge.
 - `openTierOnly` is definition A: every grant in the principal's payload also appears in the anonymous
   payload. Definition B, comparing rendered results, depends on what was withheld, which
   [adapter-integration.md](../../../design/adapter-integration.md#known-requirements) rules out.
@@ -324,7 +324,7 @@ carry.
 - The revocation channel's failed checks are counted the same way, one
   `revocationChannel.failure` per cause per interval, and its stop logs the counts it still
   holds, even when the logger throws.
-- The bridge's `logger` parameter is a minimal structured interface: `info`, `warn` and `error`, each
+- The Bridge's `logger` parameter is a minimal structured interface: `info`, `warn` and `error`, each
   taking an object and a message. Pino satisfies it, and the type does not require Pino, so a host
   with no Pino supplies a shim.
 - `start` checks the configuration, and a refusal names the rule, never a value.
@@ -341,11 +341,11 @@ carry.
 - The local refusal reads its clock tolerance from configuration as `localRefusalClockToleranceMs`,
   60000 ms by default
   ([decisions.md](../../../design/decisions.md#the-bridges-cache-is-keyed-by-the-sign-in-token-never-by-a-claim-inside-it)).
-- The controller's tolerance for a sign-in token's `exp` never exceeds the bridges' local-refusal
-  tolerance, or a bridge would refuse what the controller accepts. The bound sits on the
-  controller's side, in the contract table of the [test plan](../../bridge-tests.md).
+- The Controller's tolerance for a sign-in token's `exp` never exceeds the Bridges' local-refusal
+  tolerance, or a Bridge would refuse what the Controller accepts. The bound sits on the
+  Controller's side, in the contract table of the [test plan](../../bridge-tests.md).
 - The Usher token's clock tolerance is 0, with no parameter to change it, as the jose note sets out.
-- Plain HTTP to the controller is refused except to loopback, so any other route to the controller
+- Plain HTTP to the Controller is refused except to loopback, so any other route to the Controller
   uses TLS.
 - Loopback is accepted in all three of its spellings: `127.0.0.1`, `localhost` and `[::1]`.
 
@@ -356,19 +356,19 @@ carry.
 | credential              | what a request presents: a sign-in token, or an opaque API key                                                                                                                                      |
 | digest                  | the base64url SHA-256 of the whole credential, which keys the stores                                                                                                                                |
 | key                     | one entry an adapter registers and the request access value's `results` carries; in Arranger, one catalogue                                                                                         |
-| application key         | the 32-byte secret, one per application, from which every key the bridge holds is derived, the token key among them; the configuration's `key` parameter carries it                                 |
+| application key         | the 32-byte secret, one per application, from which every key the Bridge holds is derived, the token key among them; the configuration's `key` parameter carries it                                 |
 | entry                   | what a store holds for one digest, or the anonymous store's one slot, the anonymous entry                                                                                                           |
 | flight                  | one exchange in progress for one digest, shared by every request waiting on it                                                                                                                      |
 | check                   | an event that renews the grace period; the notice stream defines it                                                                                                                                 |
 | wall clock              | the clock that tells the time of day; `exp` and event times are read against it, and it can step backward                                                                                           |
 | monotonic clock         | a clock that only moves forward, used to measure elapsed time                                                                                                                                       |
-| refused                 | the controller refused the identity, or the credential is a signed token past its own `exp`; the request gets 401                                                                                   |
-| malformed               | the controller answered, and the bridge rejected the Usher token in it; treated as not received, so the request gets 503                                                                            |
-| failed                  | the controller gave no usable answer: a timeout, a network failure, a server error or a 408                                                                                                         |
+| refused                 | the Controller refused the identity, or the credential is a signed token past its own `exp`; the request gets 401                                                                                   |
+| malformed               | the Controller answered, and the Bridge rejected the Usher token in it; treated as not received, so the request gets 503                                                                            |
+| failed                  | the Controller gave no usable answer: a timeout, a network failure, a server error or a 408                                                                                                         |
 | unavailable             | the outcome answered with 503                                                                                                                                                                       |
 | anonymous               | a principal presenting no credential: its credential `none`, never suspended                                                                                                                        |
 | suspended               | a principal whose grants are on hold, served the open tier: `unconfirmed`, or `confirmed` naming its subject for attribution alone                                                                  |
-| cold, normal, uncertain | the bridge's three modes, set out under "Modes"                                                                                                                                                     |
+| cold, normal, uncertain | the Bridge's three modes, set out under "Modes"                                                                                                                                                     |
 | per-principal degraded  | in normal mode, one principal served from the anonymous payload because their exchange failed while the channel is healthy                                                                          |
 | held resource           | for one key, a resource whose unmarked records are held with record view, or that holds with record view a category applying to it: a global category the key defines, or one of the resource's own |
 | known resources         | for one key, the resources served by the payload, its `servedResources`, together with the key's own resource list when it has one, held or not                                                     |
@@ -377,11 +377,11 @@ carry.
 | unmapped                | of a category Usher defines: one the key neither defines nor declares absent. A global one denies the key's whole result; a resource's own withholds that resource from the key                     |
 | unknown                 | of a global category a key defines: one Usher does not list, so it is never held and its records are always excluded                                                                                |
 
-Malformed and failed both leave the bridge with no usable token for the principal, and they stay
+Malformed and failed both leave the Bridge with no usable token for the principal, and they stay
 apart. A malformed answer is a deployment fault, refused loudly with 503. A failed exchange is an
 outage, which serves the open tier marked suspended.
 
-"Key" has two meanings in the bridge. A registered key is what the contract and the adapters call a
+"Key" has two meanings in the Bridge. A registered key is what the contract and the adapters call a
 key. The application key is the secret, carried by the configuration's `key` parameter, which is that
 word's one meaning inside `BridgeConfiguration`. Where the context does not settle which is meant,
 this note says "application key".
@@ -470,9 +470,9 @@ type ResolveOutcome =
 // createBridgeCore(configuration: BridgeConfiguration, options?: { fetch?: ControllerFetch }): BridgeCore // the package's export, over the default seams
 ```
 
-The host's order follows from [Packaging the bridge](packaging-and-toolchain.md), which allows no
+The host's order follows from [Packaging the Bridge](packaging-and-toolchain.md), which allows no
 top-level await to read the application key or fetch the anonymous payload while the module loads.
-The middleware answers 503 while the bridge is cold.
+The middleware answers 503 while the Bridge is cold.
 
 **`register` is called once, before the first request, and is then frozen.** Cached results were
 rendered from the registration, so registering again throws. `validateRegistration` returns a copy of
@@ -496,7 +496,7 @@ positioned every problem under the catalogue's key and then the category's name,
 or value.
 
 **`register` refuses an artifact key.** A download service checks each file's own recorded sources,
-so no filter drawn by the bridge over a list of resources is needed. `validateRegistration` refuses
+so no filter drawn by the Bridge over a list of resources is needed. `validateRegistration` refuses
 a registration of kind `artifact` with a rule of its own, positioned at `kind`, which says what to
 do instead and names no value; any other kind outside `open` and `record` gets the kind rule.
 
@@ -508,7 +508,7 @@ anonymous fetch is also the application key's self-test, which
 [jose for the Usher token](jose-usher-token.md) sets out.
 
 **A refusal to start rejects `start()`** with a fixed-text `UsherContractError` naming the rule. The
-bridge stays cold and logs `bridge.startRefusal`, whose `reason` is a fixed code naming the rule and
+Bridge stays cold and logs `bridge.startRefusal`, whose `reason` is a fixed code naming the rule and
 never a configured value.
 
 **`start` holds the decoded key bytes only for the imports.** It imports them as a non-extractable
@@ -524,14 +524,14 @@ The core compiled under TypeScript 7.0.2 with `types: ["node"]` and no Express t
 TypeScript 5.8.3 with `skipLibCheck` on, which usher's own packages keep off; a 5.8.3 compile with it
 off was not run. No core file imports from Express, and no core file reads
 `process.env`. The prototype's core imported `node:crypto`, jose and zod at runtime, and nothing
-else. The bridge imports no zod, since usher-types validates by hand and neither package has a zod
+else. The Bridge imports no zod, since usher-types validates by hand and neither package has a zod
 peer.
 
 The core digests with `createHash` and reads a signed token's `exp` through the `Buffer` global. A host
-running the bridge outside Node, such as an edge runtime for a Next.js server side, could not use the
+running the Bridge outside Node, such as an edge runtime for a Next.js server side, could not use the
 core as written (reasoned). The alternative, Web-standard APIs such as `crypto.subtle.digest`, is
 asynchronous and adds a step to every request (not measured). The core keeps `node:crypto` and
-`Buffer`. The alternative would matter only if a host, such as Stage's server side, ran the bridge
+`Buffer`. The alternative would matter only if a host, such as Stage's server side, ran the Bridge
 outside Node.
 
 ## Modes
@@ -544,7 +544,7 @@ outside Node.
 | per-principal degraded (in normal) | this principal's exchange failed while checks are confirmed                                                                                                                                                       | the anonymous results, `openTierOnly` and `suspended`, credential `unconfirmed` with no subject; 503 when no usable anonymous payload is held                                                                                                                                                                                                                                                            | not applicable                                                                             |
 
 **The `suspended` mark is what keeps a signed-in person apart from an anonymous visitor.** Without it,
-a credential the bridge has never exchanged gets no subject and `openTierOnly` true in uncertain
+a credential the Bridge has never exchanged gets no subject and `openTierOnly` true in uncertain
 mode, which looks exactly like an anonymous visitor (run). The same holds on the per-principal
 degraded path. An adapter that serves anonymous exports as normal would then serve that signed-in
 person's export as open tier, which the design rejects.
@@ -567,7 +567,7 @@ nothing, and the credential is `unconfirmed`.
 
 **A rejected token held in the failure store stays 503 in uncertain mode.** A rejected Usher token
 is never served as suspended, as [jose for the Usher token](jose-usher-token.md) sets out, and the
-failure store answers it without asking the controller in every mode.
+failure store answers it without asking the Controller in every mode.
 
 **One outage, traced.** The grace period is 60 s. The trace ran under node:test mock timers, with one
 clock serving as both wall and monotonic clock, which changes nothing here because no wall-clock step
@@ -590,11 +590,11 @@ occurs in it. `confirmChannel` stands in for a timely check.
 
 **A second case** (reasoned from the rules above, not run). A category notice names a resource also
 named in the anonymous payload, so it drops the anonymous entry and every entry naming that resource. The
-refetch fails because the controller has gone down. Until the grace period runs out, signed-in
+refetch fails because the Controller has gone down. Until the grace period runs out, signed-in
 requests with surviving entries are served from them, and anonymous and open-tier requests get 503.
 Once it runs out, no anonymous payload is held, so the mode is cold and every request gets 503.
 [security-workflow.md](../../../design/security-workflow.md#revocation-channel-integrity-and-fail-secure-behaviour)
-says the bridge holds an anonymous payload whenever the controller has answered at least once, and
+says the Bridge holds an anonymous payload whenever the Controller has answered at least once, and
 this case breaks that. Reviving the dropped payload as the fallback would keep that statement true,
 at the cost of serving open data known to be out of date.
 
@@ -612,9 +612,9 @@ G. The defaults give 33 + 20 = 53 s against 60 s. The core's configuration carri
 `pollIntervalMs`, `pollDeadlineMs` and `graceMs`, so one check sees them together. The same check
 refuses a `pushIdleMs` above `pollIntervalMs`. The stream note holds the push's idle timeout I to at
 most T, so that a dead push is replaced within one poll interval. I defaults to 25 s whatever T is:
-derived from T, it could fall below what the controller's heartbeat needs, at least twice the
+derived from T, it could fall below what the Controller's heartbeat needs, at least twice the
 heartbeat plus jitter, and a healthy push would be replaced as silent. So a host lowering
-`pollIntervalMs` below 25000 lowers `pushIdleMs` with it, keeping it at least twice the controller's
+`pollIntervalMs` below 25000 lowers `pushIdleMs` with it, keeping it at least twice the Controller's
 heartbeat plus jitter. The same check refuses a `pollRecoveryIntervalMs` above `pollIntervalMs` as
 well. The stream note times the poll at the recovery interval R in place of T while checks are
 failing, and R at most T keeps that a shortening
@@ -677,9 +677,9 @@ non-configurable and non-enumerable, holding a deeply frozen value. It never run
 returns a fresh frozen copy it has validated. A store carrying `usher` as an ordinary property is
 refused, so a value that replaces the attached one fails closed. `resultFor(access, key)` then reads
 each result by own member only. usher-types implements both, with tests. There is no `WeakSet` and no provenance check, so two copies of
-`usher-types` in one host interoperate. `usher-types` is a peer dependency of the bridge all the
+`usher-types` in one host interoperate. `usher-types` is a peer dependency of the Bridge all the
 same, so that a host holds one copy of the contract and of `SqonSchema`, as
-[Packaging the bridge](packaging-and-toolchain.md) sets out.
+[Packaging the Bridge](packaging-and-toolchain.md) sets out.
 
 Deep freezing is required because results are shared across requests. Every anonymous request shares
 the anonymous results, and interning makes principals with equal results share one object. One
@@ -688,7 +688,7 @@ mutation would reach all of them.
 Two rules make the freeze complete (reasoned). First, freezing recurses into every child
 unconditionally: a freeze that stops at any object already frozen leaves the children of a
 shallow-frozen value mutable. Second, `attachAccess` is a public usher-types function that fake
-bridges and other frameworks' bridges call, so it cannot assume its input came from the core.
+Bridges and other frameworks' Bridges call, so it cannot assume its input came from the core.
 
 ### Marking a suspended principal
 
@@ -722,7 +722,7 @@ log.
 The layer returns nothing to Express. It chains `.then(onOutcome, fail)` on the outcome, and runs
 the work before that promise exists, a host's `extract` included, inside a `try` whose `catch` also
 calls `fail`. Synchronous throws and asynchronous rejections then both reach `fail`, as
-[Packaging the bridge](packaging-and-toolchain.md) requires. `fail` logs `bridge.internalError`
+[Packaging the Bridge](packaging-and-toolchain.md) requires. `fail` logs `bridge.internalError`
 carrying only `{ stage }` and answers 503 with fixed text, unless headers have already been sent. A
 `.catch` after the chain does the same for a throw while settling the outcome, such as one from
 `next`, logging the stage `attach`. A throw while answering is caught in both: from the `try` it
@@ -751,7 +751,7 @@ declare global {
 }
 ```
 
-This declaration lives in the Express bridge package, never in usher-types. Both
+This declaration lives in the Express Bridge package, never in usher-types. Both
 `@types/express-serve-static-core` 4.19.9 and 5.1.3 declare a global `Express.Locals` and type
 `locals` as `LocalsObj & Locals`, so one augmentation covers both majors (read from source).
 Arranger's lockfile resolves 4.19.8, which declares the same global (read from source).
@@ -767,7 +767,7 @@ Under TypeScript 7.0.2, 5.9.3 and 5.8.3, against both 4.19.9 and 5.1.3 (run):
 
 Typed as `UsherRequestAccess` instead, a direct read compiles with the full type, which leaves the
 decided rule that adapters read only through `readAccess` a convention. Typed `unknown`, the compiler
-enforces it. The declaration reaches only programs that include the bridge's declarations, so an
+enforces it. The declaration reaches only programs that include the Bridge's declarations, so an
 adapter that imports usher-types alone still sees `any`.
 
 ## The stores
@@ -777,16 +777,16 @@ adapter that imports usher-types alone still sees `any`.
 | Store     | Key      | Holds                                                                                                                                                                            | Dropped                                                                                                                                          |
 | --------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | positive  | digest   | the subject and its per-audience tag, the resource names, the interned results, `openTierOnly`                                                                                   | at the earliest of the Usher token's `exp`, receipt plus the TTL on the monotonic clock, and the sign-in token's `exp`; on eviction; by a notice |
-| refusal   | digest   | an expiry, for a credential refused by the controller; a token refused for its own `exp` is never stored                                                                         | at the signed sign-in token's own `exp`, capped at now plus the TTL; for an opaque key, now plus the TTL                                         |
+| refusal   | digest   | an expiry, for a credential refused by the Controller; a token refused for its own `exp` is never stored                                                                         | at the signed sign-in token's own `exp`, capped at now plus the TTL; for an opaque key, now plus the TTL                                         |
 | failure   | digest   | whether the token was rejected or the exchange failed, and an expiry                                                                                                             | after the fixed interval; on eviction                                                                                                            |
 | anonymous | one slot | the set of grants named in the anonymous payload, the resource names, its frozen access value and the same value marked suspended, both holding the interned results, its expiry | by a notice, for good; replaced on refresh                                                                                                       |
 
 A hit in the failure store answers without asking the controller: 503 for a rejected token, and the
-per-principal degraded path for a failed exchange. A broken controller is then not asked on every
-request, and the bridge still recovers within one interval.
+per-principal degraded path for a failed exchange. A broken Controller is then not asked on every
+request, and the Bridge still recovers within one interval.
 
-Reading `exp` from a sign-in token the bridge never validates is sound in both stores that use it
-(reasoned). For a positive entry, the digest binds the exact bytes the controller accepted, so that
+Reading `exp` from a sign-in token the Bridge never validates is sound in both stores that use it
+(reasoned). For a positive entry, the digest binds the exact bytes the Controller accepted, so that
 acceptance authenticates the claim. For a refusal, a forged `exp` can only shorten the refusal, since
 the TTL caps it.
 
@@ -820,7 +820,7 @@ installed nor cached, and no fetch after the reset joins one started before it.
 **The baseline drop covers signed-in entries because every signed-in payload carries the baseline as
 its floor.** Dropping the anonymous entry alone would let a narrowed baseline reach signed-in
 principals for up to one TTL, while the bar bounds revocation by the poll interval and the grace
-period. The controller clears its payload cache with it, and the in-flight bound holds the rush of
+period. The Controller clears its payload cache with it, and the in-flight bound holds the rush of
 exchanges that follows
 ([decisions.md](../../../design/decisions.md#a-category-change-is-announced-to-the-applications-that-serve-the-resource)).
 
@@ -856,13 +856,13 @@ baseline on names every open resource. Fifty thousand entries each holding its o
 come to about 490 MiB (arithmetic, not measured). A scan over entries that each held their own `Set`
 peaked at 1.34 GB resident (measured).
 
-### A map written for the bridge, against lru-cache 11.5.3
+### A map written for the Bridge, against lru-cache 11.5.3
 
 Each store is a `Map` kept in recency order, with one removal hook and an absolute expiry per entry,
 one instant on each clock. It has no timers of its own, and drops an entry at its exact expiry
 instant.
 
-|                                                 | lru-cache 11.5.3                                                                                                                                                                                       | map written for the bridge    |
+|                                                 | lru-cache 11.5.3                                                                                                                                                                                       | map written for the Bridge    |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
 | dependencies                                    | none; licence BlueOak-1.0.0                                                                                                                                                                            | none                          |
 | injected clock                                  | through its `perf` option                                                                                                                                                                              | yes                           |
@@ -875,7 +875,7 @@ instant.
 
 Both kept all 100 positive entries through the flood. Both pass the same store suite once lru-cache
 gets `ttlResolution: 0` and the boundary is tested one millisecond past expiry. The map written for
-the bridge is exact at the boundary, has no hidden timers, and has no falsy test on a start time. A
+the Bridge is exact at the boundary, has no hidden timers, and has no falsy test on a start time. A
 smaller dependency surface also suits a security library. The 15 ms difference over 100,000 refusals
 is no reason to take lru-cache.
 
@@ -893,7 +893,7 @@ value, so every waiter learns of it the same way.
 | ------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | ten concurrent requests on one digest       | 1                                                                                          |
 | five concurrent requests on a refused token | 1; all five refused, and the next request answered from the refusal store with no exchange |
-| a bound of 3, five distinct tokens at once  | 3; the other two answered 503 before the controller replied, each logged as overloaded     |
+| a bound of 3, five distinct tokens at once  | 3; the other two answered 503 before the Controller replied, each logged as overloaded     |
 
 Requests joining an existing flight do not count against the bound. The bound is one budget shared by
 every new digest. The flood of distinct junk credentials that can hold it is an accepted trade, set
@@ -911,7 +911,7 @@ mocked signal then aborts with an `AbortError`, where the real one aborts with a
 (run). The `AbortController` form behaves the same in tests and in production, and code never
 branches on the abort reason's name.
 
-The default fetch client, against a controller mock on a local port, maps its outcomes as follows
+The default fetch client, against a Controller mock on a local port, maps its outcomes as follows
 (run):
 
 | Controller        | Outcome                            |
@@ -936,20 +936,20 @@ every request URL is built relative to it.
 | 403                                                                                                                                | refused                       | refusal store                                      | 401                                                                                                                                   |
 | 401, the channel assertion refused                                                                                                 | unavailable                   | no                                                 | 503, logged as `token.exchangeFailure` with cause `assertionRefused`; at startup, a probable key mismatch                             |
 | timeout, network failure, 408, or a 5xx other than a 503 naming `admissionShareExceeded` or carrying a valid `Retry-After`         | failed                        | failure store                                      | the anonymous results, `openTierOnly` and `suspended`, credential `unconfirmed` with no subject; 503 with no usable anonymous payload |
-| 503 `admissionShareExceeded`                                                                                                       | backed off                    | no; the back-off window opens for the whole bridge | as for a failed exchange; counted in the aggregated `token.exchangeFailure` event with cause `admissionShareExceeded`                 |
+| 503 `admissionShareExceeded`                                                                                                       | backed off                    | no; the back-off window opens for the whole Bridge | as for a failed exchange; counted in the aggregated `token.exchangeFailure` event with cause `admissionShareExceeded`                 |
 | any other 503 carrying a valid `Retry-After`                                                                                       | held                          | failure store, for that `Retry-After` plus jitter  | as for a failed exchange; counted in the aggregated `token.exchangeFailure` event with cause `retryAfter`                             |
 | 429, or any other status                                                                                                           | unavailable                   | no                                                 | 503, logged as `token.exchangeFailure` with cause `status`                                                                            |
 | beyond the in-flight bound                                                                                                         | overloaded                    | no                                                 | 503, counted in the aggregated `token.exchangeFailure` event with cause `overloaded`                                                  |
 | a new credential while the back-off window is open                                                                                 | backed off                    | no                                                 | as for a failed exchange, with no exchange; counted in the aggregated `token.exchangeFailure` event with cause `backedOff`            |
 
-Mapping every status other than 403 to a failure fails open. With a simulated controller that refused
+Mapping every status other than 403 to a failure fails open. With a simulated Controller that refused
 an identity with 400 or 403, a client mapping that way served the credential the open tier (run). A
 429 read as a failure would likewise serve every signed-in person the open tier for as long as the
-controller sheds exchanges. Reading any other status as a refusal, answered 401, would tell a portal
-to sign the person out over what may be a bridge defect or a busy controller. A refused assertion is
+Controller sheds exchanges. Reading any other status as a refusal, answered 401, would tell a portal
+to sign the person out over what may be a Bridge defect or a busy Controller. A refused assertion is
 the sharpest case: read as a refused identity, a key revoked or rotated away would sign everyone
 out. A 408 stays a failure,
-because it reports a timeout, which the contract already treats as one. The controller sheds with
+because it reports a timeout, which the contract already treats as one. The Controller sheds with
 `503 admissionShareExceeded`, which opens the back-off window and serves what a failed exchange
 serves, holding no credential. The registered `token.exchangeFailure` carries no
 status code, so its cause `status` reads the same for a 429 answered 503 and for a 5xx served the
@@ -981,7 +981,7 @@ waiters who joined before the notice. An answer overtaken twice serves the open 
 `suspended` and naming its verified subject for attribution alone, and so does one overtaken once
 after `stop`. Notices are rare, so this case is rare too (reasoned).
 [audit-events.md](../../../design/audit-events.md) registers `token.overtaken` for each discard, with
-`outcome` `exchangedAgain` when the bridge exchanges again, and for the second discard or any after
+`outcome` `exchangedAgain` when the Bridge exchanges again, and for the second discard or any after
 `stop`, which ends the flight, `servedOpenTier` when the open tier is served or `abandoned` when
 nothing is.
 
@@ -1043,20 +1043,20 @@ output is byte-identical across processes.
 
 `globalCategories` and `resourceCategories` are carried by the
 [payload type](../../../design/security-workflow.md#the-payload-as-a-type), and decisions.md
-("A catalogue's category gap is found by the bridge") decides the checks that read them.
+("A catalogue's category gap is found by the Bridge") decides the checks that read them.
 `globalCategories` lists every concrete global category Usher defines, once for the whole payload,
 since a global category applies to every resource whose records match it. `resourceCategories`
 lists, under each resource named in `permissions`, that resource's own categories. The checks stay
 generic: the adapter turns its application's configuration, whatever its shape, into the one
-registration read by the bridge, and the bridge only compares that registration with the categories
-named in the payload. Without the category members, the bridge could not find a global category the key
+registration read by the Bridge, and the Bridge only compares that registration with the categories
+named in the payload. Without the category members, the Bridge could not find a global category the key
 leaves unmapped, whose records would be served as unmarked, nor the resources offering a resource
 category the key does not define.
 
 ### The guards
 
 A lost exclusion widens access, so a record key's narrowing passes two guards in `guardedNarrowing`
-before it is served. They are the bridge's own pair: the "two guards" of
+before it is served. They are the Bridge's own pair: the "two guards" of
 [decisions.md](../../../design/decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches)
 are the rendering guard and Arranger's refusal of an access filter holding an empty group, and the
 clause guard is not among them. Each guard's event is logged once each time the key is rendered, so
@@ -1106,15 +1106,15 @@ The weights follow OpenSearch because it counts clauses across the whole query o
 it ([decisions.md](../../../design/decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches)), so a
 filter's count is taken the way the engine takes it, rather than as the number of SQON nodes. They
 were measured on Elasticsearch and OpenSearch alike. Past the engine's own limit, the engine refuses
-the query and the request fails; a `filterClauseLimit` no higher than that limit makes the bridge
+the query and the request fails; a `filterClauseLimit` no higher than that limit makes the Bridge
 deny the key first, by name and with an event (reasoned).
 
 ### What it was checked against
 
-- The bridge's tests read each narrowing back through `parseRecordNarrowing` and compare the held
+- The Bridge's tests read each narrowing back through `parseRecordNarrowing` and compare the held
   resources, the complement, each category's lacking list with its condition, and the unmarked
   clause with what the payload and registration say, for cases 2, 5, 9, 19 and 24 and for the rows
-  that belong to the bridge alone (run).
+  that belong to the Bridge alone (run).
 - Every corpus payload, rendered for a record key with and without a resource list and for an open
   key, each registered to match the payload's configuration, gave a result the
   enforcement validator accepts and met no category gap, and every record narrowing read back (run).
@@ -1184,7 +1184,7 @@ Without a resource list on a record key, a principal whose grants all sit on res
 another key gets a narrowing that matches nothing in this key, not a deny (run). With the list given,
 the same payload rendered `deny` with `no-grants`. The producer rule in
 [decisions.md](../../../design/decisions.md) ("every grant sits in other catalogues" is a deny) needs
-the bridge to know which resources each key serves, so only a key with a list can apply it. The
+the Bridge to know which resources each key serves, so only a key with a list can apply it. The
 difference reaches people: a deny is named at catalogue level, while an empty narrowing reads as
 nothing found. The [test plan](../../bridge-tests.md#the-fixtures) carries both rows.
 
@@ -1267,8 +1267,8 @@ exactly 60 s and turn uncertain 1 ms later, with one lapse logged (run). `mock.t
 stand in for a wall-clock step, because it moves the mocked timers' own clock too: a 60 s watchdog
 armed before a 30 s backward `setTime` had not fired after 60 s of ticks (run).
 
-Those runs read their clocks from the mocked `Date`. The bridge's own tests follow
-[Packaging the bridge](packaging-and-toolchain.md) instead: they pass in fake clocks and mock only
+Those runs read their clocks from the mocked `Date`. The Bridge's own tests follow
+[Packaging the Bridge](packaging-and-toolchain.md) instead: they pass in fake clocks and mock only
 `setTimeout` among the timers, never `Date`. The notice stream times a check from its first page's
 start, and reads that start through the injected monotonic clock, so those tests drive it too. The
 exchange timeout runs on the global `setTimeout`, and so does the timer that logs a lapse, re-armed
@@ -1293,39 +1293,39 @@ interface: `info`, `warn` and `error`, each taking an object and a message. Pino
 logger decided by the [technology stack](../roadmap/technology-stack.md), satisfies it, so a host can
 pass its own Pino instance. The type does not require Pino, and a host with no Pino supplies a shim.
 
-The logger must not throw. These events are the bridge's audit trail, and a dropped event is lost
+The logger must not throw. These events are the Bridge's audit trail, and a dropped event is lost
 from it. When a host's logger breaks the contract, a call that throws drops that one event, and
 nothing else happens. `emit` returns normally, and the next event goes to the logger as usual. The
 drop is reported nowhere, since the logger is the only path a report could take: no second log call,
-no console and no stderr. Dropping the event protects the bridge's availability, not the audit trail.
-A logger that throws cannot end the process or halt the bridge's work, whether it throws while a
-request is answered or from one of the bridge's timers, such as the push's idle timer, the grace
+no console and no stderr. Dropping the event protects the Bridge's availability, not the audit trail.
+A logger that throws cannot end the process or halt the Bridge's work, whether it throws while a
+request is answered or from one of the Bridge's timers, such as the push's idle timer, the grace
 period's timer or a tally's interval.
 
-Every event the bridge emits, as registered in [audit-events.md](../../../design/audit-events.md):
+Every event the Bridge emits, as registered in [audit-events.md](../../../design/audit-events.md):
 
 | Event                             | Emitted when                                                                                                                                                                                                                                                                                             | Fields                                                                                                                                                                                          | Severity                                                          |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `revocationChannel.modeChange`    | the mode changes among `cold`, `normal` and `uncertain`; once at startup when the bridge stays cold on a probable key mismatch; and once while cold when the anonymous token is refused for its audience, a probable audience mismatch                                                                   | `fromMode`, `toMode`, `reason`; the reasons include holding no anonymous payload, a probable key mismatch (`probableKeyMismatch`) and a probable audience mismatch (`probableAudienceMismatch`) | `critical` into cold or uncertain, `info` into normal             |
+| `revocationChannel.modeChange`    | the mode changes among `cold`, `normal` and `uncertain`; once at startup when the Bridge stays cold on a probable key mismatch; and once while cold when the anonymous token is refused for its audience, a probable audience mismatch                                                                   | `fromMode`, `toMode`, `reason`; the reasons include holding no anonymous payload, a probable key mismatch (`probableKeyMismatch`) and a probable audience mismatch (`probableAudienceMismatch`) | `critical` into cold or uncertain, `info` into normal             |
 | `category.unenforced`             | an entry carrying `field` reaches nothing; once per such entry in each payload received, never per request                                                                                                                                                                                               | `userId`, `resourceId`, `category`, `payloadVersion`, `reason` (`notImplemented`), `entry` (`fieldPartition`)                                                                                   | `warning`                                                         |
 | `category.unknown`                | a key defines a category the payload does not list, global or for a resource it names, so its records are always excluded there; once per catalogue and category, and per resource for a resource category                                                                                               | `catalogue`, `category`, `resourceId` for a resource category                                                                                                                                   | `warning`                                                         |
 | `category.unmapped`               | a key is denied for a global category it neither defines nor declares absent, once per catalogue and category; or a resource is withheld from a key for a resource category the key does not define, once per catalogue, category and resource                                                           | `catalogue`, `category`; `resourceId` for a resource category only                                                                                                                              | `critical` for a global category, `error` for a resource category |
 | `credential.refusal`              | an identity is refused                                                                                                                                                                                                                                                                                   | `origin`: `controller`, `localExpiry` or `cachedRefusal`                                                                                                                                        | `info`                                                            |
-| `token.exchangeFailure`           | an exchange cannot complete, whether failed or unavailable, once for each; or, counted with one event per cause per interval, requests overloaded, exchanges shed for the admission share, requests answered without an exchange while the bridge backs off, and holds for `Retry-After`                 | `cause`: `timeout`, `network`, `status` or `assertionRefused`; or a counted cause, `overloaded`, `admissionShareExceeded`, `backedOff` or `retryAfter`, which adds `count`                      | `warning`                                                         |
+| `token.exchangeFailure`           | an exchange cannot complete, whether failed or unavailable, once for each; or, counted with one event per cause per interval, requests overloaded, exchanges shed for the admission share, requests answered without an exchange while the Bridge backs off, and holds for `Retry-After`                 | `cause`: `timeout`, `network`, `status` or `assertionRefused`; or a counted cause, `overloaded`, `admissionShareExceeded`, `backedOff` or `retryAfter`, which adds `count`                      | `warning`                                                         |
 | `token.rejection`                 | an Usher token is rejected                                                                                                                                                                                                                                                                               | `reason`, one of the jose note's reason codes; a token whose `aud` does not name this application is `audienceRejected`                                                                         | `warning`                                                         |
 | `notice.applied`                  | a notice is applied                                                                                                                                                                                                                                                                                      | `kind`, `entriesDropped`                                                                                                                                                                        | `info`                                                            |
-| `token.overtaken`                 | an exchange answer is discarded because a notice affecting it arrived while it was in flight: the first time the bridge exchanges again, the second it serves the open tier, marked suspended and naming its verified subject for attribution alone, or nothing when no usable anonymous payload is held | `outcome`: `exchangedAgain`, `servedOpenTier` or `abandoned`                                                                                                                                    | `info`                                                            |
+| `token.overtaken`                 | an exchange answer is discarded because a notice affecting it arrived while it was in flight: the first time the Bridge exchanges again, the second it serves the open tier, marked suspended and naming its verified subject for attribution alone, or nothing when no usable anonymous payload is held | `outcome`: `exchangedAgain`, `servedOpenTier` or `abandoned`                                                                                                                                    | `info`                                                            |
 | `catalogue.renderingMismatch`     | the rendering guard finds a record key's filter saying something other than its payload and registration, or refused by the parse, and denies the key; once each time the key is rendered                                                                                                                | `catalogue`                                                                                                                                                                                     | `critical`                                                        |
 | `catalogue.filterLimit`           | the clause guard denies a record key whose filter counts more clauses than `filterClauseLimit`; once each time the key is rendered                                                                                                                                                                       | `catalogue`, `filterClauseLimit`, the configured limit and never a count                                                                                                                        | `error`                                                           |
 | `catalogue.resourceListMissing`   | a record key registers an empty resource list, which denies every request to it; once per key at start                                                                                                                                                                                                   | `catalogue`                                                                                                                                                                                     | `critical`                                                        |
 | `credential.malformed`            | no single credential can be read, or one arrives in the query                                                                                                                                                                                                                                            | `reason`: `multiple`, `scheme` or `query`                                                                                                                                                       | `info`                                                            |
 | `bridge.internalError`            | an unexpected failure inside the layer or the core                                                                                                                                                                                                                                                       | `stage`                                                                                                                                                                                         | `critical`                                                        |
-| `bridge.startRefusal`             | the bridge refuses to start, and stays cold                                                                                                                                                                                                                                                              | `reason`, a fixed code naming the rule, never a configured value                                                                                                                                | `critical`                                                        |
-| `bridge.exchangeTimeoutShort`     | the bridge starts with an exchange timeout below the controller's exchange deadline plus the margin, so it may give up on an exchange the controller answers in time; once at start                                                                                                                      | `exchangeTimeoutMs`, `minimumMs`                                                                                                                                                                | `warning`                                                         |
-| `revocationChannel.failure`       | a poll fails, answered with a status other than 200, 406 or 410, unable to reach the controller or aborted at its deadline, or a defect is thrown while polling, applying a pushed notice, or handing a 410 to the channel; counted by the channel layer, one event per cause per interval               | `cause`: `status`, `network`, `timeout` or `defect`; `count`, the failures of that cause counted                                                                                                | `warning`                                                         |
+| `bridge.startRefusal`             | the Bridge refuses to start, and stays cold                                                                                                                                                                                                                                                              | `reason`, a fixed code naming the rule, never a configured value                                                                                                                                | `critical`                                                        |
+| `bridge.exchangeTimeoutShort`     | the Bridge starts with an exchange timeout below the Controller's exchange deadline plus the margin, so it may give up on an exchange the Controller answers in time; once at start                                                                                                                      | `exchangeTimeoutMs`, `minimumMs`                                                                                                                                                                | `warning`                                                         |
+| `revocationChannel.failure`       | a poll fails, answered with a status other than 200, 406 or 410, unable to reach the Controller or aborted at its deadline, or a defect is thrown while polling, applying a pushed notice, or handing a 410 to the channel; counted by the channel layer, one event per cause per interval               | `cause`: `status`, `network`, `timeout` or `defect`; `count`, the failures of that cause counted                                                                                                | `warning`                                                         |
 | `revocationChannel.pushReconnect` | the push is silent past its idle timer and reconnects                                                                                                                                                                                                                                                    | `reason`                                                                                                                                                                                        | `info`                                                            |
 | `revocationChannel.reset`         | the stream answers 410, and every positive entry and the anonymous entry are dropped                                                                                                                                                                                                                     | none                                                                                                                                                                                            | `warning`                                                         |
-| `revocationChannel.malformed`     | a notice or a poll answer fails to read, a poll page asks for more from a cursor its check already asked after, the controller refuses the notice versions listed, or the push is answered with a 200 that is not an event stream                                                                        | `reason`, a fixed code                                                                                                                                                                          | `warning`                                                         |
+| `revocationChannel.malformed`     | a notice or a poll answer fails to read, a poll page asks for more from a cursor its check already asked after, the Controller refuses the notice versions listed, or the push is answered with a 200 that is not an event stream                                                                        | `reason`, a fixed code                                                                                                                                                                          | `warning`                                                         |
 
 The last four events come from the channel layer, as
 [Revocation notice stream](revocation-notice-stream.md) sets out.
@@ -1365,7 +1365,7 @@ What the builders guarantee, and what they do not:
   payload. `category.unmapped` carries no principal at all, and `category.unknown` carries only names
   from the registration: a category, and for a resource category its resource. `category.unenforced` is the one event allowed to carry a
   grant, and carries a single one, because it records that grant reaching nothing.
-- `token.exchangeFailure` carries no `userId`: before an exchange succeeds, the bridge has no trusted
+- `token.exchangeFailure` carries no `userId`: before an exchange succeeds, the Bridge has no trusted
   subject to put there (reasoned).
 - A scan of every event logged by the Express suites found no credential, no JWE and no `permissions`.
   Those suites logged only 7 events of 4 kinds, though, and none of them carried payload values.
@@ -1385,8 +1385,8 @@ a test for each, and the first broken one is the refusal's reason:
 | `audienceEmpty`           | an empty audience                                                                                                                                                                                                |
 | `issuerEmpty`             | an empty issuer                                                                                                                                                                                                  |
 | `eventSourceEmpty`        | an empty event source                                                                                                                                                                                            |
-| `controllerUrlInvalid`    | a controller URL that does not parse, uses a scheme other than `http` or `https`, or carries credentials, a query or fragment                                                                                    |
-| `controllerUrlInsecure`   | a plain `http` controller URL to any host other than `127.0.0.1`, `localhost` or `[::1]`                                                                                                                         |
+| `controllerUrlInvalid`    | a Controller URL that does not parse, uses a scheme other than `http` or `https`, or carries credentials, a query or fragment                                                                                    |
+| `controllerUrlInsecure`   | a plain `http` Controller URL to any host other than `127.0.0.1`, `localhost` or `[::1]`                                                                                                                         |
 | `payloadVersionsInvalid`  | a `payloadVersions` list that is empty, or holds anything but distinct positive whole numbers                                                                                                                    |
 | `numberOutOfRange`        | any bound, interval, timeout or cap that is not a positive whole number, or a `pollIntervalMs` or `pollRecoveryIntervalMs` below 1000                                                                            |
 | `failureHoldOutOfBounds`  | a `stores.failureHoldMs` that is not a whole number of milliseconds from 1000 to 60000                                                                                                                           |
@@ -1397,8 +1397,8 @@ A `numberOutOfRange` error carries one problem for each setting at fault, positi
 in `pollIntervalMs` or `stores.failureMax`, while the event's `reason` stays the fixed code. Only a
 setting the host gave is named: every default passes, and R's default is never below a T that
 passes, so a T below the floor is named once, at T. The floor of 1000 on T and R is the failure
-hold's lower bound, so that a 10 typed for 10000 is refused rather than setting every bridge polling
-the controller every 10 ms.
+hold's lower bound, so that a 10 typed for 10000 is refused rather than setting every Bridge polling
+the Controller every 10 ms.
 
 The core's `start` then adds refusals of its own, judged in this order:
 
@@ -1406,8 +1406,8 @@ The core's `start` then adds refusals of its own, judged in this order:
   names each such version by a problem positioned at its index, as in `payloadVersions[1]`, while
   the event's `reason` stays the fixed code.
 - `notRegistered`, for a `start` before `register`.
-- `audienceInUse`, for a second bridge on one audience in a process.
-- `startDefect`, for a seam that throws as `start` builds the controller client, the token reader
+- `audienceInUse`, for a second Bridge on one audience in a process.
+- `startDefect`, for a seam that throws as `start` builds the Controller client, the token reader
   or the revocation channel, or starts the channel. Whatever had started is stopped before `start`
   rejects. The event's `reason` stays the fixed code, never the thrown error's message.
 
@@ -1428,13 +1428,13 @@ The core's `start` then adds refusals of its own, judged in this order:
 | `stores.refusalMax`            | 10000                                 |
 | `tokenTtlMs`                   | 300000                                |
 
-The controller sends a token of up to the default `responseCapBytes`, 1048576 bytes, and a bridge
+The Controller sends a token of up to the default `responseCapBytes`, 1048576 bytes, and a Bridge
 holding a smaller cap reads a larger token as `tokenTooLarge`.
 
 **Two clock tolerances, never one.** The local refusal of a three-part sign-in token whose own `exp`
 has passed uses a tolerance read from configuration as `localRefusalClockToleranceMs`, 60000 ms by
-default. The controller's own tolerance for a sign-in token's `exp` never exceeds it, or a bridge
-would refuse what the controller accepts. The Usher token's tolerance is 0, fixed in the decrypt call with
+default. The Controller's own tolerance for a sign-in token's `exp` never exceeds it, or a Bridge
+would refuse what the Controller accepts. The Usher token's tolerance is 0, fixed in the decrypt call with
 no parameter, and the jose note owns it. Passed to jose, a millisecond value
 read as seconds admitted a token an hour past its `exp`, an undefined value over 1,000 made every
 token fail, and -61 refused a live token (run). jose reads `clockTolerance` in seconds, so a nonzero
@@ -1445,7 +1445,7 @@ the local refusal's is, and divided by 1,000 at the jose boundary.
 `http://[::1]` (run). The check accepts all three.
 
 **Plain HTTP beyond loopback is refused.** The exchange carries the sign-in token, so plain HTTP would
-expose bearer credentials on the network between the application and the controller. Refusing it is
+expose bearer credentials on the network between the application and the Controller. Refusing it is
 the closed side.
 
 **usher-types validates by hand.** Its own code never imports zod, since a zod record
@@ -1474,10 +1474,10 @@ plain array and fails that assignment.
 None of this was tested inside Arranger. It is read from Arranger's source, from RFC 9111, and
 reasoned.
 
-- **After the health routes.** A cold bridge answers 503 to everything mounted behind it. A liveness
-  check routed through the bridge would restart the application while the controller is down. A
+- **After the health routes.** A cold Bridge answers 503 to everything mounted behind it. A liveness
+  check routed through the Bridge would restart the application while the Controller is down. A
   readiness check can read `mode()`, so a cold replica stops receiving traffic instead.
-- **After CORS.** Otherwise a cold bridge answers preflight requests with 503.
+- **After CORS.** Otherwise a cold Bridge answers preflight requests with 503.
 - **Before body parsing.** Refused and cold requests are then answered without parsing a body.
 - **Adapters read the access through `readAccess(res.locals)`, never from a merged copy.** Spreading
   `res.locals` into another object leaves `usher` behind, since it is not enumerable, and a later
@@ -1499,14 +1499,14 @@ reasoned.
   Its lockfile resolves express 4.22.2 and, at the root, TypeScript 5.9.3. The Express suites ran on
   4.22.3.
 
-## For the bridge's own tests
+## For the Bridge's own tests
 
 - Every signed-in case in [principals.json](../../../design/conformance/principals.json) carries the
   same `sub`: 31 cases, with the other 4 anonymous. A test that two principals never share an entry
-  passes vacuously unless the controller mock stamps a distinct subject per credential. How the mock
+  passes vacuously unless the Controller mock stamps a distinct subject per credential. How the mock
   mints tokens belongs to the jose note.
 - Test files are named `*.test.ts`, and shared helpers take a name outside the test glob, as
-  [Packaging the bridge](packaging-and-toolchain.md) sets out.
+  [Packaging the Bridge](packaging-and-toolchain.md) sets out.
 - **The local refusal's tolerance is refused when NaN, infinite or negative**, with the rule's name
   and not its value, and it takes 60000 ms when left out.
 - **The grace period lapses on the monotonic clock.** With the wall clock stepped back 30 s, the mode
@@ -1528,15 +1528,15 @@ reasoned.
 
 - Rendering's cost per exchange was not measured. usher-types parses each filter it renders back
   before returning it, and the rendering guard parses it again, which adds to that cost.
-- The bridge's tests count filters by the weights and run no engine, so a change in how an engine
+- The Bridge's tests count filters by the weights and run no engine, so a change in how an engine
   counts clauses would not fail them.
 - The poll and the push, which the core builds at start as its channel seam, ran against a
-  controller mock serving both over a local socket, not against the controller. Recovery ordering
+  Controller mock serving both over a local socket, not against the Controller. Recovery ordering
   rests on the channel calling `confirmChannel` only after a check's notices are applied.
-- The exchange ran against a controller mock on a local port, which checks the channel assertion and
-  mints real tokens, not against the controller.
+- The exchange ran against a Controller mock on a local port, which checks the channel assertion and
+  mints real tokens, not against the Controller.
 - The package's declarations import the Express types from the host and name neither `CryptoKey`
-  nor jose, as [Packaging the bridge](packaging-and-toolchain.md) requires. That is checked by hand,
+  nor jose, as [Packaging the Bridge](packaging-and-toolchain.md) requires. That is checked by hand,
   as [tech-debt.md](../../../tech-debt.md) records, and no consumer from TypeScript 5.8 was run
   against the built declarations.
 - Stage's server side was not explored. Its layer may need a cookie credential source, and it may run

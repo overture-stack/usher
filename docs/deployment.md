@@ -1,6 +1,6 @@
-# Deploying the controller
+# Deploying the Controller
 
-> This page is for an operator deploying the Usher controller: the service holding a platform's access policy, called by the bridge inside each ushered application and by the management UI. For what Usher does and why, read [Data access control](intro.md) first. To run the controller and its services on one machine for development, see the controller's [development notes](https://github.com/overture-stack/usher/blob/main/apps/controller/DEVELOPMENT.md).
+> This page is for an operator deploying the Usher controller: the service holding a platform's access policy, called by the Bridge inside each ushered application and by the management UI. For what Usher does and why, read [Data access control](intro.md) first. To run the Controller and its services on one machine for development, see the Controller's [development notes](https://github.com/overture-stack/usher/blob/main/apps/controller/DEVELOPMENT.md).
 
 ---
 
@@ -8,10 +8,10 @@
 
 | Part                         | What it is                                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------------------------ |
-| Controller instances         | One or more processes from the controller's image, sharing one store                       |
+| Controller instances         | One or more processes from the Controller's image, sharing one store                       |
 | The schema migration command | The same image, run once before each rollout to bring the store's schema up to the release |
-| PostgreSQL 15 or later       | The store: the policy, the audit log, and the notices read by bridges                      |
-| An identity provider         | The realm issuing the tokens trusted by the controller                                     |
+| PostgreSQL 15 or later       | The store: the policy, the audit log, and the notices read by Bridges                      |
+| An identity provider         | The realm issuing the tokens trusted by the Controller                                     |
 
 ---
 
@@ -24,7 +24,7 @@ A first deployment takes these steps, in order, each one detailed in its section
 3. Set up the realm: [The identity provider](#the-identity-provider).
 4. Set the variables, from what steps 1 to 3 made: [Variables](#variables).
 5. Run the image once as the schema migration command: [The image](#the-image), [Schema migration before each rollout](#schema-migration-before-each-rollout).
-6. Start the controller's instances, and wait for `GET /health/ready` to answer 200: [Readiness and liveness](#readiness-and-liveness).
+6. Start the Controller's instances, and wait for `GET /health/ready` to answer 200: [Readiness and liveness](#readiness-and-liveness).
 7. Have the first user nominate Usher's first administrator, and the nominee accept, since every other Management API operation is refused until then: [The identity provider](#the-identity-provider).
 8. Register each application and its resources, then confirm with an anonymous exchange: [Registering resources](#registering-resources).
 
@@ -36,7 +36,7 @@ One image runs both commands. Its entrypoint is `/nodejs/bin/node`, and its argu
 
 | Arguments                                    | Command                      |
 | -------------------------------------------- | ---------------------------- |
-| None, which runs the default, `dist/main.js` | The controller               |
+| None, which runs the default, `dist/main.js` | The Controller               |
 | `dist/migrate.js`                            | The schema migration command |
 
 Set the arguments alone to choose a command, and leave the entrypoint as it is.
@@ -60,7 +60,7 @@ Each command reads its settings from environment variables once, at start, and c
 **Unless its row says otherwise, a variable takes one value on every instance sharing the store.** Two kinds of row say otherwise:
 
 - **Per instance.** `USHER_INSTANCE_NAME` differs on every instance. `USHER_HOST` and `USHER_PORT` are each instance's own listening address.
-- **Both commands, alike.** The schema migration command creates the schema in `USHER_DATABASE_SCHEMA`, grants to the runtime role named in `USHER_DATABASE_URL`, and stores the notice retention floor: the sum of `USHER_TOKEN_LIFETIME_SECONDS`, `USHER_RETENTION_GRACE_SECONDS` and `USHER_RETENTION_MARGIN_SECONDS`. The controller relies on all five, so give both commands these values from one source.
+- **Both commands, alike.** The schema migration command creates the schema in `USHER_DATABASE_SCHEMA`, grants to the runtime role named in `USHER_DATABASE_URL`, and stores the notice retention floor: the sum of `USHER_TOKEN_LIFETIME_SECONDS`, `USHER_RETENTION_GRACE_SECONDS` and `USHER_RETENTION_MARGIN_SECONDS`. The Controller relies on all five, so give both commands these values from one source.
 
 A whole number is written in digits alone, with no sign, decimal point or unit. A comma-separated list has the whitespace around each entry left out, and an empty entry between two commas is refused.
 
@@ -78,22 +78,22 @@ A whole number is written in digits alone, with no sign, decimal point or unit. 
 | --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `USHER_INSTANCE_NAME` | Required | **Per instance.** This instance's name, carried as `data.instance` by every event it records. Give each instance sharing the store its own, such as its host or pod name. |
 | `USHER_EVENT_SOURCE`  | Required | The CloudEvents `source` carried by every event, such as `https://usher.example.org/controller`. It names the deployment, never one instance.                             |
-| `USHER_ISSUER`        | Required | The controller's own issuer: the `iss` of every Usher token.                                                                                                              |
+| `USHER_ISSUER`        | Required | The Controller's own issuer: the `iss` of every Usher token.                                                                                                              |
 
 ### The database
 
 | Variable                              | Kind           | What it is, and its rule                                                                                                                                                                                                                                                                                                           |
 | ------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `USHER_DATABASE_URL`                  | Required       | **Both commands, alike.** A `postgres:` or `postgresql:` URL connecting as the runtime role, at the address accepting writes. It must name that role, in its user information or as a `user` parameter. It never carries a password, in either place. The schema migration command reads the role's name from it and nothing else. |
-| `USHER_DATABASE_PASSWORD`             | Secret         | The runtime role's password. The controller alone reads it.                                                                                                                                                                                                                                                                        |
-| `USHER_DATABASE_SCHEMA`               | Required       | **Both commands, alike.** The schema holding the controller's tables.                                                                                                                                                                                                                                                              |
+| `USHER_DATABASE_PASSWORD`             | Secret         | The runtime role's password. The Controller alone reads it.                                                                                                                                                                                                                                                                        |
+| `USHER_DATABASE_SCHEMA`               | Required       | **Both commands, alike.** The schema holding the Controller's tables.                                                                                                                                                                                                                                                              |
 | `USHER_DATABASE_EXCHANGE_CONNECTIONS` | Optional: 10   | The store connections each instance holds for token exchanges: their own transactions, the confirmation of each application key's first exchange, and the recording of refused channel assertions. Each application's share of an instance's exchanges divides them. A whole number of at least 1.                                 |
 | `USHER_DATABASE_CONTROL_CONNECTIONS`  | Optional: 5    | The store connections each instance holds for everything but token exchanges and readiness: the Management API, the back-channel logout, the notice channel, key reloads, the counts of refusals it records, and the start. A whole number of at least 1.                                                                          |
-| `USHER_STORE_TIMEOUT_MILLISECONDS`    | Optional: 5000 | How long the controller waits on the store for one unit of work, such as a request's statement or transaction, a start, or a readiness probe, before giving up on it. The server also applies it to each of the controller's sessions, as its statement and idle-in-transaction limits. A whole number from 1 to 2147483647.       |
+| `USHER_STORE_TIMEOUT_MILLISECONDS`    | Optional: 5000 | How long the Controller waits on the store for one unit of work, such as a request's statement or transaction, a start, or a readiness probe, before giving up on it. The server also applies it to each of the Controller's sessions, as its statement and idle-in-transaction limits. A whole number from 1 to 2147483647.       |
 
 ### The schema migration command's own
 
-The controller never reads these two, so give them to the schema migration command alone.
+The Controller never reads these two, so give them to the schema migration command alone.
 
 | Variable                                   | Kind     | What it is, and its rule                                                                                                                              |
 | ------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -118,11 +118,11 @@ The controller never reads these two, so give them to the schema migration comma
 | `USHER_MANAGEMENT_CLIENTS`                     | Required                          | The client identifiers the management UI signs in through, as a comma-separated list. A management token's `azp` must be one of them. An empty value is an empty list, accepting no management token.                                               |
 | `USHER_API_DOCS_CLIENT`                        | Optional: none                    | The client used by the API documentation page at `/api-docs` to sign people in, which must be one of `USHER_MANAGEMENT_CLIENTS` exactly. Unset or empty means no page. Its requirements are under [The identity provider](#the-identity-provider).  |
 | `USHER_BACK_CHANNEL_LOGOUT_AUDIENCES`          | Required                          | The audiences allowed in a back-channel logout token's `aud`, as a comma-separated list: the platform's client identifiers. An empty value is an empty list.                                                                                        |
-| `USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS` | Required                          | The longest lifetime of a sign-in or management token accepted by the controller, in seconds: a whole number of at least 1.                                                                                                                         |
+| `USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS` | Required                          | The longest lifetime of a sign-in or management token accepted by the Controller, in seconds: a whole number of at least 1.                                                                                                                         |
 
 ### Token lifetime and notice retention
 
-The sum of these three durations is the notice retention floor: how long each notice is kept at least, for bridges to read. The schema migration command stores it, and refuses a floor above 2147483647 seconds.
+The sum of these three durations is the notice retention floor: how long each notice is kept at least, for Bridges to read. The schema migration command stores it, and refuses a floor above 2147483647 seconds.
 
 | Variable                         | Kind          | What it is, and its rule                                                                                                                                    |
 | -------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -174,21 +174,21 @@ node --eval "process.stdout.write(require('node:crypto').randomBytes(32).toStrin
 The same commands make passwords needing no quoting in a shell or an environment file.
 
 - **The key-encryption key encrypts every stored application key.** The store's first start records a check value derived from it, and a later start under any other key is refused. Every instance uses the same key, and without it no stored application key can be read.
-- **The cursor key encrypts the cursors handed to bridges reading the notice stream.** Every instance uses the same key, since any instance may answer a bridge's next poll.
+- **The cursor key encrypts the cursors handed to Bridges reading the notice stream.** Every instance uses the same key, since any instance may answer a Bridge's next poll.
 
 ---
 
 ## PostgreSQL
 
-- **PostgreSQL 15 or later.** Its schema needs 15, and the controller is tested against 15 and 18. The schema migration command refuses an older server before writing anything, naming `USHER_SCHEMA_MIGRATION_DATABASE_URL`.
+- **PostgreSQL 15 or later.** Its schema needs 15, and the Controller is tested against 15 and 18. The schema migration command refuses an older server before writing anything, naming `USHER_SCHEMA_MIGRATION_DATABASE_URL`.
 - **The address accepting writes.** Point both database URLs at the primary, never at a read replica or a standby. An instance with a role allowed to write reports itself unready, with the cause `readOnly`, while its store answers as read-only.
 
 ### Connections and poolers
 
-1. The controller sends `statement_timeout` and `idle_in_transaction_session_timeout` as startup parameters on every connection, each set to `USHER_STORE_TIMEOUT_MILLISECONDS`.
-2. Those limits are what end a statement or transaction the controller has given up on, since the server goes on running it after its client has gone.
-3. At each start, the controller reads both limits back from the server, on a connection of each of its pools. It refuses to start, naming `USHER_DATABASE_URL`, when either is missing or differs.
-4. So connect directly, or through a pooler only where each of the controller's connections keeps one server session carrying both limits. A pooler in transaction mode hands each transaction whichever server session is free, and a pooler that refuses or drops startup parameters it does not track, in any mode, fails the check at start.
+1. The Controller sends `statement_timeout` and `idle_in_transaction_session_timeout` as startup parameters on every connection, each set to `USHER_STORE_TIMEOUT_MILLISECONDS`.
+2. Those limits are what end a statement or transaction the Controller has given up on, since the server goes on running it after its client has gone.
+3. At each start, the Controller reads both limits back from the server, on a connection of each of its pools. It refuses to start, naming `USHER_DATABASE_URL`, when either is missing or differs.
+4. So connect directly, or through a pooler only where each of the Controller's connections keeps one server session carrying both limits. A pooler in transaction mode hands each transaction whichever server session is free, and a pooler that refuses or drops startup parameters it does not track, in any mode, fails the check at start.
 
 The schema migration command holds a session-level lock for its whole run, so it too needs one server session throughout: connect it directly, or through a pooler in session mode.
 
@@ -205,8 +205,8 @@ For example, 3 replicas with a surge of 1, at the defaults, hold at most 4 × 16
 
 | Role                  | Holds                                                                   | Used by                            | Its password                                                            |
 | --------------------- | ----------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
-| Schema migration role | Ownership of the database, the controller's schema and everything in it | The schema migration command alone | `USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD`, given to that command alone |
-| Runtime role          | What the migrations and the schema migration command grant it           | Every controller instance          | `USHER_DATABASE_PASSWORD`                                               |
+| Schema migration role | Ownership of the database, the Controller's schema and everything in it | The schema migration command alone | `USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD`, given to that command alone |
+| Runtime role          | What the migrations and the schema migration command grant it           | Every Controller instance          | `USHER_DATABASE_PASSWORD`                                               |
 
 **The runtime role is a separate login role: neither the schema migration role, nor a member of it, nor a superuser.** The schema migration command refuses a runtime role breaking that rule, or one not yet created, before writing anything. The split is what protects the store from a compromised controller: it can read and write policy, which it must, but it cannot widen its own privileges or drop the audit log.
 
@@ -229,14 +229,14 @@ USHER_DATABASE_URL=postgres://usher_controller@db.example.org:5432/usher
 - **The runtime role connects through the `CONNECT` privilege**, which every role holds on a database by default. The migrations grant nothing on the database itself, so where that default has been revoked, grant `CONNECT` on the database to the runtime role.
 - **The runtime role may not create in any schema, `public` included.** PostgreSQL 15 and later give `PUBLIC` no `CREATE` on the `public` schema, but a database upgraded from an earlier version keeps its earlier privileges. There, run `REVOKE CREATE ON SCHEMA public FROM PUBLIC;`.
 
-### What the controller refuses in its role
+### What the Controller refuses in its role
 
-At each start, before anything listens, the controller reads every privilege held by its role: directly, through a role it inherits from, or through `PUBLIC`. It refuses to start, naming `USHER_DATABASE_URL`, when the role holds any of these:
+At each start, before anything listens, the Controller reads every privilege held by its role: directly, through a role it inherits from, or through `PUBLIC`. It refuses to start, naming `USHER_DATABASE_URL`, when the role holds any of these:
 
 - a role attribute beyond logging in: `SUPERUSER`, `CREATEROLE`, `CREATEDB`, `REPLICATION` or `BYPASSRLS`;
 - membership in `pg_write_all_data`, `pg_execute_server_program`, `pg_read_server_files` or `pg_write_server_files`;
 - `CREATE` on the database, or on any of its schemas;
-- ownership of the controller's schema or of anything in it, or the right to grant on any of them;
+- ownership of the Controller's schema or of anything in it, or the right to grant on any of them;
 - `TRUNCATE` or `TRIGGER` on any table in the schema;
 - any write beyond what the migrations grant, `INSERT` included, on an append-only table: `audit_log`, `change_records`, `grant_decisions`, `key_encryption_key_check` or `notices`.
 
@@ -248,7 +248,7 @@ It also refuses a role allowed to write some table but not to insert into `audit
 
 ## Schema migration before each rollout
 
-**Run the image once with the arguments `dist/migrate.js`, as a one-shot job, before each rollout of the controller, and roll out only once it has succeeded.** It reads these variables. Give the controller's instances neither of the first two.
+**Run the image once with the arguments `dist/migrate.js`, as a one-shot job, before each rollout of the Controller, and roll out only once it has succeeded.** It reads these variables. Give the Controller's instances neither of the first two.
 
 | Variable                                                                                          | What the command takes from it                                                                                |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -278,34 +278,34 @@ A run goes through these steps, and every refusal comes before anything is writt
 **To check a run and the rollout after it:**
 
 1. The run exits 0 and writes one `schemaMigrations.applied` line, whose `applied` lists the release's migrations the database did not yet hold, or nothing on a database already current.
-2. After the rollout, the controller reports itself ready, which confirms its database records no migration this release does not know.
-3. A controller that does not become ready says why in its `schema.migrationUnknown` line or its readiness cause, as [Readiness and liveness](#readiness-and-liveness) describes.
+2. After the rollout, the Controller reports itself ready, which confirms its database records no migration this release does not know.
+3. A Controller that does not become ready says why in its `schema.migrationUnknown` line or its readiness cause, as [Readiness and liveness](#readiness-and-liveness) describes.
 
-- **A run on a current database applies nothing**, so `applied` is an empty list. All it may change is the retention floor, and the runtime role's reading of `schema_migrations` where that was revoked. Changing any of the three durations therefore takes a run, with the new values, before the controller rolls out with them.
+- **A run on a current database applies nothing**, so `applied` is an empty list. All it may change is the retention floor, and the runtime role's reading of `schema_migrations` where that was revoked. Changing any of the three durations therefore takes a run, with the new values, before the Controller rolls out with them.
 - **A failed migration leaves none of itself applied**, and every migration before it stays applied. Run the command again to apply the rest.
 - **Connecting is bounded at 30 seconds, but statements are not**, since a migration's changes to the schema may run long. Give the job a deadline of your platform's own, such as a Kubernetes Job's `activeDeadlineSeconds`, so a run that stops making progress cannot hold a rollout indefinitely.
 - **A stop rolls back the migration in flight.** The first `SIGTERM` or `SIGINT` ends the run's connection, and every migration committed before it stays applied. A second signal ends the process at once. The run's session checks every second that its client is still connected, so even a process ended outright has its session ended by the server within about a second, rolling back and releasing the lock.
-- **Migrations only move forward.** Rolling back the controller's image does not roll back the schema. A later release may record restrictions, such as sign-outs or suspensions, in tables an earlier release never reads, so an earlier release cannot vouch for a database a later release has migrated.
-- **A rollback runs only to a release that knows every applied migration.** The controller refuses to start, and reports itself unready, while its database records a migration its release does not know, including one changed since it was applied. A release refused this way is fixed forward: deploy a release that knows every applied migration. A rollback to a release holding the same migrations is unaffected, and its schema migration run applies nothing.
+- **Migrations only move forward.** Rolling back the Controller's image does not roll back the schema. A later release may record restrictions, such as sign-outs or suspensions, in tables an earlier release never reads, so an earlier release cannot vouch for a database a later release has migrated.
+- **A rollback runs only to a release that knows every applied migration.** The Controller refuses to start, and reports itself unready, while its database records a migration its release does not know, including one changed since it was applied. A release refused this way is fixed forward: deploy a release that knows every applied migration. A rollback to a release holding the same migrations is unaffected, and its schema migration run applies nothing.
 - **A rollout applying a migration takes the previous release's instances out of rotation.** Once the schema migration run applies a migration, each instance of the previous release reports itself unready, with the cause `migrationUnknown`, until it is replaced, so no instance is ready from then until the new release's first one is. A rollout applying no migration leaves them ready.
 
-A controller started before any migration run is refused, naming `USHER_DATABASE_SCHEMA`. So is a controller whose database records a migration its release does not know: the refusal names each such migration, and says of each the release holds that its checksum differs, but never shows a checksum. Before it is refused, the start writes those migrations as `schema.migrationUnknown` at error, with `refused` set to `start`, as [Readiness and liveness](#readiness-and-liveness) describes.
+A Controller started before any migration run is refused, naming `USHER_DATABASE_SCHEMA`. So is a Controller whose database records a migration its release does not know: the refusal names each such migration, and says of each the release holds that its checksum differs, but never shows a checksum. Before it is refused, the start writes those migrations as `schema.migrationUnknown` at error, with `refused` set to `start`, as [Readiness and liveness](#readiness-and-liveness) describes.
 
 ---
 
 ## The identity provider
 
-The controller trusts one realm of one identity provider. Its requirements, in Keycloak's terms:
+The Controller trusts one realm of one identity provider. Its requirements, in Keycloak's terms:
 
-- **Discovery at the issuer.** The discovery document, at the issuer followed by `/.well-known/openid-configuration`, answers 200 without a redirect, since the controller follows none. It names the issuer exactly as `USHER_IDENTITY_PROVIDER_ISSUER` does, and a `jwks_uri` over https, or over http to a loopback host.
-- **Tokens signed with an asymmetric algorithm**: RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384 or ES512. The controller accepts no symmetric algorithm.
-- **Bearer access tokens from every client.** Every client sending tokens to an ushered application or to the Management API, the management UI among them, sends bearer access tokens, never a token bound to a key held by the client (DPoP), since the controller is handed the token alone and cannot check the client's proof of possession.
-- **A subject, an audience and an issue time in every access token.** Every access token sent to an ushered application is a full one carrying a subject (`sub`), an audience (`aud`) naming the application's id as registered with Usher, added as the management UI client's audience is below, and the time it was issued (`iat`), never a reduced form leaving them out (Keycloak's lightweight access token, for one), since the controller refuses a token missing any of them.
-- **Access tokens living no longer than `USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS`.** For every client sending tokens to an ushered application or to the Management API, the access token lifespan, the realm's or the client's own where it sets one, is at most that many seconds, since the controller refuses a token living longer.
-- **The first-user role.** A realm role named as in `USHER_FIRST_USER_ROLE`, carried in each access token's `realm_access.roles`, held by whoever nominates Usher's first administrator. Usher keeps its own list of administrators and reads it on every Management API request, so no realm role makes an administrator. Until an administrator has accepted, the controller refuses every Management API operation with `403` `noAdministratorYet`, but for the first user nominating an administrator through `POST /admin/nominations`, the nominee accepting through `POST /admin/nominations/{id}/acceptance`, and a nominee listing their nominations through `GET /admin/me/nominations`; the health routes and the token exchange answer as usual. The nominee is the first user themself, or a person who has signed in through the realm and reached Usher before. The first user may nominate again while no administrator has accepted, and only the latest nomination may be accepted. Once an administrator has accepted, the role confers nothing, whoever holds it. Until then, whoever may assign the realm's roles can give the first-user role to anyone, themselves included, and so nominate; in Keycloak, `manage-users` is enough. Grant the role to one person, and have the first administrator accept soon after the controller first starts.
-- **A client for the management UI.** Its access tokens carry the audience in `USHER_MANAGEMENT_AUDIENCE` in their `aud`, which in Keycloak takes an audience mapper. Its client id is listed in `USHER_MANAGEMENT_CLIENTS`, since the controller checks each management token's `azp` against that list. The management UI signs people in through the authorization code flow with PKCE, as a public client. Every management token carries `sub`, `exp` and `iat`.
-- **A client for the API documentation page**, where `USHER_API_DOCS_CLIENT` is set. It is a public client using the authorization code flow with PKCE, Keycloak's standard flow, with every other flow off. Its redirect URI is `/api-docs/oauth2-redirect.html` at the controller's origin as browsers reach it, such as `https://usher.example.org/api-docs/oauth2-redirect.html`, and that origin is one of its web origins, so the page can fetch its tokens. It carries the same audience mapper as the management UI's client, and its client id is listed in `USHER_MANAGEMENT_CLIENTS`. Its access tokens carry the role in `USHER_FIRST_USER_ROLE`, so the first user can nominate through the page, which in Keycloak takes that role in the client's scope wherever its full scope is off. The identity provider's discovery document names its authorization and token endpoints at the issuer's origin, with no user name or password in them. The page's contract, at `/api-docs/openapi.json`, is answered `503` while the controller cannot read these endpoints from the discovery document.
-- **Access tokens living 15 minutes or less.** The controller reads the first-user role from each token, never from a cache, so removing the role takes effect only as the tokens issued before its removal expire.
+- **Discovery at the issuer.** The discovery document, at the issuer followed by `/.well-known/openid-configuration`, answers 200 without a redirect, since the Controller follows none. It names the issuer exactly as `USHER_IDENTITY_PROVIDER_ISSUER` does, and a `jwks_uri` over https, or over http to a loopback host.
+- **Tokens signed with an asymmetric algorithm**: RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384 or ES512. The Controller accepts no symmetric algorithm.
+- **Bearer access tokens from every client.** Every client sending tokens to an ushered application or to the Management API, the management UI among them, sends bearer access tokens, never a token bound to a key held by the client (DPoP), since the Controller is handed the token alone and cannot check the client's proof of possession.
+- **A subject, an audience and an issue time in every access token.** Every access token sent to an ushered application is a full one carrying a subject (`sub`), an audience (`aud`) naming the application's id as registered with Usher, added as the management UI client's audience is below, and the time it was issued (`iat`), never a reduced form leaving them out (Keycloak's lightweight access token, for one), since the Controller refuses a token missing any of them.
+- **Access tokens living no longer than `USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS`.** For every client sending tokens to an ushered application or to the Management API, the access token lifespan, the realm's or the client's own where it sets one, is at most that many seconds, since the Controller refuses a token living longer.
+- **The first-user role.** A realm role named as in `USHER_FIRST_USER_ROLE`, carried in each access token's `realm_access.roles`, held by whoever nominates Usher's first administrator. Usher keeps its own list of administrators and reads it on every Management API request, so no realm role makes an administrator. Until an administrator has accepted, the Controller refuses every Management API operation with `403` `noAdministratorYet`, but for the first user nominating an administrator through `POST /admin/nominations`, the nominee accepting through `POST /admin/nominations/{id}/acceptance`, and a nominee listing their nominations through `GET /admin/me/nominations`; the health routes and the token exchange answer as usual. The nominee is the first user themself, or a person who has signed in through the realm and reached Usher before. The first user may nominate again while no administrator has accepted, and only the latest nomination may be accepted. Once an administrator has accepted, the role confers nothing, whoever holds it. Until then, whoever may assign the realm's roles can give the first-user role to anyone, themselves included, and so nominate; in Keycloak, `manage-users` is enough. Grant the role to one person, and have the first administrator accept soon after the Controller first starts.
+- **A client for the management UI.** Its access tokens carry the audience in `USHER_MANAGEMENT_AUDIENCE` in their `aud`, which in Keycloak takes an audience mapper. Its client id is listed in `USHER_MANAGEMENT_CLIENTS`, since the Controller checks each management token's `azp` against that list. The management UI signs people in through the authorization code flow with PKCE, as a public client. Every management token carries `sub`, `exp` and `iat`.
+- **A client for the API documentation page**, where `USHER_API_DOCS_CLIENT` is set. It is a public client using the authorization code flow with PKCE, Keycloak's standard flow, with every other flow off. Its redirect URI is `/api-docs/oauth2-redirect.html` at the Controller's origin as browsers reach it, such as `https://usher.example.org/api-docs/oauth2-redirect.html`, and that origin is one of its web origins, so the page can fetch its tokens. It carries the same audience mapper as the management UI's client, and its client id is listed in `USHER_MANAGEMENT_CLIENTS`. Its access tokens carry the role in `USHER_FIRST_USER_ROLE`, so the first user can nominate through the page, which in Keycloak takes that role in the client's scope wherever its full scope is off. The identity provider's discovery document names its authorization and token endpoints at the issuer's origin, with no user name or password in them. The page's contract, at `/api-docs/openapi.json`, is answered `503` while the Controller cannot read these endpoints from the discovery document.
+- **Access tokens living 15 minutes or less.** The Controller reads the first-user role from each token, never from a cache, so removing the role takes effect only as the tokens issued before its removal expire.
 
 ---
 
@@ -313,9 +313,9 @@ The controller trusts one realm of one identity provider. Its requirements, in K
 
 **A resource is what a catalogue's records name in their resource field, such as a study's id, and an application reaches only the resources registered as served by it.** A platform administrator registers each through the Management API, with a management token from a client in `USHER_MANAGEMENT_CLIENTS`:
 
-1. **Register the application** with `POST /admin/applications`, sending its `displayName`. The answer holds the application's `id`, which is also its audience, and its first key, whose `value` that answer alone shows. Give both to the application's [bridge](https://github.com/overture-stack/usher/blob/main/modules/express-bridge/README.md#usage), as its `audience` and its `key`. `POST /admin/applications/{id}/keys` issues another key.
+1. **Register the application** with `POST /admin/applications`, sending its `displayName`. The answer holds the application's `id`, which is also its audience, and its first key, whose `value` that answer alone shows. Give both to the application's [Bridge](https://github.com/overture-stack/usher/blob/main/modules/express-bridge/README.md#usage), as its `audience` and its `key`. `POST /admin/applications/{id}/keys` issues another key.
 2. **Register each resource** with `POST /admin/resources`, sending its `externalId`, its `displayName`, its `accessLevel`, and in `applications` the id of each application serving it. `accessLevel` is required: `open` for a resource whose unmarked records reach everyone, the anonymous visitor included, `registered` for one whose unmarked records reach every signed-in person, and `grant` for one reached through a grant alone. An application serving it later is added with `PUT /admin/resources/{externalId}/applications/{applicationId}`.
-3. **Confirm with an anonymous exchange.** Start the application. Its bridge's start makes the anonymous visitor's exchange, which the controller logs as `bio.overture.token.exchange` with `result` `succeeded` and the application's id as `audience`, and which sets the key's `confirmedAt` in `GET /admin/applications/{id}`. `GET /admin/resources/{externalId}` names each application serving a resource in `applications`.
+3. **Confirm with an anonymous exchange.** Start the application. Its Bridge's start makes the anonymous visitor's exchange, which the Controller logs as `bio.overture.token.exchange` with `result` `succeeded` and the application's id as `audience`, and which sets the key's `confirmedAt` in `GET /admin/applications/{id}`. `GET /admin/resources/{externalId}` names each application serving a resource in `applications`.
 
 Where `USHER_API_DOCS_CLIENT` is set, these calls can also be made from a browser at `/api-docs`, signed in through that client.
 
@@ -365,9 +365,9 @@ That probe reaches the instance at `127.0.0.1`, so `USHER_HOST` must accept loop
 - **An operational line** carries `message`, its name, such as `readiness.lost`, with its fields and `time`.
 - **An event** carries a CloudEvents 1.0 envelope: `id`, `source` from `USHER_EVENT_SOURCE`, a `type` starting `bio.overture.`, `time`, `severity`, and `data` naming the actor and, as `instance`, the value of `USHER_INSTANCE_NAME`. Each event is also stored in the database's `audit_log`.
 
-**A single `retention.sweepFailed` line, at error, means the instance's retention sweep, which each second deletes the records of exchanged sessions whose sign-in tokens have expired, the sign-out records more than the controller's clock tolerance of 30 seconds past their expiry, and the notices past the retention floor, has stopped deleting until one of its runs succeeds**: it is written once as the runs start failing, naming the `cause`, so a fault that persists, such as a missing grant, writes that one line and nothing more.
+**A single `retention.sweepFailed` line, at error, means the instance's retention sweep, which each second deletes the records of exchanged sessions whose sign-in tokens have expired, the sign-out records more than the Controller's clock tolerance of 30 seconds past their expiry, and the notices past the retention floor, has stopped deleting until one of its runs succeeds**: it is written once as the runs start failing, naming the `cause`, so a fault that persists, such as a missing grant, writes that one line and nothing more.
 
-**Standard error carries a refused start, or any failure ending the process, as one line at level 60, fatal.** The process then ends with exit code 1, except for a stopped schema migration run. The line holds codes and the controller's own messages only, never a database's or a library's message, either of which could quote a value.
+**Standard error carries a refused start, or any failure ending the process, as one line at level 60, fatal.** The process then ends with exit code 1, except for a stopped schema migration run. The line holds codes and the Controller's own messages only, never a database's or a library's message, either of which could quote a value.
 
 - **A refusal** carries `variables`, naming each variable at fault, and a `message` naming each one with the rule it broke:
 

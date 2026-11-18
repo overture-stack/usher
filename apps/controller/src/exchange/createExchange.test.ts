@@ -384,11 +384,11 @@ interface StandOptions {
   /** Settles when a key's confirmation does: at once by default. */
   confirmationSettled?: Promise<void>;
 
-  /** The exchange's deadline: the controller's own by default. */
+  /** The exchange's deadline: the Controller's own by default. */
   deadlineMilliseconds?: number;
 
   /**
-   * The late-request threshold: the controller's own by default. A test shortening the deadline to
+   * The late-request threshold: the Controller's own by default. A test shortening the deadline to
    * reach the store's bound within it names a shorter one, so its request is not answered as late.
    */
   lateRequestThresholdMilliseconds?: number;
@@ -420,7 +420,7 @@ interface StandOptions {
   /** Settles when the store takes each transaction begun, its work waiting until then: at once by default. */
   storeTakes?: Promise<void>;
 
-  /** The most bytes a token answered may hold: the controller's own limit by default. */
+  /** The most bytes a token answered may hold: the Controller's own limit by default. */
   tokenLimitBytes?: number;
 }
 
@@ -731,7 +731,7 @@ interface StoreStandOptions {
 
   storeTimeoutMilliseconds: number;
 
-  /** The most bytes a token answered may hold: the controller's own limit by default. */
+  /** The most bytes a token answered may hold: the Controller's own limit by default. */
   tokenLimitBytes?: number;
 }
 

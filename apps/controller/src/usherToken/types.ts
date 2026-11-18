@@ -2,7 +2,7 @@ import type { KeyObject } from 'node:crypto';
 
 import type { PermissionsPayload } from '@overture-stack/usher-types';
 
-/** A payload as version 1 of the payload contract defines it: the version the controller seals. */
+/** A payload as version 1 of the payload contract defines it: the version the Controller seals. */
 export type VersionOnePayload = PermissionsPayload & { payloadVersion: 1 };
 
 /** The key an Usher token is sealed under, as each live application key holds it. */

@@ -17,13 +17,13 @@ import { isUsableResource } from './sqonPrimitives.js';
 /** A list with at least one element. */
 export type NonEmpty<Element> = [Element, ...Element[]];
 
-/** A resource identifier, as the instance names it. Opaque to the controller. */
+/** A resource identifier, as the instance names it. Opaque to the Controller. */
 export type ResourceIdentifier = string;
 
 /**
  * A category name, prefixed by its scope: `global` for a category shared by the whole platform, and
  * `resource` for one that exists only in the resource it is listed under. The part after the prefix
- * is the name as configured by the instance, opaque to the controller, and holds no dot. In either
+ * is the name as configured by the instance, opaque to the Controller, and holds no dot. In either
  * scope, a category's records are those matching the condition given to it by the catalogue's
  * category mapping. A key outside both forms makes the payload malformed.
  */
@@ -110,7 +110,7 @@ export interface PermissionsPayload {
   // because it says how to read the rest, the standard claims follow in the order used by every
   // example, and the content comes last.
 
-  /** The schema version of this payload, one of those declared by the bridge at the exchange. */
+  /** The schema version of this payload, one of those declared by the Bridge at the exchange. */
   payloadVersion: number;
 
   /**
@@ -119,7 +119,7 @@ export interface PermissionsPayload {
    */
   sub: string | null;
 
-  /** The controller that issued this payload. */
+  /** The Controller that issued this payload. */
   iss: string;
 
   /** The single application for which this payload was issued. */
@@ -135,7 +135,7 @@ export interface PermissionsPayload {
   exp: number;
 
   /**
-   * When the controller computed `permissions`, in seconds since the Unix epoch. Distinct from
+   * When the Controller computed `permissions`, in seconds since the Unix epoch. Distinct from
    * `iat`: a reissue from the cached payload renews the token, moving `iat`, while keeping both the
    * computation and this timestamp.
    */

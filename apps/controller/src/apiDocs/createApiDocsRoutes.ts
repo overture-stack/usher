@@ -92,7 +92,7 @@ const packageFolder = (): string =>
     createRequire(import.meta.url).resolve('swagger-ui-dist/package.json'),
   );
 
-// Scripts, styles, fonts and images from the controller's origin alone, connections to the identity
+// Scripts, styles, fonts and images from the Controller's origin alone, connections to the identity
 // provider's origin as well, and nothing inline.
 const contentSecurityPolicy = (issuer: string): string =>
   [

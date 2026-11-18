@@ -85,7 +85,7 @@ export const importApplicationKey = async (
 ): Promise<ApplicationKeys> => {
   const bytes = keyBytes(key);
   try {
-    // Imported once, as the HKDF base for every subkey, each derived as the controller derives it.
+    // Imported once, as the HKDF base for every subkey, each derived as the Controller derives it.
     const base = await webcrypto.subtle.importKey('raw', bytes, 'HKDF', false, [
       'deriveKey',
     ]);

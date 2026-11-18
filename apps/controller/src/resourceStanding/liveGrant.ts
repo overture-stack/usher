@@ -37,7 +37,7 @@ export const liveGrantCondition = (alias: string, now: string): string =>
  * The latest answer, in SQL, that the holder of the grant a statement names by an alias gave it:
  * `accepted`, `rejected`, or `NULL` while they have given none.
  *
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param alias the alias the statement gives the grant's row.
  */
 export const latestDecisionOf = (schema: string, alias: string): string =>
@@ -50,7 +50,7 @@ export const latestDecisionOf = (schema: string, alias: string): string =>
  * owner of its resource: a person's grant of the role named `owner`, live, which their latest
  * answer accepted. A group's grant makes nobody an owner.
  *
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param alias the alias the statement gives the grant's row.
  * @param now the placeholder the configured clock's instant is bound to.
  */

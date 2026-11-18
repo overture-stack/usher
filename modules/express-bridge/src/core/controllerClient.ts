@@ -3,7 +3,7 @@ import type { NonEmpty } from '@overture-stack/usher-types';
 import type { ControllerClient, ExchangeAnswer } from './core.js';
 import { textWithin } from './responseBody.js';
 
-/** The part of fetch needed to reach the controller, satisfied by the global fetch and by undici's. */
+/** The part of fetch needed to reach the Controller, satisfied by the global fetch and by undici's. */
 export type ControllerFetch = (
   url: URL,
   init: {
@@ -19,12 +19,12 @@ export type ControllerFetch = (
   status: number;
 }>;
 
-/** What the default controller client needs. */
+/** What the default Controller client needs. */
 export interface FetchControllerClientOptions {
   /** Signs a fresh channel assertion for each exchange. */
   assertion: () => Promise<string>;
 
-  /** The controller's base URL, ending in `/`. */
+  /** The Controller's base URL, ending in `/`. */
   controllerUrl: URL;
 
   /** The fetch used for every exchange; the global `fetch` when omitted. */
@@ -118,7 +118,7 @@ const answerFor503 = async (
     : { kind: 'retryAfter', retryAfterSeconds };
 };
 
-/** How a status other than 200 and 503 reads: the controller's wire format fixes each. */
+/** How a status other than 200 and 503 reads: the Controller's wire format fixes each. */
 const answerForStatus = (status: number): ExchangeAnswer => {
   if (status === 403) {
     return { kind: 'refused' };
@@ -141,8 +141,8 @@ const tokenOf = async (
 };
 
 /**
- * Creates the default controller client, which posts `{ credential, payloadVersions }` to the
- * controller's `exchange` endpoint, leaving `credential` out for the anonymous exchange. Each post is
+ * Creates the default Controller client, which posts `{ credential, payloadVersions }` to the
+ * Controller's `exchange` endpoint, leaving `credential` out for the anonymous exchange. Each post is
  * authenticated by a fresh channel assertion and follows no redirect. A 503's body is read for its
  * problem code alone, no further than 2 KiB or the response cap, whichever is smaller, and the rest is
  * cancelled. Every other answer but a 200 is discarded unread. No body reaches a log, and a refusal of

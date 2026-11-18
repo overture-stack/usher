@@ -48,7 +48,7 @@ type Reply =
   | 'stream'
   | { bodiless?: boolean; contentType?: string; status: number };
 
-/** A controller answering each connection as `reply` says; a test writes into each stream it opens. */
+/** A Controller answering each connection as `reply` says; a test writes into each stream it opens. */
 const fakeController = (
   reply: (index: number) => Promise<Reply> | Reply = () => 'stream',
 ) => {

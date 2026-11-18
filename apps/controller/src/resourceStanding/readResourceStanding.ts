@@ -22,7 +22,7 @@ const LOCKING: Readonly<Record<Exclude<StandingLock, 'none'>, string>> = {
  * `share` against every lock for update, and `noKeyUpdate` against those and against `share`.
  *
  * @param runner where the statements run: a transaction's connection for a lock.
- * @param schema the controller's schema.
+ * @param schema the Controller's schema.
  * @param question the externalId, the trusted issuer, the principal's subject, the configured
  *   clock's instant, and the lock.
  * @returns the standing, or `undefined` when no resource holds the externalId.
