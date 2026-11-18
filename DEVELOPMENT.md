@@ -54,7 +54,7 @@ from 24.11 or Node 26 and later, the versions the build tooling supports. A pnpm
     pnpm test:scripts (runs the tests of the scripts in scripts/, which pnpm test leaves out)
     pnpm typecheck    (type-checks every package, going on past a package that fails)
     pnpm typecheck:scripts (type-checks the scripts in scripts/, which pnpm typecheck leaves out)
-    pnpm format       (formats every file Prettier reads, under .prettierrc.json)
+    pnpm format       (formats every file Prettier reads, under prettier.config.ts)
     pnpm format:check (fails on any file Prettier would change)
 
 Tests and type-checks read each package's source through the `@overture-stack/source` export
