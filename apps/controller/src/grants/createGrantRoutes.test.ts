@@ -96,6 +96,9 @@ interface World {
   /** Whether a creation finds its terms held already. */
   held: boolean;
 
+  /** The externalIds of the resources the store holds, whatever their standing. */
+  registered: readonly string[];
+
   /** Where each subject stands on STUDY-A1. */
   standings: Readonly<Record<string, Partial<ResourceStanding>>>;
 }
@@ -122,6 +125,7 @@ const WORLD: World = {
   countedOwnersBesides: 1,
   grant: PENDING,
   held: false,
+  registered: [STUDY_A1.externalId],
   standings: {
     'subject-administrator': {},
     'subject-ana': { countedOwner: true, holder: true },
@@ -249,13 +253,20 @@ const standUp = (
         submitterCategory: 'global.unmarked',
       },
       store: {
-        // Whether the store holds the grant a refused request's id names.
+        // Whether the store holds the resource a refused request's body names by its externalId,
+        // for a question reading the resources, or else the grant its id names.
         query: async <Row extends pg.QueryResultRow>(
-          _text: string,
+          text: string,
           values: readonly unknown[] = [],
         ): Promise<pg.QueryResult<Row>> =>
           ({
-            rows: [{ exists: values[0] === known.grant?.id }],
+            rows: [
+              {
+                exists: /\.resources\b/u.test(text)
+                  ? known.registered.includes(String(values[0]))
+                  : values[0] === known.grant?.id,
+              },
+            ],
           }) as unknown as pg.QueryResult<Row>,
       },
       trail: {
@@ -536,7 +547,7 @@ suite('creating a grant', () => {
     ]);
   });
 
-  test('answers a principal who may not see the resource as for an absent one, recording a refusal of authority, and a resource that does not exist as not found', async (context) => {
+  test('answers a principal who may not see the resource as for an absent one, recording a refusal of authority naming the resource, and a resource that does not exist as not found naming none', async (context) => {
     const stand = standUp(context, {
       standings: { ...WORLD.standings, 'subject-bo': {} },
     });
@@ -549,14 +560,59 @@ suite('creating a grant', () => {
 
     assert.deepEqual(outcomeOf(hidden), [404, 'resourceNotFound']);
     assert.equal(hidden.body, absent.body);
+    assert.deepEqual(eventData(stand), [
+      {
+        reason: 'noAuthorityOnResource',
+        resourceId: 'STUDY-A1',
+        result: 'denied',
+        sourceIp: '127.0.0.1',
+        type: 'grant.creation',
+      },
+      {
+        reason: 'resourceNotFound',
+        result: 'denied',
+        sourceIp: '127.0.0.1',
+        type: 'grant.creation',
+      },
+    ]);
+    assert.equal(methodsCalled(stand).includes('insertGrant'), false);
+  });
+
+  test("names in a refused creation's event the resource its body names when one is registered under that externalId, whatever the refusal and the resource's standing, and none for text naming no registered resource", async (context) => {
+    const stand = standUp(context, {
+      standings: { ...WORLD.standings, 'subject-bo': { retired: true } },
+    });
+    const unknownRole = { ...VIEWER_CREATION, role: 'Viewer' };
+
+    const answers = [
+      await create(stand, 'ana', unknownRole),
+      await create(stand, 'bo'),
+      await create(stand, 'ana', { ...unknownRole, resource: 'STUDY-Z9' }),
+      await create(stand, 'administrator', {
+        ...VIEWER_CREATION,
+        resource: 'STUDY-Z9',
+      }),
+    ];
+
+    assert.deepEqual(answers.map(outcomeOf), [
+      [422, 'unknownRole'],
+      [404, 'resourceNotFound'],
+      [422, 'unknownRole'],
+      [403, 'administratorGrantsNoConsumerAccess'],
+    ]);
     assert.deepEqual(
-      eventData(stand).map(({ reason, resourceId }) => [resourceId, reason]),
+      eventData(stand).map((data) =>
+        Object.hasOwn(data, 'resourceId')
+          ? [data['reason'], data['resourceId']]
+          : [data['reason']],
+      ),
       [
-        ['STUDY-A1', 'noAuthorityOnResource'],
-        ['STUDY-Z9', 'resourceNotFound'],
+        ['unknownRole', 'STUDY-A1'],
+        ['resourceNotFound', 'STUDY-A1'],
+        ['unknownRole'],
+        ['administratorGrantsNoConsumerAccess'],
       ],
     );
-    assert.equal(methodsCalled(stand).includes('insertGrant'), false);
   });
 
   test('refuses a holder of a grant on the resource who owns it not 403 noAuthorityOnResource, writing nothing', async (context) => {

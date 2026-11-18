@@ -6,8 +6,10 @@ import {
   type AdminResponse,
   assertNotFound,
   assertSucceeded,
+  bodyObjectOf,
   carriesGrantSummary,
   comparableRefusal,
+  listResources,
   personCaller,
   PROBLEMS,
   readResource,
@@ -22,7 +24,7 @@ import {
   resourcesFixture,
 } from '../../test-support/fixtures/resources.js';
 import { type Harness, suiteHarness } from '../../test-support/harness.js';
-import { inTurn } from '../../test-support/policy.js';
+import { inTurn, STEWARD_SUBJECT } from '../../test-support/policy.js';
 
 // Beside the shared fixture: STUDY-S1, open and suppressed, where Eli holds an accepted viewer
 // grant; and STUDY-X1, retired, which Ana owned until its retirement revoked her owner grant.
@@ -36,6 +38,23 @@ const readAs = async (
   externalId: string,
 ): Promise<AdminResponse> =>
   readResource(await personCaller(harness, person), externalId);
+
+// Whether a resource's view, as a read's body or a listing's entry, carries who registered it.
+const carriesRegistrant = (view: unknown): boolean =>
+  typeof view === 'object' &&
+  view !== null &&
+  Object.hasOwn(view, 'registeredBy');
+
+// The entries of a listing's page, as the answer holds them.
+const listingEntries = (
+  response: AdminResponse,
+  label: string,
+): readonly unknown[] => {
+  const entries = bodyObjectOf(response, label)['resources'];
+  return Array.isArray(entries)
+    ? entries
+    : assert.fail(`${label} holds no list of resources`);
+};
 
 const assertAnsweredAsAbsent = (
   answer: AdminResponse,
@@ -152,5 +171,44 @@ suite("a resource's read, by the reader's standing in the store", () => {
     );
     assertAnsweredAsAbsent(byFormerOwner, absent, "the former owner's read");
     assertAnsweredAsAbsent(byOutsider, absent, "the outsider's read");
+  });
+
+  test('shows who registered a resource to a platform administrator and a counted owner, and to no other reader, in a read and in a listing alike', async () => {
+    const harness = await shared();
+    const administrator = await administratorCaller(harness);
+
+    const byAdministrator = await readResource(administrator, RESOURCES.a1);
+    const byOthers = await inTurn(
+      [
+        { person: CAST.owner, resource: RESOURCES.a1 },
+        { person: CAST.curator, resource: RESOURCES.a1 },
+        { person: CAST.holder, resource: RESOURCES.a1 },
+        { person: CAST.outsider, resource: RESOURCES.o1 },
+      ],
+      ({ person, resource }) => readAs(harness, person, resource),
+    );
+    const administratorListing = await listResources(administrator);
+    const ownerListing = await listResources(
+      await personCaller(harness, CAST.owner),
+    );
+
+    [byAdministrator, ...byOthers].forEach((answer, index) => {
+      assertSucceeded(answer, `reader ${index}`);
+    });
+    assert.deepEqual(
+      [byAdministrator, ...byOthers].map((answer, index) =>
+        carriesRegistrant(answer.body)
+          ? [resourceViewOf(answer, `reader ${index}`).registrantSubject]
+          : [],
+      ),
+      [[STEWARD_SUBJECT], [STEWARD_SUBJECT], [], [], []],
+    );
+    const listed = listingEntries(
+      administratorListing,
+      "the administrator's listing",
+    );
+    assert.ok(listed.length > 0, "the administrator's listing is empty");
+    assert.equal(listed.every(carriesRegistrant), true);
+    assert.deepEqual(listingEntries(ownerListing, "the owner's listing"), []);
   });
 });

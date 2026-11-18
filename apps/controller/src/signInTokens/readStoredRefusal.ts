@@ -26,16 +26,17 @@ const standingQuery = (schema: string): string => {
            OR EXISTS (
                 SELECT 1 FROM ${table('subject_sign_outs')}
                  WHERE idp_issuer = $1 AND idp_subject_id = $2
-                   AND ($4::timestamptz IS NULL OR $4::timestamptz < signed_out_at)
+                   AND ($4::timestamptz IS NULL OR $4::timestamptz <= signed_out_at)
               ) AS "signedOut"`;
 };
 
 /**
  * Reads whether the store refuses a principal: a standing revocation of the person holding the
- * identity; a revocation of the whole platform after the token was issued; or a sign-out the identity
- * provider relayed for the token's session, or for its subject after the token was issued, in that
- * order when more than one holds. A token naming no `iat` is read as issued before every platform
- * revocation and every sign-out of its subject, and one naming no `sid` as of no session signed out.
+ * identity; a revocation of the whole platform after the token was issued; or a sign-out the
+ * identity provider relayed for the token's session, or for its subject at or after the second the
+ * token was issued, in that order when more than one holds. A token naming no `iat` is read as
+ * issued before every platform revocation and every sign-out of its subject, and one naming no
+ * `sid` as of no session signed out.
  *
  * @param store where the revocations and sign-outs are read.
  * @param schema the Controller's schema.

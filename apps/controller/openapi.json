@@ -1708,7 +1708,15 @@
             "$ref": "#/components/schemas/Instant"
           },
           "registeredBy": {
-            "$ref": "#/components/schemas/PrincipalBySubject"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrincipalBySubject"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The platform administrator who registered the resource, by subject; `null` where none is recorded. Given to platform administrators and the resource's owners."
           },
           "retired": {
             "type": "boolean"
@@ -1729,7 +1737,6 @@
           "externalId",
           "fields",
           "registeredAt",
-          "registeredBy",
           "retired",
           "suppressed",
           "updatedAt"
@@ -4872,7 +4879,7 @@
         "tags": ["Resources"]
       },
       "get": {
-        "description": "Reads one resource. A principal who may not see it receives the answer for a resource that does not exist. Platform administrators and the resource's owners also receive `grantSummary`.",
+        "description": "Reads one resource. A principal who may not see it receives the answer for a resource that does not exist. Platform administrators and the resource's owners also receive `grantSummary` and `registeredBy`.",
         "operationId": "readResource",
         "parameters": [
           {
@@ -6139,7 +6146,7 @@
     },
     "/backchannel-logout": {
       "post": {
-        "description": "The identity provider's OpenID Connect back-channel logout endpoint. The body is form-encoded and holds one `logout_token`: a current logout token issued by the configured identity provider for the instance's back-channel logout clients alone, naming a session in `sid`, a subject in `sub`, or both. The header `typ` is `logout+jwt` or `JWT`, in any letter case and with or without the `application/` prefix, or left out.\n\nThe controller commits the sign-out, with a principal notice to every application where the subject is known, before it answers. The exchange then refuses every sign-in token of a session named by the logout token, whenever it was issued. For a logout token naming a subject alone, the exchange refuses each of that subject's sign-in tokens issued before the sign-out.\n\nA logout token delivered twice writes one notice. A logout naming a session unseen at any exchange writes no notice, and the sign-in tokens of that session are refused all the same.",
+        "description": "The identity provider's OpenID Connect back-channel logout endpoint. The body is form-encoded and holds one `logout_token`: a current logout token issued by the configured identity provider for the instance's back-channel logout clients alone, naming a session in `sid`, a subject in `sub`, or both. The header `typ` is `logout+jwt` or `JWT`, in any letter case and with or without the `application/` prefix, or left out.\n\nThe controller commits the sign-out, with a principal notice to every application where the subject is known, before it answers. The exchange then refuses every sign-in token of a session named by the logout token, whenever it was issued. For a logout token naming a subject alone, the exchange refuses each of that subject's sign-in tokens issued at or before the sign-out.\n\nA logout token delivered twice writes one notice. A logout naming a session unseen at any exchange writes no notice, and the sign-in tokens of that session are refused all the same.",
         "operationId": "relayBackChannelLogout",
         "requestBody": {
           "content": {

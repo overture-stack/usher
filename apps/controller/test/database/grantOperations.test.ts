@@ -36,6 +36,7 @@ import {
   storedDecisions,
   storedGrants,
   STUDY_A1,
+  UNKNOWN_STUDY,
   UNMARKED,
 } from '../../test-support/fixtures/grants.js';
 import { withHarness } from '../../test-support/harness.js';
@@ -184,6 +185,38 @@ suite("a grant's creation in the store", () => {
         holder: CAST.recipient.subject,
       });
       assert.equal(held.length, 2);
+    });
+  });
+
+  test("names in a refused creation's event a resource registered under the externalId its body names, and none for an externalId no resource holds", async () => {
+    await withHarness({ fixture: grantsFixture() }, async (harness) => {
+      const caller = await personCaller(harness, CAST.outsider);
+
+      const answers = [
+        await createGrant(caller, grantFor(CAST.newcomer)),
+        await createGrant(
+          caller,
+          grantFor(CAST.newcomer, { resource: UNKNOWN_STUDY }),
+        ),
+      ];
+      const refusals = (await auditRows(harness.clients.migration))
+        .filter(
+          ({ type }) => type === emittedType(AUDIT_EVENT_TYPES.grantCreation),
+        )
+        .map(dataOf)
+        .filter((data) => data['actorId'] === CAST.outsider.subject);
+
+      answers.forEach((answer) => {
+        assertRefused(answer, PROBLEMS.resourceNotFound, 'the creation');
+      });
+      assert.deepEqual(
+        refusals.map((data) =>
+          Object.hasOwn(data, 'resourceId')
+            ? [data['reason'], data['resourceId']]
+            : [data['reason']],
+        ),
+        [['noAuthorityOnResource', STUDY_A1], ['resourceNotFound']],
+      );
     });
   });
 });

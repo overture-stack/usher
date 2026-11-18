@@ -205,10 +205,10 @@ const readerOf = (
  * their latest answer did not reject, its owners among them; and, while it is neither retired nor
  * suppressed, every signed-in principal when its access level is `open` or `registered`. Anyone
  * else is answered 404 `resourceNotFound`, as for one that does not exist. A platform
- * administrator's answer and a counted owner's carry the grant summary. A platform administrator
- * lists every resource, and any other principal is listed an empty page. A listing pages in the
- * order of the externalIds in any letter case, retired resources only to an administrator asking
- * for them.
+ * administrator's answer and a counted owner's carry the grant summary and who registered the
+ * resource, and no one else's carries either. A platform administrator lists every resource, and
+ * any other principal is listed an empty page. A listing pages in the order of the externalIds in
+ * any letter case, retired resources only to an administrator asking for them.
  *
  * @param settings whether an owner grant written at registration is accepted with it, the clock,
  *   the schema, the trusted issuer, the store and the trail, each on the control pool.

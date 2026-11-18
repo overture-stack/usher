@@ -68,14 +68,14 @@ const signOutStatement = (
 };
 
 /**
- * Records a sign-out the identity provider relayed, in the transaction given: by session, for a token
- * naming a `sid`, so every sign-in token of that session is refused at the exchange; by subject, for
- * one naming a subject alone, so that subject's sign-in tokens issued before it are refused. Either is
- * kept from the time the provider signed the person out until the retention given has passed. Every
- * sign-out recorded writes the `identity.signOut` event, its actor the system's, naming the request's
- * address and, as `signedOutUserId`, the subject when one is known; a known subject also gets one
- * principal notice, and a session no exchange carried, naming no one, gets none. A sign-out the store
- * holds already writes nothing more.
+ * Records a sign-out the identity provider relayed, in the transaction given: by session, for a
+ * token naming a `sid`, so every sign-in token of that session is refused at the exchange; by
+ * subject, for one naming a subject alone, so that subject's sign-in tokens issued at or before it
+ * are refused. Either is kept from the time the provider signed the person out until the retention
+ * given has passed. Every sign-out recorded writes the `identity.signOut` event, its actor the
+ * system's, naming the request's address and, as `signedOutUserId`, the subject when one is known;
+ * a known subject also gets one principal notice, and a session no exchange carried, naming no one,
+ * gets none. A sign-out the store holds already writes nothing more.
  *
  * @param transaction the transaction, its actor the system.
  * @param context the store's schema, the trusted issuer, the retention, and the request's address.

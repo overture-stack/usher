@@ -45,12 +45,38 @@ suite('a resource as an answer shows it', () => {
     );
   });
 
-  test('shows anyone else, a holder of a grant on it among them, no grant summary at all', () => {
-    const view = resourceView(STORED, 'signedIn');
+  test('shows anyone else, a holder of a grant on it among them, no grant summary and no registrant at all', () => {
+    assert.deepEqual(resourceView(STORED, 'signedIn'), {
+      accessLevel: 'grant',
+      applications: ['0b8f7f43-2b4c-4b55-9a39-6c1b7f6f0a11'],
+      categories: ['resource.local-panel'],
+      description: null,
+      displayName: 'Wastewater surveillance, Montréal',
+      externalId: 'STUDY-A1',
+      fields: { organization: 'Lakeshore Example Institute' },
+      registeredAt: '2026-11-04T12:00:00.250Z',
+      retired: false,
+      suppressed: true,
+      updatedAt: '2026-11-05T09:30:00.000Z',
+    });
+  });
 
-    assert.equal(
-      typeof view === 'object' && view !== null && 'grantSummary' in view,
-      false,
+  test('shows a platform administrator and a counted owner a null registrant for a resource whose registering administrator is not recorded, and anyone else none', () => {
+    const unrecorded: StoredResource = { ...STORED, registeredBy: null };
+
+    const views = (['administrator', 'owner', 'signedIn'] as const).map(
+      (reader) => resourceView(unrecorded, reader),
+    );
+
+    assert.deepEqual(
+      views.map((view) =>
+        typeof view === 'object' && view !== null
+          ? Object.entries(view)
+              .filter(([name]) => name === 'registeredBy')
+              .map(([, value]) => value)
+          : [],
+      ),
+      [[null], [null], []],
     );
   });
 });

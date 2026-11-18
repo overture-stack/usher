@@ -146,7 +146,8 @@ const showsRole = (
  * writeGrant}, its granter the caller, recorded on first meeting them, refusing 409 `alreadyHolds`
  * a holder holding one on its terms neither revoked nor ended, and answers 201 with the grant. A
  * creation whose commit fails since its resource was retired first is answered 404
- * `resourceNotFound`. Its event, refused, names the resource the body names.
+ * `resourceNotFound`. Its event, refused, names the resource the body names only when the store
+ * holds a resource under that externalId, whatever its standing.
  *
  * Answering a grant, `POST /admin/grants/{id}/decisions`, reads its body with {@link
  * readGrantAnswer}. Only the grant's holder answers it, the person holding the caller's identity
@@ -203,7 +204,15 @@ export const createGrantRoutes = (
     body,
   }: NamedByRequest): Promise<EventMembers> => {
     const resource = body?.['resource'];
-    return typeof resource === 'string' ? { resourceId: resource } : {};
+    if (typeof resource !== 'string') {
+      return {};
+    }
+    const { rows } = await store.query<{ exists: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM ${pg.escapeIdentifier(databaseSchema)}.resources
+                       WHERE external_id = $1) AS exists`,
+      [resource],
+    );
+    return rows[0]?.exists === true ? { resourceId: resource } : {};
   };
 
   const creation: ManagementOperation<GrantCreation> = {
