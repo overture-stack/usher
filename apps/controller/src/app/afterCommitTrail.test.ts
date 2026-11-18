@@ -301,7 +301,7 @@ const routeThrough = (
           anyAdministrator: true,
         }),
         eventLog: { error: () => undefined },
-        refusalTally: { count: () => undefined },
+        refusals: { refuse: async () => ({ kind: 'counted' }) },
         runAfterCommit: (names) =>
           runAfterCommit({
             log,

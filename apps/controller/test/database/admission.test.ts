@@ -28,7 +28,9 @@ import {
 import {
   exchange,
   freshAssertion,
+  mintSignInToken,
   PEOPLE,
+  type Person,
   type WireResponse,
 } from '../../test-support/exchange.js';
 import {
@@ -48,7 +50,11 @@ import {
   qualified,
 } from '../../test-support/policy.js';
 import { SCHEDULING_SLACK_MS } from '../../test-support/vendoredBridge.js';
-import { type Cleanup, cleanupFor } from '../../test-support/waiting.js';
+import {
+  type Cleanup,
+  cleanupFor,
+  nowSeconds,
+} from '../../test-support/waiting.js';
 
 /**
  * The exchange pool these tests give the controller: two connections, so a few exchanges fill it. A
@@ -64,9 +70,6 @@ const CONTROL_CONNECTIONS = 5;
  * rule: half the control pool's connections, rounded down, and at least one.
  */
 const STREAM_PENDING_LIMIT = Math.max(1, Math.floor(CONTROL_CONNECTIONS / 2));
-
-// No sign-in token, so refused for its shape alone, recorded as apiKeyVerifierNotConfigured.
-const OPAQUE_CREDENTIAL = 'an-opaque-credential';
 
 /** How long an exchange admitted and waiting for a connection is watched, still unanswered. */
 const WAITING_MS = 300;
@@ -252,11 +255,21 @@ suite("each application's admission share, against the store", () => {
           Math.floor(EXCHANGE_CONNECTIONS / applications),
         );
         const before = await auditRows(migration);
-        const refused = (): Promise<WireResponse> =>
+        const now = nowSeconds();
+        // An expired token of each person's own, so each refusal opens a window of its own and its
+        // record takes a place in the share, where a later refusal under one window's key would be
+        // answered at once, taking none.
+        const refused = async (person: Person): Promise<WireResponse> =>
           exchange(harness.url, {
             application: search,
-            credential: OPAQUE_CREDENTIAL,
+            credential: await mintSignInToken(
+              harness.identityProvider,
+              person,
+              search.id,
+              { claims: { exp: now - 60, iat: now - 360 } },
+            ),
           });
+        const fillingPeople = [PEOPLE.ana, PEOPLE.bo];
 
         // Every exchange admitted waits on the held trail while holding its place, and every exchange
         // refused is answered while the trail is still held.
@@ -265,14 +278,11 @@ suite("each application's admission share, against the store", () => {
           POLICY_TABLES.auditLog,
           async () => {
             // The search application's share, then every other connection lent past it.
-            const filling = Array.from(
-              { length: EXCHANGE_CONNECTIONS },
-              refused,
-            );
+            const filling = fillingPeople.map(refused);
             const filled = await untilBlocked(migration, Promise.all(filling), {
               count: EXCHANGE_CONNECTIONS,
             });
-            const overShare = await refused();
+            const overShare = await refused(PEOPLE.cy);
             // Two anonymous exchanges at once: one takes the lane and waits for a connection, and the
             // other is refused at once, so the first answer is the refusal.
             const anonymous = [
@@ -316,9 +326,9 @@ suite("each application's admission share, against the store", () => {
           [200, 200],
         );
         assert.deepEqual(
-          [applications, share],
-          [2, 1],
-          'two applications registered, a share of one each',
+          [applications, share, fillingPeople.length],
+          [2, 1, EXCHANGE_CONNECTIONS],
+          'two applications registered, a share of one each, a refusal for each connection',
         );
         assert.equal(during.filled, true, 'the pool held, each place taken');
         assert.deepEqual(
@@ -360,7 +370,7 @@ suite("each application's admission share, against the store", () => {
           [
             ...filledAnswers.map(() => ({
               audience: undefined,
-              reason: 'apiKeyVerifierNotConfigured',
+              reason: 'expiredToken',
               result: 'denied',
             })),
             ...[search.id, portal.id].map((audience) => ({

@@ -17,6 +17,7 @@ import type {
   StandingQuestion,
   StoredRefusal,
 } from '../signInTokens/index.js';
+import type { WindowedRefusals } from '../windowedRefusals/index.js';
 
 /** Who an accepted management token speaks for. */
 export interface Principal {
@@ -114,25 +115,20 @@ export interface StoreReader {
 }
 
 /**
- * Why a management credential is counted rather than recorded, each the `reason` of a
- * `managementToken.refusalTally` event: it could not be read as exactly one Bearer credential
- * (`malformedCredential`), or its token could not be verified, being unreadable as a signed token
- * (`unreadableToken`), naming an issuer other than the trusted one (`otherIssuer`), or verifying under
- * none of the trusted issuer's published keys (`invalidSignature`). The management API lists these
- * itself, since they are its audit trail's vocabulary: a reason the verifier adds is mapped onto one
- * of them, or added here, by a decision made in this module.
+ * Why a management credential that did not verify is refused, each the `reason` of its
+ * `managementToken.refusal` and of the `managementToken.refusalTally` closing its window: it could
+ * not be read as exactly one Bearer credential (`malformedCredential`), or its token could not be
+ * verified, being unreadable as a signed token (`unreadableToken`), naming an issuer other than the
+ * trusted one (`otherIssuer`), or verifying under none of the trusted issuer's published keys
+ * (`invalidSignature`). The management API lists these itself, since they are its audit trail's
+ * vocabulary: a reason the verifier adds is mapped onto one of them, or added here, by a decision
+ * made in this module.
  */
-export type TallyReason =
+export type UnverifiedCredentialReason =
   | 'invalidSignature'
   | 'malformedCredential'
   | 'otherIssuer'
   | 'unreadableToken';
-
-/** Where the management API counts each credential it could not read or verify. */
-export interface RefusalTally {
-  /** Counts one credential refused for the reason given. */
-  count(reason: TallyReason): void;
-}
 
 /** An event's members, as an operation names them. */
 export type EventMembers = { readonly [member: string]: JsonValue };
@@ -291,7 +287,8 @@ export interface ManagementDependencies {
   /** Where an operational line is written. */
   eventLog: Pick<EventLog, 'error'>;
 
-  refusalTally: RefusalTally;
+  /** Where each refused credential is counted, the refusal opening a window recorded. */
+  refusals: Pick<WindowedRefusals, 'refuse'>;
 
   /**
    * Runs the steps an operation names, in turn, once its change has committed or may have. It never

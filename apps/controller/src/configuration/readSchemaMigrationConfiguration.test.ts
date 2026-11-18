@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { suite, test } from 'node:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { after, suite, test } from 'node:test';
 
 import { parseIntoClientConfig } from 'pg-connection-string';
 
@@ -16,6 +19,7 @@ const { databasePassword, databaseUrl } =
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES;
 
 const {
+  databaseAllowUnverifiedConnection,
   databasePassword: controllerPassword,
   databaseSchema,
   databaseUrl: controllerUrl,
@@ -59,6 +63,7 @@ suite("reading the schema migration command's configuration", () => {
     });
 
     assert.deepEqual(configuration, {
+      databaseAllowUnverifiedConnection: false,
       databasePassword: SCHEMA_MIGRATION_PASSWORD,
       databaseUrl: 'postgres://usher_migration@127.0.0.1:5432/usher',
       retentionFloorSeconds: 135,
@@ -263,5 +268,94 @@ suite("reading the schema migration command's configuration", () => {
       tokenLifetimeSeconds,
     ]);
     assert.match(refusal.message, /more than 2147483647 seconds/u);
+  });
+});
+
+suite("verifying the schema migration command's database connection", () => {
+  const folder = mkdtempSync(join(tmpdir(), 'usher-migration-configuration-'));
+  after(() => rmSync(folder, { force: true, recursive: true }));
+  const caFile = join(folder, 'root.crt');
+  writeFileSync(caFile, '-----BEGIN CERTIFICATE-----\n');
+
+  const REMOTE = 'postgres://usher_migration@db.example.org:5432/usher';
+
+  test('takes its own connection to a loopback host, or to any other host verifying the server', () => {
+    const urls = [
+      'postgres://usher_migration@localhost:5432/usher',
+      `${REMOTE}?sslmode=verify-full`,
+      `${REMOTE}?sslmode=verify-ca&sslrootcert=${caFile}`,
+    ];
+
+    const read = urls.map(
+      (url) =>
+        readSchemaMigrationConfiguration({ ...REQUIRED, [databaseUrl]: url })
+          .databaseUrl,
+    );
+
+    assert.deepEqual(read, urls);
+  });
+
+  test("refuses its own connection leaving the host unverified, require included, naming the command's variable and the rule, and judges the host the driver connects to", () => {
+    const urls = [
+      `${REMOTE}?sslmode=require`,
+      REMOTE,
+      'postgres://usher_migration@127.0.0.1:5432/usher?host=db.example.org',
+    ];
+
+    const refusals = urls.map((url) =>
+      refusalOf({ ...REQUIRED, [databaseUrl]: url }),
+    );
+
+    refusals.forEach((refusal) => {
+      assert.equal(
+        refusal.message,
+        `the schema migrations refuse to run: ${databaseUrl} connects to a host other than a loopback host or a Unix socket without verifying the server: set sslmode=verify-full, or sslmode=verify-ca with sslrootcert`,
+      );
+    });
+  });
+
+  test('refuses its own URL naming a CA file in sslrootcert that cannot be read, naming the setting and never the path', () => {
+    const missing = join(folder, 'missing.crt');
+
+    const refusal = refusalOf({
+      ...REQUIRED,
+      [databaseUrl]: `${REMOTE}?sslmode=verify-full&sslrootcert=${missing}`,
+    });
+
+    assert.deepEqual(refusal.variables, [databaseUrl]);
+    assert.match(
+      refusal.message,
+      /names a file in sslrootcert that cannot be read/u,
+    );
+    assert.equal(refusal.message.includes(missing), false);
+  });
+
+  test("takes any connection of its own while the controller's USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION is true, reading that switch as the controller does", () => {
+    const configuration = readSchemaMigrationConfiguration({
+      ...REQUIRED,
+      [databaseAllowUnverifiedConnection]: 'true',
+      [databaseUrl]: `${REMOTE}?sslmode=require`,
+    });
+    const refusal = refusalOf({
+      ...REQUIRED,
+      [databaseAllowUnverifiedConnection]: 'yes',
+      [databaseUrl]: `${REMOTE}?sslmode=require`,
+    });
+
+    assert.equal(configuration.databaseAllowUnverifiedConnection, true);
+    assert.equal(configuration.databaseUrl, `${REMOTE}?sslmode=require`);
+    assert.deepEqual(refusal.variables, [
+      databaseAllowUnverifiedConnection,
+      databaseUrl,
+    ]);
+  });
+
+  test("judges its own connection alone, never the controller's URL, which it reads for the runtime role", () => {
+    const configuration = readSchemaMigrationConfiguration({
+      ...REQUIRED,
+      [controllerUrl]: 'postgres://usher_controller@db.example.org:5432/usher',
+    });
+
+    assert.equal(configuration.runtimeRole, 'usher_controller');
   });
 });

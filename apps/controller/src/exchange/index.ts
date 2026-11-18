@@ -7,6 +7,7 @@ export {
   EXCHANGE_UNEXPECTED_FAILURE,
   LATE_REQUEST_THRESHOLD_MILLISECONDS,
 } from './createExchange.js';
+export { exchangeRefusalTallyEvent } from './exchangeEvents.js';
 export { TOKEN_LIMIT_BYTES } from './exchangeProblems.js';
 export {
   createKeyConfirmations,

@@ -68,6 +68,15 @@ export interface ControllerSettings {
   cursorKey: string;
 
   /**
+   * Whether a database connection that does not verify the server it reaches is allowed: off by
+   * default, and never on in the harness but in this setting's own tests. Off, a connection leaving
+   * the host must set `sslmode=verify-full`, or `sslmode=verify-ca` with `sslrootcert`; on, every
+   * start of the Controller or the schema migration command writes one line at warning naming its
+   * variable.
+   */
+  databaseAllowUnverifiedConnection: boolean;
+
+  /**
    * The store connections each instance holds for everything but the token exchange and readiness: 5
    * by default, a whole number of at least 1.
    */
@@ -535,6 +544,8 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',
+  databaseAllowUnverifiedConnection:
+    'USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION',
   databaseControlConnections: 'USHER_DATABASE_CONTROL_CONNECTIONS',
   databaseExchangeConnections: 'USHER_DATABASE_EXCHANGE_CONNECTIONS',
   databasePassword: 'USHER_DATABASE_PASSWORD',
@@ -639,6 +650,7 @@ export const environmentFor = ({
   backChannelLogoutAudiences,
   baseline,
   cursorKey,
+  databaseAllowUnverifiedConnection,
   databaseControlConnections,
   databaseExchangeConnections,
   databasePassword,
@@ -676,6 +688,9 @@ export const environmentFor = ({
     backChannelLogoutAudiences.join(','),
   [VARIABLE_NAMES.baseline]: baseline.join(','),
   [VARIABLE_NAMES.cursorKey]: cursorKey,
+  [VARIABLE_NAMES.databaseAllowUnverifiedConnection]: String(
+    databaseAllowUnverifiedConnection,
+  ),
   [VARIABLE_NAMES.databaseControlConnections]: String(
     databaseControlConnections,
   ),

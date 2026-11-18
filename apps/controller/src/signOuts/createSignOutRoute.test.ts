@@ -15,12 +15,17 @@ import { createServer } from '../http/index.js';
 import type { TokenVerification } from '../identityProvider/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import {
+  createWindowedRefusals,
+  type WindowedRefusals,
+} from '../windowedRefusals/index.js';
+import {
   createSignOutRoute,
   SIGN_OUT_PATH,
   SIGN_OUT_STORE_FAILED,
   SIGN_OUT_UNEXPECTED_FAILURE,
 } from './createSignOutRoute.js';
 import { BACK_CHANNEL_LOGOUT_EVENT } from './readLogoutToken.js';
+import { logoutTokenRefusalTallyEvent } from './refusalEvents.js';
 
 const NOW = Date.UTC(2026, 10, 9, 12, 0, 0);
 
@@ -77,7 +82,6 @@ interface Statement {
 
 interface Stand {
   actors: Actor[];
-  counted: string[];
   lines: Line[];
   recorded: AuditEvent[];
 
@@ -87,6 +91,9 @@ interface Stand {
   server: FastifyInstance;
   statements: Statement[];
   verified: string[];
+
+  /** The windows the refused tokens are counted in, which a test stops to close them. */
+  windows: WindowedRefusals;
 }
 
 interface StandOptions {
@@ -119,14 +126,37 @@ const standUp = (
     verifications = VERIFICATIONS,
   }: StandOptions = {},
 ): Stand => {
+  const lines: Line[] = [];
+  const refusals: Stand['refusals'] = [];
+  const recordEvent = async (
+    actor: Actor,
+    event: AuditEvent,
+  ): Promise<string | undefined> => {
+    refusals.push({ actor, event });
+    return eventsRecorded ? 'event-id' : undefined;
+  };
+  const log = {
+    error: (message: string, fields?: LineFields) => {
+      lines.push({ fields, message });
+    },
+  };
   const stand: Omit<Stand, 'server'> = {
     actors: [],
-    counted: [],
-    lines: [],
+    lines,
     recorded: [],
-    refusals: [],
+    refusals,
     statements: [],
     verified: [],
+    windows: createWindowedRefusals({
+      clock: SETTINGS.clock,
+      closingEvents: {
+        exchange: logoutTokenRefusalTallyEvent,
+        logout: logoutTokenRefusalTallyEvent,
+        management: logoutTokenRefusalTallyEvent,
+      },
+      log,
+      trail: { recordEvent },
+    }),
   };
   const query = async (text: string, values?: readonly unknown[]) => {
     stand.statements.push({ text, values });
@@ -147,16 +177,8 @@ const standUp = (
   });
   server.route(
     createSignOutRoute({
-      eventLog: {
-        error: (message, fields) => {
-          stand.lines.push({ fields, message });
-        },
-      },
-      refusalTally: {
-        count: (reason) => {
-          stand.counted.push(reason);
-        },
-      },
+      eventLog: log,
+      refusals: stand.windows,
       settings: SETTINGS,
       tokenVerifier: {
         verify: async (token) => {
@@ -181,10 +203,7 @@ const standUp = (
           }
           return result;
         },
-        recordEvent: async (actor, event) => {
-          stand.refusals.push({ actor, event });
-          return eventsRecorded ? 'event-id' : undefined;
-        },
+        recordEvent,
       },
     }),
   );
@@ -342,7 +361,7 @@ suite('refusing a back-channel logout request by its shape', () => {
 });
 
 suite('refusing a back-channel logout by its token', () => {
-  test('refuses 400 every token the verifier does not verify, counting each by its reason and recording no event', async (context) => {
+  test("refuses 400 every token the verifier does not verify, recording the first for each reason as logoutToken.refusal naming no subject, and counting the rest in that reason's window, whatever the token", async (context) => {
     const stand = standUp(context);
 
     const answers = await Promise.all(
@@ -352,26 +371,72 @@ suite('refusing a back-channel logout by its token', () => {
         'token-under-no-published-key',
       ].map((token) => post(stand, { body: formWith(token) })),
     );
+    const again = await post(stand, {
+      body: formWith('another-token-under-no-published-key'),
+    });
+    const recordedBeforeStop = stand.refusals
+      .map(({ actor, event }) => ({ actor, event }))
+      .toSorted((first, second) =>
+        String(first.event.data['reason']).localeCompare(
+          String(second.event.data['reason']),
+        ),
+      );
+    await stand.windows.stop();
 
     assert.deepEqual(
-      answers.map(refusalOf),
-      answers.map(() => refusal(400, 'logoutTokenRefused')),
+      [...answers, again].map(refusalOf),
+      [...answers, again].map(() => refusal(400, 'logoutTokenRefused')),
     );
-    assert.deepEqual(stand.counted.toSorted(), [
-      'invalidSignature',
-      'otherIssuer',
-      'unreadableToken',
-    ]);
-    assert.deepEqual(stand.refusals, []);
+    assert.deepEqual(
+      recordedBeforeStop,
+      ['invalidSignature', 'otherIssuer', 'unreadableToken'].map((reason) => ({
+        actor: { type: 'anonymous' },
+        event: {
+          data: { reason, result: 'denied', sourceIp: '127.0.0.1' },
+          severity: 'warning',
+          type: 'logoutToken.refusal',
+        },
+      })),
+    );
+    // The first three ran together, so their windows are compared whatever order they opened in.
+    assert.deepEqual(
+      stand.refusals
+        .slice(3)
+        .toSorted((first, second) =>
+          String(first.event.data['reason']).localeCompare(
+            String(second.event.data['reason']),
+          ),
+        ),
+      [
+        ['invalidSignature', 2],
+        ['otherIssuer', 1],
+        ['unreadableToken', 1],
+      ].map(([reason, count]) => ({
+        actor: { type: 'system' },
+        event: {
+          data: {
+            count,
+            firstSeenAt: new Date(NOW).toISOString(),
+            lastSeenAt: new Date(NOW).toISOString(),
+            reason,
+            windowId: 'event-id',
+          },
+          severity: 'warning',
+          type: 'logoutToken.refusalTally',
+        },
+      })),
+    );
     assert.deepEqual(stand.actors, []);
   });
 
-  test('refuses 400 a verified token that is not a logout token for this deployment, recording one refusal as anonymous naming its reason, the request and its refused subject, and counting nothing', async (context) => {
+  test('refuses 400 a verified token that is not a logout token for this deployment, recording its first refusal as anonymous naming its reason, the request and its refused subject, and counting the next in its window', async (context) => {
     const stand = standUp(context);
 
     const answer = await post(stand, { body: formWith(OTHER_AUDIENCE_TOKEN) });
+    const again = await post(stand, { body: formWith(OTHER_AUDIENCE_TOKEN) });
 
     assert.deepEqual(refusalOf(answer), refusal(400, 'logoutTokenRefused'));
+    assert.deepEqual(refusalOf(again), refusal(400, 'logoutTokenRefused'));
     assert.deepEqual(stand.refusals, [
       {
         actor: { type: 'anonymous' },
@@ -387,7 +452,17 @@ suite('refusing a back-channel logout by its token', () => {
         },
       },
     ]);
-    assert.deepEqual(stand.counted, []);
+    await stand.windows.stop();
+    assert.deepEqual(
+      stand.refusals
+        .slice(1)
+        .map(({ event }) => [
+          event.type,
+          event.data['count'],
+          event.data['reason'],
+        ]),
+      [['logoutToken.refusalTally', 2, 'otherAudience']],
+    );
     assert.deepEqual(stand.actors, []);
   });
 
@@ -413,7 +488,7 @@ suite('refusing a back-channel logout by its token', () => {
       refusalOf(answer),
       refusal(400, 'identityProviderUnavailable'),
     );
-    assert.deepEqual(stand.counted, []);
+    await stand.windows.stop();
     assert.deepEqual(stand.refusals, []);
     assert.deepEqual(stand.actors, []);
   });
@@ -429,7 +504,7 @@ suite('refusing a back-channel logout by its token', () => {
 
     assert.deepEqual(refusalOf(answer), refusal(400, 'signingKeyUnconfirmed'));
     assert.equal(answer.headers['retry-after'], undefined);
-    assert.deepEqual(stand.counted, []);
+    await stand.windows.stop();
     assert.deepEqual(stand.refusals, []);
     assert.deepEqual(stand.actors, []);
   });
@@ -441,8 +516,8 @@ suite('refusing a back-channel logout by its token', () => {
       post(stand, { body: 'state=signed-out' }),
       post(stand, { url: `${SIGN_OUT_PATH}?${formWith(TOKEN)}` }),
     ]);
+    await stand.windows.stop();
 
-    assert.deepEqual(stand.counted, []);
     assert.deepEqual(stand.refusals, []);
   });
 });

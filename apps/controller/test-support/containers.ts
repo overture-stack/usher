@@ -108,9 +108,49 @@ const postgresqlImage = (selection: string | undefined): string => {
 
 const randomPassword = (): string => randomBytes(24).toString('base64url');
 
+// The hosts naming this machine's loopback, as a daemon reports where it publishes a container's ports.
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set([
+  '127.0.0.1',
+  '::1',
+  '[::1]',
+  'localhost',
+]);
+
+/** A PostgreSQL's superuser URL on this machine's loopback, and how to let go of what reaches it there. */
+export interface LoopbackPostgresql {
+  /** The relay standing between the URL and the PostgreSQL, for a daemon on another machine; none on this one. */
+  relay: Relay | undefined;
+
+  /** Stops the relay, if any; the PostgreSQL itself is left as it is. */
+  stop(): Promise<void>;
+
+  /** The superuser URL on loopback, its credentials and path kept. */
+  url: string;
+}
+
 /**
- * Starts one PostgreSQL and one Valkey, each with a password made for this run. A container that
- * started is stopped again when the other fails, so a failed start leaves nothing running.
+ * Reaches a PostgreSQL on this machine's loopback, so every database URL the harness gives names a
+ * loopback host, which the Controller connects to with no TLS verification required: at the URL given
+ * where its host is loopback already, as for a daemon on this machine, and otherwise through a TCP
+ * relay on `127.0.0.1` ({@link startRelay}), as Keycloak is reached against a daemon on another
+ * machine.
+ *
+ * @param url the PostgreSQL's superuser URL, at the host the daemon publishes its port on.
+ */
+export const reachOnLoopback = async (
+  url: string,
+): Promise<LoopbackPostgresql> => {
+  if (LOOPBACK_HOSTS.has(new URL(url).hostname)) {
+    return { relay: undefined, stop: async () => undefined, url };
+  }
+  const relay = await startRelay(url);
+  return { relay, stop: () => relay.stop(), url: relay.url };
+};
+
+/**
+ * Starts one PostgreSQL and one Valkey, each with a password made for this run, the PostgreSQL's URL
+ * on this machine's loopback ({@link reachOnLoopback}). A container that started is stopped again
+ * when the other fails, so a failed start leaves nothing running.
  *
  * @param selection the PostgreSQL image's name in {@link POSTGRESQL_IMAGES}: `USHER_TEST_POSTGRESQL`,
  *   `floor` when unset.
@@ -128,12 +168,19 @@ export const startContainers = async (
     new ValkeyContainer(VALKEY_IMAGE).withPassword(randomPassword()).start(),
   ]);
   if (postgresql.status === 'fulfilled' && valkey.status === 'fulfilled') {
+    const reached = await reachOnLoopback(
+      postgresql.value.getConnectionUri(),
+    ).catch(async (failure: unknown) => {
+      await Promise.all([postgresql.value.stop(), valkey.value.stop()]);
+      throw failure;
+    });
     return {
       containers: {
-        postgresql: { image, url: postgresql.value.getConnectionUri() },
+        postgresql: { image, url: reached.url },
         valkey: { image: VALKEY_IMAGE, url: valkey.value.getConnectionUrl() },
       },
       stop: async () => {
+        await reached.stop();
         await Promise.all([postgresql.value.stop(), valkey.value.stop()]);
       },
     };
@@ -251,9 +298,16 @@ const untilRefused = async (url: URL, deadline: number): Promise<void> => {
   );
 };
 
+const PASS_THROUGH: RelayMode = Object.freeze({ kind: 'pass' });
+
+const REFUSE_ALL: RelayMode = Object.freeze({ kind: 'refuse' });
+
+// A container of a test file's own, reached at its URL directly or through the relay given, which
+// refuses connections while the container is stopped, as the container's own port then does.
 const dedicated = (
   started: StartedTestContainer,
   container: RunningContainer,
+  relay?: Relay,
 ): DedicatedContainer => {
   const state = { paused: false };
   const runtimeContainer = async (): Promise<RuntimeContainer> =>
@@ -274,12 +328,14 @@ const dedicated = (
 
     remove: async () => {
       await unpause();
+      await relay?.stop();
       await started.stop();
     },
 
     restart: async () => {
       await unpause();
       await started.restart();
+      await relay?.setMode(PASS_THROUGH);
     },
 
     stop: async () => {
@@ -287,6 +343,7 @@ const dedicated = (
       await (
         await getContainerRuntimeClient()
       ).container.stop(await runtimeContainer(), { timeout: 0 });
+      await relay?.setMode(REFUSE_ALL);
       await untilRefused(
         new URL(container.url),
         performance.now() + REFUSED_WITHIN_MS,
@@ -300,7 +357,8 @@ const dedicated = (
 /**
  * Starts a PostgreSQL for one test file's outage tests, or for a test needing many connections or a
  * server setting, apart from the run's shared one, with a superuser and a password of its own. Its
- * URL is its superuser's, as the shared one's is. Its settings hold across a restart.
+ * URL is its superuser's, on this machine's loopback as the shared one's is ({@link reachOnLoopback}),
+ * and refuses connections while it is stopped. Its settings hold across a restart.
  *
  * @param selection the PostgreSQL image's name in {@link POSTGRESQL_IMAGES}: the run's own, from
  *   `USHER_TEST_POSTGRESQL`, by default.
@@ -310,17 +368,31 @@ export const startDedicatedPostgresql = async (
   selection: string | undefined = process.env['USHER_TEST_POSTGRESQL'],
   { settings = {} }: { settings?: Readonly<Record<string, string>> } = {},
 ): Promise<DedicatedContainer> => {
-  const image = postgresqlImage(selection);
   const command = Object.entries(settings).flatMap(([name, value]) => [
     '-c',
     `${name}=${value}`,
   ]);
+  const { postgresql } = await startedPostgresql(
+    selection,
+    command.length > 0 ? ['postgres', ...command] : undefined,
+  );
+  return postgresql;
+};
+
+// A dedicated PostgreSQL, started with the command given or the image's own, and the container it
+// runs in, for support that runs a command inside it.
+const startedPostgresql = async (
+  selection: string | undefined,
+  command: readonly string[] | undefined,
+): Promise<{
+  postgresql: DedicatedContainer;
+  started: StartedTestContainer;
+}> => {
+  const image = postgresqlImage(selection);
   const started = await startOnFreeHostPort((hostPort) => {
     const container = new PostgreSqlContainer(image);
     return (
-      command.length > 0
-        ? container.withCommand(['postgres', ...command])
-        : container
+      command === undefined ? container : container.withCommand([...command])
     )
       .withExposedPorts({ container: POSTGRESQL_PORT, host: hostPort })
       .withDatabase('postgres')
@@ -328,7 +400,111 @@ export const startDedicatedPostgresql = async (
       .withPassword(randomPassword())
       .start();
   });
-  return dedicated(started, { image, url: started.getConnectionUri() });
+  const reached = await reachOnLoopback(started.getConnectionUri()).catch(
+    async (failure: unknown) => {
+      await started.stop();
+      throw failure;
+    },
+  );
+  return {
+    postgresql: dedicated(started, { image, url: reached.url }, reached.relay),
+    started,
+  };
+};
+
+/** The CA certificates a TLS-enabled PostgreSQL's server certificate is judged against, each as PEM text. */
+export interface TestCaCertificates {
+  /** The CA certificate the server's certificate was issued under. */
+  issued: string;
+
+  /**
+   * The same CA's certificate reissued, as a CA's renewal makes it: its name and key kept, its serial
+   * number and validity new, so the server's certificate chains to it as to the one it replaces.
+   */
+  reissued: string;
+
+  /** Another CA's certificate, of the same name and a key of its own, to which the server's certificate does not chain. */
+  unrelated: string;
+}
+
+/** A PostgreSQL of a test file's own serving TLS, and the CA certificates its server certificate is judged against. */
+export interface TlsPostgresql {
+  certificates: TestCaCertificates;
+  postgresql: DedicatedContainer;
+}
+
+// Where the container keeps what it generates. Its private keys never leave it.
+const TLS_FOLDER = '/var/lib/postgresql/tls';
+
+const CA_FILES = {
+  issued: `${TLS_FOLDER}/issued.crt`,
+  reissued: `${TLS_FOLDER}/reissued.crt`,
+  unrelated: `${TLS_FOLDER}/unrelated.crt`,
+} as const;
+
+// Generates the certificates with the image's own openssl, once, as the container first starts, so a
+// restart keeps them, then starts the server through the image's entrypoint with TLS on. Each is valid
+// from a day before the container's clock, so a clock a little behind the container's accepts them.
+// The server's certificate names every loopback host the harness connects through.
+const TLS_STARTUP = `set -e
+mkdir -p ${TLS_FOLDER}
+cd ${TLS_FOLDER}
+if [ ! -f server.crt ]; then
+  from=$(date -u -d '1 day ago' +%Y%m%d%H%M%SZ)
+  until=$(date -u -d '2 days' +%Y%m%d%H%M%SZ)
+  later=$(date -u -d '3 days' +%Y%m%d%H%M%SZ)
+  curve='-newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes'
+  openssl req -x509 -new $curve -keyout ca-private.pem -out issued.crt -subj '/CN=Usher test CA' -set_serial 1 -not_before "$from" -not_after "$until"
+  openssl req -x509 -new -key ca-private.pem -out reissued.crt -subj '/CN=Usher test CA' -set_serial 2 -not_before "$from" -not_after "$later"
+  openssl req -x509 -new $curve -keyout unrelated-private.pem -out unrelated.crt -subj '/CN=Usher test CA' -set_serial 3 -not_before "$from" -not_after "$until"
+  openssl req -new $curve -keyout server-private.pem -out server.csr -subj '/CN=localhost'
+  printf 'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1\\nbasicConstraints=CA:FALSE\\nextendedKeyUsage=serverAuth\\n' > server.ext
+  openssl x509 -req -in server.csr -CA issued.crt -CAkey ca-private.pem -set_serial 10 -not_before "$from" -not_after "$until" -extfile server.ext -out server.crt
+  chown postgres:postgres server.crt server-private.pem
+  chmod 600 server-private.pem
+fi
+exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=${TLS_FOLDER}/server.crt -c ssl_key_file=${TLS_FOLDER}/server-private.pem`;
+
+const fileIn = async (
+  started: StartedTestContainer,
+  path: string,
+): Promise<string> => {
+  const { exitCode, stdout } = await started.exec(['cat', path]);
+  if (exitCode === 0) {
+    return stdout;
+  }
+  throw new Error(`the TLS-enabled PostgreSQL holds no ${path}`);
+};
+
+/**
+ * Starts a PostgreSQL for one test file's own, as {@link startDedicatedPostgresql} does, serving TLS
+ * beside plain connections, its server certificate issued under a CA generated in the container by
+ * the image's own openssl, and gives that CA's certificate, the same CA's reissued, and an unrelated
+ * CA's. The server's certificate names `localhost`, `127.0.0.1` and `::1`, so a connection verifying
+ * it in full through the PostgreSQL's loopback URL succeeds.
+ *
+ * @param selection the PostgreSQL image's name in {@link POSTGRESQL_IMAGES}: the run's own, from
+ *   `USHER_TEST_POSTGRESQL`, by default.
+ */
+export const startTlsPostgresql = async (
+  selection: string | undefined = process.env['USHER_TEST_POSTGRESQL'],
+): Promise<TlsPostgresql> => {
+  const { postgresql, started } = await startedPostgresql(selection, [
+    'sh',
+    '-c',
+    TLS_STARTUP,
+  ]);
+  try {
+    const [issued, reissued, unrelated] = await Promise.all([
+      fileIn(started, CA_FILES.issued),
+      fileIn(started, CA_FILES.reissued),
+      fileIn(started, CA_FILES.unrelated),
+    ]);
+    return { certificates: { issued, reissued, unrelated }, postgresql };
+  } catch (failure) {
+    await postgresql.remove();
+    throw failure;
+  }
 };
 
 /** Starts a Valkey for one test file's outage tests, apart from the run's shared one, with a password of its own. */

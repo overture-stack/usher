@@ -12,6 +12,7 @@ import type {
 import type { ControllerConfiguration } from '../configuration/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
 import type { Deadline } from '../storeTimeout/index.js';
+import type { WindowedRefusals } from '../windowedRefusals/index.js';
 import type {
   SignInJudgement,
   SignInJudgementContext,
@@ -163,6 +164,9 @@ export interface ExchangeSettings {
    * `performance.now`: never the configured clock, which a test may hold still or move by hand.
    */
   monotonicNow(): number;
+
+  /** Where each credential refused `denied` is counted, the refusal opening a window recorded. */
+  refusals: Pick<WindowedRefusals, 'refuse'>;
 
   /**
    * The baseline and the signed-in rule, the clock, the schema, the identity provider's issuer, the

@@ -37,6 +37,7 @@ import type {
   ReachingGrant,
   ServedResource,
 } from '../tokenCalculation/index.js';
+import { createWindowedRefusals } from '../windowedRefusals/index.js';
 import {
   createExchange,
   EXCHANGE_PATH,
@@ -48,6 +49,7 @@ import {
   MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS,
   RECORDING_RESERVE_MILLISECONDS,
 } from './createExchange.js';
+import { exchangeRefusalTallyEvent } from './exchangeEvents.js';
 import { TOKEN_LIMIT_BYTES } from './exchangeProblems.js';
 import type { CredentialJudge, ExchangeKey } from './types.js';
 
@@ -172,6 +174,10 @@ const JUDGEMENTS: Readonly<Record<string, SignInJudgement>> = {
     refusedSubject: 'subject "ana" \\',
   },
   'credential-forged': { kind: 'recorded', reason: 'invalidSignature' },
+  'credential-forged-otherwise': {
+    kind: 'recorded',
+    reason: 'invalidSignature',
+  },
   'credential-while-keys-unavailable': { kind: 'keysUnavailable' },
   'credential-under-a-new-key': {
     kind: 'signingKeyUnconfirmed',
@@ -345,6 +351,12 @@ interface Transaction {
 }
 
 interface Stand {
+  /** The events closing the windows refused credentials were counted in, each with its actor. */
+  closings: { actor: Actor; event: AuditEvent }[];
+
+  /** Closes every window refused credentials are counted in, settling once each closing is recorded. */
+  closeWindows(): Promise<void>;
+
   /** Each key the exchange asked to confirm, as its confirmation settled. */
   confirmed: { applicationId: string; keyId: string }[];
 
@@ -446,7 +458,8 @@ const standUp = (
     poolSize,
     registeredCount: () => registered,
   });
-  const stand: Omit<Stand, 'server' | 'stop'> = {
+  const stand: Omit<Stand, 'closeWindows' | 'server' | 'stop'> = {
+    closings: [],
     confirmationDeadlines: [],
     confirmed: [],
     counted: [],
@@ -479,6 +492,27 @@ const standUp = (
     },
     refusedAssertions: createRefusedAssertions(SETTINGS.clock),
     rejections: counter,
+  });
+  // The instance's windows, closing each through a trail of their own, apart from the exchange's
+  // transactions.
+  const windows = createWindowedRefusals({
+    clock: SETTINGS.clock,
+    closingEvents: {
+      exchange: exchangeRefusalTallyEvent,
+      logout: exchangeRefusalTallyEvent,
+      management: exchangeRefusalTallyEvent,
+    },
+    log: {
+      error: (message, fields) => {
+        stand.lines.push({ fields, message });
+      },
+    },
+    trail: {
+      recordEvent: async (actor, event) => {
+        stand.closings.push({ actor, event });
+        return 'closing-id';
+      },
+    },
   });
   const exchange = createExchange({
     admission,
@@ -546,6 +580,7 @@ const standUp = (
     },
     lateRequestThresholdMilliseconds,
     monotonicNow: () => performance.now(),
+    refusals: windows,
     settings: SETTINGS,
     sharesExceeded: {
       count: (applicationId) => {
@@ -590,8 +625,14 @@ const standUp = (
   context.after(async () => {
     await refusals.stop();
     await server.close();
+    await windows.stop();
   });
-  return { ...stand, server, stop: () => refusals.stop() };
+  return {
+    ...stand,
+    closeWindows: () => windows.stop(),
+    server,
+    stop: () => refusals.stop(),
+  };
 };
 
 interface Sent {
@@ -912,6 +953,9 @@ const storeStandUp = (
     keyConfirmations: { confirm: async () => undefined },
     lateRequestThresholdMilliseconds,
     monotonicNow: () => performance.now(),
+    refusals: {
+      refuse: async (_key, open) => ({ kind: 'opened', opening: await open() }),
+    },
     settings: SETTINGS,
     sharesExceeded: { count: () => undefined },
     tokenLimitBytes,
@@ -1409,7 +1453,7 @@ suite('the token exchange', () => {
       ]);
     });
 
-    test('is answered one identical 403 for every refusal of the judgement, each recorded as denied under its own reason in a transaction of its own, naming refusedSubject only as the judgement does', async (context) => {
+    test('is answered one identical 403 for every refusal of the judgement, each recorded as denied under its own reason in a transaction of its own, naming refusedSubject only as the judgement does and the application where it does not', async (context) => {
       const stand = standUp(context);
       const credentials = [
         'credential-expired',
@@ -1451,6 +1495,7 @@ suite('the token exchange', () => {
           },
           {
             data: {
+              applicationId: APPLICATION,
               reason: 'invalidSignature',
               result: 'denied',
               sourceIp: '127.0.0.1',
@@ -1459,6 +1504,7 @@ suite('the token exchange', () => {
           },
           {
             data: {
+              applicationId: APPLICATION,
               reason: 'missingCredential',
               result: 'denied',
               sourceIp: '127.0.0.1',
@@ -1467,6 +1513,7 @@ suite('the token exchange', () => {
           },
           {
             data: {
+              applicationId: APPLICATION,
               reason: 'apiKeyVerifierNotConfigured',
               result: 'denied',
               sourceIp: '127.0.0.1',
@@ -1508,7 +1555,7 @@ suite('the token exchange', () => {
       ]);
     });
 
-    test('is answered 503 signingKeyUnconfirmed with its seconds in Retry-After while its signing key is not confirmed yet, the exchange recorded as denied at warning', async (context) => {
+    test('is answered 503 signingKeyUnconfirmed with its seconds in Retry-After while its signing key is not confirmed yet, the exchange recorded as denied at warning naming the application', async (context) => {
       const stand = standUp(context);
 
       const answer = await post(
@@ -1524,6 +1571,7 @@ suite('the token exchange', () => {
       assert.deepEqual(recordedIn(stand), [
         {
           data: {
+            applicationId: APPLICATION,
             reason: 'signingKeyUnconfirmed',
             result: 'denied',
             sourceIp: '127.0.0.1',
@@ -1765,15 +1813,21 @@ suite('the token exchange', () => {
       assert.deepEqual(
         outcomes.map(({ transactions }) =>
           transactions.map((transaction) => ({
+            actor: transaction.actor,
             recorded: transaction.recorded,
             statements: statementKindsIn(transaction),
           })),
         ),
         refusals.map((reason) => [
           {
+            actor: { id: 'subject-ana', type: 'human' },
+            recorded: [],
+            statements: ['standing'],
+          },
+          {
+            actor: { type: 'anonymous' },
             recorded: [
               {
-                actor: { type: 'anonymous' },
                 data: {
                   reason,
                   refusedSubject: 'subject-ana',
@@ -1785,7 +1839,7 @@ suite('the token exchange', () => {
                 type: 'token.exchange',
               },
             ],
-            statements: ['standing'],
+            statements: [],
           },
         ]),
       );
@@ -2531,11 +2585,13 @@ suite('the token exchange', () => {
       await post(stand, withCredential('credential-accepted'));
       await post(refusedByTheStore, withCredential('credential-accepted'));
 
+      // The anonymous exchange's, the forged credential's refusal, the issuance, and the refused
+      // principal's standing read and refusal.
       assert.deepEqual(
         [...stand.transactions, ...refusedByTheStore.transactions].map(
           ({ options }) => options?.failureEvent,
         ),
-        [1, 2, 3, 4].map(() => ({
+        [1, 2, 3, 4, 5].map(() => ({
           actor: { type: 'anonymous' },
           data: {
             reason: 'storeUnavailable',
@@ -2747,7 +2803,7 @@ suite('the token exchange', () => {
         'uak_example',
       ];
 
-      const holding = post(stand, withCredential('credential-forged'));
+      const holding = post(stand, withCredential('credential-of-no-session'));
       await untilTransactionsBegun(stand, 1);
       const answering = Promise.all(
         credentials.map((credential) =>
@@ -3037,5 +3093,175 @@ suite('the token exchange', () => {
       assert.equal(problemOf(afterwards).code, 'credentialRefused');
       assert.equal(stand.outside.length, 1);
     });
+  });
+});
+
+suite('the credentials the exchange refuses, counted in windows', () => {
+  const INSTANT = new Date(NOW).toISOString();
+
+  test("records a refused credential's first refusal and answers each later one alike at once, recording nothing and taking no place: a verified token's by its digest and reason, any other credential's by its application and reason", async (context) => {
+    const stand = standUp(context);
+
+    const first = [
+      await post(stand, withCredential('credential-expired')),
+      await post(stand, withCredential('credential-forged')),
+    ];
+    const transactionsAfterFirst = stand.transactions.length;
+    const later = [
+      await post(stand, withCredential('credential-expired')),
+      await post(stand, withCredential('credential-forged')),
+      await post(stand, withCredential('credential-forged-otherwise')),
+    ];
+
+    const answers = [...first, ...later];
+    const shown = answers.map(onTheWire);
+    shown.forEach((answer) => assert.deepEqual(answer, shown[0]));
+    assert.deepEqual(
+      answers.map(problemOf),
+      answers.map(() => ({ code: 'credentialRefused', status: 403 })),
+    );
+    assert.equal(transactionsAfterFirst, 2);
+    assert.equal(stand.transactions.length, 2);
+    assert.equal(stand.inFlight(), 0);
+  });
+
+  test('closes each window at the stop with token.exchangeRefusalTally as the system, naming its count, its reason, the application for a credential that did not verify, and its opening event', async (context) => {
+    const stand = standUp(context);
+    await post(stand, withCredential('credential-expired'));
+    await post(stand, withCredential('credential-expired'));
+    await post(stand, withCredential('credential-forged'));
+    await post(stand, withCredential('credential-forged-otherwise'));
+    await post(stand, withCredential('credential-forged'));
+
+    await stand.closeWindows();
+
+    assert.deepEqual(stand.closings, [
+      {
+        actor: { type: 'system' },
+        event: {
+          data: {
+            count: 2,
+            firstSeenAt: INSTANT,
+            lastSeenAt: INSTANT,
+            reason: 'expiredToken',
+            windowId: 'event-id',
+          },
+          severity: 'warning',
+          type: 'token.exchangeRefusalTally',
+        },
+      },
+      {
+        actor: { type: 'system' },
+        event: {
+          data: {
+            applicationId: APPLICATION,
+            count: 3,
+            firstSeenAt: INSTANT,
+            lastSeenAt: INSTANT,
+            reason: 'invalidSignature',
+            windowId: 'event-id',
+          },
+          severity: 'warning',
+          type: 'token.exchangeRefusalTally',
+        },
+      },
+    ]);
+  });
+
+  test('reads the standing of a principal the store refuses on each exchange, recording only the refusal opening its window', async (context) => {
+    const stand = standUp(context, { standing: 'revokedPrincipal' });
+
+    const answers = [
+      await post(stand, withCredential('credential-accepted')),
+      await post(stand, withCredential('credential-accepted')),
+    ];
+    await stand.closeWindows();
+
+    answers.forEach((answer) => {
+      assert.deepEqual(problemOf(answer), {
+        code: 'credentialRefused',
+        status: 403,
+      });
+    });
+    assert.deepEqual(
+      stand.transactions.map((transaction) => ({
+        recorded: transaction.recorded.map(({ data }) => data['reason']),
+        statements: statementKindsIn(transaction),
+      })),
+      [
+        { recorded: [], statements: ['standing'] },
+        { recorded: ['revokedPrincipal'], statements: [] },
+        { recorded: [], statements: ['standing'] },
+      ],
+    );
+    assert.deepEqual(
+      stand.closings.map(({ event }) => [
+        event.data['reason'],
+        event.data['count'],
+      ]),
+      [['revokedPrincipal', 2]],
+    );
+  });
+
+  test('answers a signing key not confirmed yet 503 with Retry-After each time, recording only the refusal opening its window', async (context) => {
+    const stand = standUp(context);
+
+    const answers = [
+      await post(stand, withCredential('credential-under-a-new-key')),
+      await post(stand, withCredential('credential-under-a-new-key')),
+    ];
+
+    answers.forEach((answer) => {
+      assert.deepEqual(problemOf(answer), {
+        code: 'signingKeyUnconfirmed',
+        status: 503,
+      });
+      assert.equal(answer.headers['retry-after'], '17');
+    });
+    assert.equal(stand.transactions.length, 1);
+  });
+
+  test('records every exchange refused failed, a window counting none of them', async (context) => {
+    const stand = standUp(context);
+
+    await post(stand, withCredential('credential-while-keys-unavailable'));
+    await post(stand, withCredential('credential-while-keys-unavailable'));
+    await stand.closeWindows();
+
+    assert.deepEqual(
+      stand.transactions.map(({ recorded }) =>
+        recorded.map(({ data }) => [data['result'], data['reason']]),
+      ),
+      [
+        [['failed', 'identityProviderUnavailable']],
+        [['failed', 'identityProviderUnavailable']],
+      ],
+    );
+    assert.deepEqual(stand.closings, []);
+  });
+
+  test('answers a refusal counted in an open window 403 at once while its share is full and the pool contended', async (context) => {
+    const store = deferred();
+    const stand = standUp(context, { poolSize: 1, storeTakes: store.promise });
+
+    const opening = post(stand, withCredential('credential-forged'));
+    await untilTransactionsBegun(stand, 1);
+    const counted = await answeredAtOnce(
+      post(stand, withCredential('credential-forged-otherwise')),
+    );
+    const answer = await post(
+      stand,
+      withCredential('credential-forged-otherwise'),
+    );
+    store.release();
+    await opening;
+
+    assert.equal(counted, true);
+    assert.deepEqual(problemOf(answer), {
+      code: 'credentialRefused',
+      status: 403,
+    });
+    assert.deepEqual(stand.countedOverShare, []);
+    assert.equal(stand.transactions.length, 1);
   });
 });

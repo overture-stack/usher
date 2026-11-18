@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { suite, test } from 'node:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { after, suite, test } from 'node:test';
 
 import { StartRefusal } from '../failures/index.js';
 import {
@@ -100,6 +103,7 @@ suite('reading the configuration from an environment', () => {
         autoAccept: 'true',
         backChannelLogoutAudiences: 'portal-test, submission-test',
         baseline: 'view',
+        databaseAllowUnverifiedConnection: 'true',
         databaseControlConnections: '3',
         databaseExchangeConnections: '12',
         firstUserRole: 'ims-usher-first-user',
@@ -126,6 +130,7 @@ suite('reading the configuration from an environment', () => {
       backChannelLogoutAudiences: ['portal-test', 'submission-test'],
       baseline: ['view'],
       cursorKey: CURSOR_KEY,
+      databaseAllowUnverifiedConnection: true,
       databaseControlConnections: 3,
       databaseExchangeConnections: 12,
       databasePassword: DATABASE_PASSWORD,
@@ -167,6 +172,8 @@ suite('reading the configuration from an environment', () => {
         apiDocsClient: configuration.apiDocsClient,
         autoAccept: configuration.autoAccept,
         baseline: configuration.baseline,
+        databaseAllowUnverifiedConnection:
+          configuration.databaseAllowUnverifiedConnection,
         databaseControlConnections: configuration.databaseControlConnections,
         databaseExchangeConnections: configuration.databaseExchangeConnections,
         firstUserRole: configuration.firstUserRole,
@@ -190,6 +197,7 @@ suite('reading the configuration from an environment', () => {
         apiDocsClient: '',
         autoAccept: false,
         baseline: ['count', 'view', 'export'],
+        databaseAllowUnverifiedConnection: false,
         databaseControlConnections: 5,
         databaseExchangeConnections: 10,
         firstUserRole: 'usher-first-user',
@@ -574,6 +582,154 @@ suite("reading the database's connection", () => {
         `the controller refuses to start: ${ENVIRONMENT_VARIABLES.databaseUrl} names no database role; it must name the role the controller connects as`,
       );
       assert.equal(shownBy(refusal).includes('127.0.0.1'), false);
+    });
+  });
+});
+
+suite('verifying the database connection', () => {
+  // A CA file of the test's own, standing for a database's CA certificate: its contents are never
+  // parsed while the configuration is read.
+  const folder = mkdtempSync(join(tmpdir(), 'usher-configuration-'));
+  after(() => rmSync(folder, { force: true, recursive: true }));
+  const caFile = join(folder, 'root.crt');
+  writeFileSync(caFile, '-----BEGIN CERTIFICATE-----\n');
+  const missingCaFile = join(folder, 'missing.crt');
+
+  const REMOTE = 'postgres://usher_controller@db.example.org:5432/usher';
+
+  const UNVERIFIED_RULE =
+    'connects to a host other than a loopback host or a Unix socket without verifying the server: set sslmode=verify-full, or sslmode=verify-ca with sslrootcert';
+
+  test('takes a connection to a loopback host or a Unix socket as it is, whatever its sslmode', () => {
+    const urls = [
+      'postgres://usher_controller@127.0.0.1:5432/usher',
+      'postgres://usher_controller@localhost:5432/usher?sslmode=disable',
+      'postgres://usher_controller@[::1]:5432/usher?sslmode=require',
+      'postgres://usher_controller@%2Fvar%2Frun%2Fpostgresql/usher',
+      `${REMOTE}?host=/var/run/postgresql`,
+      `${REMOTE}?host=localhost`,
+    ];
+
+    const read = urls.map(
+      (databaseUrl) =>
+        readConfiguration(environmentWith({ databaseUrl })).databaseUrl,
+    );
+
+    assert.deepEqual(read, urls);
+  });
+
+  test('takes a connection to any other host verifying the server, by sslmode=verify-full, or sslmode=verify-ca beside a CA file in sslrootcert', () => {
+    const urls = [
+      `${REMOTE}?sslmode=verify-full`,
+      `${REMOTE}?sslmode=verify-full&sslrootcert=${caFile}`,
+      `${REMOTE}?sslmode=verify-ca&sslrootcert=${caFile}`,
+      `${REMOTE}?sslmode=require&sslmode=verify-full`,
+    ];
+
+    const read = urls.map(
+      (databaseUrl) =>
+        readConfiguration(environmentWith({ databaseUrl })).databaseUrl,
+    );
+
+    assert.deepEqual(read, urls);
+  });
+
+  test('refuses a connection to any other host under every other sslmode, require included, or none, naming the variable and the rule', () => {
+    const urls = [
+      REMOTE,
+      `${REMOTE}?sslmode=disable`,
+      `${REMOTE}?sslmode=allow`,
+      `${REMOTE}?sslmode=prefer`,
+      `${REMOTE}?sslmode=require`,
+      `${REMOTE}?sslmode=require&sslrootcert=${caFile}`,
+      `${REMOTE}?sslmode=require&uselibpqcompat=true`,
+      `${REMOTE}?sslmode=verify-ca`,
+      `${REMOTE}?sslmode=no-verify`,
+      `${REMOTE}?sslmode=VERIFY-FULL`,
+      `${REMOTE}?sslmode=verify-full&sslmode=require`,
+      `${REMOTE}?ssl=true`,
+    ];
+
+    const refusals = urls.map((databaseUrl) =>
+      refusalOf(environmentWith({ databaseUrl })),
+    );
+
+    refusals.forEach((refusal) => {
+      assert.equal(
+        refusal.message,
+        `the controller refuses to start: ${ENVIRONMENT_VARIABLES.databaseUrl} ${UNVERIFIED_RULE}`,
+      );
+      assert.equal(shownBy(refusal).includes('db.example.org'), false);
+    });
+  });
+
+  test('judges the host the driver connects to, refusing a loopback hostname whose host parameter names another host', () => {
+    const refusal = refusalOf(
+      environmentWith({
+        databaseUrl:
+          'postgres://usher_controller@127.0.0.1:5432/usher?host=db.example.org',
+      }),
+    );
+
+    assert.deepEqual(refusal.variables, [ENVIRONMENT_VARIABLES.databaseUrl]);
+    assert.match(refusal.message, /without verifying the server/u);
+  });
+
+  test('refuses a URL naming a CA file in sslrootcert that cannot be read, naming the setting and never the path, wherever it connects and whatever is allowed', () => {
+    const environments = [
+      {
+        databaseUrl: `${REMOTE}?sslmode=verify-full&sslrootcert=${missingCaFile}`,
+      },
+      {
+        databaseUrl: `postgres://usher_controller@127.0.0.1:5432/usher?sslmode=verify-full&sslrootcert=${missingCaFile}`,
+      },
+      {
+        databaseAllowUnverifiedConnection: 'true',
+        databaseUrl: `${REMOTE}?sslmode=verify-ca&sslrootcert=${missingCaFile}`,
+      },
+    ];
+
+    const refusals = environments.map((values) =>
+      refusalOf(environmentWith(values)),
+    );
+
+    refusals.forEach((refusal) => {
+      assert.equal(
+        refusal.message,
+        `the controller refuses to start: ${ENVIRONMENT_VARIABLES.databaseUrl} names a file in sslrootcert that cannot be read`,
+      );
+      assert.equal(shownBy(refusal).includes(missingCaFile), false);
+    });
+  });
+
+  test('takes any connection while USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION is true, and refuses that switch written other than true or false', () => {
+    const allowed = readConfiguration(
+      environmentWith({
+        databaseAllowUnverifiedConnection: 'true',
+        databaseUrl: `${REMOTE}?sslmode=require`,
+      }),
+    );
+    const refusals = ['TRUE', 'yes', ''].map(
+      (databaseAllowUnverifiedConnection) =>
+        refusalOf(
+          environmentWith({
+            databaseAllowUnverifiedConnection,
+            databaseUrl: `${REMOTE}?sslmode=require`,
+          }),
+        ),
+    );
+
+    assert.equal(allowed.databaseUrl, `${REMOTE}?sslmode=require`);
+    assert.equal(allowed.databaseAllowUnverifiedConnection, true);
+    assert.equal(
+      ENVIRONMENT_VARIABLES.databaseAllowUnverifiedConnection,
+      'USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION',
+    );
+    refusals.forEach((refusal) => {
+      assert.deepEqual(refusal.variables, [
+        ENVIRONMENT_VARIABLES.databaseAllowUnverifiedConnection,
+        ENVIRONMENT_VARIABLES.databaseUrl,
+      ]);
     });
   });
 });

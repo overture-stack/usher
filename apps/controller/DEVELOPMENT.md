@@ -45,6 +45,12 @@ each release rather than with every run:
 `test-support/README.md` describes the shared support code, and how every test reaches the
 Controller through `test-support/controller.ts` alone.
 
+Every database URL the tests give the Controller names a loopback host, so its connections need no
+TLS verification, and no test but that setting's own sets `USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION`.
+With a Docker daemon on another machine, the tests reach PostgreSQL through a relay on `127.0.0.1`,
+as they reach Keycloak. The test of a verified connection starts a PostgreSQL serving TLS, its
+certificates generated inside the container by the image's own `openssl`.
+
 ## Running it locally
 
 `compose.yaml` starts what the Controller needs on this machine: PostgreSQL 15 and Keycloak, at
@@ -77,7 +83,10 @@ once the migrations have succeeded:
 
 The Controller takes the identity provider's URLs over http only on a loopback host, so this
 Controller shares Keycloak's network namespace, and the keycloak service publishes the Controller's
-port. These two commands are also the check that the image builds and reaches ready. The check runs
+port. It reaches PostgreSQL at the host `postgres`, over compose's network, which serves no TLS, so
+compose sets `USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION` to `true` for it and for the schema
+migration command, and each start writes `store.unverifiedConnectionAllowed` at warning. Run on this
+machine, the Controller reaches PostgreSQL at `127.0.0.1`, a loopback host, and needs neither. These two commands are also the check that the image builds and reaches ready. The check runs
 by hand rather than under `pnpm test`, since it needs Docker, an image build and the fixed ports
 above.
 

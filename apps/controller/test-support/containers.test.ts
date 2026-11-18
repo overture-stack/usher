@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { connect, createServer, type Socket } from 'node:net';
+import { networkInterfaces } from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { suite, type TestContext, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -13,8 +14,9 @@ import {
   DEFAULT_KEYCLOAK_REALM,
   flushValkey,
   openCacheConnection,
-  RELAYED_PATHS,
+  reachOnLoopback,
   type Relay,
+  RELAYED_PATHS,
   reportsHostPortTaken,
   startDedicatedPostgresql,
   startDedicatedValkey,
@@ -82,6 +84,15 @@ suite("the run's containers", () => {
     } finally {
       await postgres.end();
     }
+  });
+
+  test("give PostgreSQL's URL on this machine's loopback, so every database URL the harness gives names a loopback host", () => {
+    const { hostname } = new URL(runningContainers().postgresql.url);
+
+    assert.ok(
+      ['127.0.0.1', '[::1]', 'localhost'].includes(hostname),
+      `the URL names ${hostname}`,
+    );
   });
 
   test('answer on Valkey behind its password', async () => {
@@ -1111,5 +1122,55 @@ suite('a real Keycloak holding the people the address suites look up', () => {
     assert.deepEqual(deleted, []);
     assert.equal(administratorSubject, management.sub);
     assert.deepEqual(added, [1, 1, 1, 1]);
+  });
+});
+
+suite("a PostgreSQL reached on this machine's loopback", () => {
+  // An address of this machine other than loopback, where a daemon here publishes ports as well,
+  // standing in for the host a daemon on another machine publishes them on.
+  const otherAddress = (): string | undefined =>
+    Object.values(networkInterfaces())
+      .flat()
+      .find(
+        (entry) =>
+          entry !== undefined && !entry.internal && entry.family === 'IPv4',
+      )?.address;
+
+  test('keeps a URL whose host is loopback as it is, through no relay', async () => {
+    const { url } = runningContainers().postgresql;
+
+    const reached = await reachOnLoopback(url);
+    await reached.stop();
+
+    assert.deepEqual(
+      { relay: reached.relay, url: reached.url },
+      { relay: undefined, url },
+    );
+  });
+
+  test('reaches one published at another host through a relay on 127.0.0.1, its credentials and database kept', async (context) => {
+    const address = otherAddress();
+    if (address === undefined) {
+      context.skip('this machine has no address but loopback');
+      return;
+    }
+    const published = new URL(runningContainers().postgresql.url);
+    published.hostname = address;
+
+    const reached = await reachOnLoopback(published.href);
+    context.after(() => reached.stop());
+    const relayed = new URL(reached.url);
+    const client = new pg.Client({ connectionString: reached.url });
+    await client.connect();
+    const answer = await client
+      .query<{ one: number }>('SELECT 1 AS one')
+      .finally(() => client.end());
+
+    assert.equal(relayed.hostname, '127.0.0.1');
+    assert.deepEqual(
+      [relayed.username, relayed.password, relayed.pathname],
+      [published.username, published.password, published.pathname],
+    );
+    assert.deepEqual(answer.rows, [{ one: 1 }]);
   });
 });

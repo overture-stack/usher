@@ -66,6 +66,7 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
   resourceRevocation: 'resource.revocation',
   resourceSuppression: 'resource.suppression',
   tokenExchange: 'token.exchange',
+  tokenExchangeRefusalTally: 'token.exchangeRefusalTally',
 } as const);
 
 /** An event type the tests name, without the prefix. */
@@ -767,8 +768,8 @@ export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
 } as const);
 
 /**
- * The reasons a `managementToken.refusal` records (ruled), in the order the table lists them: a
- * management token that verifies under the trusted issuer and is still refused. Each is one of
+ * The reasons a `managementToken.refusal` records for a management token that verifies under the
+ * trusted issuer and is still refused (ruled), in the order the table lists them. Each is one of
  * {@link EXCHANGE_REFUSAL_REASONS}. A refused `token.exchange` names the token's subject, in
  * {@link REFUSED_SUBJECT_MEMBER}, for each of them but `missingSubject`, `otherType` and
  * `unrepresentableSubject`.
@@ -790,17 +791,19 @@ export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] =
   ]);
 
 /**
- * The reasons a `managementToken.refusalTally` counts by (ruled), in the order the table lists them:
+ * The reasons a `managementToken.refusal` records for a management credential it could not read or
+ * verify (ruled), in the order the table lists them after {@link MANAGEMENT_TOKEN_REFUSAL_REASONS}:
  * a credential that cannot be read, `malformedCredential`, as two `Authorization` headers or one sent
  * in the query cannot, which the Management API alone names; or one that cannot be verified, each of
- * those one of {@link EXCHANGE_REFUSAL_REASONS}.
+ * those one of {@link EXCHANGE_REFUSAL_REASONS}. Such a refusal names no subject.
  */
-export const MANAGEMENT_TOKEN_TALLY_REASONS: readonly string[] = Object.freeze([
-  'malformedCredential',
-  EXCHANGE_REFUSAL_REASONS.unreadableToken,
-  EXCHANGE_REFUSAL_REASONS.otherIssuer,
-  EXCHANGE_REFUSAL_REASONS.invalidSignature,
-]);
+export const UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS: readonly string[] =
+  Object.freeze([
+    'malformedCredential',
+    EXCHANGE_REFUSAL_REASONS.unreadableToken,
+    EXCHANGE_REFUSAL_REASONS.otherIssuer,
+    EXCHANGE_REFUSAL_REASONS.invalidSignature,
+  ]);
 
 /**
  * The member naming a refused token's subject (ruled): the `sub` of a sign-in or management token
@@ -814,11 +817,11 @@ export const MANAGEMENT_TOKEN_TALLY_REASONS: readonly string[] = Object.freeze([
  * `otherAudience`, `revokedPlatform`, `revokedPrincipal`, `signedOutSession` and
  * `serviceAccountNotPermitted` alone, once the token's signature verifies. Neither carries it for
  * `missingSubject` or `unrepresentableSubject`, and `otherType` names it at the Management API alone.
- * A refused `token.exchange` for a token whose signature does not verify (`unreadableToken`,
- * `otherIssuer`, `invalidSignature`) or for an opaque credential (`apiKeyVerifierNotConfigured`)
- * leaves it out, never empty and never `null`, so a forged token cannot put anyone's subject in the
- * trail. A `managementToken.refusalTally` carries no subject, and neither does the Bridge's
- * `credential.refusal`.
+ * A refusal of a credential whose signature does not verify (`unreadableToken`, `otherIssuer`,
+ * `invalidSignature`, and at the Management API `malformedCredential`), or at the exchange of an
+ * opaque credential (`apiKeyVerifierNotConfigured`), leaves it out, never empty and never `null`, so
+ * a forged token cannot put anyone's subject in the trail. No window's closing event carries a
+ * subject, and neither does the Bridge's `credential.refusal`.
  */
 export const REFUSED_SUBJECT_MEMBER = 'refusedSubject';
 
@@ -829,16 +832,23 @@ export const REFUSED_SUBJECT_MEMBER = 'refusedSubject';
 export const REFUSED_SUBJECT_MAXIMUM_LENGTH = 255;
 
 /**
- * The interval each instance records its `managementToken.refusalTally` events over (ruled): 60 s,
- * measured on its configured clock, as is every duration measured by the Controller.
+ * How long a window of refusals stays open once its key goes without a refusal (ruled): 10 minutes,
+ * measured on the Controller's configured clock, as is every duration measured by the Controller.
  */
-export const REFUSAL_TALLY_INTERVAL_MILLISECONDS = 60_000;
+export const REFUSAL_WINDOW_COOLDOWN_MILLISECONDS = 600_000;
+
+/** How long after it opened a window of refusals closes, however often refusals come (ruled): 60 minutes. */
+export const REFUSAL_WINDOW_CEILING_MILLISECONDS = 3_600_000;
+
+/** The most windows one instance holds open for single tokens at once (ruled). */
+export const PER_TOKEN_WINDOW_LIMIT = 10_000;
 
 /**
- * How soon after a test moves the Controller's clock past a tally interval it expects the interval's
- * tallies, in real time: 5 s, since nothing fixes how often the Controller reads its clock (assumed).
+ * How soon after a test moves the Controller's clock past a window's close it expects the window's
+ * closing event, in real time: 5 s, since nothing fixes how often the Controller reads its clock
+ * (assumed).
  */
-export const TALLY_WITHIN_MS = 5_000;
+export const WINDOW_CLOSED_WITHIN_MS = 5_000;
 
 /**
  * What a test compares of a `managementToken.refusal`: its actor, result, reason, the refused token's
@@ -855,18 +865,20 @@ export interface ManagementTokenRefusal {
 }
 
 /**
- * The `managementToken.refusal` a refused management token records (ruled): no actor but an
- * anonymous one, `denied`, the reason, the token's subject as {@link REFUSED_SUBJECT_MEMBER}, and the
- * operation's method and route.
+ * The `managementToken.refusal` a refused management credential records as it opens a window
+ * (ruled): no actor but an anonymous one, `denied`, the reason, a verified token's subject as
+ * {@link REFUSED_SUBJECT_MEMBER}, none for a credential that did not verify, and the operation's
+ * method and route.
  *
  * @param operation the operation matched, as admin.ts's `managementRouteOfOperation` reads it.
- * @param reason one of {@link MANAGEMENT_TOKEN_REFUSAL_REASONS}.
- * @param refusedSubject the refused token's `sub`.
+ * @param reason one of {@link MANAGEMENT_TOKEN_REFUSAL_REASONS} or
+ *   {@link UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS}.
+ * @param refusedSubject the refused token's `sub`, for a token that verified.
  */
 export const managementTokenRefusal = (
   { method, route }: ManagementRoute,
   reason: string,
-  refusedSubject: string,
+  refusedSubject?: string,
 ): ManagementTokenRefusal => ({
   actorId: null,
   actorType: 'anonymous',
@@ -908,8 +920,9 @@ export const managementTokenRefusalsIn = (
     );
 
 /**
- * The `managementToken.refusalTally` events among some, in their order: each one's actor, reason and
- * count, and whether it carries a subject, which none does (ruled).
+ * The `managementToken.refusalTally` events among some, in their order, each a window's closing:
+ * its actor, reason and count, the opening event it names as `windowId`, and whether it carries a
+ * subject, which none does (ruled).
  *
  * @param events the events.
  */
@@ -924,6 +937,7 @@ export const refusalTalliesIn = (
       carriesSubject: Object.hasOwn(data, REFUSED_SUBJECT_MEMBER),
       count: data['count'],
       reason: data['reason'],
+      windowId: data['windowId'],
     }));
 
 /**
@@ -941,7 +955,10 @@ export const credentialRefusalsElsewhere = (
       event.type !==
         emittedType(AUDIT_EVENT_TYPES.managementTokenRefusalTally) &&
       event.type !== emittedType(AUDIT_EVENT_TYPES.tokenExchange) &&
-      [...MANAGEMENT_TOKEN_REFUSAL_REASONS, ...MANAGEMENT_TOKEN_TALLY_REASONS]
+      [
+        ...MANAGEMENT_TOKEN_REFUSAL_REASONS,
+        ...UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS,
+      ]
         .map(String)
         .includes(String(dataOf(event)['reason'])),
   );
@@ -999,7 +1016,7 @@ export const CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS: readonly string[] =
 /**
  * The reasons a `channelAssertion.rejectionTally` always counts by (ruled): an assertion that cannot
  * be verified, which costs nothing to send, counted per reason and per registered application named
- * and recorded once each interval, as management credentials are. The tally also counts the reasons
+ * and recorded once each interval. The tally also counts the reasons
  * of {@link CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS} for every refusal not recorded one by one.
  */
 export const CHANNEL_ASSERTION_TALLY_REASONS: readonly string[] = Object.freeze(

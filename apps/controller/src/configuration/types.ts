@@ -43,6 +43,13 @@ export interface ControllerConfiguration {
   cursorKey: string;
 
   /**
+   * Whether a database connection that does not verify the server it reaches is allowed: off by
+   * default, so a connection leaving the host must set `sslmode=verify-full`, or `sslmode=verify-ca`
+   * with `sslrootcert`. On, every start writes a line at warning naming its variable.
+   */
+  databaseAllowUnverifiedConnection: boolean;
+
+  /**
    * The store connections each instance holds for everything but the token exchange and readiness:
    * the Management API, the back-channel logout, the notice channel, the key reloads, the tallies and
    * the start; 5 by default.
@@ -166,10 +173,14 @@ export type FieldWithVariable = Exclude<
 /**
  * The schema migration command's configuration: what a migration run is given. Its connection is
  * read from variables of its own, which the Controller never reads; the runtime role it grants to,
- * the schema and the durations the retention floor is made of are read from the Controller's own
- * variables, alike, so the two never disagree.
+ * the schema, the durations the retention floor is made of and whether an unverified database
+ * connection is allowed are read from the Controller's own variables, alike, so the two never
+ * disagree.
  */
 export interface SchemaMigrationConfiguration {
+  /** Whether a database connection that does not verify the server it reaches is allowed, as the Controller reads it. */
+  databaseAllowUnverifiedConnection: boolean;
+
   /** The schema migration role's PostgreSQL password, read from a variable of its own and never shown. */
   databasePassword: string;
 

@@ -5,6 +5,7 @@ import {
 } from '../eventLog/index.js';
 import type { SignInRefusal, StoredRefusal } from '../signInTokens/index.js';
 import type { ConferringRule } from '../tokenCalculation/index.js';
+import type { WindowClosing } from '../windowedRefusals/index.js';
 
 /**
  * Why a fault kept an exchange from being answered, the code answered: the identity provider's keys
@@ -84,19 +85,25 @@ export const issuedExchangeEvent = ({
  * `refusedSubject` whole when that is at most {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters, and
  * leaves the member out for a longer one, never cut short, or where none is given. A subject given
  * must be that of a token whose signature verified, so a forged token can put no subject in the trail.
+ * The application given, the one whose channel assertion verified, is named as `applicationId`, as a
+ * refusal of a credential that did not verify names it.
  *
- * @param refusal the reason, the verified token's subject if it is named, and the request's address.
+ * @param refusal the reason, the verified token's subject if it is named, the application if it is
+ *   named, and the request's address.
  */
 export const deniedExchangeEvent = ({
+  applicationId,
   reason,
   refusedSubject,
   sourceIp,
 }: {
+  applicationId?: string;
   reason: ExchangeDenial;
   refusedSubject?: string;
   sourceIp: string;
 }): AuditEvent => ({
   data: {
+    ...(applicationId === undefined ? {} : { applicationId }),
     reason,
     ...(refusedSubject !== undefined &&
     refusedSubject.length <= REFUSED_SUBJECT_MAXIMUM_LENGTH
@@ -166,4 +173,32 @@ export const failedExchangeEvent = ({
   data: { reason, result: 'failed', sourceIp, userId: null },
   severity: 'error',
   type: TYPE,
+});
+
+/**
+ * The `token.exchangeRefusalTally` closing a window of credentials the exchange refused `denied`, at
+ * warning, its actor the system: its reason, its count, the instants of its first and latest
+ * refusals, the application its key names where it names one, and as `windowId` the
+ * `token.exchange` that opened it, where that event committed. Nothing a credential carried is named.
+ *
+ * @param closing the window as it closed.
+ */
+export const exchangeRefusalTallyEvent = ({
+  applicationId,
+  count,
+  firstSeenAt,
+  lastSeenAt,
+  reason,
+  windowId,
+}: WindowClosing): AuditEvent => ({
+  data: {
+    ...(applicationId === undefined ? {} : { applicationId }),
+    count,
+    firstSeenAt: eventInstant(firstSeenAt),
+    lastSeenAt: eventInstant(lastSeenAt),
+    reason,
+    ...(windowId === undefined ? {} : { windowId }),
+  },
+  severity: 'warning',
+  type: 'token.exchangeRefusalTally',
 });

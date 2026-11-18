@@ -9,6 +9,7 @@ import type { Actor } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import { failureCodeOf, failureNameOf } from '../failures/index.js';
 import type { UnverifiedReason } from '../identityProvider/index.js';
+import { tokenDigestOf } from '../refusalWindows/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import { readLogoutRequest } from './readLogoutRequest.js';
 import { readLogoutToken } from './readLogoutToken.js';
@@ -20,9 +21,9 @@ import {
   sendSignOutProblem,
 } from './signOutProblems.js';
 import type {
-  LogoutTokenTallyReason,
   SignOut,
   SignOutRouteSettings,
+  UnverifiedLogoutReason,
 } from './types.js';
 
 /** The path the identity provider's back-channel logout is sent to. */
@@ -39,14 +40,13 @@ const BODY_TOO_LARGE = 'FST_ERR_CTP_BODY_TOO_LARGE';
 // The framework's codes for a body it could not read, each answered as the request's fault.
 const CONTENT_PARSING = 'FST_ERR_CTP_';
 
-// The tally reason each of the verifier's reasons is counted under. It covers every reason the
-// verifier gives, so a reason added there fails to compile here rather than reaching the audit trail
-// unlisted.
-const TALLY_REASONS = {
+// The reason each of the verifier's reasons is refused under. It covers every reason the verifier
+// gives, so a reason added there fails to compile here rather than reaching the audit trail unlisted.
+const UNVERIFIED_REASONS = {
   invalidSignature: 'invalidSignature',
   otherIssuer: 'otherIssuer',
   unreadableToken: 'unreadableToken',
-} as const satisfies Readonly<Record<UnverifiedReason, LogoutTokenTallyReason>>;
+} as const satisfies Readonly<Record<UnverifiedReason, UnverifiedLogoutReason>>;
 
 const ANONYMOUS: Actor = Object.freeze({ type: 'anonymous' });
 
@@ -77,32 +77,33 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * past 64 KiB; then its token is verified under the trusted issuer's published keys, through the
  * verifier every route shares, and judged as a logout token for a configured back-channel logout
  * client, current and naming a session, a subject or both, every refusal of the token answered
- * alike, `400 logoutTokenRefused`, so the answer tells no check from another. A token that could
- * not be verified costs nothing to send, so it is counted by reason in the tally given; one that
- * verified and is refused anyway came from the identity provider, so it is recorded as a
- * `logoutToken.refusal`, its actor anonymous, naming its reason, the request's address and, as
- * `refusedSubject`, the subject its `sub` names where that may be named. A token whose key cannot
- * be had while the provider cannot be reached is answered `400 identityProviderUnavailable`, and
- * one whose key is not confirmed yet, the refetch cooldown forbidding a fetch,
- * `400 signingKeyUnconfirmed` with no `Retry-After`, which Back-Channel Logout gives no meaning to.
- * Neither is counted or recorded, and a request refused before its token is verified is recorded
- * nowhere. A token accepted is recorded as a sign-out, with its `identity.signOut` event and, where
- * the subject is known, a principal notice to every application, in one transaction declaring the
- * system as its actor, and answered `200` once that transaction has committed, so every application
- * can read any notice before the provider is told the sign-out was taken; a sign-out the store
- * holds already writes nothing more and is answered `200` alike. A store that cannot take it is
- * answered `400 storeUnavailable`, its failure written by its code alone, a commit it did not
- * confirm `400 outcomeUnknown`, and a failure the route did not expect `400 internalError`: as
- * OpenID Connect Back-Channel Logout 1.0 §2.8 has it, every logout not taken is answered `400`, its
- * code naming the cause. Every answer is `no-store`, and no line it writes holds the token, a URL
- * or a message from the store: a failure is named by its code or its name only where that is an
- * identifier.
+ * alike, `400 logoutTokenRefused`, so the answer tells no check from another. Each refused token is
+ * counted in the windows given: one that verified and is refused anyway under its digest and the
+ * reason, and one that could not be verified under the reason alone, never under anything read from
+ * it. A refusal opening a window is recorded as a `logoutToken.refusal`, its actor anonymous,
+ * naming its reason, the request's address and, as `refusedSubject`, the subject named by a verified
+ * token's `sub` where that may be named; a refusal counted in an open window writes nothing. A token
+ * whose key cannot be had while the provider cannot be reached is answered
+ * `400 identityProviderUnavailable`, and one whose key is not confirmed yet, the refetch cooldown
+ * forbidding a fetch, `400 signingKeyUnconfirmed` with no `Retry-After`, which Back-Channel Logout
+ * gives no meaning to. Neither is counted or recorded, and a request refused before its token is
+ * verified is recorded nowhere. A token accepted is recorded as a sign-out, with its
+ * `identity.signOut` event and, where the subject is known, a principal notice to every
+ * application, in one transaction declaring the system as its actor, and answered `200` once that
+ * transaction has committed, so every application can read any notice before the provider is told
+ * the sign-out was taken; a sign-out the store holds already writes nothing more and is answered
+ * `200` alike. A store that cannot take it is answered `400 storeUnavailable`, its failure written
+ * by its code alone, a commit it did not confirm `400 outcomeUnknown`, and a failure the route did
+ * not expect `400 internalError`: as OpenID Connect Back-Channel Logout 1.0 §2.8 has it, every
+ * logout not taken is answered `400`, its code naming the cause. Every answer is `no-store`, and no
+ * line it writes holds the token, a URL or a message from the store: a failure is named by its code
+ * or its name only where that is an identifier.
  *
- * @param settings the verifier, the tally, the trail, the log, and the configuration the route reads.
+ * @param settings the verifier, the windows, the trail, the log, and the configuration the route reads.
  */
 export const createSignOutRoute = ({
   eventLog,
-  refusalTally,
+  refusals,
   settings,
   tokenVerifier,
   trail,
@@ -124,20 +125,42 @@ export const createSignOutRoute = ({
       return refusedWith(SIGN_OUT_PROBLEMS.signingKeyUnconfirmed);
     }
     if (verification.kind === 'unverified') {
-      refusalTally.count(TALLY_REASONS[verification.reason]);
+      const reason = UNVERIFIED_REASONS[verification.reason];
+      await refusals.refuse(
+        { reason, route: 'logout' },
+        () =>
+          trail.recordEvent(
+            ANONYMOUS,
+            logoutTokenRefusalEvent({
+              reason,
+              sourceIp: request.ip,
+              subject: undefined,
+            }),
+          ),
+        (id) => id,
+      );
       return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
     }
     const token = readLogoutToken(verification, settings, settings.clock.now());
     if (token.kind === 'accepted') {
       return { kind: 'admitted', signOut: token.signOut };
     }
-    await trail.recordEvent(
-      ANONYMOUS,
-      logoutTokenRefusalEvent({
+    await refusals.refuse(
+      {
         reason: token.reason,
-        sourceIp: request.ip,
-        subject: token.subject,
-      }),
+        route: 'logout',
+        tokenDigest: tokenDigestOf(reading.token),
+      },
+      () =>
+        trail.recordEvent(
+          ANONYMOUS,
+          logoutTokenRefusalEvent({
+            reason: token.reason,
+            sourceIp: request.ip,
+            subject: token.subject,
+          }),
+        ),
+      (id) => id,
     );
     return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
   };

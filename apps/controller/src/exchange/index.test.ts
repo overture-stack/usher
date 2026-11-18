@@ -16,6 +16,7 @@ suite("the exchange's module", () => {
       'TOKEN_LIMIT_BYTES',
       'createExchange',
       'createKeyConfirmations',
+      'exchangeRefusalTallyEvent',
     ]);
   });
 });

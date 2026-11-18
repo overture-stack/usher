@@ -29,11 +29,15 @@ import {
   type RejectionReason,
   rejectionTallyEvent,
 } from '../channelAssertion/index.js';
-import type { ControllerConfiguration } from '../configuration/index.js';
+import {
+  type ControllerConfiguration,
+  ENVIRONMENT_VARIABLES,
+} from '../configuration/index.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
 import {
   createExchange,
   createKeyConfirmations,
+  exchangeRefusalTallyEvent,
   LATE_REQUEST_THRESHOLD_MILLISECONDS,
   TOKEN_LIMIT_BYTES,
 } from '../exchange/index.js';
@@ -44,9 +48,7 @@ import { createTokenVerifier } from '../identityProvider/index.js';
 import {
   type AfterCommitStepName,
   type ManagementDependencies,
-  REFUSAL_TALLY_INTERVAL_MILLISECONDS,
   refusalTallyEvent,
-  type TallyReason,
 } from '../managementApi/index.js';
 import {
   type Migration,
@@ -70,18 +72,19 @@ import {
 } from '../signInTokens/index.js';
 import {
   createSignOutRoute,
-  LOGOUT_TOKEN_TALLY_INTERVAL_MILLISECONDS,
   logoutTokenRefusalTallyEvent,
-  type LogoutTokenTallyReason,
 } from '../signOuts/index.js';
 import {
   checkStatementLimits,
+  databaseCaFile,
   openStore,
   prepareStore,
   readStoreProbe,
+  UNVERIFIED_CONNECTION_ALLOWED,
 } from '../store/index.js';
 import { createStoreReader } from '../storeTimeout/index.js';
 import { createTally } from '../tally/index.js';
+import { createWindowedRefusals } from '../windowedRefusals/index.js';
 import { afterCommitTrail, runAfterCommit } from './afterCommitTrail.js';
 import type { AfterCommitStep, Controller } from './types.js';
 
@@ -148,16 +151,25 @@ const READINESS_CONNECTIONS = 1;
  * answer of any route, readiness's included. The Management API, the exchange and the back-channel
  * logout verify the identity provider's tokens through one verifier, and the revocation channel and
  * the exchange check channel assertions through one verifier, counting those they cannot verify in
- * one tally. Every unit of its store work, a request's statement or transaction, a recorded event,
+ * one tally. The credentials refused by those three routes are counted in one set of windows for the
+ * instance, each route recording the refusal opening a window and closing its windows with its own
+ * event. Every unit of its store work, a request's statement or transaction, a recorded event,
  * a read of the keys or the notices, a run of the sweep, or the start's transaction, runs within
  * the store timeout.
+ *
+ * Every start allowed a database connection that does not verify the server it reaches writes one
+ * line at warning, {@link UNVERIFIED_CONNECTION_ALLOWED}, naming the variable allowing it, before
+ * anything else. Every connection opening over TLS verifies the server against the CA file the
+ * database URL names in `sslrootcert` as that file is at that moment, so a CA certificate reissued
+ * takes effect with no restart; a change to the file, or its becoming unreadable, is written once.
  *
  * It holds three pools of store connections, each with the same limits, so no one kind of work can
  * hold the connections another needs: the exchange pool, of `databaseExchangeConnections`, for the
  * exchange's own transactions, its key confirmations and its recordings of refused assertions; the
  * control pool, of `databaseControlConnections`, for everything else, the Management API, the
  * back-channel logout, the notice channel's reads and its recordings of refused assertions, the key
- * reloads, the tallies, the retention sweep and the start; and one connection of readiness's own.
+ * reloads, the tallies, the windows' closing events, the retention sweep and the start; and one
+ * connection of readiness's own.
  * The start checks the store's limits on the sessions of each.
  *
  * A channel assertion that verifies and is refused anyway, on either route, is recorded as a
@@ -172,7 +184,8 @@ const READINESS_CONNECTIONS = 1;
  * its store work runs within that deadline too. Its stop first stops the sweep, so no run of it
  * begins once the stop has, then ends every stream, then closes the server, letting requests in
  * flight finish, waits for the refused channel assertions still being recorded and for the sweep's
- * run in flight, records the counts its four tallies hold, stops reading the keys, then closes
+ * run in flight, records the counts its two tallies hold and closes every open window, stops reading
+ * the keys, then closes
  * every pool's connections and lets go of the log stream. It reports itself ready while it is
  * started, its log stream takes its lines, and its store answers readiness's own connection within
  * the store timeout, recording no migration this release does not know and not reading as read-only
@@ -193,20 +206,25 @@ export const createController = (
     writes: false,
   };
   const eventLog = createEventLog(configuration);
+  // One reading of the CA file for every pool, so a change to it is written once.
+  const caCertificates = databaseCaFile(configuration, eventLog);
   const controlStore = openStore(
     configuration,
     eventLog,
     configuration.databaseControlConnections,
+    caCertificates,
   );
   const exchangeStore = openStore(
     configuration,
     eventLog,
     configuration.databaseExchangeConnections,
+    caCertificates,
   );
   const readinessStore = openStore(
     configuration,
     eventLog,
     READINESS_CONNECTIONS,
+    caCertificates,
   );
   const pools = [controlStore, exchangeStore, readinessStore];
   // The reader and the trail serve the control pool; the exchange and readiness hold their own.
@@ -232,18 +250,16 @@ export const createController = (
     settings: configuration,
     store: exchangeStore,
   });
-  const refusalTally = createTally<TallyReason>({
+  // One instance's windows for the credentials refused at the Management API, the back-channel
+  // logout and the exchange, each route closing its own with its own event.
+  const refusals = createWindowedRefusals({
     clock: configuration.clock,
-    eventOf: refusalTallyEvent,
-    intervalMilliseconds: REFUSAL_TALLY_INTERVAL_MILLISECONDS,
-    partsOf: (reason) => [reason],
-    trail,
-  });
-  const logoutTokenRefusals = createTally<LogoutTokenTallyReason>({
-    clock: configuration.clock,
-    eventOf: logoutTokenRefusalTallyEvent,
-    intervalMilliseconds: LOGOUT_TOKEN_TALLY_INTERVAL_MILLISECONDS,
-    partsOf: (reason) => [reason],
+    closingEvents: {
+      exchange: exchangeRefusalTallyEvent,
+      logout: logoutTokenRefusalTallyEvent,
+      management: refusalTallyEvent,
+    },
+    log: eventLog,
     trail,
   });
   const assertionRejections = createTally<RejectionCounted>({
@@ -361,6 +377,7 @@ export const createController = (
     }),
     lateRequestThresholdMilliseconds: LATE_REQUEST_THRESHOLD_MILLISECONDS,
     monotonicNow: () => performance.now(),
+    refusals,
     settings: configuration,
     sharesExceeded,
     tokenLimitBytes: TOKEN_LIMIT_BYTES,
@@ -370,7 +387,7 @@ export const createController = (
     administratorStatus: (identity) =>
       readAdministratorStatus(reader, configuration.databaseSchema, identity),
     eventLog,
-    refusalTally,
+    refusals,
     runAfterCommit: (names) =>
       runAfterCommit({
         log: eventLog,
@@ -449,7 +466,7 @@ export const createController = (
     exchange.route,
     createSignOutRoute({
       eventLog,
-      refusalTally: logoutTokenRefusals,
+      refusals,
       settings: configuration,
       tokenVerifier,
       trail: wakingTrail,
@@ -460,6 +477,11 @@ export const createController = (
   });
 
   const startOnce = async (): Promise<{ url: URL }> => {
+    if (configuration.databaseAllowUnverifiedConnection) {
+      eventLog.warning(UNVERIFIED_CONNECTION_ALLOWED, {
+        variable: ENVIRONMENT_VARIABLES.databaseAllowUnverifiedConnection,
+      });
+    }
     const migrations = await readMigrations();
     lifecycle.migrations = migrations;
     const { writes } = await prepareStore(
@@ -478,8 +500,7 @@ export const createController = (
     );
     await keyRing.start();
     await server.listen({ host: configuration.host, port: configuration.port });
-    refusalTally.start();
-    logoutTokenRefusals.start();
+    refusals.start();
     assertionRejections.start();
     sharesExceeded.start();
     // A role that may only read deletes nothing, so its runs could only fail.
@@ -501,8 +522,7 @@ export const createController = (
         await server.close();
       } finally {
         await Promise.all([
-          refusalTally.stop(),
-          logoutTokenRefusals.stop(),
+          refusals.stop(),
           // The rejection tally stops after the assertion refusals, so any count they make while
           // stopping reaches it.
           assertionRefusals.stop().then(() => assertionRejections.stop()),

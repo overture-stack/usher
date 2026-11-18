@@ -223,7 +223,7 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
         anyAdministrator: known.administratorExists,
       }),
       eventLog: { error: () => undefined },
-      refusalTally: { count: () => undefined },
+      refusals: { refuse: async () => ({ kind: 'counted' }) },
       runAfterCommit: async () => undefined,
       settings: {
         clock: { now: () => NOW },

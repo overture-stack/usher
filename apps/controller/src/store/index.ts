@@ -1,4 +1,9 @@
-export { openStore } from './connection.js';
+export {
+  databaseCaFile,
+  openStore,
+  UNVERIFIED_CONNECTION_ALLOWED,
+} from './connection.js';
+export { CA_FILE_CHANGED, CA_FILE_UNREADABLE } from './caFile.js';
 export { connectionProblemOf } from './connectionProblemOf.js';
 export { readStoreProbe } from './migrationRecord.js';
 export { checkStatementLimits, prepareStore } from './prepareStore.js';

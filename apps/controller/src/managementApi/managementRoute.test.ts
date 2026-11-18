@@ -21,8 +21,13 @@ import {
   MISSING_ISSUED_AT,
   type StoredRefusal,
 } from '../signInTokens/index.js';
+import {
+  createWindowedRefusals,
+  type WindowedRefusals,
+} from '../windowedRefusals/index.js';
 import { managementRoute, STORE_FAILED } from './managementRoute.js';
 import { BODY_LIMIT_BYTES } from './problems.js';
+import { refusalTallyEvent } from './refusalTallyEvent.js';
 import { readTextMembers } from './requestBody.js';
 import type {
   AdministratorStatus,
@@ -97,10 +102,13 @@ interface Stand {
   /** What each request asked to run after its commit, by the names given. */
   afterCommit: (readonly AfterCommitStepName[])[];
 
-  counted: string[];
   lines: Line[];
   ran: { input: unknown; params: Readonly<Record<string, string>> }[];
   recorded: Recorded[];
+
+  /** The windows the refused credentials are counted in, which a test stops to close them. */
+  refusals: WindowedRefusals;
+
   server: FastifyInstance;
 }
 
@@ -153,6 +161,43 @@ interface StandOptions {
 
 const ROUTE = '/admin/shelves/{id}/books';
 
+// The id the stand's trail gives every event it records.
+const EVENT_ID = '0f4c1a2b-3d5e-4f60-8a7b-9c0d1e2f3a4b';
+
+const INSTANT = new Date(NOW).toISOString();
+
+// The managementToken.refusal of a credential refused at the stand's operation, naming no subject.
+const refusalOf = (reason: string): Recorded => ({
+  actor: { type: 'anonymous' },
+  event: {
+    data: {
+      method: 'POST',
+      reason,
+      result: 'denied',
+      route: ROUTE,
+      sourceIp: '127.0.0.1',
+    },
+    severity: 'warning',
+    type: 'managementToken.refusal',
+  },
+});
+
+// The managementToken.refusalTally closing a window at the stand's fixed instant.
+const closingOf = (reason: string, count: number): Recorded => ({
+  actor: { type: 'system' },
+  event: {
+    data: {
+      count,
+      firstSeenAt: INSTANT,
+      lastSeenAt: INSTANT,
+      reason,
+      windowId: EVENT_ID,
+    },
+    severity: 'warning',
+    type: 'managementToken.refusalTally',
+  },
+});
+
 // An operation shaped as the application operations are: administrators alone, a JSON body holding
 // one required text member, and an event naming the shelf the request names.
 const shelving = (
@@ -201,13 +246,35 @@ const standUp = async (
     verifications = {},
   }: StandOptions = {},
 ): Promise<Stand> => {
+  const recorded: Recorded[] = [];
+  const lines: Line[] = [];
+  const trail: ManagementDependencies['trail'] = {
+    recordEvent: async (actor, event) => {
+      recorded.push({ actor, event });
+      return EVENT_ID;
+    },
+  };
+  const log = {
+    error: (message: string, fields?: LineFields) => {
+      lines.push({ fields, message });
+    },
+  };
   const stand: Omit<Stand, 'server'> = {
     administratorQuestions: [],
     afterCommit: [],
-    counted: [],
-    lines: [],
+    lines,
     ran: [],
-    recorded: [],
+    recorded,
+    refusals: createWindowedRefusals({
+      clock: SETTINGS.clock,
+      closingEvents: {
+        exchange: refusalTallyEvent,
+        logout: refusalTallyEvent,
+        management: refusalTallyEvent,
+      },
+      log,
+      trail,
+    }),
   };
   const server = createServer({
     isLive: () => true,
@@ -220,16 +287,8 @@ const standUp = async (
         stand.administratorQuestions.push(identity);
         return administrators(identity);
       },
-      eventLog: {
-        error: (message, fields) => {
-          stand.lines.push({ fields, message });
-        },
-      },
-      refusalTally: {
-        count: (reason) => {
-          stand.counted.push(reason);
-        },
-      },
+      eventLog: log,
+      refusals: stand.refusals,
       runAfterCommit: (steps) => {
         stand.afterCommit.push(steps);
         return runAfterCommit(steps);
@@ -243,12 +302,7 @@ const standUp = async (
             reason: 'invalidSignature',
           },
       },
-      trail: {
-        recordEvent: async (actor, event) => {
-          stand.recorded.push({ actor, event });
-          return 'event-id';
-        },
-      },
+      trail,
     }),
   );
   context.after(() => server.close());
@@ -354,10 +408,11 @@ suite('admitting a request to a management operation', () => {
       String(answer.headers['content-type']),
       /^application\/problem\+json/u,
     );
-    assert.deepEqual([stand.recorded, stand.counted, stand.ran], [[], [], []]);
+    await stand.refusals.stop();
+    assert.deepEqual([stand.recorded, stand.ran], [[], []]);
   });
 
-  test('refuses two credentials, another scheme, or a credential in the query 400, before verifying anything, counting each as malformedCredential', async (context) => {
+  test('refuses two credentials, another scheme, or a credential in the query 400, before verifying anything, recording the first as managementToken.refusal for malformedCredential and counting the rest in its window', async (context) => {
     const stand = await standUp(context, { verifications: ADMIN });
 
     const answers = [
@@ -373,18 +428,22 @@ suite('admitting a request to a management operation', () => {
       assert.equal(answer.statusCode, 400);
       assert.equal(codeOf(answer), 'malformedCredential');
     });
-    assert.deepEqual(stand.counted, [
-      'malformedCredential',
-      'malformedCredential',
-      'malformedCredential',
+    const recordedBeforeStop = [...stand.recorded];
+    await stand.refusals.stop();
+
+    assert.deepEqual(recordedBeforeStop, [refusalOf('malformedCredential')]);
+    assert.deepEqual(stand.recorded, [
+      refusalOf('malformedCredential'),
+      closingOf('malformedCredential', 3),
     ]);
-    assert.deepEqual([stand.recorded, stand.ran], [[], []]);
+    assert.deepEqual(stand.ran, []);
   });
 
-  test('counts a credential it cannot verify by its reason, recording no event for it', async (context) => {
+  test("records the first credential it cannot verify for each reason as managementToken.refusal naming no subject, and counts each later one in that reason's window, whatever the credential", async (context) => {
     const stand = await standUp(context, {
       verifications: {
         forged: { kind: 'unverified', reason: 'invalidSignature' },
+        forgedAgain: { kind: 'unverified', reason: 'invalidSignature' },
         other: { kind: 'unverified', reason: 'otherIssuer' },
         unreadable: { kind: 'unverified', reason: 'unreadableToken' },
       },
@@ -394,18 +453,54 @@ suite('admitting a request to a management operation', () => {
       await post(stand, { token: 'other' }),
       await post(stand, { token: 'forged' }),
       await post(stand, { token: 'unreadable' }),
+      await post(stand, { token: 'forgedAgain' }),
+      await post(stand, { token: 'forged' }),
     ];
+    const recordedBeforeStop = [...stand.recorded];
+    await stand.refusals.stop();
 
     answers.forEach((answer) => assert.equal(answer.statusCode, 401));
-    assert.deepEqual(stand.counted, [
-      'otherIssuer',
-      'invalidSignature',
-      'unreadableToken',
+    assert.deepEqual(recordedBeforeStop, [
+      refusalOf('otherIssuer'),
+      refusalOf('invalidSignature'),
+      refusalOf('unreadableToken'),
     ]);
-    assert.deepEqual(stand.recorded, []);
+    assert.deepEqual(stand.recorded.slice(3), [
+      closingOf('otherIssuer', 1),
+      closingOf('invalidSignature', 3),
+      closingOf('unreadableToken', 1),
+    ]);
   });
 
-  test('records a verified token naming no usable subject as managementToken.refusal for missingSubject, naming no subject and counting nothing', async (context) => {
+  test("records a verified token's first refusal for a reason, counts its later ones in that window, and opens another window for another token", async (context) => {
+    const stand = await standUp(context, {
+      verifications: {
+        expired: verified({ exp: SECONDS - 60 }),
+        expiredToo: verified({ exp: SECONDS - 60 }),
+      },
+    });
+
+    const answers = [
+      await post(stand, { token: 'expired' }),
+      await post(stand, { token: 'expired' }),
+      await post(stand, { token: 'expiredToo' }),
+      await post(stand, { token: 'expired' }),
+    ];
+    const recordedBeforeStop = stand.recorded.map(({ event }) => event.type);
+    await stand.refusals.stop();
+
+    answers.forEach((answer) => assert.equal(answer.statusCode, 401));
+    assert.deepEqual(recordedBeforeStop, [
+      'managementToken.refusal',
+      'managementToken.refusal',
+    ]);
+    assert.deepEqual(stand.recorded.slice(2), [
+      closingOf('expiredToken', 3),
+      closingOf('expiredToken', 1),
+    ]);
+  });
+
+  test('records a verified token naming no usable subject as managementToken.refusal for missingSubject, naming no subject', async (context) => {
     const stand = await standUp(context, {
       verifications: {
         blank: verified({ sub: '' }),
@@ -441,7 +536,7 @@ suite('admitting a request to a management operation', () => {
         },
       })),
     );
-    assert.deepEqual([stand.counted, stand.ran], [[], []]);
+    assert.deepEqual(stand.ran, []);
   });
 
   test("records a verified token refused for its claims as managementToken.refusal, its actor anonymous, naming the route's template and the token's subject", async (context) => {
@@ -512,10 +607,10 @@ suite('admitting a request to a management operation', () => {
         },
       })),
     );
-    assert.deepEqual([stand.counted, stand.ran], [[], []]);
+    assert.deepEqual(stand.ran, []);
   });
 
-  test('refuses a verified ID token 401 credentialRefused, recording one managementToken.refusal for otherType naming its subject, and counting nothing', async (context) => {
+  test('refuses a verified ID token 401 credentialRefused, recording one managementToken.refusal for otherType naming its subject', async (context) => {
     const stand = await standUp(context, {
       verifications: { identity: verified({ typ: 'ID' }) },
     });
@@ -541,7 +636,7 @@ suite('admitting a request to a management operation', () => {
         },
       },
     ]);
-    assert.deepEqual([stand.counted, stand.ran], [[], []]);
+    assert.deepEqual(stand.ran, []);
   });
 
   test('names a refused subject of the maximum length whole, and leaves out a longer one', async (context) => {
@@ -674,10 +769,8 @@ suite('admitting a request to a management operation', () => {
       assert.equal(answer.statusCode, 503);
       assert.equal(codeOf(answer), 'identityProviderUnavailable');
     });
-    assert.deepEqual(
-      [stand.lines, stand.recorded, stand.counted, stand.ran],
-      [[], [], [], []],
-    );
+    await stand.refusals.stop();
+    assert.deepEqual([stand.lines, stand.recorded, stand.ran], [[], [], []]);
   });
 
   test('answers 503 signingKeyUnconfirmed with Retry-After for a signing key not confirmed yet, recording, counting and writing nothing', async (context) => {
@@ -692,10 +785,8 @@ suite('admitting a request to a management operation', () => {
     assert.equal(answer.statusCode, 503);
     assert.equal(answer.headers['retry-after'], '17');
     assert.equal(codeOf(answer), 'signingKeyUnconfirmed');
-    assert.deepEqual(
-      [stand.lines, stand.recorded, stand.counted, stand.ran],
-      [[], [], [], []],
-    );
+    await stand.refusals.stop();
+    assert.deepEqual([stand.lines, stand.recorded, stand.ran], [[], [], []]);
   });
 
   test('refuses a subject or session holding text that cannot be stored, or a session that is not text, 400, recording managementToken.refusal for unrepresentableSubject, naming no subject', async (context) => {
@@ -734,7 +825,7 @@ suite('admitting a request to a management operation', () => {
         },
       })),
     );
-    assert.deepEqual([stand.counted, stand.ran], [[], []]);
+    assert.deepEqual(stand.ran, []);
   });
 });
 

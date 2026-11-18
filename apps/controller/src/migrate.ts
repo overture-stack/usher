@@ -3,7 +3,9 @@
 // refusal writes one structured line naming the variables at fault to standard error, as the
 // Controller's start does, and ends the process with a non-zero code; a run that applies its
 // migrations writes one line at info naming them to standard output, where the Controller writes
-// its own, and ends with zero. A failure nothing caught writes its line and ends the process at once.
+// its own, and ends with zero. A run allowed a database connection that does not verify the server
+// writes one line at warning naming the variable allowing it there first, as the Controller's start
+// does. A failure nothing caught writes its line and ends the process at once.
 import { constants } from 'node:os';
 
 import {
@@ -23,10 +25,15 @@ import {
   type MigrationOutcome,
   type RefusedOption,
 } from './migrations/index.js';
-import { connectionProblemOf } from './store/index.js';
+import {
+  connectionProblemOf,
+  UNVERIFIED_CONNECTION_ALLOWED,
+} from './store/index.js';
 
-// The log stream's numbering of info.
+// The log stream's numbering of info and of warn.
 const INFO_LEVEL = 30;
+
+const WARNING_LEVEL = 40;
 
 const STOP_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 
@@ -74,6 +81,18 @@ const reportApplied = ({
   process.stdout.write(`${JSON.stringify(line)}\n`);
 };
 
+// The line naming the variable that allows an unverified database connection, as the Controller's
+// start writes it, in the order the run's other lines keep.
+const reportUnverifiedAllowed = (): void => {
+  const line = {
+    level: WARNING_LEVEL,
+    variable: ENVIRONMENT_VARIABLES.databaseAllowUnverifiedConnection,
+    message: UNVERIFIED_CONNECTION_ALLOWED,
+    time: new Date().toISOString(),
+  };
+  process.stdout.write(`${JSON.stringify(line)}\n`);
+};
+
 process.on(
   'uncaughtException',
   reportUncaughtFailure('the schema migration command failed'),
@@ -97,7 +116,11 @@ STOP_SIGNALS.forEach((signal) => {
 });
 
 const run = async (): Promise<void> => {
-  const configuration = readSchemaMigrationConfiguration(process.env);
+  const { databaseAllowUnverifiedConnection, ...configuration } =
+    readSchemaMigrationConfiguration(process.env);
+  if (databaseAllowUnverifiedConnection) {
+    reportUnverifiedAllowed();
+  }
   const outcome = await migrate({
     ...configuration,
     signal: stopping.signal,

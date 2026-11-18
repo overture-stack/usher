@@ -19,8 +19,11 @@ import {
   CONTROLLER_ROLE_DESCRIPTION,
   readDatabaseRole,
   readDatabaseUrl,
+  readSwitch,
   readText,
+  readVerifiedConnection,
   type Reading,
+  then,
   type Variable,
 } from './variableReaders.js';
 
@@ -53,7 +56,9 @@ const valueOf = <Value>(reading: Reading<Value>): Value => {
  * before any is used: a refusal lists every rule broken, each naming the variable at fault and
  * never its value. The schema migration role's URL and its password are read from variables of the
  * command's own, {@link SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES}, the URL refused when it carries a
- * password or names no database role, as the Controller's is. The runtime role is the database
+ * password, names no database role, names a file the driver cannot read, or leaves the host without
+ * verifying the server while `USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION`, read as the Controller
+ * reads it, does not allow that, as the Controller's is. The runtime role is the database
  * role the Controller's own URL names, read and refused as the Controller reads it, and nothing else
  * of that URL is kept; the Controller's password is never read. The schema and the retention
  * floor's durations are read from the Controller's own variables, with the Controller's defaults,
@@ -75,12 +80,28 @@ export const readSchemaMigrationConfiguration = (
     value: environment[ENVIRONMENT_VARIABLES[field]],
   });
   const retention = readRetentionDurations(shared);
+  const databaseAllowUnverifiedConnection = readSwitch(
+    shared('databaseAllowUnverifiedConnection'),
+    false,
+  );
   const readings = {
+    databaseAllowUnverifiedConnection,
     databasePassword: readText(own('databasePassword')),
-    databaseUrl: readDatabaseUrl(own('databaseUrl'), {
-      passwordVariable: SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databasePassword,
-      roleDescription: 'the schema migration role',
-    }),
+    // An opt-out that cannot be read allows nothing, beside its own refusal.
+    databaseUrl: then(
+      readDatabaseUrl(own('databaseUrl'), {
+        passwordVariable:
+          SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databasePassword,
+        roleDescription: 'the schema migration role',
+      }),
+      (url) =>
+        readVerifiedConnection(
+          own('databaseUrl'),
+          url,
+          databaseAllowUnverifiedConnection.kind === 'read' &&
+            databaseAllowUnverifiedConnection.value,
+        ),
+    ),
     retentionGraceSeconds: retention.retentionGraceSeconds,
     retentionMarginSeconds: retention.retentionMarginSeconds,
     runtimeRole: readDatabaseRole(shared('databaseUrl'), {
@@ -103,6 +124,9 @@ export const readSchemaMigrationConfiguration = (
     readProblems.length === 0 ? floorProblems(durations()) : readProblems;
   if (problems.length === 0) {
     return {
+      databaseAllowUnverifiedConnection: valueOf(
+        readings.databaseAllowUnverifiedConnection,
+      ),
       databasePassword: valueOf(readings.databasePassword),
       databaseUrl: valueOf(readings.databaseUrl),
       retentionFloorSeconds: retentionFloorSeconds(durations()),

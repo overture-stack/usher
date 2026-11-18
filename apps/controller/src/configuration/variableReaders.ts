@@ -1,5 +1,7 @@
 import { BlockList, isIP } from 'node:net';
 
+import { parseIntoClientConfig } from 'pg-connection-string';
+
 import type { StartProblem } from '../failures/index.js';
 
 /** One environment variable as an environment gives it: its name, and its value or none. */
@@ -399,6 +401,99 @@ export const readDatabaseUrl = (
   rules: DatabaseUrlRules,
 ): Reading<string> =>
   then(readDatabaseConnection(variable, rules), ({ url }) => read(url));
+
+// The settings of a connection URL that name a file, each read by the driver as it parses the URL.
+const FILE_PARAMETERS: readonly string[] = ['sslcert', 'sslkey', 'sslrootcert'];
+
+// The `sslmode` values that verify the server a connection reaches: `verify-ca` only beside a CA file
+// of its own. Every other value is refused literally, `require` included, which this driver takes as
+// `verify-full` only while `uselibpqcompat` is unset.
+const VERIFYING_MODE = 'verify-full';
+
+const VERIFYING_MODE_WITH_CA_FILE = 'verify-ca';
+
+// The rule broken by a database URL whose connection leaves the host without verifying the server.
+const UNVERIFIED_CONNECTION_RULE =
+  'connects to a host other than a loopback host or a Unix socket without verifying the server: set sslmode=verify-full, or sslmode=verify-ca with sslrootcert';
+
+type ParsedConnection =
+  | { config: Readonly<Record<string, unknown>>; kind: 'parsed' }
+  | { kind: 'unparsed'; parameter: string | undefined };
+
+// The setting naming the file behind a parse's failure to read one, the last setting of each name
+// being the one read by the driver; none for a parse failing otherwise.
+const unreadFileOf = (url: string, failure: unknown): string | undefined => {
+  const path: unknown =
+    typeof failure === 'object' && failure !== null && 'path' in failure
+      ? failure.path
+      : undefined;
+  const parameters = URL.parse(url)?.searchParams;
+  return typeof path === 'string' && parameters !== undefined
+    ? FILE_PARAMETERS.find(
+        (parameter) => parameters.getAll(parameter).at(-1) === path,
+      )
+    : undefined;
+};
+
+// The URL as given to the pool by the driver's own parser, which also reads the files it names.
+const parsedConnection = (url: string): ParsedConnection => {
+  try {
+    return { config: { ...parseIntoClientConfig(url) }, kind: 'parsed' };
+  } catch (failure) {
+    return { kind: 'unparsed', parameter: unreadFileOf(url, failure) };
+  }
+};
+
+// Whether reaching a host keeps the connection on this machine: a loopback host, in a URL's hostname
+// form or in the driver's, its brackets taken off, or a Unix socket, a host that is an absolute path.
+const staysOnHost = (host: unknown): boolean =>
+  typeof host === 'string' &&
+  (host.startsWith('/') ||
+    LOOPBACK_HOSTS.has(host) ||
+    LOOPBACK_HOSTS.has(`[${host}]`));
+
+const verifiesServer = ({
+  sslmode,
+  sslrootcert,
+}: Readonly<Record<string, unknown>>): boolean =>
+  sslmode === VERIFYING_MODE ||
+  (sslmode === VERIFYING_MODE_WITH_CA_FILE &&
+    typeof sslrootcert === 'string' &&
+    sslrootcert !== '');
+
+/**
+ * Reads a PostgreSQL connection URL as the driver will connect with it, judged on the connection the
+ * driver's own parser gives, which takes a `host` parameter over the URL's hostname. A connection to
+ * a loopback host or a Unix socket is taken as it is. Any other must verify the server it reaches,
+ * with `sslmode=verify-full`, or `sslmode=verify-ca` with `sslrootcert`, unless unverified
+ * connections are allowed. A URL naming a file the driver cannot read, a CA file in `sslrootcert`
+ * among them, is refused whatever is allowed, naming the setting, never the path.
+ *
+ * @param variable the variable the URL was read from.
+ * @param url the URL, already read as {@link readDatabaseUrl} reads it.
+ * @param unverifiedAllowed whether a connection that does not verify the server is allowed.
+ */
+export const readVerifiedConnection = (
+  variable: Variable,
+  url: string,
+  unverifiedAllowed: boolean,
+): Reading<string> => {
+  const parsed = parsedConnection(url);
+  if (parsed.kind === 'unparsed') {
+    return refused(
+      variable,
+      parsed.parameter === undefined
+        ? 'is not a URL the database driver can read'
+        : `names a file in ${parsed.parameter} that cannot be read`,
+    );
+  }
+  const { config } = parsed;
+  return unverifiedAllowed ||
+    staysOnHost(config['host']) ||
+    verifiesServer(config)
+    ? read(url)
+    : refused(variable, UNVERIFIED_CONNECTION_RULE);
+};
 
 /**
  * Reads the database role a PostgreSQL connection URL names, as the driver reads it, the URL refused

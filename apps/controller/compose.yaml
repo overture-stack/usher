@@ -13,7 +13,9 @@ name: usher
 
 # Variables read alike by the controller and its schema migration command. The command stores a
 # notice retention floor made of the three durations, so the two must read the same ones.
-x-shared-environment: &shared-environment
+x-shared-environment:
+  &shared-environment # The postgres service serves no TLS, and compose's network never leaves this machine.
+  USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION: 'true'
   USHER_DATABASE_SCHEMA: usher
   USHER_DATABASE_URL: postgres://usher_controller@postgres:5432/usher
   USHER_RETENTION_GRACE_SECONDS: '60'

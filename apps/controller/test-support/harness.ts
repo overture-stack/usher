@@ -419,6 +419,7 @@ export const harnessConfiguration = ({
     cacheUrl,
     clock: SYSTEM_CLOCK,
     cursorKey: freshKey(),
+    databaseAllowUnverifiedConnection: false,
     databaseControlConnections: 5,
     databaseExchangeConnections: 10,
     databasePassword: freshPassword(),

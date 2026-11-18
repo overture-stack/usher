@@ -61,6 +61,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 // The log stream's numbering of info, which the command's line naming what it applied is written at.
 const INFO_LEVEL = 30;
 
+// The log stream's numbering of warn, which the command's line allowing an unverified database
+// connection is written at.
+const WARNING_LEVEL = 40;
+
 // The log stream's numbering of fatal, which the command's line saying why it ended is written at.
 const FATAL_LEVEL = 60;
 
@@ -217,6 +221,44 @@ suite('migrations', () => {
       ].filter((shown) => JSON.stringify(lines).includes(shown)),
       [],
     );
+  });
+
+  test('writes one line at warning naming USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION before its other lines on a run allowing an unverified connection, and none on a run not allowing one', async (context) => {
+    const database = await openEmptyDatabase(context);
+    const environment = schemaMigrationEnvironmentFor({
+      databaseUrl: database.urlFor('migration'),
+      retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
+      runtimeRole: DATABASE_ROLES.runtime,
+      schema: database.schema,
+    });
+
+    const runs = await Promise.all(
+      ['true', 'false'].map(async (allowed) => {
+        const exit = await spawnSchemaMigrationCommand({
+          ...environment,
+          [ENVIRONMENT_VARIABLES.databaseAllowUnverifiedConnection]: allowed,
+        });
+        return linesOf(exit.stdout).map((line) => {
+          assert.ok(typeof line === 'object' && line !== null);
+          return {
+            level: Reflect.get(line, 'level'),
+            message: Reflect.get(line, 'message'),
+            variable: Reflect.get(line, 'variable'),
+          };
+        });
+      }),
+    );
+
+    assert.deepEqual(runs[0]?.[0], {
+      level: WARNING_LEVEL,
+      message: 'store.unverifiedConnectionAllowed',
+      variable: ENVIRONMENT_VARIABLES.databaseAllowUnverifiedConnection,
+    });
+    assert.deepEqual(
+      runs.map((lines) => lines.at(-1)?.message),
+      ['schemaMigrations.applied', 'schemaMigrations.applied'],
+    );
+    assert.equal(runs[1]?.length, 1);
   });
 
   test('changes nothing when run on an up-to-date database, its line naming no migration applied', async (context) => {

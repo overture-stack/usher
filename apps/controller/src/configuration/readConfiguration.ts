@@ -23,6 +23,7 @@ import {
   readSecureUrl,
   readSwitch,
   readText,
+  readVerifiedConnection,
   type Reading,
   refused,
   then,
@@ -47,10 +48,12 @@ const valueOf = <Value>(reading: Reading<Value>): Value => {
 /**
  * Reads the Controller's configuration from an environment, every variable checked before any is
  * used: a refusal lists every rule broken, each naming the variable at fault and never its value.
- * The keys are 32 bytes as 43 base64url characters in canonical form, any whitespace around them left
- * out; the database's password is read from its own variable, as given, and a database URL carrying
- * one is refused, as is one naming no database role. The clock is the system's and the log stream
- * the process's standard output; neither is read from the environment.
+ * The keys are 32 bytes as 43 base64url characters in canonical form, any whitespace around them
+ * left out; the database's password is read from its own variable, as given, and a database URL
+ * carrying one is refused, as is one naming no database role, one naming a file the driver cannot
+ * read, and one whose connection leaves the host without verifying the server while that is not
+ * allowed. The clock is the system's and the log stream the process's standard output; neither is
+ * read from the environment.
  *
  * @param environment the environment variables, such as `process.env`.
  * @throws {StartRefusal} naming each variable at fault.
@@ -67,6 +70,10 @@ export const readConfiguration = (
     fallback: 'usher-first-user',
   });
   const managementClients = readList(variable('managementClients'));
+  const databaseAllowUnverifiedConnection = readSwitch(
+    variable('databaseAllowUnverifiedConnection'),
+    false,
+  );
   const readings = {
     // The page's tokens are management tokens, so its client is one of the management clients, as listed.
     apiDocsClient: then(
@@ -87,6 +94,7 @@ export const readConfiguration = (
     ),
     baseline: readRecordRule(variable('baseline')),
     cursorKey: readKey(variable('cursorKey')),
+    databaseAllowUnverifiedConnection,
     databaseControlConnections: readInteger(
       variable('databaseControlConnections'),
       { fallback: 5, minimum: 1 },
@@ -97,10 +105,20 @@ export const readConfiguration = (
     ),
     databasePassword: readText(variable('databasePassword')),
     databaseSchema: readText(variable('databaseSchema')),
-    databaseUrl: readDatabaseUrl(variable('databaseUrl'), {
-      passwordVariable: ENVIRONMENT_VARIABLES.databasePassword,
-      roleDescription: CONTROLLER_ROLE_DESCRIPTION,
-    }),
+    // An opt-out that cannot be read allows nothing, beside its own refusal.
+    databaseUrl: then(
+      readDatabaseUrl(variable('databaseUrl'), {
+        passwordVariable: ENVIRONMENT_VARIABLES.databasePassword,
+        roleDescription: CONTROLLER_ROLE_DESCRIPTION,
+      }),
+      (url) =>
+        readVerifiedConnection(
+          variable('databaseUrl'),
+          url,
+          databaseAllowUnverifiedConnection.kind === 'read' &&
+            databaseAllowUnverifiedConnection.value,
+        ),
+    ),
     eventSource: readText(variable('eventSource')),
     firstUserRole,
     heartbeatMilliseconds: readInteger(variable('heartbeatMilliseconds'), {
@@ -187,6 +205,9 @@ export const readConfiguration = (
       baseline: valueOf(readings.baseline),
       clock: SYSTEM_CLOCK,
       cursorKey: valueOf(readings.cursorKey),
+      databaseAllowUnverifiedConnection: valueOf(
+        readings.databaseAllowUnverifiedConnection,
+      ),
       databaseControlConnections: valueOf(readings.databaseControlConnections),
       databaseExchangeConnections: valueOf(
         readings.databaseExchangeConnections,

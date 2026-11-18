@@ -15,6 +15,8 @@ export const ENVIRONMENT_VARIABLES: Readonly<
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
   baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',
+  databaseAllowUnverifiedConnection:
+    'USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION',
   databaseControlConnections: 'USHER_DATABASE_CONTROL_CONNECTIONS',
   databaseExchangeConnections: 'USHER_DATABASE_EXCHANGE_CONNECTIONS',
   databasePassword: 'USHER_DATABASE_PASSWORD',
@@ -61,8 +63,9 @@ export const REPLACED_VARIABLES: Readonly<Record<string, string>> =
  * The environment variable each of the schema migration command's own fields is read from, by
  * field: the schema migration role's connection. The Controller never reads them, so its processes
  * never hold the schema migration role's password. The command reads the runtime role it grants to,
- * the database role `USHER_DATABASE_URL` names, and the schema and the retention floor's durations
- * from the Controller's own variables, in {@link ENVIRONMENT_VARIABLES}.
+ * the database role `USHER_DATABASE_URL` names, the schema, the retention floor's durations and
+ * whether an unverified database connection is allowed from the Controller's own variables, in
+ * {@link ENVIRONMENT_VARIABLES}.
  */
 export const SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES: Readonly<
   Record<SchemaMigrationFieldWithVariable, string>

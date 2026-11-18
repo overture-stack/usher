@@ -32,7 +32,7 @@ import {
   fieldSetsIn,
   jsonObjectOf,
   MANAGEMENT_TOKEN_REFUSAL_REASONS,
-  MANAGEMENT_TOKEN_TALLY_REASONS,
+  UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS,
   managementTokenRefusal,
   managementTokenRefusalsIn,
   IMPORT_ORIGIN_EVENT_TYPES,
@@ -43,7 +43,9 @@ import {
   readAuditEvents,
   REFUSED_SUBJECT_MAXIMUM_LENGTH,
   REFUSED_SUBJECT_MEMBER,
-  REFUSAL_TALLY_INTERVAL_MILLISECONDS,
+  PER_TOKEN_WINDOW_LIMIT,
+  REFUSAL_WINDOW_CEILING_MILLISECONDS,
+  REFUSAL_WINDOW_COOLDOWN_MILLISECONDS,
   refusalTalliesIn,
   severityIn,
   TOKEN_CAP_EVENT,
@@ -542,7 +544,7 @@ suite("the controller's events, as the document registers them", () => {
     );
   });
 
-  test("reads a refused management credential's two events, the refusal anonymous and naming the subject only under its condition, the tally the system's and naming none, each with the reasons its row lists, the tally an interval of 60 s", () => {
+  test("reads a refused management credential's two events, the refusal opening a window anonymous and naming the subject only under its condition, with every reason its row lists, and the closing the system's, naming its opening only once committed and no subject", () => {
     const refusal = registered(AUDIT_EVENT_TYPES.managementTokenRefusal);
     const tally = registered(AUDIT_EVENT_TYPES.managementTokenRefusalTally);
 
@@ -566,8 +568,8 @@ suite("the controller's events, as the document registers them", () => {
         {
           actor: { kind: 'system' },
           fields: {
-            always: ['reason', 'count'],
-            conditional: [],
+            always: ['reason', 'count', 'firstSeenAt', 'lastSeenAt'],
+            conditional: ['windowId'],
             onRefusal: [],
             onSuccess: [],
           },
@@ -575,17 +577,48 @@ suite("the controller's events, as the document registers them", () => {
         },
       ],
     );
-    assert.deepEqual(
-      valuesListedFor(refusal.row.fields, 'reason'),
-      MANAGEMENT_TOKEN_REFUSAL_REASONS,
-    );
-    assert.deepEqual(
-      valuesListedFor(tally.row.fields, 'reason'),
-      MANAGEMENT_TOKEN_TALLY_REASONS,
-    );
+    assert.deepEqual(valuesListedFor(refusal.row.fields, 'reason'), [
+      ...MANAGEMENT_TOKEN_REFUSAL_REASONS,
+      ...UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS,
+    ]);
     assert.equal(REFUSED_SUBJECT_MEMBER, 'refusedSubject');
     assert.equal(REFUSED_SUBJECT_MAXIMUM_LENGTH, 255);
-    assert.equal(REFUSAL_TALLY_INTERVAL_MILLISECONDS, 60_000);
+  });
+
+  test("reads each route's window closing as the system's at warning, naming its reason, its count, its first and latest refusals, its opening only once committed, and at the exchange the application of credentials that did not verify", () => {
+    const closings = [
+      registered(AUDIT_EVENT_TYPES.managementTokenRefusalTally),
+      registered(AUDIT_EVENT_TYPES.logoutTokenRefusalTally),
+      registered(AUDIT_EVENT_TYPES.tokenExchangeRefusalTally),
+    ];
+
+    assert.deepEqual(
+      closings.map(({ actor, fields, severity }) => ({
+        actor,
+        fields,
+        severity,
+      })),
+      [['windowId'], ['windowId'], ['windowId', 'applicationId']].map(
+        (conditional) => ({
+          actor: { kind: 'system' },
+          fields: {
+            always: ['reason', 'count', 'firstSeenAt', 'lastSeenAt'],
+            conditional,
+            onRefusal: [],
+            onSuccess: [],
+          },
+          severity: { kind: 'fixed', severity: 'warning' },
+        }),
+      ),
+    );
+    assert.deepEqual(
+      [
+        REFUSAL_WINDOW_COOLDOWN_MILLISECONDS,
+        REFUSAL_WINDOW_CEILING_MILLISECONDS,
+        PER_TOKEN_WINDOW_LIMIT,
+      ],
+      [600_000, 3_600_000, 10_000],
+    );
   });
 
   test('reads a key revocation as naming its reason only when given, recorded at warning when refused, critical for compromised and info otherwise', () => {
@@ -818,7 +851,10 @@ suite("the controller's events, as the document registers them", () => {
         actorId: null,
         actorType: 'system',
         count: 3,
+        firstSeenAt: '2026-11-04T11:55:00.000Z',
+        lastSeenAt: '2026-11-04T11:58:00.000Z',
         reason: 'otherIssuer',
+        windowId: 'the-opening-event',
       }),
       line('token.exchange', { reason: 'expiredToken', result: 'denied' }),
       line('grant.revocation', { reason: 'expiredToken', result: 'denied' }),
@@ -842,6 +878,7 @@ suite("the controller's events, as the document registers them", () => {
         carriesSubject: false,
         count: 3,
         reason: 'otherIssuer',
+        windowId: 'the-opening-event',
       },
     ]);
     assert.deepEqual(

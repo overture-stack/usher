@@ -140,7 +140,8 @@ export type AuditEventType =
   | 'resource.retirement'
   | 'resource.revocation'
   | 'resource.suppression'
-  | 'token.exchange';
+  | 'token.exchange'
+  | 'token.exchangeRefusalTally';
 
 /** One audit event, as it is recorded in a transaction. */
 export interface AuditEvent {

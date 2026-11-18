@@ -13,6 +13,7 @@ import {
 } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import type { UnverifiedReason } from '../identityProvider/index.js';
+import { tokenDigestOf } from '../refusalWindows/index.js';
 import { holdsUnstorableText, isStorableText } from '../store/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import {
@@ -35,7 +36,7 @@ import type {
   ManagementOperation,
   OperationOutcome,
   Principal,
-  TallyReason,
+  UnverifiedCredentialReason,
 } from './types.js';
 
 /** The line naming a failure of the store while an operation, or the standing of its caller, was read. */
@@ -49,14 +50,15 @@ const BODY_TOO_LARGE = 'FST_ERR_CTP_BODY_TOO_LARGE';
 // The framework's codes for a body it could not read, each answered as the request's fault.
 const CONTENT_PARSING = 'FST_ERR_CTP_';
 
-// The tally reason each of the verifier's reasons is counted under. It covers every reason the
-// verifier gives, so a reason added there fails to compile here rather than reaching the audit trail
-// unlisted.
-const TALLY_REASONS = {
+// The reason each of the verifier's reasons is refused under. It covers every reason the verifier
+// gives, so a reason added there fails to compile here rather than reaching the audit trail unlisted.
+const UNVERIFIED_REASONS = {
   invalidSignature: 'invalidSignature',
   otherIssuer: 'otherIssuer',
   unreadableToken: 'unreadableToken',
-} as const satisfies Readonly<Record<UnverifiedReason, TallyReason>>;
+} as const satisfies Readonly<
+  Record<UnverifiedReason, UnverifiedCredentialReason>
+>;
 
 // A request's body as a refused event may read it.
 type Body = Readonly<Record<string, unknown>> | undefined;
@@ -135,24 +137,28 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
 
 /**
  * Builds the route of one Management API operation. Each request is admitted before its body is
- * read: its credential must be exactly one Bearer token, else it is refused 400 and counted in the
- * refusal tally as `malformedCredential`; a missing one is refused 401 and recorded nowhere; a
- * token that cannot be verified is refused 401 and counted in the refusal tally by reason; a token
- * whose keys cannot be fetched is refused 503, and one whose signing key is not confirmed yet is
- * refused 503 `signingKeyUnconfirmed` with `Retry-After` naming the seconds to wait, neither
- * counted nor recorded; a verified token refused for its claims, or by a revocation of the person
- * or the platform or a sign-out in the store, is refused 401, or 400 for a subject or session that
- * cannot be stored, and recorded as `managementToken.refusal`, its actor anonymous, before the
- * operation begins. Admin status is then read from the store, by the token's subject under the
- * trusted issuer, on every request and never from the token; a store that cannot say is answered
- * 503, recording nothing. Until Usher has an administrator, every operation but those answered
- * before the first one is refused 403 `noAdministratorYet`, a service account included; a service
- * account is refused 403, and so is anyone but a platform administrator for an operation of theirs
- * alone, and anyone whose token lacks the first-user role for an operation of the first user's
- * alone. Then the query, refused 400 for an operation taking none, and the body are read, and the
- * operation run. What the operation answers is sent once the steps it names to run after its commit
- * have run, as is the answer to a change whose `COMMIT` went unconfirmed; a refusal or any other
- * failure runs none. A success carrying no content is answered with no body.
+ * read: its credential must be exactly one Bearer token, else it is refused 400 as
+ * `malformedCredential`; a missing one is refused 401 and recorded nowhere; a token that cannot be
+ * verified is refused 401 under the verifier's reason; a token whose keys cannot be fetched is
+ * refused 503, and one whose signing key is not confirmed yet is refused 503
+ * `signingKeyUnconfirmed` with `Retry-After` naming the seconds to wait, neither counted nor
+ * recorded; a verified token refused for its claims, or by a revocation of the person or the
+ * platform or a sign-out in the store, is refused 401, or 400 for a subject or session that cannot
+ * be stored. Each refused credential but a missing one is counted in the windows given before the
+ * operation begins: a verified token's under its digest and the reason, any other credential's
+ * under the reason alone, never under anything read from it. A refusal opening a window is recorded
+ * as `managementToken.refusal`, its actor anonymous, naming the reason, and the token's subject
+ * where the token verified; a refusal counted in an open window writes nothing. Admin status is
+ * then read from the store, by the token's subject under the trusted issuer, on every request and
+ * never from the token; a store that cannot say is answered 503, recording nothing. Until Usher has
+ * an administrator, every operation but those answered before the first one is refused 403
+ * `noAdministratorYet`, a service account included; a service account is refused 403, and so is
+ * anyone but a platform administrator for an operation of theirs alone, and anyone whose token
+ * lacks the first-user role for an operation of the first user's alone. Then the query, refused 400
+ * for an operation taking none, and the body are read, and the operation run. What the operation
+ * answers is sent once the steps it names to run after its commit have run, as is the answer to a
+ * change whose `COMMIT` went unconfirmed; a refusal or any other failure runs none. A success
+ * carrying no content is answered with no body.
  *
  * A refusal from admission on records the operation's own event, `denied`, at warning. Its reason
  * is the code answered, or the reason the operation gives in its place, as where a `404` stands in
@@ -167,7 +173,7 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * the request named.
  *
  * @param operation the operation.
- * @param dependencies the verifier, the tally, the store's readings of a principal's standing and
+ * @param dependencies the verifier, the windows, the store's readings of a principal's standing and
  *   of admin status, the trail, the runner of the steps after a commit, the log and the settings
  *   every operation shares.
  */
@@ -178,7 +184,7 @@ export const managementRoute = <Input>(
   const {
     administratorStatus,
     eventLog,
-    refusalTally,
+    refusals,
     runAfterCommit,
     settings,
     storedRefusal,
@@ -235,8 +241,8 @@ export const managementRoute = <Input>(
     return sendProblem(reply, problem);
   };
 
-  // The refused subject is left out for a token whose subject is missing, or whose subject or session
-  // cannot be stored, as it is for a subject too long.
+  // The refused subject is left out for a credential that did not verify, a token whose subject is
+  // missing, or whose subject or session cannot be stored, as it is for a subject too long.
   const recordTokenRefusal = (
     request: FastifyRequest,
     reason: string,
@@ -260,6 +266,23 @@ export const managementRoute = <Input>(
     return trail.recordEvent({ type: 'anonymous' }, event);
   };
 
+  // A refusal counted in its window, recorded only when it opens one.
+  const refuseIn = async (
+    request: FastifyRequest,
+    { reason, tokenDigest }: { reason: string; tokenDigest?: string },
+    subject?: string,
+  ): Promise<void> => {
+    await refusals.refuse(
+      {
+        reason,
+        route: 'management',
+        ...(tokenDigest === undefined ? {} : { tokenDigest }),
+      },
+      () => recordTokenRefusal(request, reason, subject),
+      (id) => id,
+    );
+  };
+
   const authenticate = async (request: FastifyRequest): Promise<Admission> => {
     const credential = readCredential(
       request.raw.rawHeaders,
@@ -269,7 +292,7 @@ export const managementRoute = <Input>(
       return refusedWith(PROBLEMS.credentialRefused);
     }
     if (credential.kind === 'malformed') {
-      refusalTally.count('malformedCredential');
+      await refuseIn(request, { reason: 'malformedCredential' });
       return refusedWith(PROBLEMS.malformedCredential);
     }
     const verification = await tokenVerifier.verify(credential.token);
@@ -284,24 +307,34 @@ export const managementRoute = <Input>(
       );
     }
     if (verification.kind === 'unverified') {
-      refusalTally.count(TALLY_REASONS[verification.reason]);
+      await refuseIn(request, {
+        reason: UNVERIFIED_REASONS[verification.reason],
+      });
       return refusedWith(PROBLEMS.credentialRefused);
     }
+    const tokenDigest = tokenDigestOf(credential.token);
     const claims = readManagementClaims(
       verification,
       settings,
       settings.clock.now(),
     );
     if (claims.kind === 'unreadable') {
-      await recordTokenRefusal(request, 'missingSubject');
+      await refuseIn(request, { reason: 'missingSubject', tokenDigest });
       return refusedWith(PROBLEMS.credentialRefused);
     }
     if (claims.kind === 'unrepresentable') {
-      await recordTokenRefusal(request, 'unrepresentableSubject');
+      await refuseIn(request, {
+        reason: 'unrepresentableSubject',
+        tokenDigest,
+      });
       return refusedWith(PROBLEMS.unrepresentableText);
     }
     if (claims.kind === 'refused') {
-      await recordTokenRefusal(request, claims.reason, claims.subject);
+      await refuseIn(
+        request,
+        { reason: claims.reason, tokenDigest },
+        claims.subject,
+      );
       return refusedWith(PROBLEMS.credentialRefused);
     }
     const { principal, session } = claims;
@@ -322,7 +355,11 @@ export const managementRoute = <Input>(
       return refusedWith(PROBLEMS.storeUnavailable);
     }
     if (stored.refusal !== undefined) {
-      await recordTokenRefusal(request, stored.refusal, principal.subject);
+      await refuseIn(
+        request,
+        { reason: stored.refusal, tokenDigest },
+        principal.subject,
+      );
       return refusedWith(PROBLEMS.credentialRefused);
     }
     const status = await administratorStatus({

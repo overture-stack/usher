@@ -14,6 +14,7 @@ import type { Actor, AuditEvent, AuditTransaction } from '../eventLog/index.js';
 import { failureCodeOf, failureNameOf } from '../failures/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
 import type { Problem } from '../http/index.js';
+import { tokenDigestOf } from '../refusalWindows/index.js';
 import {
   isServiceAccount,
   readStoredRefusal,
@@ -31,6 +32,7 @@ import { sealUsherToken, type VersionOnePayload } from '../usherToken/index.js';
 import { anonymousPayload } from './anonymousPayload.js';
 import {
   deniedExchangeEvent,
+  type ExchangeDenial,
   failedExchangeEvent,
   issuedExchangeEvent,
   overLimitExchangeEvent,
@@ -126,11 +128,27 @@ type Outcome = Answer | { failure: unknown; kind: 'failed' } | { kind: 'late' };
 
 const LATE: Outcome = Object.freeze({ kind: 'late' });
 
-/** A credential's refusal, and the `token.exchange` recording it. */
+/**
+ * A credential's refusal, and the `token.exchange` recording it; for a refusal recorded `denied`, its
+ * reason, and whether the token's signature verified, which decides the window it is counted in.
+ */
 interface CredentialRefusal extends Refusal {
+  denial?: { reason: ExchangeDenial; tokenVerified: boolean };
   event: AuditEvent;
   kind: 'refused';
 }
+
+/** What an exchange's store work found for a principal the store refuses, recording nothing. */
+interface StandingRefusal {
+  kind: 'standingRefused';
+  standing: StoredRefusal;
+  subject: string;
+}
+
+/** What recording a refusal opening a window gave: its answer and its event's id, or the failure that kept it from committing. */
+type Opening =
+  | { answer: Answer; eventId: string; kind: 'recorded' }
+  | { failure: unknown; kind: 'failed' };
 
 /** A sign-in token the judgement accepted. */
 type AcceptedJudgement = Extract<SignInJudgement, { kind: 'accepted' }>;
@@ -173,12 +191,22 @@ const storeFailureOf = (sourceIp: string): AuditEvent => ({
 // The bytes a token takes as the `200` body sends it: its compact form, as UTF-8.
 const bodyBytesOf = (token: string): number => Buffer.byteLength(token, 'utf8');
 
-// A refusal answered the one 403 every refused credential gets.
-const credentialRefused = (event: AuditEvent): CredentialRefusal => ({
+// A refusal answered the one 403 every refused credential gets, recorded denied under its reason.
+const credentialRefused = (
+  event: AuditEvent,
+  denial: NonNullable<CredentialRefusal['denial']>,
+): CredentialRefusal => ({
+  denial,
   event,
   kind: 'refused',
   problem: EXCHANGE_PROBLEMS.credentialRefused,
 });
+
+// The id a refusal opening a window committed its event under, when it was admitted and committed.
+const openedIdOf = (opening: Admitted<Opening>): string | undefined =>
+  opening.kind === 'admitted' && opening.result.kind === 'recorded'
+    ? opening.result.eventId
+    : undefined;
 
 // What the work gives within the milliseconds given, or the fallback once they have passed. The work
 // is never cancelled, since what it waits on may be shared with other requests still waiting on it, and
@@ -226,6 +254,7 @@ const acceptedCredentialOf = (
         refusedSubject: subject,
         sourceIp,
       }),
+      { reason: 'serviceAccountNotPermitted', tokenVerified: true },
     );
   }
   return expiresAt > issuedAt
@@ -236,6 +265,7 @@ const acceptedCredentialOf = (
           refusedSubject: subject,
           sourceIp,
         }),
+        { reason: 'expiredToken', tokenVerified: true },
       );
 };
 
@@ -247,16 +277,21 @@ const acceptedCredentialOf = (
 const judgedCredentialOf = (
   judgement: SignInJudgement,
   issuing: { issuedAt: number; serviceAccountRole: string },
-  sourceIp: string,
+  { applicationId, sourceIp }: { applicationId: string; sourceIp: string },
 ): JudgedCredential => {
+  // The judgement names a refused token's subject only once its signature verified; the refusal of
+  // any other credential names the application instead, as its window is that application's.
   if (judgement.kind === 'recorded') {
     const { reason, refusedSubject } = judgement;
     return credentialRefused(
       deniedExchangeEvent({
+        ...(refusedSubject === undefined
+          ? { applicationId }
+          : { refusedSubject }),
         reason,
-        ...(refusedSubject === undefined ? {} : { refusedSubject }),
         sourceIp,
       }),
+      { reason, tokenVerified: refusedSubject !== undefined },
     );
   }
   if (judgement.kind === 'keysUnavailable') {
@@ -271,7 +306,12 @@ const judgedCredentialOf = (
   }
   if (judgement.kind === 'signingKeyUnconfirmed') {
     return {
-      event: deniedExchangeEvent({ reason: 'signingKeyUnconfirmed', sourceIp }),
+      denial: { reason: 'signingKeyUnconfirmed', tokenVerified: false },
+      event: deniedExchangeEvent({
+        applicationId,
+        reason: 'signingKeyUnconfirmed',
+        sourceIp,
+      }),
       kind: 'refused',
       problem: EXCHANGE_PROBLEMS.signingKeyUnconfirmed,
       retryAfterSeconds: judgement.retryAfterSeconds,
@@ -322,16 +362,17 @@ const judgedCredentialOf = (
  * A credential is judged by the judge given, for the application the assertion names, at the
  * configured clock's instant. Every credential the judgement refuses is answered one identical
  * `403 credentialRefused` and recorded `denied` under its own reason, naming the token's subject in
- * `refusedSubject` only where the judgement names it. Keys that cannot be had are answered
+ * `refusedSubject` only where the judgement names it, and naming the application the assertion
+ * names as `applicationId` where it does not. Keys that cannot be had are answered
  * `503 identityProviderUnavailable` and recorded `failed` under that code. A signing key not confirmed
- * yet is answered `503 signingKeyUnconfirmed` with its seconds in `Retry-After` and recorded `denied`
- * under that code, since a made-up key id or a routine key rotation produces it and neither is a fault
- * in the Controller. The judgement is waited for until the deadline less
- * {@link RECORDING_RESERVE_MILLISECONDS}, which is kept for recording its outcome, a budget of at least
- * {@link MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS} for any request not answered as late; a judgement not
- * given by then is answered and recorded exactly as keys that cannot be had are. It is never
- * cancelled, since what it waits on may be shared with other requests, and its late result is
- * dropped.
+ * yet is answered `503 signingKeyUnconfirmed` with its seconds in `Retry-After` and recorded
+ * `denied` under that code, naming the application, since a made-up key id or a routine key
+ * rotation produces it and neither is a fault in the Controller. The judgement is waited for until
+ * the deadline less {@link RECORDING_RESERVE_MILLISECONDS}, which is kept for recording its
+ * outcome, a budget of at least {@link MINIMUM_JUDGEMENT_BUDGET_MILLISECONDS} for any request not
+ * answered as late; a judgement not given by then is answered and recorded exactly as keys that
+ * cannot be had are. It is never cancelled, since what it waits on may be shared with other
+ * requests, and its late result is dropped.
  *
  * A sign-in token the judgement accepts is still refused with the same `403`, before any work on the
  * store, so its principal is never met as a person: as `serviceAccountNotPermitted` when
@@ -343,9 +384,9 @@ const judgedCredentialOf = (
  * Any other sign-in token the judgement accepts is issued for, in one transaction declaring its
  * principal the actor, a person named by the identity provider's `sub`. Their standing is read first,
  * under the identity provider's issuer: a principal the store refuses, revoked, issued for before a
- * revocation of the whole platform, or signed out, is answered the same `403` and recorded `denied`
- * under that reason, naming the subject in `refusedSubject`, its actor anonymous, with nothing else
- * written. A principal in good standing is met, a person recorded on first meeting them; the
+ * revocation of the whole platform, or signed out, is answered the same `403` and denied under that
+ * reason, naming the subject in `refusedSubject`, its actor anonymous, that transaction writing
+ * nothing. A principal in good standing is met, a person recorded on first meeting them; the
  * audience's policy and the recorded grants reaching that person are read from one snapshot, and the
  * signed-in calculation is run at the second the token is issued in; the version 1 payload, naming
  * the identity provider's subject in `sub` and expiring a token lifetime after it is issued, with the
@@ -365,6 +406,15 @@ const judgedCredentialOf = (
  * {@link EXCHANGE_TOKEN_OVER_RESPONSE_CAP}, names the route alone. No session is recorded for it, and a
  * person met for the first time is kept, committed with that event.
  *
+ * Every refusal recorded `denied` is counted in the windows given: a token whose signature verified
+ * under its digest and its reason, and any other credential under the application whose assertion
+ * verified and its reason, never under anything read from it. A refusal opening a window records its
+ * `token.exchange` `denied`, in a transaction of its own taking a place in its application's share,
+ * or in the share already held by the exchange for a principal refused by the store, and is
+ * answered once that event has committed. A refusal counted in an open window is answered at once,
+ * as that refusal is answered, writing nothing and taking no place. A refusal recorded `failed` is
+ * recorded for each exchange.
+ *
  * Each exchange's store work runs within its application's share of the exchange pool, through the
  * admission given: the anonymous exchange's in the anonymous lane, and every credential's, issued for
  * or refused whatever the judgement, `signingKeyUnconfirmed` included, in the credential lane. Its
@@ -374,23 +424,25 @@ const judgedCredentialOf = (
  * nothing begun on the store and nothing recorded, and is counted for its application. A refusal of
  * the assertion or of the body, and a request answered as late, take no place.
  *
- * A refused exchange follows the same rule as an issued one: every exchange admitted into its share
- * is answered only once its `token.exchange` has committed, in a transaction of its own, so no
- * exchange goes unrecorded while looking answered. That transaction is given the deadline, and must
- * not run past it or past the store timeout. It is also given the event recording the exchange as
- * `failed` at `error`, as `storeUnavailable`, its actor anonymous, which must take the place of every
- * event the work recorded, keeping nothing the work wrote, when that work fails; the transaction must
- * then fail with the work's failure whatever becomes of that event's `COMMIT`, so such an exchange is
- * answered `503 storeUnavailable`, its failure written by its code alone. One whose transaction the
- * store cannot take, or does not take in time, is answered `503 storeUnavailable` the same way, and
- * one whose commit the store did not confirm in time `503 outcomeUnknown`; none issues a token, and a
- * refusal is never answered `403` unrecorded. A failure the route did not expect is answered
+ * A refused exchange opening a window, or recorded `failed`, follows the same rule as an issued
+ * one: every exchange admitted into its share is answered only once its `token.exchange` has
+ * committed, in a transaction of its own, so no exchange goes unrecorded while looking answered.
+ * That transaction is given the deadline, and must not run past it or past the store timeout. It is
+ * also given the event recording the exchange as `failed` at `error`, as `storeUnavailable`, its
+ * actor anonymous, which must take the place of every event the work recorded, keeping nothing the
+ * work wrote, when that work fails; the transaction must then fail with the work's failure whatever
+ * becomes of that event's `COMMIT`, so such an exchange is answered `503 storeUnavailable`, its
+ * failure written by its code alone. One whose transaction the store cannot take, or does not take
+ * in time, is answered `503 storeUnavailable` the same way, and one whose commit the store did not
+ * confirm in time `503 outcomeUnknown`; none issues a token, and a refusal is answered `403`
+ * unrecorded only when counted in an open window. A failure the route did not expect is answered
  * `500 internalError`. Every answer is `no-store`.
  *
  * @param settings the admission and where its refusals are counted, the assertion verifier, its tally,
  *   the instance's recording of refused assertions and the exchange's limit of them, the deadline and
- *   the monotonic clock it is read on, the credential judge, the key confirmations, the token limit,
- *   the trail, the log, and the configuration the exchange reads.
+ *   the monotonic clock it is read on, the credential judge, the key confirmations, the windows
+ *   counting refused credentials, the token limit, the trail, the log, and the configuration the
+ *   exchange reads.
  */
 export const createExchange = ({
   admission,
@@ -404,6 +456,7 @@ export const createExchange = ({
   keyConfirmations,
   lateRequestThresholdMilliseconds,
   monotonicNow,
+  refusals,
   settings,
   sharesExceeded,
   tokenLimitBytes,
@@ -581,23 +634,83 @@ export const createExchange = ({
       { deadline, failureEvent: storeFailureOf(sourceIp) },
     );
 
-  // A principal the store refuses is recorded denied under that reason, naming the verified subject,
-  // its actor anonymous since nothing is done for that subject.
-  const refuseForStanding = async (
-    { record }: AuditTransaction<pg.ClientBase>,
-    standing: StoredRefusal,
-    subject: string,
+  // A refusal opening a window, recorded in a transaction of its own, its actor anonymous, with the
+  // id its event committed under.
+  const recordOpening = (
+    { event, ...refusal }: CredentialRefusal,
+    { deadline }: Verified,
     sourceIp: string,
-  ): Promise<Answer> => {
-    await record({
-      actor: ANONYMOUS,
-      ...deniedExchangeEvent({
-        reason: standing,
-        refusedSubject: subject,
-        sourceIp,
-      }),
-    });
-    return { kind: 'refused', problem: EXCHANGE_PROBLEMS.credentialRefused };
+  ): Promise<Opening> =>
+    trail
+      .inTransaction(
+        ANONYMOUS,
+        async ({ record }) => {
+          const eventId = await record(event);
+          const answer: Answer = {
+            kind: 'refused',
+            problem: refusal.problem,
+            ...(refusal.retryAfterSeconds === undefined
+              ? {}
+              : { retryAfterSeconds: refusal.retryAfterSeconds }),
+          };
+          return { answer, eventId, kind: 'recorded' as const };
+        },
+        { deadline, failureEvent: storeFailureOf(sourceIp) },
+      )
+      .catch((failure: unknown): Opening => ({ failure, kind: 'failed' }));
+
+  // A denied credential's window: a verified token's by its digest and the reason, any other's by the
+  // application whose assertion verified and the reason, never by anything read from the credential.
+  const windowOf = (
+    { reason, tokenVerified }: NonNullable<CredentialRefusal['denial']>,
+    credential: string,
+    applicationId: string,
+  ) =>
+    tokenVerified
+      ? {
+          reason,
+          route: 'exchange' as const,
+          tokenDigest: tokenDigestOf(credential),
+        }
+      : { applicationId, reason, route: 'exchange' as const };
+
+  // A refusal counted in its window. One opening a window is recorded within its application's share,
+  // or through the share already taken, and answered once its event has committed; one counted in an
+  // open window is answered at once, writing nothing and taking no place.
+  const refuseInWindow = async (
+    refusal: CredentialRefusal & {
+      denial: NonNullable<CredentialRefusal['denial']>;
+    },
+    { credential, verified }: { credential: string; verified: Verified },
+    { sourceIp, withinShare }: { sourceIp: string; withinShare: boolean },
+  ): Promise<Outcome> => {
+    const { applicationId } = verified.key;
+    const record = (): Promise<Opening> =>
+      recordOpening(refusal, verified, sourceIp);
+    const windowed = await refusals.refuse(
+      windowOf(refusal.denial, credential, applicationId),
+      async (): Promise<Admitted<Opening>> =>
+        withinShare
+          ? { kind: 'admitted', result: await record() }
+          : recordRefusalWithinShare(applicationId, record),
+      openedIdOf,
+    );
+    if (windowed.kind === 'counted') {
+      return {
+        kind: 'refused',
+        problem: refusal.problem,
+        ...(refusal.retryAfterSeconds === undefined
+          ? {}
+          : { retryAfterSeconds: refusal.retryAfterSeconds }),
+      };
+    }
+    const opening = windowed.opening;
+    if (opening.kind === 'overShare') {
+      return outcomeWithin(applicationId, opening);
+    }
+    return opening.result.kind === 'recorded'
+      ? opening.result.answer
+      : { failure: opening.result.failure, kind: 'failed' };
   };
 
   // A principal in good standing is met, a person recorded the first time, before anything else is
@@ -665,16 +778,17 @@ export const createExchange = ({
   };
 
   // A signed-in principal's exchange, in one transaction declaring them its actor, their standing read
-  // first.
+  // first: a principal the store refuses is given back with nothing written, for its refusal to be
+  // counted in its window.
   const issueSignedIn = (
     verified: Verified,
     issuable: Issuable,
     sourceIp: string,
-  ): Promise<Answer> => {
+  ): Promise<Answer | StandingRefusal> => {
     const { session, subject } = issuable.principal;
     return trail.inTransaction(
       { id: subject, type: 'human' },
-      async (transaction) => {
+      async (transaction): Promise<Answer | StandingRefusal> => {
         const standing = await readStoredRefusal(
           transaction.connection,
           settings.databaseSchema,
@@ -682,9 +796,42 @@ export const createExchange = ({
         );
         return standing === undefined
           ? issueToPrincipal(transaction, verified, issuable, sourceIp)
-          : refuseForStanding(transaction, standing, subject, sourceIp);
+          : { kind: 'standingRefused', standing, subject };
       },
       { deadline: verified.deadline, failureEvent: storeFailureOf(sourceIp) },
+    );
+  };
+
+  // A principal the store refuses is denied under that reason, naming the verified subject, its actor
+  // anonymous since nothing is done for that subject, and counted in its window within the share the
+  // exchange already holds.
+  const issueOrRefuseSignedIn = async (
+    credential: string,
+    verified: Verified,
+    issuable: Issuable,
+    sourceIp: string,
+  ): Promise<Outcome> => {
+    const issued = await issueSignedIn(verified, issuable, sourceIp).catch(
+      (failure: unknown): Outcome => ({ failure, kind: 'failed' }),
+    );
+    if (issued.kind !== 'standingRefused') {
+      return issued;
+    }
+    const { standing, subject } = issued;
+    return refuseInWindow(
+      {
+        ...credentialRefused(
+          deniedExchangeEvent({
+            reason: standing,
+            refusedSubject: subject,
+            sourceIp,
+          }),
+          { reason: standing, tokenVerified: true },
+        ),
+        denial: { reason: standing, tokenVerified: true },
+      },
+      { credential, verified },
+      { sourceIp, withinShare: true },
     );
   };
 
@@ -708,24 +855,36 @@ export const createExchange = ({
       verified,
       budgetMilliseconds,
     );
+    const { applicationId } = verified.key;
     const judged = judgedCredentialOf(
       judgement,
       {
         issuedAt: Math.floor(settings.clock.now() / 1000),
         serviceAccountRole: settings.serviceAccountRole,
       },
-      sourceIp,
+      { applicationId, sourceIp },
     );
-    const { applicationId } = verified.key;
-    const admitted =
-      judged.kind === 'issuable'
-        ? await admission.within(applicationId, 'credential', () =>
-            committed(issueSignedIn(verified, judged, sourceIp)),
-          )
-        : await recordRefusalWithinShare(applicationId, () =>
+    if (judged.kind === 'issuable') {
+      return outcomeWithin(
+        applicationId,
+        await admission.within(applicationId, 'credential', () =>
+          issueOrRefuseSignedIn(credential, verified, judged, sourceIp),
+        ),
+      );
+    }
+    const { denial } = judged;
+    return denial === undefined
+      ? outcomeWithin(
+          applicationId,
+          await recordRefusalWithinShare(applicationId, () =>
             committed(recordRefusal(judged, verified, sourceIp)),
-          );
-    return outcomeWithin(applicationId, admitted);
+          ),
+        )
+      : refuseInWindow(
+          { ...judged, denial },
+          { credential, verified },
+          { sourceIp, withinShare: false },
+        );
   };
 
   // The anonymous exchange's calculation, within its application's share as an anonymous exchange,

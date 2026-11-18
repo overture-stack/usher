@@ -1,20 +1,22 @@
-import type { AuditEvent } from '../eventLog/index.js';
-import type { LogoutTokenRefusal, LogoutTokenTallyReason } from './types.js';
+import { type AuditEvent, eventInstant } from '../eventLog/index.js';
+import type { WindowClosing } from '../windowedRefusals/index.js';
+import type { LogoutTokenRefusal, UnverifiedLogoutReason } from './types.js';
 
 /**
- * The `logoutToken.refusal` recording one logout token that verifies under the trusted issuer and is
- * refused anyway: its reason, the request's address, and as `refusedSubject` the subject its `sub`
- * names where that may be named, nothing else the token carried. It names no one signed out, since a
- * refused token signs no one out.
+ * The `logoutToken.refusal` recording one refused logout token: its reason, the request's address,
+ * and as `refusedSubject` the subject its `sub` names where the token verified and that may be
+ * named, nothing else the token carried. It names no one signed out, since a refused token signs no
+ * one out.
  *
- * @param refusal why it was refused, the request's address, and the subject it names, or `undefined`.
+ * @param refusal why it was refused, the request's address, and the subject a verified token names,
+ *   or `undefined`.
  */
 export const logoutTokenRefusalEvent = ({
   reason,
   sourceIp,
   subject,
 }: {
-  reason: LogoutTokenRefusal;
+  reason: LogoutTokenRefusal | UnverifiedLogoutReason;
   sourceIp: string;
   subject: string | undefined;
 }): AuditEvent => ({
@@ -29,17 +31,26 @@ export const logoutTokenRefusalEvent = ({
 });
 
 /**
- * The `logoutToken.refusalTally` recording one interval's count of logout tokens that could not be
- * verified under the trusted issuer: their reason and the count, naming no one.
+ * The `logoutToken.refusalTally` closing a window of refused logout tokens: its reason, its count,
+ * the instants of its first and latest refusals, and as `windowId` the `logoutToken.refusal` that
+ * opened it, where that event committed, naming no one.
  *
- * @param reason why they were refused.
- * @param count how many the interval held.
+ * @param closing the window as it closed.
  */
-export const logoutTokenRefusalTallyEvent = (
-  reason: LogoutTokenTallyReason,
-  count: number,
-): AuditEvent => ({
-  data: { count, reason },
+export const logoutTokenRefusalTallyEvent = ({
+  count,
+  firstSeenAt,
+  lastSeenAt,
+  reason,
+  windowId,
+}: WindowClosing): AuditEvent => ({
+  data: {
+    count,
+    firstSeenAt: eventInstant(firstSeenAt),
+    lastSeenAt: eventInstant(lastSeenAt),
+    reason,
+    ...(windowId === undefined ? {} : { windowId }),
+  },
   severity: 'warning',
   type: 'logoutToken.refusalTally',
 });

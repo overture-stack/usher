@@ -21,7 +21,7 @@ interface Rejection {
   reason: string;
 }
 
-// Counted by reason alone, as the management API's refusal tally counts.
+// Counted by reason alone.
 const BY_REASON: Pick<TallySettings<string>, 'eventOf' | 'partsOf'> = {
   eventOf: (reason, count) => ({
     data: { count, reason },

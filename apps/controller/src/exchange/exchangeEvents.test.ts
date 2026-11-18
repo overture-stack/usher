@@ -4,6 +4,7 @@ import { suite, test } from 'node:test';
 import { REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import {
   deniedExchangeEvent,
+  exchangeRefusalTallyEvent,
   failedExchangeEvent,
   issuedExchangeEvent,
   overLimitExchangeEvent,
@@ -177,6 +178,22 @@ suite("the exchange's token.exchange events", () => {
     assert.equal(Object.hasOwn(unnamed?.data ?? {}, 'refusedSubject'), false);
   });
 
+  test('names the application whose channel assertion verified as applicationId where it is given', () => {
+    const event = deniedExchangeEvent({
+      applicationId: AUDIENCE,
+      reason: 'invalidSignature',
+      sourceIp: '192.0.2.10',
+    });
+
+    assert.deepEqual(event.data, {
+      applicationId: AUDIENCE,
+      reason: 'invalidSignature',
+      result: 'denied',
+      sourceIp: '192.0.2.10',
+      userId: null,
+    });
+  });
+
   test('records a signing key not confirmed yet at warning as denied, under its code, naming no userId', () => {
     const event = deniedExchangeEvent({
       reason: 'signingKeyUnconfirmed',
@@ -256,5 +273,49 @@ suite("the exchange's token.exchange events", () => {
         type: 'token.exchange',
       })),
     );
+  });
+});
+
+suite("a closed window's token.exchangeRefusalTally", () => {
+  const OPENED_AT = Date.UTC(2026, 10, 18, 9, 0, 0);
+
+  test('records a window of credentials refused without verifying at warning: the application its key names, its reason, its count, the instants of its first and latest refusals, and the opening event it closes', () => {
+    const event = exchangeRefusalTallyEvent({
+      applicationId: '4b1f6c2e-8d3a-4e5f-9a7b-0c1d2e3f4a5b',
+      count: 4,
+      firstSeenAt: OPENED_AT,
+      lastSeenAt: OPENED_AT + 120_000,
+      reason: 'invalidSignature',
+      windowId: '0f4c1a2b-3d5e-4f60-8a7b-9c0d1e2f3a4b',
+    });
+
+    assert.deepEqual(event, {
+      data: {
+        applicationId: '4b1f6c2e-8d3a-4e5f-9a7b-0c1d2e3f4a5b',
+        count: 4,
+        firstSeenAt: '2026-11-18T09:00:00.000Z',
+        lastSeenAt: '2026-11-18T09:02:00.000Z',
+        reason: 'invalidSignature',
+        windowId: '0f4c1a2b-3d5e-4f60-8a7b-9c0d1e2f3a4b',
+      },
+      severity: 'warning',
+      type: 'token.exchangeRefusalTally',
+    });
+  });
+
+  test("names no application for a verified token's window, and no windowId, never empty or null, for a window whose opening event did not commit", () => {
+    const event = exchangeRefusalTallyEvent({
+      count: 1,
+      firstSeenAt: OPENED_AT,
+      lastSeenAt: OPENED_AT,
+      reason: 'revokedPrincipal',
+    });
+
+    assert.deepEqual(event.data, {
+      count: 1,
+      firstSeenAt: '2026-11-18T09:00:00.000Z',
+      lastSeenAt: '2026-11-18T09:00:00.000Z',
+      reason: 'revokedPrincipal',
+    });
   });
 });

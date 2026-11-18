@@ -143,6 +143,7 @@ export const OBSERVATION_TYPES: readonly AuditEventType[] = Object.freeze([
   'logoutToken.refusalTally',
   'managementToken.refusalTally',
   'resource.orphaned',
+  'token.exchangeRefusalTally',
 ]);
 
 /** The severity each `result` gives an event whose row's severity follows it (#214 Q3). */

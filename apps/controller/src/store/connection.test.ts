@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
-import { suite, test } from 'node:test';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { suite, test, type TestContext } from 'node:test';
 
 import pg from 'pg';
 
+import { CA_FILE_CHANGED } from './caFile.js';
 import {
+  databaseCaFile,
   IDLE_CONNECTION_LOST,
   openStore,
   storeConnection,
+  UNVERIFIED_CONNECTION_ALLOWED,
 } from './connection.js';
 import type { StoreLineFields } from './types.js';
 
@@ -166,5 +172,122 @@ suite("the store's idle connections", () => {
     assert.equal(written.length, 1);
     assert.equal(text.includes(PASSWORD), false);
     assert.equal(text.includes(URL), false);
+  });
+});
+
+suite("the CA file a connection's server is verified against", () => {
+  const ISSUED =
+    '-----BEGIN CERTIFICATE-----\nissued\n-----END CERTIFICATE-----\n';
+  const REISSUED =
+    '-----BEGIN CERTIFICATE-----\nreissued\n-----END CERTIFICATE-----\n';
+
+  const caFileIn = async (context: TestContext): Promise<string> => {
+    const folder = await mkdtemp(join(tmpdir(), 'usher-store-ca-'));
+    context.after(() => rm(folder, { force: true, recursive: true }));
+    const path = join(folder, 'root.crt');
+    await writeFile(path, ISSUED);
+    return path;
+  };
+
+  // The TLS options of one connection's handshake, as the driver builds them from the pool's: a copy
+  // of their own members, taken as the connection opens.
+  const handshakeOptionsOf = (
+    connection: pg.PoolConfig,
+  ): Readonly<Record<string, unknown>> => ({ ...Object(connection.ssl) });
+
+  test('is read again as each connection opens, a reissued certificate taken by the next one and the change written once', async (context) => {
+    const path = await caFileIn(context);
+    const written: [string, StoreLineFields][] = [];
+    const log = {
+      error: (message: string, fields: StoreLineFields) => {
+        written.push([message, fields]);
+      },
+      warning: (message: string, fields: StoreLineFields) => {
+        written.push([message, fields]);
+      },
+    };
+    const settings = {
+      databasePassword: 'given',
+      databaseUrl: `postgres://usher_controller@db.example.org/usher?sslmode=verify-full&sslrootcert=${path}`,
+      storeTimeoutMilliseconds: 5000,
+    };
+    const connection = storeConnection(settings, databaseCaFile(settings, log));
+
+    const before = handshakeOptionsOf(connection)['ca'];
+    await writeFile(path, REISSUED);
+    const after = [
+      handshakeOptionsOf(connection)['ca'],
+      handshakeOptionsOf(connection)['ca'],
+    ];
+
+    assert.equal(before, ISSUED);
+    assert.deepEqual(after, [REISSUED, REISSUED]);
+    assert.deepEqual(written, [
+      [CA_FILE_CHANGED, { variable: 'USHER_DATABASE_URL' }],
+    ]);
+  });
+
+  test("keeps every other TLS setting the URL gives, its client certificate's file read once as the driver reads it", async (context) => {
+    const path = await caFileIn(context);
+    const settings = {
+      databasePassword: 'given',
+      databaseUrl: `postgres://usher_controller@db.example.org/usher?sslmode=verify-ca&uselibpqcompat=true&sslrootcert=${path}`,
+      storeTimeoutMilliseconds: 5000,
+    };
+    const connection = storeConnection(settings, () => REISSUED);
+
+    const options = handshakeOptionsOf(connection);
+
+    assert.equal(options['ca'], REISSUED);
+    assert.equal(typeof options['checkServerIdentity'], 'function');
+  });
+
+  test('is none for a URL naming no CA file, nor for one that connects without TLS', () => {
+    const log = { error: () => undefined, warning: () => undefined };
+    const unnamed = databaseCaFile(
+      {
+        databaseUrl:
+          'postgres://usher_controller@db.example.org/usher?sslmode=verify-full',
+      },
+      log,
+    );
+    const plain = storeConnection(
+      {
+        databasePassword: 'given',
+        databaseUrl: 'postgres://usher_controller@127.0.0.1/usher',
+        storeTimeoutMilliseconds: 5000,
+      },
+      () => ISSUED,
+    );
+
+    assert.equal(unnamed, undefined);
+    assert.equal(plain.ssl, undefined);
+  });
+
+  test("is read by every pool opened with it, as each of the pool's connections opens", async (context) => {
+    const path = await caFileIn(context);
+    const settings = {
+      databasePassword: 'given',
+      databaseUrl: `postgres://usher_controller@db.example.org/usher?sslmode=verify-full&sslrootcert=${path}`,
+      storeTimeoutMilliseconds: 5000,
+    };
+    const reads: string[] = [];
+    const pool = openStore(settings, { error: () => undefined }, 1, () => {
+      reads.push('read');
+      return ISSUED;
+    });
+
+    const options = { ...Object(pool.options.ssl) };
+    await pool.end();
+
+    assert.equal(options['ca'], ISSUED);
+    assert.deepEqual(reads, ['read']);
+  });
+
+  test("names the line a start allowing an unverified connection writes, as the store's other lines are named", () => {
+    assert.equal(
+      UNVERIFIED_CONNECTION_ALLOWED,
+      'store.unverifiedConnectionAllowed',
+    );
   });
 });

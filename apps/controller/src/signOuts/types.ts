@@ -8,6 +8,7 @@ import type {
   TokenHeader,
   TokenVerification,
 } from '../identityProvider/index.js';
+import type { WindowedRefusals } from '../windowedRefusals/index.js';
 
 /** What the back-channel logout route reads of the configuration. */
 export type SignOutSettings = Pick<
@@ -35,29 +36,23 @@ export interface LogoutTokenVerifier {
 }
 
 /**
- * Why a logout token is counted rather than recorded, each the `reason` of a
- * `logoutToken.refusalTally` event: it could not be read as a signed token (`unreadableToken`), names
- * an issuer other than the trusted one (`otherIssuer`), or verifies under none of the trusted issuer's
- * published keys (`invalidSignature`). The back-channel logout lists these itself, since they are its
- * audit trail's vocabulary: a reason the verifier adds is mapped onto one of them, or added here, by a
- * decision made in this module.
+ * Why a logout token that did not verify is refused, each the `reason` of its `logoutToken.refusal`
+ * and of the `logoutToken.refusalTally` closing its window: it could not be read as a signed token
+ * (`unreadableToken`), names an issuer other than the trusted one (`otherIssuer`), or verifies under
+ * none of the trusted issuer's published keys (`invalidSignature`). The back-channel logout lists
+ * these itself, since they are its audit trail's vocabulary: a reason the verifier adds is mapped
+ * onto one of them, or added here, by a decision made in this module.
  */
-export type LogoutTokenTallyReason =
+export type UnverifiedLogoutReason =
   'invalidSignature' | 'otherIssuer' | 'unreadableToken';
-
-/** Where a logout token that could not be verified is counted, for `logoutToken.refusalTally`. */
-export interface LogoutTokenTally {
-  /** Counts one token refused for the reason given. */
-  count(reason: LogoutTokenTallyReason): void;
-}
 
 /** What the back-channel logout route is built from. */
 export interface SignOutRouteSettings {
   /** Where a failure of the store, or one the route did not expect, is written. */
   eventLog: Pick<EventLog, 'error'>;
 
-  /** Where each token that could not be verified is counted. */
-  refusalTally: LogoutTokenTally;
+  /** Where each refused logout token is counted, the refusal opening a window recorded. */
+  refusals: Pick<WindowedRefusals, 'refuse'>;
 
   settings: SignOutSettings;
 

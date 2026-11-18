@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { connect, createServer as createTcpServer } from 'node:net';
 import type { AddressInfo } from 'node:net';
+import { Writable } from 'node:stream';
 import { suite, test } from 'node:test';
 
 import {
@@ -109,5 +110,53 @@ suite('a controller', () => {
       refusal.message,
       'the controller refuses to start: USHER_DATABASE_URL names a host that does not resolve',
     );
+  });
+});
+
+suite("a controller's start allowing an unverified database connection", () => {
+  // A log stream keeping each line it is written, parsed.
+  const capturedLog = (): {
+    lines: Readonly<Record<string, unknown>>[];
+    logStream: Writable;
+  } => {
+    const lines: Readonly<Record<string, unknown>>[] = [];
+    const logStream = new Writable({
+      write: (chunk: Buffer, _encoding, done) => {
+        chunk
+          .toString('utf8')
+          .split('\n')
+          .filter((line) => line !== '')
+          .forEach((line) => {
+            lines.push(JSON.parse(line) as Readonly<Record<string, unknown>>);
+          });
+        done();
+      },
+    });
+    return { lines, logStream };
+  };
+
+  test('writes one line at warning naming USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION at each start allowing it, before its store is reached, and none at a start not allowing it', async () => {
+    const starts = await Promise.all(
+      [true, false].map(async (databaseAllowUnverifiedConnection) => {
+        const { lines, logStream } = capturedLog();
+        const controller = createController({
+          ...(await unreachableStore()),
+          databaseAllowUnverifiedConnection,
+          logStream,
+        });
+        await controller.start().catch(() => undefined);
+        await controller.stop();
+        return lines
+          .filter(
+            ({ message }) => message === 'store.unverifiedConnectionAllowed',
+          )
+          .map(({ level, variable }) => ({ level, variable }));
+      }),
+    );
+
+    assert.deepEqual(starts, [
+      [{ level: 40, variable: 'USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION' }],
+      [],
+    ]);
   });
 });
