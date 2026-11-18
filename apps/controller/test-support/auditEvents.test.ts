@@ -1084,7 +1084,7 @@ suite("the audit log's rows, read", () => {
     context.after(() => database.close());
     const owner = await database.connect('migration');
     await owner.query(
-      "INSERT INTO usher.audit_log (id, occurred_at, type, source, specversion, dataschema, severity, data) VALUES ('00000000-0000-4000-8000-000000000002', '2026-10-23T12:00:01.123456Z', 'bio.overture.grant.revocation', 'https://usher.example.org/controller', '1.0', NULL, 'info', '{\"grantId\": \"g-1\"}'), ('00000000-0000-4000-8000-000000000001', '2026-10-23T12:00:00Z', 'bio.overture.grant.creation', 'https://usher.example.org/controller', '1.0', NULL, 'info', '{\"grantId\": \"g-1\"}')",
+			"INSERT INTO usher.audit_log (id, occurred_at, type, source, spec_version, data_schema, severity, data) VALUES ('00000000-0000-4000-8000-000000000002', '2026-10-23T12:00:01.123456Z', 'bio.overture.grant.revocation', 'https://usher.example.org/controller', '1.0', NULL, 'info', '{\"grantId\": \"g-1\"}'), ('00000000-0000-4000-8000-000000000001', '2026-10-23T12:00:00Z', 'bio.overture.grant.creation', 'https://usher.example.org/controller', '1.0', NULL, 'info', '{\"grantId\": \"g-1\"}')",
     );
 
     const rows = await auditRows(owner);

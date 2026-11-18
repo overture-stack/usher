@@ -488,7 +488,7 @@ suite('the change record of every policy change', () => {
       type: string;
     }>(
       owner,
-      `SELECT ${auditLog.columns.data} AS data, ${auditLog.columns.dataschema} AS dataschema, ${auditLog.columns.occurredAt} AS "occurredAt", ${auditLog.columns.severity} AS severity, ${auditLog.columns.source} AS source, ${auditLog.columns.specversion} AS specversion, ${auditLog.columns.type} AS type FROM ${qualified(auditLog)} WHERE ${auditLog.columns.id} = $1`,
+			`SELECT ${auditLog.columns.data} AS data, ${auditLog.columns.dataSchema} AS dataschema, ${auditLog.columns.occurredAt} AS "occurredAt", ${auditLog.columns.severity} AS severity, ${auditLog.columns.source} AS source, ${auditLog.columns.specVersion} AS specversion, ${auditLog.columns.type} AS type FROM ${qualified(auditLog)} WHERE ${auditLog.columns.id} = $1`,
       [entryId],
     );
     const asWritten = async (): Promise<readonly string[]> => [
@@ -532,11 +532,11 @@ suite('the change record of every policy change', () => {
       },
       {
         data: payload,
-        dataschema: entry[auditLog.columns.dataschema],
+				dataschema: entry[auditLog.columns.dataSchema],
         occurredAt: writtenAt instanceof Date ? writtenAt.getTime() : writtenAt,
         severity: entry[auditLog.columns.severity],
         source: entry[auditLog.columns.source],
-        specversion: entry[auditLog.columns.specversion],
+				specversion: entry[auditLog.columns.specVersion],
         type: entry[auditLog.columns.type],
       },
     );

@@ -46,7 +46,7 @@ const ROW_INSERT = /^INSERT INTO "usher"\.audit_log /u;
 // Each statement as the trail sends it, in full: an event's row, the declaration of the actor alone,
 // and the declaration setting both of the store's limits beside it.
 const ROW_INSERT_TEXT =
-  'INSERT INTO "usher".audit_log (id, specversion, source, type, occurred_at, dataschema, data, severity) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)';
+  'INSERT INTO "usher".audit_log (id, spec_version, source, type, occurred_at, data_schema, data, severity) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)';
 
 const ACTOR_DECLARATION =
   "SELECT set_config('usher.actor_type', $1, true), set_config('usher.actor_id', $2, true)";
@@ -308,7 +308,7 @@ suite('the audit trail', () => {
     assert.ok(line);
     assert.match(
       insert.text,
-      /\(id, specversion, source, type, occurred_at, dataschema, data, severity\)/u,
+      /\(id, spec_version, source, type, occurred_at, data_schema, data, severity\)/u,
     );
     const [
       id,

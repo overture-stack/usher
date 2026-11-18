@@ -684,7 +684,7 @@ export const auditRows = async (
 ): Promise<readonly AuditRow[]> => {
   const { columns } = POLICY_TABLES.auditLog;
   const { rows } = await client.query<AuditRow>(
-    `SELECT ${quoted(columns.data)} AS data, ${quoted(columns.dataschema)} AS dataschema, ${quoted(columns.id)}::text AS id, to_char(${quoted(columns.occurredAt)} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '000' AS "occurredAtKey", ${quoted(columns.severity)} AS severity, ${quoted(columns.source)} AS source, ${quoted(columns.specversion)} AS specversion, ${quoted(columns.type)} AS type FROM ${qualified(POLICY_TABLES.auditLog)} ORDER BY ${quoted(columns.occurredAt)}, ${quoted(columns.id)}`,
+		`SELECT ${quoted(columns.data)} AS data, ${quoted(columns.dataSchema)} AS dataschema, ${quoted(columns.id)}::text AS id, to_char(${quoted(columns.occurredAt)} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '000' AS "occurredAtKey", ${quoted(columns.severity)} AS severity, ${quoted(columns.source)} AS source, ${quoted(columns.specVersion)} AS specversion, ${quoted(columns.type)} AS type FROM ${qualified(POLICY_TABLES.auditLog)} ORDER BY ${quoted(columns.occurredAt)}, ${quoted(columns.id)}`,
   );
   return rows;
 };

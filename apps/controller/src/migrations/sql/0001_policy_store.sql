@@ -307,15 +307,16 @@ CREATE TABLE notification_outbox (
   delivered_at timestamptz
 );
 
--- The audit log: one CloudEvents envelope a row, `occurred_at` holding its `time`.
+-- The audit log: one CloudEvents envelope a row, `occurred_at` holding its `time`, `spec_version` its
+-- `specversion` and `data_schema` its `dataschema`.
 
 CREATE TABLE audit_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  specversion text NOT NULL,
+  spec_version text NOT NULL,
   source text NOT NULL,
   type text NOT NULL,
   occurred_at timestamptz NOT NULL,
-  dataschema text,
+  data_schema text,
   data jsonb NOT NULL,
   severity text NOT NULL CHECK (severity IN ('critical', 'error', 'info', 'warning'))
 );

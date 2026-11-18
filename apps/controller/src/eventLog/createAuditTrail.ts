@@ -109,7 +109,7 @@ export const createAuditTrail = <Connection extends TrailConnection>({
   settings,
   store,
 }: AuditTrailSettings<Connection>): AuditTrail<Connection> => {
-  const insertRow = `INSERT INTO ${pg.escapeIdentifier(settings.databaseSchema)}.audit_log (id, specversion, source, type, occurred_at, dataschema, data, severity) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
+	const insertRow = `INSERT INTO ${pg.escapeIdentifier(settings.databaseSchema)}.audit_log (id, spec_version, source, type, occurred_at, data_schema, data, severity) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
 
   // The trail's own members go last, so the data an event is given never names another actor.
   const envelopeOf = (

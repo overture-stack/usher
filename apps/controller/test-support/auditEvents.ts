@@ -1352,7 +1352,7 @@ export const auditRows = async (
 ): Promise<readonly AuditRow[]> => {
   const { columns } = POLICY_TABLES.auditLog;
   const { rows } = await client.query<AuditRow>(
-    `SELECT ${column(columns.data)} AS data, ${column(columns.dataschema)} AS dataschema, ${column(columns.id)}::text AS id, to_char(${column(columns.occurredAt)} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '000' AS "occurredAtKey", ${column(columns.severity)} AS severity, ${column(columns.source)} AS source, ${column(columns.specversion)} AS specversion, ${column(columns.type)} AS type FROM ${qualified(POLICY_TABLES.auditLog)} ORDER BY ${column(columns.occurredAt)}, ${column(columns.id)}`,
+		`SELECT ${column(columns.data)} AS data, ${column(columns.dataSchema)} AS dataschema, ${column(columns.id)}::text AS id, to_char(${column(columns.occurredAt)} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '000' AS "occurredAtKey", ${column(columns.severity)} AS severity, ${column(columns.source)} AS source, ${column(columns.specVersion)} AS specversion, ${column(columns.type)} AS type FROM ${qualified(POLICY_TABLES.auditLog)} ORDER BY ${column(columns.occurredAt)}, ${column(columns.id)}`,
   );
   return rows;
 };

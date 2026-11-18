@@ -849,11 +849,11 @@ export const auditEntryRow = (
   data: Readonly<Record<string, unknown>>,
 ): Row => ({
   [auditLog.columns.data]: JSON.stringify(data),
-  [auditLog.columns.dataschema]: null,
+	[auditLog.columns.dataSchema]: null,
   [auditLog.columns.occurredAt]: new Date(),
   [auditLog.columns.severity]: 'info',
   [auditLog.columns.source]: 'urn:usher:controller:test',
-  [auditLog.columns.specversion]: '1.0',
+	[auditLog.columns.specVersion]: '1.0',
   [auditLog.columns.type]: 'org.overture.usher.grant.create',
 });
 
@@ -1768,12 +1768,12 @@ export const DESIGNED_COLUMNS: {
   },
   auditLog: {
     data: required(JSONB),
-    dataschema: optional(TEXT),
+		dataSchema: optional(TEXT),
     id: required(UUID),
     occurredAt: required(INSTANT),
     severity: required(TEXT),
     source: required(TEXT),
-    specversion: required(TEXT),
+		specVersion: required(TEXT),
     type: required(TEXT),
   },
   capabilities: {

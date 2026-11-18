@@ -136,12 +136,12 @@ export const POLICY_TABLES = {
   auditLog: {
     columns: {
       data: 'data',
-      dataschema: 'dataschema',
+			dataSchema: 'data_schema',
       id: 'id',
       occurredAt: 'occurred_at',
       severity: 'severity',
       source: 'source',
-      specversion: 'specversion',
+			specVersion: 'spec_version',
       type: 'type',
     },
     name: 'audit_log',
