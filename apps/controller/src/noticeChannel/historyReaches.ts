@@ -12,13 +12,11 @@ import type { NoticePage, StreamPlace } from './types.js';
  * @param page a page read after the place's position.
  */
 export const historyReaches = (
-  { createdAt, epoch, position }: StreamPlace,
-  { createdAtPosition, epoch: currentEpoch, trimmedThrough }: NoticePage,
+	{ createdAt, epoch, position }: StreamPlace,
+	{ createdAtPosition, epoch: currentEpoch, trimmedThrough }: NoticePage,
 ): boolean => {
-  if (epoch !== currentEpoch || position < trimmedThrough) {
-    return false;
-  }
-  return createdAtPosition === undefined
-    ? position === trimmedThrough
-    : createdAt === createdAtPosition;
+	if (epoch !== currentEpoch || position < trimmedThrough) {
+		return false;
+	}
+	return createdAtPosition === undefined ? position === trimmedThrough : createdAt === createdAtPosition;
 };

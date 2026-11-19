@@ -10,9 +10,9 @@ import type { Session } from './types.js';
  * @param claims the token's claims.
  */
 export const sessionOf = (claims: TokenClaims): Session => {
-  const { iat, sid } = claims;
-  return {
-    ...(isTime(iat) ? { issuedAt: iat } : {}),
-    ...(typeof sid === 'string' ? { sid } : {}),
-  };
+	const { iat, sid } = claims;
+	return {
+		...(isTime(iat) ? { issuedAt: iat } : {}),
+		...(typeof sid === 'string' ? { sid } : {}),
+	};
 };

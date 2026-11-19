@@ -1,11 +1,6 @@
 import type { LineFields } from '../eventLog/index.js';
 import { isMigrationName } from './readMigrations.js';
-import type {
-  AppliedMigration,
-  Migration,
-  UnknownMigration,
-  UnknownMigrationRefusal,
-} from './types.js';
+import type { AppliedMigration, Migration, UnknownMigration, UnknownMigrationRefusal } from './types.js';
 
 /**
  * The line written at error, when the start or readiness refuses a database recording a migration
@@ -17,8 +12,7 @@ const NOT_IN_MIGRATION_FORM = 'a name not in migration form';
 
 // A recorded name reaches a line or a refusal only in migration form, which holds nothing but
 // digits, lower-case letters and underscores.
-const writableName = (name: string): string =>
-  isMigrationName(name) ? name : NOT_IN_MIGRATION_FORM;
+const writableName = (name: string): string => (isMigrationName(name) ? name : NOT_IN_MIGRATION_FORM);
 
 /**
  * The migrations a database records as applied that this release does not know, in the record's
@@ -31,18 +25,14 @@ const writableName = (name: string): string =>
  * @param recorded the migrations the database records as applied.
  */
 export const unknownMigrations = (
-  known: readonly Pick<Migration, 'checksum' | 'name'>[],
-  recorded: readonly AppliedMigration[],
+	known: readonly Pick<Migration, 'checksum' | 'name'>[],
+	recorded: readonly AppliedMigration[],
 ): readonly UnknownMigration[] => {
-  const checksums = new Map(
-    known.map(({ checksum, name }) => [name, checksum]),
-  );
-  return recorded.flatMap(({ checksum, name }) => {
-    const held = checksums.get(name);
-    return held === checksum
-      ? []
-      : [{ checksumDiffers: held !== undefined, name: writableName(name) }];
-  });
+	const checksums = new Map(known.map(({ checksum, name }) => [name, checksum]));
+	return recorded.flatMap(({ checksum, name }) => {
+		const held = checksums.get(name);
+		return held === checksum ? [] : [{ checksumDiffers: held !== undefined, name: writableName(name) }];
+	});
 };
 
 /**
@@ -53,11 +43,9 @@ export const unknownMigrations = (
  * @param refused what refused: the start, or readiness.
  */
 export const migrationUnknownFields = (
-  unknown: readonly UnknownMigration[],
-  refused: UnknownMigrationRefusal,
+	unknown: readonly UnknownMigration[],
+	refused: UnknownMigrationRefusal,
 ): LineFields => ({
-  migrations: unknown.map(({ checksumDiffers, name }) =>
-    checksumDiffers ? { checksumDiffers, name } : { name },
-  ),
-  refused,
+	migrations: unknown.map(({ checksumDiffers, name }) => (checksumDiffers ? { checksumDiffers, name } : { name })),
+	refused,
 });

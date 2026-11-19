@@ -7,11 +7,9 @@ export const AFTER_COMMIT_FAILED = 'controller.afterCommitFailed';
 
 // The failure by its code alone, where it carries one, since a message may quote a value.
 const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
-  const code: unknown =
-    typeof failure === 'object' && failure !== null && 'code' in failure
-      ? failure.code
-      : undefined;
-  return typeof code === 'string' ? { code } : {};
+	const code: unknown =
+		typeof failure === 'object' && failure !== null && 'code' in failure ? failure.code : undefined;
+	return typeof code === 'string' ? { code } : {};
 };
 
 /**
@@ -22,23 +20,23 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * @param settings the steps, and where a failed step is written.
  */
 export const runAfterCommit = ({
-  log,
-  steps,
+	log,
+	steps,
 }: {
-  log: AfterCommitLog;
-  steps: readonly AfterCommitStep[];
+	log: AfterCommitLog;
+	steps: readonly AfterCommitStep[];
 }): Promise<void> =>
-  steps.reduce(
-    (earlier, { name, run }) =>
-      earlier.then(async () => {
-        try {
-          await run();
-        } catch (failure) {
-          log.error(AFTER_COMMIT_FAILED, { ...codeOf(failure), step: name });
-        }
-      }),
-    Promise.resolve(),
-  );
+	steps.reduce(
+		(earlier, { name, run }) =>
+			earlier.then(async () => {
+				try {
+					await run();
+				} catch (failure) {
+					log.error(AFTER_COMMIT_FAILED, { ...codeOf(failure), step: name });
+				}
+			}),
+		Promise.resolve(),
+	);
 
 /**
  * Wraps a trail so each transaction it commits runs the steps given, as {@link runAfterCommit} runs
@@ -51,25 +49,23 @@ export const runAfterCommit = ({
  * @param settings the trail, the steps, and where a failed step is written.
  */
 export const afterCommitTrail = <Connection>({
-  log,
-  steps,
-  trail,
+	log,
+	steps,
+	trail,
 }: {
-  log: AfterCommitLog;
-  steps: readonly AfterCommitStep[];
-  trail: AuditTrail<Connection>;
+	log: AfterCommitLog;
+	steps: readonly AfterCommitStep[];
+	trail: AuditTrail<Connection>;
 }): AuditTrail<Connection> => ({
-  inTransaction: async (actor, work, options) => {
-    const result = await trail
-      .inTransaction(actor, work, options)
-      .catch(async (failure: unknown) => {
-        if (failure instanceof CommitUnconfirmed) {
-          await runAfterCommit({ log, steps });
-        }
-        throw failure;
-      });
-    await runAfterCommit({ log, steps });
-    return result;
-  },
-  recordEvent: trail.recordEvent,
+	inTransaction: async (actor, work, options) => {
+		const result = await trail.inTransaction(actor, work, options).catch(async (failure: unknown) => {
+			if (failure instanceof CommitUnconfirmed) {
+				await runAfterCommit({ log, steps });
+			}
+			throw failure;
+		});
+		await runAfterCommit({ log, steps });
+		return result;
+	},
+	recordEvent: trail.recordEvent,
 });

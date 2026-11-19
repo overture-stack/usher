@@ -33,23 +33,23 @@ const SYSTEM: Actor = Object.freeze({ type: 'system' });
  * past that expiry, in milliseconds on the configured clock, a row is kept.
  */
 interface SweptTable {
-  expiryColumn: string;
-  marginMilliseconds: number;
-  name: string;
+	expiryColumn: string;
+	marginMilliseconds: number;
+	name: string;
 }
 
 const SWEPT_TABLES: readonly SweptTable[] = [
-  { expiryColumn: 'expires_at', marginMilliseconds: 0, name: 'exchanged_sids' },
-  {
-    expiryColumn: 'expires_at',
-    marginMilliseconds: CLOCK_TOLERANCE_MILLISECONDS,
-    name: 'sid_sign_outs',
-  },
-  {
-    expiryColumn: 'expires_at',
-    marginMilliseconds: CLOCK_TOLERANCE_MILLISECONDS,
-    name: 'subject_sign_outs',
-  },
+	{ expiryColumn: 'expires_at', marginMilliseconds: 0, name: 'exchanged_sids' },
+	{
+		expiryColumn: 'expires_at',
+		marginMilliseconds: CLOCK_TOLERANCE_MILLISECONDS,
+		name: 'sid_sign_outs',
+	},
+	{
+		expiryColumn: 'expires_at',
+		marginMilliseconds: CLOCK_TOLERANCE_MILLISECONDS,
+		name: 'subject_sign_outs',
+	},
 ];
 
 /**
@@ -70,91 +70,76 @@ const SWEPT_TABLES: readonly SweptTable[] = [
  *
  * @param settings the trail each run's transaction runs on, the schema, the clock and the log.
  */
-export const createRetentionSweep = ({
-  clock,
-  log,
-  schema,
-  trail,
-}: RetentionSweepSettings): RetentionSweep => {
-  const qualified = (name: string): string =>
-    `${pg.escapeIdentifier(schema)}.${pg.escapeIdentifier(name)}`;
-  const deletions = SWEPT_TABLES.map(
-    ({ expiryColumn, marginMilliseconds, name }) => {
-      const table = qualified(name);
-      return {
-        marginMilliseconds,
-        text: `DELETE FROM ${table} WHERE ctid IN (SELECT ctid FROM ${table} WHERE ${pg.escapeIdentifier(expiryColumn)} < $1 LIMIT $2)`,
-      };
-    },
-  );
-  const trim = `SELECT ${qualified('trim_notices')}($1::integer)`;
+export const createRetentionSweep = ({ clock, log, schema, trail }: RetentionSweepSettings): RetentionSweep => {
+	const qualified = (name: string): string => `${pg.escapeIdentifier(schema)}.${pg.escapeIdentifier(name)}`;
+	const deletions = SWEPT_TABLES.map(({ expiryColumn, marginMilliseconds, name }) => {
+		const table = qualified(name);
+		return {
+			marginMilliseconds,
+			text: `DELETE FROM ${table} WHERE ctid IN (SELECT ctid FROM ${table} WHERE ${pg.escapeIdentifier(expiryColumn)} < $1 LIMIT $2)`,
+		};
+	});
+	const trim = `SELECT ${qualified('trim_notices')}($1::integer)`;
 
-  const state: {
-    failing: boolean;
-    running: Promise<void> | undefined;
-    stopped: boolean;
-    timer: ReturnType<typeof setTimeout> | undefined;
-  } = { failing: false, running: undefined, stopped: false, timer: undefined };
+	const state: {
+		failing: boolean;
+		running: Promise<void> | undefined;
+		stopped: boolean;
+		timer: ReturnType<typeof setTimeout> | undefined;
+	} = { failing: false, running: undefined, stopped: false, timer: undefined };
 
-  const sweep = async (connection: pg.ClientBase): Promise<void> => {
-    const { rows } = await connection.query<{ locked: boolean }>(
-      'SELECT pg_try_advisory_xact_lock($1) AS locked',
-      [RETENTION_SWEEP_LOCK],
-    );
-    if (rows[0]?.locked === true) {
-      const now = clock.now();
-      await deletions.reduce<Promise<void>>(
-        async (earlier, { marginMilliseconds, text }) => {
-          await earlier;
-          await connection.query(text, [
-            new Date(now - marginMilliseconds),
-            RETENTION_SWEEP_ROWS_PER_TABLE,
-          ]);
-        },
-        Promise.resolve(),
-      );
-      await connection.query(trim, [RETENTION_SWEEP_ROWS_PER_TABLE]);
-    }
-  };
+	const sweep = async (connection: pg.ClientBase): Promise<void> => {
+		const { rows } = await connection.query<{ locked: boolean }>('SELECT pg_try_advisory_xact_lock($1) AS locked', [
+			RETENTION_SWEEP_LOCK,
+		]);
+		if (rows[0]?.locked === true) {
+			const now = clock.now();
+			await deletions.reduce<Promise<void>>(async (earlier, { marginMilliseconds, text }) => {
+				await earlier;
+				await connection.query(text, [new Date(now - marginMilliseconds), RETENTION_SWEEP_ROWS_PER_TABLE]);
+			}, Promise.resolve());
+			await connection.query(trim, [RETENTION_SWEEP_ROWS_PER_TABLE]);
+		}
+	};
 
-  const runOnce = async (): Promise<void> => {
-    try {
-      await trail.inTransaction(SYSTEM, ({ connection }) => sweep(connection));
-      state.failing = false;
-    } catch (failure) {
-      if (!state.failing) {
-        log.error(RETENTION_SWEEP_FAILED, {
-          cause: failureCodeOf(failure) ?? STORE_FAILED,
-        });
-      }
-      state.failing = true;
-    }
-  };
+	const runOnce = async (): Promise<void> => {
+		try {
+			await trail.inTransaction(SYSTEM, ({ connection }) => sweep(connection));
+			state.failing = false;
+		} catch (failure) {
+			if (!state.failing) {
+				log.error(RETENTION_SWEEP_FAILED, {
+					cause: failureCodeOf(failure) ?? STORE_FAILED,
+				});
+			}
+			state.failing = true;
+		}
+	};
 
-  const schedule = (): void => {
-    if (!state.stopped) {
-      state.timer = setTimeout(() => {
-        state.timer = undefined;
-        state.running = runOnce().finally(() => {
-          state.running = undefined;
-          schedule();
-        });
-      }, RETENTION_SWEEP_INTERVAL_MILLISECONDS);
-      state.timer.unref();
-    }
-  };
+	const schedule = (): void => {
+		if (!state.stopped) {
+			state.timer = setTimeout(() => {
+				state.timer = undefined;
+				state.running = runOnce().finally(() => {
+					state.running = undefined;
+					schedule();
+				});
+			}, RETENTION_SWEEP_INTERVAL_MILLISECONDS);
+			state.timer.unref();
+		}
+	};
 
-  return {
-    start: () => {
-      if (state.timer === undefined && state.running === undefined) {
-        schedule();
-      }
-    },
-    stop: async () => {
-      state.stopped = true;
-      clearTimeout(state.timer);
-      state.timer = undefined;
-      await state.running;
-    },
-  };
+	return {
+		start: () => {
+			if (state.timer === undefined && state.running === undefined) {
+				schedule();
+			}
+		},
+		stop: async () => {
+			state.stopped = true;
+			clearTimeout(state.timer);
+			state.timer = undefined;
+			await state.running;
+		},
+	};
 };

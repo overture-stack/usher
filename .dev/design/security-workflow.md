@@ -221,10 +221,10 @@ The exchange itself is above; this is what caching adds to it.
    than two.
 5. The Controller checks one thing, its own state: whether the principal's computed payload is still
    in the shared cache, cleared by any change to a resource's categories.
-   - **It is:** re-issue a new JWE from the cached payload with a refreshed TTL, bounded by the
-     earliest grant expiry. Fast path: no full policy query.
-   - **It is not:** recompute grants from the policy store and issue a new JWE with updated
-     grants.
+    - **It is:** re-issue a new JWE from the cached payload with a refreshed TTL, bounded by the
+      earliest grant expiry. Fast path: no full policy query.
+    - **It is not:** recompute grants from the policy store and issue a new JWE with updated
+      grants.
 
 The fast path skips the full policy computation unless something has actually changed, and
 permission changes propagate within at most one TTL window for any active user. `generatedAt` is not

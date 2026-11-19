@@ -1,46 +1,35 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 
-import type {
-  CategoryName,
-  PermissionsPayload,
-  RecordAction,
-} from '@overture-stack/usher-types';
+import type { CategoryName, PermissionsPayload, RecordAction } from '@overture-stack/usher-types';
 import { SignJWT } from 'jose';
 
 import { answerGrant, assertSucceeded, createGrant } from '../admin.js';
 import {
-  CHANNEL_ASSERTION_AUDIENCE,
-  CHANNEL_ASSERTION_LIFETIME_S,
-  CHANNEL_ASSERTION_TYPE,
-  plaintextOf,
-  SUBKEY_LABELS,
-  subkeyBytes,
+	CHANNEL_ASSERTION_AUDIENCE,
+	CHANNEL_ASSERTION_LIFETIME_S,
+	CHANNEL_ASSERTION_TYPE,
+	plaintextOf,
+	SUBKEY_LABELS,
+	subkeyBytes,
 } from '../bridgeWire.js';
 import {
-  type Clock,
-  type ControllerApplication,
-  type ControllerConfiguration,
-  readConfiguration,
-  startController,
+	type Clock,
+	type ControllerApplication,
+	type ControllerConfiguration,
+	readConfiguration,
+	startController,
 } from '../controller.js';
 import { USHER_SCHEMA } from '../database.js';
-import {
-  exchange,
-  type ExchangeRequest,
-  PEOPLE,
-  type Person,
-  readUsherToken,
-  type WireResponse,
-} from '../exchange.js';
+import { exchange, type ExchangeRequest, PEOPLE, type Person, readUsherToken, type WireResponse } from '../exchange.js';
 import { type Harness, harnessConfiguration } from '../harness.js';
 import type { MintOptions } from '../identityProvider.js';
 import {
-  type FixtureDecision,
-  type FixtureGrant,
-  type FixtureResource,
-  type PolicyFixture,
-  usersWithSubject as storedPeopleWithSubject,
+	type FixtureDecision,
+	type FixtureGrant,
+	type FixtureResource,
+	type PolicyFixture,
+	usersWithSubject as storedPeopleWithSubject,
 } from '../policy.js';
 import { nowSeconds } from '../waiting.js';
 
@@ -66,13 +55,13 @@ export const LYRIC = 'lyric-test';
 
 /** The global categories as the payload names them. */
 export const CATEGORY: Readonly<{
-  communityGoverned: CategoryName;
-  controlled: CategoryName;
-  unmarked: CategoryName;
+	communityGoverned: CategoryName;
+	controlled: CategoryName;
+	unmarked: CategoryName;
 }> = Object.freeze({
-  communityGoverned: 'global.community-governed',
-  controlled: 'global.controlled',
-  unmarked: 'global.unmarked',
+	communityGoverned: 'global.community-governed',
+	controlled: 'global.controlled',
+	unmarked: 'global.unmarked',
 });
 
 /**
@@ -80,86 +69,59 @@ export const CATEGORY: Readonly<{
  * each grant on records (the batch 1 addendum). Typed as record actions so a start test can build a
  * rule from it.
  */
-export const READ: readonly RecordAction[] = Object.freeze([
-  'count',
-  'export',
-  'view',
-]);
+export const READ: readonly RecordAction[] = Object.freeze(['count', 'export', 'view']);
 
 /** `editor`'s record actions in the seeded matrix, sorted. */
-export const EDITOR_ACTIONS: readonly string[] = Object.freeze([
-  'count',
-  'create',
-  'export',
-  'update',
-  'view',
-]);
+export const EDITOR_ACTIONS: readonly string[] = Object.freeze(['count', 'create', 'export', 'update', 'view']);
 
 /** `curator`'s record actions in the seeded matrix, sorted. */
 export const CURATOR_ACTIONS: readonly string[] = Object.freeze([
-  'count',
-  'create',
-  'delete',
-  'export',
-  'update',
-  'view',
+	'count',
+	'create',
+	'delete',
+	'export',
+	'update',
+	'view',
 ]);
 
 /** What a person accepting a `viewer` grant is shown, as `entity.action` names. */
-export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze(
-  READ.map((action) => `record.${action}`),
-);
+export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze(READ.map((action) => `record.${action}`));
 
 /** What a person accepting an `editor` grant is shown, as `entity.action` names. */
-export const EDITOR_CAPABILITIES: readonly string[] = Object.freeze(
-  EDITOR_ACTIONS.map((action) => `record.${action}`),
-);
+export const EDITOR_CAPABILITIES: readonly string[] = Object.freeze(EDITOR_ACTIONS.map((action) => `record.${action}`));
 
 /** What a person accepting a `curator` grant is shown, as `entity.action` names. */
 export const CURATOR_CAPABILITIES: readonly string[] = Object.freeze(
-  CURATOR_ACTIONS.map((action) => `record.${action}`),
+	CURATOR_ACTIONS.map((action) => `record.${action}`),
 );
 
 /** The test-defined `assembler` role's capabilities, as `entity.action` names. */
 export const ASSEMBLER_CAPABILITIES: readonly string[] = Object.freeze([
-  'artifact.create',
-  'artifact.view',
-  'record.view',
+	'artifact.create',
+	'artifact.view',
+	'record.view',
 ]);
 
 const BASE_RESOURCES = {
-  'STUDY-A1': { baseTier: 'open', name: 'Cardiac Outcomes' },
-  'STUDY-B2': { baseTier: 'open', name: 'Étude pulmonaire' },
-  'STUDY-C3': { baseTier: 'registered', name: 'Members Archive' },
-  'STUDY-D4': { baseTier: 'grant', name: 'Sealed Archive' },
-  'STUDY-E5': { baseTier: 'open', name: 'Reef Survey' },
+	'STUDY-A1': { baseTier: 'open', name: 'Cardiac Outcomes' },
+	'STUDY-B2': { baseTier: 'open', name: 'Étude pulmonaire' },
+	'STUDY-C3': { baseTier: 'registered', name: 'Members Archive' },
+	'STUDY-D4': { baseTier: 'grant', name: 'Sealed Archive' },
+	'STUDY-E5': { baseTier: 'open', name: 'Reef Survey' },
 } as const satisfies Readonly<Record<string, FixtureResource>>;
 
 /** The resources `arranger-test` serves in the fixture, sorted. */
-export const ARRANGER_SERVES: readonly string[] = Object.freeze([
-  'STUDY-A1',
-  'STUDY-B2',
-  'STUDY-C3',
-  'STUDY-D4',
-]);
+export const ARRANGER_SERVES: readonly string[] = Object.freeze(['STUDY-A1', 'STUDY-B2', 'STUDY-C3', 'STUDY-D4']);
 
 /** The resources `lyric-test` serves in the fixture, sorted. */
-export const LYRIC_SERVES: readonly string[] = Object.freeze([
-  'STUDY-A1',
-  'STUDY-E5',
-]);
+export const LYRIC_SERVES: readonly string[] = Object.freeze(['STUDY-A1', 'STUDY-E5']);
 
 const OWNED_BY_DANA = ['STUDY-A1', 'STUDY-C3', 'STUDY-D4'] as const;
 
 const ownerGrantName = (externalId: string): string => `danaOwns${externalId}`;
 
 const BASE_USERS = Object.freeze(
-  Object.fromEntries(
-    (['ana', 'bo', 'cy', 'dana'] as const).map((name) => [
-      name,
-      { subject: PEOPLE[name].subject },
-    ]),
-  ),
+	Object.fromEntries((['ana', 'bo', 'cy', 'dana'] as const).map((name) => [name, { subject: PEOPLE[name].subject }])),
 );
 
 /**
@@ -174,55 +136,55 @@ const BASE_USERS = Object.freeze(
  *   revocations follow the fixture's own.
  */
 export const issuanceFixture = ({
-  applications = {},
-  categories = {},
-  decisions = [],
-  fields = {},
-  grants = {},
-  groups = {},
-  invitations = [],
-  resources = {},
-  revocations = [],
-  roles = {},
-  users = {},
+	applications = {},
+	categories = {},
+	decisions = [],
+	fields = {},
+	grants = {},
+	groups = {},
+	invitations = [],
+	resources = {},
+	revocations = [],
+	roles = {},
+	users = {},
 }: Omit<PolicyFixture, 'issuer'> = {}): PolicyFixture => ({
-  applications: {
-    [ARRANGER]: { serves: ARRANGER_SERVES },
-    [LYRIC]: { serves: LYRIC_SERVES },
-    ...applications,
-  },
-  categories: { 'community-governed': {}, controlled: {}, ...categories },
-  decisions: [
-    ...OWNED_BY_DANA.map((externalId): FixtureDecision => ({
-      decision: 'accepted',
-      grant: ownerGrantName(externalId),
-    })),
-    ...decisions,
-  ],
-  fields,
-  grants: {
-    ...Object.fromEntries(
-      OWNED_BY_DANA.map((externalId) => [
-        ownerGrantName(externalId),
-        {
-          category: null,
-          holder: { user: 'dana' },
-          resource: externalId,
-          role: 'owner',
-        },
-      ]),
-    ),
-    ...grants,
-  },
-  groups,
-  invitations,
-  resources: { ...BASE_RESOURCES, ...resources },
-  revocations,
-  roles: {
-    assembler: { capabilities: ASSEMBLER_CAPABILITIES, plane: 'data' },
-    ...roles,
-  },
-  users: { ...BASE_USERS, ...users },
+	applications: {
+		[ARRANGER]: { serves: ARRANGER_SERVES },
+		[LYRIC]: { serves: LYRIC_SERVES },
+		...applications,
+	},
+	categories: { 'community-governed': {}, controlled: {}, ...categories },
+	decisions: [
+		...OWNED_BY_DANA.map((externalId): FixtureDecision => ({
+			decision: 'accepted',
+			grant: ownerGrantName(externalId),
+		})),
+		...decisions,
+	],
+	fields,
+	grants: {
+		...Object.fromEntries(
+			OWNED_BY_DANA.map((externalId) => [
+				ownerGrantName(externalId),
+				{
+					category: null,
+					holder: { user: 'dana' },
+					resource: externalId,
+					role: 'owner',
+				},
+			]),
+		),
+		...grants,
+	},
+	groups,
+	invitations,
+	resources: { ...BASE_RESOURCES, ...resources },
+	revocations,
+	roles: {
+		assembler: { capabilities: ASSEMBLER_CAPABILITIES, plane: 'data' },
+		...roles,
+	},
+	users: { ...BASE_USERS, ...users },
 });
 
 /**
@@ -233,12 +195,12 @@ export const issuanceFixture = ({
  * @param category the global category, by bare name: `controlled`.
  * @param role the role's name.
  */
-export const grantTo = (
-  user: string,
-  resource: string,
-  category: string,
-  role: string = 'viewer',
-): FixtureGrant => ({ category, holder: { user }, resource, role });
+export const grantTo = (user: string, resource: string, category: string, role: string = 'viewer'): FixtureGrant => ({
+	category,
+	holder: { user },
+	resource,
+	role,
+});
 
 /**
  * An acceptance of a fixture grant by its holder, showing what its role carries when written.
@@ -246,26 +208,23 @@ export const grantTo = (
  * @param grant the fixture grant's name.
  */
 export const acceptance = (grant: string): FixtureDecision => ({
-  decision: 'accepted',
-  grant,
+	decision: 'accepted',
+	grant,
 });
 
 /** One exchange as a test describes it: who exchanges, through which application, and any departure. */
-export interface ExchangeAs extends Omit<
-  ExchangeRequest,
-  'application' | 'credential'
-> {
-  /** The application exchanging, by display name: `arranger-test` by default. */
-  application?: string;
+export interface ExchangeAs extends Omit<ExchangeRequest, 'application' | 'credential'> {
+	/** The application exchanging, by display name: `arranger-test` by default. */
+	application?: string;
 
-  /** A credential, such as a sign-in token minted beforehand, sent in place of a fresh sign-in token for the person. */
-  credential?: string;
+	/** A credential, such as a sign-in token minted beforehand, sent in place of a fresh sign-in token for the person. */
+	credential?: string;
 
-  /** Claims and options over a fresh sign-in token's. */
-  mint?: MintOptions;
+	/** Claims and options over a fresh sign-in token's. */
+	mint?: MintOptions;
 
-  /** Who signs in; `null` for the anonymous exchange. */
-  person: Person | null;
+	/** Who signs in; `null` for the anonymous exchange. */
+	person: Person | null;
 }
 
 /**
@@ -276,24 +235,15 @@ export interface ExchangeAs extends Omit<
  * @param request who exchanges, through which application, and any departure from the Bridge's request.
  */
 export const exchangeAs = async (
-  harness: Harness,
-  {
-    application = ARRANGER,
-    credential,
-    mint = {},
-    person: signingIn,
-    ...departures
-  }: ExchangeAs,
+	harness: Harness,
+	{ application = ARRANGER, credential, mint = {}, person: signingIn, ...departures }: ExchangeAs,
 ): Promise<WireResponse> =>
-  exchange(harness.url, {
-    ...departures,
-    application: harness.application(application),
-    credential:
-      credential ??
-      (signingIn === null
-        ? null
-        : await harness.tokens.signIn(signingIn, { application, mint })),
-  });
+	exchange(harness.url, {
+		...departures,
+		application: harness.application(application),
+		credential:
+			credential ?? (signingIn === null ? null : await harness.tokens.signIn(signingIn, { application, mint })),
+	});
 
 /**
  * Reads a 200's token as the Bridge does, failing the test with the reader's reason when the Bridge
@@ -304,18 +254,16 @@ export const exchangeAs = async (
  * @param issuer the Controller's configured issuer.
  */
 export const readPayload = async (
-  response: WireResponse,
-  application: ControllerApplication,
-  issuer: string,
+	response: WireResponse,
+	application: ControllerApplication,
+	issuer: string,
 ): Promise<PermissionsPayload> => {
-  assert.equal(response.status, 200, 'the exchange issues a token');
-  const reading = await readUsherToken(response.body, { application, issuer });
-  if (reading.kind === 'payload') {
-    return reading.payload;
-  }
-  return assert.fail(
-    `the bridge's reader refuses the token: ${reading.reason}`,
-  );
+	assert.equal(response.status, 200, 'the exchange issues a token');
+	const reading = await readUsherToken(response.body, { application, issuer });
+	if (reading.kind === 'payload') {
+		return reading.payload;
+	}
+	return assert.fail(`the bridge's reader refuses the token: ${reading.reason}`);
 };
 
 /**
@@ -326,15 +274,10 @@ export const readPayload = async (
  * @param application the application's display name: `arranger-test` by default.
  */
 export const payloadOf = (
-  harness: Harness,
-  response: WireResponse,
-  application: string = ARRANGER,
-): Promise<PermissionsPayload> =>
-  readPayload(
-    response,
-    harness.application(application),
-    harness.configuration.issuer,
-  );
+	harness: Harness,
+	response: WireResponse,
+	application: string = ARRANGER,
+): Promise<PermissionsPayload> => readPayload(response, harness.application(application), harness.configuration.issuer);
 
 /**
  * Exchanges and reads the token the Bridge would accept, asserting its `sub` is the signed-in
@@ -345,24 +288,14 @@ export const payloadOf = (
  * @param harness the running harness.
  * @param request who exchanges, and through which application.
  */
-export const payloadFor = async (
-  harness: Harness,
-  request: ExchangeAs,
-): Promise<PermissionsPayload> => {
-  const payload = await payloadOf(
-    harness,
-    await exchangeAs(harness, request),
-    request.application ?? ARRANGER,
-  );
-  assert.equal(
-    payload.sub,
-    request.person === null ? null : request.person.subject,
-  );
-  return payload;
+export const payloadFor = async (harness: Harness, request: ExchangeAs): Promise<PermissionsPayload> => {
+	const payload = await payloadOf(harness, await exchangeAs(harness, request), request.application ?? ARRANGER);
+	assert.equal(payload.sub, request.person === null ? null : request.person.subject);
+	return payload;
 };
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * The token's claims exactly as the Controller wrote them, decrypted under the application key's
@@ -373,19 +306,16 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
  * @param application the application the token was issued for.
  */
 export const rawClaims = async (
-  body: string,
-  application: ControllerApplication,
+	body: string,
+	application: ControllerApplication,
 ): Promise<Readonly<Record<string, unknown>>> => {
-  const claims: unknown = JSON.parse(
-    await plaintextOf(
-      body.trim(),
-      subkeyBytes(application.key, SUBKEY_LABELS.token),
-    ),
-  );
-  if (isRecord(claims)) {
-    return claims;
-  }
-  return assert.fail("the token's claims are not a JSON object");
+	const claims: unknown = JSON.parse(
+		await plaintextOf(body.trim(), subkeyBytes(application.key, SUBKEY_LABELS.token)),
+	);
+	if (isRecord(claims)) {
+		return claims;
+	}
+	return assert.fail("the token's claims are not a JSON object");
 };
 
 /**
@@ -394,19 +324,16 @@ export const rawClaims = async (
  * @param value the parsed value.
  */
 export const stringsIn = (value: unknown): readonly string[] => {
-  if (typeof value === 'string') {
-    return [value];
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap(stringsIn);
-  }
-  if (isRecord(value)) {
-    return Object.entries(value).flatMap(([name, member]) => [
-      name,
-      ...stringsIn(member),
-    ]);
-  }
-  return [];
+	if (typeof value === 'string') {
+		return [value];
+	}
+	if (Array.isArray(value)) {
+		return value.flatMap(stringsIn);
+	}
+	if (isRecord(value)) {
+		return Object.entries(value).flatMap(([name, member]) => [name, ...stringsIn(member)]);
+	}
+	return [];
 };
 
 const COMPACT_JWE = /^[\w-]+\.[\w-]*\.[\w-]+\.[\w-]+\.[\w-]+$/u;
@@ -416,8 +343,7 @@ const COMPACT_JWE = /^[\w-]+\.[\w-]*\.[\w-]+\.[\w-]+\.[\w-]+$/u;
  *
  * @param body the answer's body.
  */
-export const carriesToken = (body: string): boolean =>
-  COMPACT_JWE.test(body.trim());
+export const carriesToken = (body: string): boolean => COMPACT_JWE.test(body.trim());
 
 /**
  * The record or artifact actions a payload holds under one category on one resource, sorted, or
@@ -429,13 +355,13 @@ export const carriesToken = (body: string): boolean =>
  * @param entity the data entity: `record` by default.
  */
 export const actionsHeld = (
-  payload: PermissionsPayload,
-  resource: string,
-  category: CategoryName,
-  entity: 'artifact' | 'record' = 'record',
+	payload: PermissionsPayload,
+	resource: string,
+	category: CategoryName,
+	entity: 'artifact' | 'record' = 'record',
 ): readonly string[] | undefined => {
-  const held = payload.permissions[resource]?.[category]?.[entity];
-  return held === undefined ? undefined : [...held].sort();
+	const held = payload.permissions[resource]?.[category]?.[entity];
+	return held === undefined ? undefined : [...held].sort();
 };
 
 /**
@@ -445,26 +371,24 @@ export const actionsHeld = (
  * @param payload the payload.
  */
 export const heldEntries = (
-  payload: PermissionsPayload,
-): Readonly<
-  Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>
-> =>
-  Object.fromEntries(
-    Object.entries(payload.permissions).map(([resource, categories]) => [
-      resource,
-      Object.fromEntries(
-        Object.entries(categories).map(([category, entities]) => [
-          category,
-          Object.fromEntries(
-            Object.entries(entities).map(([entity, actions]) => [
-              entity,
-              Array.isArray(actions) ? [...actions].sort() : actions,
-            ]),
-          ),
-        ]),
-      ),
-    ]),
-  );
+	payload: PermissionsPayload,
+): Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>> =>
+	Object.fromEntries(
+		Object.entries(payload.permissions).map(([resource, categories]) => [
+			resource,
+			Object.fromEntries(
+				Object.entries(categories).map(([category, entities]) => [
+					category,
+					Object.fromEntries(
+						Object.entries(entities).map(([entity, actions]) => [
+							entity,
+							Array.isArray(actions) ? [...actions].sort() : actions,
+						]),
+					),
+				]),
+			),
+		]),
+	);
 
 /**
  * A clock fixed at one instant, for the three tests needing a known now (#209 Q2), injected through
@@ -472,8 +396,7 @@ export const heldEntries = (
  *
  * @param instant milliseconds since the Unix epoch.
  */
-export const fixedClock = (instant: number): Clock =>
-  Object.freeze({ now: () => instant });
+export const fixedClock = (instant: number): Clock => Object.freeze({ now: () => instant });
 
 /**
  * An instant a given number of milliseconds into the second after the one this is called in: a known
@@ -484,8 +407,7 @@ export const fixedClock = (instant: number): Clock =>
  *
  * @param milliseconds the offset into that second, below 1 000.
  */
-export const intoNextSecond = (milliseconds: number): number =>
-  (nowSeconds() + 1) * 1000 + milliseconds;
+export const intoNextSecond = (milliseconds: number): number => (nowSeconds() + 1) * 1000 + milliseconds;
 
 /**
  * A channel assertion's departures from the Bridge's own, each a claim or an ordinary header field.
@@ -493,17 +415,17 @@ export const intoNextSecond = (milliseconds: number): number =>
  * so the assertion is genuinely the application's; what a test varies is what it carries.
  */
 export interface AssertionDepartures {
-  /** `usher:controller` by default. */
-  audience?: string;
+	/** `usher:controller` by default. */
+	audience?: string;
 
-  /** Seconds since the Unix epoch: the Bridge's lifetime after `issuedAt` by default. */
-  expiresAt?: number;
+	/** Seconds since the Unix epoch: the Bridge's lifetime after `issuedAt` by default. */
+	expiresAt?: number;
 
-  /** Seconds since the Unix epoch: now by default. */
-  issuedAt?: number;
+	/** Seconds since the Unix epoch: now by default. */
+	issuedAt?: number;
 
-  /** The header's `typ`: the Bridge's assertion type by default. */
-  type?: string;
+	/** The header's `typ`: the Bridge's assertion type by default. */
+	type?: string;
 }
 
 /**
@@ -515,23 +437,23 @@ export interface AssertionDepartures {
  * @param departures the audience, lifetime or header `typ` a refusal test varies.
  */
 export const assertionFor = (
-  application: ControllerApplication,
-  {
-    audience = CHANNEL_ASSERTION_AUDIENCE,
-    expiresAt,
-    issuedAt,
-    type = CHANNEL_ASSERTION_TYPE,
-  }: AssertionDepartures = {},
+	application: ControllerApplication,
+	{
+		audience = CHANNEL_ASSERTION_AUDIENCE,
+		expiresAt,
+		issuedAt,
+		type = CHANNEL_ASSERTION_TYPE,
+	}: AssertionDepartures = {},
 ): Promise<string> => {
-  const issued = issuedAt ?? nowSeconds();
-  return new SignJWT({})
-    .setProtectedHeader({ alg: 'HS256', typ: type })
-    .setIssuer(application.id)
-    .setAudience(audience)
-    .setIssuedAt(issued)
-    .setExpirationTime(expiresAt ?? issued + CHANNEL_ASSERTION_LIFETIME_S)
-    .setJti(randomUUID())
-    .sign(subkeyBytes(application.key, SUBKEY_LABELS.channelAssertion));
+	const issued = issuedAt ?? nowSeconds();
+	return new SignJWT({})
+		.setProtectedHeader({ alg: 'HS256', typ: type })
+		.setIssuer(application.id)
+		.setAudience(audience)
+		.setIssuedAt(issued)
+		.setExpirationTime(expiresAt ?? issued + CHANNEL_ASSERTION_LIFETIME_S)
+		.setJti(randomUUID())
+		.sign(subkeyBytes(application.key, SUBKEY_LABELS.channelAssertion));
 };
 
 /**
@@ -542,30 +464,27 @@ export const assertionFor = (
  * @param harness the running harness.
  * @param subject the identity provider's subject.
  */
-export const usersWithSubject = (
-  harness: Harness,
-  subject: string,
-): Promise<number> =>
-  storedPeopleWithSubject(harness.clients.migration, subject);
+export const usersWithSubject = (harness: Harness, subject: string): Promise<number> =>
+	storedPeopleWithSubject(harness.clients.migration, subject);
 
 /** A consumer grant a test writes through the API. */
 export interface ApiGrant {
-  /** The capabilities the holder is shown when accepting, as `entity.action` names. */
-  capabilities: readonly string[];
+	/** The capabilities the holder is shown when accepting, as `entity.action` names. */
+	capabilities: readonly string[];
 
-  /** The global category, by bare name. */
-  category: string;
+	/** The global category, by bare name. */
+	category: string;
 
-  /** An instant with an offset; none when absent. */
-  expiresAt?: string;
+	/** An instant with an offset; none when absent. */
+	expiresAt?: string;
 
-  /** The holder, one of the shared cast seeded as a fixture user of the same name. */
-  holder: 'ana' | 'bo' | 'cy';
+	/** The holder, one of the shared cast seeded as a fixture user of the same name. */
+	holder: 'ana' | 'bo' | 'cy';
 
-  /** By externalId: one Dana owns. */
-  resource: string;
+	/** By externalId: one Dana owns. */
+	resource: string;
 
-  role: string;
+	role: string;
 }
 
 /**
@@ -577,33 +496,31 @@ export interface ApiGrant {
  * @returns the grant's id, as the creation answered it.
  */
 export const grantAndAccept = async (
-  harness: Harness,
-  { capabilities, category, expiresAt, holder, resource, role }: ApiGrant,
+	harness: Harness,
+	{ capabilities, category, expiresAt, holder, resource, role }: ApiGrant,
 ): Promise<string> => {
-  const owner = harness.caller(await harness.tokens.management(PEOPLE.dana));
-  const created = await createGrant(owner, {
-    category: `global.${category}`,
-    ...(expiresAt === undefined ? {} : { expiresAt }),
-    holder: { subject: PEOPLE[holder].subject },
-    resource,
-    role,
-  });
-  assertSucceeded(created, 'creating the grant');
-  const { grantId } = created;
-  if (grantId === undefined) {
-    return assert.fail("the grant's creation answered no id");
-  }
-  const recipient = harness.caller(
-    await harness.tokens.management(PEOPLE[holder]),
-  );
-  assertSucceeded(
-    await answerGrant(recipient, grantId, {
-      capabilities,
-      decision: 'accepted',
-    }),
-    'accepting the grant',
-  );
-  return grantId;
+	const owner = harness.caller(await harness.tokens.management(PEOPLE.dana));
+	const created = await createGrant(owner, {
+		category: `global.${category}`,
+		...(expiresAt === undefined ? {} : { expiresAt }),
+		holder: { subject: PEOPLE[holder].subject },
+		resource,
+		role,
+	});
+	assertSucceeded(created, 'creating the grant');
+	const { grantId } = created;
+	if (grantId === undefined) {
+		return assert.fail("the grant's creation answered no id");
+	}
+	const recipient = harness.caller(await harness.tokens.management(PEOPLE[holder]));
+	assertSucceeded(
+		await answerGrant(recipient, grantId, {
+			capabilities,
+			decision: 'accepted',
+		}),
+		'accepting the grant',
+	);
+	return grantId;
 };
 
 /**
@@ -612,19 +529,18 @@ export const grantAndAccept = async (
  *
  * @param index the resource's index.
  */
-export const scaleExternalId = (index: number): string =>
-  `STUDY-${String(index).padStart(5, '0')}-${'A'.repeat(52)}`;
+export const scaleExternalId = (index: number): string => `STUDY-${String(index).padStart(5, '0')}-${'A'.repeat(52)}`;
 
 /** What a scale fixture holds. */
 export interface ScaleFixtureOptions {
-  /** Every resource's base tier. */
-  baseTier: FixtureResource['baseTier'];
+	/** Every resource's base tier. */
+	baseTier: FixtureResource['baseTier'];
 
-  /** How many resources `arranger-test` serves. */
-  count: number;
+	/** How many resources `arranger-test` serves. */
+	count: number;
 
-  /** How many of them, from the first, Ana holds an accepted `viewer` grant on, under `controlled`. */
-  grantedToAna: number;
+	/** How many of them, from the first, Ana holds an accepted `viewer` grant on, under `controlled`. */
+	grantedToAna: number;
 }
 
 /**
@@ -634,40 +550,26 @@ export interface ScaleFixtureOptions {
  *
  * @param options the base tier, the count, and how many Ana holds.
  */
-export const scaleFixture = ({
-  baseTier,
-  count,
-  grantedToAna,
-}: ScaleFixtureOptions): PolicyFixture => {
-  const externalIds = Array.from({ length: count }, (_, index) =>
-    scaleExternalId(index),
-  );
-  const granted = externalIds.slice(0, grantedToAna);
-  return {
-    applications: {
-      [ARRANGER]: { serves: externalIds },
-      [LYRIC]: { serves: [] },
-    },
-    categories: { controlled: {} },
-    decisions: granted.map((externalId) => ({
-      capabilities: VIEWER_CAPABILITIES,
-      decision: 'accepted',
-      grant: externalId,
-    })),
-    grants: Object.fromEntries(
-      granted.map((externalId) => [
-        externalId,
-        grantTo('ana', externalId, 'controlled'),
-      ]),
-    ),
-    resources: Object.fromEntries(
-      externalIds.map((externalId, index) => [
-        externalId,
-        { baseTier, name: `Survey ${index}` },
-      ]),
-    ),
-    users: { ana: { subject: PEOPLE.ana.subject } },
-  };
+export const scaleFixture = ({ baseTier, count, grantedToAna }: ScaleFixtureOptions): PolicyFixture => {
+	const externalIds = Array.from({ length: count }, (_, index) => scaleExternalId(index));
+	const granted = externalIds.slice(0, grantedToAna);
+	return {
+		applications: {
+			[ARRANGER]: { serves: externalIds },
+			[LYRIC]: { serves: [] },
+		},
+		categories: { controlled: {} },
+		decisions: granted.map((externalId) => ({
+			capabilities: VIEWER_CAPABILITIES,
+			decision: 'accepted',
+			grant: externalId,
+		})),
+		grants: Object.fromEntries(granted.map((externalId) => [externalId, grantTo('ana', externalId, 'controlled')])),
+		resources: Object.fromEntries(
+			externalIds.map((externalId, index) => [externalId, { baseTier, name: `Survey ${index}` }]),
+		),
+		users: { ana: { subject: PEOPLE.ana.subject } },
+	};
 };
 
 /**
@@ -676,16 +578,14 @@ export const scaleFixture = ({
  *
  * @param overrides fields set over the defaults.
  */
-export const configurationToRead = (
-  overrides: Partial<ControllerConfiguration> = {},
-): ControllerConfiguration =>
-  harnessConfiguration({
-    cacheUrl: 'redis://127.0.0.1:6379',
-    databaseSchema: USHER_SCHEMA,
-    databaseUrl: 'postgres://usher_controller@127.0.0.1:5432/usher_issuance',
-    identityProviderIssuer: 'http://127.0.0.1:8080/realms/usher-test',
-    overrides,
-  });
+export const configurationToRead = (overrides: Partial<ControllerConfiguration> = {}): ControllerConfiguration =>
+	harnessConfiguration({
+		cacheUrl: 'redis://127.0.0.1:6379',
+		databaseSchema: USHER_SCHEMA,
+		databaseUrl: 'postgres://usher_controller@127.0.0.1:5432/usher_issuance',
+		identityProviderIssuer: 'http://127.0.0.1:8080/realms/usher-test',
+		overrides,
+	});
 
 /**
  * The names of the environment variables whose values differ between two environments, sorted: the
@@ -695,12 +595,10 @@ export const configurationToRead = (
  * @param to the other.
  */
 export const changedVariables = (
-  from: Readonly<Record<string, string | undefined>>,
-  to: Readonly<Record<string, string | undefined>>,
+	from: Readonly<Record<string, string | undefined>>,
+	to: Readonly<Record<string, string | undefined>>,
 ): readonly string[] =>
-  [...new Set([...Object.keys(from), ...Object.keys(to)])]
-    .filter((name) => from[name] !== to[name])
-    .sort();
+	[...new Set([...Object.keys(from), ...Object.keys(to)])].filter((name) => from[name] !== to[name]).sort();
 
 /**
  * What reading a configuration threw. A test reads a valid environment through `readConfiguration`
@@ -708,22 +606,19 @@ export const changedVariables = (
  *
  * @param environment the environment refused.
  */
-export const readRefusal = async (
-  environment: Readonly<Record<string, string | undefined>>,
-): Promise<unknown> => {
-  const outcome = await readConfiguration(environment).then(
-    () => ({ kind: 'read' }) as const,
-    (refusal: unknown) => ({ kind: 'refused', refusal }) as const,
-  );
-  if (outcome.kind === 'refused') {
-    return outcome.refusal;
-  }
-  return assert.fail('the configuration was read');
+export const readRefusal = async (environment: Readonly<Record<string, string | undefined>>): Promise<unknown> => {
+	const outcome = await readConfiguration(environment).then(
+		() => ({ kind: 'read' }) as const,
+		(refusal: unknown) => ({ kind: 'refused', refusal }) as const,
+	);
+	if (outcome.kind === 'refused') {
+		return outcome.refusal;
+	}
+	return assert.fail('the configuration was read');
 };
 
 /** How a start ended, as a refusal test reads it. */
-export type StartOutcome =
-  { kind: 'refused'; refusal: unknown } | { kind: 'started' };
+export type StartOutcome = { kind: 'refused'; refusal: unknown } | { kind: 'started' };
 
 /**
  * Starts a Controller and stops it at once, or reports the start's refusal. A test proves the seam
@@ -732,16 +627,14 @@ export type StartOutcome =
  *
  * @param configuration the configuration to start with.
  */
-export const startOutcome = async (
-  configuration: ControllerConfiguration,
-): Promise<StartOutcome> => {
-  try {
-    const running = await startController(configuration);
-    await running.stop();
-    return { kind: 'started' };
-  } catch (refusal) {
-    return { kind: 'refused', refusal };
-  }
+export const startOutcome = async (configuration: ControllerConfiguration): Promise<StartOutcome> => {
+	try {
+		const running = await startController(configuration);
+		await running.stop();
+		return { kind: 'started' };
+	} catch (refusal) {
+		return { kind: 'refused', refusal };
+	}
 };
 
 /**
@@ -750,14 +643,14 @@ export const startOutcome = async (
  * @param refusal what the start or the configuration threw.
  */
 export const refusalText = (refusal: unknown): string =>
-  refusal instanceof Error
-    ? [
-        refusal.message,
-        String(refusal.stack),
-        JSON.stringify(refusal, Object.getOwnPropertyNames(refusal)),
-        String(refusal.cause),
-      ].join('\n')
-    : String(refusal);
+	refusal instanceof Error
+		? [
+				refusal.message,
+				String(refusal.stack),
+				JSON.stringify(refusal, Object.getOwnPropertyNames(refusal)),
+				String(refusal.cause),
+			].join('\n')
+		: String(refusal);
 
 /**
  * Every key held by a configuration: the key-encryption key and the cursor key, each in its standard
@@ -766,10 +659,8 @@ export const refusalText = (refusal: unknown): string =>
  *
  * @param configuration the configuration.
  */
-export const keysOf = (
-  configuration: ControllerConfiguration,
-): readonly string[] =>
-  [configuration.keyEncryptionKey, configuration.cursorKey].flatMap((key) => {
-    const bytes = Buffer.from(key, 'base64url');
-    return [key, bytes.toString('base64'), bytes.toString('hex')];
-  });
+export const keysOf = (configuration: ControllerConfiguration): readonly string[] =>
+	[configuration.keyEncryptionKey, configuration.cursorKey].flatMap((key) => {
+		const bytes = Buffer.from(key, 'base64url');
+		return [key, bytes.toString('base64'), bytes.toString('hex')];
+	});

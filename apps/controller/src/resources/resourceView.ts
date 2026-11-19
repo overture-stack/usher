@@ -11,37 +11,37 @@ import type { Reader, StoredResource } from './types.js';
  * @param reader who it is answered to.
  */
 export const resourceView = (
-  {
-    accessLevel,
-    applications,
-    categories,
-    description,
-    displayName,
-    externalId,
-    fields,
-    registeredAt,
-    registeredBy,
-    retired,
-    suppressed,
-    updatedAt,
-  }: StoredResource,
-  reader: Reader,
+	{
+		accessLevel,
+		applications,
+		categories,
+		description,
+		displayName,
+		externalId,
+		fields,
+		registeredAt,
+		registeredBy,
+		retired,
+		suppressed,
+		updatedAt,
+	}: StoredResource,
+	reader: Reader,
 ): JsonValue => ({
-  accessLevel,
-  applications,
-  categories,
-  description,
-  displayName,
-  externalId,
-  fields,
-  ...(reader === 'signedIn' ? {} : { grantSummary: {} }),
-  registeredAt: eventInstant(registeredAt.getTime()),
-  ...(reader === 'signedIn'
-    ? {}
-    : {
-        registeredBy: registeredBy === null ? null : { subject: registeredBy },
-      }),
-  retired,
-  suppressed,
-  updatedAt: eventInstant(updatedAt.getTime()),
+	accessLevel,
+	applications,
+	categories,
+	description,
+	displayName,
+	externalId,
+	fields,
+	...(reader === 'signedIn' ? {} : { grantSummary: {} }),
+	registeredAt: eventInstant(registeredAt.getTime()),
+	...(reader === 'signedIn'
+		? {}
+		: {
+				registeredBy: registeredBy === null ? null : { subject: registeredBy },
+			}),
+	retired,
+	suppressed,
+	updatedAt: eventInstant(updatedAt.getTime()),
 });

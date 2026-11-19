@@ -2,21 +2,16 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 
 import {
-  type AccessLevel,
-  type AdminCaller,
-  type AdminResponse,
-  registerResource,
-  type ResourceRegistration,
+	type AccessLevel,
+	type AdminCaller,
+	type AdminResponse,
+	registerResource,
+	type ResourceRegistration,
 } from '../admin.js';
 import { blockedBackends, holdTable, untilBlocked } from '../database.js';
 import { PEOPLE } from '../exchange.js';
 import type { Harness } from '../harness.js';
-import {
-  type FixtureGrant,
-  mergedPolicy,
-  POLICY_TABLES,
-  type PolicyFixture,
-} from '../policy.js';
+import { type FixtureGrant, mergedPolicy, POLICY_TABLES, type PolicyFixture } from '../policy.js';
 
 // The fixture and helpers of #211's tests alone: the Policy Management API for resources and
 // categories, under test/admin/resources/. Every path, body, answer reader, refusal and vocabulary
@@ -35,10 +30,7 @@ export const CLINICAL = 'arranger-clinical';
 export const ENVIRONMENTAL = 'arranger-environmental';
 
 /** The applications the harness registers and the fixture names, by display name, sorted. */
-export const APPLICATIONS: readonly string[] = Object.freeze([
-  CLINICAL,
-  ENVIRONMENTAL,
-]);
+export const APPLICATIONS: readonly string[] = Object.freeze([CLINICAL, ENVIRONMENTAL]);
 
 /**
  * An application id no fixture registers: a fresh uuid, shaped as a registered application's id is,
@@ -53,13 +45,8 @@ export const UNREGISTERED_APPLICATION = randomUUID();
  * @param harness the running harness.
  * @param displayNames the applications.
  */
-export const applicationIdsOf = (
-  harness: Harness,
-  displayNames: readonly string[],
-): readonly string[] =>
-  displayNames
-    .map((displayName) => harness.application(displayName).id)
-    .toSorted();
+export const applicationIdsOf = (harness: Harness, displayNames: readonly string[]): readonly string[] =>
+	displayNames.map((displayName) => harness.application(displayName).id).toSorted();
 
 /** An externalId no fixture registers. */
 export const ABSENT = 'STUDY-ZZ';
@@ -78,46 +65,46 @@ export const FUNDER = 'funder';
 
 /** The length limits, in characters after NFC (#211 Q3). */
 export const LIMITS = Object.freeze({
-  description: 4096,
-  displayName: 256,
-  externalId: 128,
+	description: 4096,
+	displayName: 256,
+	externalId: 128,
 });
 
 /** The people the tests name, by the part each plays. */
 export const CAST = Object.freeze({
-  administrator: PEOPLE.administrator,
-  curator: PEOPLE.bo,
-  declinedHolder: PEOPLE.cy2,
-  expiredHolder: PEOPLE.long,
-  holder: PEOPLE.eli,
-  otherOwner: PEOPLE.dana,
-  outsider: PEOPLE.cy,
-  owner: PEOPLE.ana,
-  revokedHolder: PEOPLE.emile,
-  secondAdministrator: PEOPLE.owner,
+	administrator: PEOPLE.administrator,
+	curator: PEOPLE.bo,
+	declinedHolder: PEOPLE.cy2,
+	expiredHolder: PEOPLE.long,
+	holder: PEOPLE.eli,
+	otherOwner: PEOPLE.dana,
+	outsider: PEOPLE.cy,
+	owner: PEOPLE.ana,
+	revokedHolder: PEOPLE.emile,
+	secondAdministrator: PEOPLE.owner,
 });
 
 /** STUDY-A1's seeded details. */
 export const STUDY_A1 = Object.freeze({
-  description: 'Influent sampling at three treatment plants',
-  displayName: 'Wastewater surveillance, Montréal',
-  funder: 'Example Health Fund',
-  organization: 'Lakeshore Example Institute',
+	description: 'Influent sampling at three treatment plants',
+	displayName: 'Wastewater surveillance, Montréal',
+	funder: 'Example Health Fund',
+	organization: 'Lakeshore Example Institute',
 });
 
 /** The resources the fixture seeds, by externalId. */
 export const RESOURCES = Object.freeze({
-  a1: 'STUDY-A1',
-  b2: 'STUDY-B2',
-  o1: 'STUDY-O1',
-  r1: 'STUDY-R1',
+	a1: 'STUDY-A1',
+	b2: 'STUDY-B2',
+	o1: 'STUDY-O1',
+	r1: 'STUDY-R1',
 });
 
 /** The global categories as the API names them (#211 Q8). */
 export const GLOBAL = Object.freeze({
-  communityGoverned: 'global.community-governed',
-  controlled: 'global.controlled',
-  unmarked: 'global.unmarked',
+	communityGoverned: 'global.community-governed',
+	controlled: 'global.controlled',
+	unmarked: 'global.unmarked',
 });
 
 const DAY_MS = 86_400_000;
@@ -127,118 +114,107 @@ const DAY_MS = 86_400_000;
  *
  * @param days how many days ago.
  */
-export const daysAgo = (days: number): Date =>
-  new Date(Date.now() - days * DAY_MS);
+export const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
 
 const viewerGrant = (
-  user: string,
-  timing: Pick<FixtureGrant, 'expiresAt' | 'grantedAt' | 'revoked'> = {},
+	user: string,
+	timing: Pick<FixtureGrant, 'expiresAt' | 'grantedAt' | 'revoked'> = {},
 ): FixtureGrant => ({
-  category: 'controlled',
-  holder: { user },
-  resource: RESOURCES.a1,
-  role: 'viewer',
-  ...timing,
+	category: 'controlled',
+	holder: { user },
+	resource: RESOURCES.a1,
+	role: 'viewer',
+	...timing,
 });
 
 const BASE_FIXTURE = {
-  applications: {
-    [CLINICAL]: { serves: [RESOURCES.a1] },
-    [ENVIRONMENTAL]: { serves: [] },
-  },
-  categories: {
-    'community-governed': {
-      description: 'Released under a community agreement',
-    },
-    controlled: { description: 'Released to approved researchers' },
-  },
-  decisions: [
-    { decision: 'accepted', grant: 'anaOwnsA1' },
-    { decidedAt: daysAgo(2), decision: 'rejected', grant: 'cy2DeclinedA1' },
-    { decision: 'accepted', grant: 'danaOwnsB2' },
-    { decision: 'accepted', grant: 'eliViewsA1' },
-    { decidedAt: daysAgo(2), decision: 'accepted', grant: 'emileViewedA1' },
-    { decidedAt: daysAgo(2), decision: 'accepted', grant: 'longViewedA1' },
-  ],
-  fields: {
-    [FUNDER]: { description: 'Who funds the study' },
-    [ORGANIZATION]: { description: 'Who runs the study' },
-  },
-  grants: {
-    anaOwnsA1: {
-      category: null,
-      holder: { user: 'ana' },
-      resource: RESOURCES.a1,
-      role: 'owner',
-    },
-    boCuratesA1: {
-      category: 'controlled',
-      holder: { user: 'bo' },
-      resource: RESOURCES.a1,
-      role: 'curator',
-    },
-    cy2DeclinedA1: viewerGrant('cy2', { grantedAt: daysAgo(3) }),
-    danaOwnsB2: {
-      category: null,
-      holder: { user: 'dana' },
-      resource: RESOURCES.b2,
-      role: 'owner',
-    },
-    eliViewsA1: viewerGrant('eli'),
-    emileViewedA1: viewerGrant('emile', {
-      grantedAt: daysAgo(3),
-      revoked: { at: daysAgo(1) },
-    }),
-    longViewedA1: viewerGrant('long', {
-      expiresAt: daysAgo(1),
-      grantedAt: daysAgo(3),
-    }),
-  },
-  resources: {
-    [RESOURCES.a1]: {
-      baseTier: 'grant',
-      categories: { 'local-panel': {} },
-      description: STUDY_A1.description,
-      fieldValues: {
-        [FUNDER]: STUDY_A1.funder,
-        [ORGANIZATION]: STUDY_A1.organization,
-      },
-      name: STUDY_A1.displayName,
-    },
-    [RESOURCES.b2]: {
-      baseTier: 'grant',
-      categories: { 'other-panel': {} },
-      description: 'Sediment cores from two lakes',
-      name: 'Lake sediment survey',
-    },
-    [RESOURCES.o1]: {
-      baseTier: 'open',
-      description: 'Public beach monitoring',
-      fieldValues: { [ORGANIZATION]: 'Coastal Example Collective' },
-      name: 'Beach monitoring',
-    },
-    [RESOURCES.r1]: {
-      baseTier: 'registered',
-      description: 'Air quality readings',
-      name: 'Air quality network',
-    },
-  },
-  users: Object.fromEntries(
-    (
-      [
-        'administrator',
-        'ana',
-        'bo',
-        'cy',
-        'cy2',
-        'dana',
-        'eli',
-        'emile',
-        'long',
-        'owner',
-      ] as const
-    ).map((name) => [name, { subject: PEOPLE[name].subject }]),
-  ),
+	applications: {
+		[CLINICAL]: { serves: [RESOURCES.a1] },
+		[ENVIRONMENTAL]: { serves: [] },
+	},
+	categories: {
+		'community-governed': {
+			description: 'Released under a community agreement',
+		},
+		controlled: { description: 'Released to approved researchers' },
+	},
+	decisions: [
+		{ decision: 'accepted', grant: 'anaOwnsA1' },
+		{ decidedAt: daysAgo(2), decision: 'rejected', grant: 'cy2DeclinedA1' },
+		{ decision: 'accepted', grant: 'danaOwnsB2' },
+		{ decision: 'accepted', grant: 'eliViewsA1' },
+		{ decidedAt: daysAgo(2), decision: 'accepted', grant: 'emileViewedA1' },
+		{ decidedAt: daysAgo(2), decision: 'accepted', grant: 'longViewedA1' },
+	],
+	fields: {
+		[FUNDER]: { description: 'Who funds the study' },
+		[ORGANIZATION]: { description: 'Who runs the study' },
+	},
+	grants: {
+		anaOwnsA1: {
+			category: null,
+			holder: { user: 'ana' },
+			resource: RESOURCES.a1,
+			role: 'owner',
+		},
+		boCuratesA1: {
+			category: 'controlled',
+			holder: { user: 'bo' },
+			resource: RESOURCES.a1,
+			role: 'curator',
+		},
+		cy2DeclinedA1: viewerGrant('cy2', { grantedAt: daysAgo(3) }),
+		danaOwnsB2: {
+			category: null,
+			holder: { user: 'dana' },
+			resource: RESOURCES.b2,
+			role: 'owner',
+		},
+		eliViewsA1: viewerGrant('eli'),
+		emileViewedA1: viewerGrant('emile', {
+			grantedAt: daysAgo(3),
+			revoked: { at: daysAgo(1) },
+		}),
+		longViewedA1: viewerGrant('long', {
+			expiresAt: daysAgo(1),
+			grantedAt: daysAgo(3),
+		}),
+	},
+	resources: {
+		[RESOURCES.a1]: {
+			baseTier: 'grant',
+			categories: { 'local-panel': {} },
+			description: STUDY_A1.description,
+			fieldValues: {
+				[FUNDER]: STUDY_A1.funder,
+				[ORGANIZATION]: STUDY_A1.organization,
+			},
+			name: STUDY_A1.displayName,
+		},
+		[RESOURCES.b2]: {
+			baseTier: 'grant',
+			categories: { 'other-panel': {} },
+			description: 'Sediment cores from two lakes',
+			name: 'Lake sediment survey',
+		},
+		[RESOURCES.o1]: {
+			baseTier: 'open',
+			description: 'Public beach monitoring',
+			fieldValues: { [ORGANIZATION]: 'Coastal Example Collective' },
+			name: 'Beach monitoring',
+		},
+		[RESOURCES.r1]: {
+			baseTier: 'registered',
+			description: 'Air quality readings',
+			name: 'Air quality network',
+		},
+	},
+	users: Object.fromEntries(
+		(['administrator', 'ana', 'bo', 'cy', 'cy2', 'dana', 'eli', 'emile', 'long', 'owner'] as const).map((name) => [
+			name,
+			{ subject: PEOPLE[name].subject },
+		]),
+	),
 } as const satisfies PolicyFixture;
 
 /**
@@ -253,8 +229,7 @@ const BASE_FIXTURE = {
  * @param extra entries added over the fixture's, by the same names; its decisions and invitations
  *   follow the fixture's own.
  */
-export const resourcesFixture = (extra: PolicyFixture = {}): PolicyFixture =>
-  mergedPolicy(BASE_FIXTURE, extra);
+export const resourcesFixture = (extra: PolicyFixture = {}): PolicyFixture => mergedPolicy(BASE_FIXTURE, extra);
 
 /**
  * The fixture for registering through the API: the two applications serving nothing, the two fields,
@@ -263,16 +238,16 @@ export const resourcesFixture = (extra: PolicyFixture = {}): PolicyFixture =>
  * @param extra entries added over it.
  */
 export const registrationFixture = ({
-  categories = {},
-  fields = {},
+	categories = {},
+	fields = {},
 }: Pick<PolicyFixture, 'categories' | 'fields'> = {}): PolicyFixture => ({
-  applications: {
-    [CLINICAL]: { serves: [] },
-    [ENVIRONMENTAL]: { serves: [] },
-  },
-  categories,
-  fields: { ...BASE_FIXTURE.fields, ...fields },
-  users: BASE_FIXTURE.users,
+	applications: {
+		[CLINICAL]: { serves: [] },
+		[ENVIRONMENTAL]: { serves: [] },
+	},
+	categories,
+	fields: { ...BASE_FIXTURE.fields, ...fields },
+	users: BASE_FIXTURE.users,
 });
 
 /** The display name {@link registration} gives every resource unless told otherwise. */
@@ -290,13 +265,13 @@ export const SYNTHETIC_ACCESS_LEVEL: AccessLevel = 'registered';
  * @param extra members over the display name and the access level.
  */
 export const registration = (
-  externalId: string,
-  extra: Partial<Omit<ResourceRegistration, 'externalId'>> = {},
+	externalId: string,
+	extra: Partial<Omit<ResourceRegistration, 'externalId'>> = {},
 ): ResourceRegistration => ({
-  accessLevel: SYNTHETIC_ACCESS_LEVEL,
-  displayName: SYNTHETIC_DISPLAY_NAME,
-  externalId,
-  ...extra,
+	accessLevel: SYNTHETIC_ACCESS_LEVEL,
+	displayName: SYNTHETIC_DISPLAY_NAME,
+	externalId,
+	...extra,
 });
 
 /**
@@ -312,26 +287,24 @@ export const registration = (
  * @returns the answers, in the registrations' order.
  */
 export const registeredTogether = async (
-  harness: Harness,
-  caller: AdminCaller,
-  registrations: readonly ResourceRegistration[],
+	harness: Harness,
+	caller: AdminCaller,
+	registrations: readonly ResourceRegistration[],
 ): Promise<readonly AdminResponse[]> => {
-  const { migration } = harness.clients;
-  const held = await holdTable(harness.database, POLICY_TABLES.resources);
-  const answers = Promise.all(
-    registrations.map((sent) => registerResource(caller, sent)),
-  );
-  const waited = await (async (): Promise<boolean> => {
-    try {
-      const everyOne = await untilBlocked(migration, answers, {
-        count: registrations.length,
-      });
-      return everyOne || (await blockedBackends(migration)).length > 0;
-    } finally {
-      await held.release();
-    }
-  })();
-  const settled = await answers;
-  assert.ok(waited, 'a registration waits on the held resources table');
-  return settled;
+	const { migration } = harness.clients;
+	const held = await holdTable(harness.database, POLICY_TABLES.resources);
+	const answers = Promise.all(registrations.map((sent) => registerResource(caller, sent)));
+	const waited = await (async (): Promise<boolean> => {
+		try {
+			const everyOne = await untilBlocked(migration, answers, {
+				count: registrations.length,
+			});
+			return everyOne || (await blockedBackends(migration)).length > 0;
+		} finally {
+			await held.release();
+		}
+	})();
+	const settled = await answers;
+	assert.ok(waited, 'a registration waits on the held resources table');
+	return settled;
 };

@@ -9,41 +9,41 @@ const STRUCTURE = /"(?:[^"\\]|\\[^])*"|[{}[\],]/gu;
 const PROTOTYPE_MEMBER = '__proto__';
 
 const nameOf = (token: string): string => {
-  const parsed: unknown = JSON.parse(token);
-  return String(parsed);
+	const parsed: unknown = JSON.parse(token);
+	return String(parsed);
 };
 
 // A scan over text already parsed, so every token is well formed: each open object holds the names
 // it has met, and a string read where a name is expected is one.
 const departureOf = (text: string): string | undefined => {
-  const objects: (Set<string> | undefined)[] = [];
-  const position = { expectingName: false };
-  for (const [token] of text.matchAll(STRUCTURE)) {
-    if (token === '{') {
-      objects.push(new Set());
-      position.expectingName = true;
-    } else if (token === '[') {
-      objects.push(undefined);
-      position.expectingName = false;
-    } else if (token === '}' || token === ']') {
-      objects.pop();
-      position.expectingName = false;
-    } else if (token === ',') {
-      position.expectingName = objects.at(-1) !== undefined;
-    } else if (position.expectingName) {
-      const names = objects.at(-1);
-      const name = nameOf(token);
-      if (name === PROTOTYPE_MEMBER) {
-        return `holds a member named ${PROTOTYPE_MEMBER}`;
-      }
-      if (names?.has(name) === true) {
-        return 'names a member twice in one object';
-      }
-      names?.add(name);
-      position.expectingName = false;
-    }
-  }
-  return undefined;
+	const objects: (Set<string> | undefined)[] = [];
+	const position = { expectingName: false };
+	for (const [token] of text.matchAll(STRUCTURE)) {
+		if (token === '{') {
+			objects.push(new Set());
+			position.expectingName = true;
+		} else if (token === '[') {
+			objects.push(undefined);
+			position.expectingName = false;
+		} else if (token === '}' || token === ']') {
+			objects.pop();
+			position.expectingName = false;
+		} else if (token === ',') {
+			position.expectingName = objects.at(-1) !== undefined;
+		} else if (position.expectingName) {
+			const names = objects.at(-1);
+			const name = nameOf(token);
+			if (name === PROTOTYPE_MEMBER) {
+				return `holds a member named ${PROTOTYPE_MEMBER}`;
+			}
+			if (names?.has(name) === true) {
+				return 'names a member twice in one object';
+			}
+			names?.add(name);
+			position.expectingName = false;
+		}
+	}
+	return undefined;
 };
 
 /**
@@ -54,18 +54,16 @@ const departureOf = (text: string): string | undefined => {
  * @param text the text.
  */
 export const readStrictJson = (text: string): JsonReading => {
-  const parsed = ((): { value: unknown } | undefined => {
-    try {
-      return { value: JSON.parse(text) };
-    } catch {
-      return undefined;
-    }
-  })();
-  if (parsed === undefined) {
-    return { kind: 'refused', rule: 'is not JSON' };
-  }
-  const departure = departureOf(text);
-  return departure === undefined
-    ? { kind: 'read', value: parsed.value }
-    : { kind: 'refused', rule: departure };
+	const parsed = ((): { value: unknown } | undefined => {
+		try {
+			return { value: JSON.parse(text) };
+		} catch {
+			return undefined;
+		}
+	})();
+	if (parsed === undefined) {
+		return { kind: 'refused', rule: 'is not JSON' };
+	}
+	const departure = departureOf(text);
+	return departure === undefined ? { kind: 'read', value: parsed.value } : { kind: 'refused', rule: departure };
 };

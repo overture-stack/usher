@@ -1,6 +1,6 @@
 /** A source of the current time, in milliseconds. */
 export interface Clock {
-  now(): number;
+	now(): number;
 }
 
 /**
@@ -9,6 +9,6 @@ export interface Clock {
  * period, the poll deadline and each entry's TTL.
  */
 export interface Clocks {
-  monotonic: Clock;
-  wall: Clock;
+	monotonic: Clock;
+	wall: Clock;
 }

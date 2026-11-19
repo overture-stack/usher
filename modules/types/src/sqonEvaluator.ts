@@ -10,183 +10,160 @@ export type EvaluatedRecord = Readonly<Record<string, unknown>>;
 const MISSING_MARKER = '__missing__';
 
 /** A record's values at a field: none when the field is absent, null or an empty list. */
-const valuesAt = (
-  record: EvaluatedRecord,
-  fieldName: string,
-): readonly unknown[] => {
-  const value = ownMember(record, fieldName);
+const valuesAt = (record: EvaluatedRecord, fieldName: string): readonly unknown[] => {
+	const value = ownMember(record, fieldName);
 
-  if (value === undefined || value === null) {
-    return [];
-  }
+	if (value === undefined || value === null) {
+		return [];
+	}
 
-  return listEntries(value) ?? [value];
+	return listEntries(value) ?? [value];
 };
 
 /**
  * Whether `record` lacks `fieldName`: the field is absent, null or an empty list, which is what
  * `__missing__` matches.
  */
-export const isMissingField = (
-  record: EvaluatedRecord,
-  fieldName: string,
-): boolean => valuesAt(record, fieldName).length === 0;
+export const isMissingField = (record: EvaluatedRecord, fieldName: string): boolean =>
+	valuesAt(record, fieldName).length === 0;
 
 /** A record value and a bound compare only as two numbers, or as two strings by code unit. */
 const comparison = (value: unknown, bound: unknown): number | undefined => {
-  if (typeof value === 'number' && typeof bound === 'number') {
-    return value - bound;
-  }
+	if (typeof value === 'number' && typeof bound === 'number') {
+		return value - bound;
+	}
 
-  if (typeof value === 'string' && typeof bound === 'string') {
-    return value < bound ? -1 : value > bound ? 1 : 0;
-  }
+	if (typeof value === 'string' && typeof bound === 'string') {
+		return value < bound ? -1 : value > bound ? 1 : 0;
+	}
 
-  return undefined;
+	return undefined;
 };
 
-const RANGE_TESTS: ReadonlyMap<string, (difference: number) => boolean> =
-  new Map([
-    ['gt', (difference) => difference > 0],
-    ['gte', (difference) => difference >= 0],
-    ['lt', (difference) => difference < 0],
-    ['lte', (difference) => difference <= 0],
-  ]);
+const RANGE_TESTS: ReadonlyMap<string, (difference: number) => boolean> = new Map([
+	['gt', (difference) => difference > 0],
+	['gte', (difference) => difference >= 0],
+	['lt', (difference) => difference < 0],
+	['lte', (difference) => difference <= 0],
+]);
 
 interface Clause {
-  fieldName: string;
-  value: unknown;
+	fieldName: string;
+	value: unknown;
 }
 
 const clauseOf = (content: unknown): Clause => {
-  if (isPlainRecord(content)) {
-    const fieldName = ownMember(content, 'fieldName');
+	if (isPlainRecord(content)) {
+		const fieldName = ownMember(content, 'fieldName');
 
-    if (typeof fieldName === 'string') {
-      return { fieldName, value: ownMember(content, 'value') };
-    }
-  }
+		if (typeof fieldName === 'string') {
+			return { fieldName, value: ownMember(content, 'value') };
+		}
+	}
 
-  throw new Error('the evaluator reads a clause naming one field');
+	throw new Error('the evaluator reads a clause naming one field');
 };
 
-const listedIn = (value: unknown): readonly unknown[] =>
-  listEntries(value) ?? [value];
+const listedIn = (value: unknown): readonly unknown[] => listEntries(value) ?? [value];
 
 /** Every listed value, each read as written; a pattern or a set reference is not. */
 const literalsIn = (value: unknown): readonly unknown[] => {
-  const listed = listedIn(value);
+	const listed = listedIn(value);
 
-  if (listed.every(isLiteralValue)) {
-    return listed;
-  }
+	if (listed.every(isLiteralValue)) {
+		return listed;
+	}
 
-  throw new Error('the evaluator reads listed values only as written');
+	throw new Error('the evaluator reads listed values only as written');
 };
 
 const singleBoundOf = (value: unknown): unknown => {
-  if (listEntries(value) === undefined) {
-    return value;
-  }
+	if (listEntries(value) === undefined) {
+		return value;
+	}
 
-  throw new Error('the evaluator reads a range holding one bound');
+	throw new Error('the evaluator reads a range holding one bound');
 };
 
 const boundsOf = (value: unknown): readonly [unknown, unknown] => {
-  const [low, high, ...others] = listEntries(value) ?? [];
+	const [low, high, ...others] = listEntries(value) ?? [];
 
-  if (low !== undefined && high !== undefined && others.length === 0) {
-    return [low, high];
-  }
+	if (low !== undefined && high !== undefined && others.length === 0) {
+		return [low, high];
+	}
 
-  throw new Error('the evaluator reads a between holding two bounds');
+	throw new Error('the evaluator reads a between holding two bounds');
 };
 
 const matchesIn = (record: EvaluatedRecord, content: unknown): boolean => {
-  const { fieldName, value } = clauseOf(content);
-  const held = valuesAt(record, fieldName);
-  const listed = listedIn(value);
-  const literals = literalsIn(
-    listed.filter((entry) => entry !== MISSING_MARKER),
-  );
+	const { fieldName, value } = clauseOf(content);
+	const held = valuesAt(record, fieldName);
+	const listed = listedIn(value);
+	const literals = literalsIn(listed.filter((entry) => entry !== MISSING_MARKER));
 
-  return (
-    (listed.includes(MISSING_MARKER) && held.length === 0) ||
-    literals.some((literal) => held.includes(literal))
-  );
+	return (listed.includes(MISSING_MARKER) && held.length === 0) || literals.some((literal) => held.includes(literal));
 };
 
 const matchesAll = (record: EvaluatedRecord, content: unknown): boolean => {
-  const { fieldName, value } = clauseOf(content);
-  const held = valuesAt(record, fieldName);
+	const { fieldName, value } = clauseOf(content);
+	const held = valuesAt(record, fieldName);
 
-  return literalsIn(value).every((listed) => held.includes(listed));
+	return literalsIn(value).every((listed) => held.includes(listed));
 };
 
-const matchesRange = (
-  record: EvaluatedRecord,
-  content: unknown,
-  holds: (difference: number) => boolean,
-): boolean => {
-  const { fieldName, value } = clauseOf(content);
-  const bound = singleBoundOf(value);
+const matchesRange = (record: EvaluatedRecord, content: unknown, holds: (difference: number) => boolean): boolean => {
+	const { fieldName, value } = clauseOf(content);
+	const bound = singleBoundOf(value);
 
-  return valuesAt(record, fieldName).some((held) => {
-    const difference = comparison(held, bound);
+	return valuesAt(record, fieldName).some((held) => {
+		const difference = comparison(held, bound);
 
-    return difference !== undefined && holds(difference);
-  });
+		return difference !== undefined && holds(difference);
+	});
 };
 
 const matchesBetween = (record: EvaluatedRecord, content: unknown): boolean => {
-  const { fieldName, value } = clauseOf(content);
-  const [low, high] = boundsOf(value);
+	const { fieldName, value } = clauseOf(content);
+	const [low, high] = boundsOf(value);
 
-  return valuesAt(record, fieldName).some((held) => {
-    const fromLow = comparison(held, low);
-    const toHigh = comparison(held, high);
+	return valuesAt(record, fieldName).some((held) => {
+		const fromLow = comparison(held, low);
+		const toHigh = comparison(held, high);
 
-    return (
-      fromLow !== undefined &&
-      toHigh !== undefined &&
-      fromLow >= 0 &&
-      toHigh <= 0
-    );
-  });
+		return fromLow !== undefined && toHigh !== undefined && fromLow >= 0 && toHigh <= 0;
+	});
 };
 
 const entriesOf = (content: unknown): readonly unknown[] => {
-  const entries = listEntries(content);
+	const entries = listEntries(content);
 
-  if (entries) {
-    return entries;
-  }
+	if (entries) {
+		return entries;
+	}
 
-  throw new Error('the evaluator reads a combination holding a list');
+	throw new Error('the evaluator reads a combination holding a list');
 };
 
 // An empty group means every record, so reading one as matching nothing would let a test pass on a
 // filter that serves everything; it is refused instead.
 const groupEntriesOf = (content: unknown): readonly unknown[] => {
-  const entries = entriesOf(content);
+	const entries = entriesOf(content);
 
-  if (entries.length > 0) {
-    return entries;
-  }
+	if (entries.length > 0) {
+		return entries;
+	}
 
-  throw new Error(
-    'the evaluator reads an and or an or holding at least one entry',
-  );
+	throw new Error('the evaluator reads an and or an or holding at least one entry');
 };
 
 const onlyEntryOf = (content: unknown): unknown => {
-  const [entry, ...others] = entriesOf(content);
+	const [entry, ...others] = entriesOf(content);
 
-  if (entry !== undefined && others.length === 0) {
-    return entry;
-  }
+	if (entry !== undefined && others.length === 0) {
+		return entry;
+	}
 
-  throw new Error('the evaluator reads a not holding exactly one entry');
+	throw new Error('the evaluator reads a not holding exactly one entry');
 };
 
 /**
@@ -210,42 +187,35 @@ const onlyEntryOf = (content: unknown): unknown => {
  * - an `in` or an `all` listing a pattern or a set reference, or an `all` listing `__missing__`;
  * - a malformed node.
  */
-export const matchesSqon = (
-  node: unknown,
-  record: EvaluatedRecord,
-): boolean => {
-  const { content, operator } = isPlainRecord(node)
-    ? {
-        content: ownMember(node, 'content'),
-        operator: canonicalOperatorOf(ownMember(node, 'op')),
-      }
-    : { content: undefined, operator: undefined };
-  const range = operator ? RANGE_TESTS.get(operator) : undefined;
+export const matchesSqon = (node: unknown, record: EvaluatedRecord): boolean => {
+	const { content, operator } = isPlainRecord(node)
+		? {
+				content: ownMember(node, 'content'),
+				operator: canonicalOperatorOf(ownMember(node, 'op')),
+			}
+		: { content: undefined, operator: undefined };
+	const range = operator ? RANGE_TESTS.get(operator) : undefined;
 
-  if (range) {
-    return matchesRange(record, content, range);
-  }
+	if (range) {
+		return matchesRange(record, content, range);
+	}
 
-  switch (operator) {
-    case 'all':
-      return matchesAll(record, content);
-    case 'and':
-      return groupEntriesOf(content).every((entry) =>
-        matchesSqon(entry, record),
-      );
-    case 'between':
-      return matchesBetween(record, content);
-    case 'in':
-      return matchesIn(record, content);
-    case 'not':
-      return !matchesSqon(onlyEntryOf(content), record);
-    case 'not-in':
-      return !matchesIn(record, content);
-    case 'or':
-      return groupEntriesOf(content).some((entry) =>
-        matchesSqon(entry, record),
-      );
-    default:
-      throw new Error('the evaluator does not read this operator');
-  }
+	switch (operator) {
+		case 'all':
+			return matchesAll(record, content);
+		case 'and':
+			return groupEntriesOf(content).every((entry) => matchesSqon(entry, record));
+		case 'between':
+			return matchesBetween(record, content);
+		case 'in':
+			return matchesIn(record, content);
+		case 'not':
+			return !matchesSqon(onlyEntryOf(content), record);
+		case 'not-in':
+			return !matchesIn(record, content);
+		case 'or':
+			return groupEntriesOf(content).some((entry) => matchesSqon(entry, record));
+		default:
+			throw new Error('the evaluator does not read this operator');
+	}
 };

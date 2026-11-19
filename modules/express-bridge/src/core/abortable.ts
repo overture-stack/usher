@@ -5,17 +5,12 @@
  *
  * @param work what is awaited, already started.
  */
-export const untilAborted = <Value>(
-  signal: AbortSignal,
-  work: Promise<Value>,
-): Promise<Value> =>
-  new Promise((resolve, reject) => {
-    const aborted = (): void => reject(new Error('aborted'));
-    if (signal.aborted) {
-      aborted();
-    }
-    signal.addEventListener('abort', aborted, { once: true });
-    work
-      .then(resolve, reject)
-      .finally(() => signal.removeEventListener('abort', aborted));
-  });
+export const untilAborted = <Value>(signal: AbortSignal, work: Promise<Value>): Promise<Value> =>
+	new Promise((resolve, reject) => {
+		const aborted = (): void => reject(new Error('aborted'));
+		if (signal.aborted) {
+			aborted();
+		}
+		signal.addEventListener('abort', aborted, { once: true });
+		work.then(resolve, reject).finally(() => signal.removeEventListener('abort', aborted));
+	});

@@ -1,34 +1,29 @@
 import pg from 'pg';
 
 import { ControllerError } from '../failures/index.js';
-import type {
-  NoticePage,
-  NoticeReader,
-  StoredNotice,
-  StreamPlace,
-} from '../noticeChannel/index.js';
+import type { NoticePage, NoticeReader, StoredNotice, StreamPlace } from '../noticeChannel/index.js';
 import type { NoticeStore } from './types.js';
 
 interface HeadRow {
-  epoch: string;
-  newestCreatedAt: string | null;
-  newestPosition: string | null;
-  trimmedThrough: string;
+	epoch: string;
+	newestCreatedAt: string | null;
+	newestPosition: string | null;
+	trimmedThrough: string;
 }
 
 interface NoticeRow {
-  audience: string | null;
-  createdAt: string;
-  kind: string;
-  position: string;
-  resource: string | null;
-  servedBy: readonly string[] | null;
-  subject: string | null;
+	audience: string | null;
+	createdAt: string;
+	kind: string;
+	position: string;
+	resource: string | null;
+	servedBy: readonly string[] | null;
+	subject: string | null;
 }
 
 interface PageRow extends HeadRow {
-  createdAtPosition: string | null;
-  notices: readonly NoticeRow[];
+	createdAtPosition: string | null;
+	notices: readonly NoticeRow[];
 }
 
 /**
@@ -36,54 +31,48 @@ interface PageRow extends HeadRow {
  * log line.
  */
 export class NoticeStreamMissing extends ControllerError {
-  readonly code = 'noticeStreamMissing';
-  override readonly name = 'NoticeStreamMissing';
-  constructor() {
-    super('the notice stream holds no row');
-  }
+	readonly code = 'noticeStreamMissing';
+	override readonly name = 'NoticeStreamMissing';
+	constructor() {
+		super('the notice stream holds no row');
+	}
 }
 
 // An instant as microseconds since the Unix epoch, exactly: extract gives a numeric, never a float.
-const microseconds = (column: string): string =>
-  `(extract(epoch FROM ${column}) * 1000000)::bigint::text`;
+const microseconds = (column: string): string => `(extract(epoch FROM ${column}) * 1000000)::bigint::text`;
 
-const placeOfHead = ({
-  epoch,
-  newestCreatedAt,
-  newestPosition,
-  trimmedThrough,
-}: HeadRow): StreamPlace =>
-  newestPosition === null || newestCreatedAt === null
-    ? { createdAt: undefined, epoch, position: BigInt(trimmedThrough) }
-    : {
-        createdAt: BigInt(newestCreatedAt),
-        epoch,
-        position: BigInt(newestPosition),
-      };
+const placeOfHead = ({ epoch, newestCreatedAt, newestPosition, trimmedThrough }: HeadRow): StreamPlace =>
+	newestPosition === null || newestCreatedAt === null
+		? { createdAt: undefined, epoch, position: BigInt(trimmedThrough) }
+		: {
+				createdAt: BigInt(newestCreatedAt),
+				epoch,
+				position: BigInt(newestPosition),
+			};
 
 const storedNotice = (row: NoticeRow): StoredNotice => {
-  const base = {
-    createdAt: BigInt(row.createdAt),
-    position: BigInt(row.position),
-  };
-  if (row.kind === 'principal' && row.subject !== null) {
-    return { ...base, kind: 'principal', subject: row.subject };
-  }
-  if (row.kind === 'category' && row.resource !== null) {
-    return {
-      ...base,
-      kind: 'category',
-      resource: row.resource,
-      servedBy: row.servedBy ?? [],
-    };
-  }
-  if (row.kind === 'servedResources' && row.audience !== null) {
-    return { ...base, audience: row.audience, kind: 'servedResources' };
-  }
-  if (row.kind === 'baseline' || row.kind === 'global') {
-    return { ...base, kind: row.kind };
-  }
-  throw new TypeError('a stored notice is of no kind the stream carries');
+	const base = {
+		createdAt: BigInt(row.createdAt),
+		position: BigInt(row.position),
+	};
+	if (row.kind === 'principal' && row.subject !== null) {
+		return { ...base, kind: 'principal', subject: row.subject };
+	}
+	if (row.kind === 'category' && row.resource !== null) {
+		return {
+			...base,
+			kind: 'category',
+			resource: row.resource,
+			servedBy: row.servedBy ?? [],
+		};
+	}
+	if (row.kind === 'servedResources' && row.audience !== null) {
+		return { ...base, audience: row.audience, kind: 'servedResources' };
+	}
+	if (row.kind === 'baseline' || row.kind === 'global') {
+		return { ...base, kind: row.kind };
+	}
+	throw new TypeError('a stored notice is of no kind the stream carries');
 };
 
 /**
@@ -98,26 +87,22 @@ const storedNotice = (row: NoticeRow): StoredNotice => {
  * @param store the reader every statement runs through, within the store timeout.
  * @param schema the Controller's schema.
  */
-export const createNoticeReader = (
-  store: NoticeStore,
-  schema: string,
-): NoticeReader => {
-  const table = (name: string): string =>
-    `${pg.escapeIdentifier(schema)}.${name}`;
+export const createNoticeReader = (store: NoticeStore, schema: string): NoticeReader => {
+	const table = (name: string): string => `${pg.escapeIdentifier(schema)}.${name}`;
 
-  const newest = `LEFT JOIN LATERAL (
+	const newest = `LEFT JOIN LATERAL (
       SELECT newest_notice.position, ${microseconds('newest_notice.created_at')} AS created_at
         FROM ${table('notices')} newest_notice
        ORDER BY newest_notice.position DESC LIMIT 1
     ) newest ON true`;
 
-  const headStatement = `SELECT stream.epoch::text AS epoch, stream.trimmed_through::text AS "trimmedThrough",
+	const headStatement = `SELECT stream.epoch::text AS epoch, stream.trimmed_through::text AS "trimmedThrough",
          newest.position::text AS "newestPosition", newest.created_at AS "newestCreatedAt"
     FROM ${table('notice_stream')} stream
     ${newest}`;
 
-  // $1 the position read after, $2 how many rows to read, $3 the audience, or null for every one.
-  const pageStatement = `WITH page AS (
+	// $1 the position read after, $2 how many rows to read, $3 the audience, or null for every one.
+	const pageStatement = `WITH page AS (
       SELECT notice.position, notice.kind, notice.idp_subject_id, notice.resource_external_id,
              notice.audience, notice.created_at
         FROM ${table('notices')} notice
@@ -159,38 +144,31 @@ export const createNoticeReader = (
       FROM ${table('notice_stream')} stream
       ${newest}`;
 
-  return {
-    after: async (position, { audience, limit }) => {
-      const [row] = (
-        await store.query<PageRow>(pageStatement, [
-          position.toString(),
-          limit + 1,
-          audience ?? null,
-        ])
-      ).rows;
-      if (row === undefined) {
-        throw new NoticeStreamMissing();
-      }
-      const notices = row.notices.map(storedNotice);
-      return {
-        createdAtPosition:
-          row.createdAtPosition === null
-            ? undefined
-            : BigInt(row.createdAtPosition),
-        epoch: row.epoch,
-        head: placeOfHead(row),
-        more: notices.length > limit,
-        notices: notices.slice(0, limit),
-        trimmedThrough: BigInt(row.trimmedThrough),
-      };
-    },
+	return {
+		after: async (position, { audience, limit }) => {
+			const [row] = (
+				await store.query<PageRow>(pageStatement, [position.toString(), limit + 1, audience ?? null])
+			).rows;
+			if (row === undefined) {
+				throw new NoticeStreamMissing();
+			}
+			const notices = row.notices.map(storedNotice);
+			return {
+				createdAtPosition: row.createdAtPosition === null ? undefined : BigInt(row.createdAtPosition),
+				epoch: row.epoch,
+				head: placeOfHead(row),
+				more: notices.length > limit,
+				notices: notices.slice(0, limit),
+				trimmedThrough: BigInt(row.trimmedThrough),
+			};
+		},
 
-    head: async () => {
-      const [row] = (await store.query<HeadRow>(headStatement)).rows;
-      if (row === undefined) {
-        throw new NoticeStreamMissing();
-      }
-      return placeOfHead(row);
-    },
-  };
+		head: async () => {
+			const [row] = (await store.query<HeadRow>(headStatement)).rows;
+			if (row === undefined) {
+				throw new NoticeStreamMissing();
+			}
+			return placeOfHead(row);
+		},
+	};
 };

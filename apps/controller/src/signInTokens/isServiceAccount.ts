@@ -14,15 +14,11 @@ const SERVICE_ACCOUNT_USERNAME = 'service-account-';
  * @param claims the token's verified claims.
  * @param serviceAccountRole the realm role marking its holder's token as a service account's.
  */
-export const isServiceAccount = (
-  claims: TokenClaims,
-  serviceAccountRole: string,
-): boolean => {
-  const username = claims['preferred_username'];
-  return (
-    typeof claims['client_id'] === 'string' ||
-    (typeof username === 'string' &&
-      username.startsWith(SERVICE_ACCOUNT_USERNAME)) ||
-    realmRolesOf(claims).includes(serviceAccountRole)
-  );
+export const isServiceAccount = (claims: TokenClaims, serviceAccountRole: string): boolean => {
+	const username = claims['preferred_username'];
+	return (
+		typeof claims['client_id'] === 'string' ||
+		(typeof username === 'string' && username.startsWith(SERVICE_ACCOUNT_USERNAME)) ||
+		realmRolesOf(claims).includes(serviceAccountRole)
+	);
 };

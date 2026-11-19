@@ -6,8 +6,8 @@ const BASE64URL = /^[A-Za-z0-9_-]*$/u;
 // is empty under direct encryption, as an Usher token's is, so only the protected header has to be
 // non-empty.
 const COMPACT_SHAPES: ReadonlyMap<number, CredentialShape> = new Map([
-  [3, 'signedToken'],
-  [5, 'encryptedToken'],
+	[3, 'signedToken'],
+	[5, 'encryptedToken'],
 ]);
 
 /**
@@ -18,13 +18,10 @@ const COMPACT_SHAPES: ReadonlyMap<number, CredentialShape> = new Map([
  * @param credential the credential, as the request carried it.
  */
 export const credentialShapeOf = (credential: string): CredentialShape => {
-  if (credential === '') {
-    return 'empty';
-  }
-  const segments = credential.split('.');
-  const compact =
-    segments[0] !== '' && segments.every((segment) => BASE64URL.test(segment));
-  return (
-    (compact ? COMPACT_SHAPES.get(segments.length) : undefined) ?? 'opaque'
-  );
+	if (credential === '') {
+		return 'empty';
+	}
+	const segments = credential.split('.');
+	const compact = segments[0] !== '' && segments.every((segment) => BASE64URL.test(segment));
+	return (compact ? COMPACT_SHAPES.get(segments.length) : undefined) ?? 'opaque';
 };

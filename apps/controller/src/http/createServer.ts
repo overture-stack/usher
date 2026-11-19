@@ -3,11 +3,10 @@ import { fastify, type FastifyInstance, type FastifyReply } from 'fastify';
 import type { ServerSettings } from './types.js';
 
 /** The paths of the health endpoints, which take no credential. */
-export const HEALTH_PATHS: Readonly<{ liveness: string; readiness: string }> =
-  Object.freeze({
-    liveness: '/health/live',
-    readiness: '/health/ready',
-  });
+export const HEALTH_PATHS: Readonly<{ liveness: string; readiness: string }> = Object.freeze({
+	liveness: '/health/live',
+	readiness: '/health/ready',
+});
 
 // The longest path parameter routed, in characters as sent, percent-encodings included: as long as
 // the request head Node reads by default, so every path Node accepts reaches its route, which judges
@@ -16,10 +15,10 @@ const PATH_PARAMETER_MAXIMUM_LENGTH = 16_384;
 
 // The refusal of a path that cannot be decoded, which names the rule alone, never the path sent.
 const UNREADABLE_PATH = JSON.stringify({
-  code: 'unreadablePath',
-  detail: 'The path holds a percent-encoding that is not UTF-8.',
-  status: 400,
-  title: 'Path unreadable',
+	code: 'unreadablePath',
+	detail: 'The path holds a percent-encoding that is not UTF-8.',
+	status: 400,
+	title: 'Path unreadable',
 });
 
 /**
@@ -34,36 +33,21 @@ const UNREADABLE_PATH = JSON.stringify({
  *
  * @param settings whether the Controller is live, whether it can serve now, and the trusted proxies.
  */
-export const createServer = ({
-  isLive,
-  isReady,
-  trustedProxies,
-}: ServerSettings): FastifyInstance => {
-  const server = fastify({
-    frameworkErrors: (_error, _request, reply: FastifyReply) => {
-      reply
-        .code(400)
-        .header('content-type', 'application/problem+json')
-        .send(UNREADABLE_PATH);
-    },
-    logger: false,
-    routerOptions: { maxParamLength: PATH_PARAMETER_MAXIMUM_LENGTH },
-    trustProxy: trustedProxies.length === 0 ? false : [...trustedProxies],
-  });
-  server.removeAllContentTypeParsers();
-  server.addContentTypeParser(
-    '*',
-    { parseAs: 'buffer' },
-    (_request, body, done) => {
-      done(null, body);
-    },
-  );
-  server.get(HEALTH_PATHS.liveness, async (_request, reply) =>
-    reply.code(isLive() ? 200 : 503).send(),
-  );
-  server.get(HEALTH_PATHS.readiness, async (_request, reply) =>
-    reply.code((await isReady()) ? 200 : 503).send(),
-  );
-  server.setNotFoundHandler(async (_request, reply) => reply.code(404).send());
-  return server;
+export const createServer = ({ isLive, isReady, trustedProxies }: ServerSettings): FastifyInstance => {
+	const server = fastify({
+		frameworkErrors: (_error, _request, reply: FastifyReply) => {
+			reply.code(400).header('content-type', 'application/problem+json').send(UNREADABLE_PATH);
+		},
+		logger: false,
+		routerOptions: { maxParamLength: PATH_PARAMETER_MAXIMUM_LENGTH },
+		trustProxy: trustedProxies.length === 0 ? false : [...trustedProxies],
+	});
+	server.removeAllContentTypeParsers();
+	server.addContentTypeParser('*', { parseAs: 'buffer' }, (_request, body, done) => {
+		done(null, body);
+	});
+	server.get(HEALTH_PATHS.liveness, async (_request, reply) => reply.code(isLive() ? 200 : 503).send());
+	server.get(HEALTH_PATHS.readiness, async (_request, reply) => reply.code((await isReady()) ? 200 : 503).send());
+	server.setNotFoundHandler(async (_request, reply) => reply.code(404).send());
+	return server;
 };

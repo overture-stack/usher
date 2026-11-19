@@ -3,15 +3,14 @@ import pg from 'pg';
 import type { StandingQuestion, StoredRefusal, StoreReader } from './types.js';
 
 interface StandingRow {
-  revoked: boolean;
-  revokedPlatform: boolean;
-  signedOut: boolean;
+	revoked: boolean;
+	revokedPlatform: boolean;
+	signedOut: boolean;
 }
 
 const standingQuery = (schema: string): string => {
-  const table = (name: string): string =>
-    `${pg.escapeIdentifier(schema)}.${name}`;
-  return `
+	const table = (name: string): string => `${pg.escapeIdentifier(schema)}.${name}`;
+	return `
   SELECT EXISTS (
            SELECT 1 FROM ${table('user_identities')} identity
              JOIN ${table('principal_revocations')} revocation
@@ -43,22 +42,22 @@ const standingQuery = (schema: string): string => {
  * @param identity the trusted issuer, the token's subject, and its session.
  */
 export const readStoredRefusal = async (
-  store: StoreReader,
-  schema: string,
-  { issuer, session, subject }: StandingQuestion,
+	store: StoreReader,
+	schema: string,
+	{ issuer, session, subject }: StandingQuestion,
 ): Promise<StoredRefusal | undefined> => {
-  const { rows } = await store.query<StandingRow>(standingQuery(schema), [
-    issuer,
-    subject,
-    session.sid ?? null,
-    session.issuedAt === undefined ? null : new Date(session.issuedAt * 1000),
-  ]);
-  const [standing] = rows;
-  if (standing?.revoked === true) {
-    return 'revokedPrincipal';
-  }
-  if (standing?.revokedPlatform === true) {
-    return 'revokedPlatform';
-  }
-  return standing?.signedOut === true ? 'signedOutSession' : undefined;
+	const { rows } = await store.query<StandingRow>(standingQuery(schema), [
+		issuer,
+		subject,
+		session.sid ?? null,
+		session.issuedAt === undefined ? null : new Date(session.issuedAt * 1000),
+	]);
+	const [standing] = rows;
+	if (standing?.revoked === true) {
+		return 'revokedPrincipal';
+	}
+	if (standing?.revokedPlatform === true) {
+		return 'revokedPlatform';
+	}
+	return standing?.signedOut === true ? 'signedOutSession' : undefined;
 };

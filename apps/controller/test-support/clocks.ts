@@ -23,26 +23,25 @@ export const KEY_REFETCH_COOLDOWN_MS = 30_000;
  *
  * @param instant milliseconds since the Unix epoch.
  */
-export const fixedClock = (instant: number): Clock =>
-  Object.freeze({ now: () => instant });
+export const fixedClock = (instant: number): Clock => Object.freeze({ now: () => instant });
 
 /** A clock a test moves forward, configured as the Controller's own (#209 Q2). */
 export interface AdjustableClock {
-  /** Moves the clock forward. */
-  advance(milliseconds: number): void;
+	/** Moves the clock forward. */
+	advance(milliseconds: number): void;
 
-  clock: Clock;
+	clock: Clock;
 }
 
 /** A clock reading the system's time plus however far the test has moved it forward. */
 export const adjustableClock = (): AdjustableClock => {
-  const state = { offset: 0 };
-  return {
-    advance: (milliseconds) => {
-      state.offset += milliseconds;
-    },
-    clock: { now: () => Date.now() + state.offset },
-  };
+	const state = { offset: 0 };
+	return {
+		advance: (milliseconds) => {
+			state.offset += milliseconds;
+		},
+		clock: { now: () => Date.now() + state.offset },
+	};
 };
 
 /**
@@ -53,11 +52,11 @@ export const adjustableClock = (): AdjustableClock => {
  * @param at the instant, by `performance.now()`.
  */
 export const untilMonotonicTime = async (at: number): Promise<void> => {
-  const remaining = at - performance.now();
-  if (remaining > 0) {
-    await delay(Math.ceil(remaining));
-    await untilMonotonicTime(at);
-  }
+	const remaining = at - performance.now();
+	if (remaining > 0) {
+		await delay(Math.ceil(remaining));
+		await untilMonotonicTime(at);
+	}
 };
 
 /**
@@ -67,9 +66,9 @@ export const untilMonotonicTime = async (at: number): Promise<void> => {
  * @param epochMs the instant, in milliseconds since the Unix epoch.
  */
 export const untilWallTime = async (epochMs: number): Promise<void> => {
-  const remaining = epochMs - Date.now();
-  if (remaining > 0) {
-    await delay(Math.ceil(remaining));
-    await untilWallTime(epochMs);
-  }
+	const remaining = epochMs - Date.now();
+	if (remaining > 0) {
+		await delay(Math.ceil(remaining));
+		await untilWallTime(epochMs);
+	}
 };

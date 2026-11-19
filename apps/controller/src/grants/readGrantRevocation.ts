@@ -1,9 +1,6 @@
 import { type InputReading, readTextMembers } from '../managementApi/index.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
-import {
-  GIVEN_REVOCATION_REASONS,
-  UNSPECIFIED_REASON,
-} from './revocationReasons.js';
+import { GIVEN_REVOCATION_REASONS, UNSPECIFIED_REASON } from './revocationReasons.js';
 import type { GrantRevocation } from './types.js';
 
 /**
@@ -15,17 +12,17 @@ import type { GrantRevocation } from './types.js';
  * @param body the body's object, or none for a request sending none.
  */
 export const readGrantRevocation = (
-  body: Readonly<Record<string, unknown>> | undefined,
+	body: Readonly<Record<string, unknown>> | undefined,
 ): InputReading<GrantRevocation> => {
-  if (body === undefined) {
-    return { input: { reason: UNSPECIFIED_REASON }, kind: 'read' };
-  }
-  const reading = readTextMembers(body, { reason: { required: true } });
-  if (reading.kind === 'refused') {
-    return reading;
-  }
-  const reason = reading.members['reason'] ?? '';
-  return GIVEN_REVOCATION_REASONS.includes(reason)
-    ? { input: { reason }, kind: 'read' }
-    : { kind: 'refused', problem: GRANT_PROBLEMS.unknownRevocationReason };
+	if (body === undefined) {
+		return { input: { reason: UNSPECIFIED_REASON }, kind: 'read' };
+	}
+	const reading = readTextMembers(body, { reason: { required: true } });
+	if (reading.kind === 'refused') {
+		return reading;
+	}
+	const reason = reading.members['reason'] ?? '';
+	return GIVEN_REVOCATION_REASONS.includes(reason)
+		? { input: { reason }, kind: 'read' }
+		: { kind: 'refused', problem: GRANT_PROBLEMS.unknownRevocationReason };
 };

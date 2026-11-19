@@ -4,15 +4,12 @@ import { GRANT_PROBLEMS } from './grantProblems.js';
 import type { GrantAuthority, GrantAuthorityQuestion } from './types.js';
 
 // The roles a platform administrator grants on any resource.
-const ADMINISTRATOR_GRANTED_ROLES: ReadonlySet<string> = new Set([
-  'owner',
-  'submitter',
-]);
+const ADMINISTRATOR_GRANTED_ROLES: ReadonlySet<string> = new Set(['owner', 'submitter']);
 
 const refuse = (problem: Problem, recordedReason?: string): GrantAuthority => ({
-  kind: 'refuse',
-  problem,
-  ...(recordedReason === undefined ? {} : { recordedReason }),
+	kind: 'refuse',
+	problem,
+	...(recordedReason === undefined ? {} : { recordedReason }),
 });
 
 /**
@@ -29,30 +26,25 @@ const refuse = (problem: Problem, recordedReason?: string): GrantAuthority => ({
  *   and where the caller stands on the resource.
  */
 export const grantAuthority = ({
-  administrator,
-  holderIsCaller,
-  role,
-  standing,
+	administrator,
+	holderIsCaller,
+	role,
+	standing,
 }: GrantAuthorityQuestion): GrantAuthority => {
-  if (administrator && holderIsCaller && role === 'owner') {
-    return refuse(GRANT_PROBLEMS.administratorSelfOwnership);
-  }
-  if (holderIsCaller) {
-    return refuse(GRANT_PROBLEMS.selfNamed);
-  }
-  if (administrator && !ADMINISTRATOR_GRANTED_ROLES.has(role)) {
-    return refuse(GRANT_PROBLEMS.administratorGrantsNoConsumerAccess);
-  }
-  if (standing === undefined || standing.retired) {
-    return refuse(GRANT_PROBLEMS.resourceNotFound);
-  }
-  if (!maySee(standing, { administrator, asksForRetired: false })) {
-    return refuse(
-      GRANT_PROBLEMS.resourceNotFound,
-      GRANT_PROBLEMS.noAuthorityOnResource.code,
-    );
-  }
-  return administrator || standing.countedOwner
-    ? { kind: 'issue' }
-    : refuse(GRANT_PROBLEMS.noAuthorityOnResource);
+	if (administrator && holderIsCaller && role === 'owner') {
+		return refuse(GRANT_PROBLEMS.administratorSelfOwnership);
+	}
+	if (holderIsCaller) {
+		return refuse(GRANT_PROBLEMS.selfNamed);
+	}
+	if (administrator && !ADMINISTRATOR_GRANTED_ROLES.has(role)) {
+		return refuse(GRANT_PROBLEMS.administratorGrantsNoConsumerAccess);
+	}
+	if (standing === undefined || standing.retired) {
+		return refuse(GRANT_PROBLEMS.resourceNotFound);
+	}
+	if (!maySee(standing, { administrator, asksForRetired: false })) {
+		return refuse(GRANT_PROBLEMS.resourceNotFound, GRANT_PROBLEMS.noAuthorityOnResource.code);
+	}
+	return administrator || standing.countedOwner ? { kind: 'issue' } : refuse(GRANT_PROBLEMS.noAuthorityOnResource);
 };

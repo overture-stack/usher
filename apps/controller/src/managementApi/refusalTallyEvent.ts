@@ -9,20 +9,14 @@ import type { WindowClosing } from '../windowedRefusals/index.js';
  *
  * @param closing the window as it closed.
  */
-export const refusalTallyEvent = ({
-  count,
-  firstSeenAt,
-  lastSeenAt,
-  reason,
-  windowId,
-}: WindowClosing): AuditEvent => ({
-  data: {
-    count,
-    firstSeenAt: eventInstant(firstSeenAt),
-    lastSeenAt: eventInstant(lastSeenAt),
-    reason,
-    ...(windowId === undefined ? {} : { windowId }),
-  },
-  severity: 'warning',
-  type: 'managementToken.refusalTally',
+export const refusalTallyEvent = ({ count, firstSeenAt, lastSeenAt, reason, windowId }: WindowClosing): AuditEvent => ({
+	data: {
+		count,
+		firstSeenAt: eventInstant(firstSeenAt),
+		lastSeenAt: eventInstant(lastSeenAt),
+		reason,
+		...(windowId === undefined ? {} : { windowId }),
+	},
+	severity: 'warning',
+	type: 'managementToken.refusalTally',
 });

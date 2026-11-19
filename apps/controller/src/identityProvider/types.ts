@@ -8,8 +8,7 @@ import type { EventLog } from '../eventLog/index.js';
  * token, it names an issuer other than the trusted one, or no published key of the trusted issuer
  * verifies its signature under an algorithm the Controller accepts.
  */
-export type UnverifiedReason =
-  'invalidSignature' | 'otherIssuer' | 'unreadableToken';
+export type UnverifiedReason = 'invalidSignature' | 'otherIssuer' | 'unreadableToken';
 
 /** A verified token's claims: its payload, as the identity provider signed it. */
 export type TokenClaims = Readonly<Record<string, unknown>>;
@@ -27,10 +26,10 @@ export type TokenHeader = Readonly<Record<string, unknown>>;
  * since that fetch, as by a rotation, is found by the next fetch.
  */
 export type TokenVerification =
-  | { claims: TokenClaims; header: TokenHeader; kind: 'verified' }
-  | { kind: 'keysUnavailable' }
-  | { kind: 'signingKeyUnconfirmed'; retryAfterSeconds: number }
-  | { kind: 'unverified'; reason: UnverifiedReason };
+	| { claims: TokenClaims; header: TokenHeader; kind: 'verified' }
+	| { kind: 'keysUnavailable' }
+	| { kind: 'signingKeyUnconfirmed'; retryAfterSeconds: number }
+	| { kind: 'unverified'; reason: UnverifiedReason };
 
 /**
  * What verifying a token under the keys already held found, nothing fetched: its claims and protected
@@ -38,14 +37,10 @@ export type TokenVerification =
  * held, none being held, those held having grown too old, or none of them being its key.
  */
 export type HeldKeyVerification =
-  | Extract<TokenVerification, { kind: 'unverified' | 'verified' }>
-  | { kind: 'keyNotHeld' };
+	Extract<TokenVerification, { kind: 'unverified' | 'verified' }> | { kind: 'keyNotHeld' };
 
 /** What the verifier is created from: the clock the key set's age is measured on, and the trusted issuer. */
-export type TokenVerifierSettings = Pick<
-  ControllerConfiguration,
-  'clock' | 'identityProviderIssuer'
->;
+export type TokenVerifierSettings = Pick<ControllerConfiguration, 'clock' | 'identityProviderIssuer'>;
 
 /** Where the verifier writes a failed fetch of the trusted issuer's key set. */
 export type TokenVerifierLog = Pick<EventLog, 'error'>;
@@ -57,18 +52,10 @@ export type TokenVerifierLog = Pick<EventLog, 'error'>;
  * the trusted issuer exactly; that document names no key set reachable over https, or over http to a
  * loopback host; or the key set is not a JSON object holding a list of keys.
  */
-export type KeySetFetchFailure =
-  | 'discoveryIssuer'
-  | 'keySetLocation'
-  | 'keySetShape'
-  | 'status'
-  | 'unreachable';
+export type KeySetFetchFailure = 'discoveryIssuer' | 'keySetLocation' | 'keySetShape' | 'status' | 'unreachable';
 
 /** What the issuer's sign-in endpoints are read with: the clock the cooldown is measured on, and the trusted issuer. */
-export type IssuerEndpointsSettings = Pick<
-  ControllerConfiguration,
-  'clock' | 'identityProviderIssuer'
->;
+export type IssuerEndpointsSettings = Pick<ControllerConfiguration, 'clock' | 'identityProviderIssuer'>;
 
 /** Where a failed read of the issuer's sign-in endpoints is written. */
 export type IssuerEndpointsLog = Pick<EventLog, 'error'>;
@@ -82,16 +69,12 @@ export type IssuerEndpointsLog = Pick<EventLog, 'error'>;
  * loopback host; or it names one at an origin other than the issuer's.
  */
 export type IssuerEndpointsFailure =
-  | 'discoveryIssuer'
-  | 'endpointLocation'
-  | 'endpointOrigin'
-  | 'status'
-  | 'unreachable';
+	'discoveryIssuer' | 'endpointLocation' | 'endpointOrigin' | 'status' | 'unreachable';
 
 /** The trusted issuer's authorization and token endpoints, each at the issuer's origin, as URLs. */
 export interface SignInEndpoints {
-  authorizationEndpoint: string;
-  tokenEndpoint: string;
+	authorizationEndpoint: string;
+	tokenEndpoint: string;
 }
 
 /**
@@ -100,19 +83,18 @@ export interface SignInEndpoints {
  * cooldown.
  */
 export type IssuerEndpointsReading =
-  | { endpoints: SignInEndpoints; kind: 'read' }
-  | { kind: 'unavailable'; retryInMilliseconds: number };
+	{ endpoints: SignInEndpoints; kind: 'read' } | { kind: 'unavailable'; retryInMilliseconds: number };
 
 /**
  * The trusted issuer's sign-in endpoints, read from its discovery document when first asked for and
  * held from then on.
  */
 export interface IssuerEndpoints {
-  /**
-   * The endpoints: those held; else those of a read in flight, joined; else, unless a read failed
-   * within the cooldown, those of a read it starts.
-   */
-  current(): Promise<IssuerEndpointsReading>;
+	/**
+	 * The endpoints: those held; else those of a read in flight, joined; else, unless a read failed
+	 * within the cooldown, those of a read it starts.
+	 */
+	current(): Promise<IssuerEndpointsReading>;
 }
 
 /**
@@ -120,30 +102,30 @@ export interface IssuerEndpoints {
  * them and whether the latest attempt to fetch them failed, or that none could be had.
  */
 export type KeySetReading =
-  | {
-      /** Whether the keys come from a fetch the reading started or joined, rather than from those already held. */
-      fetched: boolean;
+	| {
+			/** Whether the keys come from a fetch the reading started or joined, rather than from those already held. */
+			fetched: boolean;
 
-      keys: readonly JWK[];
-      kind: 'held';
-      latestFetchFailed: boolean;
-    }
-  | { kind: 'unavailable' };
+			keys: readonly JWK[];
+			kind: 'held';
+			latestFetchFailed: boolean;
+	  }
+	| { kind: 'unavailable' };
 
 /**
  * The trusted issuer's published signing keys, fetched through its discovery document and kept for a
  * while, every age measured on the configured clock.
  */
 export interface SigningKeys {
-  /** The keys held, fetched when none are held or they have grown too old, unless a fetch was tried too recently. */
-  current(): Promise<KeySetReading>;
+	/** The keys held, fetched when none are held or they have grown too old, unless a fetch was tried too recently. */
+	current(): Promise<KeySetReading>;
 
-  /** The keys held, never fetched: unavailable when none are held or they have grown too old. */
-  held(): KeySetReading;
+	/** The keys held, never fetched: unavailable when none are held or they have grown too old. */
+	held(): KeySetReading;
 
-  /** The keys fetched anew, for a token whose key is not among those held, unless a fetch was tried too recently. */
-  refreshed(): Promise<KeySetReading>;
+	/** The keys fetched anew, for a token whose key is not among those held, unless a fetch was tried too recently. */
+	refreshed(): Promise<KeySetReading>;
 
-  /** How long until the refetch cooldown lets a fetch start, in milliseconds of the configured clock: 0 once it does. */
-  refetchInMilliseconds(): number;
+	/** How long until the refetch cooldown lets a fetch start, in milliseconds of the configured clock: 0 once it does. */
+	refetchInMilliseconds(): number;
 }

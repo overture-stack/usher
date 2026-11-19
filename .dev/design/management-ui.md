@@ -69,17 +69,17 @@ Stage rather than preferences:
   CSS-in-JS runtime reads `var(--x)` without difficulty. A theme object would be correct for a host
   today and wrong for the same host after a move already decided.
 
-  **The two-stack case is the expected path rather than a hedge.** The first host's move to the
-  utility-class stack is decided and unstarted, with no replacement framework chosen, so this package
-  ships while that host is still on CSS-in-JS and the host moves stacks underneath it afterwards. Same
-  package, same host, two stacks, in that order, with no re-theming in between. That is what the
-  custom-properties input is for, and without it the package would need retheming exactly when
-  the host has the least attention to spare.
+    **The two-stack case is the expected path rather than a hedge.** The first host's move to the
+    utility-class stack is decided and unstarted, with no replacement framework chosen, so this package
+    ships while that host is still on CSS-in-JS and the host moves stacks underneath it afterwards. Same
+    package, same host, two stacks, in that order, with no re-theming in between. That is what the
+    custom-properties input is for, and without it the package would need retheming exactly when
+    the host has the least attention to spare.
 
-  **On the older stack the host supplies the Bridge**, which is work to expect rather than to
-  discover: a host themed by a JS object emits those values as custom properties on a root element,
-  and the package reads them without knowing which stack produced them. Small, and it belongs to the
-  host because only the host knows its own theme.
+    **On the older stack the host supplies the Bridge**, which is work to expect rather than to
+    discover: a host themed by a JS object emits those values as custom properties on a root element,
+    and the package reads them without knowing which stack produced them. Small, and it belongs to the
+    host because only the host knows its own theme.
 
 - **No data model or vocabulary is hardcoded in rendered output.** A host resolves its catalogues at
   runtime precisely so no model is baked in, and an instance calls resources studies and roles study

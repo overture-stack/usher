@@ -22,22 +22,22 @@ const BUILD_VARIABLE = 'USHER_TEST_CONTROLLER_BUILD';
  * @returns the folder holding the build.
  */
 export const buildController = async (): Promise<URL> => {
-  const folder = new URL(`build-${randomUUID()}.tmp/`, APP_ROOT);
-  await mkdir(folder);
-  const [{ build }, { default: config }] = await Promise.all([
-    import('tsdown'),
-    import(new URL('tsdown.config.ts', APP_ROOT).href) as Promise<{
-      default: UserConfig;
-    }>,
-  ]);
-  await build({
-    ...config,
-    config: false,
-    cwd: fileURLToPath(APP_ROOT),
-    logLevel: 'warn',
-    outDir: fileURLToPath(folder),
-  });
-  return folder;
+	const folder = new URL(`build-${randomUUID()}.tmp/`, APP_ROOT);
+	await mkdir(folder);
+	const [{ build }, { default: config }] = await Promise.all([
+		import('tsdown'),
+		import(new URL('tsdown.config.ts', APP_ROOT).href) as Promise<{
+			default: UserConfig;
+		}>,
+	]);
+	await build({
+		...config,
+		config: false,
+		cwd: fileURLToPath(APP_ROOT),
+		logLevel: 'warn',
+		outDir: fileURLToPath(folder),
+	});
+	return folder;
 };
 
 /**
@@ -45,8 +45,7 @@ export const buildController = async (): Promise<URL> => {
  *
  * @param folder the folder {@link buildController} gave.
  */
-export const removeBuild = (folder: URL): Promise<void> =>
-  rm(folder, { force: true, recursive: true });
+export const removeBuild = (folder: URL): Promise<void> => rm(folder, { force: true, recursive: true });
 
 /**
  * The environment variable that hands the run's build to the test files. The global setup sets it
@@ -55,10 +54,8 @@ export const removeBuild = (folder: URL): Promise<void> =>
  *
  * @param folder the folder holding the build.
  */
-export const environmentForBuild = (
-  folder: URL,
-): Readonly<Record<string, string>> => ({
-  [BUILD_VARIABLE]: fileURLToPath(folder),
+export const environmentForBuild = (folder: URL): Readonly<Record<string, string>> => ({
+	[BUILD_VARIABLE]: fileURLToPath(folder),
 });
 
 /**
@@ -70,14 +67,12 @@ export const environmentForBuild = (
  * @throws {Error} when the run built none, as when a test file runs without the global setup.
  */
 export const builtEntry = (
-  entry: BuiltEntry,
-  environment: Readonly<Record<string, string | undefined>> = process.env,
+	entry: BuiltEntry,
+	environment: Readonly<Record<string, string | undefined>> = process.env,
 ): URL => {
-  const folder = environment[BUILD_VARIABLE];
-  if (folder !== undefined) {
-    return new URL(`${entry}.js`, pathToFileURL(`${folder}/`));
-  }
-  throw new Error(
-    'the controller is not built: run the suite with pnpm test, whose global setup builds it',
-  );
+	const folder = environment[BUILD_VARIABLE];
+	if (folder !== undefined) {
+		return new URL(`${entry}.js`, pathToFileURL(`${folder}/`));
+	}
+	throw new Error('the controller is not built: run the suite with pnpm test, whose global setup builds it');
 };

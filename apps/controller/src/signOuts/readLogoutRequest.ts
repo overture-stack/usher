@@ -6,19 +6,19 @@ const FORM_MEDIA_TYPE = 'application/x-www-form-urlencoded';
 const LOGOUT_TOKEN = 'logout_token';
 
 const REFUSED_BODY: LogoutRequestReading = Object.freeze({
-  kind: 'refused',
-  problem: SIGN_OUT_PROBLEMS.unreadableBody,
+	kind: 'refused',
+	problem: SIGN_OUT_PROBLEMS.unreadableBody,
 });
 
 const mediaTypeOf = (contentType: string | undefined): string =>
-  (contentType ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
+	(contentType ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
 
 const decodedText = (body: Uint8Array): string | undefined => {
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(body);
-  } catch {
-    return undefined;
-  }
+	try {
+		return new TextDecoder('utf-8', { fatal: true }).decode(body);
+	} catch {
+		return undefined;
+	}
 };
 
 /**
@@ -32,22 +32,15 @@ const decodedText = (body: Uint8Array): string | undefined => {
  *
  * @param request the request's URL as sent, its content type and its body's bytes.
  */
-export const readLogoutRequest = ({
-  body,
-  contentType,
-  url,
-}: LogoutRequest): LogoutRequestReading => {
-  if (url.includes('?')) {
-    return { kind: 'refused', problem: SIGN_OUT_PROBLEMS.unreadableQuery };
-  }
-  if (body === undefined || mediaTypeOf(contentType) !== FORM_MEDIA_TYPE) {
-    return REFUSED_BODY;
-  }
-  const text = decodedText(body);
-  const tokens =
-    text === undefined ? [] : new URLSearchParams(text).getAll(LOGOUT_TOKEN);
-  const [token] = tokens;
-  return tokens.length === 1 && token !== undefined && token !== ''
-    ? { kind: 'read', token }
-    : REFUSED_BODY;
+export const readLogoutRequest = ({ body, contentType, url }: LogoutRequest): LogoutRequestReading => {
+	if (url.includes('?')) {
+		return { kind: 'refused', problem: SIGN_OUT_PROBLEMS.unreadableQuery };
+	}
+	if (body === undefined || mediaTypeOf(contentType) !== FORM_MEDIA_TYPE) {
+		return REFUSED_BODY;
+	}
+	const text = decodedText(body);
+	const tokens = text === undefined ? [] : new URLSearchParams(text).getAll(LOGOUT_TOKEN);
+	const [token] = tokens;
+	return tokens.length === 1 && token !== undefined && token !== '' ? { kind: 'read', token } : REFUSED_BODY;
 };

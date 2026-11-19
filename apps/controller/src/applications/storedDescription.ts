@@ -5,6 +5,6 @@
  * @param given the description sent, if any.
  */
 export const storedDescription = (given: string | undefined): string | null => {
-  const trimmed = given?.trim() ?? '';
-  return trimmed === '' ? null : trimmed;
+	const trimmed = given?.trim() ?? '';
+	return trimmed === '' ? null : trimmed;
 };

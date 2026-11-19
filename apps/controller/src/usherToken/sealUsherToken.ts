@@ -16,10 +16,7 @@ const PLAINTEXT_ENCODER = new TextEncoder();
  * @param payload the payload, as version 1 defines it.
  * @param key the application's key answering the exchange, whose token subkey alone is used.
  */
-export const sealUsherToken = (
-  payload: VersionOnePayload,
-  key: TokenSealingKey,
-): Promise<string> =>
-  new CompactEncrypt(PLAINTEXT_ENCODER.encode(JSON.stringify(payload)))
-    .setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ: TOKEN_TYPE })
-    .encrypt(key.token);
+export const sealUsherToken = (payload: VersionOnePayload, key: TokenSealingKey): Promise<string> =>
+	new CompactEncrypt(PLAINTEXT_ENCODER.encode(JSON.stringify(payload)))
+		.setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ: TOKEN_TYPE })
+		.encrypt(key.token);

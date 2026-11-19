@@ -7,16 +7,10 @@ import { isNonEmptyString } from './plainData.js';
  * pattern, a saved-set reference and a missing-field marker. Frozen, so no caller can narrow what is
  * refused.
  */
-export const SPECIAL_VALUE_MARKERS: readonly string[] = Object.freeze([
-  '*',
-  '__missing__',
-  'set_id:',
-]);
+export const SPECIAL_VALUE_MARKERS: readonly string[] = Object.freeze(['*', '__missing__', 'set_id:']);
 
 // A Map, so a name inherited from Object.prototype is never taken for an alias.
-const CANONICAL_OPERATORS: ReadonlyMap<string, string> = new Map(
-  Object.entries(SQON_OP_ALIASES),
-);
+const CANONICAL_OPERATORS: ReadonlyMap<string, string> = new Map(Object.entries(SQON_OP_ALIASES));
 
 /**
  * Whether a SQON value is read as itself: anything but a string holding one of
@@ -25,9 +19,7 @@ const CANONICAL_OPERATORS: ReadonlyMap<string, string> = new Map(
  * @param value one value of a clause.
  */
 export const isLiteralValue = (value: unknown): boolean =>
-  typeof value === 'string'
-    ? SPECIAL_VALUE_MARKERS.every((marker) => !value.includes(marker))
-    : true;
+	typeof value === 'string' ? SPECIAL_VALUE_MARKERS.every((marker) => !value.includes(marker)) : true;
 
 /**
  * Date math's relative form: `now` in any case after any leading whitespace, alone save for
@@ -47,9 +39,7 @@ const RELATIVE_DATE = /^\s*now(?:\s*$|[+\-/])/iu;
  * @param value one value of a clause.
  */
 export const isFixedValue = (value: unknown): boolean =>
-  typeof value === 'string'
-    ? !RELATIVE_DATE.test(value) && !value.includes('||')
-    : true;
+	typeof value === 'string' ? !RELATIVE_DATE.test(value) && !value.includes('||') : true;
 
 /**
  * The canonical spelling of a SQON operator, read through `SQON_OP_ALIASES`, where a name inherited
@@ -59,9 +49,7 @@ export const isFixedValue = (value: unknown): boolean =>
  * @param operator a node's `op`, untrusted.
  */
 export const canonicalOperatorOf = (operator: unknown): string | undefined =>
-  typeof operator === 'string'
-    ? (CANONICAL_OPERATORS.get(operator) ?? operator)
-    : undefined;
+	typeof operator === 'string' ? (CANONICAL_OPERATORS.get(operator) ?? operator) : undefined;
 
 /**
  * A value the search engine can use as a range bound: a finite number or a non-empty string, which
@@ -70,12 +58,11 @@ export const canonicalOperatorOf = (operator: unknown): string | undefined =>
  * @param value one value of a clause.
  */
 export const isBound = (value: unknown): boolean =>
-  (typeof value === 'number' && Number.isFinite(value)) ||
-  isNonEmptyString(value);
+	(typeof value === 'number' && Number.isFinite(value)) || isNonEmptyString(value);
 
 /**
  * Whether `value` can name a resource: a non-empty string other than `__proto__`, holding no marker
  * read specially by Arranger.
  */
 export const isUsableResource = (value: unknown): value is string =>
-  isNonEmptyString(value) && value !== '__proto__' && isLiteralValue(value);
+	isNonEmptyString(value) && value !== '__proto__' && isLiteralValue(value);

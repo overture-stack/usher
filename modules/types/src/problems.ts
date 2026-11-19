@@ -5,51 +5,48 @@ import { plainSnapshot } from './plainData.js';
  * taken from the refused input, so a problem is safe to log.
  */
 export interface ValidationProblem {
-  /**
-   * A value-free path from the validated value's root, such as
-   * `permissions.<resource>.<category>.record`. A key taken from the input is replaced by a
-   * placeholder (`<resource>`, `<category>`, `<entity>` or `<key>`), with one exception: a
-   * registration's problems name each category name and resource identifier they are found under,
-   * since those keys come from configuration rather than data. Each such key is written as
-   * {@link keySegment} writes it, bare or quoted in brackets, as in
-   * `categories.resource.HEART_STUDY["resource.consented"]`. A list entry is written with its index,
-   * such as `content[1]`, since an index is structure rather than content, and `(root)` is the
-   * validated value itself.
-   */
-  position: string;
+	/**
+	 * A value-free path from the validated value's root, such as
+	 * `permissions.<resource>.<category>.record`. A key taken from the input is replaced by a
+	 * placeholder (`<resource>`, `<category>`, `<entity>` or `<key>`), with one exception: a
+	 * registration's problems name each category name and resource identifier they are found under,
+	 * since those keys come from configuration rather than data. Each such key is written as
+	 * {@link keySegment} writes it, bare or quoted in brackets, as in
+	 * `categories.resource.HEART_STUDY["resource.consented"]`. A list entry is written with its index,
+	 * such as `content[1]`, since an index is structure rather than content, and `(root)` is the
+	 * validated value itself.
+	 */
+	position: string;
 
-  /** Fixed wording naming the rule broken. */
-  rule: string;
+	/** Fixed wording naming the rule broken. */
+	rule: string;
 }
 
 /** The position naming the validated value itself. */
 export const ROOT_POSITION = '(root)';
 
 /** The rule broken by a value that throws when read, through a getter or a proxy. */
-export const READ_RULE =
-  'the value is plain data that can be read without error';
+export const READ_RULE = 'the value is plain data that can be read without error';
 
 /**
  * The one error this package throws. Its message is the rule broken and `problems` lists where, so
  * neither carries a value taken from the input that caused it, and it never holds a cause.
  */
 export class UsherContractError extends Error {
-  /** The problems behind the error, empty when the rule alone says what went wrong. */
-  readonly problems: readonly ValidationProblem[];
+	/** The problems behind the error, empty when the rule alone says what went wrong. */
+	readonly problems: readonly ValidationProblem[];
 
-  /**
-   * @param rule fixed wording naming the rule broken, never content of the value.
-   * @param problems the value-free problems found, when a validator found any.
-   */
-  constructor(rule: string, problems: readonly ValidationProblem[] = []) {
-    super(rule);
-    this.name = 'UsherContractError';
-    this.problems = Object.freeze(
-      problems.map(({ position, rule: problemRule }) =>
-        Object.freeze({ position, rule: problemRule }),
-      ),
-    );
-  }
+	/**
+	 * @param rule fixed wording naming the rule broken, never content of the value.
+	 * @param problems the value-free problems found, when a validator found any.
+	 */
+	constructor(rule: string, problems: readonly ValidationProblem[] = []) {
+		super(rule);
+		this.name = 'UsherContractError';
+		this.problems = Object.freeze(
+			problems.map(({ position, rule: problemRule }) => Object.freeze({ position, rule: problemRule })),
+		);
+	}
 }
 
 /**
@@ -59,15 +56,14 @@ export class UsherContractError extends Error {
  * @param rules each rule's wording, paired with whether the value meets it.
  */
 export const brokenRules = (
-  position: string,
-  rules: readonly (readonly [holds: boolean, rule: string])[],
-): readonly ValidationProblem[] =>
-  rules.filter(([holds]) => !holds).map(([, rule]) => ({ position, rule }));
+	position: string,
+	rules: readonly (readonly [holds: boolean, rule: string])[],
+): readonly ValidationProblem[] => rules.filter(([holds]) => !holds).map(([, rule]) => ({ position, rule }));
 
 /** Every problem found by a validator in its snapshot of a value, and the snapshot it checked. */
 export interface CheckedSnapshot {
-  problems: readonly ValidationProblem[];
-  snapshot: unknown;
+	problems: readonly ValidationProblem[];
+	snapshot: unknown;
 }
 
 /**
@@ -80,19 +76,19 @@ export interface CheckedSnapshot {
  *   throws, an `undefined` snapshot and a single problem at `(root)` naming {@link READ_RULE}.
  */
 export const checkSnapshot = (
-  value: unknown,
-  problemsOf: (snapshot: unknown) => readonly ValidationProblem[],
+	value: unknown,
+	problemsOf: (snapshot: unknown) => readonly ValidationProblem[],
 ): CheckedSnapshot => {
-  try {
-    const snapshot = plainSnapshot(value);
+	try {
+		const snapshot = plainSnapshot(value);
 
-    return { problems: problemsOf(snapshot), snapshot };
-  } catch {
-    return {
-      problems: [{ position: ROOT_POSITION, rule: READ_RULE }],
-      snapshot: undefined,
-    };
-  }
+		return { problems: problemsOf(snapshot), snapshot };
+	} catch {
+		return {
+			problems: [{ position: ROOT_POSITION, rule: READ_RULE }],
+			snapshot: undefined,
+		};
+	}
 };
 
 /**
@@ -102,7 +98,7 @@ export const checkSnapshot = (
  * @param inner the problem's position relative to the nested value.
  */
 export const nestedPosition = (outer: string, inner: string): string =>
-  inner === ROOT_POSITION ? outer : `${outer}.${inner}`;
+	inner === ROOT_POSITION ? outer : `${outer}.${inner}`;
 
 const BARE_KEY_FORM = /^[A-Za-z0-9_-]+$/u;
 
@@ -110,8 +106,7 @@ const ESCAPED_BEYOND_JSON = /[\u007f-\u009f\u2028\u2029]/gu;
 
 const isBareKey = (key: string): boolean => BARE_KEY_FORM.test(key);
 
-const unicodeEscape = (character: string): string =>
-  `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`;
+const unicodeEscape = (character: string): string => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`;
 
 /**
  * The segment naming `key` in a position, for a key named by a position because it comes from
@@ -132,9 +127,7 @@ const unicodeEscape = (character: string): string =>
  * @returns the key bare, or quoted in brackets.
  */
 export const keySegment = (key: string): string =>
-  isBareKey(key)
-    ? key
-    : `[${JSON.stringify(key).replace(ESCAPED_BEYOND_JSON, unicodeEscape)}]`;
+	isBareKey(key) ? key : `[${JSON.stringify(key).replace(ESCAPED_BEYOND_JSON, unicodeEscape)}]`;
 
 /**
  * The position of the member at `key` in the map at `outer`, the key written by {@link keySegment}:
@@ -144,4 +137,4 @@ export const keySegment = (key: string): string =>
  * @param key the member's key, a name from configuration rather than a value from data.
  */
 export const memberPosition = (outer: string, key: string): string =>
-  isBareKey(key) ? `${outer}.${keySegment(key)}` : `${outer}${keySegment(key)}`;
+	isBareKey(key) ? `${outer}.${keySegment(key)}` : `${outer}${keySegment(key)}`;

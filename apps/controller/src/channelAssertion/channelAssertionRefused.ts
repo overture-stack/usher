@@ -6,8 +6,8 @@ import { problem, type Problem } from '../http/index.js';
  * tells no check from another and the cause is in the Controller's log alone.
  */
 export const CHANNEL_ASSERTION_REFUSED: Problem = problem(
-  'channelAssertionRefused',
-  401,
-  'Channel assertion refused',
-  'Send one Bearer channel assertion: HS256 under the channel-assertion subkey of a live key of the application it names in iss, typed usher-channel+jwt, for usher:controller, living at most 60 seconds, current, and with a jti never presented to the stream route before.',
+	'channelAssertionRefused',
+	401,
+	'Channel assertion refused',
+	'Send one Bearer channel assertion: HS256 under the channel-assertion subkey of a live key of the application it names in iss, typed usher-channel+jwt, for usher:controller, living at most 60 seconds, current, and with a jti never presented to the stream route before.',
 );

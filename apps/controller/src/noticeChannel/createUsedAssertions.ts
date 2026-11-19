@@ -9,21 +9,21 @@ import type { UsedAssertions } from './types.js';
  * @param clock the wall clock assertions' acceptance is judged on.
  */
 export const createUsedAssertions = (clock: Clock): UsedAssertions => {
-  const recorded = new Map<string, number>();
-  return {
-    record: (applicationId, id, acceptedUntil) => {
-      const now = clock.now();
-      [...recorded]
-        .filter(([, until]) => until < now)
-        .forEach(([expired]) => {
-          recorded.delete(expired);
-        });
-      const known = `${applicationId}\n${id}`;
-      if (recorded.has(known)) {
-        return false;
-      }
-      recorded.set(known, acceptedUntil);
-      return true;
-    },
-  };
+	const recorded = new Map<string, number>();
+	return {
+		record: (applicationId, id, acceptedUntil) => {
+			const now = clock.now();
+			[...recorded]
+				.filter(([, until]) => until < now)
+				.forEach(([expired]) => {
+					recorded.delete(expired);
+				});
+			const known = `${applicationId}\n${id}`;
+			if (recorded.has(known)) {
+				return false;
+			}
+			recorded.set(known, acceptedUntil);
+			return true;
+		},
+	};
 };

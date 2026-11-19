@@ -33,19 +33,14 @@ import type { Calculation, PrincipalPolicy } from './types.js';
  *   seconds since the Unix epoch.
  */
 export const signedInCalculation = (
-  policy: PrincipalPolicy,
-  { grantRules, issuedAt }: { grantRules: GrantRules; issuedAt: number },
+	policy: PrincipalPolicy,
+	{ grantRules, issuedAt }: { grantRules: GrantRules; issuedAt: number },
 ): Calculation => {
-  const ruled = ruleEntries(
-    policy.served,
-    grantRuleConferrals(grantRules, ['everyone', 'signedIn']),
-  );
-  const granted = grantEntries(policy.served, policy.grants, issuedAt);
-  return calculationOf(policy, [...ruled.entries, ...granted.entries], {
-    ...(granted.earliestExpiry === undefined
-      ? {}
-      : { earliestGrantExpiry: granted.earliestExpiry }),
-    grantCount: granted.grantCount,
-    rules: ruled.rules,
-  });
+	const ruled = ruleEntries(policy.served, grantRuleConferrals(grantRules, ['everyone', 'signedIn']));
+	const granted = grantEntries(policy.served, policy.grants, issuedAt);
+	return calculationOf(policy, [...ruled.entries, ...granted.entries], {
+		...(granted.earliestExpiry === undefined ? {} : { earliestGrantExpiry: granted.earliestExpiry }),
+		grantCount: granted.grantCount,
+		rules: ruled.rules,
+	});
 };

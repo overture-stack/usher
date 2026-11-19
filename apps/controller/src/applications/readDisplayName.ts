@@ -15,11 +15,11 @@ export const DISPLAY_NAME_MAXIMUM_LENGTH = 128;
  * @param given the display name sent.
  */
 export const readDisplayName = (given: string): DisplayNameReading => {
-  const stored = given.trim().normalize('NFC');
-  if (stored === '') {
-    return { kind: 'refused', rule: 'blank' };
-  }
-  return [...stored].length > DISPLAY_NAME_MAXIMUM_LENGTH
-    ? { kind: 'refused', rule: 'tooLong' }
-    : { displayName: stored, kind: 'read' };
+	const stored = given.trim().normalize('NFC');
+	if (stored === '') {
+		return { kind: 'refused', rule: 'blank' };
+	}
+	return [...stored].length > DISPLAY_NAME_MAXIMUM_LENGTH
+		? { kind: 'refused', rule: 'tooLong' }
+		: { displayName: stored, kind: 'read' };
 };

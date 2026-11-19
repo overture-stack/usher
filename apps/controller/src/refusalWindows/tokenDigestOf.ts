@@ -6,5 +6,4 @@ import { createHash } from 'node:crypto';
  *
  * @param token the token as the request carried it.
  */
-export const tokenDigestOf = (token: string): string =>
-  createHash('sha256').update(token, 'utf8').digest('base64url');
+export const tokenDigestOf = (token: string): string => createHash('sha256').update(token, 'utf8').digest('base64url');

@@ -9,42 +9,42 @@ export interface StoreProbe {
 	/** Whether the grant rules the store holds read as valid. */
 	grantRulesValid: boolean;
 
-  readOnly: boolean;
-  unknownMigrations: readonly UnknownMigration[];
+	readOnly: boolean;
+	unknownMigrations: readonly UnknownMigration[];
 }
 
 /** Where readiness writes its lines, each named by its message. */
 export interface ReadinessLog {
-  /** Writes a line at error. */
-  error(message: string, fields: LineFields): void;
+	/** Writes a line at error. */
+	error(message: string, fields: LineFields): void;
 
-  /** Writes a line at info. */
-  info(message: string, fields?: Readonly<Record<string, string>>): void;
+	/** Writes a line at info. */
+	info(message: string, fields?: Readonly<Record<string, string>>): void;
 
-  /** Writes a line at warning. */
-  warning(message: string, fields?: Readonly<Record<string, string>>): void;
+	/** Writes a line at warning. */
+	warning(message: string, fields?: Readonly<Record<string, string>>): void;
 }
 
 /** What the Controller's readiness is judged from. */
 export interface ReadinessSettings {
-  /** Whether every line so far has reached the log stream. */
-  isLogWritable(): boolean;
+	/** Whether every line so far has reached the log stream. */
+	isLogWritable(): boolean;
 
-  /** Whether the Controller has started and is not stopping. */
-  isServing(): boolean;
+	/** Whether the Controller has started and is not stopping. */
+	isServing(): boolean;
 
-  /** Where each change of readiness is written. */
-  log: ReadinessLog;
+	/** Where each change of readiness is written. */
+	log: ReadinessLog;
 
-  /** A monotonic clock, in milliseconds, such as `performance.now`. */
-  monotonicNow(): number;
+	/** A monotonic clock, in milliseconds, such as `performance.now`. */
+	monotonicNow(): number;
 
-  /**
-   * Asks the store one statement within the store timeout, resolving to its answer and rejecting
-   * when it is not answered.
-   */
-  probeStore(): Promise<StoreProbe>;
+	/**
+	 * Asks the store one statement within the store timeout, resolving to its answer and rejecting
+	 * when it is not answered.
+	 */
+	probeStore(): Promise<StoreProbe>;
 
-  /** Whether the instance's database role writes, so a store reading as read-only cannot serve it. */
-  writesStore(): boolean;
+	/** Whether the instance's database role writes, so a store reading as read-only cannot serve it. */
+	writesStore(): boolean;
 }

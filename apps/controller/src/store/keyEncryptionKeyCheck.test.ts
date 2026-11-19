@@ -73,7 +73,7 @@ suite('checking the key-encryption key at the start', () => {
 			sent.map(({ values }) => values),
 			[['keyEncryptionKey']],
 		);
-  });
+	});
 
 	test("refuses the start, naming the key's variable, when the recorded fingerprint is another key's or of another length", async () => {
 		const recorded = [keyFingerprint(freshKey()), keyFingerprint(SETTINGS.keyEncryptionKey).subarray(0, 16)];
@@ -85,8 +85,8 @@ suite('checking the key-encryption key at the start', () => {
 		assert.deepEqual(
 			refusals.map((refusal) => (refusal instanceof StartRefusal ? refusal.variables : refusal)),
 			[['USHER_KEY_ENCRYPTION_KEY'], ['USHER_KEY_ENCRYPTION_KEY']],
-    );
-  });
+		);
+	});
 
 	test("refuses the start, naming the key's variable, when the store holds no fingerprint and the database role may not record one", async () => {
 		const refusal = await refusalOf(storeHolding([], { writeFailure: storeError('42501') }).connection);

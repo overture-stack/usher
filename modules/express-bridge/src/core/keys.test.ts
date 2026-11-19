@@ -1,192 +1,149 @@
 import assert from 'node:assert/strict';
-import {
-  createCipheriv,
-  createHash,
-  createHmac,
-  hkdfSync,
-  randomBytes,
-  webcrypto,
-} from 'node:crypto';
+import { createCipheriv, createHash, createHmac, hkdfSync, randomBytes, webcrypto } from 'node:crypto';
 import { suite, test } from 'node:test';
 
-import {
-  credentialDigest,
-  importApplicationKey,
-  SUBKEY_LABELS,
-  subjectTag,
-} from './keys.js';
+import { credentialDigest, importApplicationKey, SUBKEY_LABELS, subjectTag } from './keys.js';
 
 const KEY_BYTES = Buffer.alloc(32, 7);
 const KEY = KEY_BYTES.toString('base64url');
 
 /** The subkey a Controller derives with node:crypto, which the Bridge's WebCrypto derivation must match. */
 const controllerSubkey = (label: string): Buffer =>
-  Buffer.from(hkdfSync('sha256', KEY_BYTES, new Uint8Array(0), label, 32));
+	Buffer.from(hkdfSync('sha256', KEY_BYTES, new Uint8Array(0), label, 32));
 
-const aesGcmSealed = (
-  keyBytes: Buffer,
-  plaintext: string,
-): { ciphertext: Uint8Array; iv: Uint8Array } => {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', keyBytes, iv);
-  const sealed = Buffer.concat([
-    cipher.update(plaintext, 'utf8'),
-    cipher.final(),
-    cipher.getAuthTag(),
-  ]);
-  return { ciphertext: sealed, iv };
+const aesGcmSealed = (keyBytes: Buffer, plaintext: string): { ciphertext: Uint8Array; iv: Uint8Array } => {
+	const iv = randomBytes(12);
+	const cipher = createCipheriv('aes-256-gcm', keyBytes, iv);
+	const sealed = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final(), cipher.getAuthTag()]);
+	return { ciphertext: sealed, iv };
 };
 
 const decrypted = async (
-  key: webcrypto.CryptoKey,
-  { ciphertext, iv }: { ciphertext: Uint8Array; iv: Uint8Array },
+	key: webcrypto.CryptoKey,
+	{ ciphertext, iv }: { ciphertext: Uint8Array; iv: Uint8Array },
 ): Promise<string> =>
-  Buffer.from(
-    await webcrypto.subtle.decrypt({ iv, name: 'AES-GCM' }, key, ciphertext),
-  ).toString('utf8');
+	Buffer.from(await webcrypto.subtle.decrypt({ iv, name: 'AES-GCM' }, key, ciphertext)).toString('utf8');
 
 suite('importApplicationKey', () => {
-  test('labels each subkey as the controller labels it, one label for each use, the Usher token included', () => {
-    assert.deepEqual(SUBKEY_LABELS, {
-      channelAssertion: 'usher/v1/channel-assertion',
-      notice: 'usher/v1/notice-encryption',
-      pollAnswer: 'usher/v1/poll-answer',
-      subjectTag: 'usher/v1/subject-tag',
-      token: 'usher/v1/token-encryption',
-    });
-  });
+	test('labels each subkey as the controller labels it, one label for each use, the Usher token included', () => {
+		assert.deepEqual(SUBKEY_LABELS, {
+			channelAssertion: 'usher/v1/channel-assertion',
+			notice: 'usher/v1/notice-encryption',
+			pollAnswer: 'usher/v1/poll-answer',
+			subjectTag: 'usher/v1/subject-tag',
+			token: 'usher/v1/token-encryption',
+		});
+	});
 
-  test('derives the token key as the controller does, from its own label, decrypting what was sealed under that subkey', async () => {
-    const keys = await importApplicationKey(KEY);
+	test('derives the token key as the controller does, from its own label, decrypting what was sealed under that subkey', async () => {
+		const keys = await importApplicationKey(KEY);
 
-    const opened = await decrypted(
-      keys.tokenKey,
-      aesGcmSealed(
-        controllerSubkey('usher/v1/token-encryption'),
-        'an Usher token',
-      ),
-    );
+		const opened = await decrypted(
+			keys.tokenKey,
+			aesGcmSealed(controllerSubkey('usher/v1/token-encryption'), 'an Usher token'),
+		);
 
-    assert.equal(opened, 'an Usher token');
-  });
+		assert.equal(opened, 'an Usher token');
+	});
 
-  test('refuses with the token key what was sealed under the application key itself or under another of its subkeys', async () => {
-    const keys = await importApplicationKey(KEY);
-    const others = [
-      KEY_BYTES,
-      controllerSubkey(SUBKEY_LABELS.notice),
-      controllerSubkey(SUBKEY_LABELS.pollAnswer),
-    ];
+	test('refuses with the token key what was sealed under the application key itself or under another of its subkeys', async () => {
+		const keys = await importApplicationKey(KEY);
+		const others = [KEY_BYTES, controllerSubkey(SUBKEY_LABELS.notice), controllerSubkey(SUBKEY_LABELS.pollAnswer)];
 
-    const refusals = await Promise.all(
-      others.map((keyBytes) =>
-        decrypted(keys.tokenKey, aesGcmSealed(keyBytes, 'an Usher token')).then(
-          () => 'decrypted',
-          (error: unknown) =>
-            error instanceof Error ? error.name : 'not an error',
-        ),
-      ),
-    );
+		const refusals = await Promise.all(
+			others.map((keyBytes) =>
+				decrypted(keys.tokenKey, aesGcmSealed(keyBytes, 'an Usher token')).then(
+					() => 'decrypted',
+					(error: unknown) => (error instanceof Error ? error.name : 'not an error'),
+				),
+			),
+		);
 
-    assert.deepEqual(refusals, [
-      'OperationError',
-      'OperationError',
-      'OperationError',
-    ]);
-  });
+		assert.deepEqual(refusals, ['OperationError', 'OperationError', 'OperationError']);
+	});
 
-  test('derives the notice and poll-answer keys as the controller does, from their own labels', async () => {
-    const keys = await importApplicationKey(KEY);
+	test('derives the notice and poll-answer keys as the controller does, from their own labels', async () => {
+		const keys = await importApplicationKey(KEY);
 
-    const notice = await decrypted(
-      keys.noticeKey,
-      aesGcmSealed(controllerSubkey(SUBKEY_LABELS.notice), 'a notice'),
-    );
-    const pollAnswer = await decrypted(
-      keys.pollAnswerKey,
-      aesGcmSealed(controllerSubkey(SUBKEY_LABELS.pollAnswer), 'an answer'),
-    );
+		const notice = await decrypted(
+			keys.noticeKey,
+			aesGcmSealed(controllerSubkey(SUBKEY_LABELS.notice), 'a notice'),
+		);
+		const pollAnswer = await decrypted(
+			keys.pollAnswerKey,
+			aesGcmSealed(controllerSubkey(SUBKEY_LABELS.pollAnswer), 'an answer'),
+		);
 
-    assert.deepEqual([notice, pollAnswer], ['a notice', 'an answer']);
-  });
+		assert.deepEqual([notice, pollAnswer], ['a notice', 'an answer']);
+	});
 
-  test('derives the channel assertion key as the controller does, signing what it verifies', async () => {
-    const keys = await importApplicationKey(KEY);
+	test('derives the channel assertion key as the controller does, signing what it verifies', async () => {
+		const keys = await importApplicationKey(KEY);
 
-    const signature = Buffer.from(
-      await webcrypto.subtle.sign(
-        'HMAC',
-        keys.channelAssertionKey,
-        Buffer.from('header.claims'),
-      ),
-    ).toString('base64url');
+		const signature = Buffer.from(
+			await webcrypto.subtle.sign('HMAC', keys.channelAssertionKey, Buffer.from('header.claims')),
+		).toString('base64url');
 
-    assert.equal(
-      signature,
-      createHmac('sha256', controllerSubkey(SUBKEY_LABELS.channelAssertion))
-        .update('header.claims')
-        .digest('base64url'),
-    );
-  });
+		assert.equal(
+			signature,
+			createHmac('sha256', controllerSubkey(SUBKEY_LABELS.channelAssertion))
+				.update('header.claims')
+				.digest('base64url'),
+		);
+	});
 
-  test('keeps every key non-extractable, and the token key for decryption alone', async () => {
-    const keys = await importApplicationKey(KEY);
+	test('keeps every key non-extractable, and the token key for decryption alone', async () => {
+		const keys = await importApplicationKey(KEY);
 
-    const extractable = Object.values(keys).map((key) => key.extractable);
+		const extractable = Object.values(keys).map((key) => key.extractable);
 
-    assert.deepEqual(extractable, [false, false, false, false, false]);
-    assert.deepEqual(keys.tokenKey.usages, ['decrypt']);
-    await assert.rejects(webcrypto.subtle.exportKey('raw', keys.tokenKey));
-  });
+		assert.deepEqual(extractable, [false, false, false, false, false]);
+		assert.deepEqual(keys.tokenKey.usages, ['decrypt']);
+		await assert.rejects(webcrypto.subtle.exportKey('raw', keys.tokenKey));
+	});
 
-  test('refuses a key that is not 43 base64url characters in canonical form', async () => {
-    await assert.rejects(importApplicationKey(`${KEY.slice(0, 42)}B`));
-  });
+	test('refuses a key that is not 43 base64url characters in canonical form', async () => {
+		await assert.rejects(importApplicationKey(`${KEY.slice(0, 42)}B`));
+	});
 });
 
 suite('subjectTag', () => {
-  test('tags a subject as the controller does: HMAC-SHA256 under the subject-tag subkey, base64url without padding', async () => {
-    const keys = await importApplicationKey(KEY);
+	test('tags a subject as the controller does: HMAC-SHA256 under the subject-tag subkey, base64url without padding', async () => {
+		const keys = await importApplicationKey(KEY);
 
-    const tag = await subjectTag(keys, '8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b');
+		const tag = await subjectTag(keys, '8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b');
 
-    assert.equal(
-      tag,
-      createHmac('sha256', controllerSubkey('usher/v1/subject-tag'))
-        .update('8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b')
-        .digest('base64url'),
-    );
-    assert.equal(tag.includes('='), false);
-  });
+		assert.equal(
+			tag,
+			createHmac('sha256', controllerSubkey('usher/v1/subject-tag'))
+				.update('8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b')
+				.digest('base64url'),
+		);
+		assert.equal(tag.includes('='), false);
+	});
 
-  test('gives two subjects different tags, and one subject the same tag each time', async () => {
-    const keys = await importApplicationKey(KEY);
+	test('gives two subjects different tags, and one subject the same tag each time', async () => {
+		const keys = await importApplicationKey(KEY);
 
-    const [first, again, other] = await Promise.all([
-      subjectTag(keys, 'subject-ana'),
-      subjectTag(keys, 'subject-ana'),
-      subjectTag(keys, 'subject-ben'),
-    ]);
+		const [first, again, other] = await Promise.all([
+			subjectTag(keys, 'subject-ana'),
+			subjectTag(keys, 'subject-ana'),
+			subjectTag(keys, 'subject-ben'),
+		]);
 
-    assert.equal(first, again);
-    assert.notEqual(first, other);
-  });
+		assert.equal(first, again);
+		assert.notEqual(first, other);
+	});
 });
 
 suite('credentialDigest', () => {
-  test('digests the whole credential with SHA-256, as base64url', () => {
-    const credential = 'header.claims.signature';
+	test('digests the whole credential with SHA-256, as base64url', () => {
+		const credential = 'header.claims.signature';
 
-    assert.equal(
-      credentialDigest(credential),
-      createHash('sha256').update(credential).digest('base64url'),
-    );
-  });
+		assert.equal(credentialDigest(credential), createHash('sha256').update(credential).digest('base64url'));
+	});
 
-  test('tells apart two credentials sharing every claim but their signature', () => {
-    assert.notEqual(
-      credentialDigest('header.claims.signature-a'),
-      credentialDigest('header.claims.signature-b'),
-    );
-  });
+	test('tells apart two credentials sharing every claim but their signature', () => {
+		assert.notEqual(credentialDigest('header.claims.signature-a'), credentialDigest('header.claims.signature-b'));
+	});
 });

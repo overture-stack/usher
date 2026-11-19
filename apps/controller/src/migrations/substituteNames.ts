@@ -15,14 +15,11 @@ const SCHEMA_PLACEHOLDER = ':"schema"';
  * @param sql the migration's statements.
  * @param names the schema and the runtime role.
  */
-export const substituteNames = (
-  sql: string,
-  { runtimeRole, schema }: MigrationNames,
-): string => {
-  const quotedRole = pg.escapeIdentifier(runtimeRole);
-  const quotedSchema = pg.escapeIdentifier(schema);
-  // A replacer function, since a replacement string would read `$&` and its kin in a name as patterns.
-  return sql
-    .replaceAll(RUNTIME_ROLE_PLACEHOLDER, () => quotedRole)
-    .replaceAll(SCHEMA_PLACEHOLDER, () => quotedSchema);
+export const substituteNames = (sql: string, { runtimeRole, schema }: MigrationNames): string => {
+	const quotedRole = pg.escapeIdentifier(runtimeRole);
+	const quotedSchema = pg.escapeIdentifier(schema);
+	// A replacer function, since a replacement string would read `$&` and its kin in a name as patterns.
+	return sql
+		.replaceAll(RUNTIME_ROLE_PLACEHOLDER, () => quotedRole)
+		.replaceAll(SCHEMA_PLACEHOLDER, () => quotedSchema);
 };

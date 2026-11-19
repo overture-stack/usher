@@ -1,32 +1,32 @@
 {
-  "clients": [
-    {
-      "attributes": {
-        "backchannel.logout.url": "http://127.0.0.1:3001/backchannel-logout"
-      },
-      "clientId": "usher-ui",
-      "directAccessGrantsEnabled": true,
-      "enabled": true,
-      "protocol": "openid-connect",
-      "protocolMappers": [
-        {
-          "config": {
-            "access.token.claim": "true",
-            "id.token.claim": "false",
-            "included.custom.audience": "usher-management"
-          },
-          "name": "audience usher-management",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-audience-mapper"
-        }
-      ],
-      "publicClient": true,
-      "standardFlowEnabled": false
-    }
-  ],
-  "enabled": true,
-  "realm": "overture",
-  "roles": {
-    "realm": [{ "name": "usher-first-user" }]
-  }
+	"clients": [
+		{
+			"attributes": {
+				"backchannel.logout.url": "http://127.0.0.1:3001/backchannel-logout"
+			},
+			"clientId": "usher-ui",
+			"directAccessGrantsEnabled": true,
+			"enabled": true,
+			"protocol": "openid-connect",
+			"protocolMappers": [
+				{
+					"config": {
+						"access.token.claim": "true",
+						"id.token.claim": "false",
+						"included.custom.audience": "usher-management"
+					},
+					"name": "audience usher-management",
+					"protocol": "openid-connect",
+					"protocolMapper": "oidc-audience-mapper"
+				}
+			],
+			"publicClient": true,
+			"standardFlowEnabled": false
+		}
+	],
+	"enabled": true,
+	"realm": "overture",
+	"roles": {
+		"realm": [{ "name": "usher-first-user" }]
+	}
 }

@@ -5,61 +5,45 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import pg from 'pg';
 
+import { type AdminCaller, type AuditPage, auditPageOf, type AuditQuery, readAudit, stringsIn } from '../admin.js';
 import {
-  type AdminCaller,
-  type AuditPage,
-  auditPageOf,
-  type AuditQuery,
-  readAudit,
-  stringsIn,
-} from '../admin.js';
-import {
-  AUDIT_EVENT_TYPES,
-  type AuditEventType,
-  type CloudEvent,
-  cloudEventsIn,
-  emittedType,
-  jsonObjectOf,
-  LOG_LEVEL_MEMBER,
-  REFUSED_SUBJECT_MEMBER,
-  SEVERITY_ATTRIBUTE,
-  type Severity,
+	AUDIT_EVENT_TYPES,
+	type AuditEventType,
+	type CloudEvent,
+	cloudEventsIn,
+	emittedType,
+	jsonObjectOf,
+	LOG_LEVEL_MEMBER,
+	REFUSED_SUBJECT_MEMBER,
+	SEVERITY_ATTRIBUTE,
+	type Severity,
 } from '../auditEvents.js';
 import { createChannelAssertion, importApplicationKey } from '../bridgeWire.js';
 import type { KeycloakRealmOptions } from '../containers.js';
 import {
-  captureLog,
-  type ControllerApplication,
-  type ControllerConfiguration,
-  type LogCapture,
+	captureLog,
+	type ControllerApplication,
+	type ControllerConfiguration,
+	type LogCapture,
 } from '../controller.js';
+import { exchange, PEOPLE, type Person, type WireResponse } from '../exchange.js';
 import {
-  exchange,
-  PEOPLE,
-  type Person,
-  type WireResponse,
-} from '../exchange.js';
-import {
-  type AdministratorTokenSource,
-  type ControllerInstance,
-  type Harness,
-  type HarnessOptions,
-  startInstance,
-  suiteHarness,
-  withHarness,
+	type AdministratorTokenSource,
+	type ControllerInstance,
+	type Harness,
+	type HarnessOptions,
+	startInstance,
+	suiteHarness,
+	withHarness,
 } from '../harness.js';
+import { type IdentityProvider, type MintOptions, SERVICE_ACCOUNT } from '../identityProvider.js';
 import {
-  type IdentityProvider,
-  type MintOptions,
-  SERVICE_ACCOUNT,
-} from '../identityProvider.js';
-import {
-  type FixtureDecision,
-  type FixtureGrant,
-  mergedPolicy,
-  POLICY_TABLES,
-  type PolicyFixture,
-  qualified,
+	type FixtureDecision,
+	type FixtureGrant,
+	mergedPolicy,
+	POLICY_TABLES,
+	type PolicyFixture,
+	qualified,
 } from '../policy.js';
 import { type Cleanup, eventually, nowSeconds } from '../waiting.js';
 
@@ -80,54 +64,54 @@ export const SUBMISSION_PORTAL = 'submission-portal';
 
 /** The resources the fixture registers, by externalId. */
 export const RESOURCES = Object.freeze({
-  a1: 'STUDY-A1',
-  b2: 'STUDY-B2',
-  c3: 'STUDY-C3',
-  d4: 'STUDY-D4',
+	a1: 'STUDY-A1',
+	b2: 'STUDY-B2',
+	c3: 'STUDY-C3',
+	d4: 'STUDY-D4',
 });
 
 /** The global category the consumer grants name, as the payload names it. */
 export const CONTROLLED = 'global.controlled';
 
 /** What a person accepting a `viewer` grant is shown, as `entity.action` names (the batch 1 addendum). */
-export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze([
-  'record.count',
-  'record.export',
-  'record.view',
-]);
+export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze(['record.count', 'record.export', 'record.view']);
 
 /**
  * The grant rate threshold the rate tests run under: more than 3 operations by one actor within 30 s
  * (#214 Q19), a window no run's operations outlast.
  */
-export const RATE_THRESHOLD: ControllerConfiguration['grantRateThreshold'] =
-  Object.freeze({ operationCount: 3, windowSeconds: 30 });
+export const RATE_THRESHOLD: ControllerConfiguration['grantRateThreshold'] = Object.freeze({
+	operationCount: 3,
+	windowSeconds: 30,
+});
 
 /** The threshold the clock-boundary test runs under: more than 3 operations within 5 s. */
-export const BOUNDARY_RATE_THRESHOLD: ControllerConfiguration['grantRateThreshold'] =
-  Object.freeze({ operationCount: 3, windowSeconds: 5 });
+export const BOUNDARY_RATE_THRESHOLD: ControllerConfiguration['grantRateThreshold'] = Object.freeze({
+	operationCount: 3,
+	windowSeconds: 5,
+});
 
 /** A fixed code's form, as the Bridge's reasons and the API's problem codes take it: camelCase ASCII. */
 export const FIXED_CODE = /^[a-z][A-Za-z0-9]*$/u;
 
 /** The CloudEvents attributes an event carries, `severity` beside the standard's own (#214 Q2). */
 export const ENVELOPE_ATTRIBUTES: readonly string[] = Object.freeze([
-  'data',
-  'id',
-  SEVERITY_ATTRIBUTE,
-  'source',
-  'specversion',
-  'time',
-  'type',
+	'data',
+	'id',
+	SEVERITY_ATTRIBUTE,
+	'source',
+	'specversion',
+	'time',
+	'type',
 ]);
 
 /** The properties `audit-events.md` names as recurring across entities, with `instance` (#214 Q17). */
 export const RECURRING_PROPERTIES = Object.freeze({
-  actorId: 'actorId',
-  actorType: 'actorType',
-  instance: 'instance',
-  result: 'result',
-  sourceIp: 'sourceIp',
+	actorId: 'actorId',
+	actorType: 'actorType',
+	instance: 'instance',
+	result: 'result',
+	sourceIp: 'sourceIp',
 });
 
 /**
@@ -135,40 +119,38 @@ export const RECURRING_PROPERTIES = Object.freeze({
  * being system-generated, no `sourceIp` (`audit-events.md` § Two families of event; #214 Q19).
  */
 export const OBSERVATION_TYPES: readonly AuditEventType[] = Object.freeze([
-  'admission.shareExceededTally',
-  'applicationKey.confirmation',
-  'applicationKey.unreadable',
-  'channelAssertion.rejectionTally',
-  'grant.rateExceeded',
-  'logoutToken.refusalTally',
-  'managementToken.refusalTally',
-  'resource.orphaned',
-  'token.exchangeRefusalTally',
+	'admission.shareExceededTally',
+	'applicationKey.confirmation',
+	'applicationKey.unreadable',
+	'channelAssertion.rejectionTally',
+	'grant.rateExceeded',
+	'logoutToken.refusalTally',
+	'managementToken.refusalTally',
+	'resource.orphaned',
+	'token.exchangeRefusalTally',
 ]);
 
 /** The severity each `result` gives an event whose row's severity follows it (#214 Q3). */
-export const RESULT_SEVERITIES: Readonly<Record<string, Severity>> =
-  Object.freeze({ denied: 'warning', failed: 'error', succeeded: 'info' });
+export const RESULT_SEVERITIES: Readonly<Record<string, Severity>> = Object.freeze({
+	denied: 'warning',
+	failed: 'error',
+	succeeded: 'info',
+});
 
 /**
  * The management clients a configuration lists so a service account's token is read, and refused with
  * 403 rather than 401 as a credential.
  */
-export const MANAGEMENT_CLIENTS_WITH_SERVICE_ACCOUNT: readonly string[] =
-  Object.freeze(['usher-ui-test', SERVICE_ACCOUNT.clientId]);
+export const MANAGEMENT_CLIENTS_WITH_SERVICE_ACCOUNT: readonly string[] = Object.freeze([
+	'usher-ui-test',
+	SERVICE_ACCOUNT.clientId,
+]);
 
 const OWNED = Object.freeze([RESOURCES.a1, RESOURCES.b2, RESOURCES.c3]);
 
 const ownerGrantName = (externalId: string): string => `owner:${externalId}`;
 
-const FIXTURE_PEOPLE = Object.freeze([
-  'ana',
-  'bo',
-  'cy',
-  'dana',
-  'eli',
-  'owner',
-] as const);
+const FIXTURE_PEOPLE = Object.freeze(['ana', 'bo', 'cy', 'dana', 'eli', 'owner'] as const);
 
 /**
  * The applications alone, serving nothing, for a test seeding nothing else before it starts its own
@@ -176,10 +158,10 @@ const FIXTURE_PEOPLE = Object.freeze([
  * own Controller first listens, and holds none until then.
  */
 export const APPLICATIONS_ONLY: PolicyFixture = Object.freeze({
-  applications: {
-    [SEARCH_PORTAL]: { serves: [] },
-    [SUBMISSION_PORTAL]: { serves: [] },
-  },
+	applications: {
+		[SEARCH_PORTAL]: { serves: [] },
+		[SUBMISSION_PORTAL]: { serves: [] },
+	},
 });
 
 /**
@@ -192,42 +174,40 @@ export const APPLICATIONS_ONLY: PolicyFixture = Object.freeze({
  * @param policy the test's own entries, merged over the fixture's by name.
  */
 export const auditPolicy = (policy: PolicyFixture = {}): PolicyFixture =>
-  mergedPolicy(
-    {
-      applications: {
-        [SEARCH_PORTAL]: {
-          serves: [RESOURCES.a1, RESOURCES.b2, RESOURCES.d4],
-        },
-        [SUBMISSION_PORTAL]: { serves: [RESOURCES.b2, RESOURCES.c3] },
-      },
-      categories: { controlled: { description: 'Controlled access' } },
-      decisions: OWNED.map((externalId): FixtureDecision => ({
-        decision: 'accepted',
-        grant: ownerGrantName(externalId),
-      })),
-      grants: Object.fromEntries(
-        OWNED.map((externalId): [string, FixtureGrant] => [
-          ownerGrantName(externalId),
-          {
-            category: null,
-            holder: { user: 'owner' },
-            resource: externalId,
-            role: 'owner',
-          },
-        ]),
-      ),
-      resources: {
-        [RESOURCES.a1]: { baseTier: 'open', name: 'Wastewater Survey A1' },
-        [RESOURCES.b2]: { baseTier: 'registered', name: 'Cohort B2' },
-        [RESOURCES.c3]: { baseTier: 'grant', name: 'Sealed Study C3' },
-        [RESOURCES.d4]: { baseTier: 'registered', name: 'Unowned Study D4' },
-      },
-      users: Object.fromEntries(
-        FIXTURE_PEOPLE.map((name) => [name, { subject: PEOPLE[name].subject }]),
-      ),
-    },
-    policy,
-  );
+	mergedPolicy(
+		{
+			applications: {
+				[SEARCH_PORTAL]: {
+					serves: [RESOURCES.a1, RESOURCES.b2, RESOURCES.d4],
+				},
+				[SUBMISSION_PORTAL]: { serves: [RESOURCES.b2, RESOURCES.c3] },
+			},
+			categories: { controlled: { description: 'Controlled access' } },
+			decisions: OWNED.map((externalId): FixtureDecision => ({
+				decision: 'accepted',
+				grant: ownerGrantName(externalId),
+			})),
+			grants: Object.fromEntries(
+				OWNED.map((externalId): [string, FixtureGrant] => [
+					ownerGrantName(externalId),
+					{
+						category: null,
+						holder: { user: 'owner' },
+						resource: externalId,
+						role: 'owner',
+					},
+				]),
+			),
+			resources: {
+				[RESOURCES.a1]: { baseTier: 'open', name: 'Wastewater Survey A1' },
+				[RESOURCES.b2]: { baseTier: 'registered', name: 'Cohort B2' },
+				[RESOURCES.c3]: { baseTier: 'grant', name: 'Sealed Study C3' },
+				[RESOURCES.d4]: { baseTier: 'registered', name: 'Unowned Study D4' },
+			},
+			users: Object.fromEntries(FIXTURE_PEOPLE.map((name) => [name, { subject: PEOPLE[name].subject }])),
+		},
+		policy,
+	);
 
 /**
  * A consumer grant on the controlled category for a fixture user, at `viewer` unless a role is named.
@@ -237,15 +217,15 @@ export const auditPolicy = (policy: PolicyFixture = {}): PolicyFixture =>
  * @param options the role, and the grant's end.
  */
 export const consumerGrant = (
-  user: string,
-  resource: string,
-  { expiresAt, role = 'viewer' }: { expiresAt?: Date; role?: string } = {},
+	user: string,
+	resource: string,
+	{ expiresAt, role = 'viewer' }: { expiresAt?: Date; role?: string } = {},
 ): FixtureGrant => ({
-  category: 'controlled',
-  holder: { user },
-  resource,
-  role,
-  ...(expiresAt === undefined ? {} : { expiresAt }),
+	category: 'controlled',
+	holder: { user },
+	resource,
+	role,
+	...(expiresAt === undefined ? {} : { expiresAt }),
 });
 
 /**
@@ -254,55 +234,55 @@ export const consumerGrant = (
  * @param grant the fixture grant's name.
  * @param decision the answer: accepted by default.
  */
-export const decided = (
-  grant: string,
-  decision: FixtureDecision['decision'] = 'accepted',
-): FixtureDecision => ({ decision, grant });
+export const decided = (grant: string, decision: FixtureDecision['decision'] = 'accepted'): FixtureDecision => ({
+	decision,
+	grant,
+});
 
 /** What a test's Controller runs with, over the audit harness's own. */
 export interface AuditHarnessOptions {
-  /**
-   * Where the harness gets the platform administrator's token for registering its applications and
-   * issuing their first keys: the stand-in's by default, and a realm's own administrator's for a
-   * Controller trusting a Keycloak realm (`realmRegistrar`, in `harness.ts`).
-   */
-  administratorToken?: AdministratorTokenSource;
+	/**
+	 * Where the harness gets the platform administrator's token for registering its applications and
+	 * issuing their first keys: the stand-in's by default, and a realm's own administrator's for a
+	 * Controller trusting a Keycloak realm (`realmRegistrar`, in `harness.ts`).
+	 */
+	administratorToken?: AdministratorTokenSource;
 
-  /** Fields over the harness's configuration. */
-  configuration?: Partial<ControllerConfiguration>;
+	/** Fields over the harness's configuration. */
+	configuration?: Partial<ControllerConfiguration>;
 
-  /** The whole fixture: {@link auditPolicy}'s by default. */
-  fixture?: PolicyFixture;
+	/** The whole fixture: {@link auditPolicy}'s by default. */
+	fixture?: PolicyFixture;
 
-  /** A stand-in the test started itself, so the identity provider can fail before the start. */
-  identityProvider?: IdentityProvider;
+	/** A stand-in the test started itself, so the identity provider can fail before the start. */
+	identityProvider?: IdentityProvider;
 
-  /** Whether the harness starts a Controller: true by default. */
-  startsController?: boolean;
+	/** Whether the harness starts a Controller: true by default. */
+	startsController?: boolean;
 }
 
 /** A harness whose Controller writes its log stream where the test reads it. */
 export interface AuditHarness {
-  harness: Harness;
-  log: LogCapture;
+	harness: Harness;
+	log: LogCapture;
 }
 
 const harnessOptions = (
-  log: LogCapture,
-  {
-    administratorToken,
-    configuration = {},
-    fixture = auditPolicy(),
-    identityProvider,
-    startsController = true,
-  }: AuditHarnessOptions,
+	log: LogCapture,
+	{
+		administratorToken,
+		configuration = {},
+		fixture = auditPolicy(),
+		identityProvider,
+		startsController = true,
+	}: AuditHarnessOptions,
 ): HarnessOptions => ({
-  ...(administratorToken === undefined ? {} : { administratorToken }),
-  applications: [SEARCH_PORTAL, SUBMISSION_PORTAL],
-  configuration: { logStream: log.stream, ...configuration },
-  fixture,
-  startsController,
-  ...(identityProvider === undefined ? {} : { identityProvider }),
+	...(administratorToken === undefined ? {} : { administratorToken }),
+	applications: [SEARCH_PORTAL, SUBMISSION_PORTAL],
+	configuration: { logStream: log.stream, ...configuration },
+	fixture,
+	startsController,
+	...(identityProvider === undefined ? {} : { identityProvider }),
 });
 
 /**
@@ -315,16 +295,12 @@ const harnessOptions = (
  * @param context the test's context, to stop the harness after the test's own cleanups.
  */
 export const withAuditHarness = <Result>(
-  options: AuditHarnessOptions,
-  work: (audit: AuditHarness) => Promise<Result>,
-  context?: TestContext,
+	options: AuditHarnessOptions,
+	work: (audit: AuditHarness) => Promise<Result>,
+	context?: TestContext,
 ): Promise<Result> => {
-  const log = captureLog();
-  return withHarness(
-    harnessOptions(log, options),
-    (harness) => work({ harness, log }),
-    context,
-  );
+	const log = captureLog();
+	return withHarness(harnessOptions(log, options), (harness) => work({ harness, log }), context);
 };
 
 /**
@@ -333,18 +309,16 @@ export const withAuditHarness = <Result>(
  *
  * @param options the configuration over the harness's and the fixture.
  */
-export const sharedAuditHarness = (
-  options: AuditHarnessOptions = {},
-): (() => Promise<AuditHarness>) => {
-  const log = captureLog();
-  const shared = suiteHarness(harnessOptions(log, options));
-  return async () => ({ harness: await shared(), log });
+export const sharedAuditHarness = (options: AuditHarnessOptions = {}): (() => Promise<AuditHarness>) => {
+	const log = captureLog();
+	const shared = suiteHarness(harnessOptions(log, options));
+	return async () => ({ harness: await shared(), log });
 };
 
 /** A second Controller instance a test started, with its own log stream. */
 export interface LoggedInstance {
-  instance: ControllerInstance;
-  log: LogCapture;
+	instance: ControllerInstance;
+	log: LogCapture;
 }
 
 /**
@@ -356,34 +330,34 @@ export interface LoggedInstance {
  * @param overrides fields over the harness's configuration.
  */
 export const startLoggedInstance = async (
-  scope: Cleanup,
-  harness: Harness,
-  overrides: Partial<ControllerConfiguration> = {},
+	scope: Cleanup,
+	harness: Harness,
+	overrides: Partial<ControllerConfiguration> = {},
 ): Promise<LoggedInstance> => {
-  const log = captureLog();
-  const instance = await startInstance(scope, harness, {
-    logStream: log.stream,
-    ...overrides,
-  });
-  return { instance, log };
+	const log = captureLog();
+	const instance = await startInstance(scope, harness, {
+		logStream: log.stream,
+		...overrides,
+	});
+	return { instance, log };
 };
 
 /** One exchange as a test describes it. */
 export interface ExchangeBy {
-  /** The application exchanging, by display name: `search-portal` by default. */
-  application?: string;
+	/** The application exchanging, by display name: `search-portal` by default. */
+	application?: string;
 
-  /** A channel assertion sent in place of a fresh one. */
-  assertion?: string;
+	/** A channel assertion sent in place of a fresh one. */
+	assertion?: string;
 
-  /** A credential sent in place of a fresh sign-in token for the person. */
-  credential?: string;
+	/** A credential sent in place of a fresh sign-in token for the person. */
+	credential?: string;
 
-  /** Claims and options over a fresh sign-in token's. */
-  mint?: MintOptions;
+	/** Claims and options over a fresh sign-in token's. */
+	mint?: MintOptions;
 
-  /** The instance exchanged with: the harness's Controller by default. */
-  url?: URL;
+	/** The instance exchanged with: the harness's Controller by default. */
+	url?: URL;
 }
 
 /**
@@ -395,29 +369,19 @@ export interface ExchangeBy {
  * @param request the application, the credential, the assertion and the instance.
  */
 export const exchangeBy = async (
-  harness: Harness,
-  person: Person | null,
-  {
-    application = SEARCH_PORTAL,
-    assertion,
-    credential,
-    mint = {},
-    url,
-  }: ExchangeBy = {},
+	harness: Harness,
+	person: Person | null,
+	{ application = SEARCH_PORTAL, assertion, credential, mint = {}, url }: ExchangeBy = {},
 ): Promise<WireResponse> =>
-  exchange(url ?? harness.url, {
-    application: harness.application(application),
-    ...(assertion === undefined ? {} : { assertion }),
-    credential:
-      credential ??
-      (person === null
-        ? null
-        : await harness.tokens.signIn(person, { application, mint })),
-  });
+	exchange(url ?? harness.url, {
+		application: harness.application(application),
+		...(assertion === undefined ? {} : { assertion }),
+		credential: credential ?? (person === null ? null : await harness.tokens.signIn(person, { application, mint })),
+	});
 
 export const expiredClaims = (): MintOptions => {
-  const now = nowSeconds();
-  return { claims: { exp: now - 3600, iat: now - 3900 } };
+	const now = nowSeconds();
+	return { claims: { exp: now - 3600, iat: now - 3900 } };
 };
 
 /**
@@ -426,15 +390,13 @@ export const expiredClaims = (): MintOptions => {
  *
  * @param application the application signing.
  */
-export const expiredAssertion = async (
-  application: ControllerApplication,
-): Promise<string> => {
-  const { channelAssertionKey } = await importApplicationKey(application.key);
-  return createChannelAssertion({
-    application: application.id,
-    assertionKey: channelAssertionKey,
-    wallClock: { now: () => Date.now() - 10 * 60_000 },
-  })();
+export const expiredAssertion = async (application: ControllerApplication): Promise<string> => {
+	const { channelAssertionKey } = await importApplicationKey(application.key);
+	return createChannelAssertion({
+		application: application.id,
+		assertionKey: channelAssertionKey,
+		wallClock: { now: () => Date.now() - 10 * 60_000 },
+	})();
 };
 
 /**
@@ -442,8 +404,7 @@ export const expiredAssertion = async (
  *
  * @param milliseconds the duration; negative for the past.
  */
-export const instantIn = (milliseconds: number): string =>
-  new Date(Date.now() + milliseconds).toISOString();
+export const instantIn = (milliseconds: number): string => new Date(Date.now() + milliseconds).toISOString();
 
 /**
  * An instant written at a numeric offset from UTC, as RFC 3339 permits and `audit-events.md` narrows
@@ -453,13 +414,11 @@ export const instantIn = (milliseconds: number): string =>
  * @param offsetMinutes the offset east of UTC, in minutes.
  */
 export const atOffset = (instant: number, offsetMinutes: number): string => {
-  const sign = offsetMinutes < 0 ? '-' : '+';
-  const magnitude = Math.abs(offsetMinutes);
-  const hours = String(Math.floor(magnitude / 60)).padStart(2, '0');
-  const minutes = String(magnitude % 60).padStart(2, '0');
-  return new Date(instant + offsetMinutes * 60_000)
-    .toISOString()
-    .replace('Z', `${sign}${hours}:${minutes}`);
+	const sign = offsetMinutes < 0 ? '-' : '+';
+	const magnitude = Math.abs(offsetMinutes);
+	const hours = String(Math.floor(magnitude / 60)).padStart(2, '0');
+	const minutes = String(magnitude % 60).padStart(2, '0');
+	return new Date(instant + offsetMinutes * 60_000).toISOString().replace('Z', `${sign}${hours}:${minutes}`);
 };
 
 /**
@@ -469,17 +428,15 @@ export const atOffset = (instant: number, offsetMinutes: number): string => {
  * @throws when the time is not in UTC with the `Z` designator.
  */
 export const timeKey = (time: string): string => {
-  const matched = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z$/u.exec(
-    time,
-  );
-  if (matched?.[1] !== undefined) {
-    return `${matched[1]}.${(matched[2] ?? '').padEnd(9, '0').slice(0, 9)}`;
-  }
-  throw new Error(`${time} is not an RFC 3339 time in UTC`);
+	const matched = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z$/u.exec(time);
+	if (matched?.[1] !== undefined) {
+		return `${matched[1]}.${(matched[2] ?? '').padEnd(9, '0').slice(0, 9)}`;
+	}
+	throw new Error(`${time} is not an RFC 3339 time in UTC`);
 };
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * An event's `data`, as a log line or an answer of the audit log carries it, failing the test unless
@@ -487,12 +444,8 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
  *
  * @param event the event.
  */
-export const dataOf = (event: {
-  readonly data?: unknown;
-}): Readonly<Record<string, unknown>> =>
-  isRecord(event.data)
-    ? event.data
-    : assert.fail("an event's data is not an object");
+export const dataOf = (event: { readonly data?: unknown }): Readonly<Record<string, unknown>> =>
+	isRecord(event.data) ? event.data : assert.fail("an event's data is not an object");
 
 /**
  * The events among the lines a log stream holds, from a mark on.
@@ -500,10 +453,8 @@ export const dataOf = (event: {
  * @param log the captured log stream.
  * @param since how many lines to pass over: none by default.
  */
-export const eventsIn = (
-  log: LogCapture,
-  since: number = 0,
-): readonly CloudEvent[] => cloudEventsIn(log.lines().slice(since));
+export const eventsIn = (log: LogCapture, since: number = 0): readonly CloudEvent[] =>
+	cloudEventsIn(log.lines().slice(since));
 
 /**
  * The events of one type, as the table names it.
@@ -511,19 +462,16 @@ export const eventsIn = (
  * @param events the events.
  * @param type the event type, without the prefix.
  */
-export const ofType = (
-  events: readonly CloudEvent[],
-  type: AuditEventType,
-): readonly CloudEvent[] =>
-  events.filter((event) => event.type === emittedType(type));
+export const ofType = (events: readonly CloudEvent[], type: AuditEventType): readonly CloudEvent[] =>
+	events.filter((event) => event.type === emittedType(type));
 
 /** Where a wait reads from, and for how long. */
 export interface AwaitOptions {
-  /** Lines to pass over: none by default. */
-  since?: number;
+	/** Lines to pass over: none by default. */
+	since?: number;
 
-  /** The longest wait: 10 s by default. */
-  timeoutMs?: number;
+	/** The longest wait: 10 s by default. */
+	timeoutMs?: number;
 }
 
 /**
@@ -535,16 +483,13 @@ export interface AwaitOptions {
  * @param options the mark and the timeout.
  */
 export const awaitEvents = async (
-  log: LogCapture,
-  condition: (events: readonly CloudEvent[]) => boolean,
-  { since = 0, timeoutMs = 10_000 }: AwaitOptions = {},
+	log: LogCapture,
+	condition: (events: readonly CloudEvent[]) => boolean,
+	{ since = 0, timeoutMs = 10_000 }: AwaitOptions = {},
 ): Promise<readonly CloudEvent[]> => {
-  const held = await eventually(
-    async () => condition(eventsIn(log, since)),
-    timeoutMs,
-  );
-  assert.ok(held, 'the events awaited never reached the log stream');
-  return eventsIn(log, since);
+	const held = await eventually(async () => condition(eventsIn(log, since)), timeoutMs);
+	assert.ok(held, 'the events awaited never reached the log stream');
+	return eventsIn(log, since);
 };
 
 /**
@@ -555,18 +500,11 @@ export const awaitEvents = async (
  * @param options how many, the mark and the timeout.
  */
 export const awaitEventsOfType = async (
-  log: LogCapture,
-  type: AuditEventType,
-  { count = 1, ...options }: AwaitOptions & { count?: number } = {},
+	log: LogCapture,
+	type: AuditEventType,
+	{ count = 1, ...options }: AwaitOptions & { count?: number } = {},
 ): Promise<readonly CloudEvent[]> =>
-  ofType(
-    await awaitEvents(
-      log,
-      (events) => ofType(events, type).length >= count,
-      options,
-    ),
-    type,
-  );
+	ofType(await awaitEvents(log, (events) => ofType(events, type).length >= count, options), type);
 
 /**
  * The one event of a type the log stream holds from a mark on, waited for, failing the test unless
@@ -577,13 +515,13 @@ export const awaitEventsOfType = async (
  * @param options the mark and the timeout.
  */
 export const awaitOneEvent = async (
-  log: LogCapture,
-  type: AuditEventType,
-  options: AwaitOptions = {},
+	log: LogCapture,
+	type: AuditEventType,
+	options: AwaitOptions = {},
 ): Promise<CloudEvent> => {
-  const [event, ...more] = await awaitEventsOfType(log, type, options);
-  assert.equal(more.length, 0, `more than one ${type} was recorded`);
-  return event ?? assert.fail(`no ${type} was recorded`);
+	const [event, ...more] = await awaitEventsOfType(log, type, options);
+	assert.equal(more.length, 0, `more than one ${type} was recorded`);
+	return event ?? assert.fail(`no ${type} was recorded`);
 };
 
 /**
@@ -596,18 +534,16 @@ export const awaitOneEvent = async (
  * @param options the mark and the timeout.
  */
 export const awaitEventWhere = async (
-  log: LogCapture,
-  type: AuditEventType,
-  matches: (data: Readonly<Record<string, unknown>>) => boolean,
-  options: AwaitOptions = {},
+	log: LogCapture,
+	type: AuditEventType,
+	matches: (data: Readonly<Record<string, unknown>>) => boolean,
+	options: AwaitOptions = {},
 ): Promise<CloudEvent> => {
-  const matching = (events: readonly CloudEvent[]): readonly CloudEvent[] =>
-    ofType(events, type).filter((event) => matches(dataOf(event)));
-  const [event, ...more] = matching(
-    await awaitEvents(log, (events) => matching(events).length > 0, options),
-  );
-  assert.equal(more.length, 0, `more than one matching ${type} was recorded`);
-  return event ?? assert.fail(`no matching ${type} was recorded`);
+	const matching = (events: readonly CloudEvent[]): readonly CloudEvent[] =>
+		ofType(events, type).filter((event) => matches(dataOf(event)));
+	const [event, ...more] = matching(await awaitEvents(log, (events) => matching(events).length > 0, options));
+	assert.equal(more.length, 0, `more than one matching ${type} was recorded`);
+	return event ?? assert.fail(`no matching ${type} was recorded`);
 };
 
 /**
@@ -616,11 +552,9 @@ export const awaitEventWhere = async (
  * @param grantId the grant's id.
  */
 export const namingGrant =
-  (
-    grantId: string | undefined,
-  ): ((data: Readonly<Record<string, unknown>>) => boolean) =>
-  (data) =>
-    grantId !== undefined && data['grantId'] === grantId;
+	(grantId: string | undefined): ((data: Readonly<Record<string, unknown>>) => boolean) =>
+	(data) =>
+		grantId !== undefined && data['grantId'] === grantId;
 
 /**
  * The log stream's operational lines: every line carrying no CloudEvents envelope.
@@ -628,7 +562,7 @@ export const namingGrant =
  * @param log the captured log stream.
  */
 export const operationalLines = (log: LogCapture): readonly string[] =>
-  log.lines().filter((line) => cloudEventsIn([line]).length === 0);
+	log.lines().filter((line) => cloudEventsIn([line]).length === 0);
 
 /**
  * How many lines a log stream holds now, as a mark a later read passes over.
@@ -647,29 +581,26 @@ export const markOf = (log: LogCapture): number => log.lines().length;
  * @param log the captured log stream.
  * @param harness the harness, its Controller listening.
  */
-export const markAfterFirstKeys = async (
-  log: LogCapture,
-  harness: Harness,
-): Promise<number> => {
-  await awaitEventsOfType(log, AUDIT_EVENT_TYPES.applicationKeyIssuance, {
-    count: harness.applications.length,
-  });
-  return markOf(log);
+export const markAfterFirstKeys = async (log: LogCapture, harness: Harness): Promise<number> => {
+	await awaitEventsOfType(log, AUDIT_EVENT_TYPES.applicationKeyIssuance, {
+		count: harness.applications.length,
+	});
+	return markOf(log);
 };
 
 /** One `audit_log` row as a test reads it. */
 export interface AuditRow {
-  data: unknown;
-  dataschema: string | null;
-  id: string;
+	data: unknown;
+	dataschema: string | null;
+	id: string;
 
-  /** `occurred_at`, to the store's microsecond, as {@link timeKey} writes an event's `time`. */
-  occurredAtKey: string;
+	/** `occurred_at`, to the store's microsecond, as {@link timeKey} writes an event's `time`. */
+	occurredAtKey: string;
 
-  severity: unknown;
-  source: string;
-  specversion: string;
-  type: string;
+	severity: unknown;
+	source: string;
+	specversion: string;
+	type: string;
 }
 
 const quoted = (name: string): string => pg.escapeIdentifier(name);
@@ -679,14 +610,12 @@ const quoted = (name: string): string => pg.escapeIdentifier(name);
  *
  * @param client a connection under the migration role.
  */
-export const auditRows = async (
-  client: pg.ClientBase,
-): Promise<readonly AuditRow[]> => {
-  const { columns } = POLICY_TABLES.auditLog;
-  const { rows } = await client.query<AuditRow>(
+export const auditRows = async (client: pg.ClientBase): Promise<readonly AuditRow[]> => {
+	const { columns } = POLICY_TABLES.auditLog;
+	const { rows } = await client.query<AuditRow>(
 		`SELECT ${quoted(columns.data)} AS data, ${quoted(columns.dataSchema)} AS dataschema, ${quoted(columns.id)}::text AS id, to_char(${quoted(columns.occurredAt)} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '000' AS "occurredAtKey", ${quoted(columns.severity)} AS severity, ${quoted(columns.source)} AS source, ${quoted(columns.specVersion)} AS specversion, ${quoted(columns.type)} AS type FROM ${qualified(POLICY_TABLES.auditLog)} ORDER BY ${quoted(columns.occurredAt)}, ${quoted(columns.id)}`,
-  );
-  return rows;
+	);
+	return rows;
 };
 
 /**
@@ -695,7 +624,7 @@ export const auditRows = async (
  * @param row the row.
  */
 export const rowDataOf = (row: AuditRow): Readonly<Record<string, unknown>> =>
-  isRecord(row.data) ? row.data : assert.fail("a row's data is not an object");
+	isRecord(row.data) ? row.data : assert.fail("a row's data is not an object");
 
 /**
  * The `audit_log` rows of one type.
@@ -703,11 +632,8 @@ export const rowDataOf = (row: AuditRow): Readonly<Record<string, unknown>> =>
  * @param client a connection under the migration role.
  * @param type the event type, without the prefix.
  */
-export const auditRowsOfType = async (
-  client: pg.ClientBase,
-  type: AuditEventType,
-): Promise<readonly AuditRow[]> =>
-  (await auditRows(client)).filter((row) => row.type === emittedType(type));
+export const auditRowsOfType = async (client: pg.ClientBase, type: AuditEventType): Promise<readonly AuditRow[]> =>
+	(await auditRows(client)).filter((row) => row.type === emittedType(type));
 
 /**
  * The `audit_log` row holding an event, by the event's id, failing the test unless exactly one does.
@@ -715,48 +641,35 @@ export const auditRowsOfType = async (
  * @param rows the rows.
  * @param event the event.
  */
-export const rowOf = (
-  rows: readonly AuditRow[],
-  event: CloudEvent,
-): AuditRow => {
-  const held = rows.filter((row) => row.id === event.id);
-  assert.equal(
-    held.length,
-    1,
-    `audit_log holds ${held.length} rows by one event's id`,
-  );
-  return held[0] ?? assert.fail('no row holds the event');
+export const rowOf = (rows: readonly AuditRow[], event: CloudEvent): AuditRow => {
+	const held = rows.filter((row) => row.id === event.id);
+	assert.equal(held.length, 1, `audit_log holds ${held.length} rows by one event's id`);
+	return held[0] ?? assert.fail('no row holds the event');
 };
 
 const parsedOrNothing = (line: string): unknown => {
-  try {
-    return JSON.parse(line) as unknown;
-  } catch {
-    return undefined;
-  }
+	try {
+		return JSON.parse(line) as unknown;
+	} catch {
+		return undefined;
+	}
 };
 
-const isPlainObject = (
-  value: unknown,
-): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isPlainObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const withoutRefusedSubject = (data: unknown): unknown =>
-  isPlainObject(data)
-    ? Object.fromEntries(
-        Object.entries(data).filter(
-          ([member]) => member !== REFUSED_SUBJECT_MEMBER,
-        ),
-      )
-    : data;
+	isPlainObject(data)
+		? Object.fromEntries(Object.entries(data).filter(([member]) => member !== REFUSED_SUBJECT_MEMBER))
+		: data;
 
 const lineWithoutRefusedSubject = (line: string): string => {
-  const parsed = parsedOrNothing(line);
-  return isPlainObject(parsed) &&
-    isPlainObject(parsed['data']) &&
-    Object.hasOwn(parsed['data'], REFUSED_SUBJECT_MEMBER)
-    ? JSON.stringify({ ...parsed, data: withoutRefusedSubject(parsed['data']) })
-    : line;
+	const parsed = parsedOrNothing(line);
+	return isPlainObject(parsed) &&
+		isPlainObject(parsed['data']) &&
+		Object.hasOwn(parsed['data'], REFUSED_SUBJECT_MEMBER)
+		? JSON.stringify({ ...parsed, data: withoutRefusedSubject(parsed['data']) })
+		: line;
 };
 
 /**
@@ -769,13 +682,13 @@ const lineWithoutRefusedSubject = (line: string): string => {
  * @param rows the `audit_log` rows.
  */
 export const recordedTextsBesideRefusedSubjects = (
-  lines: readonly string[],
-  rows: readonly AuditRow[],
+	lines: readonly string[],
+	rows: readonly AuditRow[],
 ): readonly string[] =>
-  recordedTexts(
-    lines.map(lineWithoutRefusedSubject),
-    rows.map((row) => ({ ...row, data: withoutRefusedSubject(row.data) })),
-  );
+	recordedTexts(
+		lines.map(lineWithoutRefusedSubject),
+		rows.map((row) => ({ ...row, data: withoutRefusedSubject(row.data) })),
+	);
 
 /**
  * Everything a reader of the trail sees: each log line as written, every member and value each line
@@ -784,21 +697,18 @@ export const recordedTextsBesideRefusedSubjects = (
  * @param lines the log stream's lines.
  * @param rows the `audit_log` rows.
  */
-export const recordedTexts = (
-  lines: readonly string[],
-  rows: readonly AuditRow[],
-): readonly string[] => [
-  ...lines,
-  ...lines.flatMap((line) => stringsIn(parsedOrNothing(line))),
-  ...rows.flatMap((row) => [
-    row.id,
-    row.source,
-    row.specversion,
-    row.type,
-    String(row.severity),
-    row.dataschema ?? '',
-    ...stringsIn(row.data),
-  ]),
+export const recordedTexts = (lines: readonly string[], rows: readonly AuditRow[]): readonly string[] => [
+	...lines,
+	...lines.flatMap((line) => stringsIn(parsedOrNothing(line))),
+	...rows.flatMap((row) => [
+		row.id,
+		row.source,
+		row.specversion,
+		row.type,
+		String(row.severity),
+		row.dataschema ?? '',
+		...stringsIn(row.data),
+	]),
 ];
 
 /**
@@ -809,16 +719,15 @@ export const recordedTexts = (
  * @param options whether letter case is ignored: false by default.
  */
 export const valuesFound = (
-  values: readonly string[],
-  texts: readonly string[],
-  { ignoreCase = false }: { ignoreCase?: boolean } = {},
+	values: readonly string[],
+	texts: readonly string[],
+	{ ignoreCase = false }: { ignoreCase?: boolean } = {},
 ): readonly string[] => {
-  const folded = (text: string): string =>
-    ignoreCase ? text.toLowerCase() : text;
-  const searched = texts.map(folded);
-  return values
-    .filter((value) => value.length > 0)
-    .filter((value) => searched.some((text) => text.includes(folded(value))));
+	const folded = (text: string): string => (ignoreCase ? text.toLowerCase() : text);
+	const searched = texts.map(folded);
+	return values
+		.filter((value) => value.length > 0)
+		.filter((value) => searched.some((text) => text.includes(folded(value))));
 };
 
 /**
@@ -828,23 +737,19 @@ export const valuesFound = (
  * @param subject the holder's subject.
  * @param externalId the resource.
  */
-export const liveGrantCount = async (
-  client: pg.ClientBase,
-  subject: string,
-  externalId: string,
-): Promise<number> => {
-  const { grants, resources, userIdentities } = POLICY_TABLES;
-  const { rows } = await client.query<{ count: number }>(
-    `SELECT count(*)::int AS count
+export const liveGrantCount = async (client: pg.ClientBase, subject: string, externalId: string): Promise<number> => {
+	const { grants, resources, userIdentities } = POLICY_TABLES;
+	const { rows } = await client.query<{ count: number }>(
+		`SELECT count(*)::int AS count
        FROM ${qualified(grants)} held
        JOIN ${qualified(userIdentities)} holder ON holder.${quoted(userIdentities.columns.userId)} = held.${quoted(grants.columns.holderUserId)}
        JOIN ${qualified(resources)} resource ON resource.${quoted(resources.columns.id)} = held.${quoted(grants.columns.resourceId)}
       WHERE holder.${quoted(userIdentities.columns.idpSubjectId)} = $1
         AND resource.${quoted(resources.columns.externalId)} = $2
         AND held.${quoted(grants.columns.revokedAt)} IS NULL`,
-    [subject, externalId],
-  );
-  return rows[0]?.count ?? 0;
+		[subject, externalId],
+	);
+	return rows[0]?.count ?? 0;
 };
 
 /**
@@ -855,22 +760,22 @@ export const liveGrantCount = async (
  * @throws when no grant has that id.
  */
 export const storedGrant = async (
-  client: pg.ClientBase,
-  grantId: string,
+	client: pg.ClientBase,
+	grantId: string,
 ): Promise<{ expiresAt: Date | null; revokedAt: Date | null }> => {
-  const { grants } = POLICY_TABLES;
-  const { rows } = await client.query<{
-    expiresAt: Date | null;
-    revokedAt: Date | null;
-  }>(
-    `SELECT ${quoted(grants.columns.expiresAt)} AS "expiresAt", ${quoted(grants.columns.revokedAt)} AS "revokedAt" FROM ${qualified(grants)} WHERE ${quoted(grants.columns.id)}::text = $1`,
-    [grantId],
-  );
-  const [row] = rows;
-  if (row !== undefined) {
-    return row;
-  }
-  throw new Error('no grant has that id');
+	const { grants } = POLICY_TABLES;
+	const { rows } = await client.query<{
+		expiresAt: Date | null;
+		revokedAt: Date | null;
+	}>(
+		`SELECT ${quoted(grants.columns.expiresAt)} AS "expiresAt", ${quoted(grants.columns.revokedAt)} AS "revokedAt" FROM ${qualified(grants)} WHERE ${quoted(grants.columns.id)}::text = $1`,
+		[grantId],
+	);
+	const [row] = rows;
+	if (row !== undefined) {
+		return row;
+	}
+	throw new Error('no grant has that id');
 };
 
 /**
@@ -879,16 +784,13 @@ export const storedGrant = async (
  * @param client a connection under the migration role.
  * @param externalId the externalId.
  */
-export const resourcesNamed = async (
-  client: pg.ClientBase,
-  externalId: string,
-): Promise<readonly string[]> => {
-  const { resources } = POLICY_TABLES;
-  const { rows } = await client.query<{ externalId: string }>(
-    `SELECT ${quoted(resources.columns.externalId)} AS "externalId" FROM ${qualified(resources)} WHERE lower(${quoted(resources.columns.externalId)}) = lower($1)`,
-    [externalId],
-  );
-  return rows.map((row) => row.externalId);
+export const resourcesNamed = async (client: pg.ClientBase, externalId: string): Promise<readonly string[]> => {
+	const { resources } = POLICY_TABLES;
+	const { rows } = await client.query<{ externalId: string }>(
+		`SELECT ${quoted(resources.columns.externalId)} AS "externalId" FROM ${qualified(resources)} WHERE lower(${quoted(resources.columns.externalId)}) = lower($1)`,
+		[externalId],
+	);
+	return rows.map((row) => row.externalId);
 };
 
 /**
@@ -898,20 +800,17 @@ export const resourcesNamed = async (
  * @param externalId the resource.
  * @throws when no resource has that externalId.
  */
-export const retiredAt = async (
-  client: pg.ClientBase,
-  externalId: string,
-): Promise<Date | null> => {
-  const { resources } = POLICY_TABLES;
-  const { rows } = await client.query<{ retiredAt: Date | null }>(
-    `SELECT ${quoted(resources.columns.retiredAt)} AS "retiredAt" FROM ${qualified(resources)} WHERE ${quoted(resources.columns.externalId)} = $1`,
-    [externalId],
-  );
-  const [row] = rows;
-  if (row !== undefined) {
-    return row.retiredAt;
-  }
-  throw new Error('no resource has that externalId');
+export const retiredAt = async (client: pg.ClientBase, externalId: string): Promise<Date | null> => {
+	const { resources } = POLICY_TABLES;
+	const { rows } = await client.query<{ retiredAt: Date | null }>(
+		`SELECT ${quoted(resources.columns.retiredAt)} AS "retiredAt" FROM ${qualified(resources)} WHERE ${quoted(resources.columns.externalId)} = $1`,
+		[externalId],
+	);
+	const [row] = rows;
+	if (row !== undefined) {
+		return row.retiredAt;
+	}
+	throw new Error('no resource has that externalId');
 };
 
 /**
@@ -920,19 +819,16 @@ export const retiredAt = async (
  * @param client a connection under the migration role.
  * @param subject the person's subject.
  */
-export const principalRevocationCount = async (
-  client: pg.ClientBase,
-  subject: string,
-): Promise<number> => {
-  const { principalRevocations, userIdentities } = POLICY_TABLES;
-  const { rows } = await client.query<{ count: number }>(
-    `SELECT count(*)::int AS count
+export const principalRevocationCount = async (client: pg.ClientBase, subject: string): Promise<number> => {
+	const { principalRevocations, userIdentities } = POLICY_TABLES;
+	const { rows } = await client.query<{ count: number }>(
+		`SELECT count(*)::int AS count
        FROM ${qualified(principalRevocations)} revocation
        JOIN ${qualified(userIdentities)} revoked ON revoked.${quoted(userIdentities.columns.userId)} = revocation.${quoted(principalRevocations.columns.userId)}
       WHERE revoked.${quoted(userIdentities.columns.idpSubjectId)} = $1`,
-    [subject],
-  );
-  return rows[0]?.count ?? 0;
+		[subject],
+	);
+	return rows[0]?.count ?? 0;
 };
 
 /**
@@ -945,24 +841,24 @@ export const principalRevocationCount = async (
  * @param runtimeRole the runtime role's name.
  */
 export const changeAuditPrivilege = async (
-  client: pg.ClientBase,
-  change: 'GRANT' | 'REVOKE',
-  privilege: 'DELETE' | 'INSERT' | 'UPDATE',
-  runtimeRole: string,
+	client: pg.ClientBase,
+	change: 'GRANT' | 'REVOKE',
+	privilege: 'DELETE' | 'INSERT' | 'UPDATE',
+	runtimeRole: string,
 ): Promise<void> => {
-  const direction = change === 'GRANT' ? 'TO' : 'FROM';
-  await client.query(
-    `${change} ${privilege} ON ${qualified(POLICY_TABLES.auditLog)} ${direction} ${quoted(runtimeRole)}`,
-  );
+	const direction = change === 'GRANT' ? 'TO' : 'FROM';
+	await client.query(
+		`${change} ${privilege} ON ${qualified(POLICY_TABLES.auditLog)} ${direction} ${quoted(runtimeRole)}`,
+	);
 };
 
 /** How {@link readEveryAuditPage} pages. */
 export interface PagingOptions {
-  /** Work done after each page but the last, such as writing events while the pages are read. */
-  between?: () => Promise<void>;
+	/** Work done after each page but the last, such as writing events while the pages are read. */
+	between?: () => Promise<void>;
 
-  /** The most pages read: 200 by default. */
-  maximumPages?: number;
+	/** The most pages read: 200 by default. */
+	maximumPages?: number;
 }
 
 /**
@@ -975,38 +871,29 @@ export interface PagingOptions {
  * @param options work between pages, and the most pages read.
  */
 export const readEveryAuditPage = async (
-  caller: AdminCaller,
-  query: AuditQuery,
-  { between, maximumPages = 200 }: PagingOptions = {},
+	caller: AdminCaller,
+	query: AuditQuery,
+	{ between, maximumPages = 200 }: PagingOptions = {},
 ): Promise<readonly AuditPage[]> => {
-  const bounded: AuditQuery = { to: new Date().toISOString(), ...query };
-  const from = async (
-    cursor: string | undefined,
-    remaining: number,
-  ): Promise<readonly AuditPage[]> => {
-    assert.ok(remaining > 0, 'the audit log kept answering further pages');
-    const page = auditPageOf(
-      await readAudit(caller, {
-        ...bounded,
-        ...(cursor === undefined ? {} : { cursor }),
-      }),
-    );
-    if (page.next === undefined || page.events.length === 0) {
-      return [page];
-    }
-    await between?.();
-    return [page, ...(await from(page.next, remaining - 1))];
-  };
-  return from(undefined, maximumPages);
+	const bounded: AuditQuery = { to: new Date().toISOString(), ...query };
+	const from = async (cursor: string | undefined, remaining: number): Promise<readonly AuditPage[]> => {
+		assert.ok(remaining > 0, 'the audit log kept answering further pages');
+		const page = auditPageOf(
+			await readAudit(caller, {
+				...bounded,
+				...(cursor === undefined ? {} : { cursor }),
+			}),
+		);
+		if (page.next === undefined || page.events.length === 0) {
+			return [page];
+		}
+		await between?.();
+		return [page, ...(await from(page.next, remaining - 1))];
+	};
+	return from(undefined, maximumPages);
 };
 
-const WARNING_LEVELS: ReadonlySet<string> = new Set([
-  'critical',
-  'error',
-  'fatal',
-  'warn',
-  'warning',
-]);
+const WARNING_LEVELS: ReadonlySet<string> = new Set(['critical', 'error', 'fatal', 'warn', 'warning']);
 
 // The numeric levels common loggers write, pino's among them: 40 is warn.
 const LOWEST_NUMERIC_WARNING = 40;
@@ -1019,11 +906,11 @@ const LOWEST_NUMERIC_WARNING = 40;
  * @param line a log line.
  */
 export const atWarningOrAbove = (line: string): boolean => {
-  const value = jsonObjectOf(line);
-  const level = value[SEVERITY_ATTRIBUTE] ?? value[LOG_LEVEL_MEMBER];
-  return typeof level === 'number'
-    ? level >= LOWEST_NUMERIC_WARNING
-    : WARNING_LEVELS.has(String(level).toLowerCase());
+	const value = jsonObjectOf(line);
+	const level = value[SEVERITY_ATTRIBUTE] ?? value[LOG_LEVEL_MEMBER];
+	return typeof level === 'number'
+		? level >= LOWEST_NUMERIC_WARNING
+		: WARNING_LEVELS.has(String(level).toLowerCase());
 };
 
 /**
@@ -1032,18 +919,18 @@ export const atWarningOrAbove = (line: string): boolean => {
  * @param instant milliseconds since the Unix epoch.
  */
 export const untilInstant = async (instant: number): Promise<void> => {
-  const remaining = instant - Date.now();
-  if (remaining > 0) {
-    await delay(remaining);
-  }
+	const remaining = instant - Date.now();
+	if (remaining > 0) {
+		await delay(remaining);
+	}
 };
 
 const freshSecret = (): string => randomBytes(24).toString('base64url');
 
 /** The person a real Keycloak's realm holds as the administrator, signing in through the management client. */
 export const KEYCLOAK_ADMINISTRATOR = Object.freeze({
-  email: 'admin.one@example.org',
-  username: 'admin.one@example.org',
+	email: 'admin.one@example.org',
+	username: 'admin.one@example.org',
 });
 
 /**
@@ -1056,27 +943,27 @@ export const KEYCLOAK_ADMINISTRATOR = Object.freeze({
  * @param options the first-user role and the management API's audience: the harness's by default.
  */
 export const serviceAccountRealm = ({
-  firstUserRole = 'usher-first-user',
-  managementAudience = 'usher-management-test',
+	firstUserRole = 'usher-first-user',
+	managementAudience = 'usher-management-test',
 }: {
-  firstUserRole?: string;
-  managementAudience?: string;
+	firstUserRole?: string;
+	managementAudience?: string;
 } = {}): KeycloakRealmOptions => ({
-  clients: [
-    { audiences: [managementAudience], clientId: 'usher-ui-test' },
-    {
-      audiences: [managementAudience],
-      clientId: SERVICE_ACCOUNT.clientId,
-      secret: freshSecret(),
-    },
-  ],
-  people: [
-    {
-      ...KEYCLOAK_ADMINISTRATOR,
-      password: freshSecret(),
-      realmRoles: [firstUserRole],
-    },
-  ],
-  realm: 'usher-test',
-  realmRoles: [firstUserRole],
+	clients: [
+		{ audiences: [managementAudience], clientId: 'usher-ui-test' },
+		{
+			audiences: [managementAudience],
+			clientId: SERVICE_ACCOUNT.clientId,
+			secret: freshSecret(),
+		},
+	],
+	people: [
+		{
+			...KEYCLOAK_ADMINISTRATOR,
+			password: freshSecret(),
+			realmRoles: [firstUserRole],
+		},
+	],
+	realm: 'usher-test',
+	realmRoles: [firstUserRole],
 });

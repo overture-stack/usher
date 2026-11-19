@@ -4,7 +4,7 @@ import { suite, test } from 'node:test';
 import * as strictJson from './index.js';
 
 suite('the strict JSON module', () => {
-  test('exports at run time exactly the values its surface names', () => {
-    assert.deepEqual(Object.keys(strictJson).toSorted(), ['readStrictJson']);
-  });
+	test('exports at run time exactly the values its surface names', () => {
+		assert.deepEqual(Object.keys(strictJson).toSorted(), ['readStrictJson']);
+	});
 });

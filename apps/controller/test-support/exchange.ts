@@ -3,28 +3,23 @@ import { webcrypto } from 'node:crypto';
 import type { Clock } from '@overture-stack/usher-express-bridge';
 import { type NonEmpty, PAYLOAD_VERSION } from '@overture-stack/usher-types';
 
-import {
-  createChannelAssertion,
-  createTokenReader,
-  importApplicationKey,
-  type TokenReading,
-} from './bridgeWire.js';
+import { createChannelAssertion, createTokenReader, importApplicationKey, type TokenReading } from './bridgeWire.js';
 import type { ControllerApplication } from './controller.js';
 import type { IdentityProvider, MintOptions } from './identityProvider.js';
 
 /** A person as the tests name one: the identity provider's subject for them, and their address. */
 export interface Person {
-  /** An address at example.org. */
-  email: string;
+	/** An address at example.org. */
+	email: string;
 
-  subject: string;
+	subject: string;
 }
 
 /** An answer as a test reads it: the status, the headers and the body's text. */
 export interface WireResponse {
-  body: string;
-  headers: Headers;
-  status: number;
+	body: string;
+	headers: Headers;
+	status: number;
 }
 
 /**
@@ -32,50 +27,49 @@ export interface WireResponse {
  * rest are for the malformed-request tests.
  */
 export interface ExchangeRequest {
-  /** The application whose channel assertion authenticates the exchange, signed under its key. */
-  application: ControllerApplication;
+	/** The application whose channel assertion authenticates the exchange, signed under its key. */
+	application: ControllerApplication;
 
-  /** A channel assertion sent in place of a fresh one; `null` sends no `authorization` header. */
-  assertion?: string | null;
+	/** A channel assertion sent in place of a fresh one; `null` sends no `authorization` header. */
+	assertion?: string | null;
 
-  /** A raw body sent in place of the JSON the Bridge builds. */
-  body?: string;
+	/** A raw body sent in place of the JSON the Bridge builds. */
+	body?: string;
 
-  /**
-   * The person's credential: a sign-in token, or an opaque credential such as an API key. Absent or
-   * `null` for the anonymous exchange, whose body carries no `credential`.
-   */
-  credential?: string | null;
+	/**
+	 * The person's credential: a sign-in token, or an opaque credential such as an API key. Absent or
+	 * `null` for the anonymous exchange, whose body carries no `credential`.
+	 */
+	credential?: string | null;
 
-  /** Members merged over the body's own, so one can also replace `credential` or `payloadVersions`. */
-  extraMembers?: Readonly<Record<string, unknown>>;
+	/** Members merged over the body's own, so one can also replace `credential` or `payloadVersions`. */
+	extraMembers?: Readonly<Record<string, unknown>>;
 
-  /** Headers merged over the Bridge's, by lower-case name; one set to `undefined` is left out. */
-  headers?: Readonly<Record<string, string | undefined>>;
+	/** Headers merged over the Bridge's, by lower-case name; one set to `undefined` is left out. */
+	headers?: Readonly<Record<string, string | undefined>>;
 
-  /** The payload versions listed: `[1]`, the version usher-types reads, by default. */
-  payloadVersions?: readonly number[];
+	/** The payload versions listed: `[1]`, the version usher-types reads, by default. */
+	payloadVersions?: readonly number[];
 
-  signal?: AbortSignal;
+	signal?: AbortSignal;
 }
 
 /** What reading an Usher token needs beyond the token. */
 export interface UsherTokenReadOptions {
-  /** The application the token was issued for: its id is the audience, its key decrypts. */
-  application: ControllerApplication;
+	/** The application the token was issued for: its id is the audience, its key decrypts. */
+	application: ControllerApplication;
 
-  /** The Controller's issuer, which the token's `iss` must be. */
-  issuer: string;
+	/** The Controller's issuer, which the token's `iss` must be. */
+	issuer: string;
 
-  /** The payload versions the reader accepts: `[1]` by default. */
-  payloadVersions?: NonEmpty<number>;
+	/** The payload versions the reader accepts: `[1]` by default. */
+	payloadVersions?: NonEmpty<number>;
 
-  /** The clock `exp` is checked against: the system's by default. */
-  wallClock?: Clock;
+	/** The clock `exp` is checked against: the system's by default. */
+	wallClock?: Clock;
 }
 
-const person = (email: string, subject: string): Person =>
-  Object.freeze({ email, subject });
+const person = (email: string, subject: string): Person => Object.freeze({ email, subject });
 
 /**
  * The people the tests name, one cast for every ticket, each an invented subject and an example.org
@@ -91,24 +85,21 @@ const person = (email: string, subject: string): Person =>
  * (`wildcardLookalike`, `axbyz`).
  */
 export const PEOPLE = Object.freeze({
-  administrator: person('admin@example.org', 'admin-0001'),
-  ana: person('ana@example.org', '0b7c2f1e-5d1a-4c3e-9f2a-6e8d4b1a7c90'),
-  bo: person('bo@example.org', 'auth0|bo+test/='),
-  cy: person('cy@example.org', 'cy-CASE'),
-  cy2: person('cy2@example.org', 'cy-case'),
-  dana: person('dana@example.org', '5d7a3e90-b8c4-4f21-8e6b-0a9c7d2f1e43'),
-  eli: person('eli@example.org', 'e1b6f2a8-9d03-4c7e-b5a4-6f8e0c3d2a17'),
-  emile: person('emile@example.org', 'émile-ü'),
-  fen: person('fen@example.org', '9c3e7a14-6b2d-4f80-a1e9-d4b8c5f07e62'),
-  long: person(
-    'long@example.org',
-    'long-'.padEnd(255, 'abcdefghijklmnopqrstuvwxyz0123456789'),
-  ),
-  markup: person('markup@example.org', 'q"b\\l\nu  </script>'),
-  owner: person('owner@example.org', 'owner-0001'),
-  quoted: person('quoted@example.org', 'auth0|a"b\\c'),
-  wildcard: person('wildcard@example.org', 'a_b%'),
-  wildcardLookalike: person('lookalike@example.org', 'axbyz'),
+	administrator: person('admin@example.org', 'admin-0001'),
+	ana: person('ana@example.org', '0b7c2f1e-5d1a-4c3e-9f2a-6e8d4b1a7c90'),
+	bo: person('bo@example.org', 'auth0|bo+test/='),
+	cy: person('cy@example.org', 'cy-CASE'),
+	cy2: person('cy2@example.org', 'cy-case'),
+	dana: person('dana@example.org', '5d7a3e90-b8c4-4f21-8e6b-0a9c7d2f1e43'),
+	eli: person('eli@example.org', 'e1b6f2a8-9d03-4c7e-b5a4-6f8e0c3d2a17'),
+	emile: person('emile@example.org', 'émile-ü'),
+	fen: person('fen@example.org', '9c3e7a14-6b2d-4f80-a1e9-d4b8c5f07e62'),
+	long: person('long@example.org', 'long-'.padEnd(255, 'abcdefghijklmnopqrstuvwxyz0123456789')),
+	markup: person('markup@example.org', 'q"b\\l\nu  </script>'),
+	owner: person('owner@example.org', 'owner-0001'),
+	quoted: person('quoted@example.org', 'auth0|a"b\\c'),
+	wildcard: person('wildcard@example.org', 'a_b%'),
+	wildcardLookalike: person('lookalike@example.org', 'axbyz'),
 });
 
 /** A person's name in {@link PEOPLE}. */
@@ -124,20 +115,15 @@ export const SYSTEM_CLOCK: Clock = Object.freeze({ now: () => Date.now() });
  * @param overrides a test's headers.
  */
 export const mergedHeaders = (
-  defaults: Readonly<Record<string, string>>,
-  overrides: Readonly<Record<string, string | undefined>> = {},
+	defaults: Readonly<Record<string, string>>,
+	overrides: Readonly<Record<string, string | undefined>> = {},
 ): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries({
-      ...defaults,
-      ...Object.fromEntries(
-        Object.entries(overrides).map(([name, value]) => [
-          name.toLowerCase(),
-          value,
-        ]),
-      ),
-    }).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])),
-  );
+	Object.fromEntries(
+		Object.entries({
+			...defaults,
+			...Object.fromEntries(Object.entries(overrides).map(([name, value]) => [name.toLowerCase(), value])),
+		}).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])),
+	);
 
 /**
  * Signs a fresh channel assertion for an application as the Bridge signs one, under the HKDF subkey
@@ -145,15 +131,13 @@ export const mergedHeaders = (
  *
  * @param application the application the assertion names as its issuer.
  */
-export const freshAssertion = async (
-  application: ControllerApplication,
-): Promise<string> => {
-  const { channelAssertionKey } = await importApplicationKey(application.key);
-  return createChannelAssertion({
-    application: application.id,
-    assertionKey: channelAssertionKey,
-    wallClock: SYSTEM_CLOCK,
-  })();
+export const freshAssertion = async (application: ControllerApplication): Promise<string> => {
+	const { channelAssertionKey } = await importApplicationKey(application.key);
+	return createChannelAssertion({
+		application: application.id,
+		assertionKey: channelAssertionKey,
+		wallClock: SYSTEM_CLOCK,
+	})();
 };
 
 /**
@@ -164,15 +148,15 @@ export const freshAssertion = async (
  * @param assertion a given assertion, or `null` for none.
  */
 export const authorizationFor = async (
-  application: ControllerApplication,
-  assertion: string | null | undefined,
+	application: ControllerApplication,
+	assertion: string | null | undefined,
 ): Promise<Readonly<Record<string, string>>> => {
-  if (assertion === null) {
-    return {};
-  }
-  return {
-    authorization: `Bearer ${assertion ?? (await freshAssertion(application))}`,
-  };
+	if (assertion === null) {
+		return {};
+	}
+	return {
+		authorization: `Bearer ${assertion ?? (await freshAssertion(application))}`,
+	};
 };
 
 /**
@@ -186,45 +170,43 @@ export const authorizationFor = async (
  * @param request the application, the credential and any departure from the Bridge's request.
  */
 export const exchange = async (
-  controllerUrl: URL,
-  {
-    application,
-    assertion,
-    body,
-    credential,
-    extraMembers = {},
-    headers = {},
-    payloadVersions = [PAYLOAD_VERSION],
-    signal,
-  }: ExchangeRequest,
+	controllerUrl: URL,
+	{
+		application,
+		assertion,
+		body,
+		credential,
+		extraMembers = {},
+		headers = {},
+		payloadVersions = [PAYLOAD_VERSION],
+		signal,
+	}: ExchangeRequest,
 ): Promise<WireResponse> => {
-  const response = await fetch(new URL('exchange', controllerUrl), {
-    body:
-      body ??
-      JSON.stringify({
-        ...(credential === undefined || credential === null
-          ? {}
-          : { credential }),
-        payloadVersions,
-        ...extraMembers,
-      }),
-    headers: mergedHeaders(
-      {
-        accept: 'application/jwt',
-        ...(await authorizationFor(application, assertion)),
-        'content-type': 'application/json',
-      },
-      headers,
-    ),
-    method: 'POST',
-    redirect: 'manual',
-    ...(signal === undefined ? {} : { signal }),
-  });
-  return {
-    body: await response.text(),
-    headers: response.headers,
-    status: response.status,
-  };
+	const response = await fetch(new URL('exchange', controllerUrl), {
+		body:
+			body ??
+			JSON.stringify({
+				...(credential === undefined || credential === null ? {} : { credential }),
+				payloadVersions,
+				...extraMembers,
+			}),
+		headers: mergedHeaders(
+			{
+				accept: 'application/jwt',
+				...(await authorizationFor(application, assertion)),
+				'content-type': 'application/json',
+			},
+			headers,
+		),
+		method: 'POST',
+		redirect: 'manual',
+		...(signal === undefined ? {} : { signal }),
+	});
+	return {
+		body: await response.text(),
+		headers: response.headers,
+		status: response.status,
+	};
 };
 
 const COMPACT_JWE = /^[\w-]+\.[\w-]*\.[\w-]+\.[\w-]+\.[\w-]+$/u;
@@ -234,8 +216,7 @@ const COMPACT_JWE = /^[\w-]+\.[\w-]*\.[\w-]+\.[\w-]+\.[\w-]+$/u;
  *
  * @param body the answer's body.
  */
-export const carriesToken = (body: string): boolean =>
-  COMPACT_JWE.test(body.trim());
+export const carriesToken = (body: string): boolean => COMPACT_JWE.test(body.trim());
 
 /**
  * The headers whose value differs between any two answers by its nature, whatever was answered: the
@@ -244,28 +225,28 @@ export const carriesToken = (body: string): boolean =>
  * `traceparent` and `tracestate`, and the common tracing headers).
  */
 export const PER_ANSWER_HEADERS: ReadonlySet<string> = new Set([
-  'date',
-  'request-id',
-  'traceparent',
-  'tracestate',
-  'x-amzn-trace-id',
-  'x-correlation-id',
-  'x-request-id',
-  'x-trace-id',
+	'date',
+	'request-id',
+	'traceparent',
+	'tracestate',
+	'x-amzn-trace-id',
+	'x-correlation-id',
+	'x-request-id',
+	'x-trace-id',
 ]);
 
 /** A refusal in the form two refusals that must be identical on the wire are compared by. */
 export interface ComparableWireRefusal {
-  /** The body's text, exactly as received. */
-  body: string;
+	/** The body's text, exactly as received. */
+	body: string;
 
-  /**
-   * Every header by lower-case name, sorted by name, each with its value; a header of
-   * {@link PER_ANSWER_HEADERS} with its value left out, its name kept.
-   */
-  headers: readonly (readonly [string, string | null])[];
+	/**
+	 * Every header by lower-case name, sorted by name, each with its value; a header of
+	 * {@link PER_ANSWER_HEADERS} with its value left out, its name kept.
+	 */
+	headers: readonly (readonly [string, string | null])[];
 
-  status: number;
+	status: number;
 }
 
 /**
@@ -278,17 +259,15 @@ export interface ComparableWireRefusal {
  *
  * @param answer the exchange's or the poll's answer.
  */
-export const comparableWireRefusal = (
-  answer: WireResponse,
-): ComparableWireRefusal => ({
-  body: answer.body,
-  headers: [...answer.headers]
-    .map(([name, value]): readonly [string, string | null] => [
-      name.toLowerCase(),
-      PER_ANSWER_HEADERS.has(name.toLowerCase()) ? null : value,
-    ])
-    .toSorted(([first], [second]) => first.localeCompare(second)),
-  status: answer.status,
+export const comparableWireRefusal = (answer: WireResponse): ComparableWireRefusal => ({
+	body: answer.body,
+	headers: [...answer.headers]
+		.map(([name, value]): readonly [string, string | null] => [
+			name.toLowerCase(),
+			PER_ANSWER_HEADERS.has(name.toLowerCase()) ? null : value,
+		])
+		.toSorted(([first], [second]) => first.localeCompare(second)),
+	status: answer.status,
 });
 
 /**
@@ -299,22 +278,17 @@ export const comparableWireRefusal = (
  * @param options the application, the Controller's issuer, and the reader's versions and clock.
  */
 export const readUsherToken = async (
-  body: string,
-  {
-    application,
-    issuer,
-    payloadVersions = [PAYLOAD_VERSION],
-    wallClock = SYSTEM_CLOCK,
-  }: UsherTokenReadOptions,
+	body: string,
+	{ application, issuer, payloadVersions = [PAYLOAD_VERSION], wallClock = SYSTEM_CLOCK }: UsherTokenReadOptions,
 ): Promise<TokenReading> => {
-  const { tokenKey } = await importApplicationKey(application.key);
-  return createTokenReader({
-    audience: application.id,
-    issuer,
-    payloadVersions,
-    tokenKey,
-    wallClock,
-  }).read(body.trim());
+	const { tokenKey } = await importApplicationKey(application.key);
+	return createTokenReader({
+		audience: application.id,
+		issuer,
+		payloadVersions,
+		tokenKey,
+		wallClock,
+	}).read(body.trim());
 };
 
 /**
@@ -324,14 +298,11 @@ export const readUsherToken = async (
  * @param person who signs in.
  * @param application the application's id, the audience.
  */
-export const signInClaims = (
-  person: Person,
-  application: string,
-): Readonly<Record<string, unknown>> => ({
-  aud: [application],
-  email: person.email,
-  preferred_username: person.email,
-  sub: person.subject,
+export const signInClaims = (person: Person, application: string): Readonly<Record<string, unknown>> => ({
+	aud: [application],
+	email: person.email,
+	preferred_username: person.email,
+	sub: person.subject,
 });
 
 /**
@@ -343,24 +314,23 @@ export const signInClaims = (
  * @param options claims and header members over these, and the key and lifetime.
  */
 export const mintSignInToken = (
-  provider: IdentityProvider,
-  person: Person,
-  application: string,
-  options: MintOptions = {},
+	provider: IdentityProvider,
+	person: Person,
+	application: string,
+	options: MintOptions = {},
 ): Promise<string> =>
-  provider.mint({
-    ...options,
-    claims: { ...signInClaims(person, application), ...options.claims },
-  });
+	provider.mint({
+		...options,
+		claims: { ...signInClaims(person, application), ...options.claims },
+	});
 
 /**
  * An application key's 32 bytes.
  *
  * @param application the application.
  */
-export const applicationKeyBytes = (
-  application: ControllerApplication,
-): Uint8Array => new Uint8Array(Buffer.from(application.key, 'base64url'));
+export const applicationKeyBytes = (application: ControllerApplication): Uint8Array =>
+	new Uint8Array(Buffer.from(application.key, 'base64url'));
 
 /**
  * Imports 32 bytes as an AES-GCM key for decryption alone, the form in which the Bridge holds its
@@ -368,16 +338,8 @@ export const applicationKeyBytes = (
  *
  * @param bytes the key's bytes.
  */
-export const decryptionKey = (
-  bytes: Uint8Array,
-): Promise<webcrypto.CryptoKey> =>
-  webcrypto.subtle.importKey(
-    'raw',
-    bytes,
-    { length: 256, name: 'AES-GCM' },
-    false,
-    ['decrypt'],
-  );
+export const decryptionKey = (bytes: Uint8Array): Promise<webcrypto.CryptoKey> =>
+	webcrypto.subtle.importKey('raw', bytes, { length: 256, name: 'AES-GCM' }, false, ['decrypt']);
 
 /**
  * Reads an exchange's answer through the Bridge's token reader under a key of the test's choosing,
@@ -388,17 +350,13 @@ export const decryptionKey = (
  * @param options the audience and issuer pinned, and the key.
  */
 export const readUnderKey = (
-  body: string,
-  {
-    audience,
-    issuer,
-    tokenKey,
-  }: { audience: string; issuer: string; tokenKey: webcrypto.CryptoKey },
+	body: string,
+	{ audience, issuer, tokenKey }: { audience: string; issuer: string; tokenKey: webcrypto.CryptoKey },
 ): Promise<TokenReading> =>
-  createTokenReader({
-    audience,
-    issuer,
-    payloadVersions: [PAYLOAD_VERSION],
-    tokenKey,
-    wallClock: SYSTEM_CLOCK,
-  }).read(body.trim());
+	createTokenReader({
+		audience,
+		issuer,
+		payloadVersions: [PAYLOAD_VERSION],
+		tokenKey,
+		wallClock: SYSTEM_CLOCK,
+	}).read(body.trim());

@@ -1,8 +1,4 @@
-import {
-  type AuditEvent,
-  eventInstant,
-  REFUSED_SUBJECT_MAXIMUM_LENGTH,
-} from '../eventLog/index.js';
+import { type AuditEvent, eventInstant, REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import type { SignInRefusal, StoredRefusal } from '../signInTokens/index.js';
 import type { ConferringRule } from '../tokenCalculation/index.js';
 import type { WindowClosing } from '../windowedRefusals/index.js';
@@ -18,33 +14,29 @@ export type ExchangeFault = 'identityProviderUnavailable' | 'storedSettingsInval
  * which a made-up key id or a routine key rotation produces, so no fault in the Controller; a service
  * account's token (`serviceAccountNotPermitted`); or the store's refusal of the principal.
  */
-export type ExchangeDenial =
-  | SignInRefusal
-  | StoredRefusal
-  | 'serviceAccountNotPermitted'
-  | 'signingKeyUnconfirmed';
+export type ExchangeDenial = SignInRefusal | StoredRefusal | 'serviceAccountNotPermitted' | 'signingKeyUnconfirmed';
 
 /** An Usher token issued, as its `token.exchange` records it. */
 export interface Issuance {
-  /** The application the token was issued for. */
-  audience: string;
+	/** The application the token was issued for. */
+	audience: string;
 
-  /** When its permissions were computed, in seconds since the Unix epoch. */
-  generatedAt: number;
+	/** When its permissions were computed, in seconds since the Unix epoch. */
+	generatedAt: number;
 
-  /** The recorded grants that reached it. */
-  grantCount: number;
+	/** The recorded grants that reached it. */
+	grantCount: number;
 
-  /** The rules that conferred an entry. */
-  rules: readonly ConferringRule[];
+	/** The rules that conferred an entry. */
+	rules: readonly ConferringRule[];
 
-  sourceIp: string;
+	sourceIp: string;
 
-  /** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
-  subject: string | null;
+	/** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
+	subject: string | null;
 
-  /** Its lifetime, `exp` less `iat`, in seconds. */
-  tokenTtl: number;
+	/** Its lifetime, `exp` less `iat`, in seconds. */
+	tokenTtl: number;
 }
 
 const TYPE = 'token.exchange';
@@ -57,26 +49,26 @@ const TYPE = 'token.exchange';
  * @param issuance what was issued, and for whom.
  */
 export const issuedExchangeEvent = ({
-  audience,
-  generatedAt,
-  grantCount,
-  rules,
-  sourceIp,
-  subject,
-  tokenTtl,
+	audience,
+	generatedAt,
+	grantCount,
+	rules,
+	sourceIp,
+	subject,
+	tokenTtl,
 }: Issuance): AuditEvent => ({
-  data: {
-    audience,
-    generatedAt: eventInstant(generatedAt * 1000),
-    grantCount,
-    result: 'succeeded',
-    rules: [...rules],
-    sourceIp,
-    tokenTtl,
-    userId: subject,
-  },
-  severity: 'info',
-  type: TYPE,
+	data: {
+		audience,
+		generatedAt: eventInstant(generatedAt * 1000),
+		grantCount,
+		result: 'succeeded',
+		rules: [...rules],
+		sourceIp,
+		tokenTtl,
+		userId: subject,
+	},
+	severity: 'info',
+	type: TYPE,
 });
 
 /**
@@ -92,43 +84,42 @@ export const issuedExchangeEvent = ({
  *   named, and the request's address.
  */
 export const deniedExchangeEvent = ({
-  applicationId,
-  reason,
-  refusedSubject,
-  sourceIp,
+	applicationId,
+	reason,
+	refusedSubject,
+	sourceIp,
 }: {
-  applicationId?: string;
-  reason: ExchangeDenial;
-  refusedSubject?: string;
-  sourceIp: string;
+	applicationId?: string;
+	reason: ExchangeDenial;
+	refusedSubject?: string;
+	sourceIp: string;
 }): AuditEvent => ({
-  data: {
-    ...(applicationId === undefined ? {} : { applicationId }),
-    reason,
-    ...(refusedSubject !== undefined &&
-    refusedSubject.length <= REFUSED_SUBJECT_MAXIMUM_LENGTH
-      ? { refusedSubject }
-      : {}),
-    result: 'denied',
-    sourceIp,
-    userId: null,
-  },
-  severity: 'warning',
-  type: TYPE,
+	data: {
+		...(applicationId === undefined ? {} : { applicationId }),
+		reason,
+		...(refusedSubject !== undefined && refusedSubject.length <= REFUSED_SUBJECT_MAXIMUM_LENGTH
+			? { refusedSubject }
+			: {}),
+		result: 'denied',
+		sourceIp,
+		userId: null,
+	},
+	severity: 'warning',
+	type: TYPE,
 });
 
 /** An Usher token not issued for passing the token limit, as its `token.exchange` records it. */
 export interface OverLimitToken {
-  /** How many resources its payload holds an entry for. */
-  heldResourceCount: number;
+	/** How many resources its payload holds an entry for. */
+	heldResourceCount: number;
 
-  sourceIp: string;
+	sourceIp: string;
 
-  /** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
-  subject: string | null;
+	/** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
+	subject: string | null;
 
-  /** Its size in bytes, as the `200` body would have sent it. */
-  tokenBytes: number;
+	/** Its size in bytes, as the `200` body would have sent it. */
+	tokenBytes: number;
 }
 
 /**
@@ -140,21 +131,21 @@ export interface OverLimitToken {
  * @param token the token's subject, its size and the resources it holds, and the request's address.
  */
 export const overLimitExchangeEvent = ({
-  heldResourceCount,
-  sourceIp,
-  subject,
-  tokenBytes,
+	heldResourceCount,
+	sourceIp,
+	subject,
+	tokenBytes,
 }: OverLimitToken): AuditEvent => ({
-  data: {
-    heldResourceCount,
-    reason: 'tokenOverResponseCap',
-    result: 'failed',
-    sourceIp,
-    tokenBytes,
-    userId: subject,
-  },
-  severity: 'error',
-  type: TYPE,
+	data: {
+		heldResourceCount,
+		reason: 'tokenOverResponseCap',
+		result: 'failed',
+		sourceIp,
+		tokenBytes,
+		userId: subject,
+	},
+	severity: 'error',
+	type: TYPE,
 });
 
 /**
@@ -163,16 +154,10 @@ export const overLimitExchangeEvent = ({
  *
  * @param failure the code answered, and the request's address.
  */
-export const failedExchangeEvent = ({
-  reason,
-  sourceIp,
-}: {
-  reason: ExchangeFault;
-  sourceIp: string;
-}): AuditEvent => ({
-  data: { reason, result: 'failed', sourceIp, userId: null },
-  severity: 'error',
-  type: TYPE,
+export const failedExchangeEvent = ({ reason, sourceIp }: { reason: ExchangeFault; sourceIp: string }): AuditEvent => ({
+	data: { reason, result: 'failed', sourceIp, userId: null },
+	severity: 'error',
+	type: TYPE,
 });
 
 /**
@@ -184,21 +169,21 @@ export const failedExchangeEvent = ({
  * @param closing the window as it closed.
  */
 export const exchangeRefusalTallyEvent = ({
-  applicationId,
-  count,
-  firstSeenAt,
-  lastSeenAt,
-  reason,
-  windowId,
+	applicationId,
+	count,
+	firstSeenAt,
+	lastSeenAt,
+	reason,
+	windowId,
 }: WindowClosing): AuditEvent => ({
-  data: {
-    ...(applicationId === undefined ? {} : { applicationId }),
-    count,
-    firstSeenAt: eventInstant(firstSeenAt),
-    lastSeenAt: eventInstant(lastSeenAt),
-    reason,
-    ...(windowId === undefined ? {} : { windowId }),
-  },
-  severity: 'warning',
-  type: 'token.exchangeRefusalTally',
+	data: {
+		...(applicationId === undefined ? {} : { applicationId }),
+		count,
+		firstSeenAt: eventInstant(firstSeenAt),
+		lastSeenAt: eventInstant(lastSeenAt),
+		reason,
+		...(windowId === undefined ? {} : { windowId }),
+	},
+	severity: 'warning',
+	type: 'token.exchangeRefusalTally',
 });

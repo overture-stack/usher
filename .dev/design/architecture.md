@@ -250,9 +250,9 @@ and the Lyric adapter after it.
 - Intercepting incoming data requests before they reach the data layer
 - Calling the Bridge to get the current `PermissionsPayload` for the requesting user
 - Translating that payload into the application's query filter format:
-  - The Arranger adapter: SQON filter object injected as a server-side filter in Arranger's GraphQL
-    layer
-  - The Lyric adapter: query conditions injected into Lyric's data access layer
+    - The Arranger adapter: SQON filter object injected as a server-side filter in Arranger's GraphQL
+      layer
+    - The Lyric adapter: query conditions injected into Lyric's data access layer
 - Returning 401 or 503 to the principal when the Bridge signals an invalid or uncertain session
 
 **Does not own:**

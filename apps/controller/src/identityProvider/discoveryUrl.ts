@@ -5,4 +5,4 @@
  * @param issuer the issuer, as its tokens carry it.
  */
 export const discoveryUrl = (issuer: string): URL =>
-  new URL(`${issuer.replace(/\/$/u, '')}/.well-known/openid-configuration`);
+	new URL(`${issuer.replace(/\/$/u, '')}/.well-known/openid-configuration`);

@@ -5,8 +5,8 @@ import { defaultSeams } from './core/defaultSeams.js';
 
 /** What a host may hand the Bridge beside its configuration. */
 export interface BridgeOptions {
-  /** A fetch to reach the Controller with, in place of the Bridge's own. */
-  fetch?: ControllerFetch;
+	/** A fetch to reach the Controller with, in place of the Bridge's own. */
+	fetch?: ControllerFetch;
 }
 
 /**
@@ -17,8 +17,5 @@ export interface BridgeOptions {
  * @param options `fetch` reaches the Controller in place of undici's fetch through an Agent of the
  *   core's own, which a global dispatcher set by the host never replaces.
  */
-export const createBridgeCore = (
-  configuration: BridgeConfiguration,
-  options: BridgeOptions = {},
-): BridgeCore =>
-  createBridgeCoreWithSeams(configuration, defaultSeams(options));
+export const createBridgeCore = (configuration: BridgeConfiguration, options: BridgeOptions = {}): BridgeCore =>
+	createBridgeCoreWithSeams(configuration, defaultSeams(options));

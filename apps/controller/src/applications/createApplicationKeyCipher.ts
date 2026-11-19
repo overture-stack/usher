@@ -1,10 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createSecretKey,
-  hkdfSync,
-  randomBytes,
-} from 'node:crypto';
+import { createCipheriv, createDecipheriv, createSecretKey, hkdfSync, randomBytes } from 'node:crypto';
 
 import type { ApplicationKeyCipher, ApplicationKeyIdentity } from './types.js';
 
@@ -30,7 +24,7 @@ const NO_SALT = Buffer.alloc(0);
 // sealed key copied onto another row fails to open rather than letting one application pass as
 // another.
 const boundTo = ({ applicationId, keyId }: ApplicationKeyIdentity): Buffer =>
-  Buffer.from(`${SEAL_LABEL}\n${applicationId}\n${keyId}`, 'utf8');
+	Buffer.from(`${SEAL_LABEL}\n${applicationId}\n${keyId}`, 'utf8');
 
 /**
  * Creates the cipher stored application keys are sealed under: AES-256-GCM, under an HKDF-SHA256
@@ -41,51 +35,40 @@ const boundTo = ({ applicationId, keyId }: ApplicationKeyIdentity): Buffer =>
  *
  * @param keyEncryptionKey the key-encryption key: 43 base64url characters in canonical form.
  */
-export const createApplicationKeyCipher = (
-  keyEncryptionKey: string,
-): ApplicationKeyCipher => {
-  const bytes = Buffer.from(keyEncryptionKey, 'base64url');
-  const derived = Buffer.from(
-    hkdfSync('sha256', bytes, NO_SALT, SEAL_LABEL, 32),
-  );
-  const subkey = createSecretKey(derived);
-  bytes.fill(0);
-  derived.fill(0);
-  return {
-    open: (identity, sealed) => {
-      if (sealed.length !== SEALED_BYTES || sealed[0] !== FORM) {
-        return undefined;
-      }
-      const nonce = sealed.subarray(1, 1 + NONCE_BYTES);
-      const encrypted = sealed.subarray(1 + NONCE_BYTES, -TAG_BYTES);
-      try {
-        const decipher = createDecipheriv('aes-256-gcm', subkey, nonce, {
-          authTagLength: TAG_BYTES,
-        })
-          .setAAD(boundTo(identity))
-          .setAuthTag(sealed.subarray(-TAG_BYTES));
-        return Buffer.concat([decipher.update(encrypted), decipher.final()]);
-      } catch {
-        return undefined;
-      }
-    },
-    seal: (identity, key) => {
-      if (key.length !== APPLICATION_KEY_BYTES) {
-        throw new RangeError(
-          `an application key is ${APPLICATION_KEY_BYTES} bytes`,
-        );
-      }
-      const nonce = randomBytes(NONCE_BYTES);
-      const cipher = createCipheriv('aes-256-gcm', subkey, nonce, {
-        authTagLength: TAG_BYTES,
-      }).setAAD(boundTo(identity));
-      const encrypted = Buffer.concat([cipher.update(key), cipher.final()]);
-      return Buffer.concat([
-        Buffer.of(FORM),
-        nonce,
-        encrypted,
-        cipher.getAuthTag(),
-      ]);
-    },
-  };
+export const createApplicationKeyCipher = (keyEncryptionKey: string): ApplicationKeyCipher => {
+	const bytes = Buffer.from(keyEncryptionKey, 'base64url');
+	const derived = Buffer.from(hkdfSync('sha256', bytes, NO_SALT, SEAL_LABEL, 32));
+	const subkey = createSecretKey(derived);
+	bytes.fill(0);
+	derived.fill(0);
+	return {
+		open: (identity, sealed) => {
+			if (sealed.length !== SEALED_BYTES || sealed[0] !== FORM) {
+				return undefined;
+			}
+			const nonce = sealed.subarray(1, 1 + NONCE_BYTES);
+			const encrypted = sealed.subarray(1 + NONCE_BYTES, -TAG_BYTES);
+			try {
+				const decipher = createDecipheriv('aes-256-gcm', subkey, nonce, {
+					authTagLength: TAG_BYTES,
+				})
+					.setAAD(boundTo(identity))
+					.setAuthTag(sealed.subarray(-TAG_BYTES));
+				return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+			} catch {
+				return undefined;
+			}
+		},
+		seal: (identity, key) => {
+			if (key.length !== APPLICATION_KEY_BYTES) {
+				throw new RangeError(`an application key is ${APPLICATION_KEY_BYTES} bytes`);
+			}
+			const nonce = randomBytes(NONCE_BYTES);
+			const cipher = createCipheriv('aes-256-gcm', subkey, nonce, {
+				authTagLength: TAG_BYTES,
+			}).setAAD(boundTo(identity));
+			const encrypted = Buffer.concat([cipher.update(key), cipher.final()]);
+			return Buffer.concat([Buffer.of(FORM), nonce, encrypted, cipher.getAuthTag()]);
+		},
+	};
 };

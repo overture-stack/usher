@@ -14,11 +14,8 @@ export const SHARE_EXCEEDED_RETRY_AFTER_SECONDS = 1;
  * @param applicationId the application whose exchanges were refused.
  * @param count how many the interval held.
  */
-export const shareExceededTallyEvent = (
-  applicationId: string,
-  count: number,
-): AuditEvent => ({
-  data: { applicationId, count },
-  severity: 'warning',
-  type: 'admission.shareExceededTally',
+export const shareExceededTallyEvent = (applicationId: string, count: number): AuditEvent => ({
+	data: { applicationId, count },
+	severity: 'warning',
+	type: 'admission.shareExceededTally',
 });

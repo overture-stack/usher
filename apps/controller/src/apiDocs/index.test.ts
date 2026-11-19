@@ -4,7 +4,7 @@ import { suite, test } from 'node:test';
 import * as apiDocs from './index.js';
 
 suite("the API documentation page's module", () => {
-  test('exports at run time exactly the values its surface names', () => {
-    assert.deepEqual(Object.keys(apiDocs).toSorted(), ['createApiDocsRoutes']);
-  });
+	test('exports at run time exactly the values its surface names', () => {
+		assert.deepEqual(Object.keys(apiDocs).toSorted(), ['createApiDocsRoutes']);
+	});
 });

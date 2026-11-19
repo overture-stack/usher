@@ -19,4 +19,4 @@ const KEYCLOAK_ACCESS_TOKEN_TYPE = 'Bearer';
  * @param token the token's claims and protected header, verified or not.
  */
 export const isKeycloakAccessToken = ({ claims }: TokenContents): boolean =>
-  claims['typ'] === KEYCLOAK_ACCESS_TOKEN_TYPE;
+	claims['typ'] === KEYCLOAK_ACCESS_TOKEN_TYPE;

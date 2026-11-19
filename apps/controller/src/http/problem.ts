@@ -9,9 +9,5 @@ import type { Problem } from './types.js';
  * @param title the rule broken, in a few words.
  * @param detail what was wrong, and what to do about it.
  */
-export const problem = (
-  code: string,
-  status: number,
-  title: string,
-  detail: string,
-): Problem => Object.freeze({ code, detail, status, title });
+export const problem = (code: string, status: number, title: string, detail: string): Problem =>
+	Object.freeze({ code, detail, status, title });

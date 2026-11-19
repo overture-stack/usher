@@ -8,11 +8,11 @@ import type { HolderReading } from './types.js';
 const ADDRESS_FORM = /^[^\s@,\p{Cc}]+@[^\s@,\p{Cc}]+$/u;
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const refused = (problem: Problem): HolderReading => ({
-  kind: 'refused',
-  problem,
+	kind: 'refused',
+	problem,
 });
 
 /**
@@ -26,33 +26,25 @@ const refused = (problem: Problem): HolderReading => ({
  * @param member how the body names the holder, for a refusal of its shape.
  */
 export const readHolder = (value: unknown, member: string): HolderReading => {
-  if (!isRecord(value)) {
-    return refused(
-      unreadableBody(`holds ${member} as something other than an object`),
-    );
-  }
-  const mistyped = ['email', 'subject'].find(
-    (name) => Object.hasOwn(value, name) && typeof value[name] !== 'string',
-  );
-  if (mistyped !== undefined) {
-    return refused(
-      unreadableBody(
-        `holds the ${mistyped} of ${member} as something other than a string`,
-      ),
-    );
-  }
-  const [named, ...more] = Object.entries(value);
-  if (named === undefined || more.length > 0) {
-    return refused(GRANT_PROBLEMS.holderNotOnePerson);
-  }
-  const [name, text] = named;
-  if (name === 'subject' && typeof text === 'string' && text !== '') {
-    return { holder: { kind: 'subject', subject: text }, kind: 'read' };
-  }
-  if (name !== 'email' || typeof text !== 'string') {
-    return refused(GRANT_PROBLEMS.holderNotOnePerson);
-  }
-  return ADDRESS_FORM.test(text)
-    ? { holder: { email: text, kind: 'address' }, kind: 'read' }
-    : refused(GRANT_PROBLEMS.addressForm);
+	if (!isRecord(value)) {
+		return refused(unreadableBody(`holds ${member} as something other than an object`));
+	}
+	const mistyped = ['email', 'subject'].find((name) => Object.hasOwn(value, name) && typeof value[name] !== 'string');
+	if (mistyped !== undefined) {
+		return refused(unreadableBody(`holds the ${mistyped} of ${member} as something other than a string`));
+	}
+	const [named, ...more] = Object.entries(value);
+	if (named === undefined || more.length > 0) {
+		return refused(GRANT_PROBLEMS.holderNotOnePerson);
+	}
+	const [name, text] = named;
+	if (name === 'subject' && typeof text === 'string' && text !== '') {
+		return { holder: { kind: 'subject', subject: text }, kind: 'read' };
+	}
+	if (name !== 'email' || typeof text !== 'string') {
+		return refused(GRANT_PROBLEMS.holderNotOnePerson);
+	}
+	return ADDRESS_FORM.test(text)
+		? { holder: { email: text, kind: 'address' }, kind: 'read' }
+		: refused(GRANT_PROBLEMS.addressForm);
 };

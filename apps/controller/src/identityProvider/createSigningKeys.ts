@@ -1,20 +1,7 @@
 import type { JWK } from 'jose';
 
-import {
-  discoveryDocument,
-  failed,
-  fetchedJson,
-  isRecord,
-  keySetUrl,
-  obtained,
-  type Step,
-} from './discovery.js';
-import type {
-  KeySetReading,
-  SigningKeys,
-  TokenVerifierLog,
-  TokenVerifierSettings,
-} from './types.js';
+import { discoveryDocument, failed, fetchedJson, isRecord, keySetUrl, obtained, type Step } from './discovery.js';
+import type { KeySetReading, SigningKeys, TokenVerifierLog, TokenVerifierSettings } from './types.js';
 
 /** How long a fetched key set is trusted before it is fetched again, in milliseconds of the configured clock. */
 export const KEY_SET_MAXIMUM_AGE_MILLISECONDS = 600_000;
@@ -30,37 +17,32 @@ const UNAVAILABLE: KeySetReading = Object.freeze({ kind: 'unavailable' });
 // A key the provider publishes for verifying signatures: never one published for encryption, and never
 // a private key, which no provider publishes on purpose.
 const isSigningKey = (key: unknown): key is JWK =>
-  isRecord(key) &&
-  typeof key['kty'] === 'string' &&
-  key['use'] !== 'enc' &&
-  !Object.hasOwn(key, 'd');
+	isRecord(key) && typeof key['kty'] === 'string' && key['use'] !== 'enc' && !Object.hasOwn(key, 'd');
 
-const fetchSigningKeys = async (
-  issuer: string,
-): Promise<Step<readonly JWK[]>> => {
-  const discovery = await discoveryDocument(issuer);
-  if (discovery.kind === 'failed') {
-    return discovery;
-  }
-  const location = keySetUrl(discovery.value);
-  if (location.kind === 'failed') {
-    return location;
-  }
-  const keySet = await fetchedJson(location.value, 'keySetShape');
-  if (keySet.kind === 'failed') {
-    return keySet;
-  }
-  return isRecord(keySet.value) && Array.isArray(keySet.value['keys'])
-    ? obtained(keySet.value['keys'].filter(isSigningKey))
-    : failed('keySetShape');
+const fetchSigningKeys = async (issuer: string): Promise<Step<readonly JWK[]>> => {
+	const discovery = await discoveryDocument(issuer);
+	if (discovery.kind === 'failed') {
+		return discovery;
+	}
+	const location = keySetUrl(discovery.value);
+	if (location.kind === 'failed') {
+		return location;
+	}
+	const keySet = await fetchedJson(location.value, 'keySetShape');
+	if (keySet.kind === 'failed') {
+		return keySet;
+	}
+	return isRecord(keySet.value) && Array.isArray(keySet.value['keys'])
+		? obtained(keySet.value['keys'].filter(isSigningKey))
+		: failed('keySetShape');
 };
 
 interface KeyCache {
-  attemptedAt: number | undefined;
-  fetchedAt: number | undefined;
-  inFlight: Promise<KeySetReading> | undefined;
-  keys: readonly JWK[] | undefined;
-  latestFetchFailed: boolean;
+	attemptedAt: number | undefined;
+	fetchedAt: number | undefined;
+	inFlight: Promise<KeySetReading> | undefined;
+	keys: readonly JWK[] | undefined;
+	latestFetchFailed: boolean;
 }
 
 /**
@@ -80,73 +62,69 @@ interface KeyCache {
  * @param eventLog where a failed fetch is written.
  */
 export const createSigningKeys = (
-  { clock, identityProviderIssuer }: TokenVerifierSettings,
-  eventLog: TokenVerifierLog,
+	{ clock, identityProviderIssuer }: TokenVerifierSettings,
+	eventLog: TokenVerifierLog,
 ): SigningKeys => {
-  const cache: KeyCache = {
-    attemptedAt: undefined,
-    fetchedAt: undefined,
-    inFlight: undefined,
-    keys: undefined,
-    latestFetchFailed: false,
-  };
-  const held = (fetched: boolean): KeySetReading =>
-    cache.keys !== undefined &&
-    cache.fetchedAt !== undefined &&
-    clock.now() - cache.fetchedAt < KEY_SET_MAXIMUM_AGE_MILLISECONDS
-      ? {
-          fetched,
-          keys: cache.keys,
-          kind: 'held',
-          latestFetchFailed: cache.latestFetchFailed,
-        }
-      : UNAVAILABLE;
-  const refetchInMilliseconds = (): number =>
-    cache.attemptedAt === undefined
-      ? 0
-      : Math.max(
-          0,
-          cache.attemptedAt + KEY_REFETCH_COOLDOWN_MILLISECONDS - clock.now(),
-        );
-  const coolingDown = (): boolean => refetchInMilliseconds() > 0;
-  const fetchOnce = async (): Promise<KeySetReading> => {
-    cache.attemptedAt = clock.now();
-    // The fetch leaves flight however it ends, so no later asker joins one that rejected.
-    try {
-      // A fetch that throws is counted unreachable, so fetchSigningKeys must throw only for want of
-      // an answer: a connection refused or cut, or no answer within the timeout.
-      const outcome = await fetchSigningKeys(identityProviderIssuer).catch(
-        (): Step<never> => failed('unreachable'),
-      );
-      cache.latestFetchFailed = outcome.kind === 'failed';
-      if (outcome.kind === 'obtained') {
-        cache.keys = outcome.value;
-        cache.fetchedAt = clock.now();
-      } else {
-        eventLog.error(KEY_SET_FETCH_FAILED, { cause: outcome.cause });
-      }
-    } finally {
-      cache.inFlight = undefined;
-    }
-    return held(true);
-  };
-  const fetched = (): Promise<KeySetReading> => {
-    cache.inFlight ??= fetchOnce();
-    return cache.inFlight;
-  };
-  // A fetch in flight is joined whatever the cooldown says, since it was started within it.
-  const mayFetch = (): boolean =>
-    cache.inFlight !== undefined || !coolingDown();
-  return {
-    current: async () => {
-      const reading = held(false);
-      if (reading.kind === 'held') {
-        return reading;
-      }
-      return mayFetch() ? fetched() : UNAVAILABLE;
-    },
-    held: () => held(false),
-    refetchInMilliseconds,
-    refreshed: async () => (mayFetch() ? fetched() : held(false)),
-  };
+	const cache: KeyCache = {
+		attemptedAt: undefined,
+		fetchedAt: undefined,
+		inFlight: undefined,
+		keys: undefined,
+		latestFetchFailed: false,
+	};
+	const held = (fetched: boolean): KeySetReading =>
+		cache.keys !== undefined &&
+		cache.fetchedAt !== undefined &&
+		clock.now() - cache.fetchedAt < KEY_SET_MAXIMUM_AGE_MILLISECONDS
+			? {
+					fetched,
+					keys: cache.keys,
+					kind: 'held',
+					latestFetchFailed: cache.latestFetchFailed,
+				}
+			: UNAVAILABLE;
+	const refetchInMilliseconds = (): number =>
+		cache.attemptedAt === undefined
+			? 0
+			: Math.max(0, cache.attemptedAt + KEY_REFETCH_COOLDOWN_MILLISECONDS - clock.now());
+	const coolingDown = (): boolean => refetchInMilliseconds() > 0;
+	const fetchOnce = async (): Promise<KeySetReading> => {
+		cache.attemptedAt = clock.now();
+		// The fetch leaves flight however it ends, so no later asker joins one that rejected.
+		try {
+			// A fetch that throws is counted unreachable, so fetchSigningKeys must throw only for want of
+			// an answer: a connection refused or cut, or no answer within the timeout.
+			const outcome = await fetchSigningKeys(identityProviderIssuer).catch((): Step<never> =>
+				failed('unreachable'),
+			);
+			cache.latestFetchFailed = outcome.kind === 'failed';
+			if (outcome.kind === 'obtained') {
+				cache.keys = outcome.value;
+				cache.fetchedAt = clock.now();
+			} else {
+				eventLog.error(KEY_SET_FETCH_FAILED, { cause: outcome.cause });
+			}
+		} finally {
+			cache.inFlight = undefined;
+		}
+		return held(true);
+	};
+	const fetched = (): Promise<KeySetReading> => {
+		cache.inFlight ??= fetchOnce();
+		return cache.inFlight;
+	};
+	// A fetch in flight is joined whatever the cooldown says, since it was started within it.
+	const mayFetch = (): boolean => cache.inFlight !== undefined || !coolingDown();
+	return {
+		current: async () => {
+			const reading = held(false);
+			if (reading.kind === 'held') {
+				return reading;
+			}
+			return mayFetch() ? fetched() : UNAVAILABLE;
+		},
+		held: () => held(false),
+		refetchInMilliseconds,
+		refreshed: async () => (mayFetch() ? fetched() : held(false)),
+	};
 };

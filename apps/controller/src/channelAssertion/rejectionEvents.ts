@@ -10,17 +10,17 @@ import type { RejectionReason, VerifiedRejectionReason } from './types.js';
  *   request's address.
  */
 export const rejectionEvent = ({
-  applicationId,
-  reason,
-  sourceIp,
+	applicationId,
+	reason,
+	sourceIp,
 }: {
-  applicationId: string;
-  reason: VerifiedRejectionReason;
-  sourceIp: string;
+	applicationId: string;
+	reason: VerifiedRejectionReason;
+	sourceIp: string;
 }): AuditEvent => ({
-  data: { applicationId, reason, result: 'denied', sourceIp },
-  severity: 'warning',
-  type: 'channelAssertion.rejection',
+	data: { applicationId, reason, result: 'denied', sourceIp },
+	severity: 'warning',
+	type: 'channelAssertion.rejection',
 });
 
 /**
@@ -34,15 +34,15 @@ export const rejectionEvent = ({
  * @param count how many the interval held.
  */
 export const rejectionTallyEvent = (
-  reason: RejectionReason,
-  applicationId: string | undefined,
-  count: number,
+	reason: RejectionReason,
+	applicationId: string | undefined,
+	count: number,
 ): AuditEvent => ({
-  data: {
-    ...(applicationId === undefined ? {} : { applicationId }),
-    count,
-    reason,
-  },
-  severity: 'warning',
-  type: 'channelAssertion.rejectionTally',
+	data: {
+		...(applicationId === undefined ? {} : { applicationId }),
+		count,
+		reason,
+	},
+	severity: 'warning',
+	type: 'channelAssertion.rejectionTally',
 });

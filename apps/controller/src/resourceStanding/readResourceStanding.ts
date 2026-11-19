@@ -1,17 +1,12 @@
 import pg from 'pg';
 
 import { standingColumns } from './standingColumns.js';
-import type {
-  ResourceStanding,
-  StandingLock,
-  StandingQuestion,
-  StatementRunner,
-} from './types.js';
+import type { ResourceStanding, StandingLock, StandingQuestion, StatementRunner } from './types.js';
 
 // The row lock a read takes on the resource, held until its transaction ends.
 const LOCKING: Readonly<Record<Exclude<StandingLock, 'none'>, string>> = {
-  noKeyUpdate: 'FOR NO KEY UPDATE',
-  share: 'FOR SHARE',
+	noKeyUpdate: 'FOR NO KEY UPDATE',
+	share: 'FOR SHARE',
 };
 
 /**
@@ -28,31 +23,28 @@ const LOCKING: Readonly<Record<Exclude<StandingLock, 'none'>, string>> = {
  * @returns the standing, or `undefined` when no resource holds the externalId.
  */
 export const readResourceStanding = async (
-  runner: StatementRunner,
-  schema: string,
-  { externalId, issuer, lock, now, subject }: StandingQuestion,
+	runner: StatementRunner,
+	schema: string,
+	{ externalId, issuer, lock, now, subject }: StandingQuestion,
 ): Promise<ResourceStanding | undefined> => {
-  const resources = `${pg.escapeIdentifier(schema)}.resources`;
-  if (lock !== 'none') {
-    await runner.query(
-      `SELECT 1 FROM ${resources} WHERE external_id = $1 ${LOCKING[lock]}`,
-      [externalId],
-    );
-  }
-  const { rows } = await runner.query<ResourceStanding>(
-    `SELECT resource.base_tier AS "accessLevel",
+	const resources = `${pg.escapeIdentifier(schema)}.resources`;
+	if (lock !== 'none') {
+		await runner.query(`SELECT 1 FROM ${resources} WHERE external_id = $1 ${LOCKING[lock]}`, [externalId]);
+	}
+	const { rows } = await runner.query<ResourceStanding>(
+		`SELECT resource.base_tier AS "accessLevel",
             resource.external_id AS "externalId",
             resource.id::text AS id,
             resource.retired_at IS NOT NULL AS retired,
             resource.suppressed,
             ${standingColumns(schema, {
-              issuer: '$2::text',
-              now: '$3::timestamptz',
-              subject: '$4::text',
-            })}
+				issuer: '$2::text',
+				now: '$3::timestamptz',
+				subject: '$4::text',
+			})}
        FROM ${resources} resource
       WHERE resource.external_id = $1`,
-    [externalId, issuer, now, subject],
-  );
-  return rows[0];
+		[externalId, issuer, now, subject],
+	);
+	return rows[0];
 };

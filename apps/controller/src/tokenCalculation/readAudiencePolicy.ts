@@ -3,30 +3,30 @@ import pg from 'pg';
 import { ControllerError } from '../failures/index.js';
 import { SETTING_DEFINITIONS } from '../settings/index.js';
 import type {
-  AudiencePolicyReading,
-  PrincipalPolicy,
-  ReachingGrant,
-  ServedResource,
-  StoredGrantRules,
+	AudiencePolicyReading,
+	PrincipalPolicy,
+	ReachingGrant,
+	ServedResource,
+	StoredGrantRules,
 } from './types.js';
 
 interface PolicyRow {
-  globalCategories: readonly string[];
+	globalCategories: readonly string[];
 
-  // The grant rules' stored value, which the store holds as JSON; null where no row is.
-  grantRules: unknown;
+	// The grant rules' stored value, which the store holds as JSON; null where no row is.
+	grantRules: unknown;
 
-  served: readonly ServedResource[];
+	served: readonly ServedResource[];
 }
 
 interface PrincipalPolicyRow extends PolicyRow {
-  grants: readonly ReachingGrant[];
+	grants: readonly ReachingGrant[];
 }
 
 const tablesIn =
-  (schema: string) =>
-  (name: string): string =>
-    `${pg.escapeIdentifier(schema)}.${name}`;
+	(schema: string) =>
+	(name: string): string =>
+		`${pg.escapeIdentifier(schema)}.${name}`;
 
 // The global categories, every resource served by the audience bound as $1, and the grant rules' stored
 // value, so every part of a read comes from the one snapshot.
@@ -56,7 +56,7 @@ const offeringColumns = (table: (name: string) => string): string => `
 
 // A category a grant names, by scope and name, or null where it names none.
 const namedCategory = (alias: string): string =>
-  `CASE WHEN ${alias}.id IS NULL THEN NULL ELSE json_build_object('name', ${alias}.name, 'scope', ${alias}.scope) END`;
+	`CASE WHEN ${alias}.id IS NULL THEN NULL ELSE json_build_object('name', ${alias}.name, 'scope', ${alias}.scope) END`;
 
 // Every unrevoked grant held by the person bound as $2, directly or through a group they belong to, on a
 // resource served by the audience bound as $1, with the person's own latest decision on it and what its
@@ -107,22 +107,19 @@ const grantsColumn = (table: (name: string) => string): string => `
 // Reads the grant rules' stored value by their definition: the rules, or the rule the value breaks, a
 // missing row among them.
 const storedGrantRulesOf = (value: unknown): StoredGrantRules => {
-  const reading = SETTING_DEFINITIONS.grantRules.read(value);
-  return reading.kind === 'read'
-    ? { kind: 'read', rules: reading.value }
-    : { kind: 'refused', rule: reading.rule };
+	const reading = SETTING_DEFINITIONS.grantRules.read(value);
+	return reading.kind === 'read' ? { kind: 'read', rules: reading.value } : { kind: 'refused', rule: reading.rule };
 };
 
 // One statement, so every part of the read comes from one snapshot: a resource retired or suppressed
 // meanwhile is read as it stood beside the categories read with it.
-const policyQuery = (schema: string): string =>
-  `SELECT ${offeringColumns(tablesIn(schema))}`;
+const policyQuery = (schema: string): string => `SELECT ${offeringColumns(tablesIn(schema))}`;
 
 // One statement, so a grant, a decision, a membership or a role changed meanwhile is read as it stood
 // beside the resources and categories read with it.
 const principalPolicyQuery = (schema: string): string => {
-  const table = tablesIn(schema);
-  return `SELECT ${offeringColumns(table)}, ${grantsColumn(table)}`;
+	const table = tablesIn(schema);
+	return `SELECT ${offeringColumns(table)}, ${grantsColumn(table)}`;
 };
 
 /**
@@ -139,24 +136,20 @@ const principalPolicyQuery = (schema: string): string => {
  * @throws whatever the store throws.
  */
 export const readAudiencePolicy = async (
-  connection: pg.ClientBase,
-  schema: string,
-  audience: string,
+	connection: pg.ClientBase,
+	schema: string,
+	audience: string,
 ): Promise<AudiencePolicyReading> => {
-  const { rows } = await connection.query<PolicyRow>(policyQuery(schema), [
-    audience,
-  ]);
-  const [row] = rows;
-  if (row === undefined) {
-    throw new ControllerError(
-      "the read of an audience's policy answered no row",
-    );
-  }
-  return {
-    globalCategories: row.globalCategories,
-    grantRules: storedGrantRulesOf(row.grantRules),
-    served: row.served,
-  };
+	const { rows } = await connection.query<PolicyRow>(policyQuery(schema), [audience]);
+	const [row] = rows;
+	if (row === undefined) {
+		throw new ControllerError("the read of an audience's policy answered no row");
+	}
+	return {
+		globalCategories: row.globalCategories,
+		grantRules: storedGrantRulesOf(row.grantRules),
+		served: row.served,
+	};
 };
 
 /**
@@ -178,25 +171,20 @@ export const readAudiencePolicy = async (
  * @throws whatever the store throws.
  */
 export const readPrincipalPolicy = async (
-  connection: pg.ClientBase,
-  schema: string,
-  audience: string,
-  person: string,
+	connection: pg.ClientBase,
+	schema: string,
+	audience: string,
+	person: string,
 ): Promise<PrincipalPolicy & { grantRules: StoredGrantRules }> => {
-  const { rows } = await connection.query<PrincipalPolicyRow>(
-    principalPolicyQuery(schema),
-    [audience, person],
-  );
-  const [row] = rows;
-  if (row === undefined) {
-    throw new ControllerError(
-      "the read of a principal's policy answered no row",
-    );
-  }
-  return {
-    globalCategories: row.globalCategories,
-    grantRules: storedGrantRulesOf(row.grantRules),
-    grants: row.grants,
-    served: row.served,
-  };
+	const { rows } = await connection.query<PrincipalPolicyRow>(principalPolicyQuery(schema), [audience, person]);
+	const [row] = rows;
+	if (row === undefined) {
+		throw new ControllerError("the read of a principal's policy answered no row");
+	}
+	return {
+		globalCategories: row.globalCategories,
+		grantRules: storedGrantRulesOf(row.grantRules),
+		grants: row.grants,
+		served: row.served,
+	};
 };

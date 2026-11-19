@@ -2,63 +2,46 @@ import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import type { TokenClaims } from '../identityProvider/index.js';
 import type { FirstUser } from '../settings/index.js';
 import {
-  currencyOf,
-  isKeycloakAccessToken,
-  isServiceAccount,
-  namesAudience,
-  type NamesRefusal,
-  readNames,
-  realmRolesOf,
-  sessionOf,
-  type TokenContents,
+	currencyOf,
+	isKeycloakAccessToken,
+	isServiceAccount,
+	namesAudience,
+	type NamesRefusal,
+	readNames,
+	realmRolesOf,
+	sessionOf,
+	type TokenContents,
 } from '../signInTokens/index.js';
-import type {
-  ClaimsReading,
-  ManagementTokenSettings,
-  Principal,
-} from './types.js';
+import type { ClaimsReading, ManagementTokenSettings, Principal } from './types.js';
 
 // The reading each refusal of a token's names is given, so the route answers and records each as its
 // own: a token naming no subject to act for, or one whose subject or session cannot be stored.
 const NAMES_READINGS = {
-  missingSubject: { kind: 'unreadable' },
-  unrepresentableSubject: { kind: 'unrepresentable' },
+	missingSubject: { kind: 'unreadable' },
+	unrepresentableSubject: { kind: 'unrepresentable' },
 } as const satisfies Readonly<Record<NamesRefusal, ClaimsReading>>;
 
 // The first user is named by a realm role the token holds, compared by its exact name, or by the subject
 // the token names; the token is already verified under the configured issuer.
-const isFirstUser = (
-  claims: TokenClaims,
-  subject: string,
-  firstUser: FirstUser,
-): boolean =>
-  'realmRole' in firstUser
-    ? realmRolesOf(claims).includes(firstUser.realmRole)
-    : subject === firstUser.subject;
+const isFirstUser = (claims: TokenClaims, subject: string, firstUser: FirstUser): boolean =>
+	'realmRole' in firstUser ? realmRolesOf(claims).includes(firstUser.realmRole) : subject === firstUser.subject;
 
 // The seconds between a token's issue and its expiry, read once its currency has been judged: both are times then.
 const lifetimeOf = (claims: TokenClaims): number | undefined => {
-  const { exp, iat } = claims;
-  return typeof exp === 'number' && typeof iat === 'number'
-    ? exp - iat
-    : undefined;
+	const { exp, iat } = claims;
+	return typeof exp === 'number' && typeof iat === 'number' ? exp - iat : undefined;
 };
 
 const principalOf = (
-  claims: TokenClaims,
-  subject: string,
-  tokenLifetimeSeconds: number,
-  {
-    firstUser,
-    serviceAccountRole,
-  }: Pick<ManagementTokenSettings, 'firstUser' | 'serviceAccountRole'>,
+	claims: TokenClaims,
+	subject: string,
+	tokenLifetimeSeconds: number,
+	{ firstUser, serviceAccountRole }: Pick<ManagementTokenSettings, 'firstUser' | 'serviceAccountRole'>,
 ): Omit<Principal, 'administrator'> => ({
-  firstUser: isFirstUser(claims, subject, firstUser),
-  subject,
-  tokenLifetimeSeconds,
-  type: isServiceAccount(claims, serviceAccountRole)
-    ? 'serviceAccount'
-    : 'human',
+	firstUser: isFirstUser(claims, subject, firstUser),
+	subject,
+	tokenLifetimeSeconds,
+	type: isServiceAccount(claims, serviceAccountRole) ? 'serviceAccount' : 'human',
 });
 
 /**
@@ -82,48 +65,50 @@ const principalOf = (
  * @param now the instant, in milliseconds since the Unix epoch.
  */
 export const readManagementClaims = (
-  token: TokenContents,
-  {
-    firstUser,
-    managementAudience,
-    managementClients,
-    serviceAccountRole,
-    signInTokenMaximumFor,
-  }: ManagementTokenSettings,
-  now: number,
+	token: TokenContents,
+	{
+		firstUser,
+		managementAudience,
+		managementClients,
+		serviceAccountRole,
+		signInTokenMaximumFor,
+	}: ManagementTokenSettings,
+	now: number,
 ): ClaimsReading => {
-  const { claims } = token;
-  const names = readNames(claims);
-  if (names.kind === 'refused') {
-    return NAMES_READINGS[names.reason];
-  }
-  const { subject } = names;
-  const refused = (
-    reason: Extract<ClaimsReading, { kind: 'refused' }>['reason'],
-  ): ClaimsReading => ({ kind: 'refused', reason, subject });
-  if (!isKeycloakAccessToken(token)) {
-    return refused('otherType');
-  }
-  const currency = currencyOf(claims, { signInTokenMaximumFor }, now);
-  if (currency.kind === 'refused') {
-    return refused(currency.reason);
-  }
-  const azp = claims['azp'];
-  const tokenLifetimeSeconds = lifetimeOf(claims);
-  if (
-    tokenLifetimeSeconds !== undefined &&
-    namesAudience(claims, managementAudience) &&
-    typeof azp === 'string' &&
-    managementClients.includes(azp)
-  ) {
-    return {
-      kind: 'accepted',
-      principal: principalOf(claims, subject, tokenLifetimeSeconds, {
-        firstUser,
-        serviceAccountRole,
-      }),
-      session: sessionOf(claims),
-    };
-  }
-  return refused('otherAudience');
+	const { claims } = token;
+	const names = readNames(claims);
+	if (names.kind === 'refused') {
+		return NAMES_READINGS[names.reason];
+	}
+	const { subject } = names;
+	const refused = (reason: Extract<ClaimsReading, { kind: 'refused' }>['reason']): ClaimsReading => ({
+		kind: 'refused',
+		reason,
+		subject,
+	});
+	if (!isKeycloakAccessToken(token)) {
+		return refused('otherType');
+	}
+	const currency = currencyOf(claims, { signInTokenMaximumFor }, now);
+	if (currency.kind === 'refused') {
+		return refused(currency.reason);
+	}
+	const azp = claims['azp'];
+	const tokenLifetimeSeconds = lifetimeOf(claims);
+	if (
+		tokenLifetimeSeconds !== undefined &&
+		namesAudience(claims, managementAudience) &&
+		typeof azp === 'string' &&
+		managementClients.includes(azp)
+	) {
+		return {
+			kind: 'accepted',
+			principal: principalOf(claims, subject, tokenLifetimeSeconds, {
+				firstUser,
+				serviceAccountRole,
+			}),
+			session: sessionOf(claims),
+		};
+	}
+	return refused('otherAudience');
 };

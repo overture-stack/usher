@@ -12,7 +12,7 @@ const FATAL_LEVEL = 60;
 const IDENTIFIER = /^[A-Za-z0-9_]{1,64}$/u;
 
 const identifierOf = (value: unknown): string | undefined =>
-  typeof value === 'string' && IDENTIFIER.test(value) ? value : undefined;
+	typeof value === 'string' && IDENTIFIER.test(value) ? value : undefined;
 
 /**
  * A failure's code, a SQLSTATE or a system error's code, as a failure line may write it: only when it
@@ -21,11 +21,7 @@ const identifierOf = (value: unknown): string | undefined =>
  * @param failure what failed.
  */
 export const failureCodeOf = (failure: unknown): string | undefined =>
-  identifierOf(
-    typeof failure === 'object' && failure !== null && 'code' in failure
-      ? failure.code
-      : undefined,
-  );
+	identifierOf(typeof failure === 'object' && failure !== null && 'code' in failure ? failure.code : undefined);
 
 /**
  * A failure's name as a failure line may write it: an error's name when it is an identifier, else
@@ -34,9 +30,7 @@ export const failureCodeOf = (failure: unknown): string | undefined =>
  * @param failure what failed.
  */
 export const failureNameOf = (failure: unknown): string =>
-  failure instanceof Error
-    ? (identifierOf(failure.name) ?? 'Error')
-    : typeof failure;
+	failure instanceof Error ? (identifierOf(failure.name) ?? 'Error') : typeof failure;
 
 // A failure line carries codes and the Controller's own messages only. A refusal is written with the
 // variables it names and its message, and any other error of the Controller's own with its name and
@@ -44,29 +38,24 @@ export const failureNameOf = (failure: unknown): string =>
 // its code when it carries one, else by its name alone, under the fixed message naming what failed.
 // A code or a name is written only when it is an identifier. The members come in the log stream's
 // order: the level, the fields, then the message and the time.
-const failureFields = (
-  failed: string,
-  failure: unknown,
-): Readonly<Record<string, unknown>> => {
-  if (failure instanceof StartRefusal) {
-    return {
-      variables: failure.variables,
-      ...(failure.settings.length === 0 ? {} : { settings: failure.settings }),
-      message: failure.message,
-    };
-  }
-  if (failure instanceof ControllerError) {
-    const causeCode = failureCodeOf(failure.cause);
-    return {
-      error: failure.name,
-      ...(causeCode === undefined ? {} : { code: causeCode }),
-      message: `${failed}: ${failure.message}`,
-    };
-  }
-  const code = failureCodeOf(failure);
-  return code === undefined
-    ? { error: failureNameOf(failure), message: failed }
-    : { code, message: failed };
+const failureFields = (failed: string, failure: unknown): Readonly<Record<string, unknown>> => {
+	if (failure instanceof StartRefusal) {
+		return {
+			variables: failure.variables,
+			...(failure.settings.length === 0 ? {} : { settings: failure.settings }),
+			message: failure.message,
+		};
+	}
+	if (failure instanceof ControllerError) {
+		const causeCode = failureCodeOf(failure.cause);
+		return {
+			error: failure.name,
+			...(causeCode === undefined ? {} : { code: causeCode }),
+			message: `${failed}: ${failure.message}`,
+		};
+	}
+	const code = failureCodeOf(failure);
+	return code === undefined ? { error: failureNameOf(failure), message: failed } : { code, message: failed };
 };
 
 /**
@@ -80,13 +69,10 @@ const failureFields = (
  * @param failed what failed, which opens the message, such as `the controller failed to start`.
  * @param failure what the entry met.
  */
-export const failureRecord = (
-  failed: string,
-  failure: unknown,
-): Readonly<Record<string, unknown>> => ({
-  level: FATAL_LEVEL,
-  ...failureFields(failed, failure),
-  time: new Date().toISOString(),
+export const failureRecord = (failed: string, failure: unknown): Readonly<Record<string, unknown>> => ({
+	level: FATAL_LEVEL,
+	...failureFields(failed, failure),
+	time: new Date().toISOString(),
 });
 
 /**
@@ -96,11 +82,11 @@ export const failureRecord = (
  * @param failed what failed, which opens the message, such as `the controller failed to start`.
  */
 export const reportFailure =
-  (failed: string) =>
-  (failure: unknown): void => {
-    process.stderr.write(`${JSON.stringify(failureRecord(failed, failure))}\n`);
-    process.exitCode = 1;
-  };
+	(failed: string) =>
+	(failure: unknown): void => {
+		process.stderr.write(`${JSON.stringify(failureRecord(failed, failure))}\n`);
+		process.exitCode = 1;
+	};
 
 /**
  * Reports a failure nothing caught, a thrown error or, under Node's default handling, a rejected
@@ -112,14 +98,11 @@ export const reportFailure =
  * @param failed what failed, which opens the message, such as `the controller failed`.
  */
 export const reportUncaughtFailure =
-  (failed: string) =>
-  (failure: unknown): never => {
-    try {
-      writeSync(
-        process.stderr.fd,
-        `${JSON.stringify(failureRecord(failed, failure))}\n`,
-      );
-    } finally {
-      process.exit(1);
-    }
-  };
+	(failed: string) =>
+	(failure: unknown): never => {
+		try {
+			writeSync(process.stderr.fd, `${JSON.stringify(failureRecord(failed, failure))}\n`);
+		} finally {
+			process.exit(1);
+		}
+	};

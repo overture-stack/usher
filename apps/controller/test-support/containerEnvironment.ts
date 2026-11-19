@@ -3,8 +3,8 @@
 
 /** One container a run started: the image it runs and the URL that reaches it. */
 export interface RunningContainer {
-  image: string;
-  url: string;
+	image: string;
+	url: string;
 }
 
 /**
@@ -13,15 +13,15 @@ export interface RunningContainer {
  * `database.ts` hands it.
  */
 export interface RunningContainers {
-  postgresql: RunningContainer;
-  valkey: RunningContainer;
+	postgresql: RunningContainer;
+	valkey: RunningContainer;
 }
 
 const VARIABLES = {
-  postgresqlImage: 'USHER_TEST_POSTGRESQL_IMAGE',
-  postgresqlUrl: 'USHER_TEST_POSTGRESQL_URL',
-  valkeyImage: 'USHER_TEST_VALKEY_IMAGE',
-  valkeyUrl: 'USHER_TEST_VALKEY_URL',
+	postgresqlImage: 'USHER_TEST_POSTGRESQL_IMAGE',
+	postgresqlUrl: 'USHER_TEST_POSTGRESQL_URL',
+	valkeyImage: 'USHER_TEST_VALKEY_IMAGE',
+	valkeyUrl: 'USHER_TEST_VALKEY_URL',
 } as const;
 
 /**
@@ -32,13 +32,13 @@ const VARIABLES = {
  * @param containers the containers the run started.
  */
 export const environmentForContainers = ({
-  postgresql,
-  valkey,
+	postgresql,
+	valkey,
 }: RunningContainers): Readonly<Record<string, string>> => ({
-  [VARIABLES.postgresqlImage]: postgresql.image,
-  [VARIABLES.postgresqlUrl]: postgresql.url,
-  [VARIABLES.valkeyImage]: valkey.image,
-  [VARIABLES.valkeyUrl]: valkey.url,
+	[VARIABLES.postgresqlImage]: postgresql.image,
+	[VARIABLES.postgresqlUrl]: postgresql.url,
+	[VARIABLES.valkeyImage]: valkey.image,
+	[VARIABLES.valkeyUrl]: valkey.url,
 });
 
 /**
@@ -48,24 +48,24 @@ export const environmentForContainers = ({
  * @throws {Error} when the run started none, as when a test file runs without the global setup.
  */
 export const runningContainers = (
-  environment: Readonly<Record<string, string | undefined>> = process.env,
+	environment: Readonly<Record<string, string | undefined>> = process.env,
 ): RunningContainers => {
-  const postgresqlImage = environment[VARIABLES.postgresqlImage];
-  const postgresqlUrl = environment[VARIABLES.postgresqlUrl];
-  const valkeyImage = environment[VARIABLES.valkeyImage];
-  const valkeyUrl = environment[VARIABLES.valkeyUrl];
-  if (
-    postgresqlImage !== undefined &&
-    postgresqlUrl !== undefined &&
-    valkeyImage !== undefined &&
-    valkeyUrl !== undefined
-  ) {
-    return {
-      postgresql: { image: postgresqlImage, url: postgresqlUrl },
-      valkey: { image: valkeyImage, url: valkeyUrl },
-    };
-  }
-  throw new Error(
-    'the test containers are not running: run the suite with pnpm test, whose global setup starts them',
-  );
+	const postgresqlImage = environment[VARIABLES.postgresqlImage];
+	const postgresqlUrl = environment[VARIABLES.postgresqlUrl];
+	const valkeyImage = environment[VARIABLES.valkeyImage];
+	const valkeyUrl = environment[VARIABLES.valkeyUrl];
+	if (
+		postgresqlImage !== undefined &&
+		postgresqlUrl !== undefined &&
+		valkeyImage !== undefined &&
+		valkeyUrl !== undefined
+	) {
+		return {
+			postgresql: { image: postgresqlImage, url: postgresqlUrl },
+			valkey: { image: valkeyImage, url: valkeyUrl },
+		};
+	}
+	throw new Error(
+		'the test containers are not running: run the suite with pnpm test, whose global setup starts them',
+	);
 };

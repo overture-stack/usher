@@ -12,22 +12,22 @@ import type { LogoutTokenRefusal, SwitchedOffLogoutReason, UnverifiedLogoutReaso
  *   or `undefined`.
  */
 export const logoutTokenRefusalEvent = ({
-  reason,
-  sourceIp,
-  subject,
+	reason,
+	sourceIp,
+	subject,
 }: {
 	reason: LogoutTokenRefusal | SwitchedOffLogoutReason | UnverifiedLogoutReason;
-  sourceIp: string;
-  subject: string | undefined;
+	sourceIp: string;
+	subject: string | undefined;
 }): AuditEvent => ({
-  data: {
-    reason,
-    result: 'denied',
-    ...(subject === undefined ? {} : { refusedSubject: subject }),
-    sourceIp,
-  },
-  severity: 'warning',
-  type: 'logoutToken.refusal',
+	data: {
+		reason,
+		result: 'denied',
+		...(subject === undefined ? {} : { refusedSubject: subject }),
+		sourceIp,
+	},
+	severity: 'warning',
+	type: 'logoutToken.refusal',
 });
 
 /**
@@ -38,19 +38,19 @@ export const logoutTokenRefusalEvent = ({
  * @param closing the window as it closed.
  */
 export const logoutTokenRefusalTallyEvent = ({
-  count,
-  firstSeenAt,
-  lastSeenAt,
-  reason,
-  windowId,
+	count,
+	firstSeenAt,
+	lastSeenAt,
+	reason,
+	windowId,
 }: WindowClosing): AuditEvent => ({
-  data: {
-    count,
-    firstSeenAt: eventInstant(firstSeenAt),
-    lastSeenAt: eventInstant(lastSeenAt),
-    reason,
-    ...(windowId === undefined ? {} : { windowId }),
-  },
-  severity: 'warning',
-  type: 'logoutToken.refusalTally',
+	data: {
+		count,
+		firstSeenAt: eventInstant(firstSeenAt),
+		lastSeenAt: eventInstant(lastSeenAt),
+		reason,
+		...(windowId === undefined ? {} : { windowId }),
+	},
+	severity: 'warning',
+	type: 'logoutToken.refusalTally',
 });

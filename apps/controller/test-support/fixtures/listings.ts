@@ -3,23 +3,23 @@ import { after } from 'node:test';
 
 import { type AdminCaller, type GrantView, instantOf } from '../admin.js';
 import {
-  addressKeycloakRealm,
-  type KeycloakDirectory,
-  type KeycloakPerson,
-  type KeycloakRealm,
-  type KeycloakRealmOptions,
-  startKeycloak,
+	addressKeycloakRealm,
+	type KeycloakDirectory,
+	type KeycloakPerson,
+	type KeycloakRealm,
+	type KeycloakRealmOptions,
+	startKeycloak,
 } from '../containers.js';
 import type { ControllerConfiguration } from '../controller.js';
 import { type Harness, realmAdministrator, startHarness } from '../harness.js';
 import {
-  type FixtureDecision,
-  type FixtureGrant,
-  type FixtureUser,
-  mergedPolicy,
-  type PolicyFixture,
-  type ResourceTimes,
-  seededId,
+	type FixtureDecision,
+	type FixtureGrant,
+	type FixtureUser,
+	mergedPolicy,
+	type PolicyFixture,
+	type ResourceTimes,
+	seededId,
 } from '../policy.js';
 import { type Cleanup, eventually, suiteCleanup } from '../waiting.js';
 
@@ -40,9 +40,9 @@ export const DIRECTORY_CLIENT = 'usher-directory';
 
 /** The main world's studies, by externalId. */
 export const STUDIES = Object.freeze({
-  a1: 'STUDY-A1',
-  b2: 'STUDY-B2',
-  c3: 'STUDY-C3',
+	a1: 'STUDY-A1',
+	b2: 'STUDY-B2',
+	c3: 'STUDY-C3',
 } as const);
 
 /** A study id no world registers. */
@@ -61,10 +61,7 @@ export const INVITEE_ADDRESS = 'invitee@example.org';
 export const UNNAMED_SHARER = 'a data steward';
 
 /** The capabilities the seeded `submitter` role carries, as `entity.action` names (permissions-model.md). */
-export const SUBMITTER_CAPABILITIES: readonly string[] = Object.freeze([
-  'record.create',
-  'record.update',
-]);
+export const SUBMITTER_CAPABILITIES: readonly string[] = Object.freeze(['record.create', 'record.update']);
 
 /**
  * What Bo was shown when he accepted his `STUDY-A1` grant: more than the role carries now, as after
@@ -72,31 +69,31 @@ export const SUBMITTER_CAPABILITIES: readonly string[] = Object.freeze([
  * in its place is told apart from one showing the decision's record.
  */
 export const BO_SHOWN_CAPABILITIES: readonly string[] = Object.freeze([
-  'record.create',
-  'record.delete',
-  'record.update',
+	'record.create',
+	'record.delete',
+	'record.update',
 ]);
 
 /** The categories a listing names, as the payload names them (#214 Q7). */
 export const CATEGORIES = Object.freeze({
-  controlled: 'global.controlled',
-  unmarked: 'global.unmarked',
+	controlled: 'global.controlled',
+	unmarked: 'global.unmarked',
 } as const);
 
 /** A cast member's name in the listing suites. */
 export type CastName =
-  | 'administrator'
-  | 'ana'
-  | 'bo'
-  | 'cy'
-  | 'dee'
-  | 'eve'
-  | 'fay'
-  | 'gil'
-  | 'hal'
-  | 'holdsNothing'
-  | 'outsider'
-  | 'quinn';
+	| 'administrator'
+	| 'ana'
+	| 'bo'
+	| 'cy'
+	| 'dee'
+	| 'eve'
+	| 'fay'
+	| 'gil'
+	| 'hal'
+	| 'holdsNothing'
+	| 'outsider'
+	| 'quinn';
 
 /**
  * Each cast member's username, which is also their address. The administrator, Bo and the account
@@ -105,25 +102,23 @@ export type CastName =
  * the directory no longer knows.
  */
 export const CAST: Readonly<Record<CastName, string>> = Object.freeze({
-  administrator: 'admin.one@example.org',
-  ana: 'ana@example.org',
-  bo: 'sub.bo@example.org',
-  cy: 'cy@example.org',
-  dee: 'dee@example.org',
-  eve: 'eve@example.org',
-  fay: 'fay@example.org',
-  gil: 'gil@example.org',
-  hal: 'hal@example.org',
-  holdsNothing: 'abo@example.org',
-  outsider: 'outsider@example.org',
-  quinn: 'quinn@example.org',
+	administrator: 'admin.one@example.org',
+	ana: 'ana@example.org',
+	bo: 'sub.bo@example.org',
+	cy: 'cy@example.org',
+	dee: 'dee@example.org',
+	eve: 'eve@example.org',
+	fay: 'fay@example.org',
+	gil: 'gil@example.org',
+	hal: 'hal@example.org',
+	holdsNothing: 'abo@example.org',
+	outsider: 'outsider@example.org',
+	quinn: 'quinn@example.org',
 });
 
 /** Every cast member's name. */
 export const CAST_NAMES: readonly CastName[] = Object.freeze(
-  Object.keys(CAST).filter((name): name is CastName =>
-    Object.hasOwn(CAST, name),
-  ),
+	Object.keys(CAST).filter((name): name is CastName => Object.hasOwn(CAST, name)),
 );
 
 /** The full name a sharer with a given and a family name is shown by (#213 Q9). */
@@ -133,31 +128,31 @@ export const HAL_NAME = 'Hal Example';
 export const ANA_NAME = 'Ana Example';
 
 interface AddedPerson {
-  firstName: string | null;
-  lastName: string | null;
-  name: CastName;
+	firstName: string | null;
+	lastName: string | null;
+	name: CastName;
 
-  /** Realm roles beside Keycloak's defaults. */
-  realmRoles?: readonly string[];
+	/** Realm roles beside Keycloak's defaults. */
+	realmRoles?: readonly string[];
 }
 
 // Quinn's username is their address and they have neither name (#213 Q9). Quinn never signs in,
 // since Keycloak may refuse a person with no names a direct access grant.
 const ADDED_PEOPLE: readonly AddedPerson[] = Object.freeze([
-  { firstName: 'Ana', lastName: 'Example', name: 'ana' },
-  { firstName: 'Cy', lastName: 'Example', name: 'cy' },
-  { firstName: 'Dee', lastName: 'Example', name: 'dee' },
-  { firstName: 'Eve', lastName: 'Example', name: 'eve' },
-  { firstName: 'Fay', lastName: 'Example', name: 'fay' },
-  { firstName: 'Gil', lastName: 'Example', name: 'gil' },
-  { firstName: 'Hal', lastName: 'Example', name: 'hal' },
-  { firstName: 'Olu', lastName: 'Example', name: 'outsider' },
-  {
-    firstName: null,
-    lastName: null,
-    name: 'quinn',
-    realmRoles: ['usher-platform-admin'],
-  },
+	{ firstName: 'Ana', lastName: 'Example', name: 'ana' },
+	{ firstName: 'Cy', lastName: 'Example', name: 'cy' },
+	{ firstName: 'Dee', lastName: 'Example', name: 'dee' },
+	{ firstName: 'Eve', lastName: 'Example', name: 'eve' },
+	{ firstName: 'Fay', lastName: 'Example', name: 'fay' },
+	{ firstName: 'Gil', lastName: 'Example', name: 'gil' },
+	{ firstName: 'Hal', lastName: 'Example', name: 'hal' },
+	{ firstName: 'Olu', lastName: 'Example', name: 'outsider' },
+	{
+		firstName: null,
+		lastName: null,
+		name: 'quinn',
+		realmRoles: ['usher-platform-admin'],
+	},
 ]);
 
 const randomPassword = (): string => randomBytes(24).toString('base64url');
@@ -167,92 +162,78 @@ const randomPassword = (): string => randomBytes(24).toString('base64url');
  * with given and family names, and Quinn, an administrator with neither.
  */
 export const listingRealmOptions = (): KeycloakRealmOptions => {
-  const base = addressKeycloakRealm();
-  const added = ADDED_PEOPLE.map(
-    ({ firstName, lastName, name, realmRoles }): KeycloakPerson => ({
-      email: CAST[name],
-      firstName,
-      lastName,
-      password: randomPassword(),
-      ...(realmRoles === undefined ? {} : { realmRoles }),
-      username: CAST[name],
-    }),
-  );
-  return { ...base, people: [...base.people, ...added] };
+	const base = addressKeycloakRealm();
+	const added = ADDED_PEOPLE.map(({ firstName, lastName, name, realmRoles }): KeycloakPerson => ({
+		email: CAST[name],
+		firstName,
+		lastName,
+		password: randomPassword(),
+		...(realmRoles === undefined ? {} : { realmRoles }),
+		username: CAST[name],
+	}));
+	return { ...base, people: [...base.people, ...added] };
 };
 
 /** A Keycloak holding the listing cast, each member's subject learned from it. */
 export interface ListingRealm {
-  /** The configuration fields pointing a Controller's directory at the realm. */
-  directory: KeycloakDirectory;
+	/** The configuration fields pointing a Controller's directory at the realm. */
+	directory: KeycloakDirectory;
 
-  keycloak: KeycloakRealm;
+	keycloak: KeycloakRealm;
 
-  /** What the realm was set up with, its administrator among its people. */
-  options: KeycloakRealmOptions;
+	/** What the realm was set up with, its administrator among its people. */
+	options: KeycloakRealmOptions;
 
-  /**
-   * Every name a listing could show a cast member by once the directory has resolved them, as a
-   * sharer is named (#213 Q9): given and family names together, or {@link UNNAMED_SHARER} for one
-   * with neither.
-   */
-  resolvedNames: readonly string[];
+	/**
+	 * Every name a listing could show a cast member by once the directory has resolved them, as a
+	 * sharer is named (#213 Q9): given and family names together, or {@link UNNAMED_SHARER} for one
+	 * with neither.
+	 */
+	resolvedNames: readonly string[];
 
-  /** Signs a cast member in through the management client, answering their access token. */
-  signIn(name: CastName): Promise<string>;
+	/** Signs a cast member in through the management client, answering their access token. */
+	signIn(name: CastName): Promise<string>;
 
-  /** A cast member's subject, as Keycloak's tokens and directory name them. */
-  subject(name: CastName): string;
+	/** A cast member's subject, as Keycloak's tokens and directory name them. */
+	subject(name: CastName): string;
 }
 
 // realmImport writes `Synthetic` and `Person` where a person's options leave a name out, and none
 // where they give `null`, as KeycloakPerson documents.
 const shownNameOf = ({ firstName, lastName }: KeycloakPerson): string => {
-  const names = [
-    firstName === undefined ? 'Synthetic' : firstName,
-    lastName === undefined ? 'Person' : lastName,
-  ].filter((name): name is string => typeof name === 'string' && name !== '');
-  return names.length > 0 ? names.join(' ') : UNNAMED_SHARER;
+	const names = [
+		firstName === undefined ? 'Synthetic' : firstName,
+		lastName === undefined ? 'Person' : lastName,
+	].filter((name): name is string => typeof name === 'string' && name !== '');
+	return names.length > 0 ? names.join(' ') : UNNAMED_SHARER;
 };
 
-const learnedRealm = async (
-  keycloak: KeycloakRealm,
-  options: KeycloakRealmOptions,
-): Promise<ListingRealm> => {
-  const subjects = new Map<CastName, string>(
-    await Promise.all(
-      CAST_NAMES.map(
-        async (name) => [name, await keycloak.subject(CAST[name])] as const,
-      ),
-    ),
-  );
-  await keycloak.deleteUser(CAST.fay);
-  const personOf = (name: CastName): KeycloakPerson => {
-    const person = options.people.find(
-      ({ username }) => username === CAST[name],
-    );
-    if (person !== undefined) {
-      return person;
-    }
-    throw new Error(`the realm's options hold no ${name}`);
-  };
-  return {
-    directory: keycloak.directoryFor(DIRECTORY_CLIENT),
-    keycloak,
-    options,
-    resolvedNames: [
-      ...new Set(CAST_NAMES.map((name) => shownNameOf(personOf(name)))),
-    ],
-    signIn: async (name) =>
-      (await keycloak.signIn(MANAGEMENT_CLIENT, personOf(name))).accessToken,
-    subject: (name) => {
-      const subject = subjects.get(name);
-      if (subject !== undefined) {
-        return subject;
-      }
-      throw new Error(`no subject was learned for ${name}`);
-    },
-  };
+const learnedRealm = async (keycloak: KeycloakRealm, options: KeycloakRealmOptions): Promise<ListingRealm> => {
+	const subjects = new Map<CastName, string>(
+		await Promise.all(CAST_NAMES.map(async (name) => [name, await keycloak.subject(CAST[name])] as const)),
+	);
+	await keycloak.deleteUser(CAST.fay);
+	const personOf = (name: CastName): KeycloakPerson => {
+		const person = options.people.find(({ username }) => username === CAST[name]);
+		if (person !== undefined) {
+			return person;
+		}
+		throw new Error(`the realm's options hold no ${name}`);
+	};
+	return {
+		directory: keycloak.directoryFor(DIRECTORY_CLIENT),
+		keycloak,
+		options,
+		resolvedNames: [...new Set(CAST_NAMES.map((name) => shownNameOf(personOf(name))))],
+		signIn: async (name) => (await keycloak.signIn(MANAGEMENT_CLIENT, personOf(name))).accessToken,
+		subject: (name) => {
+			const subject = subjects.get(name);
+			if (subject !== undefined) {
+				return subject;
+			}
+			throw new Error(`no subject was learned for ${name}`);
+		},
+	};
 };
 
 /**
@@ -260,14 +241,14 @@ const learnedRealm = async (
  * account. A start that fails after the container started removes it.
  */
 export const startListingRealm = async (): Promise<ListingRealm> => {
-  const options = listingRealmOptions();
-  const keycloak = await startKeycloak(options);
-  try {
-    return await learnedRealm(keycloak, options);
-  } catch (error) {
-    await keycloak.remove();
-    throw error;
-  }
+	const options = listingRealmOptions();
+	const keycloak = await startKeycloak(options);
+	try {
+		return await learnedRealm(keycloak, options);
+	} catch (error) {
+		await keycloak.remove();
+		throw error;
+	}
 };
 
 /**
@@ -276,28 +257,27 @@ export const startListingRealm = async (): Promise<ListingRealm> => {
  * test file's top level.
  */
 export const fileRealm = (): (() => Promise<ListingRealm>) => {
-  const state: { starting: Promise<ListingRealm> | undefined } = {
-    starting: undefined,
-  };
-  after(async () => {
-    const started = await state.starting?.catch(() => undefined);
-    await started?.keycloak.remove();
-  });
-  return () => {
-    const starting =
-      state.starting ??
-      startListingRealm().catch((error: unknown) => {
-        state.starting = undefined;
-        throw error;
-      });
-    state.starting = starting;
-    return starting;
-  };
+	const state: { starting: Promise<ListingRealm> | undefined } = {
+		starting: undefined,
+	};
+	after(async () => {
+		const started = await state.starting?.catch(() => undefined);
+		await started?.keycloak.remove();
+	});
+	return () => {
+		const starting =
+			state.starting ??
+			startListingRealm().catch((error: unknown) => {
+				state.starting = undefined;
+				throw error;
+			});
+		state.starting = starting;
+		return starting;
+	};
 };
 
 /** Whole seconds since the Unix epoch, in milliseconds, so every seeded time reads back exactly in any instant form. */
-export const wholeSecondNow = (): number =>
-  Math.floor(Date.now() / 1000) * 1000;
+export const wholeSecondNow = (): number => Math.floor(Date.now() / 1000) * 1000;
 
 const DAY_MS = 86_400_000;
 
@@ -309,8 +289,7 @@ const HOUR_MS = 3_600_000;
  * @param base the base, in milliseconds.
  * @param days how many days before it.
  */
-export const daysBefore = (base: number, days: number): Date =>
-  new Date(base - days * DAY_MS);
+export const daysBefore = (base: number, days: number): Date => new Date(base - days * DAY_MS);
 
 /**
  * An instant a whole number of hours after a base time, or before it for a negative count.
@@ -318,34 +297,28 @@ export const daysBefore = (base: number, days: number): Date =>
  * @param base the base, in milliseconds.
  * @param hours how many hours after it.
  */
-export const hoursAfter = (base: number, hours: number): Date =>
-  new Date(base + hours * HOUR_MS);
+export const hoursAfter = (base: number, hours: number): Date => new Date(base + hours * HOUR_MS);
 
-const answer = (
-  grant: string,
-  decision: FixtureDecision['decision'],
-  decidedAt: Date,
-): FixtureDecision => ({ decidedAt, decision, grant });
+const answer = (grant: string, decision: FixtureDecision['decision'], decidedAt: Date): FixtureDecision => ({
+	decidedAt,
+	decision,
+	grant,
+});
 
-const usersOf = (
-  realm: ListingRealm,
-  names: readonly CastName[],
-): Readonly<Record<string, FixtureUser>> =>
-  Object.fromEntries(
-    names.map((name) => [name, { subject: realm.subject(name) }]),
-  );
+const usersOf = (realm: ListingRealm, names: readonly CastName[]): Readonly<Record<string, FixtureUser>> =>
+	Object.fromEntries(names.map((name) => [name, { subject: realm.subject(name) }]));
 
 const SEEDED_CAST: readonly CastName[] = Object.freeze([
-  'administrator',
-  'ana',
-  'bo',
-  'cy',
-  'dee',
-  'eve',
-  'fay',
-  'gil',
-  'hal',
-  'quinn',
+	'administrator',
+	'ana',
+	'bo',
+	'cy',
+	'dee',
+	'eve',
+	'fay',
+	'gil',
+	'hal',
+	'quinn',
 ]);
 
 /**
@@ -364,132 +337,129 @@ const SEEDED_CAST: readonly CastName[] = Object.freeze([
  * @param realm the realm whose subjects the users carry and whose issuer they name.
  * @param base the time the seed is relative to: a whole second.
  */
-export const listingPolicy = (
-  realm: ListingRealm,
-  base: number,
-): PolicyFixture => {
-  const submitter = (
-    holder: CastName,
-    resource: string,
-    grantedBy: CastName,
-    grantedDaysAgo: number,
-  ): FixtureGrant => ({
-    category: 'unmarked',
-    grantedAt: daysBefore(base, grantedDaysAgo),
-    grantedBy,
-    holder: { user: holder },
-    resource,
-    role: 'submitter',
-  });
-  return {
-    applications: {
-      [APPLICATION]: {
-        registeredBy: 'administrator',
-        serves: [STUDIES.a1, STUDIES.b2, STUDIES.c3],
-      },
-    },
-    categories: { controlled: { description: 'Controlled access' } },
-    decisions: [
-      answer('a1Owner', 'accepted', daysBefore(base, 39)),
-      {
-        capabilities: SUBMITTER_CAPABILITIES,
-        decidedAt: daysBefore(base, 29),
-        decision: 'rejected',
-        grant: 'a1Bo',
-      },
-      {
-        capabilities: BO_SHOWN_CAPABILITIES,
-        decidedAt: daysBefore(base, 28),
-        decision: 'accepted',
-        grant: 'a1Bo',
-      },
-      answer('a1Dee', 'accepted', daysBefore(base, 25)),
-      answer('a1Dee', 'rejected', daysBefore(base, 24)),
-      answer('a1Eve', 'accepted', daysBefore(base, 22)),
-      answer('a1Fay', 'accepted', daysBefore(base, 20)),
-      answer('a1Gil', 'accepted', daysBefore(base, 18)),
-      answer('a1Self', 'accepted', hoursAfter(base, -1)),
-      answer('b2Owner', 'accepted', daysBefore(base, 34)),
-    ],
-    grants: {
-      a1Bo: submitter('bo', STUDIES.a1, 'quinn', 30),
-      a1Cy: submitter('cy', STUDIES.a1, 'administrator', 27),
-      a1Dee: submitter('dee', STUDIES.a1, 'quinn', 26),
-      a1Eve: {
-        ...submitter('eve', STUDIES.a1, 'administrator', 23),
-        revoked: { at: daysBefore(base, 2), by: 'administrator' },
-      },
-      a1Fay: {
-        ...submitter('fay', STUDIES.a1, 'administrator', 21),
-        expiresAt: daysBefore(base, 1),
-      },
-      a1Gil: {
-        category: 'controlled',
-        grantedAt: daysBefore(base, 19),
-        grantedBy: 'ana',
-        holder: { user: 'gil' },
-        resource: STUDIES.a1,
-        role: 'viewer',
-      },
-      a1Owner: {
-        category: null,
-        grantedAt: daysBefore(base, 40),
-        grantedBy: 'administrator',
-        holder: { user: 'ana' },
-        resource: STUDIES.a1,
-        role: 'owner',
-      },
-      a1Self: {
-        category: 'controlled',
-        expiresAt: hoursAfter(base, 11),
-        grantedAt: hoursAfter(base, -1),
-        grantedBy: 'administrator',
-        holder: { user: 'administrator' },
-        resource: STUDIES.a1,
-        role: 'viewer',
-      },
-      b2Bo: {
-        ...submitter('bo', STUDIES.b2, 'hal', 10),
-        expiresAt: daysBefore(base, -30),
-      },
-      b2Owner: {
-        category: null,
-        grantedAt: daysBefore(base, 35),
-        grantedBy: 'administrator',
-        holder: { user: 'hal' },
-        resource: STUDIES.b2,
-        role: 'owner',
-      },
-    },
-    issuer: realm.keycloak.issuer,
-    resources: {
-      [STUDIES.a1]: {
-        baseTier: 'grant',
-        description: 'A synthetic study whose records need a grant',
-        name: 'Study A1',
-        registeredAt: daysBefore(base, 90),
-        registeredBy: 'administrator',
-        updatedAt: daysBefore(base, 45),
-      },
-      [STUDIES.b2]: {
-        baseTier: 'registered',
-        description: 'A synthetic study for anyone signed in',
-        name: 'Study B2',
-        registeredAt: daysBefore(base, 80),
-        registeredBy: 'quinn',
-        updatedAt: daysBefore(base, 43),
-      },
-      [STUDIES.c3]: {
-        baseTier: 'open',
-        description: 'Une étude synthétique « ouverte »',
-        name: 'Étude C3',
-        registeredAt: daysBefore(base, 70),
-        registeredBy: 'administrator',
-        updatedAt: daysBefore(base, 41),
-      },
-    },
-    users: usersOf(realm, SEEDED_CAST),
-  };
+export const listingPolicy = (realm: ListingRealm, base: number): PolicyFixture => {
+	const submitter = (
+		holder: CastName,
+		resource: string,
+		grantedBy: CastName,
+		grantedDaysAgo: number,
+	): FixtureGrant => ({
+		category: 'unmarked',
+		grantedAt: daysBefore(base, grantedDaysAgo),
+		grantedBy,
+		holder: { user: holder },
+		resource,
+		role: 'submitter',
+	});
+	return {
+		applications: {
+			[APPLICATION]: {
+				registeredBy: 'administrator',
+				serves: [STUDIES.a1, STUDIES.b2, STUDIES.c3],
+			},
+		},
+		categories: { controlled: { description: 'Controlled access' } },
+		decisions: [
+			answer('a1Owner', 'accepted', daysBefore(base, 39)),
+			{
+				capabilities: SUBMITTER_CAPABILITIES,
+				decidedAt: daysBefore(base, 29),
+				decision: 'rejected',
+				grant: 'a1Bo',
+			},
+			{
+				capabilities: BO_SHOWN_CAPABILITIES,
+				decidedAt: daysBefore(base, 28),
+				decision: 'accepted',
+				grant: 'a1Bo',
+			},
+			answer('a1Dee', 'accepted', daysBefore(base, 25)),
+			answer('a1Dee', 'rejected', daysBefore(base, 24)),
+			answer('a1Eve', 'accepted', daysBefore(base, 22)),
+			answer('a1Fay', 'accepted', daysBefore(base, 20)),
+			answer('a1Gil', 'accepted', daysBefore(base, 18)),
+			answer('a1Self', 'accepted', hoursAfter(base, -1)),
+			answer('b2Owner', 'accepted', daysBefore(base, 34)),
+		],
+		grants: {
+			a1Bo: submitter('bo', STUDIES.a1, 'quinn', 30),
+			a1Cy: submitter('cy', STUDIES.a1, 'administrator', 27),
+			a1Dee: submitter('dee', STUDIES.a1, 'quinn', 26),
+			a1Eve: {
+				...submitter('eve', STUDIES.a1, 'administrator', 23),
+				revoked: { at: daysBefore(base, 2), by: 'administrator' },
+			},
+			a1Fay: {
+				...submitter('fay', STUDIES.a1, 'administrator', 21),
+				expiresAt: daysBefore(base, 1),
+			},
+			a1Gil: {
+				category: 'controlled',
+				grantedAt: daysBefore(base, 19),
+				grantedBy: 'ana',
+				holder: { user: 'gil' },
+				resource: STUDIES.a1,
+				role: 'viewer',
+			},
+			a1Owner: {
+				category: null,
+				grantedAt: daysBefore(base, 40),
+				grantedBy: 'administrator',
+				holder: { user: 'ana' },
+				resource: STUDIES.a1,
+				role: 'owner',
+			},
+			a1Self: {
+				category: 'controlled',
+				expiresAt: hoursAfter(base, 11),
+				grantedAt: hoursAfter(base, -1),
+				grantedBy: 'administrator',
+				holder: { user: 'administrator' },
+				resource: STUDIES.a1,
+				role: 'viewer',
+			},
+			b2Bo: {
+				...submitter('bo', STUDIES.b2, 'hal', 10),
+				expiresAt: daysBefore(base, -30),
+			},
+			b2Owner: {
+				category: null,
+				grantedAt: daysBefore(base, 35),
+				grantedBy: 'administrator',
+				holder: { user: 'hal' },
+				resource: STUDIES.b2,
+				role: 'owner',
+			},
+		},
+		issuer: realm.keycloak.issuer,
+		resources: {
+			[STUDIES.a1]: {
+				baseTier: 'grant',
+				description: 'A synthetic study whose records need a grant',
+				name: 'Study A1',
+				registeredAt: daysBefore(base, 90),
+				registeredBy: 'administrator',
+				updatedAt: daysBefore(base, 45),
+			},
+			[STUDIES.b2]: {
+				baseTier: 'registered',
+				description: 'A synthetic study for anyone signed in',
+				name: 'Study B2',
+				registeredAt: daysBefore(base, 80),
+				registeredBy: 'quinn',
+				updatedAt: daysBefore(base, 43),
+			},
+			[STUDIES.c3]: {
+				baseTier: 'open',
+				description: 'Une étude synthétique « ouverte »',
+				name: 'Étude C3',
+				registeredAt: daysBefore(base, 70),
+				registeredBy: 'administrator',
+				updatedAt: daysBefore(base, 41),
+			},
+		},
+		users: usersOf(realm, SEEDED_CAST),
+	};
 };
 
 /**
@@ -500,43 +470,34 @@ export const listingPolicy = (
  * @param realm the realm.
  * @param base the time the seed is relative to.
  */
-export const ownerStatesPolicy = (
-  realm: ListingRealm,
-  base: number,
-): PolicyFixture => {
-  const main = listingPolicy(realm, base);
-  const owner = (
-    holder: CastName,
-    resource: string,
-    grantedDaysAgo: number,
-  ): FixtureGrant => ({
-    category: null,
-    grantedAt: daysBefore(base, grantedDaysAgo),
-    grantedBy: 'administrator',
-    holder: { user: holder },
-    resource,
-    role: 'owner',
-  });
-  return {
-    ...main,
-    decisions: [
-      ...(main.decisions ?? []).filter(
-        ({ grant }) => grant !== 'a1Owner' && grant !== 'b2Owner',
-      ),
-      answer('b2Owner', 'rejected', daysBefore(base, 1)),
-      answer('c3CyOwner', 'accepted', daysBefore(base, 14)),
-      answer('c3DeeOwner', 'accepted', daysBefore(base, 11)),
-    ],
-    grants: {
-      ...main.grants,
-      b2Owner: owner('hal', STUDIES.b2, 35),
-      c3CyOwner: {
-        ...owner('cy', STUDIES.c3, 15),
-        revoked: { at: daysBefore(base, 3), by: 'administrator' },
-      },
-      c3DeeOwner: owner('dee', STUDIES.c3, 12),
-    },
-  };
+export const ownerStatesPolicy = (realm: ListingRealm, base: number): PolicyFixture => {
+	const main = listingPolicy(realm, base);
+	const owner = (holder: CastName, resource: string, grantedDaysAgo: number): FixtureGrant => ({
+		category: null,
+		grantedAt: daysBefore(base, grantedDaysAgo),
+		grantedBy: 'administrator',
+		holder: { user: holder },
+		resource,
+		role: 'owner',
+	});
+	return {
+		...main,
+		decisions: [
+			...(main.decisions ?? []).filter(({ grant }) => grant !== 'a1Owner' && grant !== 'b2Owner'),
+			answer('b2Owner', 'rejected', daysBefore(base, 1)),
+			answer('c3CyOwner', 'accepted', daysBefore(base, 14)),
+			answer('c3DeeOwner', 'accepted', daysBefore(base, 11)),
+		],
+		grants: {
+			...main.grants,
+			b2Owner: owner('hal', STUDIES.b2, 35),
+			c3CyOwner: {
+				...owner('cy', STUDIES.c3, 15),
+				revoked: { at: daysBefore(base, 3), by: 'administrator' },
+			},
+			c3DeeOwner: owner('dee', STUDIES.c3, 12),
+		},
+	};
 };
 
 /**
@@ -545,22 +506,19 @@ export const ownerStatesPolicy = (
  * @param realm the realm.
  * @param base the time the seed is relative to.
  */
-export const invitedPolicy = (
-  realm: ListingRealm,
-  base: number,
-): PolicyFixture =>
-  mergedPolicy(listingPolicy(realm, base), {
-    invitations: [
-      {
-        category: 'unmarked',
-        email: INVITEE_ADDRESS,
-        invitedAt: daysBefore(base, 1),
-        invitedBy: 'ana',
-        resource: STUDIES.a1,
-        role: 'submitter',
-      },
-    ],
-  });
+export const invitedPolicy = (realm: ListingRealm, base: number): PolicyFixture =>
+	mergedPolicy(listingPolicy(realm, base), {
+		invitations: [
+			{
+				category: 'unmarked',
+				email: INVITEE_ADDRESS,
+				invitedAt: daysBefore(base, 1),
+				invitedBy: 'ana',
+				resource: STUDIES.a1,
+				role: 'submitter',
+			},
+		],
+	});
 
 /**
  * The plan's seed with {@link RETIRED_STUDY}, whose history holds Hal's owner grant, revoked, and
@@ -570,57 +528,54 @@ export const invitedPolicy = (
  * @param realm the realm.
  * @param base the time the seed is relative to.
  */
-export const retiredPolicy = (
-  realm: ListingRealm,
-  base: number,
-): PolicyFixture =>
-  mergedPolicy(listingPolicy(realm, base), {
-    decisions: [
-      answer('r9Gil', 'accepted', daysBefore(base, 49)),
-      answer('r9Owner', 'accepted', daysBefore(base, 59)),
-    ],
-    grants: {
-      r9Gil: {
-        category: 'controlled',
-        expiresAt: daysBefore(base, 6),
-        grantedAt: daysBefore(base, 50),
-        grantedBy: 'hal',
-        holder: { user: 'gil' },
-        resource: RETIRED_STUDY,
-        role: 'viewer',
-      },
-      r9Owner: {
-        category: null,
-        grantedAt: daysBefore(base, 60),
-        grantedBy: 'administrator',
-        holder: { user: 'hal' },
-        resource: RETIRED_STUDY,
-        revoked: { at: daysBefore(base, 5), by: 'administrator' },
-        role: 'owner',
-      },
-    },
-    resources: {
-      [RETIRED_STUDY]: {
-        baseTier: 'grant',
-        description: 'A synthetic study since retired',
-        name: 'Study R9',
-        registeredBy: 'administrator',
-      },
-    },
-  });
+export const retiredPolicy = (realm: ListingRealm, base: number): PolicyFixture =>
+	mergedPolicy(listingPolicy(realm, base), {
+		decisions: [
+			answer('r9Gil', 'accepted', daysBefore(base, 49)),
+			answer('r9Owner', 'accepted', daysBefore(base, 59)),
+		],
+		grants: {
+			r9Gil: {
+				category: 'controlled',
+				expiresAt: daysBefore(base, 6),
+				grantedAt: daysBefore(base, 50),
+				grantedBy: 'hal',
+				holder: { user: 'gil' },
+				resource: RETIRED_STUDY,
+				role: 'viewer',
+			},
+			r9Owner: {
+				category: null,
+				grantedAt: daysBefore(base, 60),
+				grantedBy: 'administrator',
+				holder: { user: 'hal' },
+				resource: RETIRED_STUDY,
+				revoked: { at: daysBefore(base, 5), by: 'administrator' },
+				role: 'owner',
+			},
+		},
+		resources: {
+			[RETIRED_STUDY]: {
+				baseTier: 'grant',
+				description: 'A synthetic study since retired',
+				name: 'Study R9',
+				registeredBy: 'administrator',
+			},
+		},
+	});
 
 /**
  * The externalIds of the paging world, registered in an order other than their own, each differing
  * from the others in its last letter alone so every collation orders them alike.
  */
 export const PAGING_STUDIES: readonly string[] = Object.freeze([
-  'PAGE-E',
-  'PAGE-B',
-  'PAGE-G',
-  'PAGE-A',
-  'PAGE-F',
-  'PAGE-C',
-  'PAGE-D',
+	'PAGE-E',
+	'PAGE-B',
+	'PAGE-G',
+	'PAGE-A',
+	'PAGE-F',
+	'PAGE-C',
+	'PAGE-D',
 ]);
 
 /**
@@ -629,30 +584,30 @@ export const PAGING_STUDIES: readonly string[] = Object.freeze([
  * @param realm the realm.
  */
 export const pagingPolicy = (realm: ListingRealm): PolicyFixture => ({
-  applications: {
-    [APPLICATION]: { registeredBy: 'administrator', serves: [] },
-  },
-  issuer: realm.keycloak.issuer,
-  resources: Object.fromEntries(
-    PAGING_STUDIES.map((externalId) => [
-      externalId,
-      {
-        baseTier: 'registered' as const,
-        name: `Paging ${externalId}`,
-        registeredBy: 'administrator',
-      },
-    ]),
-  ),
-  users: usersOf(realm, ['administrator']),
+	applications: {
+		[APPLICATION]: { registeredBy: 'administrator', serves: [] },
+	},
+	issuer: realm.keycloak.issuer,
+	resources: Object.fromEntries(
+		PAGING_STUDIES.map((externalId) => [
+			externalId,
+			{
+				baseTier: 'registered' as const,
+				name: `Paging ${externalId}`,
+				registeredBy: 'administrator',
+			},
+		]),
+	),
+	users: usersOf(realm, ['administrator']),
 });
 
 /** The studies {@link othersPolicy} adds, none of them Ana's. */
 export const OTHER_STUDIES: readonly string[] = Object.freeze([
-  'STUDY-D4',
-  'STUDY-E5',
-  'STUDY-F6',
-  'STUDY-G7',
-  'STUDY-H8',
+	'STUDY-D4',
+	'STUDY-E5',
+	'STUDY-F6',
+	'STUDY-G7',
+	'STUDY-H8',
 ]);
 
 /**
@@ -661,41 +616,38 @@ export const OTHER_STUDIES: readonly string[] = Object.freeze([
  * @param realm the realm.
  * @param base the time the seed is relative to.
  */
-export const othersPolicy = (
-  realm: ListingRealm,
-  base: number,
-): PolicyFixture => ({
-  decisions: [answer('d4Owner', 'accepted', daysBefore(base, 1))],
-  grants: {
-    d4Owner: {
-      category: null,
-      grantedAt: daysBefore(base, 2),
-      grantedBy: 'administrator',
-      holder: { user: 'hal' },
-      resource: 'STUDY-D4',
-      role: 'owner',
-    },
-  },
-  issuer: realm.keycloak.issuer,
-  resources: Object.fromEntries(
-    OTHER_STUDIES.map((externalId) => [
-      externalId,
-      {
-        baseTier: 'grant' as const,
-        name: `Other ${externalId}`,
-        registeredBy: 'administrator',
-      },
-    ]),
-  ),
-  users: usersOf(realm, ['administrator', 'hal']),
+export const othersPolicy = (realm: ListingRealm, base: number): PolicyFixture => ({
+	decisions: [answer('d4Owner', 'accepted', daysBefore(base, 1))],
+	grants: {
+		d4Owner: {
+			category: null,
+			grantedAt: daysBefore(base, 2),
+			grantedBy: 'administrator',
+			holder: { user: 'hal' },
+			resource: 'STUDY-D4',
+			role: 'owner',
+		},
+	},
+	issuer: realm.keycloak.issuer,
+	resources: Object.fromEntries(
+		OTHER_STUDIES.map((externalId) => [
+			externalId,
+			{
+				baseTier: 'grant' as const,
+				name: `Other ${externalId}`,
+				registeredBy: 'administrator',
+			},
+		]),
+	),
+	users: usersOf(realm, ['administrator', 'hal']),
 });
 
 /** One open study and nothing else, under the stand-in's issuer, for the authentication test. */
 export const AUTHENTICATION_POLICY: PolicyFixture = Object.freeze({
-  applications: { [APPLICATION]: { serves: [STUDIES.c3] } },
-  resources: {
-    [STUDIES.c3]: { baseTier: 'open' as const, name: 'Étude C3' },
-  },
+	applications: { [APPLICATION]: { serves: [STUDIES.c3] } },
+	resources: {
+		[STUDIES.c3]: { baseTier: 'open' as const, name: 'Étude C3' },
+	},
 });
 
 /**
@@ -707,43 +659,35 @@ export const AUTHENTICATION_POLICY: PolicyFixture = Object.freeze({
  * @param spanMs how far in the past each must be.
  * @throws when they are not within ten seconds more.
  */
-export const untilInThePast = async (
-  times: Readonly<Record<string, ResourceTimes>>,
-  spanMs: number,
-): Promise<void> => {
-  const latest = Math.max(
-    ...Object.values(times).flatMap(({ registeredAt, updatedAt }) => [
-      registeredAt.getTime(),
-      updatedAt.getTime(),
-    ]),
-  );
-  if (
-    await eventually(async () => Date.now() >= latest + spanMs, spanMs + 10_000)
-  ) {
-    return;
-  }
-  throw new Error(`the stored times are not ${spanMs} ms in the past`);
+export const untilInThePast = async (times: Readonly<Record<string, ResourceTimes>>, spanMs: number): Promise<void> => {
+	const latest = Math.max(
+		...Object.values(times).flatMap(({ registeredAt, updatedAt }) => [registeredAt.getTime(), updatedAt.getTime()]),
+	);
+	if (await eventually(async () => Date.now() >= latest + spanMs, spanMs + 10_000)) {
+		return;
+	}
+	throw new Error(`the stored times are not ${spanMs} ms in the past`);
 };
 
 /** One Controller seeded with a listing policy, the realm issuing its tokens and holding its directory. */
 export interface ListingWorld {
-  /** A cast member as a caller of the Policy Management API, with a fresh token from the realm. */
-  caller(name: CastName): Promise<AdminCaller>;
+	/** A cast member as a caller of the Policy Management API, with a fresh token from the realm. */
+	caller(name: CastName): Promise<AdminCaller>;
 
-  harness: Harness;
+	harness: Harness;
 
-  /** The policy seeded. */
-  policy: PolicyFixture;
+	/** The policy seeded. */
+	policy: PolicyFixture;
 
-  realm: ListingRealm;
+	realm: ListingRealm;
 }
 
 /** What a listing world is started with. */
 export interface ListingWorldOptions {
-  /** Fields over the world's configuration: the realm's issuer and directory by default. */
-  configuration?: Partial<ControllerConfiguration>;
+	/** Fields over the world's configuration: the realm's issuer and directory by default. */
+	configuration?: Partial<ControllerConfiguration>;
 
-  policy: PolicyFixture;
+	policy: PolicyFixture;
 }
 
 /**
@@ -756,30 +700,30 @@ export interface ListingWorldOptions {
  * @param options the policy, and fields over the configuration.
  */
 export const startListingWorld = async (
-  scope: Cleanup,
-  realm: ListingRealm,
-  { configuration = {}, policy }: ListingWorldOptions,
+	scope: Cleanup,
+	realm: ListingRealm,
+	{ configuration = {}, policy }: ListingWorldOptions,
 ): Promise<ListingWorld> => {
-  const harness = await startHarness({
-    administratorToken: realmAdministrator(realm),
-    applications: [APPLICATION],
-    configuration: {
-      ...realm.directory,
-      identityProviderIssuer: realm.keycloak.issuer,
-      ...configuration,
-    },
-    fixture: policy,
-  });
-  scope.defer(() => harness.stop());
-  return {
-    caller: async (name) => ({
-      token: await realm.signIn(name),
-      url: harness.url,
-    }),
-    harness,
-    policy,
-    realm,
-  };
+	const harness = await startHarness({
+		administratorToken: realmAdministrator(realm),
+		applications: [APPLICATION],
+		configuration: {
+			...realm.directory,
+			identityProviderIssuer: realm.keycloak.issuer,
+			...configuration,
+		},
+		fixture: policy,
+	});
+	scope.defer(() => harness.stop());
+	return {
+		caller: async (name) => ({
+			token: await realm.signIn(name),
+			url: harness.url,
+		}),
+		harness,
+		policy,
+		realm,
+	};
 };
 
 /**
@@ -791,27 +735,27 @@ export const startListingWorld = async (
  * @param options the world's options, given the realm once it has started.
  */
 export const suiteWorld = (
-  realm: () => Promise<ListingRealm>,
-  options: (started: ListingRealm) => ListingWorldOptions,
+	realm: () => Promise<ListingRealm>,
+	options: (started: ListingRealm) => ListingWorldOptions,
 ): (() => Promise<ListingWorld>) => {
-  const scope = suiteCleanup();
-  const state: { starting: Promise<ListingWorld> | undefined } = {
-    starting: undefined,
-  };
-  const start = async (): Promise<ListingWorld> => {
-    const started = await realm();
-    return startListingWorld(scope, started, options(started));
-  };
-  return () => {
-    const starting =
-      state.starting ??
-      start().catch((error: unknown) => {
-        state.starting = undefined;
-        throw error;
-      });
-    state.starting = starting;
-    return starting;
-  };
+	const scope = suiteCleanup();
+	const state: { starting: Promise<ListingWorld> | undefined } = {
+		starting: undefined,
+	};
+	const start = async (): Promise<ListingWorld> => {
+		const started = await realm();
+		return startListingWorld(scope, started, options(started));
+	};
+	return () => {
+		const starting =
+			state.starting ??
+			start().catch((error: unknown) => {
+				state.starting = undefined;
+				throw error;
+			});
+		state.starting = starting;
+		return starting;
+	};
 };
 
 /**
@@ -825,18 +769,18 @@ export const suiteWorld = (
  * @param configuration fields over the configuration, such as a log stream the test reads.
  */
 export const startStandInHarness = async (
-  scope: Cleanup,
-  realm: ListingRealm,
-  fixture: PolicyFixture,
-  configuration: Partial<ControllerConfiguration> = {},
+	scope: Cleanup,
+	realm: ListingRealm,
+	fixture: PolicyFixture,
+	configuration: Partial<ControllerConfiguration> = {},
 ): Promise<Harness> => {
-  const harness = await startHarness({
-    applications: [APPLICATION],
-    configuration: { ...realm.directory, ...configuration },
-    fixture,
-  });
-  scope.defer(() => harness.stop());
-  return harness;
+	const harness = await startHarness({
+		applications: [APPLICATION],
+		configuration: { ...realm.directory, ...configuration },
+		fixture,
+	});
+	scope.defer(() => harness.stop());
+	return harness;
 };
 
 /**
@@ -845,15 +789,12 @@ export const startStandInHarness = async (
  * @param world the world.
  * @param name the grant's fixture name, such as `a1Bo`.
  */
-export const seededGrant = (
-  world: ListingWorld,
-  name: string,
-): FixtureGrant => {
-  const grant = world.policy.grants?.[name];
-  if (grant !== undefined && Object.hasOwn(world.policy.grants ?? {}, name)) {
-    return grant;
-  }
-  throw new Error(`the world's policy seeds no grant ${name}`);
+export const seededGrant = (world: ListingWorld, name: string): FixtureGrant => {
+	const grant = world.policy.grants?.[name];
+	if (grant !== undefined && Object.hasOwn(world.policy.grants ?? {}, name)) {
+		return grant;
+	}
+	throw new Error(`the world's policy seeds no grant ${name}`);
 };
 
 /**
@@ -862,8 +803,7 @@ export const seededGrant = (
  * @param world the world.
  * @param name the grant's fixture name.
  */
-export const grantIdOf = (world: ListingWorld, name: string): string =>
-  seededId(world.harness.seeded.grants, name);
+export const grantIdOf = (world: ListingWorld, name: string): string => seededId(world.harness.seeded.grants, name);
 
 /**
  * A fixture user's name as the cast names them.
@@ -872,11 +812,11 @@ export const grantIdOf = (world: ListingWorld, name: string): string =>
  * @throws when the name is no cast member's.
  */
 export const castNameOf = (name: string): CastName => {
-  const found = CAST_NAMES.find((castName) => castName === name);
-  if (found !== undefined) {
-    return found;
-  }
-  throw new Error(`${name} is no member of the listing cast`);
+	const found = CAST_NAMES.find((castName) => castName === name);
+	if (found !== undefined) {
+		return found;
+	}
+	throw new Error(`${name} is no member of the listing cast`);
 };
 
 /**
@@ -886,10 +826,10 @@ export const castNameOf = (name: string): CastName => {
  * @param category the fixture grant's category.
  */
 export const scopedCategory = (category: string | null): string | null => {
-  if (category === null || category.includes('.')) {
-    return category;
-  }
-  return `global.${category}`;
+	if (category === null || category.includes('.')) {
+		return category;
+	}
+	return `global.${category}`;
 };
 
 /**
@@ -899,19 +839,19 @@ export const scopedCategory = (category: string | null): string | null => {
  * @param value the grant's `expiresAt`.
  */
 export const expiryOf = (value: unknown): number | undefined =>
-  value === null ? undefined : instantOf(value, 'expiresAt');
+	value === null ? undefined : instantOf(value, 'expiresAt');
 
 /** What the plan checks of every listed grant: its holder, category, role, expiry, state and id. */
 export interface GrantFacts {
-  category: unknown;
+	category: unknown;
 
-  /** In milliseconds; `undefined` for a grant that never expires. */
-  expiresAt: number | undefined;
+	/** In milliseconds; `undefined` for a grant that never expires. */
+	expiresAt: number | undefined;
 
-  holder: unknown;
-  id: unknown;
-  role: unknown;
-  state: unknown;
+	holder: unknown;
+	id: unknown;
+	role: unknown;
+	state: unknown;
 }
 
 /**
@@ -920,12 +860,12 @@ export interface GrantFacts {
  * @param grant the listed grant.
  */
 export const grantFacts = (grant: GrantView): GrantFacts => ({
-  category: grant.category,
-  expiresAt: expiryOf(grant.expiresAt),
-  holder: grant.holder?.subject,
-  id: grant.id,
-  role: grant.role,
-  state: grant.state,
+	category: grant.category,
+	expiresAt: expiryOf(grant.expiresAt),
+	holder: grant.holder?.subject,
+	id: grant.id,
+	role: grant.role,
+	state: grant.state,
 });
 
 /**
@@ -935,23 +875,19 @@ export const grantFacts = (grant: GrantView): GrantFacts => ({
  * @param name the grant's fixture name.
  * @param state the state expected.
  */
-export const seededGrantFacts = (
-  world: ListingWorld,
-  name: string,
-  state: string,
-): GrantFacts => {
-  const grant = seededGrant(world, name);
-  if ('user' in grant.holder) {
-    return {
-      category: scopedCategory(grant.category),
-      expiresAt: grant.expiresAt?.getTime(),
-      holder: world.realm.subject(castNameOf(grant.holder.user)),
-      id: grantIdOf(world, name),
-      role: grant.role,
-      state,
-    };
-  }
-  throw new Error(`the grant ${name} is held by a group`);
+export const seededGrantFacts = (world: ListingWorld, name: string, state: string): GrantFacts => {
+	const grant = seededGrant(world, name);
+	if ('user' in grant.holder) {
+		return {
+			category: scopedCategory(grant.category),
+			expiresAt: grant.expiresAt?.getTime(),
+			holder: world.realm.subject(castNameOf(grant.holder.user)),
+			id: grantIdOf(world, name),
+			role: grant.role,
+			state,
+		};
+	}
+	throw new Error(`the grant ${name} is held by a group`);
 };
 
 /**
@@ -960,9 +896,7 @@ export const seededGrantFacts = (
  * @param facts the facts.
  */
 export const byId = (facts: readonly GrantFacts[]): readonly GrantFacts[] =>
-  facts.toSorted((first, second) =>
-    String(first.id).localeCompare(String(second.id)),
-  );
+	facts.toSorted((first, second) => String(first.id).localeCompare(String(second.id)));
 
 /**
  * The latest decision the world's policy seeded on a grant.
@@ -971,17 +905,12 @@ export const byId = (facts: readonly GrantFacts[]): readonly GrantFacts[] =>
  * @param name the grant's fixture name.
  * @throws when the policy seeds no decision on it.
  */
-export const latestDecisionOf = (
-  world: ListingWorld,
-  name: string,
-): FixtureDecision => {
-  const latest = (world.policy.decisions ?? [])
-    .filter(({ grant }) => grant === name)
-    .at(-1);
-  if (latest !== undefined) {
-    return latest;
-  }
-  throw new Error(`the world's policy seeds no decision on ${name}`);
+export const latestDecisionOf = (world: ListingWorld, name: string): FixtureDecision => {
+	const latest = (world.policy.decisions ?? []).filter(({ grant }) => grant === name).at(-1);
+	if (latest !== undefined) {
+		return latest;
+	}
+	throw new Error(`the world's policy seeds no decision on ${name}`);
 };
 
 /**
@@ -991,7 +920,7 @@ export const latestDecisionOf = (
  * @param name the grant's fixture name.
  */
 export const granterSubjectOf = (world: ListingWorld, name: string): string =>
-  world.realm.subject(castNameOf(seededGrant(world, name).grantedBy ?? ''));
+	world.realm.subject(castNameOf(seededGrant(world, name).grantedBy ?? ''));
 
 /**
  * One listed grant, by the seeded grant's id.
@@ -1001,17 +930,13 @@ export const granterSubjectOf = (world: ListingWorld, name: string): string =>
  * @param name the grant's fixture name.
  * @throws when the listing holds no such grant.
  */
-export const listedGrant = (
-  grants: readonly GrantView[],
-  world: ListingWorld,
-  name: string,
-): GrantView => {
-  const id = grantIdOf(world, name);
-  const found = grants.find((grant) => grant.id === id);
-  if (found !== undefined) {
-    return found;
-  }
-  throw new Error(`the listing holds no grant ${name}`);
+export const listedGrant = (grants: readonly GrantView[], world: ListingWorld, name: string): GrantView => {
+	const id = grantIdOf(world, name);
+	const found = grants.find((grant) => grant.id === id);
+	if (found !== undefined) {
+		return found;
+	}
+	throw new Error(`the listing holds no grant ${name}`);
 };
 
 /**
@@ -1019,5 +944,4 @@ export const listedGrant = (
  *
  * @param value the value.
  */
-export const isNamed = (value: unknown): boolean =>
-  typeof value === 'string' && value.trim().length > 0;
+export const isNamed = (value: unknown): boolean => typeof value === 'string' && value.trim().length > 0;

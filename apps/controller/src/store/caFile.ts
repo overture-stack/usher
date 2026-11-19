@@ -9,50 +9,44 @@ export const CA_FILE_CHANGED = 'store.caFileChanged';
 /** The line naming a CA file that could not be read as a connection opened, so that connection fails. */
 export const CA_FILE_UNREADABLE = 'store.caFileUnreadable';
 
-type Reading =
-  { digest: string; kind: 'read' } | { code: string; kind: 'unreadable' };
+type Reading = { digest: string; kind: 'read' } | { code: string; kind: 'unreadable' };
 
 const codeOf = (failure: unknown): string => {
-  const code: unknown =
-    typeof failure === 'object' && failure !== null && 'code' in failure
-      ? failure.code
-      : undefined;
-  return typeof code === 'string' ? code : 'unreadable';
+	const code: unknown =
+		typeof failure === 'object' && failure !== null && 'code' in failure ? failure.code : undefined;
+	return typeof code === 'string' ? code : 'unreadable';
 };
 
 const readingOf = (path: string): { contents?: string; reading: Reading } => {
-  try {
-    const contents = readFileSync(path, 'utf8');
-    return {
-      contents,
-      reading: {
-        digest: createHash('sha256').update(contents).digest('hex'),
-        kind: 'read',
-      },
-    };
-  } catch (failure) {
-    return { reading: { code: codeOf(failure), kind: 'unreadable' } };
-  }
+	try {
+		const contents = readFileSync(path, 'utf8');
+		return {
+			contents,
+			reading: {
+				digest: createHash('sha256').update(contents).digest('hex'),
+				kind: 'read',
+			},
+		};
+	} catch (failure) {
+		return { reading: { code: codeOf(failure), kind: 'unreadable' } };
+	}
 };
 
 const isSame = (first: Reading, second: Reading): boolean =>
-  first.kind === 'read'
-    ? second.kind === 'read' && first.digest === second.digest
-    : second.kind === 'unreadable' && first.code === second.code;
+	first.kind === 'read'
+		? second.kind === 'read' && first.digest === second.digest
+		: second.kind === 'unreadable' && first.code === second.code;
 
 // The line a read writes, given the reading before it: none for a read finding what the one before
 // found, nor for a first read finding the file, which the start read already.
-const lineFor = (
-  before: Reading | undefined,
-  reading: Reading,
-): 'changed' | 'unreadable' | undefined => {
-  if (before !== undefined && isSame(before, reading)) {
-    return undefined;
-  }
-  if (reading.kind === 'unreadable') {
-    return 'unreadable';
-  }
-  return before === undefined ? undefined : 'changed';
+const lineFor = (before: Reading | undefined, reading: Reading): 'changed' | 'unreadable' | undefined => {
+	if (before !== undefined && isSame(before, reading)) {
+		return undefined;
+	}
+	if (reading.kind === 'unreadable') {
+		return 'unreadable';
+	}
+	return before === undefined ? undefined : 'changed';
 };
 
 /**
@@ -68,24 +62,21 @@ const lineFor = (
  * @param settings where the lines are written, and the variable they name.
  */
 export const readCaFile = (
-  path: string,
-  {
-    log,
-    variable,
-  }: { log: Pick<StoreLog, 'error' | 'warning'>; variable: string },
+	path: string,
+	{ log, variable }: { log: Pick<StoreLog, 'error' | 'warning'>; variable: string },
 ): (() => string | string[]) => {
-  // The reading before, against which each read tells a change; none before the first.
-  const previous: { reading?: Reading } = {};
-  return () => {
-    const { contents, reading } = readingOf(path);
-    const line = lineFor(previous.reading, reading);
-    previous.reading = reading;
-    if (line === 'unreadable' && reading.kind === 'unreadable') {
-      log.error(CA_FILE_UNREADABLE, { code: reading.code, variable });
-    }
-    if (line === 'changed') {
-      log.warning(CA_FILE_CHANGED, { variable });
-    }
-    return contents ?? [];
-  };
+	// The reading before, against which each read tells a change; none before the first.
+	const previous: { reading?: Reading } = {};
+	return () => {
+		const { contents, reading } = readingOf(path);
+		const line = lineFor(previous.reading, reading);
+		previous.reading = reading;
+		if (line === 'unreadable' && reading.kind === 'unreadable') {
+			log.error(CA_FILE_UNREADABLE, { code: reading.code, variable });
+		}
+		if (line === 'changed') {
+			log.warning(CA_FILE_CHANGED, { variable });
+		}
+		return contents ?? [];
+	};
 };

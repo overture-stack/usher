@@ -7,6 +7,6 @@ import type { StoredNotice, StreamPlace } from './types.js';
  * @param notice the notice.
  */
 export const placeOfNotice = (
-  epoch: string,
-  { createdAt, position }: Pick<StoredNotice, 'createdAt' | 'position'>,
+	epoch: string,
+	{ createdAt, position }: Pick<StoredNotice, 'createdAt' | 'position'>,
 ): StreamPlace => ({ createdAt, epoch, position });

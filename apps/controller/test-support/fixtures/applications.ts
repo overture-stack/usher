@@ -3,30 +3,25 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
 
 import {
-  type AdminCaller,
-  type ApplicationRegistration,
-  assertSucceeded,
-  type IssuedApplicationKey,
-  issueApplicationKey,
-  issuedApplicationKeyOf,
-  managementClaims,
-  registerApplication,
-  type RegisteredApplication,
-  registeredApplicationOf,
+	type AdminCaller,
+	type ApplicationRegistration,
+	assertSucceeded,
+	type IssuedApplicationKey,
+	issueApplicationKey,
+	issuedApplicationKeyOf,
+	managementClaims,
+	registerApplication,
+	type RegisteredApplication,
+	registeredApplicationOf,
 } from '../admin.js';
 import type { KeycloakPerson, KeycloakRealmOptions } from '../containers.js';
 import type { ControllerApplication } from '../controller.js';
+import { exchange, type ExchangeRequest, PEOPLE, type WireResponse } from '../exchange.js';
 import {
-  exchange,
-  type ExchangeRequest,
-  PEOPLE,
-  type WireResponse,
-} from '../exchange.js';
-import {
-  APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS,
-  configurationToRead,
-  type Harness,
-  type HarnessOptions,
+	APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS,
+	configurationToRead,
+	type Harness,
+	type HarnessOptions,
 } from '../harness.js';
 import { mintServiceAccountToken } from '../identityProvider.js';
 import { POLICY_TABLES, qualified } from '../policy.js';
@@ -42,26 +37,23 @@ import { POLICY_TABLES, qualified } from '../policy.js';
 
 /** The people named by the tests, by their parts. */
 export const CAST = Object.freeze({
-  administrator: PEOPLE.administrator,
-  outsider: PEOPLE.ana,
-  secondAdministrator: PEOPLE.owner,
+	administrator: PEOPLE.administrator,
+	outsider: PEOPLE.ana,
+	secondAdministrator: PEOPLE.owner,
 });
 
 /** The harness options of every application suite: no application registered by the harness. */
 export const APPLICATION_SUITE: HarnessOptions = Object.freeze({
-  applications: [],
+	applications: [],
 });
 
 const REGISTERING = configurationToRead();
 
-const realmPerson = (
-  username: string,
-  realmRoles: readonly string[],
-): KeycloakPerson => ({
-  email: username,
-  password: randomBytes(18).toString('base64url'),
-  realmRoles,
-  username,
+const realmPerson = (username: string, realmRoles: readonly string[]): KeycloakPerson => ({
+	email: username,
+	password: randomBytes(18).toString('base64url'),
+	realmRoles,
+	username,
 });
 
 /**
@@ -77,23 +69,19 @@ export const REALM_ADMINISTRATOR = 'registrar@example.org';
  * signed in; and a person holding none.
  */
 export const REGISTRAR_REALM: KeycloakRealmOptions = Object.freeze({
-  clients: [
-    {
-      audiences: [REGISTERING.managementAudience],
-      clientId: REGISTERING.managementClients[0] ?? 'usher-ui-test',
-    },
-  ],
-  people: [
-    realmPerson(REALM_ADMINISTRATOR, [REGISTERING.firstUserRole]),
-    realmPerson('bystander@example.org', []),
-  ],
-  realm: 'usher-applications-test',
-  realmRoles: [REGISTERING.firstUserRole],
+	clients: [
+		{
+			audiences: [REGISTERING.managementAudience],
+			clientId: REGISTERING.managementClients[0] ?? 'usher-ui-test',
+		},
+	],
+	people: [realmPerson(REALM_ADMINISTRATOR, [REGISTERING.firstUserRole]), realmPerson('bystander@example.org', [])],
+	realm: 'usher-applications-test',
+	realmRoles: [REGISTERING.firstUserRole],
 });
 
 /** A uuid in its text form, as every application's id and every key's id is generated. */
-export const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 /** The Controller's clock and the test's may differ by the container host's drift. */
 export const CLOCK_TOLERANCE_MS = 30_000;
@@ -104,8 +92,7 @@ export const CLOCK_TOLERANCE_MS = 30_000;
  * @param key the key's value.
  */
 export const isCanonicalKey = (key: string): boolean =>
-  /^[\w-]{43}$/u.test(key) &&
-  Buffer.from(key, 'base64url').toString('base64url') === key;
+	/^[\w-]{43}$/u.test(key) && Buffer.from(key, 'base64url').toString('base64url') === key;
 
 /**
  * A key's value in each of its forms, base64url, base64 and hex, for a search of an answer or a log
@@ -114,8 +101,8 @@ export const isCanonicalKey = (key: string): boolean =>
  * @param value the key's value.
  */
 export const keyForms = (value: string): readonly string[] => {
-  const bytes = Buffer.from(value, 'base64url');
-  return [value, bytes.toString('base64'), bytes.toString('hex')];
+	const bytes = Buffer.from(value, 'base64url');
+	return [value, bytes.toString('base64'), bytes.toString('hex')];
 };
 
 /**
@@ -123,12 +110,12 @@ export const keyForms = (value: string): readonly string[] => {
  * well-formed unknown one, and malformed ones.
  */
 export const absentApplicationIds = (): readonly {
-  id: string;
-  name: string;
+	id: string;
+	name: string;
 }[] => [
-  { id: randomUUID(), name: 'an unknown id' },
-  { id: 'not-a-uuid', name: 'a malformed id' },
-  { id: `${randomUUID()}0`, name: 'a uuid with a character added' },
+	{ id: randomUUID(), name: 'an unknown id' },
+	{ id: 'not-a-uuid', name: 'a malformed id' },
+	{ id: `${randomUUID()}0`, name: 'a uuid with a character added' },
 ];
 
 /**
@@ -139,13 +126,13 @@ export const absentApplicationIds = (): readonly {
  * @param registration the display name and the description.
  */
 export const registered = async (
-  caller: AdminCaller,
-  registration: ApplicationRegistration,
+	caller: AdminCaller,
+	registration: ApplicationRegistration,
 ): Promise<RegisteredApplication> => {
-  const label = `registering ${registration.displayName}`;
-  const response = await registerApplication(caller, registration);
-  assertSucceeded(response, label);
-  return registeredApplicationOf(response, label);
+	const label = `registering ${registration.displayName}`;
+	const response = await registerApplication(caller, registration);
+	assertSucceeded(response, label);
+	return registeredApplicationOf(response, label);
 };
 
 /**
@@ -155,14 +142,11 @@ export const registered = async (
  * @param caller a platform administrator.
  * @param applicationId the application's id.
  */
-export const issued = async (
-  caller: AdminCaller,
-  applicationId: string,
-): Promise<IssuedApplicationKey> => {
-  const label = `issuing a key for ${applicationId}`;
-  const response = await issueApplicationKey(caller, applicationId);
-  assertSucceeded(response, label);
-  return issuedApplicationKeyOf(response, label);
+export const issued = async (caller: AdminCaller, applicationId: string): Promise<IssuedApplicationKey> => {
+	const label = `issuing a key for ${applicationId}`;
+	const response = await issueApplicationKey(caller, applicationId);
+	assertSucceeded(response, label);
+	return issuedApplicationKeyOf(response, label);
 };
 
 /**
@@ -173,8 +157,8 @@ export const issued = async (
  * @param key the key held by the Bridge.
  */
 export const heldBy = (
-  application: Pick<RegisteredApplication, 'id' | 'key'>,
-  key: IssuedApplicationKey = application.key,
+	application: Pick<RegisteredApplication, 'id' | 'key'>,
+	key: IssuedApplicationKey = application.key,
 ): ControllerApplication => ({ id: application.id, key: key.value });
 
 /**
@@ -186,16 +170,16 @@ export const heldBy = (
  * @param request a given assertion, and a signal aborting the exchange.
  */
 export const anonymousExchange = (
-  url: URL,
-  application: ControllerApplication,
-  { assertion, signal }: Pick<ExchangeRequest, 'assertion' | 'signal'> = {},
+	url: URL,
+	application: ControllerApplication,
+	{ assertion, signal }: Pick<ExchangeRequest, 'assertion' | 'signal'> = {},
 ): Promise<WireResponse> =>
-  exchange(url, {
-    application,
-    ...(assertion === undefined ? {} : { assertion }),
-    credential: null,
-    ...(signal === undefined ? {} : { signal }),
-  });
+	exchange(url, {
+		application,
+		...(assertion === undefined ? {} : { assertion }),
+		credential: null,
+		...(signal === undefined ? {} : { signal }),
+	});
 
 /**
  * How long an instance may take to learn a registration, an issue or a revocation through the cache's
@@ -212,8 +196,7 @@ export const WAKE_WITHIN_MS = 10_000;
 export const RELOAD_WITHIN_MS = 5_000;
 
 /** The reload interval, and a moment past it, by which a test moves an instance's clock forward. */
-export const PAST_THE_RELOAD_INTERVAL_MS =
-  APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS + 1_000;
+export const PAST_THE_RELOAD_INTERVAL_MS = APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS + 1_000;
 
 /**
  * The counts of applications and application keys held in the store, for a test showing that a
@@ -221,14 +204,12 @@ export const PAST_THE_RELOAD_INTERVAL_MS =
  *
  * @param client a connection under the migration role.
  */
-export const applicationRowCounts = async (
-  client: pg.ClientBase,
-): Promise<{ applications: number; keys: number }> => {
-  const { applicationKeys, applications } = POLICY_TABLES;
-  const { rows } = await client.query<{ applications: number; keys: number }>(
-    `SELECT (SELECT count(*)::int FROM ${qualified(applications)}) AS ${pg.escapeIdentifier('applications')}, (SELECT count(*)::int FROM ${qualified(applicationKeys)}) AS ${pg.escapeIdentifier('keys')}`,
-  );
-  return rows[0] ?? { applications: 0, keys: 0 };
+export const applicationRowCounts = async (client: pg.ClientBase): Promise<{ applications: number; keys: number }> => {
+	const { applicationKeys, applications } = POLICY_TABLES;
+	const { rows } = await client.query<{ applications: number; keys: number }>(
+		`SELECT (SELECT count(*)::int FROM ${qualified(applications)}) AS ${pg.escapeIdentifier('applications')}, (SELECT count(*)::int FROM ${qualified(applicationKeys)}) AS ${pg.escapeIdentifier('keys')}`,
+	);
+	return rows[0] ?? { applications: 0, keys: 0 };
 };
 
 /**
@@ -237,33 +218,24 @@ export const applicationRowCounts = async (
  *
  * @param harness the harness, its configuration listing the service account's client.
  */
-export const serviceAccountTokens = async (
-  harness: Harness,
-): Promise<readonly { label: string; token: string }[]> => [
-  {
-    label: 'a client-credentials token',
-    token: await mintServiceAccountToken(
-      harness.identityProvider,
-      harness.configuration,
-    ),
-  },
-  {
-    label: 'a client-credentials token with the first-user role',
-    token: await mintServiceAccountToken(
-      harness.identityProvider,
-      harness.configuration,
-      {
-        mint: {
-          claims: {
-            realm_access: managementClaims(
-              harness.identityProvider,
-              harness.configuration,
-              CAST.administrator,
-              true,
-            )['realm_access'],
-          },
-        },
-      },
-    ),
-  },
+export const serviceAccountTokens = async (harness: Harness): Promise<readonly { label: string; token: string }[]> => [
+	{
+		label: 'a client-credentials token',
+		token: await mintServiceAccountToken(harness.identityProvider, harness.configuration),
+	},
+	{
+		label: 'a client-credentials token with the first-user role',
+		token: await mintServiceAccountToken(harness.identityProvider, harness.configuration, {
+			mint: {
+				claims: {
+					realm_access: managementClaims(
+						harness.identityProvider,
+						harness.configuration,
+						CAST.administrator,
+						true,
+					)['realm_access'],
+				},
+			},
+		}),
+	},
 ];

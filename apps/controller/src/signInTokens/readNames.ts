@@ -12,15 +12,13 @@ import type { NamesReading } from './types.js';
  * @param claims the token's claims.
  */
 export const readNames = (claims: TokenClaims): NamesReading => {
-  const subject = claims['sub'];
-  if (typeof subject !== 'string' || subject === '') {
-    return { kind: 'refused', reason: 'missingSubject' };
-  }
-  const sid = claims['sid'];
-  const storableSession =
-    !Object.hasOwn(claims, 'sid') ||
-    (typeof sid === 'string' && isStorableText(sid));
-  return isStorableText(subject) && storableSession
-    ? { kind: 'named', subject }
-    : { kind: 'refused', reason: 'unrepresentableSubject' };
+	const subject = claims['sub'];
+	if (typeof subject !== 'string' || subject === '') {
+		return { kind: 'refused', reason: 'missingSubject' };
+	}
+	const sid = claims['sid'];
+	const storableSession = !Object.hasOwn(claims, 'sid') || (typeof sid === 'string' && isStorableText(sid));
+	return isStorableText(subject) && storableSession
+		? { kind: 'named', subject }
+		: { kind: 'refused', reason: 'unrepresentableSubject' };
 };

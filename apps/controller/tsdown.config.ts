@@ -5,10 +5,10 @@ import type { UserConfig } from 'tsdown';
 // the module reading them, and tsdown writes every chunk to the top of the output folder, so the SQL
 // folder is copied there, to `<outDir>/sql/`, whichever chunk holds that module.
 const config: UserConfig = {
-  copy: ['src/migrations/sql'],
-  entry: { main: 'src/main.ts', migrate: 'src/migrate.ts' },
-  fixedExtension: false,
-  format: 'esm',
+	copy: ['src/migrations/sql'],
+	entry: { main: 'src/main.ts', migrate: 'src/migrate.ts' },
+	fixedExtension: false,
+	format: 'esm',
 };
 
 export default config;

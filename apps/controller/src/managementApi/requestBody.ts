@@ -4,14 +4,13 @@ import { PROBLEMS, unreadableBody } from './problems.js';
 
 /** What reading a request's body gave: none, one JSON object, or the refusal it earned. */
 export type BodyReading =
-  | { kind: 'absent' }
-  | { kind: 'object'; value: Readonly<Record<string, unknown>> }
-  | { kind: 'refused'; problem: Problem };
+	| { kind: 'absent' }
+	| { kind: 'object'; value: Readonly<Record<string, unknown>> }
+	| { kind: 'refused'; problem: Problem };
 
 /** What reading an object's text members gave: the members sent, by name, or the refusal they earned. */
 export type MembersReading =
-  | { kind: 'read'; members: Readonly<Partial<Record<string, string>>> }
-  | { kind: 'refused'; problem: Problem };
+	{ kind: 'read'; members: Readonly<Partial<Record<string, string>>> } | { kind: 'refused'; problem: Problem };
 
 const JSON_MEDIA_TYPE = 'application/json';
 
@@ -19,29 +18,28 @@ const JSON_MEDIA_TYPE = 'application/json';
 export const MERGE_PATCH_MEDIA_TYPE = 'application/merge-patch+json';
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // JSON in UTF-8, the one encoding RFC 8259 allows: a charset parameter naming any other is refused.
 const isJson = (contentType: string | undefined, expected: string): boolean => {
-  const [mediaType = '', ...parameters] = (contentType ?? '').split(';');
-  return (
-    mediaType.trim().toLowerCase() === expected &&
-    parameters.every((parameter) => {
-      const [name = '', value = ''] = parameter.split('=');
-      return (
-        name.trim().toLowerCase() !== 'charset' ||
-        value.trim().replaceAll('"', '').toLowerCase() === 'utf-8'
-      );
-    })
-  );
+	const [mediaType = '', ...parameters] = (contentType ?? '').split(';');
+	return (
+		mediaType.trim().toLowerCase() === expected &&
+		parameters.every((parameter) => {
+			const [name = '', value = ''] = parameter.split('=');
+			return (
+				name.trim().toLowerCase() !== 'charset' || value.trim().replaceAll('"', '').toLowerCase() === 'utf-8'
+			);
+		})
+	);
 };
 
 const decoded = (bytes: Uint8Array): string | undefined => {
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    return undefined;
-  }
+	try {
+		return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+	} catch {
+		return undefined;
+	}
 };
 
 /**
@@ -55,34 +53,30 @@ const decoded = (bytes: Uint8Array): string | undefined => {
  * @param mediaType the media type the body must be in.
  */
 export const readJsonBody = (
-  bytes: Uint8Array | undefined,
-  contentType: string | undefined,
-  mediaType:
-    typeof JSON_MEDIA_TYPE | typeof MERGE_PATCH_MEDIA_TYPE = JSON_MEDIA_TYPE,
+	bytes: Uint8Array | undefined,
+	contentType: string | undefined,
+	mediaType: typeof JSON_MEDIA_TYPE | typeof MERGE_PATCH_MEDIA_TYPE = JSON_MEDIA_TYPE,
 ): BodyReading => {
-  if (bytes === undefined || bytes.length === 0) {
-    return { kind: 'absent' };
-  }
-  if (!isJson(contentType, mediaType)) {
-    return {
-      kind: 'refused',
-      problem:
-        mediaType === JSON_MEDIA_TYPE
-          ? PROBLEMS.unsupportedMediaType
-          : PROBLEMS.unsupportedMergePatch,
-    };
-  }
-  const text = decoded(bytes);
-  if (text === undefined) {
-    return { kind: 'refused', problem: unreadableBody('is not UTF-8') };
-  }
-  const reading = readStrictJson(text);
-  if (reading.kind === 'refused') {
-    return { kind: 'refused', problem: unreadableBody(reading.rule) };
-  }
-  return isRecord(reading.value)
-    ? { kind: 'object', value: reading.value }
-    : { kind: 'refused', problem: unreadableBody('is not one JSON object') };
+	if (bytes === undefined || bytes.length === 0) {
+		return { kind: 'absent' };
+	}
+	if (!isJson(contentType, mediaType)) {
+		return {
+			kind: 'refused',
+			problem: mediaType === JSON_MEDIA_TYPE ? PROBLEMS.unsupportedMediaType : PROBLEMS.unsupportedMergePatch,
+		};
+	}
+	const text = decoded(bytes);
+	if (text === undefined) {
+		return { kind: 'refused', problem: unreadableBody('is not UTF-8') };
+	}
+	const reading = readStrictJson(text);
+	if (reading.kind === 'refused') {
+		return { kind: 'refused', problem: unreadableBody(reading.rule) };
+	}
+	return isRecord(reading.value)
+		? { kind: 'object', value: reading.value }
+		: { kind: 'refused', problem: unreadableBody('is not one JSON object') };
 };
 
 /**
@@ -93,46 +87,39 @@ export const readJsonBody = (
  * @param members each member taken, and whether it is required.
  */
 export const readTextMembers = <Name extends string>(
-  object: Readonly<Record<string, unknown>>,
-  members: Readonly<Record<Name, { required: boolean }>>,
+	object: Readonly<Record<string, unknown>>,
+	members: Readonly<Record<Name, { required: boolean }>>,
 ): MembersReading => {
-  const names = Object.keys(members).toSorted();
-  const isTaken = (name: string): name is Name => Object.hasOwn(members, name);
-  if (!Object.keys(object).every(isTaken)) {
-    return {
-      kind: 'refused',
-      problem: unreadableBody(
-        `holds a member this operation does not take: it takes ${names.join(' and ')} alone`,
-      ),
-    };
-  }
-  const missing = names.find(
-    (name) =>
-      isTaken(name) && members[name].required && !Object.hasOwn(object, name),
-  );
-  if (missing !== undefined) {
-    return {
-      kind: 'refused',
-      problem: unreadableBody(`lacks the member ${missing}`),
-    };
-  }
-  const mistyped = Object.keys(object).find(
-    (name) => typeof object[name] !== 'string',
-  );
-  if (mistyped !== undefined) {
-    return {
-      kind: 'refused',
-      problem: unreadableBody(
-        `holds ${mistyped} as something other than a string`,
-      ),
-    };
-  }
-  return {
-    kind: 'read',
-    members: Object.fromEntries(
-      Object.entries(object).flatMap(([name, value]) =>
-        isTaken(name) && typeof value === 'string' ? [[name, value]] : [],
-      ),
-    ),
-  };
+	const names = Object.keys(members).toSorted();
+	const isTaken = (name: string): name is Name => Object.hasOwn(members, name);
+	if (!Object.keys(object).every(isTaken)) {
+		return {
+			kind: 'refused',
+			problem: unreadableBody(
+				`holds a member this operation does not take: it takes ${names.join(' and ')} alone`,
+			),
+		};
+	}
+	const missing = names.find((name) => isTaken(name) && members[name].required && !Object.hasOwn(object, name));
+	if (missing !== undefined) {
+		return {
+			kind: 'refused',
+			problem: unreadableBody(`lacks the member ${missing}`),
+		};
+	}
+	const mistyped = Object.keys(object).find((name) => typeof object[name] !== 'string');
+	if (mistyped !== undefined) {
+		return {
+			kind: 'refused',
+			problem: unreadableBody(`holds ${mistyped} as something other than a string`),
+		};
+	}
+	return {
+		kind: 'read',
+		members: Object.fromEntries(
+			Object.entries(object).flatMap(([name, value]) =>
+				isTaken(name) && typeof value === 'string' ? [[name, value]] : [],
+			),
+		),
+	};
 };

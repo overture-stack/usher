@@ -11,5 +11,5 @@
  * underscores. A failure it wraps is kept as its `cause`, whose code alone the line carries.
  */
 export class ControllerError extends Error {
-  override readonly name: string = 'ControllerError';
+	override readonly name: string = 'ControllerError';
 }

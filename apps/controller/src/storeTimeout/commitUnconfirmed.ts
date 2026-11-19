@@ -6,11 +6,11 @@ import { ControllerError } from '../failures/index.js';
  * discarded. Its `code` names it on a log line; its message names no value.
  */
 export class CommitUnconfirmed extends ControllerError {
-  readonly code = 'commitUnconfirmed';
+	readonly code = 'commitUnconfirmed';
 
-  override readonly name = 'CommitUnconfirmed';
+	override readonly name = 'CommitUnconfirmed';
 
-  constructor() {
-    super('the store did not confirm whether the commit took effect');
-  }
+	constructor() {
+		super('the store did not confirm whether the commit took effect');
+	}
 }

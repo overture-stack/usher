@@ -5,11 +5,11 @@
  * the global `Express.Locals`.
  */
 declare global {
-  namespace Express {
-    interface Locals {
-      readonly usher?: unknown;
-    }
-  }
+	namespace Express {
+		interface Locals {
+			readonly usher?: unknown;
+		}
+	}
 }
 
 export {};

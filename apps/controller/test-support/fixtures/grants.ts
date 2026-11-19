@@ -4,35 +4,30 @@ import { decodeJwt } from 'jose';
 import pg from 'pg';
 
 import {
-  type AdminCaller,
-  type AdminResponse,
-  type GrantCreation,
-  managementClaims,
-  type SelfGrantCreation,
-  stringsIn,
+	type AdminCaller,
+	type AdminResponse,
+	type GrantCreation,
+	managementClaims,
+	type SelfGrantCreation,
+	stringsIn,
 } from '../admin.js';
 import { AUDIT_EVENT_TYPES, emittedType } from '../auditEvents.js';
-import {
-  addressKeycloakRealm,
-  type KeycloakRealm,
-  type KeycloakRealmOptions,
-  startKeycloak,
-} from '../containers.js';
+import { addressKeycloakRealm, type KeycloakRealm, type KeycloakRealmOptions, startKeycloak } from '../containers.js';
 import type { Clock } from '../controller.js';
 import { holdTable, untilBlocked } from '../database.js';
 import { PEOPLE, type Person } from '../exchange.js';
 import { type Harness, startHarness } from '../harness.js';
 import type { MintOptions } from '../identityProvider.js';
 import {
-  type FixtureApplication,
-  type FixtureDecision,
-  type FixtureGrant,
-  inTransactionAs,
-  type PolicyFixture,
-  POLICY_TABLES,
-  qualified,
-  seedPolicy,
-  SYSTEM_ACTOR,
+	type FixtureApplication,
+	type FixtureDecision,
+	type FixtureGrant,
+	inTransactionAs,
+	type PolicyFixture,
+	POLICY_TABLES,
+	qualified,
+	seedPolicy,
+	SYSTEM_ACTOR,
 } from '../policy.js';
 import { suiteCleanup } from '../waiting.js';
 
@@ -49,36 +44,29 @@ import { suiteCleanup } from '../waiting.js';
  * role alone, so neither is seeded.
  */
 export const CAST = Object.freeze({
-  administrator: PEOPLE.administrator,
-  curator: PEOPLE.bo,
-  lookalike: PEOPLE.cy2,
-  newcomer: PEOPLE.fen,
-  outsider: PEOPLE.long,
-  ownerOfA1: PEOPLE.ana,
-  ownerOfB2: PEOPLE.dana,
-  recipient: PEOPLE.cy,
-  secondAdministrator: PEOPLE.eli,
-  spare: PEOPLE.owner,
+	administrator: PEOPLE.administrator,
+	curator: PEOPLE.bo,
+	lookalike: PEOPLE.cy2,
+	newcomer: PEOPLE.fen,
+	outsider: PEOPLE.long,
+	ownerOfA1: PEOPLE.ana,
+	ownerOfB2: PEOPLE.dana,
+	recipient: PEOPLE.cy,
+	secondAdministrator: PEOPLE.eli,
+	spare: PEOPLE.owner,
 });
 
 /** A part in {@link CAST} that the fixture seeds as a user of the same name. */
-export type SeededPart =
-  | 'curator'
-  | 'lookalike'
-  | 'outsider'
-  | 'ownerOfA1'
-  | 'ownerOfB2'
-  | 'recipient'
-  | 'spare';
+export type SeededPart = 'curator' | 'lookalike' | 'outsider' | 'ownerOfA1' | 'ownerOfB2' | 'recipient' | 'spare';
 
 const SEEDED_PARTS: readonly SeededPart[] = Object.freeze([
-  'curator',
-  'lookalike',
-  'outsider',
-  'ownerOfA1',
-  'ownerOfB2',
-  'recipient',
-  'spare',
+	'curator',
+	'lookalike',
+	'outsider',
+	'ownerOfA1',
+	'ownerOfB2',
+	'recipient',
+	'spare',
 ]);
 
 /** The study Ana owns. */
@@ -110,21 +98,21 @@ export const KEY_REFETCH_COOLDOWN_MS = 30_000;
 
 /** A clock a test moves forward, configured as the Controller's own (#209 Q2). */
 export interface AdjustableClock {
-  /** Moves the clock forward. */
-  advance(milliseconds: number): void;
+	/** Moves the clock forward. */
+	advance(milliseconds: number): void;
 
-  clock: Clock;
+	clock: Clock;
 }
 
 /** A clock reading the system's time plus however far the test has moved it forward. */
 export const adjustableClock = (): AdjustableClock => {
-  const state = { offset: 0 };
-  return {
-    advance: (milliseconds) => {
-      state.offset += milliseconds;
-    },
-    clock: { now: () => Date.now() + state.offset },
-  };
+	const state = { offset: 0 };
+	return {
+		advance: (milliseconds) => {
+			state.offset += milliseconds;
+		},
+		clock: { now: () => Date.now() + state.offset },
+	};
 };
 
 /** An hour, in milliseconds. */
@@ -138,36 +126,30 @@ export const MINUTE_MS = 60_000;
  * the seeded matrix of `permissions-model.md` § The seeded roles, as a matrix.
  */
 export const SHOWN = Object.freeze({
-  curator: Object.freeze([
-    'record.count',
-    'record.create',
-    'record.delete',
-    'record.export',
-    'record.update',
-    'record.view',
-  ]),
-  editor: Object.freeze([
-    'record.count',
-    'record.create',
-    'record.export',
-    'record.update',
-    'record.view',
-  ]),
-  owner: Object.freeze([
-    'grant.create',
-    'grant.extend',
-    'grant.reduce',
-    'grant.revoke',
-    'grant.view',
-    'invitation.create',
-    'ownership.transfer',
-    'resource.restore',
-    'resource.suppress',
-    'resource.update',
-    'resource.view',
-  ]),
-  submitter: Object.freeze(['record.create', 'record.update']),
-  viewer: Object.freeze(['record.count', 'record.export', 'record.view']),
+	curator: Object.freeze([
+		'record.count',
+		'record.create',
+		'record.delete',
+		'record.export',
+		'record.update',
+		'record.view',
+	]),
+	editor: Object.freeze(['record.count', 'record.create', 'record.export', 'record.update', 'record.view']),
+	owner: Object.freeze([
+		'grant.create',
+		'grant.extend',
+		'grant.reduce',
+		'grant.revoke',
+		'grant.view',
+		'invitation.create',
+		'ownership.transfer',
+		'resource.restore',
+		'resource.suppress',
+		'resource.update',
+		'resource.view',
+	]),
+	submitter: Object.freeze(['record.create', 'record.update']),
+	viewer: Object.freeze(['record.count', 'record.export', 'record.view']),
 });
 
 /**
@@ -179,21 +161,18 @@ export const SHOWN = Object.freeze({
  * @param harness the harness.
  * @param grantId the grant's id.
  */
-export const revocationReasonsRecorded = async (
-  harness: Harness,
-  grantId: string,
-): Promise<readonly unknown[]> => {
-  const { auditLog } = POLICY_TABLES;
-  const data = pg.escapeIdentifier(auditLog.columns.data);
-  const { rows } = await harness.clients.migration.query<{ reason: unknown }>(
-    `SELECT ${data} -> 'reason' AS reason
+export const revocationReasonsRecorded = async (harness: Harness, grantId: string): Promise<readonly unknown[]> => {
+	const { auditLog } = POLICY_TABLES;
+	const data = pg.escapeIdentifier(auditLog.columns.data);
+	const { rows } = await harness.clients.migration.query<{ reason: unknown }>(
+		`SELECT ${data} -> 'reason' AS reason
        FROM ${qualified(auditLog)}
       WHERE ${pg.escapeIdentifier(auditLog.columns.type)} = $1
         AND ${data} ->> 'grantId' = $2
         AND ${data} ->> 'result' = 'succeeded'`,
-    [emittedType(AUDIT_EVENT_TYPES.grantRevocation), grantId],
-  );
-  return rows.map(({ reason }) => reason);
+		[emittedType(AUDIT_EVENT_TYPES.grantRevocation), grantId],
+	);
+	return rows.map(({ reason }) => reason);
 };
 
 /**
@@ -203,7 +182,7 @@ export const revocationReasonsRecorded = async (
  * @param value the value, such as a subject or an externalId.
  */
 export const answerNames = (response: AdminResponse, value: string): boolean =>
-  stringsIn(response.body).includes(value);
+	stringsIn(response.body).includes(value);
 
 const INSTANT_FORM = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u;
 
@@ -214,19 +193,13 @@ const INSTANT_FORM = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u;
  * @param response the answer.
  * @param instant the instant.
  */
-export const answerNamesInstant = (
-  response: AdminResponse,
-  instant: Date,
-): boolean =>
-  stringsIn(response.body).some(
-    (value) =>
-      INSTANT_FORM.test(value) &&
-      Math.abs(Date.parse(value) - instant.getTime()) <= 1,
-  );
+export const answerNamesInstant = (response: AdminResponse, instant: Date): boolean =>
+	stringsIn(response.body).some(
+		(value) => INSTANT_FORM.test(value) && Math.abs(Date.parse(value) - instant.getTime()) <= 1,
+	);
 
 /** A UUID in its canonical text form. */
-export const UUID_FORM =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+export const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 /**
  * An instant a duration from now, whole seconds, as the API takes one: UTC with `Z`.
@@ -234,7 +207,7 @@ export const UUID_FORM =
  * @param milliseconds the duration; negative for the past.
  */
 export const instantFromNow = (milliseconds: number): string =>
-  new Date(Math.floor((Date.now() + milliseconds) / 1000) * 1000).toISOString();
+	new Date(Math.floor((Date.now() + milliseconds) / 1000) * 1000).toISOString();
 
 const twoDigits = (value: number): string => String(value).padStart(2, '0');
 
@@ -246,21 +219,20 @@ const twoDigits = (value: number): string => String(value).padStart(2, '0');
  * @param offsetMinutes the offset, east positive.
  */
 export const atOffset = (instant: Date, offsetMinutes: number): string => {
-  const local = new Date(instant.getTime() + offsetMinutes * MINUTE_MS);
-  const sign = offsetMinutes < 0 ? '-' : '+';
-  const magnitude = Math.abs(offsetMinutes);
-  return `${local.toISOString().slice(0, 19)}${sign}${twoDigits(Math.floor(magnitude / 60))}:${twoDigits(magnitude % 60)}`;
+	const local = new Date(instant.getTime() + offsetMinutes * MINUTE_MS);
+	const sign = offsetMinutes < 0 ? '-' : '+';
+	const magnitude = Math.abs(offsetMinutes);
+	return `${local.toISOString().slice(0, 19)}${sign}${twoDigits(Math.floor(magnitude / 60))}:${twoDigits(magnitude % 60)}`;
 };
 
 /**
  * The harness's default applications, by label, serving nothing, since serving is not #212's: the
  * harness registers them through the API once its Controller listens.
  */
-export const APPLICATIONS: Readonly<Record<string, FixtureApplication>> =
-  Object.freeze({
-    'arranger-test': { serves: [] },
-    'lyric-test': { serves: [] },
-  });
+export const APPLICATIONS: Readonly<Record<string, FixtureApplication>> = Object.freeze({
+	'arranger-test': { serves: [] },
+	'lyric-test': { serves: [] },
+});
 
 /**
  * A fixture grant.
@@ -271,19 +243,15 @@ export const APPLICATIONS: Readonly<Record<string, FixtureApplication>> =
  *   resource (STUDY-A1 by default), and anything over them.
  */
 export const fixtureGrant = (
-  user: string,
-  role: string,
-  {
-    category = 'controlled',
-    resource = STUDY_A1,
-    ...details
-  }: Partial<FixtureGrant> = {},
+	user: string,
+	role: string,
+	{ category = 'controlled', resource = STUDY_A1, ...details }: Partial<FixtureGrant> = {},
 ): FixtureGrant => ({
-  ...details,
-  category,
-  holder: { user },
-  resource,
-  role,
+	...details,
+	category,
+	holder: { user },
+	resource,
+	role,
 });
 
 /**
@@ -294,23 +262,23 @@ export const fixtureGrant = (
  * @param decidedAt when: the transaction's clock by default.
  */
 export const answeredInFixture = (
-  grant: string,
-  decision: FixtureDecision['decision'] = 'accepted',
-  decidedAt?: Date,
+	grant: string,
+	decision: FixtureDecision['decision'] = 'accepted',
+	decidedAt?: Date,
 ): FixtureDecision => ({
-  decision,
-  grant,
-  ...(decidedAt === undefined ? {} : { decidedAt }),
+	decision,
+	grant,
+	...(decidedAt === undefined ? {} : { decidedAt }),
 });
 
 /** The fixture's own grants, each accepted: Ana's and Dana's ownerships and Bo's curator grant. */
 const BASE_GRANTS: Readonly<Record<string, FixtureGrant>> = Object.freeze({
-  curatesA1: fixtureGrant('curator', 'curator'),
-  ownsA1: fixtureGrant('ownerOfA1', 'owner', { category: null }),
-  ownsB2: fixtureGrant('ownerOfB2', 'owner', {
-    category: null,
-    resource: STUDY_B2,
-  }),
+	curatesA1: fixtureGrant('curator', 'curator'),
+	ownsA1: fixtureGrant('ownerOfA1', 'owner', { category: null }),
+	ownsB2: fixtureGrant('ownerOfB2', 'owner', {
+		category: null,
+		resource: STUDY_B2,
+	}),
 });
 
 /**
@@ -324,39 +292,31 @@ const BASE_GRANTS: Readonly<Record<string, FixtureGrant>> = Object.freeze({
  * @param extra entries over the fixture's, by the same names; decisions follow the fixture's own.
  */
 export const grantsFixture = ({
-  decisions = [],
-  grants = {},
-  resources = {},
-  users = {},
-}: Pick<
-  PolicyFixture,
-  'decisions' | 'grants' | 'resources' | 'users'
-> = {}): PolicyFixture => ({
-  applications: APPLICATIONS,
-  categories: { controlled: { description: 'Controlled access' } },
-  decisions: [
-    ...Object.keys(BASE_GRANTS).map((grant) => answeredInFixture(grant)),
-    ...decisions,
-  ],
-  grants: { ...BASE_GRANTS, ...grants },
-  resources: {
-    [STUDY_A1]: { baseTier: 'grant', name: 'Cardiac Outcomes' },
-    [STUDY_B2]: {
-      baseTier: 'grant',
-      categories: { internal: { description: 'Internal records' } },
-      name: 'Étude pulmonaire',
-      offers: [B2_OWN_CATEGORY],
-    },
-    [OPEN_STUDY]: { baseTier: 'open', name: 'Reef Survey' },
-    [REGISTERED_STUDY]: { baseTier: 'registered', name: 'Members Archive' },
-    ...resources,
-  },
-  users: {
-    ...Object.fromEntries(
-      SEEDED_PARTS.map((part) => [part, { subject: CAST[part].subject }]),
-    ),
-    ...users,
-  },
+	decisions = [],
+	grants = {},
+	resources = {},
+	users = {},
+}: Pick<PolicyFixture, 'decisions' | 'grants' | 'resources' | 'users'> = {}): PolicyFixture => ({
+	applications: APPLICATIONS,
+	categories: { controlled: { description: 'Controlled access' } },
+	decisions: [...Object.keys(BASE_GRANTS).map((grant) => answeredInFixture(grant)), ...decisions],
+	grants: { ...BASE_GRANTS, ...grants },
+	resources: {
+		[STUDY_A1]: { baseTier: 'grant', name: 'Cardiac Outcomes' },
+		[STUDY_B2]: {
+			baseTier: 'grant',
+			categories: { internal: { description: 'Internal records' } },
+			name: 'Étude pulmonaire',
+			offers: [B2_OWN_CATEGORY],
+		},
+		[OPEN_STUDY]: { baseTier: 'open', name: 'Reef Survey' },
+		[REGISTERED_STUDY]: { baseTier: 'registered', name: 'Members Archive' },
+		...resources,
+	},
+	users: {
+		...Object.fromEntries(SEEDED_PARTS.map((part) => [part, { subject: CAST[part].subject }])),
+		...users,
+	},
 });
 
 /**
@@ -367,40 +327,26 @@ export const grantsFixture = ({
  * @param person who the token is for.
  * @param added the roles added.
  */
-export const withRealmRoles = (
-  harness: Harness,
-  person: Person,
-  added: readonly string[],
-): MintOptions => {
-  const access = managementClaims(
-    harness.identityProvider,
-    harness.configuration,
-    person,
-    false,
-  )['realm_access'];
-  const held: unknown =
-    typeof access === 'object' && access !== null
-      ? Reflect.get(access, 'roles')
-      : undefined;
-  const defaults = Array.isArray(held)
-    ? held.filter((role): role is string => typeof role === 'string')
-    : [];
-  return { claims: { realm_access: { roles: [...defaults, ...added] } } };
+export const withRealmRoles = (harness: Harness, person: Person, added: readonly string[]): MintOptions => {
+	const access = managementClaims(harness.identityProvider, harness.configuration, person, false)['realm_access'];
+	const held: unknown = typeof access === 'object' && access !== null ? Reflect.get(access, 'roles') : undefined;
+	const defaults = Array.isArray(held) ? held.filter((role): role is string => typeof role === 'string') : [];
+	return { claims: { realm_access: { roles: [...defaults, ...added] } } };
 };
 
 /** What a grant names beyond its holder, each with a default. */
 export interface GrantTerms {
-  /** `global.controlled` by default. */
-  category?: string;
+	/** `global.controlled` by default. */
+	category?: string;
 
-  /** An instant with an offset; none by default. */
-  expiresAt?: string;
+	/** An instant with an offset; none by default. */
+	expiresAt?: string;
 
-  /** STUDY-A1 by default. */
-  resource?: string;
+	/** STUDY-A1 by default. */
+	resource?: string;
 
-  /** `viewer` by default. */
-  role?: string;
+	/** `viewer` by default. */
+	role?: string;
 }
 
 /**
@@ -411,19 +357,14 @@ export interface GrantTerms {
  * @param terms the category, expiry, resource and role.
  */
 export const grantFor = (
-  holder: Pick<Person, 'subject'>,
-  {
-    category = CONTROLLED,
-    expiresAt,
-    resource = STUDY_A1,
-    role = 'viewer',
-  }: GrantTerms = {},
+	holder: Pick<Person, 'subject'>,
+	{ category = CONTROLLED, expiresAt, resource = STUDY_A1, role = 'viewer' }: GrantTerms = {},
 ): GrantCreation => ({
-  category,
-  ...(expiresAt === undefined ? {} : { expiresAt }),
-  holder: { subject: holder.subject },
-  resource,
-  role,
+	category,
+	...(expiresAt === undefined ? {} : { expiresAt }),
+	holder: { subject: holder.subject },
+	resource,
+	role,
 });
 
 /**
@@ -435,9 +376,9 @@ export const grantFor = (
  * @param resource STUDY-A1 by default.
  */
 export const uncategorizedGrantFor = (
-  holder: Pick<Person, 'subject'>,
-  role: 'owner' | 'submitter',
-  resource: string = STUDY_A1,
+	holder: Pick<Person, 'subject'>,
+	role: 'owner' | 'submitter',
+	resource: string = STUDY_A1,
 ): GrantCreation => ({ holder: { subject: holder.subject }, resource, role });
 
 /**
@@ -447,12 +388,8 @@ export const uncategorizedGrantFor = (
  * @param terms the category, resource and role.
  */
 export const selfGrantUntil = (
-  expiresAt: string,
-  {
-    category = CONTROLLED,
-    resource = STUDY_A1,
-    role = 'viewer',
-  }: Omit<GrantTerms, 'expiresAt'> = {},
+	expiresAt: string,
+	{ category = CONTROLLED, resource = STUDY_A1, role = 'viewer' }: Omit<GrantTerms, 'expiresAt'> = {},
 ): SelfGrantCreation => ({ category, expiresAt, resource, role });
 
 /**
@@ -462,69 +399,66 @@ export const selfGrantUntil = (
  * @param what what the test asked for, for the failure's message.
  */
 export const createdId = (response: AdminResponse, what: string): string => {
-  assert.ok(
-    response.status >= 200 && response.status < 300,
-    `${what} was answered ${response.status}${response.problem === undefined ? '' : ` ${response.problem.code}`}`,
-  );
-  const id: unknown =
-    typeof response.body === 'object' && response.body !== null
-      ? Reflect.get(response.body, 'id')
-      : undefined;
-  if (typeof id === 'string') {
-    return id;
-  }
-  return assert.fail(`${what} answered no grant id`);
+	assert.ok(
+		response.status >= 200 && response.status < 300,
+		`${what} was answered ${response.status}${response.problem === undefined ? '' : ` ${response.problem.code}`}`,
+	);
+	const id: unknown =
+		typeof response.body === 'object' && response.body !== null ? Reflect.get(response.body, 'id') : undefined;
+	if (typeof id === 'string') {
+		return id;
+	}
+	return assert.fail(`${what} answered no grant id`);
 };
 
 const {
-  capabilities,
-  categories,
-  grantDecisions,
-  grants,
-  invitations,
-  notificationOutbox,
-  resources,
-  rolePermissions,
-  roles,
-  userIdentities,
-  users,
+	capabilities,
+	categories,
+	grantDecisions,
+	grants,
+	invitations,
+	notificationOutbox,
+	resources,
+	rolePermissions,
+	roles,
+	userIdentities,
+	users,
 } = POLICY_TABLES;
 
-const at = (alias: string, column: string): string =>
-  `${alias}.${pg.escapeIdentifier(column)}`;
+const at = (alias: string, column: string): string => `${alias}.${pg.escapeIdentifier(column)}`;
 
 /** A grant as the store holds it, people by subject, the resource by externalId and the category scoped. */
 export interface StoredGrant {
-  /** `global.controlled` or `resource.internal`; `null` for the control plane's wildcard. */
-  category: string | null;
+	/** `global.controlled` or `resource.internal`; `null` for the control plane's wildcard. */
+	category: string | null;
 
-  expiresAt: Date | null;
-  fieldCategory: string | null;
-  grantedAt: Date;
-  granterSubject: string;
-  holderIssuer: string | null;
-  holderSubject: string | null;
-  id: string;
+	expiresAt: Date | null;
+	fieldCategory: string | null;
+	grantedAt: Date;
+	granterSubject: string;
+	holderIssuer: string | null;
+	holderSubject: string | null;
+	id: string;
 
-  /** By externalId. */
-  resource: string;
+	/** By externalId. */
+	resource: string;
 
-  revokedAt: Date | null;
-  revokerSubject: string | null;
-  role: string;
+	revokedAt: Date | null;
+	revokerSubject: string | null;
+	role: string;
 }
 
 /** Which grants to read: each member narrows, and none reads them all. */
 export interface GrantFilter {
-  /** The holder, by the identity provider's subject. */
-  holder?: string;
+	/** The holder, by the identity provider's subject. */
+	holder?: string;
 
-  id?: string;
+	id?: string;
 
-  /** By externalId. */
-  resource?: string;
+	/** By externalId. */
+	resource?: string;
 
-  role?: string;
+	role?: string;
 }
 
 /**
@@ -534,11 +468,11 @@ export interface GrantFilter {
  * @param filter the holder, id, resource and role.
  */
 export const storedGrants = async (
-  harness: Harness,
-  { holder, id, resource, role }: GrantFilter = {},
+	harness: Harness,
+	{ holder, id, resource, role }: GrantFilter = {},
 ): Promise<readonly StoredGrant[]> => {
-  const { rows } = await harness.clients.migration.query<StoredGrant>(
-    `SELECT ${at('held', grants.columns.id)}::text AS id,
+	const { rows } = await harness.clients.migration.query<StoredGrant>(
+		`SELECT ${at('held', grants.columns.id)}::text AS id,
             ${at('record_category', categories.columns.scope)} || '.' || ${at('record_category', categories.columns.name)} AS category,
             ${at('held', grants.columns.expiresAt)} AS "expiresAt",
             ${at('field_category', categories.columns.scope)} || '.' || ${at('field_category', categories.columns.name)} AS "fieldCategory",
@@ -563,9 +497,9 @@ export const storedGrants = async (
         AND ($3::text IS NULL OR ${at('resource_row', resources.columns.externalId)} = $3)
         AND ($4::text IS NULL OR ${at('role_row', roles.columns.name)} = $4)
       ORDER BY ${at('held', grants.columns.grantedAt)}, 1`,
-    [id ?? null, holder ?? null, resource ?? null, role ?? null],
-  );
-  return rows;
+		[id ?? null, holder ?? null, resource ?? null, role ?? null],
+	);
+	return rows;
 };
 
 /**
@@ -575,25 +509,22 @@ export const storedGrants = async (
  * @param id the grant's id.
  * @throws when the store holds no grant by that id.
  */
-export const storedGrant = async (
-  harness: Harness,
-  id: string,
-): Promise<StoredGrant> => {
-  const [found] = await storedGrants(harness, { id });
-  if (found !== undefined) {
-    return found;
-  }
-  throw new Error('the store holds no grant by that id');
+export const storedGrant = async (harness: Harness, id: string): Promise<StoredGrant> => {
+	const [found] = await storedGrants(harness, { id });
+	if (found !== undefined) {
+		return found;
+	}
+	throw new Error('the store holds no grant by that id');
 };
 
 /** A decision as the store holds it, its person by subject. */
 export interface StoredDecision {
-  /** What the person was shown, as `entity.action` names, sorted. */
-  capabilities: readonly string[];
+	/** What the person was shown, as `entity.action` names, sorted. */
+	capabilities: readonly string[];
 
-  decidedAt: Date;
-  deciderSubject: string;
-  decision: string;
+	decidedAt: Date;
+	deciderSubject: string;
+	decision: string;
 }
 
 /**
@@ -602,12 +533,9 @@ export interface StoredDecision {
  * @param harness the harness.
  * @param grantId the grant's id.
  */
-export const storedDecisions = async (
-  harness: Harness,
-  grantId: string,
-): Promise<readonly StoredDecision[]> => {
-  const { rows } = await harness.clients.migration.query<StoredDecision>(
-    `SELECT ARRAY(SELECT unnest(${at('decision_row', grantDecisions.columns.capabilities)}) ORDER BY 1) AS capabilities,
+export const storedDecisions = async (harness: Harness, grantId: string): Promise<readonly StoredDecision[]> => {
+	const { rows } = await harness.clients.migration.query<StoredDecision>(
+		`SELECT ARRAY(SELECT unnest(${at('decision_row', grantDecisions.columns.capabilities)}) ORDER BY 1) AS capabilities,
             ${at('decision_row', grantDecisions.columns.decidedAt)} AS "decidedAt",
             ${at('decision_row', grantDecisions.columns.decision)} AS decision,
             ${at('decider', userIdentities.columns.idpSubjectId)} AS "deciderSubject"
@@ -615,16 +543,16 @@ export const storedDecisions = async (
        JOIN ${qualified(userIdentities)} decider ON ${at('decider', userIdentities.columns.userId)} = ${at('decision_row', grantDecisions.columns.userId)}
       WHERE ${at('decision_row', grantDecisions.columns.grantId)}::text = $1
       ORDER BY ${at('decision_row', grantDecisions.columns.decidedAt)}`,
-    [grantId],
-  );
-  return rows;
+		[grantId],
+	);
+	return rows;
 };
 
 /** An owner notification as the outbox holds it (#212 Q13), its recipient by subject. */
 export interface StoredNotification {
-  deliveredAt: Date | null;
-  kind: string;
-  recipientSubject: string;
+	deliveredAt: Date | null;
+	kind: string;
+	recipientSubject: string;
 }
 
 /**
@@ -633,40 +561,36 @@ export interface StoredNotification {
  * @param harness the harness.
  * @param grantId the grant's id.
  */
-export const notificationsOf = async (
-  harness: Harness,
-  grantId: string,
-): Promise<readonly StoredNotification[]> => {
-  const { rows } = await harness.clients.migration.query<StoredNotification>(
-    `SELECT ${at('outbox', notificationOutbox.columns.deliveredAt)} AS "deliveredAt",
+export const notificationsOf = async (harness: Harness, grantId: string): Promise<readonly StoredNotification[]> => {
+	const { rows } = await harness.clients.migration.query<StoredNotification>(
+		`SELECT ${at('outbox', notificationOutbox.columns.deliveredAt)} AS "deliveredAt",
             ${at('outbox', notificationOutbox.columns.kind)} AS kind,
             ${at('recipient', userIdentities.columns.idpSubjectId)} AS "recipientSubject"
        FROM ${qualified(notificationOutbox)} outbox
        JOIN ${qualified(userIdentities)} recipient ON ${at('recipient', userIdentities.columns.userId)} = ${at('outbox', notificationOutbox.columns.recipientUserId)}
       WHERE ${at('outbox', notificationOutbox.columns.grantId)}::text = $1
       ORDER BY 3`,
-    [grantId],
-  );
-  return rows;
+		[grantId],
+	);
+	return rows;
 };
 
 /** How many rows each table a refused write must leave untouched holds. */
 export interface RowCounts {
-  categories: number;
-  decisions: number;
-  grants: number;
+	categories: number;
+	decisions: number;
+	grants: number;
 
-  /** A person's identities: a grant written to someone never seen writes one beside their person. */
-  identities: number;
+	/** A person's identities: a grant written to someone never seen writes one beside their person. */
+	identities: number;
 
-  invitations: number;
-  notifications: number;
-  resources: number;
-  users: number;
+	invitations: number;
+	notifications: number;
+	resources: number;
+	users: number;
 }
 
-const counted = (table: { name: string }): string =>
-  `(SELECT count(*)::int FROM ${qualified(table)})`;
+const counted = (table: { name: string }): string => `(SELECT count(*)::int FROM ${qualified(table)})`;
 
 /**
  * How many rows the tables a grant operation writes hold now, for a test showing a refusal wrote
@@ -675,8 +599,8 @@ const counted = (table: { name: string }): string =>
  * @param harness the harness.
  */
 export const rowCounts = async (harness: Harness): Promise<RowCounts> => {
-  const { rows } = await harness.clients.migration.query<RowCounts>(
-    `SELECT ${counted(categories)} AS categories,
+	const { rows } = await harness.clients.migration.query<RowCounts>(
+		`SELECT ${counted(categories)} AS categories,
             ${counted(grantDecisions)} AS decisions,
             ${counted(grants)} AS grants,
             ${counted(userIdentities)} AS identities,
@@ -684,12 +608,12 @@ export const rowCounts = async (harness: Harness): Promise<RowCounts> => {
             ${counted(notificationOutbox)} AS notifications,
             ${counted(resources)} AS resources,
             ${counted(users)} AS users`,
-  );
-  const [found] = rows;
-  if (found !== undefined) {
-    return found;
-  }
-  throw new Error('the store answered no counts');
+	);
+	const [found] = rows;
+	if (found !== undefined) {
+		return found;
+	}
+	throw new Error('the store answered no counts');
 };
 
 /**
@@ -703,28 +627,25 @@ export const rowCounts = async (harness: Harness): Promise<RowCounts> => {
  * @returns the answers, in the order sent.
  */
 export const racedAtTheGrantsTable = async <Answer>(
-  harness: Harness,
-  count: number,
-  send: () => Promise<Answer>,
+	harness: Harness,
+	count: number,
+	send: () => Promise<Answer>,
 ): Promise<readonly Answer[]> => {
-  const held = await holdTable(harness.database, grants);
-  const sending = Promise.all(Array.from({ length: count }, () => send()));
-  const waiting = await untilBlocked(harness.clients.migration, sending, {
-    count,
-  }).then(
-    (blocked) => ({ blocked, failure: undefined }),
-    (failure: unknown) => ({ blocked: false, failure }),
-  );
-  await held.release();
-  const answers = await sending;
-  if (waiting.failure !== undefined) {
-    throw waiting.failure;
-  }
-  assert.ok(
-    waiting.blocked,
-    `all ${count} requests waited on the grants table together`,
-  );
-  return answers;
+	const held = await holdTable(harness.database, grants);
+	const sending = Promise.all(Array.from({ length: count }, () => send()));
+	const waiting = await untilBlocked(harness.clients.migration, sending, {
+		count,
+	}).then(
+		(blocked) => ({ blocked, failure: undefined }),
+		(failure: unknown) => ({ blocked: false, failure }),
+	);
+	await held.release();
+	const answers = await sending;
+	if (waiting.failure !== undefined) {
+		throw waiting.failure;
+	}
+	assert.ok(waiting.blocked, `all ${count} requests waited on the grants table together`);
+	return answers;
 };
 
 /**
@@ -735,28 +656,24 @@ export const racedAtTheGrantsTable = async <Answer>(
  * @param role the role's name.
  * @param capability the capability, as `entity.action`.
  */
-export const withdrawCapabilityInStore = async (
-  harness: Harness,
-  role: string,
-  capability: string,
-): Promise<void> => {
-  const [entity, action] = capability.split('.');
-  const client = harness.clients.migration;
-  const { rowCount } = await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    client.query(
-      `DELETE FROM ${qualified(rolePermissions)} permission
+export const withdrawCapabilityInStore = async (harness: Harness, role: string, capability: string): Promise<void> => {
+	const [entity, action] = capability.split('.');
+	const client = harness.clients.migration;
+	const { rowCount } = await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		client.query(
+			`DELETE FROM ${qualified(rolePermissions)} permission
         USING ${qualified(roles)} role_row, ${qualified(capabilities)} capability
         WHERE ${at('permission', rolePermissions.columns.roleId)} = ${at('role_row', roles.columns.id)}
           AND ${at('permission', rolePermissions.columns.capabilityId)} = ${at('capability', capabilities.columns.id)}
           AND ${at('role_row', roles.columns.name)} = $1
           AND ${at('capability', capabilities.columns.entity)} = $2
           AND ${at('capability', capabilities.columns.action)} = $3`,
-      [role, entity ?? '', action ?? ''],
-    ),
-  );
-  if (rowCount !== 1) {
-    throw new Error(`the role ${role} carried no ${capability}`);
-  }
+			[role, entity ?? '', action ?? ''],
+		),
+	);
+	if (rowCount !== 1) {
+		throw new Error(`the role ${role} carried no ${capability}`);
+	}
 };
 
 /**
@@ -765,29 +682,29 @@ export const withdrawCapabilityInStore = async (
  * own so the realm a suite shares stays as imported for every other test.
  */
 export const ADDRESSES = Object.freeze({
-  administrator: 'admin.one@example.org',
-  disabledLater: 'paused@example.org',
-  duplicated: 'dup@example.org',
-  nearMissPrefixed: 'abo@example.org',
-  nearMissSurname: 'bo.smith@example.org',
-  nonAscii: 'zoë@example.org',
-  outsider: 'outsider.cy@example.org',
-  owner: 'owner.ana@example.org',
-  plusAddressed: 'bo+ims@example.org',
-  removedLater: 'leaving@example.org',
-  submitter: 'sub.bo@example.org',
-  unverified: 'una@example.org',
+	administrator: 'admin.one@example.org',
+	disabledLater: 'paused@example.org',
+	duplicated: 'dup@example.org',
+	nearMissPrefixed: 'abo@example.org',
+	nearMissSurname: 'bo.smith@example.org',
+	nonAscii: 'zoë@example.org',
+	outsider: 'outsider.cy@example.org',
+	owner: 'owner.ana@example.org',
+	plusAddressed: 'bo+ims@example.org',
+	removedLater: 'leaving@example.org',
+	submitter: 'sub.bo@example.org',
+	unverified: 'una@example.org',
 });
 
 /** A real Keycloak holding the address realm, and the options it was imported from. */
 export interface AddressRealm {
-  keycloak: KeycloakRealm;
-  options: KeycloakRealmOptions;
+	keycloak: KeycloakRealm;
+	options: KeycloakRealmOptions;
 }
 
 const startAddressRealm = async (): Promise<AddressRealm> => {
-  const options = addressKeycloakRealm();
-  return { keycloak: await startKeycloak(options), options };
+	const options = addressKeycloakRealm();
+	return { keycloak: await startKeycloak(options), options };
 };
 
 /** The address realm one suite's tests share, started by the first test asking for it. */
@@ -799,49 +716,49 @@ export type SharedAddressRealm = () => Promise<AddressRealm>;
  * Call it in the suite's body.
  */
 export const sharedAddressRealm = (): SharedAddressRealm => {
-  const scope = suiteCleanup();
-  const state: { starting: Promise<AddressRealm> | undefined } = {
-    starting: undefined,
-  };
-  scope.defer(async () => {
-    const started = await state.starting?.catch(() => undefined);
-    await started?.keycloak.remove();
-  });
-  return () => {
-    const starting =
-      state.starting ??
-      startAddressRealm().catch((error: unknown) => {
-        state.starting = undefined;
-        throw error;
-      });
-    state.starting = starting;
-    return starting;
-  };
+	const scope = suiteCleanup();
+	const state: { starting: Promise<AddressRealm> | undefined } = {
+		starting: undefined,
+	};
+	scope.defer(async () => {
+		const started = await state.starting?.catch(() => undefined);
+		await started?.keycloak.remove();
+	});
+	return () => {
+		const starting =
+			state.starting ??
+			startAddressRealm().catch((error: unknown) => {
+				state.starting = undefined;
+				throw error;
+			});
+		state.starting = starting;
+		return starting;
+	};
 };
 
 /** A realm person signed in through the management client. */
 export interface SignedIn {
-  /** The person's subject, as the access token carries it. */
-  subject: string;
+	/** The person's subject, as the access token carries it. */
+	subject: string;
 
-  /** The access token, a management token from the real Keycloak. */
-  token: string;
+	/** The access token, a management token from the real Keycloak. */
+	token: string;
 }
 
 /** What a test in the address suite works with. */
 export interface AddressSession {
-  /** A caller holding a token, at the Controller as it runs now. */
-  caller(signedIn: SignedIn): AdminCaller;
+	/** A caller holding a token, at the Controller as it runs now. */
+	caller(signedIn: SignedIn): AdminCaller;
 
-  harness: Harness;
-  keycloak: KeycloakRealm;
-  options: KeycloakRealmOptions;
+	harness: Harness;
+	keycloak: KeycloakRealm;
+	options: KeycloakRealmOptions;
 
-  /** Ana, signed in, the accepted owner of STUDY-A1. */
-  owner: SignedIn;
+	/** Ana, signed in, the accepted owner of STUDY-A1. */
+	owner: SignedIn;
 
-  /** Signs a realm person in by username, through the harness's management client. */
-  signIn(username: string): Promise<SignedIn>;
+	/** Signs a realm person in by username, through the harness's management client. */
+	signIn(username: string): Promise<SignedIn>;
 }
 
 /**
@@ -850,30 +767,28 @@ export interface AddressSession {
  * @param options the realm.
  */
 export const directoryClientOf = (options: KeycloakRealmOptions): string => {
-  const found = options.clients.find(
-    ({ directoryRoles = [] }) => directoryRoles.length > 0,
-  );
-  if (found !== undefined) {
-    return found.clientId;
-  }
-  throw new Error('the realm holds no directory client');
+	const found = options.clients.find(({ directoryRoles = [] }) => directoryRoles.length > 0);
+	if (found !== undefined) {
+		return found.clientId;
+	}
+	throw new Error('the realm holds no directory client');
 };
 
 const signedInThrough = async (
-  { keycloak, options }: AddressRealm,
-  clientId: string,
-  username: string,
+	{ keycloak, options }: AddressRealm,
+	clientId: string,
+	username: string,
 ): Promise<SignedIn> => {
-  const person = options.people.find((held) => held.username === username);
-  if (person === undefined) {
-    throw new Error(`the realm holds no ${username}`);
-  }
-  const { accessToken } = await keycloak.signIn(clientId, person);
-  const { sub } = decodeJwt(accessToken);
-  if (typeof sub === 'string') {
-    return { subject: sub, token: accessToken };
-  }
-  throw new Error("Keycloak's access token names no subject");
+	const person = options.people.find((held) => held.username === username);
+	if (person === undefined) {
+		throw new Error(`the realm holds no ${username}`);
+	}
+	const { accessToken } = await keycloak.signIn(clientId, person);
+	const { sub } = decodeJwt(accessToken);
+	if (typeof sub === 'string') {
+		return { subject: sub, token: accessToken };
+	}
+	throw new Error("Keycloak's access token names no subject");
 };
 
 /**
@@ -890,47 +805,46 @@ const signedInThrough = async (
  * @param work the test's steps.
  */
 export const withAddressHarness = async (
-  realm: SharedAddressRealm,
-  work: (session: AddressSession) => Promise<void>,
+	realm: SharedAddressRealm,
+	work: (session: AddressSession) => Promise<void>,
 ): Promise<void> => {
-  const harness = await startHarness({
-    applications: [],
-    startsController: false,
-  });
-  try {
-    const shared = await realm();
-    const [managementClient] = harness.configuration.managementClients;
-    if (managementClient === undefined) {
-      throw new Error('the harness configures no management client');
-    }
-    const signIn = (username: string): Promise<SignedIn> =>
-      signedInThrough(shared, managementClient, username);
-    const owner = await signIn(ADDRESSES.owner);
-    await harness.restart({
-      ...shared.keycloak.directoryFor(directoryClientOf(shared.options)),
-      identityProviderIssuer: shared.keycloak.issuer,
-    });
-    await seedPolicy(harness.clients.migration, {
-      categories: { controlled: { description: 'Controlled access' } },
-      decisions: [answeredInFixture('ownsA1')],
-      grants: { ownsA1: fixtureGrant('owner', 'owner', { category: null }) },
-      issuer: shared.keycloak.issuer,
-      resources: {
-        [STUDY_A1]: { baseTier: 'grant', name: 'Cardiac Outcomes' },
-        [STUDY_B2]: { baseTier: 'grant', name: 'Étude pulmonaire' },
-        [OPEN_STUDY]: { baseTier: 'open', name: 'Reef Survey' },
-      },
-      users: { owner: { subject: owner.subject } },
-    });
-    await work({
-      caller: ({ token }) => harness.caller(token),
-      harness,
-      keycloak: shared.keycloak,
-      options: shared.options,
-      owner,
-      signIn,
-    });
-  } finally {
-    await harness.stop();
-  }
+	const harness = await startHarness({
+		applications: [],
+		startsController: false,
+	});
+	try {
+		const shared = await realm();
+		const [managementClient] = harness.configuration.managementClients;
+		if (managementClient === undefined) {
+			throw new Error('the harness configures no management client');
+		}
+		const signIn = (username: string): Promise<SignedIn> => signedInThrough(shared, managementClient, username);
+		const owner = await signIn(ADDRESSES.owner);
+		await harness.restart({
+			...shared.keycloak.directoryFor(directoryClientOf(shared.options)),
+			identityProviderIssuer: shared.keycloak.issuer,
+		});
+		await seedPolicy(harness.clients.migration, {
+			categories: { controlled: { description: 'Controlled access' } },
+			decisions: [answeredInFixture('ownsA1')],
+			grants: { ownsA1: fixtureGrant('owner', 'owner', { category: null }) },
+			issuer: shared.keycloak.issuer,
+			resources: {
+				[STUDY_A1]: { baseTier: 'grant', name: 'Cardiac Outcomes' },
+				[STUDY_B2]: { baseTier: 'grant', name: 'Étude pulmonaire' },
+				[OPEN_STUDY]: { baseTier: 'open', name: 'Reef Survey' },
+			},
+			users: { owner: { subject: owner.subject } },
+		});
+		await work({
+			caller: ({ token }) => harness.caller(token),
+			harness,
+			keycloak: shared.keycloak,
+			options: shared.options,
+			owner,
+			signIn,
+		});
+	} finally {
+		await harness.stop();
+	}
 };

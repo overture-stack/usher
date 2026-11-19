@@ -21,23 +21,23 @@ const LIFETIME_S = 60;
  * @returns the signer; each promise it returns rejects when jose cannot sign under `assertionKey`.
  */
 export const createChannelAssertion = ({
-  application,
-  assertionKey,
-  wallClock,
+	application,
+	assertionKey,
+	wallClock,
 }: {
-  application: string;
-  assertionKey: CryptoKey;
-  wallClock: Clock;
+	application: string;
+	assertionKey: CryptoKey;
+	wallClock: Clock;
 }): (() => Promise<string>) => {
-  return () => {
-    const issuedAt = Math.floor(wallClock.now() / 1000);
-    return new SignJWT({})
-      .setProtectedHeader({ alg: 'HS256', typ: CHANNEL_ASSERTION_TYPE })
-      .setIssuer(application)
-      .setAudience(CHANNEL_ASSERTION_AUDIENCE)
-      .setIssuedAt(issuedAt)
-      .setExpirationTime(issuedAt + LIFETIME_S)
-      .setJti(randomUUID())
-      .sign(assertionKey);
-  };
+	return () => {
+		const issuedAt = Math.floor(wallClock.now() / 1000);
+		return new SignJWT({})
+			.setProtectedHeader({ alg: 'HS256', typ: CHANNEL_ASSERTION_TYPE })
+			.setIssuer(application)
+			.setAudience(CHANNEL_ASSERTION_AUDIENCE)
+			.setIssuedAt(issuedAt)
+			.setExpirationTime(issuedAt + LIFETIME_S)
+			.setJti(randomUUID())
+			.sign(assertionKey);
+	};
 };

@@ -4,17 +4,17 @@ import { versionOnePayload } from './versionOnePayload.js';
 
 /** When and by whom an anonymous token is issued, and for which audience. */
 export interface AnonymousIssuing {
-  /** The application the token is issued for, its `aud`. */
-  audience: string;
+	/** The application the token is issued for, its `aud`. */
+	audience: string;
 
-  /** The instant of issue and of the computation, in whole seconds since the Unix epoch. */
-  issuedAt: number;
+	/** The instant of issue and of the computation, in whole seconds since the Unix epoch. */
+	issuedAt: number;
 
-  /** The Controller's own issuer, its `iss`. */
-  issuer: string;
+	/** The Controller's own issuer, its `iss`. */
+	issuer: string;
 
-  /** How long the token lives, in seconds. */
-  lifetimeSeconds: number;
+	/** How long the token lives, in seconds. */
+	lifetimeSeconds: number;
 }
 
 /**
@@ -27,13 +27,13 @@ export interface AnonymousIssuing {
  * @param issuing the audience, the instant, the issuer and the token lifetime.
  */
 export const anonymousPayload = (
-  calculation: Calculation,
-  { audience, issuedAt, issuer, lifetimeSeconds }: AnonymousIssuing,
+	calculation: Calculation,
+	{ audience, issuedAt, issuer, lifetimeSeconds }: AnonymousIssuing,
 ): VersionOnePayload =>
-  versionOnePayload(calculation, {
-    audience,
-    expiresAt: issuedAt + lifetimeSeconds,
-    issuedAt,
-    issuer,
-    subject: null,
-  });
+	versionOnePayload(calculation, {
+		audience,
+		expiresAt: issuedAt + lifetimeSeconds,
+		issuedAt,
+		issuer,
+		subject: null,
+	});

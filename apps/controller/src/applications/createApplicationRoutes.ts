@@ -5,169 +5,145 @@ import { type Actor, eventInstant, type JsonValue } from '../eventLog/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
 import { type Problem, problem } from '../http/index.js';
 import {
-  type AfterCommitStepName,
-  type EventMembers,
-  type InputReading,
-  type ManagementDependencies,
-  type ManagementOperation,
-  managementRoute,
-  type OperationOutcome,
-  type Principal,
-  readTextMembers,
+	type AfterCommitStepName,
+	type EventMembers,
+	type InputReading,
+	type ManagementDependencies,
+	type ManagementOperation,
+	managementRoute,
+	type OperationOutcome,
+	type Principal,
+	readTextMembers,
 } from '../managementApi/index.js';
 import {
-  countLiveKeys,
-  findApplication,
-  insertApplication,
-  insertKey,
-  LIVE_KEY_LIMIT,
-  lockApplication,
-  lockKey,
-  readNamedEntities,
-  readStoredApplication,
-  revokeKey,
+	countLiveKeys,
+	findApplication,
+	insertApplication,
+	insertKey,
+	LIVE_KEY_LIMIT,
+	lockApplication,
+	lockKey,
+	readNamedEntities,
+	readStoredApplication,
+	revokeKey,
 } from './applicationStore.js';
-import {
-  DISPLAY_NAME_MAXIMUM_LENGTH,
-  readDisplayName,
-} from './readDisplayName.js';
+import { DISPLAY_NAME_MAXIMUM_LENGTH, readDisplayName } from './readDisplayName.js';
 import { storedDescription } from './storedDescription.js';
-import type {
-  ApplicationOperationsSettings,
-  IssuedApplicationKey,
-  StoredApplicationKey,
-} from './types.js';
+import type { ApplicationOperationsSettings, IssuedApplicationKey, StoredApplicationKey } from './types.js';
 
 /** The reasons an application key may be revoked for, each recorded on its revocation's event. */
-const KEY_REVOCATION_REASONS: readonly string[] = Object.freeze([
-  'compromised',
-  'retired',
-  'rotated',
-]);
+const KEY_REVOCATION_REASONS: readonly string[] = Object.freeze(['compromised', 'retired', 'rotated']);
 
 /** What a change to an application's keys runs once it has committed: the live keys read again. */
-const KEY_CHANGE_STEPS: readonly AfterCommitStepName[] = Object.freeze([
-  'keyReload',
-]);
+const KEY_CHANGE_STEPS: readonly AfterCommitStepName[] = Object.freeze(['keyReload']);
 
 /** The refusals the application operations answer, beside those every operation may. */
 const APPLICATION_PROBLEMS = Object.freeze({
-  applicationKeyLimit: problem(
-    'applicationKeyLimit',
-    409,
-    'Live key limit reached',
-    `An application holds at most ${LIVE_KEY_LIMIT} live keys: revoke one before issuing another.`,
-  ),
-  applicationKeyNotFound: problem(
-    'applicationKeyNotFound',
-    404,
-    'Application key not found',
-    "The key named is none of this application's keys.",
-  ),
-  applicationNotFound: problem(
-    'applicationNotFound',
-    404,
-    'Application not found',
-    'No registered application has the id named.',
-  ),
-  displayNameBlank: problem(
-    'displayNameBlank',
-    422,
-    'Display name blank',
-    'displayName must hold more than whitespace.',
-  ),
-  displayNameTooLong: problem(
-    'displayNameTooLong',
-    422,
-    'Display name too long',
-    `displayName holds at most ${DISPLAY_NAME_MAXIMUM_LENGTH} characters once trimmed and normalized to NFC.`,
-  ),
-  doesNotHold: problem(
-    'doesNotHold',
-    409,
-    'Key revoked already',
-    'The key is revoked already, and keeps its first revocation.',
-  ),
-  unknownRevocationReason: problem(
-    'unknownRevocationReason',
-    422,
-    'Unknown revocation reason',
-    'reason is one of rotated, compromised and retired.',
-  ),
+	applicationKeyLimit: problem(
+		'applicationKeyLimit',
+		409,
+		'Live key limit reached',
+		`An application holds at most ${LIVE_KEY_LIMIT} live keys: revoke one before issuing another.`,
+	),
+	applicationKeyNotFound: problem(
+		'applicationKeyNotFound',
+		404,
+		'Application key not found',
+		"The key named is none of this application's keys.",
+	),
+	applicationNotFound: problem(
+		'applicationNotFound',
+		404,
+		'Application not found',
+		'No registered application has the id named.',
+	),
+	displayNameBlank: problem(
+		'displayNameBlank',
+		422,
+		'Display name blank',
+		'displayName must hold more than whitespace.',
+	),
+	displayNameTooLong: problem(
+		'displayNameTooLong',
+		422,
+		'Display name too long',
+		`displayName holds at most ${DISPLAY_NAME_MAXIMUM_LENGTH} characters once trimmed and normalized to NFC.`,
+	),
+	doesNotHold: problem(
+		'doesNotHold',
+		409,
+		'Key revoked already',
+		'The key is revoked already, and keeps its first revocation.',
+	),
+	unknownRevocationReason: problem(
+		'unknownRevocationReason',
+		422,
+		'Unknown revocation reason',
+		'reason is one of rotated, compromised and retired.',
+	),
 });
 
 interface Registration {
-  description: string | null;
-  displayName: string;
+	description: string | null;
+	displayName: string;
 }
 
 interface Revocation {
-  reason: string | undefined;
+	reason: string | undefined;
 }
 
 // What a change's work decided: a refusal, reached before it writes anything, so committing it
 // commits nothing, or the value it wrote.
-type Decided<Value> =
-  { kind: 'reached'; value: Value } | { kind: 'refused'; problem: Problem };
+type Decided<Value> = { kind: 'reached'; value: Value } | { kind: 'refused'; problem: Problem };
 
 const refusedWithin = (refusal: Problem): Decided<never> => ({
-  kind: 'refused',
-  problem: refusal,
+	kind: 'refused',
+	problem: refusal,
 });
 
 const reached = <Value>(value: Value): Decided<Value> => ({
-  kind: 'reached',
-  value,
+	kind: 'reached',
+	value,
 });
 
 const refused = (refusal: Problem): OperationOutcome => ({
-  kind: 'refused',
-  problem: refusal,
+	kind: 'refused',
+	problem: refusal,
 });
 
-const answered = (
-  status: number,
-  body: JsonValue,
-  forbidsStoring = false,
-): OperationOutcome => ({ body, forbidsStoring, kind: 'answered', status });
+const answered = (status: number, body: JsonValue, forbidsStoring = false): OperationOutcome => ({
+	body,
+	forbidsStoring,
+	kind: 'answered',
+	status,
+});
 
 const actorOf = ({ subject, type }: Principal): Actor => ({
-  id: subject,
-  type,
+	id: subject,
+	type,
 });
 
 const noInput = (): InputReading<undefined> => ({
-  input: undefined,
-  kind: 'read',
+	input: undefined,
+	kind: 'read',
 });
 
 const instantOrNull = (instant: Date | null): string | null =>
-  instant === null ? null : eventInstant(instant.getTime());
+	instant === null ? null : eventInstant(instant.getTime());
 
-const byPrincipal = (subject: string | null): { subject: string } | null =>
-  subject === null ? null : { subject };
+const byPrincipal = (subject: string | null): { subject: string } | null => (subject === null ? null : { subject });
 
-const keyView = ({
-  confirmedAt,
-  id,
-  issuedAt,
-  issuedBy,
-  revokedAt,
-  revokedBy,
-}: StoredApplicationKey): JsonValue => ({
-  confirmedAt: instantOrNull(confirmedAt),
-  id,
-  issuedAt: eventInstant(issuedAt.getTime()),
-  issuedBy: byPrincipal(issuedBy),
-  revokedAt: instantOrNull(revokedAt),
-  revokedBy: byPrincipal(revokedBy),
+const keyView = ({ confirmedAt, id, issuedAt, issuedBy, revokedAt, revokedBy }: StoredApplicationKey): JsonValue => ({
+	confirmedAt: instantOrNull(confirmedAt),
+	id,
+	issuedAt: eventInstant(issuedAt.getTime()),
+	issuedBy: byPrincipal(issuedBy),
+	revokedAt: instantOrNull(revokedAt),
+	revokedBy: byPrincipal(revokedBy),
 });
 
-const outcomeOf = <Value>(
-  decided: Decided<Value>,
-  answer: (value: Value) => OperationOutcome,
-): OperationOutcome =>
-  decided.kind === 'reached' ? answer(decided.value) : refused(decided.problem);
+const outcomeOf = <Value>(decided: Decided<Value>, answer: (value: Value) => OperationOutcome): OperationOutcome =>
+	decided.kind === 'reached' ? answer(decided.value) : refused(decided.problem);
 
 /**
  * Creates the routes of the Management API's application operations, each for platform
@@ -183,281 +159,250 @@ const outcomeOf = <Value>(
  * @param dependencies what every Management API operation's route is built on.
  */
 export const createApplicationRoutes = (
-  {
-    cipher,
-    settings: { clock, databaseSchema, identityProviderIssuer },
-    store,
-    trail,
-  }: ApplicationOperationsSettings,
-  dependencies: ManagementDependencies,
+	{
+		cipher,
+		settings: { clock, databaseSchema, identityProviderIssuer },
+		store,
+		trail,
+	}: ApplicationOperationsSettings,
+	dependencies: ManagementDependencies,
 ): readonly RouteOptions[] => {
-  const personOf = (
-    connection: pg.ClientBase,
-    { subject }: Principal,
-    now: Date,
-  ): Promise<string> =>
-    findOrRecordPerson(
-      connection,
-      databaseSchema,
-      { issuer: identityProviderIssuer, subject },
-      now,
-    );
+	const personOf = (connection: pg.ClientBase, { subject }: Principal, now: Date): Promise<string> =>
+		findOrRecordPerson(connection, databaseSchema, { issuer: identityProviderIssuer, subject }, now);
 
-  const namedApplication = (
-    params: Readonly<Record<string, string>>,
-    keyNamed: boolean,
-  ): Promise<EventMembers> =>
-    readNamedEntities(store, databaseSchema, {
-      applicationId: params['id'] ?? '',
-      keyId: keyNamed ? (params['keyId'] ?? '') : undefined,
-    });
+	const namedApplication = (params: Readonly<Record<string, string>>, keyNamed: boolean): Promise<EventMembers> =>
+		readNamedEntities(store, databaseSchema, {
+			applicationId: params['id'] ?? '',
+			keyId: keyNamed ? (params['keyId'] ?? '') : undefined,
+		});
 
-  const registration: ManagementOperation<Registration> = {
-    administratorOnly: true,
-    afterCommit: KEY_CHANGE_STEPS,
-    body: 'required',
-    event: { named: async () => ({}), type: 'application.registration' },
-    method: 'POST',
-    readInput: (body) => {
-      const reading = readTextMembers(body ?? {}, {
-        description: { required: false },
-        displayName: { required: true },
-      });
-      if (reading.kind === 'refused') {
-        return reading;
-      }
-      const { description, displayName = '' } = reading.members;
-      const name = readDisplayName(displayName);
-      if (name.kind === 'refused') {
-        return {
-          kind: 'refused',
-          problem:
-            name.rule === 'blank'
-              ? APPLICATION_PROBLEMS.displayNameBlank
-              : APPLICATION_PROBLEMS.displayNameTooLong,
-        };
-      }
-      return {
-        input: {
-          description: storedDescription(description),
-          displayName: name.displayName,
-        },
-        kind: 'read',
-      };
-    },
-    route: '/admin/applications',
-    run: async ({ input, principal, sourceIp }) => {
-      const now = new Date(clock.now());
-      const registered = await trail.inTransaction(
-        actorOf(principal),
-        async ({ connection, record }) => {
-          const person = await personOf(connection, principal, now);
-          const applicationId = await insertApplication(
-            connection,
-            databaseSchema,
-            { ...input, registeredAt: now, registeredBy: person },
-          );
-          const key = await insertKey(connection, databaseSchema, cipher, {
-            applicationId,
-            issuedAt: now,
-            issuedBy: person,
-          });
-          await record({
-            data: { applicationId, result: 'succeeded', sourceIp },
-            severity: 'info',
-            type: 'application.registration',
-          });
-          await record({
-            data: {
-              applicationId,
-              keyId: key.id,
-              result: 'succeeded',
-              sourceIp,
-            },
-            severity: 'info',
-            type: 'applicationKey.issuance',
-          });
-          return { applicationId, key };
-        },
-      );
-      return answered(
-        201,
-        {
-          description: input.description,
-          displayName: input.displayName,
-          id: registered.applicationId,
-          key: { id: registered.key.id, value: registered.key.value },
-        },
-        true,
-      );
-    },
-  };
+	const registration: ManagementOperation<Registration> = {
+		administratorOnly: true,
+		afterCommit: KEY_CHANGE_STEPS,
+		body: 'required',
+		event: { named: async () => ({}), type: 'application.registration' },
+		method: 'POST',
+		readInput: (body) => {
+			const reading = readTextMembers(body ?? {}, {
+				description: { required: false },
+				displayName: { required: true },
+			});
+			if (reading.kind === 'refused') {
+				return reading;
+			}
+			const { description, displayName = '' } = reading.members;
+			const name = readDisplayName(displayName);
+			if (name.kind === 'refused') {
+				return {
+					kind: 'refused',
+					problem:
+						name.rule === 'blank'
+							? APPLICATION_PROBLEMS.displayNameBlank
+							: APPLICATION_PROBLEMS.displayNameTooLong,
+				};
+			}
+			return {
+				input: {
+					description: storedDescription(description),
+					displayName: name.displayName,
+				},
+				kind: 'read',
+			};
+		},
+		route: '/admin/applications',
+		run: async ({ input, principal, sourceIp }) => {
+			const now = new Date(clock.now());
+			const registered = await trail.inTransaction(actorOf(principal), async ({ connection, record }) => {
+				const person = await personOf(connection, principal, now);
+				const applicationId = await insertApplication(connection, databaseSchema, {
+					...input,
+					registeredAt: now,
+					registeredBy: person,
+				});
+				const key = await insertKey(connection, databaseSchema, cipher, {
+					applicationId,
+					issuedAt: now,
+					issuedBy: person,
+				});
+				await record({
+					data: { applicationId, result: 'succeeded', sourceIp },
+					severity: 'info',
+					type: 'application.registration',
+				});
+				await record({
+					data: {
+						applicationId,
+						keyId: key.id,
+						result: 'succeeded',
+						sourceIp,
+					},
+					severity: 'info',
+					type: 'applicationKey.issuance',
+				});
+				return { applicationId, key };
+			});
+			return answered(
+				201,
+				{
+					description: input.description,
+					displayName: input.displayName,
+					id: registered.applicationId,
+					key: { id: registered.key.id, value: registered.key.value },
+				},
+				true,
+			);
+		},
+	};
 
-  const reading: ManagementOperation<undefined> = {
-    administratorOnly: true,
-    body: 'none',
-    method: 'GET',
-    readInput: noInput,
-    route: '/admin/applications/{id}',
-    run: async ({ params }) => {
-      const application = await readStoredApplication(
-        store,
-        databaseSchema,
-        identityProviderIssuer,
-        params['id'] ?? '',
-      );
-      return application === undefined
-        ? refused(APPLICATION_PROBLEMS.applicationNotFound)
-        : answered(200, {
-            description: application.description,
-            displayName: application.displayName,
-            id: application.id,
-            keys: application.keys.map(keyView),
-            registeredAt: eventInstant(application.registeredAt.getTime()),
-            registeredBy: byPrincipal(application.registeredBy),
-          });
-    },
-  };
+	const reading: ManagementOperation<undefined> = {
+		administratorOnly: true,
+		body: 'none',
+		method: 'GET',
+		readInput: noInput,
+		route: '/admin/applications/{id}',
+		run: async ({ params }) => {
+			const application = await readStoredApplication(
+				store,
+				databaseSchema,
+				identityProviderIssuer,
+				params['id'] ?? '',
+			);
+			return application === undefined
+				? refused(APPLICATION_PROBLEMS.applicationNotFound)
+				: answered(200, {
+						description: application.description,
+						displayName: application.displayName,
+						id: application.id,
+						keys: application.keys.map(keyView),
+						registeredAt: eventInstant(application.registeredAt.getTime()),
+						registeredBy: byPrincipal(application.registeredBy),
+					});
+		},
+	};
 
-  const issue: ManagementOperation<undefined> = {
-    administratorOnly: true,
-    afterCommit: KEY_CHANGE_STEPS,
-    body: 'none',
-    event: {
-      named: ({ params }) => namedApplication(params, false),
-      type: 'applicationKey.issuance',
-    },
-    method: 'POST',
-    readInput: noInput,
-    route: '/admin/applications/{id}/keys',
-    run: async ({ params, principal, sourceIp }) => {
-      const now = new Date(clock.now());
-      const decided = await trail.inTransaction(
-        actorOf(principal),
-        async ({
-          connection,
-          record,
-        }): Promise<Decided<IssuedApplicationKey>> => {
-          const applicationId = await lockApplication(
-            connection,
-            databaseSchema,
-            params['id'] ?? '',
-          );
-          if (applicationId === undefined) {
-            return refusedWithin(APPLICATION_PROBLEMS.applicationNotFound);
-          }
-          if (
-            (await countLiveKeys(connection, databaseSchema, applicationId)) >=
-            LIVE_KEY_LIMIT
-          ) {
-            return refusedWithin(APPLICATION_PROBLEMS.applicationKeyLimit);
-          }
-          const key = await insertKey(connection, databaseSchema, cipher, {
-            applicationId,
-            issuedAt: now,
-            issuedBy: await personOf(connection, principal, now),
-          });
-          await record({
-            data: {
-              applicationId,
-              keyId: key.id,
-              result: 'succeeded',
-              sourceIp,
-            },
-            severity: 'info',
-            type: 'applicationKey.issuance',
-          });
-          return reached(key);
-        },
-      );
-      return outcomeOf(decided, (key) =>
-        answered(201, { id: key.id, value: key.value }, true),
-      );
-    },
-  };
+	const issue: ManagementOperation<undefined> = {
+		administratorOnly: true,
+		afterCommit: KEY_CHANGE_STEPS,
+		body: 'none',
+		event: {
+			named: ({ params }) => namedApplication(params, false),
+			type: 'applicationKey.issuance',
+		},
+		method: 'POST',
+		readInput: noInput,
+		route: '/admin/applications/{id}/keys',
+		run: async ({ params, principal, sourceIp }) => {
+			const now = new Date(clock.now());
+			const decided = await trail.inTransaction(
+				actorOf(principal),
+				async ({ connection, record }): Promise<Decided<IssuedApplicationKey>> => {
+					const applicationId = await lockApplication(connection, databaseSchema, params['id'] ?? '');
+					if (applicationId === undefined) {
+						return refusedWithin(APPLICATION_PROBLEMS.applicationNotFound);
+					}
+					if ((await countLiveKeys(connection, databaseSchema, applicationId)) >= LIVE_KEY_LIMIT) {
+						return refusedWithin(APPLICATION_PROBLEMS.applicationKeyLimit);
+					}
+					const key = await insertKey(connection, databaseSchema, cipher, {
+						applicationId,
+						issuedAt: now,
+						issuedBy: await personOf(connection, principal, now),
+					});
+					await record({
+						data: {
+							applicationId,
+							keyId: key.id,
+							result: 'succeeded',
+							sourceIp,
+						},
+						severity: 'info',
+						type: 'applicationKey.issuance',
+					});
+					return reached(key);
+				},
+			);
+			return outcomeOf(decided, (key) => answered(201, { id: key.id, value: key.value }, true));
+		},
+	};
 
-  const revocation: ManagementOperation<Revocation> = {
-    administratorOnly: true,
-    afterCommit: KEY_CHANGE_STEPS,
-    body: 'optional',
-    event: {
-      named: ({ params }) => namedApplication(params, true),
-      type: 'applicationKey.revocation',
-    },
-    method: 'DELETE',
-    readInput: (body) => {
-      if (body === undefined) {
-        return { input: { reason: undefined }, kind: 'read' };
-      }
-      const members = readTextMembers(body, { reason: { required: true } });
-      if (members.kind === 'refused') {
-        return members;
-      }
-      const { reason = '' } = members.members;
-      return KEY_REVOCATION_REASONS.includes(reason)
-        ? { input: { reason }, kind: 'read' }
-        : {
-            kind: 'refused',
-            problem: APPLICATION_PROBLEMS.unknownRevocationReason,
-          };
-    },
-    route: '/admin/applications/{id}/keys/{keyId}',
-    run: async ({ input: { reason }, params, principal, sourceIp }) => {
-      const now = new Date(clock.now());
-      const decided = await trail.inTransaction(
-        actorOf(principal),
-        async ({ connection, record }): Promise<Decided<string>> => {
-          const applicationId = await findApplication(
-            connection,
-            databaseSchema,
-            params['id'] ?? '',
-          );
-          if (applicationId === undefined) {
-            return refusedWithin(APPLICATION_PROBLEMS.applicationNotFound);
-          }
-          const key = await lockKey(connection, databaseSchema, {
-            applicationId,
-            keyId: params['keyId'] ?? '',
-          });
-          if (key === undefined) {
-            return refusedWithin(APPLICATION_PROBLEMS.applicationKeyNotFound);
-          }
-          if (key.revoked) {
-            return refusedWithin(APPLICATION_PROBLEMS.doesNotHold);
-          }
-          await revokeKey(connection, databaseSchema, {
-            keyId: key.id,
-            revokedAt: now,
-            revokedBy: await personOf(connection, principal, now),
-          });
-          await record({
-            data: {
-              applicationId,
-              keyId: key.id,
-              ...(reason === undefined ? {} : { reason }),
-              result: 'succeeded',
-              sourceIp,
-            },
-            severity: reason === 'compromised' ? 'critical' : 'info',
-            type: 'applicationKey.revocation',
-          });
-          return reached(key.id);
-        },
-      );
-      return outcomeOf(decided, (keyId) =>
-        answered(200, {
-          id: keyId,
-          revokedAt: eventInstant(now.getTime()),
-          revokedBy: { subject: principal.subject },
-        }),
-      );
-    },
-  };
+	const revocation: ManagementOperation<Revocation> = {
+		administratorOnly: true,
+		afterCommit: KEY_CHANGE_STEPS,
+		body: 'optional',
+		event: {
+			named: ({ params }) => namedApplication(params, true),
+			type: 'applicationKey.revocation',
+		},
+		method: 'DELETE',
+		readInput: (body) => {
+			if (body === undefined) {
+				return { input: { reason: undefined }, kind: 'read' };
+			}
+			const members = readTextMembers(body, { reason: { required: true } });
+			if (members.kind === 'refused') {
+				return members;
+			}
+			const { reason = '' } = members.members;
+			return KEY_REVOCATION_REASONS.includes(reason)
+				? { input: { reason }, kind: 'read' }
+				: {
+						kind: 'refused',
+						problem: APPLICATION_PROBLEMS.unknownRevocationReason,
+					};
+		},
+		route: '/admin/applications/{id}/keys/{keyId}',
+		run: async ({ input: { reason }, params, principal, sourceIp }) => {
+			const now = new Date(clock.now());
+			const decided = await trail.inTransaction(
+				actorOf(principal),
+				async ({ connection, record }): Promise<Decided<string>> => {
+					const applicationId = await findApplication(connection, databaseSchema, params['id'] ?? '');
+					if (applicationId === undefined) {
+						return refusedWithin(APPLICATION_PROBLEMS.applicationNotFound);
+					}
+					const key = await lockKey(connection, databaseSchema, {
+						applicationId,
+						keyId: params['keyId'] ?? '',
+					});
+					if (key === undefined) {
+						return refusedWithin(APPLICATION_PROBLEMS.applicationKeyNotFound);
+					}
+					if (key.revoked) {
+						return refusedWithin(APPLICATION_PROBLEMS.doesNotHold);
+					}
+					await revokeKey(connection, databaseSchema, {
+						keyId: key.id,
+						revokedAt: now,
+						revokedBy: await personOf(connection, principal, now),
+					});
+					await record({
+						data: {
+							applicationId,
+							keyId: key.id,
+							...(reason === undefined ? {} : { reason }),
+							result: 'succeeded',
+							sourceIp,
+						},
+						severity: reason === 'compromised' ? 'critical' : 'info',
+						type: 'applicationKey.revocation',
+					});
+					return reached(key.id);
+				},
+			);
+			return outcomeOf(decided, (keyId) =>
+				answered(200, {
+					id: keyId,
+					revokedAt: eventInstant(now.getTime()),
+					revokedBy: { subject: principal.subject },
+				}),
+			);
+		},
+	};
 
-  return [
-    managementRoute(registration, dependencies),
-    managementRoute(reading, dependencies),
-    managementRoute(issue, dependencies),
-    managementRoute(revocation, dependencies),
-  ];
+	return [
+		managementRoute(registration, dependencies),
+		managementRoute(reading, dependencies),
+		managementRoute(issue, dependencies),
+		managementRoute(revocation, dependencies),
+	];
 };

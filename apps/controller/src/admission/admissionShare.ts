@@ -11,8 +11,5 @@ export const SHARE_FLOOR = 1;
  * @param poolSize how many connections the instance's exchange pool holds.
  * @param registeredCount how many applications are registered.
  */
-export const admissionShare = (
-  poolSize: number,
-  registeredCount: number,
-): number =>
-  Math.max(SHARE_FLOOR, Math.floor(poolSize / Math.max(1, registeredCount)));
+export const admissionShare = (poolSize: number, registeredCount: number): number =>
+	Math.max(SHARE_FLOOR, Math.floor(poolSize / Math.max(1, registeredCount)));

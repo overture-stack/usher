@@ -234,15 +234,15 @@ indexed data records, and how does Usher's grant model map to SQON filters on th
    index template (`index-templates/*.yaml`) are queryable. An unmapped field lands in `_source`
    but is invisible to any SQON filter.
 
-   **Important distinction:** a field absent from the mapping is
-   not necessarily a bug. It may be a deliberate privacy choice: kept out of the index so it
-   is never searchable or exposed through Arranger. Do not assume either way without confirming
-   intent. Furthermore, field exclusion from the mapping is the wrong shape for ABAC: it is
-   binary and global (the field is either indexed for every document or none), not per-principal
-   or per-document. It cannot express "user A sees records where tier=open, user B sees
-   tier=open and tier=registered." That row-level, per-principal control is exactly what
-   SQON filter injection provides. Field exclusion and SQON filtering are complementary levers
-   at different granularities, not substitutes for each other.
+    **Important distinction:** a field absent from the mapping is
+    not necessarily a bug. It may be a deliberate privacy choice: kept out of the index so it
+    is never searchable or exposed through Arranger. Do not assume either way without confirming
+    intent. Furthermore, field exclusion from the mapping is the wrong shape for ABAC: it is
+    binary and global (the field is either indexed for every document or none), not per-principal
+    or per-document. It cannot express "user A sees records where tier=open, user B sees
+    tier=open and tier=registered." That row-level, per-principal control is exactly what
+    SQON filter injection provides. Field exclusion and SQON filtering are complementary levers
+    at different granularities, not substitutes for each other.
 
 **Design implication for the Arranger adapter:** the access-control axis field must be IN the
 mapping (so it is SQON-filterable), but being in the mapping does not gate access: the injected
@@ -286,30 +286,30 @@ reason, since the difference between the two is where the safety-relevant change
   valid,
   intentional, first-class value:
 
-  `SqonCombinationSchema` declares `content: zod.array(SqonSchema)` with no `.min(1)`, while
-  every leaf schema constrains its own content (`fieldName: min(1)`, `value: min(1)` or
-  `.length(2)`, `fieldNames: min(1)`). So `{ op: 'and', content: [] }` validates.
-  `SqonBuilder.empty()` produces exactly that value, and three tests assert it:
-  `modules/sqon/src/builder/index.test.ts:9`, `:482`, and `:514`. Reduction converges on it,
-  since removing the last remaining filter yields the empty combination and inner empties are
-  pruned into the parent.
+    `SqonCombinationSchema` declares `content: zod.array(SqonSchema)` with no `.min(1)`, while
+    every leaf schema constrains its own content (`fieldName: min(1)`, `value: min(1)` or
+    `.length(2)`, `fieldNames: min(1)`). So `{ op: 'and', content: [] }` validates.
+    `SqonBuilder.empty()` produces exactly that value, and three tests assert it:
+    `modules/sqon/src/builder/index.test.ts:9`, `:482`, and `:514`. Reduction converges on it,
+    since removing the last remaining filter yields the empty combination and inner empties are
+    pruned into the parent.
 
-  This is correct behaviour for a search library, where "no filter" legitimately means
-  "everything." It is exactly wrong as the encoding of "no grants" in an authorization context,
-  where an empty and-combination compiles to match-all.
+    This is correct behaviour for a search library, where "no filter" legitimately means
+    "everything." It is exactly wrong as the encoding of "no grants" in an authorization context,
+    where an empty and-combination compiles to match-all.
 
-  **Design constraint that follows:** no Usher component may rely on SQON schema validation to
-  reject a zero-grant filter. The guard has to be explicit and must sit in Usher's own code,
-  before a filter is handed to any SQON builder or serializer. A zero-grant principal must
-  short-circuit to a denial, never to a filter that happens to be empty. This is a stronger
-  requirement than the previous entry implied, because it now has to be built rather than
-  inherited. It also strengthens the case for locating shared SQON handling in the Bridge: the
-  guard gets written once for every application rather than once per adapter.
+    **Design constraint that follows:** no Usher component may rely on SQON schema validation to
+    reject a zero-grant filter. The guard has to be explicit and must sit in Usher's own code,
+    before a filter is handed to any SQON builder or serializer. A zero-grant principal must
+    short-circuit to a denial, never to a filter that happens to be empty. This is a stronger
+    requirement than the previous entry implied, because it now has to be built rather than
+    inherited. It also strengthens the case for locating shared SQON handling in the Bridge: the
+    guard gets written once for every application rather than once per adapter.
 
-  **Consequence for the conformance corpus:** the zero-grant section cannot merely assert
-  `visible: false` for a principal with no grants. It needs a case whose failure mode is
-  match-all, that is, a zero-grant principal evaluated against a non-empty record set, so a
-  regression to an empty combination is caught rather than passing silently.
+    **Consequence for the conformance corpus:** the zero-grant section cannot merely assert
+    `visible: false` for a principal with no grants. It needs a case whose failure mode is
+    match-all, that is, a zero-grant principal evaluated against a non-empty record set, so a
+    regression to an empty combination is caught rather than passing silently.
 
 - **SQL injection in Lyric's SQON handler is now an open PR.** Lyric PR 219 (open since
   2026-08-20) parameterizes `fieldName` and value through drizzle's SQL template instead of

@@ -1,15 +1,8 @@
 {
-  "compilerOptions": {
-    "declaration": false,
-    "isolatedDeclarations": false
-  },
-  "extends": "../../tsconfig.base.json",
-  "include": [
-    "scripts",
-    "src",
-    "test",
-    "test-support",
-    "tsdown.config.ts",
-    "tsdown.config.test.ts"
-  ]
+	"compilerOptions": {
+		"declaration": false,
+		"isolatedDeclarations": false
+	},
+	"extends": "../../tsconfig.base.json",
+	"include": ["scripts", "src", "test", "test-support", "tsdown.config.ts", "tsdown.config.test.ts"]
 }

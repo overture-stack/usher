@@ -15,9 +15,9 @@ export const SUSPENDED_VALUE = 'true';
  *   one anywhere but the Authorization header.
  */
 export const CHALLENGE_ERRORS: Readonly<{
-  invalidRequest: 'invalid_request';
-  invalidToken: 'invalid_token';
+	invalidRequest: 'invalid_request';
+	invalidToken: 'invalid_token';
 }> = Object.freeze({
-  invalidRequest: 'invalid_request',
-  invalidToken: 'invalid_token',
+	invalidRequest: 'invalid_request',
+	invalidToken: 'invalid_token',
 });

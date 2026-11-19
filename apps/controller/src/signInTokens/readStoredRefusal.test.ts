@@ -11,100 +11,90 @@ const ISSUER = 'https://auth.example.org/realms/usher';
 const ISSUED_AT = Math.floor(Date.UTC(2026, 10, 4, 12, 0, 0) / 1000);
 
 interface Standing {
-  revoked: boolean;
-  revokedPlatform: boolean;
-  signedOut: boolean;
+	revoked: boolean;
+	revokedPlatform: boolean;
+	signedOut: boolean;
 }
 
 interface Asked {
-  text: string;
-  values: readonly unknown[] | undefined;
+	text: string;
+	values: readonly unknown[] | undefined;
 }
 
 const STANDING_NONE: Standing = Object.freeze({
-  revoked: false,
-  revokedPlatform: false,
-  signedOut: false,
+	revoked: false,
+	revokedPlatform: false,
+	signedOut: false,
 });
 
 // A store answering every question with the standing given, keeping each question asked.
-const answering = (
-  standing: Standing,
-): { asked: Asked[]; store: StoreReader } => {
-  const asked: Asked[] = [];
-  const query = async (text: string, values?: readonly unknown[]) => {
-    asked.push({ text, values });
-    return { rows: [standing] };
-  };
-  // A pool that never connects, its query answered here: the pool's overloads are more than a fake
-  // can spell out.
-  return { asked, store: Object.assign(new pg.Pool(), { query }) };
+const answering = (standing: Standing): { asked: Asked[]; store: StoreReader } => {
+	const asked: Asked[] = [];
+	const query = async (text: string, values?: readonly unknown[]) => {
+		asked.push({ text, values });
+		return { rows: [standing] };
+	};
+	// A pool that never connects, its query answered here: the pool's overloads are more than a fake
+	// can spell out.
+	return { asked, store: Object.assign(new pg.Pool(), { query }) };
 };
 
 const SESSION = Object.freeze({ issuedAt: ISSUED_AT, sid: 'session-1' });
 
 suite("reading a principal's standing in the store", () => {
-  test('refuses for a standing revocation of the person first, then a revocation of the platform, then a sign-out, and not at all for none', async () => {
-    const standings: readonly Standing[] = [
-      { revoked: true, revokedPlatform: true, signedOut: true },
-      { revoked: false, revokedPlatform: true, signedOut: true },
-      { revoked: false, revokedPlatform: false, signedOut: true },
-      STANDING_NONE,
-    ];
+	test('refuses for a standing revocation of the person first, then a revocation of the platform, then a sign-out, and not at all for none', async () => {
+		const standings: readonly Standing[] = [
+			{ revoked: true, revokedPlatform: true, signedOut: true },
+			{ revoked: false, revokedPlatform: true, signedOut: true },
+			{ revoked: false, revokedPlatform: false, signedOut: true },
+			STANDING_NONE,
+		];
 
-    const refusals = await Promise.all(
-      standings.map((standing) =>
-        readStoredRefusal(answering(standing).store, 'usher', {
-          issuer: ISSUER,
-          session: SESSION,
-          subject: 'subject-ana',
-        }),
-      ),
-    );
+		const refusals = await Promise.all(
+			standings.map((standing) =>
+				readStoredRefusal(answering(standing).store, 'usher', {
+					issuer: ISSUER,
+					session: SESSION,
+					subject: 'subject-ana',
+				}),
+			),
+		);
 
-    assert.deepEqual(refusals, [
-      'revokedPrincipal',
-      'revokedPlatform',
-      'signedOutSession',
-      undefined,
-    ]);
-  });
+		assert.deepEqual(refusals, ['revokedPrincipal', 'revokedPlatform', 'signedOutSession', undefined]);
+	});
 
-  test("binds the issuer, the subject, the session and the token's iat as an instant, and none for a token naming no iat or sid", async () => {
-    const { asked, store } = answering(STANDING_NONE);
+	test("binds the issuer, the subject, the session and the token's iat as an instant, and none for a token naming no iat or sid", async () => {
+		const { asked, store } = answering(STANDING_NONE);
 
-    await readStoredRefusal(store, 'usher', {
-      issuer: ISSUER,
-      session: SESSION,
-      subject: 'subject-ana',
-    });
-    await readStoredRefusal(store, 'usher', {
-      issuer: ISSUER,
-      session: {},
-      subject: 'subject-ana',
-    });
+		await readStoredRefusal(store, 'usher', {
+			issuer: ISSUER,
+			session: SESSION,
+			subject: 'subject-ana',
+		});
+		await readStoredRefusal(store, 'usher', {
+			issuer: ISSUER,
+			session: {},
+			subject: 'subject-ana',
+		});
 
-    assert.deepEqual(
-      asked.map(({ values }) => values),
-      [
-        [ISSUER, 'subject-ana', 'session-1', new Date(ISSUED_AT * 1000)],
-        [ISSUER, 'subject-ana', null, null],
-      ],
-    );
-  });
+		assert.deepEqual(
+			asked.map(({ values }) => values),
+			[
+				[ISSUER, 'subject-ana', 'session-1', new Date(ISSUED_AT * 1000)],
+				[ISSUER, 'subject-ana', null, null],
+			],
+		);
+	});
 
-  test('reads the platform revocations in the schema named, quoted as an identifier', async () => {
-    const { asked, store } = answering(STANDING_NONE);
+	test('reads the platform revocations in the schema named, quoted as an identifier', async () => {
+		const { asked, store } = answering(STANDING_NONE);
 
-    await readStoredRefusal(store, 'usher "staging"', {
-      issuer: ISSUER,
-      session: SESSION,
-      subject: 'subject-ana',
-    });
+		await readStoredRefusal(store, 'usher "staging"', {
+			issuer: ISSUER,
+			session: SESSION,
+			subject: 'subject-ana',
+		});
 
-    assert.match(
-      asked[0]?.text ?? '',
-      /"usher ""staging"""\.global_revocations/u,
-    );
-  });
+		assert.match(asked[0]?.text ?? '', /"usher ""staging"""\.global_revocations/u);
+	});
 });

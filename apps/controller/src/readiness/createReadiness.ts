@@ -1,9 +1,5 @@
 import type { Readiness } from '../http/index.js';
-import {
-  MIGRATION_UNKNOWN,
-  migrationUnknownFields,
-  type UnknownMigration,
-} from '../migrations/index.js';
+import { MIGRATION_UNKNOWN, migrationUnknownFields, type UnknownMigration } from '../migrations/index.js';
 import type { ReadinessSettings, StoreProbe } from './types.js';
 
 /**
@@ -28,40 +24,35 @@ const MIGRATION_UNKNOWN_CAUSE = 'migrationUnknown';
 // The cause naming a stored grant rule that breaks its rule, which the exchange answers as it answers no token.
 const STORED_SETTINGS_INVALID_CAUSE = 'storedSettingsInvalid';
 
-type ProbeOutcome =
-  { answer: StoreProbe; kind: 'answered' } | { cause: string; kind: 'failed' };
+type ProbeOutcome = { answer: StoreProbe; kind: 'answered' } | { cause: string; kind: 'failed' };
 
 interface StoreAnswer {
-  outcome: ProbeOutcome;
+	outcome: ProbeOutcome;
 
-  /** When the probe giving it began, on the monotonic clock. */
-  probedAt: number;
+	/** When the probe giving it began, on the monotonic clock. */
+	probedAt: number;
 }
 
 // An unready judgement for unknown migrations alone carries them.
 type Judgement =
-  | {
-      cause: string;
-      ready: false;
-      unknownMigrations?: readonly UnknownMigration[];
-    }
-  | { ready: true };
+	| {
+			cause: string;
+			ready: false;
+			unknownMigrations?: readonly UnknownMigration[];
+	  }
+	| { ready: true };
 
 const READY: Judgement = Object.freeze({ ready: true });
 
-const unknownOf = (
-  judgement: Judgement,
-): readonly UnknownMigration[] | undefined =>
-  judgement.ready ? undefined : judgement.unknownMigrations;
+const unknownOf = (judgement: Judgement): readonly UnknownMigration[] | undefined =>
+	judgement.ready ? undefined : judgement.unknownMigrations;
 
 // A failure by its code, a SQLSTATE or a system error's or the store timeout's, since a store's
 // message may quote a value.
 const causeOf = (failure: unknown): string => {
-  const code: unknown =
-    typeof failure === 'object' && failure !== null && 'code' in failure
-      ? failure.code
-      : undefined;
-  return typeof code === 'string' ? code : STORE_FAILED;
+	const code: unknown =
+		typeof failure === 'object' && failure !== null && 'code' in failure ? failure.code : undefined;
+	return typeof code === 'string' ? code : STORE_FAILED;
 };
 
 /**
@@ -83,102 +74,94 @@ const causeOf = (failure: unknown): string => {
  *   whether the instance's role writes.
  */
 export const createReadiness = ({
-  isLogWritable,
-  isServing,
-  log,
-  monotonicNow,
-  probeStore,
-  writesStore,
+	isLogWritable,
+	isServing,
+	log,
+	monotonicNow,
+	probeStore,
+	writesStore,
 }: ReadinessSettings): Readiness => {
-  const state: {
-    judged: Judgement | undefined;
-    last: StoreAnswer | undefined;
-    probing: Promise<ProbeOutcome> | undefined;
-  } = { judged: undefined, last: undefined, probing: undefined };
+	const state: {
+		judged: Judgement | undefined;
+		last: StoreAnswer | undefined;
+		probing: Promise<ProbeOutcome> | undefined;
+	} = { judged: undefined, last: undefined, probing: undefined };
 
-  const probe = (probedAt: number): Promise<ProbeOutcome> => {
-    const probing = probeStore()
-      .then(
-        (answer): ProbeOutcome => ({ answer, kind: 'answered' }),
-        (failure: unknown): ProbeOutcome => ({
-          cause: causeOf(failure),
-          kind: 'failed',
-        }),
-      )
-      .then((outcome) => {
-        state.last = { outcome, probedAt };
-        state.probing = undefined;
-        return outcome;
-      });
-    state.probing = probing;
-    return probing;
-  };
+	const probe = (probedAt: number): Promise<ProbeOutcome> => {
+		const probing = probeStore()
+			.then(
+				(answer): ProbeOutcome => ({ answer, kind: 'answered' }),
+				(failure: unknown): ProbeOutcome => ({
+					cause: causeOf(failure),
+					kind: 'failed',
+				}),
+			)
+			.then((outcome) => {
+				state.last = { outcome, probedAt };
+				state.probing = undefined;
+				return outcome;
+			});
+		state.probing = probing;
+		return probing;
+	};
 
-  const storeOutcome = (): Promise<ProbeOutcome> => {
-    const now = monotonicNow();
-    const { last, probing } = state;
-    if (
-      last !== undefined &&
-      now - last.probedAt < STORE_PROBE_INTERVAL_MILLISECONDS
-    ) {
-      return Promise.resolve(last.outcome);
-    }
-    return probing ?? probe(now);
-  };
+	const storeOutcome = (): Promise<ProbeOutcome> => {
+		const now = monotonicNow();
+		const { last, probing } = state;
+		if (last !== undefined && now - last.probedAt < STORE_PROBE_INTERVAL_MILLISECONDS) {
+			return Promise.resolve(last.outcome);
+		}
+		return probing ?? probe(now);
+	};
 
-  const judgedStore = (outcome: ProbeOutcome): Judgement => {
-    if (outcome.kind === 'failed') {
-      return { cause: outcome.cause, ready: false };
-    }
-    const { grantRulesValid, readOnly, unknownMigrations } = outcome.answer;
-    if (unknownMigrations.length > 0) {
-      return {
-        cause: MIGRATION_UNKNOWN_CAUSE,
-        ready: false,
-        unknownMigrations,
-      };
-    }
-    if (!grantRulesValid) {
-      return { cause: STORED_SETTINGS_INVALID_CAUSE, ready: false };
-    }
-    return readOnly && writesStore()
-      ? { cause: 'readOnly', ready: false }
-      : READY;
-  };
+	const judgedStore = (outcome: ProbeOutcome): Judgement => {
+		if (outcome.kind === 'failed') {
+			return { cause: outcome.cause, ready: false };
+		}
+		const { grantRulesValid, readOnly, unknownMigrations } = outcome.answer;
+		if (unknownMigrations.length > 0) {
+			return {
+				cause: MIGRATION_UNKNOWN_CAUSE,
+				ready: false,
+				unknownMigrations,
+			};
+		}
+		if (!grantRulesValid) {
+			return { cause: STORED_SETTINGS_INVALID_CAUSE, ready: false };
+		}
+		return readOnly && writesStore() ? { cause: 'readOnly', ready: false } : READY;
+	};
 
-  const judged = async (): Promise<Judgement> => {
-    if (isServing() && isLogWritable()) {
-      return judgedStore(await storeOutcome());
-    }
-    return { cause: isServing() ? 'logUnwritable' : 'stopping', ready: false };
-  };
+	const judged = async (): Promise<Judgement> => {
+		if (isServing() && isLogWritable()) {
+			return judgedStore(await storeOutcome());
+		}
+		return { cause: isServing() ? 'logUnwritable' : 'stopping', ready: false };
+	};
 
-  // Lines mark changes alone, so a run of failed probes writes one, and a run of probes finding
-  // unknown migrations one naming them; the Controller counts as ready until judged otherwise, its
-  // start having proved the store.
-  const noteChange = (judgement: Judgement): void => {
-    const previous = state.judged ?? READY;
-    state.judged = judgement;
-    if (judgement.ready && previous.ready === false) {
-      log.info(READINESS_RESTORED);
-    }
-    if (judgement.ready === false && previous.ready) {
-      log.warning(READINESS_LOST, { cause: judgement.cause });
-    }
-    const unknown = unknownOf(judgement);
-    if (unknown !== undefined && unknownOf(previous) === undefined) {
-      log.error(
-        MIGRATION_UNKNOWN,
-        migrationUnknownFields(unknown, 'readiness'),
-      );
-    }
-  };
+	// Lines mark changes alone, so a run of failed probes writes one, and a run of probes finding
+	// unknown migrations one naming them; the Controller counts as ready until judged otherwise, its
+	// start having proved the store.
+	const noteChange = (judgement: Judgement): void => {
+		const previous = state.judged ?? READY;
+		state.judged = judgement;
+		if (judgement.ready && previous.ready === false) {
+			log.info(READINESS_RESTORED);
+		}
+		if (judgement.ready === false && previous.ready) {
+			log.warning(READINESS_LOST, { cause: judgement.cause });
+		}
+		const unknown = unknownOf(judgement);
+		if (unknown !== undefined && unknownOf(previous) === undefined) {
+			log.error(MIGRATION_UNKNOWN, migrationUnknownFields(unknown, 'readiness'));
+		}
+	};
 
-  return {
-    isReady: async () => {
-      const judgement = await judged();
-      noteChange(judgement);
-      return judgement.ready;
-    },
-  };
+	return {
+		isReady: async () => {
+			const judgement = await judged();
+			noteChange(judgement);
+			return judgement.ready;
+		},
+	};
 };

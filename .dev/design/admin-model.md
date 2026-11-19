@@ -93,24 +93,24 @@ EGO-based instances (primarily iMS):
 5. **Host application change.** What must change is any code that either calls EGO's
    authorization endpoints or builds request context from EGO-derived claims. Two categories:
 
-   - **Services calling EGO endpoints directly.** Portals and gateway APIs that validate EGO
-     tokens or resolve EGO group memberships before serving requests. These are updated to use
-     Usher's Bridge and token exchange. For services that verify tokens by public key (RS256),
-     **key rotation is a required step of the replacement, distinct from code changes**: Keycloak uses its
-     own signing key pair, so the configured public key at each dependent service must be updated
-     to the Keycloak signing key before the first Keycloak-issued token is accepted. A service
-     still configured with EGO's public key will reject all Keycloak-issued tokens at the signature
-     verification step, regardless of any other replacement work.
-   - **Authorization callbacks reading EGO-populated context.** Search instances may currently
-     express authorization by reading EGO claims that a host application placed into request
-     context. That callback code lives in the host application's own repo, not in the data
-     service's repo, and would not appear in any audit of the ushered service itself. Identify and
-     change these in the same pass.
+    - **Services calling EGO endpoints directly.** Portals and gateway APIs that validate EGO
+      tokens or resolve EGO group memberships before serving requests. These are updated to use
+      Usher's Bridge and token exchange. For services that verify tokens by public key (RS256),
+      **key rotation is a required step of the replacement, distinct from code changes**: Keycloak uses its
+      own signing key pair, so the configured public key at each dependent service must be updated
+      to the Keycloak signing key before the first Keycloak-issued token is accepted. A service
+      still configured with EGO's public key will reject all Keycloak-issued tokens at the signature
+      verification step, regardless of any other replacement work.
+    - **Authorization callbacks reading EGO-populated context.** Search instances may currently
+      express authorization by reading EGO claims that a host application placed into request
+      context. That callback code lives in the host application's own repo, not in the data
+      service's repo, and would not appear in any audit of the ushered service itself. Identify and
+      change these in the same pass.
 
-   Ushered services that perform no authentication themselves
-   (for example, a search-server instance relying entirely on host-supplied context) are not
-   in scope for that replacement as shipped: there is no EGO call to repoint. What requires change
-   is the host code that constructs that context.
+    Ushered services that perform no authentication themselves
+    (for example, a search-server instance relying entirely on host-supplied context) are not
+    in scope for that replacement as shipped: there is no EGO call to repoint. What requires change
+    is the host code that constructs that context.
 
 This replacement must be planned and coordinated before any EGO infrastructure is deprovisioned.
 

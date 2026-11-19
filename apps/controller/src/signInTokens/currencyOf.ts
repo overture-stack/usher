@@ -3,15 +3,11 @@ import type { TokenClaims } from '../identityProvider/index.js';
 import { EXCESSIVE_LIFETIME } from './excessiveLifetime.js';
 import { isTime } from './isTime.js';
 import { MISSING_ISSUED_AT } from './missingIssuedAt.js';
-import type {
-  CurrencyRefusal,
-  CurrencySettings,
-  TokenCurrency,
-} from './types.js';
+import type { CurrencyRefusal, CurrencySettings, TokenCurrency } from './types.js';
 
 const refused = (reason: CurrencyRefusal): TokenCurrency => ({
-  kind: 'refused',
-  reason,
+	kind: 'refused',
+	reason,
 });
 
 /**
@@ -28,25 +24,24 @@ const refused = (reason: CurrencyRefusal): TokenCurrency => ({
  * @param now the instant, in milliseconds since the Unix epoch.
  */
 export const currencyOf = (
-  claims: TokenClaims,
-  { signInTokenMaximumFor }: CurrencySettings,
-  now: number,
+	claims: TokenClaims,
+	{ signInTokenMaximumFor }: CurrencySettings,
+	now: number,
 ): TokenCurrency => {
-  const { exp, iat, nbf } = claims;
-  if (!isTime(exp)) {
-    return refused('missingExpiry');
-  }
-  if (now >= exp * 1000 + CLOCK_TOLERANCE_MILLISECONDS) {
-    return refused('expiredToken');
-  }
-  if (!isTime(iat)) {
-    return refused(MISSING_ISSUED_AT);
-  }
-  if (exp - iat > signInTokenMaximumFor(iat)) {
-    return refused(EXCESSIVE_LIFETIME);
-  }
-  return nbf === undefined ||
-    (isTime(nbf) && nbf * 1000 <= now + CLOCK_TOLERANCE_MILLISECONDS)
-    ? { expiresAt: exp, kind: 'current' }
-    : refused('notYetValid');
+	const { exp, iat, nbf } = claims;
+	if (!isTime(exp)) {
+		return refused('missingExpiry');
+	}
+	if (now >= exp * 1000 + CLOCK_TOLERANCE_MILLISECONDS) {
+		return refused('expiredToken');
+	}
+	if (!isTime(iat)) {
+		return refused(MISSING_ISSUED_AT);
+	}
+	if (exp - iat > signInTokenMaximumFor(iat)) {
+		return refused(EXCESSIVE_LIFETIME);
+	}
+	return nbf === undefined || (isTime(nbf) && nbf * 1000 <= now + CLOCK_TOLERANCE_MILLISECONDS)
+		? { expiresAt: exp, kind: 'current' }
+		: refused('notYetValid');
 };

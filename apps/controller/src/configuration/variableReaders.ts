@@ -6,16 +6,15 @@ import type { StartProblem } from '../failures/index.js';
 
 /** One environment variable as an environment gives it: its name, and its value or none. */
 export interface Variable {
-  name: string;
-  value: string | undefined;
+	name: string;
+	value: string | undefined;
 }
 
 /**
  * What reading one variable gave: its value, or the rule its value broke. A refused reading names the
  * variable and the rule alone, never the value.
  */
-export type Reading<Value> =
-  { kind: 'read'; value: Value } | { kind: 'refused'; problem: StartProblem };
+export type Reading<Value> = { kind: 'read'; value: Value } | { kind: 'refused'; problem: StartProblem };
 
 /** The protocols a PostgreSQL connection URL may name. */
 const DATABASE_PROTOCOLS: readonly string[] = ['postgres:', 'postgresql:'];
@@ -27,11 +26,7 @@ const CANONICAL_KEY = /^[A-Za-z0-9_-]{43}$/u;
 
 const WHOLE_NUMBER = /^\d+$/u;
 
-const LOOPBACK_HOSTS: ReadonlySet<string> = new Set([
-  '127.0.0.1',
-  '[::1]',
-  'localhost',
-]);
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['127.0.0.1', '[::1]', 'localhost']);
 
 /**
  * A reading of a value.
@@ -39,8 +34,8 @@ const LOOPBACK_HOSTS: ReadonlySet<string> = new Set([
  * @param value the value read.
  */
 export const read = <Value>(value: Value): Reading<Value> => ({
-  kind: 'read',
-  value,
+	kind: 'read',
+	value,
 });
 
 /**
@@ -49,10 +44,10 @@ export const read = <Value>(value: Value): Reading<Value> => ({
  * @param variable the variable read.
  * @param rule the rule, worded to follow the variable's name.
  */
-export const refused = <Value>(
-  { name }: Variable,
-  rule: string,
-): Reading<Value> => ({ kind: 'refused', problem: { rule, variable: name } });
+export const refused = <Value>({ name }: Variable, rule: string): Reading<Value> => ({
+	kind: 'refused',
+	problem: { rule, variable: name },
+});
 
 /**
  * Reads on from a reading's value, passing a refusal through as it is.
@@ -60,10 +55,8 @@ export const refused = <Value>(
  * @param reading the reading so far.
  * @param next what reads on from its value.
  */
-export const then = <From, To>(
-  reading: Reading<From>,
-  next: (value: From) => Reading<To>,
-): Reading<To> => (reading.kind === 'read' ? next(reading.value) : reading);
+export const then = <From, To>(reading: Reading<From>, next: (value: From) => Reading<To>): Reading<To> =>
+	reading.kind === 'read' ? next(reading.value) : reading;
 
 /**
  * Reads text, as given: the default when the variable is unset, and an empty value refused unless
@@ -74,19 +67,14 @@ export const then = <From, To>(
  *   is refused.
  */
 export const readText = (
-  variable: Variable,
-  {
-    emptyAllowed = false,
-    fallback,
-  }: { emptyAllowed?: boolean; fallback?: string } = {},
+	variable: Variable,
+	{ emptyAllowed = false, fallback }: { emptyAllowed?: boolean; fallback?: string } = {},
 ): Reading<string> => {
-  const { value } = variable;
-  if (value === undefined) {
-    return fallback === undefined ? refused(variable, MISSING) : read(fallback);
-  }
-  return value === '' && !emptyAllowed
-    ? refused(variable, 'is empty')
-    : read(value);
+	const { value } = variable;
+	if (value === undefined) {
+		return fallback === undefined ? refused(variable, MISSING) : read(fallback);
+	}
+	return value === '' && !emptyAllowed ? refused(variable, 'is empty') : read(value);
 };
 
 /**
@@ -96,18 +84,15 @@ export const readText = (
  * @param variable the variable.
  * @param fallback the value when the variable is unset.
  */
-export const readSwitch = (
-  variable: Variable,
-  fallback: boolean,
-): Reading<boolean> => {
-  const { value } = variable;
-  if (value === undefined) {
-    return read(fallback);
-  }
-  if (value === 'true' || value === 'false') {
-    return read(value === 'true');
-  }
-  return refused(variable, 'is neither true nor false');
+export const readSwitch = (variable: Variable, fallback: boolean): Reading<boolean> => {
+	const { value } = variable;
+	if (value === undefined) {
+		return read(fallback);
+	}
+	if (value === 'true' || value === 'false') {
+		return read(value === 'true');
+	}
+	return refused(variable, 'is neither true nor false');
 };
 
 // A global category as a payload names it: its scope, a dot, and a name holding no dot.
@@ -121,30 +106,20 @@ const GLOBAL_CATEGORY = /^global\.[^.]+$/u;
  * @param variable the variable.
  * @param fallback the category when the variable is unset.
  */
-export const readGlobalCategory = (
-  variable: Variable,
-  fallback: string,
-): Reading<string> =>
-  then(readText(variable, { emptyAllowed: true, fallback }), (category) =>
-    GLOBAL_CATEGORY.test(category)
-      ? read(category)
-      : refused(
-          variable,
-          'is not global. followed by the name of a category, which holds no dot',
-        ),
-  );
+export const readGlobalCategory = (variable: Variable, fallback: string): Reading<string> =>
+	then(readText(variable, { emptyAllowed: true, fallback }), (category) =>
+		GLOBAL_CATEGORY.test(category)
+			? read(category)
+			: refused(variable, 'is not global. followed by the name of a category, which holds no dot'),
+	);
 
 const isCanonicalKey = (text: string): boolean => {
-  const bytes = Buffer.from(text, 'base64url');
-  try {
-    return (
-      CANONICAL_KEY.test(text) &&
-      bytes.length === 32 &&
-      bytes.toString('base64url') === text
-    );
-  } finally {
-    bytes.fill(0);
-  }
+	const bytes = Buffer.from(text, 'base64url');
+	try {
+		return CANONICAL_KEY.test(text) && bytes.length === 32 && bytes.toString('base64url') === text;
+	} finally {
+		bytes.fill(0);
+	}
 };
 
 /**
@@ -155,15 +130,12 @@ const isCanonicalKey = (text: string): boolean => {
  * @param variable the variable.
  */
 export const readKey = (variable: Variable): Reading<string> =>
-  then(readText(variable, { emptyAllowed: true }), (text) => {
-    const key = text.trim();
-    return isCanonicalKey(key)
-      ? read(key)
-      : refused(
-          variable,
-          'is not 32 bytes as 43 base64url characters in canonical form',
-        );
-  });
+	then(readText(variable, { emptyAllowed: true }), (text) => {
+		const key = text.trim();
+		return isCanonicalKey(key)
+			? read(key)
+			: refused(variable, 'is not 32 bytes as 43 base64url characters in canonical form');
+	});
 
 /**
  * Reads a whole number within bounds.
@@ -173,27 +145,23 @@ export const readKey = (variable: Variable): Reading<string> =>
  *   default, without which an unset variable is refused.
  */
 export const readInteger = (
-  variable: Variable,
-  {
-    fallback,
-    maximum = Number.MAX_SAFE_INTEGER,
-    minimum,
-  }: { fallback?: number; maximum?: number; minimum: number },
+	variable: Variable,
+	{ fallback, maximum = Number.MAX_SAFE_INTEGER, minimum }: { fallback?: number; maximum?: number; minimum: number },
 ): Reading<number> => {
-  const { value } = variable;
-  if (value === undefined) {
-    return fallback === undefined ? refused(variable, MISSING) : read(fallback);
-  }
-  const number = WHOLE_NUMBER.test(value) ? Number(value) : Number.NaN;
-  if (Number.isSafeInteger(number) && number >= minimum && number <= maximum) {
-    return read(number);
-  }
-  return refused(
-    variable,
-    maximum === Number.MAX_SAFE_INTEGER
-      ? `is not a whole number of at least ${minimum}`
-      : `is not a whole number from ${minimum} to ${maximum}`,
-  );
+	const { value } = variable;
+	if (value === undefined) {
+		return fallback === undefined ? refused(variable, MISSING) : read(fallback);
+	}
+	const number = WHOLE_NUMBER.test(value) ? Number(value) : Number.NaN;
+	if (Number.isSafeInteger(number) && number >= minimum && number <= maximum) {
+		return read(number);
+	}
+	return refused(
+		variable,
+		maximum === Number.MAX_SAFE_INTEGER
+			? `is not a whole number of at least ${minimum}`
+			: `is not a whole number from ${minimum} to ${maximum}`,
+	);
 };
 
 /**
@@ -203,21 +171,16 @@ export const readInteger = (
  * @param variable the variable.
  * @param fallback the list when the variable is unset; without one, an unset variable is refused.
  */
-export const readList = (
-  variable: Variable,
-  fallback?: readonly string[],
-): Reading<readonly string[]> => {
-  const { value } = variable;
-  if (value === undefined) {
-    return fallback === undefined ? refused(variable, MISSING) : read(fallback);
-  }
-  if (value === '') {
-    return read([]);
-  }
-  const entries = value.split(',').map((entry) => entry.trim());
-  return entries.includes('')
-    ? refused(variable, 'holds an empty entry between its commas')
-    : read(entries);
+export const readList = (variable: Variable, fallback?: readonly string[]): Reading<readonly string[]> => {
+	const { value } = variable;
+	if (value === undefined) {
+		return fallback === undefined ? refused(variable, MISSING) : read(fallback);
+	}
+	if (value === '') {
+		return read([]);
+	}
+	const entries = value.split(',').map((entry) => entry.trim());
+	return entries.includes('') ? refused(variable, 'holds an empty entry between its commas') : read(entries);
 };
 
 // A CIDR prefix length: a whole number with no sign and no leading zero.
@@ -228,42 +191,36 @@ const ADDRESS_BITS: Readonly<Record<number, number>> = { 4: 32, 6: 128 };
 
 // The first and last IPv4 addresses in their IPv6 form, which an IPv4 client is matched in against
 // an IPv6 range.
-const MAPPED_IPV4_BOUNDS: readonly string[] = [
-  '::ffff:0.0.0.0',
-  '::ffff:255.255.255.255',
-];
+const MAPPED_IPV4_BOUNDS: readonly string[] = ['::ffff:0.0.0.0', '::ffff:255.255.255.255'];
 
 interface AddressRange {
-  address: string;
-  prefix: number;
-  version: number;
+	address: string;
+	prefix: number;
+	version: number;
 }
 
 // An entry written as a CIDR range, or undefined for one that is not.
 const rangeOf = (entry: string): AddressRange | undefined => {
-  const [address = '', prefix = '', ...rest] = entry.split('/');
-  const version = isIP(address);
-  const bits = ADDRESS_BITS[version];
-  return rest.length === 0 &&
-    bits !== undefined &&
-    PREFIX_LENGTH.test(prefix) &&
-    Number(prefix) <= bits
-    ? { address, prefix: Number(prefix), version }
-    : undefined;
+	const [address = '', prefix = '', ...rest] = entry.split('/');
+	const version = isIP(address);
+	const bits = ADDRESS_BITS[version];
+	return rest.length === 0 && bits !== undefined && PREFIX_LENGTH.test(prefix) && Number(prefix) <= bits
+		? { address, prefix: Number(prefix), version }
+		: undefined;
 };
 
 // Whether a range holds every address of an IP version: prefix length 0, or an IPv6 range holding
 // every IPv4 address in its IPv6 form, which `::ffff:0:0/96` does.
 const holdsAVersion = ({ address, prefix, version }: AddressRange): boolean => {
-  if (prefix === 0) {
-    return true;
-  }
-  if (version !== 6) {
-    return false;
-  }
-  const range = new BlockList();
-  range.addSubnet(address, prefix, 'ipv6');
-  return MAPPED_IPV4_BOUNDS.every((bound) => range.check(bound, 'ipv6'));
+	if (prefix === 0) {
+		return true;
+	}
+	if (version !== 6) {
+		return false;
+	}
+	const range = new BlockList();
+	range.addSubnet(address, prefix, 'ipv6');
+	return MAPPED_IPV4_BOUNDS.every((bound) => range.check(bound, 'ipv6'));
 };
 
 /**
@@ -275,25 +232,18 @@ const holdsAVersion = ({ address, prefix, version }: AddressRange): boolean => {
  * @param variable the variable.
  */
 export const readAddresses = (variable: Variable): Reading<readonly string[]> =>
-  then(readList(variable, []), (entries) => {
-    const ranges = entries.map(rangeOf);
-    if (
-      !entries.every(
-        (entry, index) => isIP(entry) !== 0 || ranges[index] !== undefined,
-      )
-    ) {
-      return refused(
-        variable,
-        'holds an entry that is neither an IP address nor a CIDR range',
-      );
-    }
-    return ranges.some((range) => range !== undefined && holdsAVersion(range))
-      ? refused(
-          variable,
-          'holds a range of every address of an IP version, which would let any client name its own address',
-        )
-      : read(entries);
-  });
+	then(readList(variable, []), (entries) => {
+		const ranges = entries.map(rangeOf);
+		if (!entries.every((entry, index) => isIP(entry) !== 0 || ranges[index] !== undefined)) {
+			return refused(variable, 'holds an entry that is neither an IP address nor a CIDR range');
+		}
+		return ranges.some((range) => range !== undefined && holdsAVersion(range))
+			? refused(
+					variable,
+					'holds a range of every address of an IP version, which would let any client name its own address',
+				)
+			: read(entries);
+	});
 
 /**
  * Whether a URL carries a password, in its user information or as a `password` parameter, either of
@@ -301,8 +251,7 @@ export const readAddresses = (variable: Variable): Reading<readonly string[]> =>
  *
  * @param url the URL.
  */
-const carriesPassword = (url: URL): boolean =>
-  url.password !== '' || url.searchParams.has('password');
+const carriesPassword = (url: URL): boolean => url.password !== '' || url.searchParams.has('password');
 
 /**
  * Reads a store's connection URL, which never carries the store's password: a URL is the kind of
@@ -312,80 +261,63 @@ const carriesPassword = (url: URL): boolean =>
  * @param rules the variable the password is read from, and the protocols allowed, any by default.
  */
 export const readStoreUrl = (
-  variable: Variable,
-  {
-    passwordVariable,
-    protocols,
-  }: { passwordVariable: string; protocols?: readonly string[] },
+	variable: Variable,
+	{ passwordVariable, protocols }: { passwordVariable: string; protocols?: readonly string[] },
 ): Reading<string> =>
-  then(readText(variable), (text) => {
-    const url = URL.parse(text);
-    if (url === null) {
-      return refused(variable, 'is not a URL');
-    }
-    if (carriesPassword(url)) {
-      return refused(
-        variable,
-        `carries a password, which is read from ${passwordVariable} alone`,
-      );
-    }
-    return protocols === undefined || protocols.includes(url.protocol)
-      ? read(text)
-      : refused(
-          variable,
-          `is not a URL whose protocol is one of ${protocols.join(', ')}`,
-        );
-  });
+	then(readText(variable), (text) => {
+		const url = URL.parse(text);
+		if (url === null) {
+			return refused(variable, 'is not a URL');
+		}
+		if (carriesPassword(url)) {
+			return refused(variable, `carries a password, which is read from ${passwordVariable} alone`);
+		}
+		return protocols === undefined || protocols.includes(url.protocol)
+			? read(text)
+			: refused(variable, `is not a URL whose protocol is one of ${protocols.join(', ')}`);
+	});
 
 // The user information as the driver decodes it; one that does not decode names no role it can read.
 const decodedUser = (username: string): string => {
-  try {
-    return decodeURIComponent(username);
-  } catch {
-    return '';
-  }
+	try {
+		return decodeURIComponent(username);
+	} catch {
+		return '';
+	}
 };
 
 // The role a PostgreSQL URL names as the driver reads it: its last `user` parameter, else its user
 // information, an empty value counting as none in either, so empty when it names none.
-const roleNamedBy = (url: URL): string =>
-  url.searchParams.getAll('user').at(-1) || decodedUser(url.username);
+const roleNamedBy = (url: URL): string => url.searchParams.getAll('user').at(-1) || decodedUser(url.username);
 
 /** How the role the Controller connects as is named by the refusal of a URL naming no role. */
-export const CONTROLLER_ROLE_DESCRIPTION =
-  'the role the controller connects as';
+export const CONTROLLER_ROLE_DESCRIPTION = 'the role the controller connects as';
 
 /** What reading a PostgreSQL connection URL is told: the variable its password is read from, and the role it must name. */
 export interface DatabaseUrlRules {
-  /** The variable the role's password is read from, which the refusal of a URL carrying one names. */
-  passwordVariable: string;
+	/** The variable the role's password is read from, which the refusal of a URL carrying one names. */
+	passwordVariable: string;
 
-  /** The role the URL must name, as the refusal of a URL naming none words it, such as `the schema migration role`. */
-  roleDescription: string;
+	/** The role the URL must name, as the refusal of a URL naming none words it, such as `the schema migration role`. */
+	roleDescription: string;
 }
 
 interface DatabaseConnection {
-  role: string;
-  url: string;
+	role: string;
+	url: string;
 }
 
 // The URL was read by readStoreUrl, which takes only text that parses as a URL.
 const readDatabaseConnection = (
-  variable: Variable,
-  { passwordVariable, roleDescription }: DatabaseUrlRules,
+	variable: Variable,
+	{ passwordVariable, roleDescription }: DatabaseUrlRules,
 ): Reading<DatabaseConnection> =>
-  then(
-    readStoreUrl(variable, { passwordVariable, protocols: DATABASE_PROTOCOLS }),
-    (url) => {
-      const role = roleNamedBy(new URL(url));
-      return role === ''
-        ? refused(
-            variable,
-            `names no database role; it must name ${roleDescription}`,
-          )
-        : read({ role, url });
-    },
-  );
+	then(readStoreUrl(variable, { passwordVariable, protocols: DATABASE_PROTOCOLS }), (url) => {
+		const role = roleNamedBy(new URL(url));
+		return role === ''
+			? refused(variable, `names no database role; it must name ${roleDescription}`)
+			: read({ role, url });
+	});
 
 /**
  * Reads a PostgreSQL connection URL as {@link readStoreUrl} reads a store's, which must name the
@@ -396,11 +328,8 @@ const readDatabaseConnection = (
  * @param variable the variable.
  * @param rules the variable the password is read from, and the role the URL must name.
  */
-export const readDatabaseUrl = (
-  variable: Variable,
-  rules: DatabaseUrlRules,
-): Reading<string> =>
-  then(readDatabaseConnection(variable, rules), ({ url }) => read(url));
+export const readDatabaseUrl = (variable: Variable, rules: DatabaseUrlRules): Reading<string> =>
+	then(readDatabaseConnection(variable, rules), ({ url }) => read(url));
 
 // The settings of a connection URL that name a file, each read by the driver as it parses the URL.
 const FILE_PARAMETERS: readonly string[] = ['sslcert', 'sslkey', 'sslrootcert'];
@@ -414,52 +343,39 @@ const VERIFYING_MODE_WITH_CA_FILE = 'verify-ca';
 
 // The rule broken by a database URL whose connection leaves the host without verifying the server.
 const UNVERIFIED_CONNECTION_RULE =
-  'connects to a host other than a loopback host or a Unix socket without verifying the server: set sslmode=verify-full, or sslmode=verify-ca with sslrootcert';
+	'connects to a host other than a loopback host or a Unix socket without verifying the server: set sslmode=verify-full, or sslmode=verify-ca with sslrootcert';
 
 type ParsedConnection =
-  | { config: Readonly<Record<string, unknown>>; kind: 'parsed' }
-  | { kind: 'unparsed'; parameter: string | undefined };
+	{ config: Readonly<Record<string, unknown>>; kind: 'parsed' } | { kind: 'unparsed'; parameter: string | undefined };
 
 // The setting naming the file behind a parse's failure to read one, the last setting of each name
 // being the one read by the driver; none for a parse failing otherwise.
 const unreadFileOf = (url: string, failure: unknown): string | undefined => {
-  const path: unknown =
-    typeof failure === 'object' && failure !== null && 'path' in failure
-      ? failure.path
-      : undefined;
-  const parameters = URL.parse(url)?.searchParams;
-  return typeof path === 'string' && parameters !== undefined
-    ? FILE_PARAMETERS.find(
-        (parameter) => parameters.getAll(parameter).at(-1) === path,
-      )
-    : undefined;
+	const path: unknown =
+		typeof failure === 'object' && failure !== null && 'path' in failure ? failure.path : undefined;
+	const parameters = URL.parse(url)?.searchParams;
+	return typeof path === 'string' && parameters !== undefined
+		? FILE_PARAMETERS.find((parameter) => parameters.getAll(parameter).at(-1) === path)
+		: undefined;
 };
 
 // The URL as given to the pool by the driver's own parser, which also reads the files it names.
 const parsedConnection = (url: string): ParsedConnection => {
-  try {
-    return { config: { ...parseIntoClientConfig(url) }, kind: 'parsed' };
-  } catch (failure) {
-    return { kind: 'unparsed', parameter: unreadFileOf(url, failure) };
-  }
+	try {
+		return { config: { ...parseIntoClientConfig(url) }, kind: 'parsed' };
+	} catch (failure) {
+		return { kind: 'unparsed', parameter: unreadFileOf(url, failure) };
+	}
 };
 
 // Whether reaching a host keeps the connection on this machine: a loopback host, in a URL's hostname
 // form or in the driver's, its brackets taken off, or a Unix socket, a host that is an absolute path.
 const staysOnHost = (host: unknown): boolean =>
-  typeof host === 'string' &&
-  (host.startsWith('/') ||
-    LOOPBACK_HOSTS.has(host) ||
-    LOOPBACK_HOSTS.has(`[${host}]`));
+	typeof host === 'string' && (host.startsWith('/') || LOOPBACK_HOSTS.has(host) || LOOPBACK_HOSTS.has(`[${host}]`));
 
-const verifiesServer = ({
-  sslmode,
-  sslrootcert,
-}: Readonly<Record<string, unknown>>): boolean =>
-  sslmode === VERIFYING_MODE ||
-  (sslmode === VERIFYING_MODE_WITH_CA_FILE &&
-    typeof sslrootcert === 'string' &&
-    sslrootcert !== '');
+const verifiesServer = ({ sslmode, sslrootcert }: Readonly<Record<string, unknown>>): boolean =>
+	sslmode === VERIFYING_MODE ||
+	(sslmode === VERIFYING_MODE_WITH_CA_FILE && typeof sslrootcert === 'string' && sslrootcert !== '');
 
 /**
  * Reads a PostgreSQL connection URL as the driver will connect with it, judged on the connection the
@@ -474,25 +390,23 @@ const verifiesServer = ({
  * @param unverifiedAllowed whether a connection that does not verify the server is allowed.
  */
 export const readVerifiedConnection = (
-  variable: Variable,
-  url: string,
-  unverifiedAllowed: boolean,
+	variable: Variable,
+	url: string,
+	unverifiedAllowed: boolean,
 ): Reading<string> => {
-  const parsed = parsedConnection(url);
-  if (parsed.kind === 'unparsed') {
-    return refused(
-      variable,
-      parsed.parameter === undefined
-        ? 'is not a URL the database driver can read'
-        : `names a file in ${parsed.parameter} that cannot be read`,
-    );
-  }
-  const { config } = parsed;
-  return unverifiedAllowed ||
-    staysOnHost(config['host']) ||
-    verifiesServer(config)
-    ? read(url)
-    : refused(variable, UNVERIFIED_CONNECTION_RULE);
+	const parsed = parsedConnection(url);
+	if (parsed.kind === 'unparsed') {
+		return refused(
+			variable,
+			parsed.parameter === undefined
+				? 'is not a URL the database driver can read'
+				: `names a file in ${parsed.parameter} that cannot be read`,
+		);
+	}
+	const { config } = parsed;
+	return unverifiedAllowed || staysOnHost(config['host']) || verifiesServer(config)
+		? read(url)
+		: refused(variable, UNVERIFIED_CONNECTION_RULE);
 };
 
 /**
@@ -502,11 +416,8 @@ export const readVerifiedConnection = (
  * @param variable the variable.
  * @param rules the variable the password is read from, and the role the URL must name.
  */
-export const readDatabaseRole = (
-  variable: Variable,
-  rules: DatabaseUrlRules,
-): Reading<string> =>
-  then(readDatabaseConnection(variable, rules), ({ role }) => read(role));
+export const readDatabaseRole = (variable: Variable, rules: DatabaseUrlRules): Reading<string> =>
+	then(readDatabaseConnection(variable, rules), ({ role }) => read(role));
 
 /**
  * Reads the URL of something the Controller trusts or sends a secret to: https, or http to a loopback
@@ -516,17 +427,13 @@ export const readDatabaseRole = (
  * @param variable the variable.
  */
 export const readSecureUrl = (variable: Variable): Reading<string> =>
-  then(readText(variable), (text) => {
-    const url = URL.parse(text);
-    if (url !== null && carriesPassword(url)) {
-      return refused(variable, 'carries a password');
-    }
-    return url !== null &&
-      (url.protocol === 'https:' ||
-        (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname)))
-      ? read(text)
-      : refused(
-          variable,
-          'is not an https URL, or an http URL to a loopback host',
-        );
-  });
+	then(readText(variable), (text) => {
+		const url = URL.parse(text);
+		if (url !== null && carriesPassword(url)) {
+			return refused(variable, 'carries a password');
+		}
+		return url !== null &&
+			(url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname)))
+			? read(text)
+			: refused(variable, 'is not an https URL, or an http URL to a loopback host');
+	});

@@ -3,11 +3,10 @@ import { isLive } from '../resourceStanding/index.js';
 import type { ViewedGrant } from './types.js';
 
 /** A grant's state, as an answer names it. */
-export type GrantState =
-  'accepted' | 'expired' | 'pending' | 'rejected' | 'revoked';
+export type GrantState = 'accepted' | 'expired' | 'pending' | 'rejected' | 'revoked';
 
 const instantOrNull = (instant: Date | null): string | null =>
-  instant === null ? null : eventInstant(instant.getTime());
+	instant === null ? null : eventInstant(instant.getTime());
 
 /**
  * A grant's state on the configured clock: `revoked` once revoked; `expired` once its expiry has
@@ -18,21 +17,16 @@ const instantOrNull = (instant: Date | null): string | null =>
  * @param now the configured clock's instant, in milliseconds since the Unix epoch.
  */
 export const grantStateOf = (
-  {
-    decision,
-    endedAt,
-    expiresAt,
-    revokedAt,
-  }: Pick<ViewedGrant, 'decision' | 'endedAt' | 'expiresAt' | 'revokedAt'>,
-  now: number,
+	{ decision, endedAt, expiresAt, revokedAt }: Pick<ViewedGrant, 'decision' | 'endedAt' | 'expiresAt' | 'revokedAt'>,
+	now: number,
 ): GrantState => {
-  if (revokedAt !== null) {
-    return 'revoked';
-  }
-  if (!isLive({ endedAt, expiresAt, revokedAt }, now)) {
-    return 'expired';
-  }
-  return decision?.decision ?? 'pending';
+	if (revokedAt !== null) {
+		return 'revoked';
+	}
+	if (!isLive({ endedAt, expiresAt, revokedAt }, now)) {
+		return 'expired';
+	}
+	return decision?.decision ?? 'pending';
 };
 
 /**
@@ -45,40 +39,40 @@ export const grantStateOf = (
  * @param now the configured clock's instant, in milliseconds since the Unix epoch.
  */
 export const grantView = (grant: ViewedGrant, now: number): JsonValue => {
-  const {
-    category,
-    decision,
-    expiresAt,
-    grantedAt,
-    granterSubject,
-    holderSubject,
-    id,
-    resource,
-    revokedAt,
-    revokerSubject,
-    role,
-    selfGrant,
-  } = grant;
-  return {
-    category,
-    decision:
-      decision === null
-        ? null
-        : {
-            capabilities: decision.capabilities,
-            decidedAt: eventInstant(decision.decidedAt.getTime()),
-            decision: decision.decision,
-          },
-    expiresAt: instantOrNull(expiresAt),
-    grantedAt: eventInstant(grantedAt.getTime()),
-    grantedBy: { subject: granterSubject },
-    holder: { hasAccount: true, subject: holderSubject },
-    id,
-    resource,
-    revokedAt: instantOrNull(revokedAt),
-    revokedBy: revokerSubject === null ? null : { subject: revokerSubject },
-    role,
-    selfGrant,
-    state: grantStateOf(grant, now),
-  };
+	const {
+		category,
+		decision,
+		expiresAt,
+		grantedAt,
+		granterSubject,
+		holderSubject,
+		id,
+		resource,
+		revokedAt,
+		revokerSubject,
+		role,
+		selfGrant,
+	} = grant;
+	return {
+		category,
+		decision:
+			decision === null
+				? null
+				: {
+						capabilities: decision.capabilities,
+						decidedAt: eventInstant(decision.decidedAt.getTime()),
+						decision: decision.decision,
+					},
+		expiresAt: instantOrNull(expiresAt),
+		grantedAt: eventInstant(grantedAt.getTime()),
+		grantedBy: { subject: granterSubject },
+		holder: { hasAccount: true, subject: holderSubject },
+		id,
+		resource,
+		revokedAt: instantOrNull(revokedAt),
+		revokedBy: revokerSubject === null ? null : { subject: revokerSubject },
+		role,
+		selfGrant,
+		state: grantStateOf(grant, now),
+	};
 };

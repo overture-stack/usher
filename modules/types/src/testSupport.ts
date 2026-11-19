@@ -22,29 +22,28 @@ const CONTRACT_NUMBERS: ReadonlySet<number> = new Set([1]);
 
 /** The result of any validator in this package, seen only as far as these assertions need. */
 export type CheckedResult =
-  | { success: true }
-  | { problems: readonly { position: string; rule: string }[]; success: false };
+	{ success: true } | { problems: readonly { position: string; rule: string }[]; success: false };
 
 /**
  * One input refused by a validator, with the problem it must report, for a test showing that the
  * problem names no content of the input.
  */
 export interface LeakCase {
-  /** The input's defect, named in the test. */
-  description: string;
+	/** The input's defect, named in the test. */
+	description: string;
 
-  /** The input, every identifier and value of it marked. */
-  input: unknown;
+	/** The input, every identifier and value of it marked. */
+	input: unknown;
 
-  /** The position required in the problem. */
-  position: string;
+	/** The position required in the problem. */
+	position: string;
 
-  /** The rule required in the problem. */
-  rule: string;
+	/** The rule required in the problem. */
+	rule: string;
 }
 
 const problemPositions = (result: CheckedResult): readonly string[] =>
-  result.success ? [] : result.problems.map((problem) => problem.position);
+	result.success ? [] : result.problems.map((problem) => problem.position);
 
 /**
  * Asserts the value was accepted.
@@ -52,12 +51,8 @@ const problemPositions = (result: CheckedResult): readonly string[] =>
  * @throws {AssertionError} when it was refused, carrying the problems found as its `actual`.
  */
 export const assertAccepted = (result: CheckedResult): void => {
-  assert.deepEqual(
-    result.success ? [] : result.problems,
-    [],
-    'expected the value to be accepted',
-  );
-  assert.equal(result.success, true);
+	assert.deepEqual(result.success ? [] : result.problems, [], 'expected the value to be accepted');
+	assert.equal(result.success, true);
 };
 
 /**
@@ -66,11 +61,8 @@ export const assertAccepted = (result: CheckedResult): void => {
  * @throws {AssertionError} when it was accepted, or refused with no problem.
  */
 export const assertRefused = (result: CheckedResult): void => {
-  assert.equal(result.success, false, 'expected the value to be refused');
-  assert.ok(
-    problemPositions(result).length > 0,
-    'a refusal names at least one problem',
-  );
+	assert.equal(result.success, false, 'expected the value to be refused');
+	assert.ok(problemPositions(result).length > 0, 'a refusal names at least one problem');
 };
 
 /**
@@ -82,19 +74,12 @@ export const assertRefused = (result: CheckedResult): void => {
  * @throws {AssertionError} when the value was accepted, or when it was refused with no problem
  *   naming `rule` at `position`, in which case the message lists the problems found.
  */
-export const assertRefusedFor = (
-  result: CheckedResult,
-  position: string,
-  rule: string,
-): void => {
-  assertRefused(result);
-  assert.ok(
-    !result.success &&
-      result.problems.some(
-        (problem) => problem.position === position && problem.rule === rule,
-      ),
-    `expected "${rule}" at ${position}; found ${inspect(result.success ? [] : result.problems)}`,
-  );
+export const assertRefusedFor = (result: CheckedResult, position: string, rule: string): void => {
+	assertRefused(result);
+	assert.ok(
+		!result.success && result.problems.some((problem) => problem.position === position && problem.rule === rule),
+		`expected "${rule}" at ${position}; found ${inspect(result.success ? [] : result.problems)}`,
+	);
 };
 
 /**
@@ -105,48 +90,40 @@ export const assertRefusedFor = (
  * @throws {AssertionError} when the marker or the digits are found, quoting what was rendered.
  */
 export const assertCarriesNoInput = (carrier: unknown): void => {
-  const rendered = inspect(carrier, { depth: Infinity, showHidden: true });
+	const rendered = inspect(carrier, { depth: Infinity, showHidden: true });
 
-  assert.equal(
-    rendered.includes(LEAK_MARKER) || rendered.includes(LEAK_DIGITS),
-    false,
-    `a problem or an error carried content of the input: ${rendered}`,
-  );
+	assert.equal(
+		rendered.includes(LEAK_MARKER) || rendered.includes(LEAK_DIGITS),
+		false,
+		`a problem or an error carried content of the input: ${rendered}`,
+	);
 };
 
 const unmarkedParts = (
-  value: unknown,
-  contractWords: ReadonlySet<string>,
-  allowedUnmarkedKeys: ReadonlySet<string>,
+	value: unknown,
+	contractWords: ReadonlySet<string>,
+	allowedUnmarkedKeys: ReadonlySet<string>,
 ): readonly unknown[] => {
-  if (typeof value === 'string') {
-    return value.includes(LEAK_MARKER) || contractWords.has(value)
-      ? []
-      : [value];
-  }
+	if (typeof value === 'string') {
+		return value.includes(LEAK_MARKER) || contractWords.has(value) ? [] : [value];
+	}
 
-  if (typeof value === 'number') {
-    return String(value).includes(LEAK_DIGITS) || CONTRACT_NUMBERS.has(value)
-      ? []
-      : [value];
-  }
+	if (typeof value === 'number') {
+		return String(value).includes(LEAK_DIGITS) || CONTRACT_NUMBERS.has(value) ? [] : [value];
+	}
 
-  if (Array.isArray(value)) {
-    return Array.from(value).flatMap((entry) =>
-      unmarkedParts(entry, contractWords, allowedUnmarkedKeys),
-    );
-  }
+	if (Array.isArray(value)) {
+		return Array.from(value).flatMap((entry) => unmarkedParts(entry, contractWords, allowedUnmarkedKeys));
+	}
 
-  if (typeof value === 'object' && value !== null) {
-    return Object.entries(value).flatMap(([key, member]) => [
-      ...(allowedUnmarkedKeys.has(key)
-        ? []
-        : unmarkedParts(key, contractWords, allowedUnmarkedKeys)),
-      ...unmarkedParts(member, contractWords, allowedUnmarkedKeys),
-    ]);
-  }
+	if (typeof value === 'object' && value !== null) {
+		return Object.entries(value).flatMap(([key, member]) => [
+			...(allowedUnmarkedKeys.has(key) ? [] : unmarkedParts(key, contractWords, allowedUnmarkedKeys)),
+			...unmarkedParts(member, contractWords, allowedUnmarkedKeys),
+		]);
+	}
 
-  return [];
+	return [];
 };
 
 /**
@@ -163,15 +140,15 @@ const unmarkedParts = (
  *   `actual`.
  */
 export const assertInputMarked = (
-  input: unknown,
-  contractWords: ReadonlySet<string>,
-  allowedUnmarkedKeys: ReadonlySet<string> = new Set(),
+	input: unknown,
+	contractWords: ReadonlySet<string>,
+	allowedUnmarkedKeys: ReadonlySet<string> = new Set(),
 ): void => {
-  assert.deepEqual(
-    unmarkedParts(input, contractWords, allowedUnmarkedKeys),
-    [],
-    'every identifier and value of a leak input carries the marker',
-  );
+	assert.deepEqual(
+		unmarkedParts(input, contractWords, allowedUnmarkedKeys),
+		[],
+		'every identifier and value of a leak input carries the marker',
+	);
 };
 
 /**
@@ -184,25 +161,25 @@ export const assertInputMarked = (
  *   `actual`.
  */
 export const assertEveryRuleBroken = (
-  cases: readonly { rule: string }[],
-  rules: Readonly<Record<string, string>>,
+	cases: readonly { rule: string }[],
+	rules: Readonly<Record<string, string>>,
 ): void => {
-  const broken: ReadonlySet<string> = new Set(cases.map(({ rule }) => rule));
+	const broken: ReadonlySet<string> = new Set(cases.map(({ rule }) => rule));
 
-  assert.deepEqual(
-    Object.values(rules).filter((rule) => !broken.has(rule)),
-    [],
-  );
+	assert.deepEqual(
+		Object.values(rules).filter((rule) => !broken.has(rule)),
+		[],
+	);
 };
 
 const thrownBy = (action: () => unknown): unknown => {
-  try {
-    action();
-  } catch (error) {
-    return error;
-  }
+	try {
+		action();
+	} catch (error) {
+		return error;
+	}
 
-  return assert.fail('expected the call to throw');
+	return assert.fail('expected the call to throw');
 };
 
 /**
@@ -213,16 +190,13 @@ const thrownBy = (action: () => unknown): unknown => {
  * @throws {AssertionError} when `action` throws nothing, throws anything other than an
  *   {@link UsherContractError}, or throws one whose message is not `rule`.
  */
-export const contractErrorFrom = (
-  action: () => unknown,
-  rule: string,
-): UsherContractError => {
-  const error = thrownBy(action);
+export const contractErrorFrom = (action: () => unknown, rule: string): UsherContractError => {
+	const error = thrownBy(action);
 
-  assert.ok(error instanceof UsherContractError, inspect(error));
-  assert.equal(error.message, rule);
+	assert.ok(error instanceof UsherContractError, inspect(error));
+	assert.equal(error.message, rule);
 
-  return error;
+	return error;
 };
 
 /**
@@ -238,11 +212,10 @@ export const bypassTypes = <Target>(value: unknown): Target => value as Target;
  *
  * @param value a value holding JSON data only.
  */
-export const throughJson = (value: unknown): unknown =>
-  JSON.parse(JSON.stringify(value));
+export const throughJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
 
 /** Whether `value` and everything reachable from it is frozen. */
 export const isDeeplyFrozen = (value: unknown): boolean =>
-  typeof value === 'object' && value !== null
-    ? Object.isFrozen(value) && Object.values(value).every(isDeeplyFrozen)
-    : true;
+	typeof value === 'object' && value !== null
+		? Object.isFrozen(value) && Object.values(value).every(isDeeplyFrozen)
+		: true;

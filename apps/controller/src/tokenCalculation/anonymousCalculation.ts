@@ -14,8 +14,5 @@ import type { AudiencePolicy, Calculation } from './types.js';
  * @param policy the audience's served resources and the global categories, as one read gave them.
  * @param grantRules the grant rules the store holds.
  */
-export const anonymousCalculation = (
-  policy: AudiencePolicy,
-  grantRules: GrantRules,
-): Calculation =>
-  ruleCalculation(policy, grantRuleConferrals(grantRules, ['everyone']));
+export const anonymousCalculation = (policy: AudiencePolicy, grantRules: GrantRules): Calculation =>
+	ruleCalculation(policy, grantRuleConferrals(grantRules, ['everyone']));

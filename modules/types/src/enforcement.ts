@@ -1,32 +1,10 @@
-import {
-  SQON_COMBINATION_OPS,
-  SQON_FIELD_OPS,
-  SQON_MAX_DEPTH,
-  SqonSchema,
-  type SqonNode,
-} from '@overture-stack/sqon';
+import { SQON_COMBINATION_OPS, SQON_FIELD_OPS, SQON_MAX_DEPTH, SqonSchema, type SqonNode } from '@overture-stack/sqon';
 
 import type { NonEmpty } from './payload.js';
-import {
-  hasOnlyMembers,
-  isNonEmptyString,
-  isPlainRecord,
-  listEntries,
-  ownMember,
-} from './plainData.js';
-import {
-  brokenRules,
-  checkSnapshot,
-  ROOT_POSITION,
-  type ValidationProblem,
-} from './problems.js';
+import { hasOnlyMembers, isNonEmptyString, isPlainRecord, listEntries, ownMember } from './plainData.js';
+import { brokenRules, checkSnapshot, ROOT_POSITION, type ValidationProblem } from './problems.js';
 import { parseRecordNarrowing } from './renderedNarrowing.js';
-import {
-  canonicalOperatorOf,
-  isBound,
-  isLiteralValue,
-  SPECIAL_VALUE_MARKERS,
-} from './sqonPrimitives.js';
+import { canonicalOperatorOf, isBound, isLiteralValue, SPECIAL_VALUE_MARKERS } from './sqonPrimitives.js';
 
 /**
  * The Bridge's decision for one key registered by the adapter, one of three kinds in order of
@@ -49,103 +27,80 @@ import {
  *   absent.
  */
 export type Enforcement =
-  | {
-      kind: 'deny';
-      reason:
-        | 'filter-limit'
-        | 'no-grants'
-        | 'rendering-mismatch'
-        | 'unknown-resource'
-        | 'unmapped-category';
-    }
-  | { kind: 'narrow'; sqon: SqonNode }
-  | { kind: 'allow' };
+	| {
+			kind: 'deny';
+			reason: 'filter-limit' | 'no-grants' | 'rendering-mismatch' | 'unknown-resource' | 'unmapped-category';
+	  }
+	| { kind: 'narrow'; sqon: SqonNode }
+	| { kind: 'allow' };
 
 /**
  * The result of {@link validateEnforcement}: a copy of the enforcement result's own data, typed,
  * when it holds to the contract, and otherwise every problem found, each value-free.
  */
 export type EnforcementValidationResult =
-  | { enforcement: Enforcement; success: true }
-  | { problems: NonEmpty<ValidationProblem>; success: false };
+	{ enforcement: Enforcement; success: true } | { problems: NonEmpty<ValidationProblem>; success: false };
 
 /**
  * The wording of every rule held by {@link validateEnforcement}, keyed by a stable name, to match
  * against each problem's `rule`.
  */
 export const ENFORCEMENT_RULES = {
-  allNotEmpty: 'an all clause lists at least one value',
-  armMembers:
-    'an enforcement result carries only the members defined for its kind',
-  clauseMembers: 'a clause carries only fieldName and value',
-  combinationContentIsList: "a combination's content is a list of SQON nodes",
-  combinationNotEmpty:
-    'a combination holds at least one entry, since an empty one matches every document',
-  denyReason:
-    'a deny carries its reason: filter-limit, no-grants, rendering-mismatch, unknown-resource or unmapped-category',
-  depth: 'a filter nests no deeper than SQON allows',
-  entryIsNode: 'every entry of a filter is a SQON node',
-  exclusion:
-    'a filter holds no exclusion: excluding a value is written as a not around an in',
-  inNotEmpty:
-    'an in clause lists at least one value: matching nothing is a deny, never a narrowing',
-  isMap: 'an enforcement result is a map',
-  kind: 'kind is deny, narrow or allow',
-  literalValues:
-    'a clause lists literal values, never one read specially by Arranger: a * pattern, a set_id: reference or __missing__',
-  namesField: 'a clause names its field as a non-empty fieldName',
-  nodeMembers: 'a filter node carries only op and content',
-  notPlacement:
-    'a not sits in an and beside an in clause, so it narrows only the records admitted by that clause',
-  operator: 'a filter uses only operators defined by SQON',
-  pattern: 'a filter matches values as listed, never by a wildcard pattern',
-  pivot: 'a filter carries no pivot',
-  rangeBound:
-    'a range holds only usable bounds, each a finite number or a non-empty string, and a between holds two',
-  validSqon: 'a narrowing holds a valid SQON',
+	allNotEmpty: 'an all clause lists at least one value',
+	armMembers: 'an enforcement result carries only the members defined for its kind',
+	clauseMembers: 'a clause carries only fieldName and value',
+	combinationContentIsList: "a combination's content is a list of SQON nodes",
+	combinationNotEmpty: 'a combination holds at least one entry, since an empty one matches every document',
+	denyReason:
+		'a deny carries its reason: filter-limit, no-grants, rendering-mismatch, unknown-resource or unmapped-category',
+	depth: 'a filter nests no deeper than SQON allows',
+	entryIsNode: 'every entry of a filter is a SQON node',
+	exclusion: 'a filter holds no exclusion: excluding a value is written as a not around an in',
+	inNotEmpty: 'an in clause lists at least one value: matching nothing is a deny, never a narrowing',
+	isMap: 'an enforcement result is a map',
+	kind: 'kind is deny, narrow or allow',
+	literalValues:
+		'a clause lists literal values, never one read specially by Arranger: a * pattern, a set_id: reference or __missing__',
+	namesField: 'a clause names its field as a non-empty fieldName',
+	nodeMembers: 'a filter node carries only op and content',
+	notPlacement: 'a not sits in an and beside an in clause, so it narrows only the records admitted by that clause',
+	operator: 'a filter uses only operators defined by SQON',
+	pattern: 'a filter matches values as listed, never by a wildcard pattern',
+	pivot: 'a filter carries no pivot',
+	rangeBound: 'a range holds only usable bounds, each a finite number or a non-empty string, and a between holds two',
+	validSqon: 'a narrowing holds a valid SQON',
 } as const;
 
 type DenyReason = Extract<Enforcement, { kind: 'deny' }>['reason'];
 
 const DENY_REASONS: ReadonlySet<string> = new Set(
-  Object.keys({
-    'filter-limit': true,
-    'no-grants': true,
-    'rendering-mismatch': true,
-    'unknown-resource': true,
-    'unmapped-category': true,
-  } satisfies Readonly<Record<DenyReason, true>>),
+	Object.keys({
+		'filter-limit': true,
+		'no-grants': true,
+		'rendering-mismatch': true,
+		'unknown-resource': true,
+		'unmapped-category': true,
+	} satisfies Readonly<Record<DenyReason, true>>),
 );
 
 /** Each arm's members, looked up through a `Map` so an inherited name is never a kind. */
 const ARM_MEMBERS: ReadonlyMap<string, ReadonlySet<string>> = new Map(
-  Object.entries({
-    allow: new Set(['kind']),
-    deny: new Set(['kind', 'reason']),
-    narrow: new Set(['kind', 'sqon']),
-  } satisfies Readonly<Record<Enforcement['kind'], ReadonlySet<string>>>),
+	Object.entries({
+		allow: new Set(['kind']),
+		deny: new Set(['kind', 'reason']),
+		narrow: new Set(['kind', 'sqon']),
+	} satisfies Readonly<Record<Enforcement['kind'], ReadonlySet<string>>>),
 );
 
-const COMBINATION_OPERATORS: ReadonlySet<string> = new Set(
-  SQON_COMBINATION_OPS,
-);
+const COMBINATION_OPERATORS: ReadonlySet<string> = new Set(SQON_COMBINATION_OPS);
 
 const FIELD_OPERATORS: ReadonlySet<string> = new Set(SQON_FIELD_OPS);
 
-const EXCLUSION_OPERATORS: ReadonlySet<string> = new Set([
-  'not-in',
-  'some-not-in',
-]);
+const EXCLUSION_OPERATORS: ReadonlySet<string> = new Set(['not-in', 'some-not-in']);
 
 const PATTERN_OPERATORS: ReadonlySet<string> = new Set(['wildcard']);
 
-const RANGE_OPERATORS: ReadonlySet<string> = new Set([
-  'between',
-  'gt',
-  'gte',
-  'lt',
-  'lte',
-]);
+const RANGE_OPERATORS: ReadonlySet<string> = new Set(['between', 'gt', 'gte', 'lt', 'lte']);
 
 /** The operators whose values are searched by Arranger for {@link SPECIAL_VALUE_MARKERS}. */
 const LISTING_OPERATORS: ReadonlySet<string> = new Set(['all', 'in']);
@@ -158,59 +113,40 @@ const CLAUSE_MEMBERS: ReadonlySet<string> = new Set(['fieldName', 'value']);
 const FILTER_POSITION = 'sqon';
 
 const isInClause = (node: unknown): boolean =>
-  isPlainRecord(node) && canonicalOperatorOf(ownMember(node, 'op')) === 'in';
+	isPlainRecord(node) && canonicalOperatorOf(ownMember(node, 'op')) === 'in';
 
 // Every bound must be usable, since Arranger reads each bound it is given, a between's as the
 // lowest and highest listed.
 const isBoundedRange = (operator: string, value: unknown): boolean => {
-  const bounds = listEntries(value);
+	const bounds = listEntries(value);
 
-  if (operator === 'between') {
-    return bounds !== undefined && bounds.length === 2 && bounds.every(isBound);
-  }
-  return bounds ? bounds.length > 0 && bounds.every(isBound) : isBound(value);
+	if (operator === 'between') {
+		return bounds !== undefined && bounds.length === 2 && bounds.every(isBound);
+	}
+	return bounds ? bounds.length > 0 && bounds.every(isBound) : isBound(value);
 };
 
 const namesAField = (content: Readonly<Record<string, unknown>>): boolean =>
-  isNonEmptyString(ownMember(content, 'fieldName'));
+	isNonEmptyString(ownMember(content, 'fieldName'));
 
-const clauseProblems = (
-  operator: string,
-  content: unknown,
-  position: string,
-): readonly ValidationProblem[] => {
-  if (isPlainRecord(content)) {
-    const value = ownMember(content, 'value');
-    const values = listEntries(value) ?? [value];
+const clauseProblems = (operator: string, content: unknown, position: string): readonly ValidationProblem[] => {
+	if (isPlainRecord(content)) {
+		const value = ownMember(content, 'value');
+		const values = listEntries(value) ?? [value];
 
-    return brokenRules(position, [
-      [namesAField(content), ENFORCEMENT_RULES.namesField],
-      [
-        hasOnlyMembers(content, CLAUSE_MEMBERS),
-        ENFORCEMENT_RULES.clauseMembers,
-      ],
-      [!EXCLUSION_OPERATORS.has(operator), ENFORCEMENT_RULES.exclusion],
-      [!PATTERN_OPERATORS.has(operator), ENFORCEMENT_RULES.pattern],
-      [
-        operator === 'in' ? values.length > 0 : true,
-        ENFORCEMENT_RULES.inNotEmpty,
-      ],
-      [
-        operator === 'all' ? values.length > 0 : true,
-        ENFORCEMENT_RULES.allNotEmpty,
-      ],
-      [
-        LISTING_OPERATORS.has(operator) ? values.every(isLiteralValue) : true,
-        ENFORCEMENT_RULES.literalValues,
-      ],
-      [
-        RANGE_OPERATORS.has(operator) ? isBoundedRange(operator, value) : true,
-        ENFORCEMENT_RULES.rangeBound,
-      ],
-    ]);
-  }
+		return brokenRules(position, [
+			[namesAField(content), ENFORCEMENT_RULES.namesField],
+			[hasOnlyMembers(content, CLAUSE_MEMBERS), ENFORCEMENT_RULES.clauseMembers],
+			[!EXCLUSION_OPERATORS.has(operator), ENFORCEMENT_RULES.exclusion],
+			[!PATTERN_OPERATORS.has(operator), ENFORCEMENT_RULES.pattern],
+			[operator === 'in' ? values.length > 0 : true, ENFORCEMENT_RULES.inNotEmpty],
+			[operator === 'all' ? values.length > 0 : true, ENFORCEMENT_RULES.allNotEmpty],
+			[LISTING_OPERATORS.has(operator) ? values.every(isLiteralValue) : true, ENFORCEMENT_RULES.literalValues],
+			[RANGE_OPERATORS.has(operator) ? isBoundedRange(operator, value) : true, ENFORCEMENT_RULES.rangeBound],
+		]);
+	}
 
-  return [{ position, rule: ENFORCEMENT_RULES.namesField }];
+	return [{ position, rule: ENFORCEMENT_RULES.namesField }];
 };
 
 /**
@@ -219,31 +155,28 @@ const clauseProblems = (
  * clause. A `not` must sit there, so it narrows only the records admitted by that clause.
  */
 const nodeProblems = (
-  node: Readonly<Record<string, unknown>>,
-  position: string,
-  depth: number,
-  besideIn: boolean,
+	node: Readonly<Record<string, unknown>>,
+	position: string,
+	depth: number,
+	besideIn: boolean,
 ): readonly ValidationProblem[] => {
-  const operator = canonicalOperatorOf(ownMember(node, 'op'));
-  const content = ownMember(node, 'content');
-  const shapeProblems = brokenRules(position, [
-    [hasOnlyMembers(node, NODE_MEMBERS), ENFORCEMENT_RULES.nodeMembers],
-    [!Object.hasOwn(node, 'pivot'), ENFORCEMENT_RULES.pivot],
-    [operator === 'not' ? besideIn : true, ENFORCEMENT_RULES.notPlacement],
-  ]);
+	const operator = canonicalOperatorOf(ownMember(node, 'op'));
+	const content = ownMember(node, 'content');
+	const shapeProblems = brokenRules(position, [
+		[hasOnlyMembers(node, NODE_MEMBERS), ENFORCEMENT_RULES.nodeMembers],
+		[!Object.hasOwn(node, 'pivot'), ENFORCEMENT_RULES.pivot],
+		[operator === 'not' ? besideIn : true, ENFORCEMENT_RULES.notPlacement],
+	]);
 
-  if (operator !== undefined && COMBINATION_OPERATORS.has(operator)) {
-    return [
-      ...shapeProblems,
-      ...combinationProblems(operator, content, position, depth),
-    ];
-  }
+	if (operator !== undefined && COMBINATION_OPERATORS.has(operator)) {
+		return [...shapeProblems, ...combinationProblems(operator, content, position, depth)];
+	}
 
-  if (operator !== undefined && FIELD_OPERATORS.has(operator)) {
-    return [...shapeProblems, ...clauseProblems(operator, content, position)];
-  }
+	if (operator !== undefined && FIELD_OPERATORS.has(operator)) {
+		return [...shapeProblems, ...clauseProblems(operator, content, position)];
+	}
 
-  return [...shapeProblems, { position, rule: ENFORCEMENT_RULES.operator }];
+	return [...shapeProblems, { position, rule: ENFORCEMENT_RULES.operator }];
 };
 
 /**
@@ -251,56 +184,47 @@ const nodeProblems = (
  * filter that passed it never reaches the limit here and recursion stays far inside the stack.
  */
 const filterProblems = (
-  node: unknown,
-  position: string,
-  depth: number,
-  besideIn: boolean,
+	node: unknown,
+	position: string,
+	depth: number,
+	besideIn: boolean,
 ): readonly ValidationProblem[] => {
-  const withinDepth = depth <= SQON_MAX_DEPTH;
+	const withinDepth = depth <= SQON_MAX_DEPTH;
 
-  if (withinDepth && isPlainRecord(node)) {
-    return nodeProblems(node, position, depth, besideIn);
-  }
+	if (withinDepth && isPlainRecord(node)) {
+		return nodeProblems(node, position, depth, besideIn);
+	}
 
-  return [
-    {
-      position,
-      rule: withinDepth
-        ? ENFORCEMENT_RULES.entryIsNode
-        : ENFORCEMENT_RULES.depth,
-    },
-  ];
+	return [
+		{
+			position,
+			rule: withinDepth ? ENFORCEMENT_RULES.entryIsNode : ENFORCEMENT_RULES.depth,
+		},
+	];
 };
 
 const combinationProblems = (
-  operator: string,
-  content: unknown,
-  position: string,
-  depth: number,
+	operator: string,
+	content: unknown,
+	position: string,
+	depth: number,
 ): readonly ValidationProblem[] => {
-  const entries = listEntries(content);
+	const entries = listEntries(content);
 
-  if (entries !== undefined && entries.length > 0) {
-    const holdsIn = operator === 'and' && entries.some(isInClause);
+	if (entries !== undefined && entries.length > 0) {
+		const holdsIn = operator === 'and' && entries.some(isInClause);
 
-    return entries.flatMap((entry, index) =>
-      filterProblems(
-        entry,
-        `${position}.content[${index}]`,
-        depth + 1,
-        holdsIn,
-      ),
-    );
-  }
+		return entries.flatMap((entry, index) =>
+			filterProblems(entry, `${position}.content[${index}]`, depth + 1, holdsIn),
+		);
+	}
 
-  return [
-    {
-      position,
-      rule: entries
-        ? ENFORCEMENT_RULES.combinationNotEmpty
-        : ENFORCEMENT_RULES.combinationContentIsList,
-    },
-  ];
+	return [
+		{
+			position,
+			rule: entries ? ENFORCEMENT_RULES.combinationNotEmpty : ENFORCEMENT_RULES.combinationContentIsList,
+		},
+	];
 };
 
 // Exported so tests can reach refusals otherwise made first by `SqonSchema`, such as an entry that
@@ -313,7 +237,7 @@ const combinationProblems = (
  * @internal
  */
 export const walkProblems = (sqon: unknown): readonly ValidationProblem[] =>
-  filterProblems(sqon, FILTER_POSITION, 0, false);
+	filterProblems(sqon, FILTER_POSITION, 0, false);
 
 /**
  * Problems with a narrowing's filter. `SqonSchema` runs first and on its own, never composed into a
@@ -324,24 +248,17 @@ export const walkProblems = (sqon: unknown): readonly ValidationProblem[] =>
  * filter refused by both is reported with the walk's problems.
  */
 const sqonProblems = (sqon: unknown): readonly ValidationProblem[] => {
-  if (SqonSchema.safeParse(sqon).success) {
-    const problems = walkProblems(sqon);
+	if (SqonSchema.safeParse(sqon).success) {
+		const problems = walkProblems(sqon);
 
-    return problems.length === 0 || parseRecordNarrowing(sqon).success
-      ? []
-      : problems;
-  }
+		return problems.length === 0 || parseRecordNarrowing(sqon).success ? [] : problems;
+	}
 
-  return [{ position: FILTER_POSITION, rule: ENFORCEMENT_RULES.validSqon }];
+	return [{ position: FILTER_POSITION, rule: ENFORCEMENT_RULES.validSqon }];
 };
 
 const reasonProblems = (reason: unknown): readonly ValidationProblem[] =>
-  brokenRules('reason', [
-    [
-      typeof reason === 'string' && DENY_REASONS.has(reason),
-      ENFORCEMENT_RULES.denyReason,
-    ],
-  ]);
+	brokenRules('reason', [[typeof reason === 'string' && DENY_REASONS.has(reason), ENFORCEMENT_RULES.denyReason]]);
 
 /**
  * The problems with an enforcement result under the rules of {@link validateEnforcement},
@@ -349,28 +266,23 @@ const reasonProblems = (reason: unknown): readonly ValidationProblem[] =>
  * directly, so a getter in it runs and an error it throws is not caught. No problem quotes the
  * result, even when `SqonSchema` refuses its filter.
  */
-export const enforcementProblems = (
-  value: unknown,
-): readonly ValidationProblem[] => {
-  if (isPlainRecord(value)) {
-    const kind = ownMember(value, 'kind');
-    const members =
-      typeof kind === 'string' ? ARM_MEMBERS.get(kind) : undefined;
+export const enforcementProblems = (value: unknown): readonly ValidationProblem[] => {
+	if (isPlainRecord(value)) {
+		const kind = ownMember(value, 'kind');
+		const members = typeof kind === 'string' ? ARM_MEMBERS.get(kind) : undefined;
 
-    if (members) {
-      return [
-        ...brokenRules(ROOT_POSITION, [
-          [hasOnlyMembers(value, members), ENFORCEMENT_RULES.armMembers],
-        ]),
-        ...(kind === 'deny' ? reasonProblems(ownMember(value, 'reason')) : []),
-        ...(kind === 'narrow' ? sqonProblems(ownMember(value, 'sqon')) : []),
-      ];
-    }
+		if (members) {
+			return [
+				...brokenRules(ROOT_POSITION, [[hasOnlyMembers(value, members), ENFORCEMENT_RULES.armMembers]]),
+				...(kind === 'deny' ? reasonProblems(ownMember(value, 'reason')) : []),
+				...(kind === 'narrow' ? sqonProblems(ownMember(value, 'sqon')) : []),
+			];
+		}
 
-    return [{ position: 'kind', rule: ENFORCEMENT_RULES.kind }];
-  }
+		return [{ position: 'kind', rule: ENFORCEMENT_RULES.kind }];
+	}
 
-  return [{ position: ROOT_POSITION, rule: ENFORCEMENT_RULES.isMap }];
+	return [{ position: ROOT_POSITION, rule: ENFORCEMENT_RULES.isMap }];
 };
 
 /**
@@ -396,15 +308,13 @@ export const enforcementProblems = (
  * @returns a copy of the result's own data, typed, which is exactly what was checked, or every
  *   problem found, none naming content of the result.
  */
-export const validateEnforcement = (
-  value: unknown,
-): EnforcementValidationResult => {
-  const {
-    problems: [firstProblem, ...otherProblems],
-    snapshot,
-  } = checkSnapshot(value, enforcementProblems);
+export const validateEnforcement = (value: unknown): EnforcementValidationResult => {
+	const {
+		problems: [firstProblem, ...otherProblems],
+		snapshot,
+	} = checkSnapshot(value, enforcementProblems);
 
-  return firstProblem
-    ? { problems: [firstProblem, ...otherProblems], success: false }
-    : { enforcement: snapshot as Enforcement, success: true };
+	return firstProblem
+		? { problems: [firstProblem, ...otherProblems], success: false }
+		: { enforcement: snapshot as Enforcement, success: true };
 };

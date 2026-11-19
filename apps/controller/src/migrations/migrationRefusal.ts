@@ -10,21 +10,21 @@ export const MIGRATIONS_REFUSE_TO_RUN = 'the schema migrations refuse to run';
  * caller that read the option from a variable can name the variable instead.
  */
 export class MigrationRefusal extends ControllerError {
-  override readonly name = 'MigrationRefusal';
+	override readonly name = 'MigrationRefusal';
 
-  /** The option at fault. */
-  readonly option: RefusedOption;
+	/** The option at fault. */
+	readonly option: RefusedOption;
 
-  /** The rule its value broke, worded to follow its name. */
-  readonly rule: string;
+	/** The rule its value broke, worded to follow its name. */
+	readonly rule: string;
 
-  /**
-   * @param option the option at fault.
-   * @param rule the rule its value broke, worded to follow its name.
-   */
-  constructor(option: RefusedOption, rule: string) {
-    super(`${MIGRATIONS_REFUSE_TO_RUN}: ${option} ${rule}`);
-    this.option = option;
-    this.rule = rule;
-  }
+	/**
+	 * @param option the option at fault.
+	 * @param rule the rule its value broke, worded to follow its name.
+	 */
+	constructor(option: RefusedOption, rule: string) {
+		super(`${MIGRATIONS_REFUSE_TO_RUN}: ${option} ${rule}`);
+		this.option = option;
+		this.rule = rule;
+	}
 }

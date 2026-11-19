@@ -3,11 +3,7 @@ import pg from 'pg';
 import type { Actor, AuditEvent } from '../eventLog/index.js';
 import { failureCodeOf } from '../failures/index.js';
 import { CommitUnconfirmed, type Deadline } from '../storeTimeout/index.js';
-import type {
-  ExchangeKey,
-  KeyConfirmations,
-  KeyConfirmationSettings,
-} from './types.js';
+import type { ExchangeKey, KeyConfirmations, KeyConfirmationSettings } from './types.js';
 
 /** The line naming a key's confirmation the store could not take; the next exchange tries again. */
 export const KEY_CONFIRMATION_FAILED = 'exchange.keyConfirmationFailed';
@@ -19,24 +15,21 @@ type ConfirmedKey = Pick<ExchangeKey, 'applicationId' | 'keyId'>;
 // Only a key still unconfirmed, and still live, is confirmed: of two writes racing on one key, the
 // second waits on the first's row lock, then finds it confirmed and returns no row.
 const confirmation = (schema: string): string =>
-  `UPDATE ${pg.escapeIdentifier(schema)}.application_keys SET confirmed_at = $3
+	`UPDATE ${pg.escapeIdentifier(schema)}.application_keys SET confirmed_at = $3
     WHERE id = $1::uuid AND application_id = $2::uuid AND confirmed_at IS NULL AND revoked_at IS NULL
     RETURNING id`;
 
-const confirmationEvent = ({
-  applicationId,
-  keyId,
-}: ConfirmedKey): AuditEvent => ({
-  data: { applicationId, keyId },
-  severity: 'info',
-  type: 'applicationKey.confirmation',
+const confirmationEvent = ({ applicationId, keyId }: ConfirmedKey): AuditEvent => ({
+	data: { applicationId, keyId },
+	severity: 'info',
+	type: 'applicationKey.confirmation',
 });
 
 // The failure by its code alone, where it carries one that is an identifier, since a message may quote
 // a value.
 const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
-  const code = failureCodeOf(failure);
-  return code === undefined ? {} : { code };
+	const code = failureCodeOf(failure);
+	return code === undefined ? {} : { code };
 };
 
 /**
@@ -58,59 +51,52 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  *
  * @param settings the trail, the log, the clock and the schema.
  */
-export const createKeyConfirmations = ({
-  eventLog,
-  settings,
-  trail,
-}: KeyConfirmationSettings): KeyConfirmations => {
-  const confirmed = new Set<string>();
-  const writing = new Map<string, Promise<void>>();
-  const statement = confirmation(settings.databaseSchema);
+export const createKeyConfirmations = ({ eventLog, settings, trail }: KeyConfirmationSettings): KeyConfirmations => {
+	const confirmed = new Set<string>();
+	const writing = new Map<string, Promise<void>>();
+	const statement = confirmation(settings.databaseSchema);
 
-  const write = async (
-    key: ConfirmedKey,
-    deadline: Deadline | undefined,
-  ): Promise<void> => {
-    try {
-      await trail.inTransaction(
-        SYSTEM,
-        async ({ connection, record }) => {
-          const { rows } = await connection.query(statement, [
-            key.keyId,
-            key.applicationId,
-            new Date(settings.clock.now()),
-          ]);
-          if (rows.length > 0) {
-            await record(confirmationEvent(key));
-          }
-        },
-        deadline === undefined ? {} : { deadline },
-      );
-      confirmed.add(key.keyId);
-    } catch (failure) {
-      if (failure instanceof CommitUnconfirmed) {
-        return;
-      }
-      eventLog.error(KEY_CONFIRMATION_FAILED, {
-        applicationId: key.applicationId,
-        ...codeOf(failure),
-        keyId: key.keyId,
-      });
-    }
-  };
+	const write = async (key: ConfirmedKey, deadline: Deadline | undefined): Promise<void> => {
+		try {
+			await trail.inTransaction(
+				SYSTEM,
+				async ({ connection, record }) => {
+					const { rows } = await connection.query(statement, [
+						key.keyId,
+						key.applicationId,
+						new Date(settings.clock.now()),
+					]);
+					if (rows.length > 0) {
+						await record(confirmationEvent(key));
+					}
+				},
+				deadline === undefined ? {} : { deadline },
+			);
+			confirmed.add(key.keyId);
+		} catch (failure) {
+			if (failure instanceof CommitUnconfirmed) {
+				return;
+			}
+			eventLog.error(KEY_CONFIRMATION_FAILED, {
+				applicationId: key.applicationId,
+				...codeOf(failure),
+				keyId: key.keyId,
+			});
+		}
+	};
 
-  return {
-    confirm: (key, deadline) => {
-      if (confirmed.has(key.keyId)) {
-        return Promise.resolve();
-      }
-      const pending =
-        writing.get(key.keyId) ??
-        write(key, deadline).finally(() => {
-          writing.delete(key.keyId);
-        });
-      writing.set(key.keyId, pending);
-      return pending;
-    },
-  };
+	return {
+		confirm: (key, deadline) => {
+			if (confirmed.has(key.keyId)) {
+				return Promise.resolve();
+			}
+			const pending =
+				writing.get(key.keyId) ??
+				write(key, deadline).finally(() => {
+					writing.delete(key.keyId);
+				});
+			writing.set(key.keyId, pending);
+			return pending;
+		},
+	};
 };

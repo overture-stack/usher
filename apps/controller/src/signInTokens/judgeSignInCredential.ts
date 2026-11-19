@@ -1,104 +1,87 @@
 import { decodeJwt, decodeProtectedHeader } from 'jose';
 
-import type {
-  HeldKeyVerification,
-  TokenVerification,
-  UnverifiedReason,
-} from '../identityProvider/index.js';
+import type { HeldKeyVerification, TokenVerification, UnverifiedReason } from '../identityProvider/index.js';
 import { credentialShapeOf } from './credentialShapeOf.js';
-import {
-  readSignInClaims,
-  SUBJECT_NAMING_REFUSALS,
-} from './readSignInClaims.js';
+import { readSignInClaims, SUBJECT_NAMING_REFUSALS } from './readSignInClaims.js';
 import type {
-  ContentsRefusal,
-  CredentialShape,
-  RecordedRefusal,
-  SignInJudgement,
-  SignInJudgementContext,
-  SignInRefusal,
-  TokenContents,
+	ContentsRefusal,
+	CredentialShape,
+	RecordedRefusal,
+	SignInJudgement,
+	SignInJudgementContext,
+	SignInRefusal,
+	TokenContents,
 } from './types.js';
 
 // The reason a credential refused for its shape alone is recorded under. An opaque credential is an
 // API key's to judge, so with no API key verifier its reason names that state rather than the
 // credential.
 const SHAPE_REASONS = {
-  empty: 'missingCredential',
-  encryptedToken: 'unreadableToken',
-  opaque: 'apiKeyVerifierNotConfigured',
-} as const satisfies Readonly<
-  Record<Exclude<CredentialShape, 'signedToken'>, SignInRefusal>
->;
+	empty: 'missingCredential',
+	encryptedToken: 'unreadableToken',
+	opaque: 'apiKeyVerifierNotConfigured',
+} as const satisfies Readonly<Record<Exclude<CredentialShape, 'signedToken'>, SignInRefusal>>;
 
 // The reason each of the verifier's reasons is recorded under. It covers every reason the verifier
 // gives, so a reason added there fails to compile here rather than reaching the audit trail unlisted.
 const VERIFIER_REASONS = {
-  invalidSignature: 'invalidSignature',
-  otherIssuer: 'otherIssuer',
-  unreadableToken: 'unreadableToken',
+	invalidSignature: 'invalidSignature',
+	otherIssuer: 'otherIssuer',
+	unreadableToken: 'unreadableToken',
 } as const satisfies Readonly<Record<UnverifiedReason, SignInRefusal>>;
 
 // What a token's claims are judged against: everything a credential is, but the verifier.
 type ClaimsContext = Omit<SignInJudgementContext, 'verifier'>;
 
 const recorded = (reason: SignInRefusal): RecordedRefusal => ({
-  kind: 'recorded',
-  reason,
+	kind: 'recorded',
+	reason,
 });
 
 const unverifiedContentsOf = (token: string): TokenContents | undefined => {
-  try {
-    return { claims: decodeJwt(token), header: decodeProtectedHeader(token) };
-  } catch {
-    return undefined;
-  }
+	try {
+		return { claims: decodeJwt(token), header: decodeProtectedHeader(token) };
+	} catch {
+		return undefined;
+	}
 };
 
-const contentsRefusalOf = (
-  token: string,
-  claimsContext: ClaimsContext,
-): ContentsRefusal | undefined => {
-  const contents = unverifiedContentsOf(token);
-  if (contents === undefined) {
-    return 'unreadableToken';
-  }
-  const reading = readSignInClaims(contents, claimsContext);
-  return reading.kind === 'refused' ? reading.reason : undefined;
+const contentsRefusalOf = (token: string, claimsContext: ClaimsContext): ContentsRefusal | undefined => {
+	const contents = unverifiedContentsOf(token);
+	if (contents === undefined) {
+		return 'unreadableToken';
+	}
+	const reading = readSignInClaims(contents, claimsContext);
+	return reading.kind === 'refused' ? reading.reason : undefined;
 };
 
 // A token its contents did not refuse, judged by what verifying it found, the keys fetched if need
 // be: by its verified claims alone once it verifies.
-const judgementOf = (
-  verification: TokenVerification,
-  claimsContext: ClaimsContext,
-): SignInJudgement => {
-  if (verification.kind === 'verified') {
-    const reading = readSignInClaims(verification, claimsContext);
-    return reading.kind === 'accepted'
-      ? { claims: verification.claims, ...reading }
-      : { ...reading, kind: 'recorded' };
-  }
-  return verification.kind === 'unverified'
-    ? recorded(VERIFIER_REASONS[verification.reason])
-    : verification;
+const judgementOf = (verification: TokenVerification, claimsContext: ClaimsContext): SignInJudgement => {
+	if (verification.kind === 'verified') {
+		const reading = readSignInClaims(verification, claimsContext);
+		return reading.kind === 'accepted'
+			? { claims: verification.claims, ...reading }
+			: { ...reading, kind: 'recorded' };
+	}
+	return verification.kind === 'unverified' ? recorded(VERIFIER_REASONS[verification.reason]) : verification;
 };
 
 // A token its contents refused stays refused, whatever the keys held let its signature show: verified,
 // it is recorded as its verified claims refuse it, its subject named as they allow; otherwise, under the
 // refusal its contents earned, naming no subject.
 const refusalOf = (
-  contentsRefusal: ContentsRefusal,
-  verification: HeldKeyVerification,
-  claimsContext: ClaimsContext,
+	contentsRefusal: ContentsRefusal,
+	verification: HeldKeyVerification,
+	claimsContext: ClaimsContext,
 ): RecordedRefusal => {
-  if (verification.kind === 'verified') {
-    const reading = readSignInClaims(verification, claimsContext);
-    if (reading.kind === 'refused') {
-      return { ...reading, kind: 'recorded' };
-    }
-  }
-  return recorded(contentsRefusal);
+	if (verification.kind === 'verified') {
+		const reading = readSignInClaims(verification, claimsContext);
+		if (reading.kind === 'refused') {
+			return { ...reading, kind: 'recorded' };
+		}
+	}
+	return recorded(contentsRefusal);
 };
 
 /**
@@ -119,20 +102,16 @@ const refusalOf = (
  *   have, and the verifier.
  */
 export const judgeSignedToken = async (
-  token: string,
-  contentsRefusal: ContentsRefusal | undefined,
-  { verifier, ...claimsContext }: SignInJudgementContext,
+	token: string,
+	contentsRefusal: ContentsRefusal | undefined,
+	{ verifier, ...claimsContext }: SignInJudgementContext,
 ): Promise<SignInJudgement> => {
-  if (contentsRefusal === undefined) {
-    return judgementOf(await verifier.verify(token), claimsContext);
-  }
-  return SUBJECT_NAMING_REFUSALS.has(contentsRefusal)
-    ? refusalOf(
-        contentsRefusal,
-        await verifier.verifyHeld(token),
-        claimsContext,
-      )
-    : recorded(contentsRefusal);
+	if (contentsRefusal === undefined) {
+		return judgementOf(await verifier.verify(token), claimsContext);
+	}
+	return SUBJECT_NAMING_REFUSALS.has(contentsRefusal)
+		? refusalOf(contentsRefusal, await verifier.verifyHeld(token), claimsContext)
+		: recorded(contentsRefusal);
 };
 
 /**
@@ -148,15 +127,11 @@ export const judgeSignedToken = async (
  *   have, and the verifier.
  */
 export const judgeSignInCredential = async (
-  credential: string,
-  context: SignInJudgementContext,
+	credential: string,
+	context: SignInJudgementContext,
 ): Promise<SignInJudgement> => {
-  const shape = credentialShapeOf(credential);
-  return shape === 'signedToken'
-    ? judgeSignedToken(
-        credential,
-        contentsRefusalOf(credential, context),
-        context,
-      )
-    : recorded(SHAPE_REASONS[shape]);
+	const shape = credentialShapeOf(credential);
+	return shape === 'signedToken'
+		? judgeSignedToken(credential, contentsRefusalOf(credential, context), context)
+		: recorded(SHAPE_REASONS[shape]);
 };

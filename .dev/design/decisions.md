@@ -1609,13 +1609,13 @@ its cheapest failing check.**
    any database work on it. Recording that refusal takes a place in its application's share, so a
    flood of junk through one application's Bridge fills that application's share and no other's.
 
-   | Order | Check                                                                                                           | Cost                  |
-   | ----- | --------------------------------------------------------------------------------------------------------------- | --------------------- |
-   | 1     | the Bridge's channel assertion                                                                                  | one signature check   |
-   | 2     | the credential's shape; for a sign-in token, its issuer, audience, expiry and key id against the cached key set | string comparisons    |
-   | 3     | the credential's own mark: a sign-in token's signature                                                          | one signature, no I/O |
-   | 4     | admission into the application's share                                                                          | a counter             |
-   | 5     | the identity lookup, revocation and the token calculation                                                       | the database          |
+    | Order | Check                                                                                                           | Cost                  |
+    | ----- | --------------------------------------------------------------------------------------------------------------- | --------------------- |
+    | 1     | the Bridge's channel assertion                                                                                  | one signature check   |
+    | 2     | the credential's shape; for a sign-in token, its issuer, audience, expiry and key id against the cached key set | string comparisons    |
+    | 3     | the credential's own mark: a sign-in token's signature                                                          | one signature, no I/O |
+    | 4     | admission into the application's share                                                                          | a counter             |
+    | 5     | the identity lookup, revocation and the token calculation                                                       | the database          |
 
 3. **Bridges cooperate rather than configure.** A Bridge keeps a fixed bound only on its own memory,
    honours `Retry-After` with jitter, and offers no option for the bound.

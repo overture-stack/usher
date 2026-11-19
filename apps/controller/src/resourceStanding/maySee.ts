@@ -12,15 +12,11 @@ import type { Onlooker, ResourceStanding } from './types.js';
  *   resource.
  */
 export const maySee = (
-  { accessLevel, holder, retired, suppressed }: ResourceStanding,
-  { administrator, asksForRetired }: Onlooker,
+	{ accessLevel, holder, retired, suppressed }: ResourceStanding,
+	{ administrator, asksForRetired }: Onlooker,
 ): boolean => {
-  if (retired) {
-    return administrator && asksForRetired;
-  }
-  return (
-    administrator ||
-    holder ||
-    (!suppressed && (accessLevel === 'open' || accessLevel === 'registered'))
-  );
+	if (retired) {
+		return administrator && asksForRetired;
+	}
+	return administrator || holder || (!suppressed && (accessLevel === 'open' || accessLevel === 'registered'));
 };

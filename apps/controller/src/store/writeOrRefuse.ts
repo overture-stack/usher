@@ -13,19 +13,13 @@ const INSUFFICIENT_PRIVILEGE = '42501';
  * @param write the write, on the start's connection.
  * @throws {StartRefusal} carrying the problem, when the store refuses the write for want of privilege.
  */
-export const writeOrRefuse = async <Result>(
-  problem: StartProblem,
-  write: () => Promise<Result>,
-): Promise<Result> => {
-  try {
-    return await write();
-  } catch (error) {
-    if (
-      error instanceof pg.DatabaseError &&
-      error.code === INSUFFICIENT_PRIVILEGE
-    ) {
-      throw new StartRefusal([problem]);
-    }
-    throw error;
-  }
+export const writeOrRefuse = async <Result>(problem: StartProblem, write: () => Promise<Result>): Promise<Result> => {
+	try {
+		return await write();
+	} catch (error) {
+		if (error instanceof pg.DatabaseError && error.code === INSUFFICIENT_PRIVILEGE) {
+			throw new StartRefusal([problem]);
+		}
+		throw error;
+	}
 };

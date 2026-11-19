@@ -59,30 +59,30 @@ predicate" in [decisions.md](decisions.md).
 - An adapter answers a suspended principal by what the open tier can settle, the same in every
   application:
 
-  | Operation                                                                      | For a suspended principal                                                |
-  | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-  | A search, facet or count                                                       | served, narrowed to the open tier, with the interface's notice           |
-  | An export                                                                      | 503: a file holding only open records would read as complete             |
-  | Fetching one object that only a grant could answer, or one that does not exist | 503 for both, so a 503 never tells a protected object from a missing one |
-  | A write                                                                        | 503                                                                      |
+    | Operation                                                                      | For a suspended principal                                                |
+    | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+    | A search, facet or count                                                       | served, narrowed to the open tier, with the interface's notice           |
+    | An export                                                                      | 503: a file holding only open records would read as complete             |
+    | Fetching one object that only a grant could answer, or one that does not exist | 503 for both, so a 503 never tells a protected object from a missing one |
+    | A write                                                                        | 503                                                                      |
 
-  An anonymous principal is served the open tier as always, exports included, since nothing is
-  reduced for it.
+    An anonymous principal is served the open tier as always, exports included, since nothing is
+    reduced for it.
 
-  **In GraphQL, a 503 is an error code rather than a status.** A GraphQL response's status speaks
-  for the whole request, so a refused operation answers with a GraphQL error carrying a stable code
-  that means temporarily unavailable, with no data, while an HTTP route such as an export answers
-  503 itself. Either way the text and the retry interval are the Bridge's own for its 503, so a
-  client meets one answer whichever layer refused. Such a refusal is logged as its own event, never
-  as the failure that signals a misconfiguration.
+    **In GraphQL, a 503 is an error code rather than a status.** A GraphQL response's status speaks
+    for the whole request, so a refused operation answers with a GraphQL error carrying a stable code
+    that means temporarily unavailable, with no data, while an HTTP route such as an export answers
+    503 itself. Either way the text and the retry interval are the Bridge's own for its 503, so a
+    client meets one answer whichever layer refused. Such a refusal is logged as its own event, never
+    as the failure that signals a misconfiguration.
 
-  **The interface's notice comes from one header, set by the Bridge.** Every response to a suspended
-  principal carries `Usher-Suspended: true`, set by the Bridge's Express layer and exposed to
-  browsers through `Access-Control-Expose-Headers`, so an interface shows the notice the same way in
-  every application, whatever its API. A principal presenting no credential never carries it, and
-  nor does a confirmed one whose grants hold. A client compares against the header's name and value
-  as `@overture-stack/usher-types` exports them; [client-integration.md](client-integration.md) has
-  what it does with each answer.
+    **The interface's notice comes from one header, set by the Bridge.** Every response to a suspended
+    principal carries `Usher-Suspended: true`, set by the Bridge's Express layer and exposed to
+    browsers through `Access-Control-Expose-Headers`, so an interface shows the notice the same way in
+    every application, whatever its API. A principal presenting no credential never carries it, and
+    nor does a confirmed one whose grants hold. A client compares against the header's name and value
+    as `@overture-stack/usher-types` exports them; [client-integration.md](client-integration.md) has
+    what it does with each answer.
 
 - **An export cut short by a row limit says so, and with access enforcement on, no request raises
   the limit.** A file is the read most easily taken further, so the configured limit is a ceiling: a

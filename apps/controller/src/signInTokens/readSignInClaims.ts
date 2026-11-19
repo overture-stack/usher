@@ -8,11 +8,11 @@ import { namesAudience } from './namesAudience.js';
 import { readNames } from './readNames.js';
 import { sessionOf } from './sessionOf.js';
 import type {
-  SignInClaimsReading,
-  SignInClaimsRefusal,
-  SignInJudgementContext,
-  SignInRefusal,
-  TokenContents,
+	SignInClaimsReading,
+	SignInClaimsRefusal,
+	SignInJudgementContext,
+	SignInRefusal,
+	TokenContents,
 } from './types.js';
 
 /**
@@ -20,12 +20,12 @@ import type {
  * its times and its audience. No other refusal of its contents names it.
  */
 export const SUBJECT_NAMING_REFUSALS: ReadonlySet<SignInRefusal> = new Set([
-  EXCESSIVE_LIFETIME,
-  'expiredToken',
-  'missingExpiry',
-  MISSING_ISSUED_AT,
-  'notYetValid',
-  'otherAudience',
+	EXCESSIVE_LIFETIME,
+	'expiredToken',
+	'missingExpiry',
+	MISSING_ISSUED_AT,
+	'notYetValid',
+	'otherAudience',
 ]);
 
 // The header type Back-Channel Logout 1.0 gives a logout token, compared as RFC 7515 compares a media
@@ -35,32 +35,26 @@ const LOGOUT_TOKEN_TYPE = 'logout+jwt';
 const APPLICATION_PREFIX = /^application\//u;
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // The same provider signs logout tokens and sign-in tokens, so a logout token is told apart by what it
 // declares: the back-channel logout among its `events`, whatever that member holds, or its type. Read
 // alongside the access-token recognition, so a logout token is refused whatever its payload's `typ`.
 const isLogoutToken = ({ claims, header }: TokenContents): boolean => {
-  const { events } = claims;
-  const { typ } = header;
-  return (
-    (isRecord(events) && Object.hasOwn(events, BACK_CHANNEL_LOGOUT_EVENT)) ||
-    (typeof typ === 'string' &&
-      typ.toLowerCase().replace(APPLICATION_PREFIX, '') === LOGOUT_TOKEN_TYPE)
-  );
+	const { events } = claims;
+	const { typ } = header;
+	return (
+		(isRecord(events) && Object.hasOwn(events, BACK_CHANNEL_LOGOUT_EVENT)) ||
+		(typeof typ === 'string' && typ.toLowerCase().replace(APPLICATION_PREFIX, '') === LOGOUT_TOKEN_TYPE)
+	);
 };
 
-const refused = (
-  reason: SignInClaimsRefusal,
-  subject?: string,
-): SignInClaimsReading => ({
-  kind: 'refused',
-  reason,
-  ...(subject !== undefined &&
-  SUBJECT_NAMING_REFUSALS.has(reason) &&
-  subject.length <= REFUSED_SUBJECT_MAXIMUM_LENGTH
-    ? { refusedSubject: subject }
-    : {}),
+const refused = (reason: SignInClaimsRefusal, subject?: string): SignInClaimsReading => ({
+	kind: 'refused',
+	reason,
+	...(subject !== undefined && SUBJECT_NAMING_REFUSALS.has(reason) && subject.length <= REFUSED_SUBJECT_MAXIMUM_LENGTH
+		? { refusedSubject: subject }
+		: {}),
 });
 
 /**
@@ -82,32 +76,28 @@ const refused = (
  *   issued at an instant may have.
  */
 export const readSignInClaims = (
-  token: TokenContents,
-  {
-    audience,
-    now,
-    signInTokenMaximumFor,
-  }: Omit<SignInJudgementContext, 'verifier'>,
+	token: TokenContents,
+	{ audience, now, signInTokenMaximumFor }: Omit<SignInJudgementContext, 'verifier'>,
 ): SignInClaimsReading => {
-  if (isLogoutToken(token) || !isKeycloakAccessToken(token)) {
-    return refused('otherType');
-  }
-  const { claims } = token;
-  const names = readNames(claims);
-  if (names.kind === 'refused') {
-    return refused(names.reason);
-  }
-  const { subject } = names;
-  const currency = currencyOf(claims, { signInTokenMaximumFor }, now);
-  if (currency.kind === 'refused') {
-    return refused(currency.reason, subject);
-  }
-  return namesAudience(claims, audience)
-    ? {
-        expiresAt: currency.expiresAt,
-        kind: 'accepted',
-        session: sessionOf(claims),
-        subject,
-      }
-    : refused('otherAudience', subject);
+	if (isLogoutToken(token) || !isKeycloakAccessToken(token)) {
+		return refused('otherType');
+	}
+	const { claims } = token;
+	const names = readNames(claims);
+	if (names.kind === 'refused') {
+		return refused(names.reason);
+	}
+	const { subject } = names;
+	const currency = currencyOf(claims, { signInTokenMaximumFor }, now);
+	if (currency.kind === 'refused') {
+		return refused(currency.reason, subject);
+	}
+	return namesAudience(claims, audience)
+		? {
+				expiresAt: currency.expiresAt,
+				kind: 'accepted',
+				session: sessionOf(claims),
+				subject,
+			}
+		: refused('otherAudience', subject);
 };

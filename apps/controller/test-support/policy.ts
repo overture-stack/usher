@@ -10,9 +10,7 @@ import { type Cleanup, eventually } from './waiting.js';
  * account is named by the identity provider's subject, as `actorId` names it; a system or anonymous
  * actor has nobody to name.
  */
-export type Actor =
-  | { id: string; type: 'human' | 'serviceAccount' }
-  | { type: 'anonymous' | 'system' };
+export type Actor = { id: string; type: 'human' | 'serviceAccount' } | { type: 'anonymous' | 'system' };
 
 /** The actor SQL seeding and migrations declare. */
 export const SYSTEM_ACTOR: Actor = Object.freeze({ type: 'system' });
@@ -21,19 +19,21 @@ export const SYSTEM_ACTOR: Actor = Object.freeze({ type: 'system' });
  * The transaction-local settings a transaction declares its actor in, as the audit triggers read
  * them: the actor's type, and its subject, empty where the type says there is nobody.
  */
-export const ACTOR_SETTINGS: Readonly<{ id: string; type: string }> =
-  Object.freeze({ id: 'usher.actor_id', type: 'usher.actor_type' });
+export const ACTOR_SETTINGS: Readonly<{ id: string; type: string }> = Object.freeze({
+	id: 'usher.actor_id',
+	type: 'usher.actor_type',
+});
 
 /**
  * The settings naming the two limits the store applies to a session, which a transaction given a
  * bound of its own must set to that bound inside the transaction alone.
  */
 export const SESSION_LIMIT_SETTINGS: Readonly<{
-  idleInTransactionSessionTimeout: string;
-  statementTimeout: string;
+	idleInTransactionSessionTimeout: string;
+	statementTimeout: string;
 }> = Object.freeze({
-  idleInTransactionSessionTimeout: 'idle_in_transaction_session_timeout',
-  statementTimeout: 'statement_timeout',
+	idleInTransactionSessionTimeout: 'idle_in_transaction_session_timeout',
+	statementTimeout: 'statement_timeout',
 });
 
 /** The savepoint a transaction naming a failure event must run its work under. */
@@ -90,332 +90,332 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  * - `audit_log.severity`: the event's severity as its line carries it (#214 Q2).
  */
 export const POLICY_TABLES = {
-  administrators: {
-    columns: {
-      acceptedAt: 'accepted_at',
-      nominationId: 'nomination_id',
-      userId: 'user_id',
-    },
-    name: 'administrators',
-  },
-  applicationKeys: {
-    columns: {
-      applicationId: 'application_id',
-      confirmedAt: 'confirmed_at',
-      encryptedKey: 'encrypted_key',
-      id: 'id',
-      issuedAt: 'issued_at',
-      issuedBy: 'issued_by',
-      revokedAt: 'revoked_at',
-      revokedBy: 'revoked_by',
-    },
-    name: 'application_keys',
-  },
-  applicationResources: {
-    columns: { applicationId: 'application_id', resourceId: 'resource_id' },
-    name: 'application_resources',
-  },
-  applications: {
-    columns: {
-      description: 'description',
-      displayName: 'display_name',
-      id: 'id',
-      registeredAt: 'registered_at',
-      registeredBy: 'registered_by',
-    },
-    name: 'applications',
-  },
-  auditLog: {
-    columns: {
-      data: 'data',
+	administrators: {
+		columns: {
+			acceptedAt: 'accepted_at',
+			nominationId: 'nomination_id',
+			userId: 'user_id',
+		},
+		name: 'administrators',
+	},
+	applicationKeys: {
+		columns: {
+			applicationId: 'application_id',
+			confirmedAt: 'confirmed_at',
+			encryptedKey: 'encrypted_key',
+			id: 'id',
+			issuedAt: 'issued_at',
+			issuedBy: 'issued_by',
+			revokedAt: 'revoked_at',
+			revokedBy: 'revoked_by',
+		},
+		name: 'application_keys',
+	},
+	applicationResources: {
+		columns: { applicationId: 'application_id', resourceId: 'resource_id' },
+		name: 'application_resources',
+	},
+	applications: {
+		columns: {
+			description: 'description',
+			displayName: 'display_name',
+			id: 'id',
+			registeredAt: 'registered_at',
+			registeredBy: 'registered_by',
+		},
+		name: 'applications',
+	},
+	auditLog: {
+		columns: {
+			data: 'data',
 			dataSchema: 'data_schema',
-      id: 'id',
-      occurredAt: 'occurred_at',
-      severity: 'severity',
-      source: 'source',
+			id: 'id',
+			occurredAt: 'occurred_at',
+			severity: 'severity',
+			source: 'source',
 			specVersion: 'spec_version',
-      type: 'type',
-    },
-    name: 'audit_log',
-  },
-  capabilities: {
-    columns: {
-      action: 'action',
-      description: 'description',
-      displayName: 'display_name',
-      entity: 'entity',
-      id: 'id',
-      plane: 'plane',
-    },
-    name: 'capabilities',
-  },
-  categories: {
-    columns: {
-      description: 'description',
-      id: 'id',
-      name: 'name',
-      resourceId: 'resource_id',
-      scope: 'scope',
-    },
-    name: 'categories',
-  },
-  changeRecords: {
-    columns: {
-      actorType: 'actor_type',
-      id: 'id',
-      idpSubjectId: 'idp_subject_id',
-      newRow: 'new_row',
-      oldRow: 'old_row',
-      operation: 'operation',
-      recordedAt: 'recorded_at',
-      rowKey: 'row_key',
-      tableName: 'table_name',
-    },
-    name: 'change_records',
-  },
-  exchangedSids: {
-    columns: {
-      expiresAt: 'expires_at',
-      idpIssuer: 'idp_issuer',
-      idpSubjectId: 'idp_subject_id',
-      sid: 'sid',
-    },
-    name: 'exchanged_sids',
-  },
-  globalRevocations: {
-    columns: {
-      id: 'id',
-      reasonCode: 'reason_code',
-      revokedAt: 'revoked_at',
-      revokedBy: 'revoked_by',
-    },
-    name: 'global_revocations',
-  },
-  grantDecisions: {
-    columns: {
-      capabilities: 'capabilities',
-      decidedAt: 'decided_at',
-      decision: 'decision',
-      grantId: 'grant_id',
-      id: 'id',
-      userId: 'user_id',
-    },
-    name: 'grant_decisions',
-  },
-  grants: {
-    columns: {
-      endedAt: 'ended_at',
-      expiresAt: 'expires_at',
-      fieldCategoryId: 'field_category_id',
-      grantedAt: 'granted_at',
-      grantedBy: 'granted_by',
-      holderGroupId: 'holder_group_id',
-      holderUserId: 'holder_user_id',
-      id: 'id',
-      recordCategoryId: 'record_category_id',
-      resourceId: 'resource_id',
-      revokedAt: 'revoked_at',
-      revokedBy: 'revoked_by',
-      roleId: 'role_id',
-    },
-    name: 'grants',
-  },
-  groupUsers: {
-    columns: { groupId: 'group_id', userId: 'user_id' },
-    name: 'group_users',
-  },
-  groups: {
-    columns: {
-      createdAt: 'created_at',
-      createdBy: 'created_by',
-      description: 'description',
-      id: 'id',
-      name: 'name',
-      resourceId: 'resource_id',
-    },
-    name: 'groups',
-  },
-  invitations: {
-    columns: {
-      email: 'email',
-      expiresAt: 'expires_at',
-      fieldCategoryId: 'field_category_id',
-      id: 'id',
-      invitedAt: 'invited_at',
-      invitedBy: 'invited_by',
-      linkTokenHash: 'link_token_hash',
-      recordCategoryId: 'record_category_id',
-      resourceId: 'resource_id',
-      roleId: 'role_id',
-    },
-    name: 'invitations',
-  },
-  keyFingerprints: {
-    columns: {
-      fingerprint: 'fingerprint',
-      keyName: 'key_name',
-      recordedAt: 'recorded_at',
-    },
-    name: 'key_fingerprints',
-  },
-  nominations: {
-    columns: {
-      id: 'id',
-      nominatedAt: 'nominated_at',
-      nominatedBy: 'nominated_by',
-      nomineeId: 'nominee_id',
-    },
-    name: 'nominations',
-  },
-  noticeRetention: {
-    columns: { floorSeconds: 'floor_seconds', singleton: 'singleton' },
-    name: 'notice_retention',
-  },
-  noticeStream: {
-    columns: {
-      epoch: 'epoch',
-      singleton: 'singleton',
-      trimmedThrough: 'trimmed_through',
-    },
-    name: 'notice_stream',
-  },
-  notices: {
-    columns: {
-      audience: 'audience',
-      createdAt: 'created_at',
-      idpSubjectId: 'idp_subject_id',
-      kind: 'kind',
-      position: 'position',
-      resourceExternalId: 'resource_external_id',
-    },
-    name: 'notices',
-  },
-  notificationOutbox: {
-    columns: {
-      createdAt: 'created_at',
-      deliveredAt: 'delivered_at',
-      grantId: 'grant_id',
-      id: 'id',
-      kind: 'kind',
-      recipientUserId: 'recipient_user_id',
-    },
-    name: 'notification_outbox',
-  },
-  policyGeneration: {
-    columns: { generation: 'generation', singleton: 'singleton' },
-    name: 'policy_generation',
-  },
-  principalRevocations: {
-    columns: {
-      id: 'id',
-      liftedAt: 'lifted_at',
-      liftedBy: 'lifted_by',
-      reason: 'reason',
-      revokedAt: 'revoked_at',
-      revokedBy: 'revoked_by',
-      userId: 'user_id',
-    },
-    name: 'principal_revocations',
-  },
-  resourceCategories: {
-    columns: { categoryId: 'category_id', resourceId: 'resource_id' },
-    name: 'resource_categories',
-  },
-  resourceFieldValues: {
-    columns: { fieldId: 'field_id', resourceId: 'resource_id', value: 'value' },
-    name: 'resource_field_values',
-  },
-  resourceFields: {
-    columns: { description: 'description', id: 'id', name: 'name' },
-    name: 'resource_fields',
-  },
-  resources: {
-    columns: {
-      baseTier: 'base_tier',
-      description: 'description',
-      externalId: 'external_id',
-      id: 'id',
-      name: 'name',
-      registeredAt: 'registered_at',
-      registeredBy: 'registered_by',
-      retiredAt: 'retired_at',
-      retiredBy: 'retired_by',
-      suppressed: 'suppressed',
-      updatedAt: 'updated_at',
-    },
-    name: 'resources',
-  },
-  rolePermissions: {
-    columns: { capabilityId: 'capability_id', roleId: 'role_id' },
-    name: 'role_permissions',
-  },
-  roles: {
-    columns: {
-      description: 'description',
-      id: 'id',
-      name: 'name',
-      plane: 'plane',
-    },
-    name: 'roles',
-  },
-  identityProviderConfiguration: {
-    columns: { name: 'name', recordedAt: 'recorded_at', value: 'value' },
-    name: 'identity_provider_configuration',
-  },
-  schemaMigrations: {
-    columns: { appliedAt: 'applied_at', checksum: 'checksum', name: 'name' },
-    name: 'schema_migrations',
-  },
-  settings: {
-    columns: {
-      changedAt: 'changed_at',
-      changedBy: 'changed_by',
-      name: 'name',
-      value: 'value',
-    },
-    name: 'settings',
-  },
-  settingsGeneration: {
-    columns: { generation: 'generation', singleton: 'singleton' },
-    name: 'settings_generation',
-  },
-  sidSignOuts: {
-    columns: {
-      expiresAt: 'expires_at',
-      idpIssuer: 'idp_issuer',
-      idpSubjectId: 'idp_subject_id',
-      sid: 'sid',
-      signedOutAt: 'signed_out_at',
-    },
-    name: 'sid_sign_outs',
-  },
-  subjectSignOuts: {
-    columns: {
-      expiresAt: 'expires_at',
-      idpIssuer: 'idp_issuer',
-      idpSubjectId: 'idp_subject_id',
-      signedOutAt: 'signed_out_at',
-    },
-    name: 'subject_sign_outs',
-  },
-  userIdentities: {
-    columns: {
-      addedAt: 'added_at',
-      addedBy: 'added_by',
-      id: 'id',
-      idpIssuer: 'idp_issuer',
-      idpSubjectId: 'idp_subject_id',
-      userId: 'user_id',
-    },
-    name: 'user_identities',
-  },
-  users: {
-    columns: {
-      createdAt: 'created_at',
-      id: 'id',
-    },
-    name: 'users',
-  },
+			type: 'type',
+		},
+		name: 'audit_log',
+	},
+	capabilities: {
+		columns: {
+			action: 'action',
+			description: 'description',
+			displayName: 'display_name',
+			entity: 'entity',
+			id: 'id',
+			plane: 'plane',
+		},
+		name: 'capabilities',
+	},
+	categories: {
+		columns: {
+			description: 'description',
+			id: 'id',
+			name: 'name',
+			resourceId: 'resource_id',
+			scope: 'scope',
+		},
+		name: 'categories',
+	},
+	changeRecords: {
+		columns: {
+			actorType: 'actor_type',
+			id: 'id',
+			idpSubjectId: 'idp_subject_id',
+			newRow: 'new_row',
+			oldRow: 'old_row',
+			operation: 'operation',
+			recordedAt: 'recorded_at',
+			rowKey: 'row_key',
+			tableName: 'table_name',
+		},
+		name: 'change_records',
+	},
+	exchangedSids: {
+		columns: {
+			expiresAt: 'expires_at',
+			idpIssuer: 'idp_issuer',
+			idpSubjectId: 'idp_subject_id',
+			sid: 'sid',
+		},
+		name: 'exchanged_sids',
+	},
+	globalRevocations: {
+		columns: {
+			id: 'id',
+			reasonCode: 'reason_code',
+			revokedAt: 'revoked_at',
+			revokedBy: 'revoked_by',
+		},
+		name: 'global_revocations',
+	},
+	grantDecisions: {
+		columns: {
+			capabilities: 'capabilities',
+			decidedAt: 'decided_at',
+			decision: 'decision',
+			grantId: 'grant_id',
+			id: 'id',
+			userId: 'user_id',
+		},
+		name: 'grant_decisions',
+	},
+	grants: {
+		columns: {
+			endedAt: 'ended_at',
+			expiresAt: 'expires_at',
+			fieldCategoryId: 'field_category_id',
+			grantedAt: 'granted_at',
+			grantedBy: 'granted_by',
+			holderGroupId: 'holder_group_id',
+			holderUserId: 'holder_user_id',
+			id: 'id',
+			recordCategoryId: 'record_category_id',
+			resourceId: 'resource_id',
+			revokedAt: 'revoked_at',
+			revokedBy: 'revoked_by',
+			roleId: 'role_id',
+		},
+		name: 'grants',
+	},
+	groupUsers: {
+		columns: { groupId: 'group_id', userId: 'user_id' },
+		name: 'group_users',
+	},
+	groups: {
+		columns: {
+			createdAt: 'created_at',
+			createdBy: 'created_by',
+			description: 'description',
+			id: 'id',
+			name: 'name',
+			resourceId: 'resource_id',
+		},
+		name: 'groups',
+	},
+	invitations: {
+		columns: {
+			email: 'email',
+			expiresAt: 'expires_at',
+			fieldCategoryId: 'field_category_id',
+			id: 'id',
+			invitedAt: 'invited_at',
+			invitedBy: 'invited_by',
+			linkTokenHash: 'link_token_hash',
+			recordCategoryId: 'record_category_id',
+			resourceId: 'resource_id',
+			roleId: 'role_id',
+		},
+		name: 'invitations',
+	},
+	keyFingerprints: {
+		columns: {
+			fingerprint: 'fingerprint',
+			keyName: 'key_name',
+			recordedAt: 'recorded_at',
+		},
+		name: 'key_fingerprints',
+	},
+	nominations: {
+		columns: {
+			id: 'id',
+			nominatedAt: 'nominated_at',
+			nominatedBy: 'nominated_by',
+			nomineeId: 'nominee_id',
+		},
+		name: 'nominations',
+	},
+	noticeRetention: {
+		columns: { floorSeconds: 'floor_seconds', singleton: 'singleton' },
+		name: 'notice_retention',
+	},
+	noticeStream: {
+		columns: {
+			epoch: 'epoch',
+			singleton: 'singleton',
+			trimmedThrough: 'trimmed_through',
+		},
+		name: 'notice_stream',
+	},
+	notices: {
+		columns: {
+			audience: 'audience',
+			createdAt: 'created_at',
+			idpSubjectId: 'idp_subject_id',
+			kind: 'kind',
+			position: 'position',
+			resourceExternalId: 'resource_external_id',
+		},
+		name: 'notices',
+	},
+	notificationOutbox: {
+		columns: {
+			createdAt: 'created_at',
+			deliveredAt: 'delivered_at',
+			grantId: 'grant_id',
+			id: 'id',
+			kind: 'kind',
+			recipientUserId: 'recipient_user_id',
+		},
+		name: 'notification_outbox',
+	},
+	policyGeneration: {
+		columns: { generation: 'generation', singleton: 'singleton' },
+		name: 'policy_generation',
+	},
+	principalRevocations: {
+		columns: {
+			id: 'id',
+			liftedAt: 'lifted_at',
+			liftedBy: 'lifted_by',
+			reason: 'reason',
+			revokedAt: 'revoked_at',
+			revokedBy: 'revoked_by',
+			userId: 'user_id',
+		},
+		name: 'principal_revocations',
+	},
+	resourceCategories: {
+		columns: { categoryId: 'category_id', resourceId: 'resource_id' },
+		name: 'resource_categories',
+	},
+	resourceFieldValues: {
+		columns: { fieldId: 'field_id', resourceId: 'resource_id', value: 'value' },
+		name: 'resource_field_values',
+	},
+	resourceFields: {
+		columns: { description: 'description', id: 'id', name: 'name' },
+		name: 'resource_fields',
+	},
+	resources: {
+		columns: {
+			baseTier: 'base_tier',
+			description: 'description',
+			externalId: 'external_id',
+			id: 'id',
+			name: 'name',
+			registeredAt: 'registered_at',
+			registeredBy: 'registered_by',
+			retiredAt: 'retired_at',
+			retiredBy: 'retired_by',
+			suppressed: 'suppressed',
+			updatedAt: 'updated_at',
+		},
+		name: 'resources',
+	},
+	rolePermissions: {
+		columns: { capabilityId: 'capability_id', roleId: 'role_id' },
+		name: 'role_permissions',
+	},
+	roles: {
+		columns: {
+			description: 'description',
+			id: 'id',
+			name: 'name',
+			plane: 'plane',
+		},
+		name: 'roles',
+	},
+	identityProviderConfiguration: {
+		columns: { name: 'name', recordedAt: 'recorded_at', value: 'value' },
+		name: 'identity_provider_configuration',
+	},
+	schemaMigrations: {
+		columns: { appliedAt: 'applied_at', checksum: 'checksum', name: 'name' },
+		name: 'schema_migrations',
+	},
+	settings: {
+		columns: {
+			changedAt: 'changed_at',
+			changedBy: 'changed_by',
+			name: 'name',
+			value: 'value',
+		},
+		name: 'settings',
+	},
+	settingsGeneration: {
+		columns: { generation: 'generation', singleton: 'singleton' },
+		name: 'settings_generation',
+	},
+	sidSignOuts: {
+		columns: {
+			expiresAt: 'expires_at',
+			idpIssuer: 'idp_issuer',
+			idpSubjectId: 'idp_subject_id',
+			sid: 'sid',
+			signedOutAt: 'signed_out_at',
+		},
+		name: 'sid_sign_outs',
+	},
+	subjectSignOuts: {
+		columns: {
+			expiresAt: 'expires_at',
+			idpIssuer: 'idp_issuer',
+			idpSubjectId: 'idp_subject_id',
+			signedOutAt: 'signed_out_at',
+		},
+		name: 'subject_sign_outs',
+	},
+	userIdentities: {
+		columns: {
+			addedAt: 'added_at',
+			addedBy: 'added_by',
+			id: 'id',
+			idpIssuer: 'idp_issuer',
+			idpSubjectId: 'idp_subject_id',
+			userId: 'user_id',
+		},
+		name: 'user_identities',
+	},
+	users: {
+		columns: {
+			createdAt: 'created_at',
+			id: 'id',
+		},
+		name: 'users',
+	},
 } as const;
 
 /**
@@ -427,17 +427,17 @@ export const POLICY_TABLES = {
  * end, expiry and role as written (`grantEndKept`). The two keys carry PostgreSQL's default names.
  */
 export const POLICY_CONSTRAINTS: Readonly<{
-  decisionOrder: string;
-  grantEndKept: string;
-  grantEndedAfterExpiry: string;
-  identity: string;
-  liveGrant: string;
+	decisionOrder: string;
+	grantEndKept: string;
+	grantEndedAfterExpiry: string;
+	identity: string;
+	liveGrant: string;
 }> = Object.freeze({
-  decisionOrder: 'grant_decisions_user_id_grant_id_decided_at_key',
-  grantEndKept: 'grants_end_kept',
-  grantEndedAfterExpiry: 'grants_ended_after_expiry',
-  identity: 'user_identities_idp_issuer_idp_subject_id_key',
-  liveGrant: 'grants_live_unique',
+	decisionOrder: 'grant_decisions_user_id_grant_id_decided_at_key',
+	grantEndKept: 'grants_end_kept',
+	grantEndedAfterExpiry: 'grants_ended_after_expiry',
+	identity: 'user_identities_idp_issuer_idp_subject_id_key',
+	liveGrant: 'grants_live_unique',
 });
 
 /**
@@ -450,8 +450,7 @@ export const POLICY_CONSTRAINTS: Readonly<{
  * `max_rows` below 1, or none. No caller can choose the floor, so none can trim a notice a Bridge may
  * still need.
  */
-export const POLICY_FUNCTIONS: Readonly<{ trimNotices: string }> =
-  Object.freeze({ trimNotices: 'trim_notices' });
+export const POLICY_FUNCTIONS: Readonly<{ trimNotices: string }> = Object.freeze({ trimNotices: 'trim_notices' });
 
 /**
  * The SQLSTATE the bounded trim refuses a `max_rows` below 1, or none, with: PostgreSQL's
@@ -472,17 +471,17 @@ export const BOUNDED_TRIM_REFUSAL = '22023';
  * at error once as runs start failing.
  */
 export const RETENTION_SWEEP: Readonly<{
-  clockToleranceMilliseconds: number;
-  failedLine: string;
-  intervalMilliseconds: number;
-  lock: number;
-  rowsPerRun: number;
+	clockToleranceMilliseconds: number;
+	failedLine: string;
+	intervalMilliseconds: number;
+	lock: number;
+	rowsPerRun: number;
 }> = Object.freeze({
-  clockToleranceMilliseconds: 30_000,
-  failedLine: 'retention.sweepFailed',
-  intervalMilliseconds: 1000,
-  lock: 8_617_207_004,
-  rowsPerRun: 1000,
+	clockToleranceMilliseconds: 30_000,
+	failedLine: 'retention.sweepFailed',
+	intervalMilliseconds: 1000,
+	lock: 8_617_207_004,
+	rowsPerRun: 1000,
 });
 
 /**
@@ -495,13 +494,7 @@ export const RETENTION_SWEEP: Readonly<{
 export const DECISION_ORIGIN_COLUMN = 'origin';
 
 /** The notice kinds, spelled as on the wire. */
-export const NOTICE_KINDS = Object.freeze([
-  'baseline',
-  'category',
-  'global',
-  'principal',
-  'servedResources',
-] as const);
+export const NOTICE_KINDS = Object.freeze(['baseline', 'category', 'global', 'principal', 'servedResources'] as const);
 
 /** The kind of the outbox row that tells a resource's owners of a self-grant on it (#212 Q13). */
 export const SELF_GRANT_NOTIFICATION = 'selfGrant';
@@ -516,39 +509,31 @@ export const SELF_GRANT_NOTIFICATION = 'selfGrant';
 export const OWNER_ROLE = 'owner';
 
 /** A role the Controller seeds, as permissions-model.md's seeded matrix names it. */
-export type SeededRole =
-  'admin' | 'curator' | 'editor' | 'owner' | 'submitter' | 'viewer';
+export type SeededRole = 'admin' | 'curator' | 'editor' | 'owner' | 'submitter' | 'viewer';
 
 const VIEWER_CAPABILITIES = ['record.count', 'record.export', 'record.view'];
 
-const EDITOR_CAPABILITIES = [
-  ...VIEWER_CAPABILITIES,
-  'record.create',
-  'record.update',
-];
+const EDITOR_CAPABILITIES = [...VIEWER_CAPABILITIES, 'record.create', 'record.update'];
 
 const OWNER_CAPABILITIES = [
-  'grant.create',
-  'grant.extend',
-  'grant.reduce',
-  'grant.revoke',
-  'grant.view',
-  'invitation.create',
-  'ownership.transfer',
-  'resource.restore',
-  'resource.suppress',
-  'resource.update',
-  'resource.view',
+	'grant.create',
+	'grant.extend',
+	'grant.reduce',
+	'grant.revoke',
+	'grant.view',
+	'invitation.create',
+	'ownership.transfer',
+	'resource.restore',
+	'resource.suppress',
+	'resource.update',
+	'resource.view',
 ];
 
-const seededRole = (
-  plane: FixtureRole['plane'],
-  capabilities: readonly string[],
-): Readonly<FixtureRole> =>
-  Object.freeze({
-    capabilities: Object.freeze(capabilities.toSorted()),
-    plane,
-  });
+const seededRole = (plane: FixtureRole['plane'], capabilities: readonly string[]): Readonly<FixtureRole> =>
+	Object.freeze({
+		capabilities: Object.freeze(capabilities.toSorted()),
+		plane,
+	});
 
 /**
  * What each seeded role carries, as `entity.action` names, sorted, and its plane: the seeded matrix of
@@ -564,25 +549,24 @@ const seededRole = (
  *   `category.create`, `role.define` and `group.*` (create, view, update, addMember, removeMember).
  *   An administrator is one by the management token's realm role (#212 Q3); the row is the matrix's.
  */
-export const SEEDED_ROLES: Readonly<Record<SeededRole, Readonly<FixtureRole>>> =
-  Object.freeze({
-    admin: seededRole('control', [
-      ...OWNER_CAPABILITIES,
-      'category.create',
-      'group.addMember',
-      'group.create',
-      'group.removeMember',
-      'group.update',
-      'group.view',
-      'resource.register',
-      'role.define',
-    ]),
-    curator: seededRole('data', [...EDITOR_CAPABILITIES, 'record.delete']),
-    editor: seededRole('data', EDITOR_CAPABILITIES),
-    owner: seededRole('control', OWNER_CAPABILITIES),
-    submitter: seededRole('data', ['record.create', 'record.update']),
-    viewer: seededRole('data', VIEWER_CAPABILITIES),
-  });
+export const SEEDED_ROLES: Readonly<Record<SeededRole, Readonly<FixtureRole>>> = Object.freeze({
+	admin: seededRole('control', [
+		...OWNER_CAPABILITIES,
+		'category.create',
+		'group.addMember',
+		'group.create',
+		'group.removeMember',
+		'group.update',
+		'group.view',
+		'resource.register',
+		'role.define',
+	]),
+	curator: seededRole('data', [...EDITOR_CAPABILITIES, 'record.delete']),
+	editor: seededRole('data', EDITOR_CAPABILITIES),
+	owner: seededRole('control', OWNER_CAPABILITIES),
+	submitter: seededRole('data', ['record.create', 'record.update']),
+	viewer: seededRole('data', VIEWER_CAPABILITIES),
+});
 
 /** The issuer fixture users carry when neither they nor the fixture name one. */
 export const DEFAULT_FIXTURE_ISSUER = 'https://auth.example.org/realms/usher';
@@ -599,7 +583,7 @@ export const STEWARD = 'steward';
  * @param table an entry of {@link POLICY_TABLES}.
  */
 export const qualified = ({ name }: { name: string }): string =>
-  `${pg.escapeIdentifier(USHER_SCHEMA)}.${pg.escapeIdentifier(name)}`;
+	`${pg.escapeIdentifier(USHER_SCHEMA)}.${pg.escapeIdentifier(name)}`;
 
 /** A resource's base tier, as `schema.md` spells it. */
 export type BaseTier = 'grant' | 'open' | 'registered';
@@ -609,80 +593,80 @@ export type BaseTier = 'grant' | 'open' | 'registered';
  * writes to `user_identities` beside the person's `users` row.
  */
 export interface FixtureUser {
-  /** The fixture's issuer by default. */
-  issuer?: string;
+	/** The fixture's issuer by default. */
+	issuer?: string;
 
-  subject: string;
+	subject: string;
 }
 
 /** A role the fixture defines, beside those the Controller writes at start. */
 export interface FixtureRole {
-  /** What the role carries, as `entity.action` names; a capability not yet held is added. */
-  capabilities: readonly string[];
+	/** What the role carries, as `entity.action` names; a capability not yet held is added. */
+	capabilities: readonly string[];
 
-  plane: 'control' | 'data';
+	plane: 'control' | 'data';
 }
 
 /** A global category the fixture registers, keyed by its name: `controlled`, never `global.controlled`. */
 export interface FixtureCategory {
-  description?: string;
+	description?: string;
 }
 
 /** A resource field the fixture defines, instance-wide, keyed by its name. */
 export interface FixtureField {
-  description?: string;
+	description?: string;
 }
 
 /** A resource the fixture registers, keyed by its externalId. */
 export interface FixtureResource {
-  baseTier: BaseTier;
+	baseTier: BaseTier;
 
-  /**
-   * Categories of the resource's own, keyed by name, written at the database: no operation of the
-   * first release registers one (#211 Q10).
-   */
-  categories?: Readonly<Record<string, FixtureCategory>>;
+	/**
+	 * Categories of the resource's own, keyed by name, written at the database: no operation of the
+	 * first release registers one (#211 Q10).
+	 */
+	categories?: Readonly<Record<string, FixtureCategory>>;
 
-  description?: string;
+	description?: string;
 
-  /** Its values of the resource fields, by field name. */
-  fieldValues?: Readonly<Record<string, string>>;
+	/** Its values of the resource fields, by field name. */
+	fieldValues?: Readonly<Record<string, string>>;
 
-  /** The display name. */
-  name: string;
+	/** The display name. */
+	name: string;
 
-  /**
-   * The categories it offers: a global one by bare name (a fixture category, or one already held,
-   * such as `unmarked`) or as `global.<name>`, and one of its own as `resource.<name>`.
-   */
-  offers?: readonly string[];
+	/**
+	 * The categories it offers: a global one by bare name (a fixture category, or one already held,
+	 * such as `unmarked`) or as `global.<name>`, and one of its own as `resource.<name>`.
+	 */
+	offers?: readonly string[];
 
-  /**
-   * When it was registered: the transaction's clock by default. Set once the rest of the fixture is
-   * written, then read back into {@link SeededPolicy.resourceTimes}.
-   */
-  registeredAt?: Date;
+	/**
+	 * When it was registered: the transaction's clock by default. Set once the rest of the fixture is
+	 * written, then read back into {@link SeededPolicy.resourceTimes}.
+	 */
+	registeredAt?: Date;
 
-  /** A fixture user; the steward by default. */
-  registeredBy?: string;
+	/** A fixture user; the steward by default. */
+	registeredBy?: string;
 
-  /** Retired at the given time, the transaction's clock by default, by the given fixture user, the steward by default (#320 B). */
-  retired?: { at?: Date; by?: string };
+	/** Retired at the given time, the transaction's clock by default, by the given fixture user, the steward by default (#320 B). */
+	retired?: { at?: Date; by?: string };
 
-  /** False by default. */
-  suppressed?: boolean;
+	/** False by default. */
+	suppressed?: boolean;
 
-  /**
-   * When it last changed: the transaction's clock by default. Set with {@link registeredAt}, and read
-   * back, since a trigger keeping `updated_at` may rewrite what was written.
-   */
-  updatedAt?: Date;
+	/**
+	 * When it last changed: the transaction's clock by default. Set with {@link registeredAt}, and read
+	 * back, since a trigger keeping `updated_at` may rewrite what was written.
+	 */
+	updatedAt?: Date;
 }
 
 /** When a resource was registered and last changed. */
 export interface ResourceTimes {
-  registeredAt: Date;
-  updatedAt: Date;
+	registeredAt: Date;
+	updatedAt: Date;
 }
 
 /**
@@ -691,19 +675,19 @@ export interface ResourceTimes {
  * seeding again finds the application by its id.
  */
 export interface FixtureApplication {
-  description?: string;
+	description?: string;
 
-  /**
-   * The id of an application registered already, such as one registered through the API with its
-   * keys: seeding writes no row for an application held by that id, only what it serves.
-   */
-  id?: string;
+	/**
+	 * The id of an application registered already, such as one registered through the API with its
+	 * keys: seeding writes no row for an application held by that id, only what it serves.
+	 */
+	id?: string;
 
-  /** A fixture user; the steward by default. */
-  registeredBy?: string;
+	/** A fixture user; the steward by default. */
+	registeredBy?: string;
 
-  /** The resources it serves, by externalId. */
-  serves: readonly string[];
+	/** The resources it serves, by externalId. */
+	serves: readonly string[];
 }
 
 /**
@@ -716,35 +700,27 @@ export interface FixtureApplication {
  * @param label the application's label in the fixture, its display name.
  */
 export const fixtureApplicationId = (label: string): string => {
-  const hex = createHash('sha256')
-    .update(`usher-test-application:${label}`)
-    .digest('hex');
-  const version = `8${hex.slice(13, 16)}`;
-  const variant = `${((Number.parseInt(hex.slice(16, 17), 16) & 0x3) | 0x8).toString(16)}${hex.slice(17, 20)}`;
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    version,
-    variant,
-    hex.slice(20, 32),
-  ].join('-');
+	const hex = createHash('sha256').update(`usher-test-application:${label}`).digest('hex');
+	const version = `8${hex.slice(13, 16)}`;
+	const variant = `${((Number.parseInt(hex.slice(16, 17), 16) & 0x3) | 0x8).toString(16)}${hex.slice(17, 20)}`;
+	return [hex.slice(0, 8), hex.slice(8, 12), version, variant, hex.slice(20, 32)].join('-');
 };
 
 /** A group the fixture creates on one resource, keyed by a name the fixture's grants use. */
 export interface FixtureGroup {
-  /** A fixture user; the steward by default. */
-  createdBy?: string;
+	/** A fixture user; the steward by default. */
+	createdBy?: string;
 
-  description?: string;
+	description?: string;
 
-  /** Its members, as fixture users. */
-  members: readonly string[];
+	/** Its members, as fixture users. */
+	members: readonly string[];
 
-  /** The group's own name; the fixture's key for it by default. */
-  name?: string;
+	/** The group's own name; the fixture's key for it by default. */
+	name?: string;
 
-  /** The resource it belongs to, by externalId. */
-  resource: string;
+	/** The resource it belongs to, by externalId. */
+	resource: string;
 }
 
 /** Who holds a grant: a fixture user or a fixture group. */
@@ -752,93 +728,93 @@ export type FixtureHolder = { group: string } | { user: string };
 
 /** A grant the fixture writes, keyed by a name its decisions and the returned ids use. */
 export interface FixtureGrant {
-  /**
-   * A global category by bare name or as `global.<name>`, or one of the resource's own as
-   * `resource.<name>`; `null` for the control plane's wildcard.
-   */
-  category: string | null;
+	/**
+	 * A global category by bare name or as `global.<name>`, or one of the resource's own as
+	 * `resource.<name>`; `null` for the control plane's wildcard.
+	 */
+	category: string | null;
 
-  expiresAt?: Date;
+	expiresAt?: Date;
 
-  /** A field category within its category, named as `category` names one; none when absent. */
-  fieldCategory?: string;
+	/** A field category within its category, named as `category` names one; none when absent. */
+	fieldCategory?: string;
 
-  /** The transaction's clock when it is written, by default. */
-  grantedAt?: Date;
+	/** The transaction's clock when it is written, by default. */
+	grantedAt?: Date;
 
-  /** A fixture user; the steward by default. */
-  grantedBy?: string;
+	/** A fixture user; the steward by default. */
+	grantedBy?: string;
 
-  holder: FixtureHolder;
+	holder: FixtureHolder;
 
-  /** By externalId. */
-  resource: string;
+	/** By externalId. */
+	resource: string;
 
-  /** Revoked at the given time, the transaction's clock by default, by the given fixture user, the steward by default. */
-  revoked?: { at?: Date; by?: string };
+	/** Revoked at the given time, the transaction's clock by default, by the given fixture user, the steward by default. */
+	revoked?: { at?: Date; by?: string };
 
-  /** A role by name: a fixture one or one the Controller wrote at start. */
-  role: string;
+	/** A role by name: a fixture one or one the Controller wrote at start. */
+	role: string;
 }
 
 /** An answer about a fixture grant. */
 export interface FixtureDecision {
-  /** What the person was shown, as `entity.action` names; what the grant's role carries now by default. */
-  capabilities?: readonly string[];
+	/** What the person was shown, as `entity.action` names; what the grant's role carries now by default. */
+	capabilities?: readonly string[];
 
-  /** The transaction's clock when it is written, by default, so answers written in turn are ordered. */
-  decidedAt?: Date;
+	/** The transaction's clock when it is written, by default, so answers written in turn are ordered. */
+	decidedAt?: Date;
 
-  decision: 'accepted' | 'rejected';
+	decision: 'accepted' | 'rejected';
 
-  /** The fixture grant answered. */
-  grant: string;
+	/** The fixture grant answered. */
+	grant: string;
 
-  /** The fixture user answering; the grant's holder by default, which a group's grant requires naming. */
-  person?: string;
+	/** The fixture user answering; the grant's holder by default, which a group's grant requires naming. */
+	person?: string;
 }
 
 /** A pending invitation, which no operation of the first release writes. */
 export interface FixtureInvitation {
-  /** As a grant names it; `null` for the control plane's wildcard. */
-  category: string | null;
+	/** As a grant names it; `null` for the control plane's wildcard. */
+	category: string | null;
 
-  /** The address invited, as the store holds it: lower-cased (#207 Q9). */
-  email: string;
+	/** The address invited, as the store holds it: lower-cased (#207 Q9). */
+	email: string;
 
-  /** The resulting grant's expiry; none when absent (#207 Q9). */
-  expiresAt?: Date;
+	/** The resulting grant's expiry; none when absent (#207 Q9). */
+	expiresAt?: Date;
 
-  /** The transaction's clock by default. */
-  invitedAt?: Date;
+	/** The transaction's clock by default. */
+	invitedAt?: Date;
 
-  /** A fixture user; the steward by default. */
-  invitedBy?: string;
+	/** A fixture user; the steward by default. */
+	invitedBy?: string;
 
-  /** The hash of the link's token: a SHA-256 of fresh random bytes by default. */
-  linkTokenHash?: Uint8Array;
+	/** The hash of the link's token: a SHA-256 of fresh random bytes by default. */
+	linkTokenHash?: Uint8Array;
 
-  /** By externalId. */
-  resource: string;
+	/** By externalId. */
+	resource: string;
 
-  role: string;
+	role: string;
 }
 
 /** A revocation of a principal entirely. */
 export interface FixtureRevocation {
-  /** Lifted at the given time, the transaction's clock by default, by the given fixture user, the steward by default. */
-  lifted?: { at?: Date; by?: string };
+	/** Lifted at the given time, the transaction's clock by default, by the given fixture user, the steward by default. */
+	lifted?: { at?: Date; by?: string };
 
-  reason: string;
+	reason: string;
 
-  /** The transaction's clock by default. */
-  revokedAt?: Date;
+	/** The transaction's clock by default. */
+	revokedAt?: Date;
 
-  /** A fixture user; the steward by default. */
-  revokedBy?: string;
+	/** A fixture user; the steward by default. */
+	revokedBy?: string;
 
-  /** The fixture user revoked. */
-  user: string;
+	/** The fixture user revoked. */
+	user: string;
 }
 
 /**
@@ -847,22 +823,22 @@ export interface FixtureRevocation {
  * label written as their display name, categories, fields and roles by name.
  */
 export interface PolicyFixture {
-  applications?: Readonly<Record<string, FixtureApplication>>;
-  categories?: Readonly<Record<string, FixtureCategory>>;
-  decisions?: readonly FixtureDecision[];
-  fields?: Readonly<Record<string, FixtureField>>;
-  grants?: Readonly<Record<string, FixtureGrant>>;
-  groups?: Readonly<Record<string, FixtureGroup>>;
+	applications?: Readonly<Record<string, FixtureApplication>>;
+	categories?: Readonly<Record<string, FixtureCategory>>;
+	decisions?: readonly FixtureDecision[];
+	fields?: Readonly<Record<string, FixtureField>>;
+	grants?: Readonly<Record<string, FixtureGrant>>;
+	groups?: Readonly<Record<string, FixtureGroup>>;
 
-  invitations?: readonly FixtureInvitation[];
+	invitations?: readonly FixtureInvitation[];
 
-  /** The issuer of every user naming none: {@link DEFAULT_FIXTURE_ISSUER} by default. */
-  issuer?: string;
+	/** The issuer of every user naming none: {@link DEFAULT_FIXTURE_ISSUER} by default. */
+	issuer?: string;
 
-  resources?: Readonly<Record<string, FixtureResource>>;
-  revocations?: readonly FixtureRevocation[];
-  roles?: Readonly<Record<string, FixtureRole>>;
-  users?: Readonly<Record<string, FixtureUser>>;
+	resources?: Readonly<Record<string, FixtureResource>>;
+	revocations?: readonly FixtureRevocation[];
+	roles?: Readonly<Record<string, FixtureRole>>;
+	users?: Readonly<Record<string, FixtureUser>>;
 }
 
 /**
@@ -873,32 +849,30 @@ export interface PolicyFixture {
  * found again through `user_identities` rather than written twice.
  */
 export interface SeededPolicy {
-  /** Each fixture application's id, the audience, by its label. */
-  applications: Readonly<Record<string, string>>;
+	/** Each fixture application's id, the audience, by its label. */
+	applications: Readonly<Record<string, string>>;
 
-  categories: Readonly<Record<string, string>>;
-  fields: Readonly<Record<string, string>>;
-  grants: Readonly<Record<string, string>>;
-  groups: Readonly<Record<string, string>>;
+	categories: Readonly<Record<string, string>>;
+	fields: Readonly<Record<string, string>>;
+	grants: Readonly<Record<string, string>>;
+	groups: Readonly<Record<string, string>>;
 
-  /** The invitations' ids, in the fixture's order. */
-  invitations: readonly string[];
+	/** The invitations' ids, in the fixture's order. */
+	invitations: readonly string[];
 
-  /** Each resource's own categories, by the resource's externalId, then by the category's name. */
-  resourceCategories: Readonly<
-    Record<string, Readonly<Record<string, string>>>
-  >;
+	/** Each resource's own categories, by the resource's externalId, then by the category's name. */
+	resourceCategories: Readonly<Record<string, Readonly<Record<string, string>>>>;
 
-  /** Each fixture resource's registration and change times, by externalId, as the store holds them once seeded. */
-  resourceTimes: Readonly<Record<string, ResourceTimes>>;
+	/** Each fixture resource's registration and change times, by externalId, as the store holds them once seeded. */
+	resourceTimes: Readonly<Record<string, ResourceTimes>>;
 
-  resources: Readonly<Record<string, string>>;
+	resources: Readonly<Record<string, string>>;
 
-  /** The principal revocations' ids, in the fixture's order. */
-  revocations: readonly string[];
+	/** The principal revocations' ids, in the fixture's order. */
+	revocations: readonly string[];
 
-  roles: Readonly<Record<string, string>>;
-  users: Readonly<Record<string, string>>;
+	roles: Readonly<Record<string, string>>;
+	users: Readonly<Record<string, string>>;
 }
 
 /** The steward's invented subject, when seeding writes the steward. */
@@ -906,88 +880,76 @@ export const STEWARD_SUBJECT = 'steward-7b3e9c1a-usher-test';
 
 const CLOCK: unique symbol = Symbol('clock_timestamp()');
 
-type Cell =
-  | boolean
-  | Date
-  | null
-  | number
-  | readonly string[]
-  | string
-  | typeof CLOCK
-  | Uint8Array;
+type Cell = boolean | Date | null | number | readonly string[] | string | typeof CLOCK | Uint8Array;
 
 type Row = Readonly<Record<string, Cell>>;
 
 const {
-  administrators,
-  applicationResources,
-  applications,
-  capabilities,
-  categories,
-  grantDecisions,
-  grants,
-  groupUsers,
-  groups,
-  invitations,
-  nominations,
-  principalRevocations,
-  resourceCategories,
-  resourceFieldValues,
-  resourceFields,
-  resources,
-  rolePermissions,
-  roles,
-  userIdentities,
-  users,
+	administrators,
+	applicationResources,
+	applications,
+	capabilities,
+	categories,
+	grantDecisions,
+	grants,
+	groupUsers,
+	groups,
+	invitations,
+	nominations,
+	principalRevocations,
+	resourceCategories,
+	resourceFieldValues,
+	resourceFields,
+	resources,
+	rolePermissions,
+	roles,
+	userIdentities,
+	users,
 } = POLICY_TABLES;
 
 const parameterIndexes = (cells: readonly Cell[]): readonly string[] =>
-  cells.map((cell, index) =>
-    cell === CLOCK
-      ? 'clock_timestamp()'
-      : `$${cells.slice(0, index + 1).filter((earlier) => earlier !== CLOCK).length}`,
-  );
+	cells.map((cell, index) =>
+		cell === CLOCK
+			? 'clock_timestamp()'
+			: `$${cells.slice(0, index + 1).filter((earlier) => earlier !== CLOCK).length}`,
+	);
 
 const insertStatement = (
-  table: { name: string },
-  row: Row,
-  returning: string,
+	table: { name: string },
+	row: Row,
+	returning: string,
 ): { parameters: unknown[]; text: string } => {
-  const entries = Object.entries(row);
-  const cells = entries.map(([, cell]) => cell);
-  return {
-    parameters: cells.filter((cell) => cell !== CLOCK),
-    text: `INSERT INTO ${qualified(table)} (${entries
-      .map(([column]) => pg.escapeIdentifier(column))
-      .join(', ')}) VALUES (${parameterIndexes(cells).join(', ')})${returning}`,
-  };
+	const entries = Object.entries(row);
+	const cells = entries.map(([, cell]) => cell);
+	return {
+		parameters: cells.filter((cell) => cell !== CLOCK),
+		text: `INSERT INTO ${qualified(table)} (${entries
+			.map(([column]) => pg.escapeIdentifier(column))
+			.join(', ')}) VALUES (${parameterIndexes(cells).join(', ')})${returning}`,
+	};
 };
 
-const insertRow = async (
-  client: pg.ClientBase,
-  table: { name: string },
-  row: Row,
-): Promise<void> => {
-  const { parameters, text } = insertStatement(table, row, '');
-  await client.query(text, parameters);
+const insertRow = async (client: pg.ClientBase, table: { name: string }, row: Row): Promise<void> => {
+	const { parameters, text } = insertStatement(table, row, '');
+	await client.query(text, parameters);
 };
 
 const insertWithId = async (
-  client: pg.ClientBase,
-  table: { columns: { id: string }; name: string },
-  row: Row,
+	client: pg.ClientBase,
+	table: { columns: { id: string }; name: string },
+	row: Row,
 ): Promise<string> => {
-  const { parameters, text } = insertStatement(
-    table,
-    row,
-    ` RETURNING ${pg.escapeIdentifier(table.columns.id)} AS id`,
-  );
-  const { rows } = await client.query<{ id: string }>(text, parameters);
-  const [inserted] = rows;
-  if (inserted !== undefined) {
-    return inserted.id;
-  }
-  throw new Error(`the insert into ${table.name} returned no id`);
+	const { parameters, text } = insertStatement(
+		table,
+		row,
+		` RETURNING ${pg.escapeIdentifier(table.columns.id)} AS id`,
+	);
+	const { rows } = await client.query<{ id: string }>(text, parameters);
+	const [inserted] = rows;
+	if (inserted !== undefined) {
+		return inserted.id;
+	}
+	throw new Error(`the insert into ${table.name} returned no id`);
 };
 
 /**
@@ -998,161 +960,134 @@ const insertWithId = async (
  * @param work what to do with each.
  */
 export const inTurn = <Item, Result>(
-  items: readonly Item[],
-  work: (item: Item) => Promise<Result>,
+	items: readonly Item[],
+	work: (item: Item) => Promise<Result>,
 ): Promise<readonly Result[]> =>
-  items.reduce<Promise<readonly Result[]>>(
-    async (earlier, item) => [...(await earlier), await work(item)],
-    Promise.resolve([]),
-  );
+	items.reduce<Promise<readonly Result[]>>(
+		async (earlier, item) => [...(await earlier), await work(item)],
+		Promise.resolve([]),
+	);
 
-const insertRows = async (
-  client: pg.ClientBase,
-  table: { name: string },
-  rows: readonly Row[],
-): Promise<void> => {
-  await inTurn(rows, (row) => insertRow(client, table, row));
+const insertRows = async (client: pg.ClientBase, table: { name: string }, rows: readonly Row[]): Promise<void> => {
+	await inTurn(rows, (row) => insertRow(client, table, row));
 };
 
 const idsByName = async <Entry>(
-  entries: Readonly<Record<string, Entry>>,
-  insert: (entry: Entry, name: string) => Promise<string>,
+	entries: Readonly<Record<string, Entry>>,
+	insert: (entry: Entry, name: string) => Promise<string>,
 ): Promise<Readonly<Record<string, string>>> =>
-  Object.fromEntries(
-    await inTurn(
-      Object.entries(entries),
-      async ([name, entry]) => [name, await insert(entry, name)] as const,
-    ),
-  );
+	Object.fromEntries(
+		await inTurn(Object.entries(entries), async ([name, entry]) => [name, await insert(entry, name)] as const),
+	);
 
 const namedIds = async (
-  client: pg.ClientBase,
-  table: { columns: { id: string; name: string }; name: string },
-  where: string,
+	client: pg.ClientBase,
+	table: { columns: { id: string; name: string }; name: string },
+	where: string,
 ): Promise<Readonly<Record<string, string>>> => {
-  const { rows } = await client.query<{ id: string; name: string }>(
-    `SELECT ${pg.escapeIdentifier(table.columns.name)} AS name, ${pg.escapeIdentifier(table.columns.id)} AS id FROM ${qualified(table)}${where}`,
-  );
-  return Object.fromEntries(rows.map(({ id, name }) => [name, id]));
+	const { rows } = await client.query<{ id: string; name: string }>(
+		`SELECT ${pg.escapeIdentifier(table.columns.name)} AS name, ${pg.escapeIdentifier(table.columns.id)} AS id FROM ${qualified(table)}${where}`,
+	);
+	return Object.fromEntries(rows.map(({ id, name }) => [name, id]));
 };
 
 const resolver =
-  (
-    ids: Readonly<Record<string, string>>,
-    kind: string,
-  ): ((name: string) => string) =>
-  (name: string): string => {
-    const id = Object.hasOwn(ids, name) ? ids[name] : undefined;
-    if (id !== undefined) {
-      return id;
-    }
-    throw new Error(`the fixture names no ${kind} ${name}`);
-  };
+	(ids: Readonly<Record<string, string>>, kind: string): ((name: string) => string) =>
+	(name: string): string => {
+		const id = Object.hasOwn(ids, name) ? ids[name] : undefined;
+		if (id !== undefined) {
+			return id;
+		}
+		throw new Error(`the fixture names no ${kind} ${name}`);
+	};
 
 const at = (time: Date | undefined): Date | typeof CLOCK => time ?? CLOCK;
 
 const needsSteward = ({
-  applications: fixtureApplications = {},
-  grants: fixtureGrants = {},
-  groups: fixtureGroups = {},
-  invitations = [],
-  resources: fixtureResources = {},
-  revocations = [],
+	applications: fixtureApplications = {},
+	grants: fixtureGrants = {},
+	groups: fixtureGroups = {},
+	invitations = [],
+	resources: fixtureResources = {},
+	revocations = [],
 }: PolicyFixture): boolean =>
-  [
-    ...Object.values(fixtureResources).flatMap(({ registeredBy, retired }) => [
-      registeredBy,
-      ...(retired === undefined ? [] : [retired.by]),
-    ]),
-    ...invitations.map(({ invitedBy }) => invitedBy),
-    ...Object.values(fixtureApplications).map(
-      ({ registeredBy }) => registeredBy,
-    ),
-    ...Object.values(fixtureGroups).map(({ createdBy }) => createdBy),
-    ...Object.values(fixtureGrants).flatMap(({ grantedBy, revoked }) => [
-      grantedBy,
-      ...(revoked === undefined ? [] : [revoked.by]),
-    ]),
-    ...revocations.flatMap(({ lifted, revokedBy }) => [
-      revokedBy,
-      ...(lifted === undefined ? [] : [lifted.by]),
-    ]),
-  ].some((actor) => actor === undefined);
+	[
+		...Object.values(fixtureResources).flatMap(({ registeredBy, retired }) => [
+			registeredBy,
+			...(retired === undefined ? [] : [retired.by]),
+		]),
+		...invitations.map(({ invitedBy }) => invitedBy),
+		...Object.values(fixtureApplications).map(({ registeredBy }) => registeredBy),
+		...Object.values(fixtureGroups).map(({ createdBy }) => createdBy),
+		...Object.values(fixtureGrants).flatMap(({ grantedBy, revoked }) => [
+			grantedBy,
+			...(revoked === undefined ? [] : [revoked.by]),
+		]),
+		...revocations.flatMap(({ lifted, revokedBy }) => [revokedBy, ...(lifted === undefined ? [] : [lifted.by])]),
+	].some((actor) => actor === undefined);
 
-const fixtureUsers = (
-  fixture: PolicyFixture,
-): Readonly<Record<string, FixtureUser>> => {
-  const named = fixture.users ?? {};
-  return Object.hasOwn(named, STEWARD) || !needsSteward(fixture)
-    ? named
-    : { ...named, [STEWARD]: { subject: STEWARD_SUBJECT } };
+const fixtureUsers = (fixture: PolicyFixture): Readonly<Record<string, FixtureUser>> => {
+	const named = fixture.users ?? {};
+	return Object.hasOwn(named, STEWARD) || !needsSteward(fixture)
+		? named
+		: { ...named, [STEWARD]: { subject: STEWARD_SUBJECT } };
 };
 
-const capabilityParts = (
-  capability: string,
-): { action: string; entity: string } => {
-  const [entity, action, ...rest] = capability.split('.');
-  if (entity !== undefined && action !== undefined && rest.length === 0) {
-    return { action, entity };
-  }
-  throw new Error(
-    `the fixture names a capability ${capability} that is not entity.action`,
-  );
+const capabilityParts = (capability: string): { action: string; entity: string } => {
+	const [entity, action, ...rest] = capability.split('.');
+	if (entity !== undefined && action !== undefined && rest.length === 0) {
+		return { action, entity };
+	}
+	throw new Error(`the fixture names a capability ${capability} that is not entity.action`);
 };
 
 const seedRoles = async (
-  client: pg.ClientBase,
-  fixtureRoles: Readonly<Record<string, FixtureRole>>,
+	client: pg.ClientBase,
+	fixtureRoles: Readonly<Record<string, FixtureRole>>,
 ): Promise<Readonly<Record<string, string>>> => {
-  await inTurn(
-    Object.values(fixtureRoles).flatMap(({ capabilities: held, plane }) =>
-      held.map((capability) => ({
-        capability,
-        plane,
-        ...capabilityParts(capability),
-      })),
-    ),
-    ({ action, capability, entity, plane }) =>
-      client.query(
-        `INSERT INTO ${qualified(capabilities)} (${capabilities.columns.action}, ${capabilities.columns.displayName}, ${capabilities.columns.entity}, ${capabilities.columns.plane}) VALUES ($1, $2, $3, $4) ON CONFLICT (${capabilities.columns.entity}, ${capabilities.columns.action}) DO NOTHING`,
-        [action, capability, entity, plane],
-      ),
-  );
-  const { rows } = await client.query<{ id: string; name: string }>(
-    `SELECT ${capabilities.columns.entity} || '.' || ${capabilities.columns.action} AS name, ${capabilities.columns.id} AS id FROM ${qualified(capabilities)}`,
-  );
-  const capabilityId = resolver(
-    Object.fromEntries(rows.map(({ id, name }) => [name, id])),
-    'capability',
-  );
-  const written = await idsByName(fixtureRoles, ({ plane }, name) =>
-    insertWithId(client, roles, {
-      [roles.columns.name]: name,
-      [roles.columns.plane]: plane,
-    }),
-  );
-  await insertRows(
-    client,
-    rolePermissions,
-    Object.entries(fixtureRoles).flatMap(([name, { capabilities: held }]) =>
-      held.map((capability) => ({
-        [rolePermissions.columns.capabilityId]: capabilityId(capability),
-        [rolePermissions.columns.roleId]: resolver(written, 'role')(name),
-      })),
-    ),
-  );
-  return namedIds(client, roles, '');
+	await inTurn(
+		Object.values(fixtureRoles).flatMap(({ capabilities: held, plane }) =>
+			held.map((capability) => ({
+				capability,
+				plane,
+				...capabilityParts(capability),
+			})),
+		),
+		({ action, capability, entity, plane }) =>
+			client.query(
+				`INSERT INTO ${qualified(capabilities)} (${capabilities.columns.action}, ${capabilities.columns.displayName}, ${capabilities.columns.entity}, ${capabilities.columns.plane}) VALUES ($1, $2, $3, $4) ON CONFLICT (${capabilities.columns.entity}, ${capabilities.columns.action}) DO NOTHING`,
+				[action, capability, entity, plane],
+			),
+	);
+	const { rows } = await client.query<{ id: string; name: string }>(
+		`SELECT ${capabilities.columns.entity} || '.' || ${capabilities.columns.action} AS name, ${capabilities.columns.id} AS id FROM ${qualified(capabilities)}`,
+	);
+	const capabilityId = resolver(Object.fromEntries(rows.map(({ id, name }) => [name, id])), 'capability');
+	const written = await idsByName(fixtureRoles, ({ plane }, name) =>
+		insertWithId(client, roles, {
+			[roles.columns.name]: name,
+			[roles.columns.plane]: plane,
+		}),
+	);
+	await insertRows(
+		client,
+		rolePermissions,
+		Object.entries(fixtureRoles).flatMap(([name, { capabilities: held }]) =>
+			held.map((capability) => ({
+				[rolePermissions.columns.capabilityId]: capabilityId(capability),
+				[rolePermissions.columns.roleId]: resolver(written, 'role')(name),
+			})),
+		),
+	);
+	return namedIds(client, roles, '');
 };
 
-const roleCapabilities = async (
-  client: pg.ClientBase,
-  roleId: string,
-): Promise<readonly string[]> => {
-  const { rows } = await client.query<{ capabilities: string[] }>(
-    `SELECT coalesce(array_agg(capability.${capabilities.columns.entity} || '.' || capability.${capabilities.columns.action} ORDER BY capability.${capabilities.columns.entity}, capability.${capabilities.columns.action}), '{}') AS capabilities FROM ${qualified(rolePermissions)} permission JOIN ${qualified(capabilities)} capability ON capability.${capabilities.columns.id} = permission.${rolePermissions.columns.capabilityId} WHERE permission.${rolePermissions.columns.roleId} = $1`,
-    [roleId],
-  );
-  return rows[0]?.capabilities ?? [];
+const roleCapabilities = async (client: pg.ClientBase, roleId: string): Promise<readonly string[]> => {
+	const { rows } = await client.query<{ capabilities: string[] }>(
+		`SELECT coalesce(array_agg(capability.${capabilities.columns.entity} || '.' || capability.${capabilities.columns.action} ORDER BY capability.${capabilities.columns.entity}, capability.${capabilities.columns.action}), '{}') AS capabilities FROM ${qualified(rolePermissions)} permission JOIN ${qualified(capabilities)} capability ON capability.${capabilities.columns.id} = permission.${rolePermissions.columns.capabilityId} WHERE permission.${rolePermissions.columns.roleId} = $1`,
+		[roleId],
+	);
+	return rows[0]?.capabilities ?? [];
 };
 
 const GLOBAL_SCOPE = 'global.';
@@ -1163,356 +1098,301 @@ const RESOURCE_SCOPE = 'resource.';
 // seeding can run more than once on one database. A new person is written with their one identity
 // in the caller's transaction, `added_by` null as on a first meeting.
 const heldOrWrittenPerson = async (
-  client: pg.ClientBase,
-  { issuer, subject }: { issuer: string; subject: string },
+	client: pg.ClientBase,
+	{ issuer, subject }: { issuer: string; subject: string },
 ): Promise<string> => {
-  const { rows } = await client.query<{ id: string }>(
-    `SELECT ${pg.escapeIdentifier(userIdentities.columns.userId)}::text AS id FROM ${qualified(userIdentities)} WHERE ${pg.escapeIdentifier(userIdentities.columns.idpIssuer)} = $1 AND ${pg.escapeIdentifier(userIdentities.columns.idpSubjectId)} = $2`,
-    [issuer, subject],
-  );
-  const [held] = rows;
-  if (held !== undefined) {
-    return held.id;
-  }
-  const userId = await insertWithId(client, users, {
-    [users.columns.createdAt]: CLOCK,
-  });
-  await insertRow(client, userIdentities, {
-    [userIdentities.columns.addedAt]: CLOCK,
-    [userIdentities.columns.addedBy]: null,
-    [userIdentities.columns.idpIssuer]: issuer,
-    [userIdentities.columns.idpSubjectId]: subject,
-    [userIdentities.columns.userId]: userId,
-  });
-  return userId;
+	const { rows } = await client.query<{ id: string }>(
+		`SELECT ${pg.escapeIdentifier(userIdentities.columns.userId)}::text AS id FROM ${qualified(userIdentities)} WHERE ${pg.escapeIdentifier(userIdentities.columns.idpIssuer)} = $1 AND ${pg.escapeIdentifier(userIdentities.columns.idpSubjectId)} = $2`,
+		[issuer, subject],
+	);
+	const [held] = rows;
+	if (held !== undefined) {
+		return held.id;
+	}
+	const userId = await insertWithId(client, users, {
+		[users.columns.createdAt]: CLOCK,
+	});
+	await insertRow(client, userIdentities, {
+		[userIdentities.columns.addedAt]: CLOCK,
+		[userIdentities.columns.addedBy]: null,
+		[userIdentities.columns.idpIssuer]: issuer,
+		[userIdentities.columns.idpSubjectId]: subject,
+		[userIdentities.columns.userId]: userId,
+	});
+	return userId;
 };
 
-const externalIds = async (
-  client: pg.ClientBase,
-): Promise<Readonly<Record<string, string>>> => {
-  const { rows } = await client.query<{ external_id: string; id: string }>(
-    `SELECT ${pg.escapeIdentifier(resources.columns.externalId)} AS external_id, ${pg.escapeIdentifier(resources.columns.id)} AS id FROM ${qualified(resources)}`,
-  );
-  return Object.fromEntries(
-    rows.map(({ external_id, id }) => [external_id, id]),
-  );
+const externalIds = async (client: pg.ClientBase): Promise<Readonly<Record<string, string>>> => {
+	const { rows } = await client.query<{ external_id: string; id: string }>(
+		`SELECT ${pg.escapeIdentifier(resources.columns.externalId)} AS external_id, ${pg.escapeIdentifier(resources.columns.id)} AS id FROM ${qualified(resources)}`,
+	);
+	return Object.fromEntries(rows.map(({ external_id, id }) => [external_id, id]));
 };
 
-const applicationIds = async (
-  client: pg.ClientBase,
-): Promise<ReadonlySet<string>> => {
-  const { rows } = await client.query<{ id: string }>(
-    `SELECT ${pg.escapeIdentifier(applications.columns.id)} AS id FROM ${qualified(applications)}`,
-  );
-  return new Set(rows.map(({ id }) => id));
+const applicationIds = async (client: pg.ClientBase): Promise<ReadonlySet<string>> => {
+	const { rows } = await client.query<{ id: string }>(
+		`SELECT ${pg.escapeIdentifier(applications.columns.id)} AS id FROM ${qualified(applications)}`,
+	);
+	return new Set(rows.map(({ id }) => id));
 };
 
-const seedWithin = async (
-  client: pg.ClientBase,
-  fixture: PolicyFixture,
-): Promise<SeededPolicy> => {
-  const issuer = fixture.issuer ?? DEFAULT_FIXTURE_ISSUER;
-  const userIds = await idsByName(fixtureUsers(fixture), (user) =>
-    heldOrWrittenPerson(client, {
-      issuer: user.issuer ?? issuer,
-      subject: user.subject,
-    }),
-  );
-  const user = resolver(userIds, 'user');
-  const actor = (name: string | undefined): string => user(name ?? STEWARD);
+const seedWithin = async (client: pg.ClientBase, fixture: PolicyFixture): Promise<SeededPolicy> => {
+	const issuer = fixture.issuer ?? DEFAULT_FIXTURE_ISSUER;
+	const userIds = await idsByName(fixtureUsers(fixture), (user) =>
+		heldOrWrittenPerson(client, {
+			issuer: user.issuer ?? issuer,
+			subject: user.subject,
+		}),
+	);
+	const user = resolver(userIds, 'user');
+	const actor = (name: string | undefined): string => user(name ?? STEWARD);
 
-  const roleIds = await seedRoles(client, fixture.roles ?? {});
-  const role = resolver(roleIds, 'role');
+	const roleIds = await seedRoles(client, fixture.roles ?? {});
+	const role = resolver(roleIds, 'role');
 
-  await insertRows(
-    client,
-    categories,
-    Object.entries(fixture.categories ?? {}).map(([name, { description }]) => ({
-      [categories.columns.description]: description ?? null,
-      [categories.columns.name]: name,
-      [categories.columns.scope]: 'global',
-    })),
-  );
-  const categoryIds = await namedIds(
-    client,
-    categories,
-    ` WHERE ${categories.columns.scope} = 'global'`,
-  );
-  const globalCategory = resolver(categoryIds, 'global category');
+	await insertRows(
+		client,
+		categories,
+		Object.entries(fixture.categories ?? {}).map(([name, { description }]) => ({
+			[categories.columns.description]: description ?? null,
+			[categories.columns.name]: name,
+			[categories.columns.scope]: 'global',
+		})),
+	);
+	const categoryIds = await namedIds(client, categories, ` WHERE ${categories.columns.scope} = 'global'`);
+	const globalCategory = resolver(categoryIds, 'global category');
 
-  const resourceIds = await idsByName(
-    fixture.resources ?? {},
-    (resource, externalId) =>
-      insertWithId(client, resources, {
-        [resources.columns.baseTier]: resource.baseTier,
-        [resources.columns.description]: resource.description ?? null,
-        [resources.columns.externalId]: externalId,
-        [resources.columns.name]: resource.name,
-        [resources.columns.registeredAt]: CLOCK,
-        [resources.columns.registeredBy]: actor(resource.registeredBy),
-        ...(resource.retired === undefined
-          ? {}
-          : {
-              [resources.columns.retiredAt]: at(resource.retired.at),
-              [resources.columns.retiredBy]: actor(resource.retired.by),
-            }),
-        [resources.columns.suppressed]: resource.suppressed ?? false,
-        [resources.columns.updatedAt]: CLOCK,
-      }),
-  );
-  const heldResources = {
-    ...(await externalIds(client)),
-    ...resourceIds,
-  };
-  const resource = resolver(heldResources, 'resource');
+	const resourceIds = await idsByName(fixture.resources ?? {}, (resource, externalId) =>
+		insertWithId(client, resources, {
+			[resources.columns.baseTier]: resource.baseTier,
+			[resources.columns.description]: resource.description ?? null,
+			[resources.columns.externalId]: externalId,
+			[resources.columns.name]: resource.name,
+			[resources.columns.registeredAt]: CLOCK,
+			[resources.columns.registeredBy]: actor(resource.registeredBy),
+			...(resource.retired === undefined
+				? {}
+				: {
+						[resources.columns.retiredAt]: at(resource.retired.at),
+						[resources.columns.retiredBy]: actor(resource.retired.by),
+					}),
+			[resources.columns.suppressed]: resource.suppressed ?? false,
+			[resources.columns.updatedAt]: CLOCK,
+		}),
+	);
+	const heldResources = {
+		...(await externalIds(client)),
+		...resourceIds,
+	};
+	const resource = resolver(heldResources, 'resource');
 
-  const resourceCategoryIds: Readonly<
-    Record<string, Readonly<Record<string, string>>>
-  > = Object.fromEntries(
-    await inTurn(
-      Object.entries(fixture.resources ?? {}),
-      async ([externalId, { categories: own = {} }]) =>
-        [
-          externalId,
-          await idsByName(own, ({ description }, name) =>
-            insertWithId(client, categories, {
-              [categories.columns.description]: description ?? null,
-              [categories.columns.name]: name,
-              [categories.columns.resourceId]: resource(externalId),
-              [categories.columns.scope]: 'resource',
-            }),
-          ),
-        ] as const,
-    ),
-  );
-  // A category is named by scope as a payload names it, or bare for a global one.
-  const category = (name: string, externalId: string): string => {
-    if (name.startsWith(RESOURCE_SCOPE)) {
-      const own = resourceCategoryIds[externalId] ?? {};
-      return resolver(
-        own,
-        `category of ${externalId}`,
-      )(name.slice(RESOURCE_SCOPE.length));
-    }
-    return globalCategory(
-      name.startsWith(GLOBAL_SCOPE) ? name.slice(GLOBAL_SCOPE.length) : name,
-    );
-  };
+	const resourceCategoryIds: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.fromEntries(
+		await inTurn(
+			Object.entries(fixture.resources ?? {}),
+			async ([externalId, { categories: own = {} }]) =>
+				[
+					externalId,
+					await idsByName(own, ({ description }, name) =>
+						insertWithId(client, categories, {
+							[categories.columns.description]: description ?? null,
+							[categories.columns.name]: name,
+							[categories.columns.resourceId]: resource(externalId),
+							[categories.columns.scope]: 'resource',
+						}),
+					),
+				] as const,
+		),
+	);
+	// A category is named by scope as a payload names it, or bare for a global one.
+	const category = (name: string, externalId: string): string => {
+		if (name.startsWith(RESOURCE_SCOPE)) {
+			const own = resourceCategoryIds[externalId] ?? {};
+			return resolver(own, `category of ${externalId}`)(name.slice(RESOURCE_SCOPE.length));
+		}
+		return globalCategory(name.startsWith(GLOBAL_SCOPE) ? name.slice(GLOBAL_SCOPE.length) : name);
+	};
 
-  await insertRows(
-    client,
-    resourceCategories,
-    Object.entries(fixture.resources ?? {}).flatMap(
-      ([externalId, { offers = [] }]) =>
-        offers.map((name) => ({
-          [resourceCategories.columns.categoryId]: category(name, externalId),
-          [resourceCategories.columns.resourceId]: resource(externalId),
-        })),
-    ),
-  );
+	await insertRows(
+		client,
+		resourceCategories,
+		Object.entries(fixture.resources ?? {}).flatMap(([externalId, { offers = [] }]) =>
+			offers.map((name) => ({
+				[resourceCategories.columns.categoryId]: category(name, externalId),
+				[resourceCategories.columns.resourceId]: resource(externalId),
+			})),
+		),
+	);
 
-  const fieldIds = await idsByName(
-    fixture.fields ?? {},
-    ({ description }, name) =>
-      insertWithId(client, resourceFields, {
-        [resourceFields.columns.description]: description ?? null,
-        [resourceFields.columns.name]: name,
-      }),
-  );
-  const field = resolver(fieldIds, 'resource field');
-  await insertRows(
-    client,
-    resourceFieldValues,
-    Object.entries(fixture.resources ?? {}).flatMap(
-      ([externalId, { fieldValues = {} }]) =>
-        Object.entries(fieldValues).map(([name, value]) => ({
-          [resourceFieldValues.columns.fieldId]: field(name),
-          [resourceFieldValues.columns.resourceId]: resource(externalId),
-          [resourceFieldValues.columns.value]: value,
-        })),
-    ),
-  );
+	const fieldIds = await idsByName(fixture.fields ?? {}, ({ description }, name) =>
+		insertWithId(client, resourceFields, {
+			[resourceFields.columns.description]: description ?? null,
+			[resourceFields.columns.name]: name,
+		}),
+	);
+	const field = resolver(fieldIds, 'resource field');
+	await insertRows(
+		client,
+		resourceFieldValues,
+		Object.entries(fixture.resources ?? {}).flatMap(([externalId, { fieldValues = {} }]) =>
+			Object.entries(fieldValues).map(([name, value]) => ({
+				[resourceFieldValues.columns.fieldId]: field(name),
+				[resourceFieldValues.columns.resourceId]: resource(externalId),
+				[resourceFieldValues.columns.value]: value,
+			})),
+		),
+	);
 
-  const applicationIdsByLabel = Object.fromEntries(
-    Object.entries(fixture.applications ?? {}).map(([label, { id }]) => [
-      label,
-      id ?? fixtureApplicationId(label),
-    ]),
-  );
-  const application = resolver(applicationIdsByLabel, 'application');
-  const heldApplications = await applicationIds(client);
-  await insertRows(
-    client,
-    applications,
-    Object.entries(fixture.applications ?? {}).flatMap(
-      ([label, { description, registeredBy }]) =>
-        heldApplications.has(application(label))
-          ? []
-          : [
-              {
-                [applications.columns.description]: description ?? null,
-                [applications.columns.displayName]: label,
-                [applications.columns.id]: application(label),
-                [applications.columns.registeredAt]: CLOCK,
-                [applications.columns.registeredBy]: actor(registeredBy),
-              },
-            ],
-    ),
-  );
-  await insertRows(
-    client,
-    applicationResources,
-    Object.entries(fixture.applications ?? {}).flatMap(([label, { serves }]) =>
-      serves.map((externalId) => ({
-        [applicationResources.columns.applicationId]: application(label),
-        [applicationResources.columns.resourceId]: resource(externalId),
-      })),
-    ),
-  );
+	const applicationIdsByLabel = Object.fromEntries(
+		Object.entries(fixture.applications ?? {}).map(([label, { id }]) => [label, id ?? fixtureApplicationId(label)]),
+	);
+	const application = resolver(applicationIdsByLabel, 'application');
+	const heldApplications = await applicationIds(client);
+	await insertRows(
+		client,
+		applications,
+		Object.entries(fixture.applications ?? {}).flatMap(([label, { description, registeredBy }]) =>
+			heldApplications.has(application(label))
+				? []
+				: [
+						{
+							[applications.columns.description]: description ?? null,
+							[applications.columns.displayName]: label,
+							[applications.columns.id]: application(label),
+							[applications.columns.registeredAt]: CLOCK,
+							[applications.columns.registeredBy]: actor(registeredBy),
+						},
+					],
+		),
+	);
+	await insertRows(
+		client,
+		applicationResources,
+		Object.entries(fixture.applications ?? {}).flatMap(([label, { serves }]) =>
+			serves.map((externalId) => ({
+				[applicationResources.columns.applicationId]: application(label),
+				[applicationResources.columns.resourceId]: resource(externalId),
+			})),
+		),
+	);
 
-  const groupIds = await idsByName(fixture.groups ?? {}, (group, key) =>
-    insertWithId(client, groups, {
-      [groups.columns.createdAt]: CLOCK,
-      [groups.columns.createdBy]: actor(group.createdBy),
-      [groups.columns.description]: group.description ?? null,
-      [groups.columns.name]: group.name ?? key,
-      [groups.columns.resourceId]: resource(group.resource),
-    }),
-  );
-  const group = resolver(groupIds, 'group');
-  await insertRows(
-    client,
-    groupUsers,
-    Object.entries(fixture.groups ?? {}).flatMap(([key, { members }]) =>
-      members.map((member) => ({
-        [groupUsers.columns.groupId]: group(key),
-        [groupUsers.columns.userId]: user(member),
-      })),
-    ),
-  );
+	const groupIds = await idsByName(fixture.groups ?? {}, (group, key) =>
+		insertWithId(client, groups, {
+			[groups.columns.createdAt]: CLOCK,
+			[groups.columns.createdBy]: actor(group.createdBy),
+			[groups.columns.description]: group.description ?? null,
+			[groups.columns.name]: group.name ?? key,
+			[groups.columns.resourceId]: resource(group.resource),
+		}),
+	);
+	const group = resolver(groupIds, 'group');
+	await insertRows(
+		client,
+		groupUsers,
+		Object.entries(fixture.groups ?? {}).flatMap(([key, { members }]) =>
+			members.map((member) => ({
+				[groupUsers.columns.groupId]: group(key),
+				[groupUsers.columns.userId]: user(member),
+			})),
+		),
+	);
 
-  const grantIds = await idsByName(fixture.grants ?? {}, (grant) =>
-    insertWithId(client, grants, {
-      [grants.columns.expiresAt]: grant.expiresAt ?? null,
-      [grants.columns.fieldCategoryId]:
-        grant.fieldCategory === undefined
-          ? null
-          : category(grant.fieldCategory, grant.resource),
-      [grants.columns.grantedAt]: at(grant.grantedAt),
-      [grants.columns.grantedBy]: actor(grant.grantedBy),
-      [grants.columns.holderGroupId]:
-        'group' in grant.holder ? group(grant.holder.group) : null,
-      [grants.columns.holderUserId]:
-        'user' in grant.holder ? user(grant.holder.user) : null,
-      [grants.columns.recordCategoryId]:
-        grant.category === null
-          ? null
-          : category(grant.category, grant.resource),
-      [grants.columns.resourceId]: resource(grant.resource),
-      [grants.columns.revokedAt]:
-        grant.revoked === undefined ? null : at(grant.revoked.at),
-      [grants.columns.revokedBy]:
-        grant.revoked === undefined ? null : actor(grant.revoked.by),
-      [grants.columns.roleId]: role(grant.role),
-    }),
-  );
-  const fixtureGrant = (name: string): FixtureGrant => {
-    const grant = fixture.grants?.[name];
-    if (grant !== undefined && Object.hasOwn(fixture.grants ?? {}, name)) {
-      return grant;
-    }
-    throw new Error(`the fixture names no grant ${name}`);
-  };
-  const decider = ({ grant, person }: FixtureDecision): string => {
-    const { holder } = fixtureGrant(grant);
-    const answering = person ?? ('user' in holder ? holder.user : undefined);
-    if (answering !== undefined) {
-      return user(answering);
-    }
-    throw new Error(
-      `the fixture's decision on ${grant}, a group's grant, names no person`,
-    );
-  };
-  await inTurn(fixture.decisions ?? [], async (decision) =>
-    insertRow(client, grantDecisions, {
-      [grantDecisions.columns.capabilities]:
-        decision.capabilities ??
-        (await roleCapabilities(
-          client,
-          role(fixtureGrant(decision.grant).role),
-        )),
-      [grantDecisions.columns.decidedAt]: at(decision.decidedAt),
-      [grantDecisions.columns.decision]: decision.decision,
-      [grantDecisions.columns.grantId]: resolver(
-        grantIds,
-        'grant',
-      )(decision.grant),
-      [grantDecisions.columns.userId]: decider(decision),
-    }),
-  );
+	const grantIds = await idsByName(fixture.grants ?? {}, (grant) =>
+		insertWithId(client, grants, {
+			[grants.columns.expiresAt]: grant.expiresAt ?? null,
+			[grants.columns.fieldCategoryId]:
+				grant.fieldCategory === undefined ? null : category(grant.fieldCategory, grant.resource),
+			[grants.columns.grantedAt]: at(grant.grantedAt),
+			[grants.columns.grantedBy]: actor(grant.grantedBy),
+			[grants.columns.holderGroupId]: 'group' in grant.holder ? group(grant.holder.group) : null,
+			[grants.columns.holderUserId]: 'user' in grant.holder ? user(grant.holder.user) : null,
+			[grants.columns.recordCategoryId]:
+				grant.category === null ? null : category(grant.category, grant.resource),
+			[grants.columns.resourceId]: resource(grant.resource),
+			[grants.columns.revokedAt]: grant.revoked === undefined ? null : at(grant.revoked.at),
+			[grants.columns.revokedBy]: grant.revoked === undefined ? null : actor(grant.revoked.by),
+			[grants.columns.roleId]: role(grant.role),
+		}),
+	);
+	const fixtureGrant = (name: string): FixtureGrant => {
+		const grant = fixture.grants?.[name];
+		if (grant !== undefined && Object.hasOwn(fixture.grants ?? {}, name)) {
+			return grant;
+		}
+		throw new Error(`the fixture names no grant ${name}`);
+	};
+	const decider = ({ grant, person }: FixtureDecision): string => {
+		const { holder } = fixtureGrant(grant);
+		const answering = person ?? ('user' in holder ? holder.user : undefined);
+		if (answering !== undefined) {
+			return user(answering);
+		}
+		throw new Error(`the fixture's decision on ${grant}, a group's grant, names no person`);
+	};
+	await inTurn(fixture.decisions ?? [], async (decision) =>
+		insertRow(client, grantDecisions, {
+			[grantDecisions.columns.capabilities]:
+				decision.capabilities ?? (await roleCapabilities(client, role(fixtureGrant(decision.grant).role))),
+			[grantDecisions.columns.decidedAt]: at(decision.decidedAt),
+			[grantDecisions.columns.decision]: decision.decision,
+			[grantDecisions.columns.grantId]: resolver(grantIds, 'grant')(decision.grant),
+			[grantDecisions.columns.userId]: decider(decision),
+		}),
+	);
 
-  const revocationIds = await inTurn(fixture.revocations ?? [], (revocation) =>
-    insertWithId(client, principalRevocations, {
-      [principalRevocations.columns.liftedAt]:
-        revocation.lifted === undefined ? null : at(revocation.lifted.at),
-      [principalRevocations.columns.liftedBy]:
-        revocation.lifted === undefined ? null : actor(revocation.lifted.by),
-      [principalRevocations.columns.reason]: revocation.reason,
-      [principalRevocations.columns.revokedAt]: at(revocation.revokedAt),
-      [principalRevocations.columns.revokedBy]: actor(revocation.revokedBy),
-      [principalRevocations.columns.userId]: user(revocation.user),
-    }),
-  );
+	const revocationIds = await inTurn(fixture.revocations ?? [], (revocation) =>
+		insertWithId(client, principalRevocations, {
+			[principalRevocations.columns.liftedAt]: revocation.lifted === undefined ? null : at(revocation.lifted.at),
+			[principalRevocations.columns.liftedBy]:
+				revocation.lifted === undefined ? null : actor(revocation.lifted.by),
+			[principalRevocations.columns.reason]: revocation.reason,
+			[principalRevocations.columns.revokedAt]: at(revocation.revokedAt),
+			[principalRevocations.columns.revokedBy]: actor(revocation.revokedBy),
+			[principalRevocations.columns.userId]: user(revocation.user),
+		}),
+	);
 
-  const invitationIds = await inTurn(fixture.invitations ?? [], (invitation) =>
-    insertWithId(client, invitations, {
-      [invitations.columns.email]: invitation.email,
-      [invitations.columns.expiresAt]: invitation.expiresAt ?? null,
-      [invitations.columns.invitedAt]: at(invitation.invitedAt),
-      [invitations.columns.invitedBy]: actor(invitation.invitedBy),
-      [invitations.columns.linkTokenHash]:
-        invitation.linkTokenHash ??
-        createHash('sha256').update(randomBytes(32)).digest(),
-      [invitations.columns.recordCategoryId]:
-        invitation.category === null
-          ? null
-          : category(invitation.category, invitation.resource),
-      [invitations.columns.resourceId]: resource(invitation.resource),
-      [invitations.columns.roleId]: role(invitation.role),
-    }),
-  );
+	const invitationIds = await inTurn(fixture.invitations ?? [], (invitation) =>
+		insertWithId(client, invitations, {
+			[invitations.columns.email]: invitation.email,
+			[invitations.columns.expiresAt]: invitation.expiresAt ?? null,
+			[invitations.columns.invitedAt]: at(invitation.invitedAt),
+			[invitations.columns.invitedBy]: actor(invitation.invitedBy),
+			[invitations.columns.linkTokenHash]:
+				invitation.linkTokenHash ?? createHash('sha256').update(randomBytes(32)).digest(),
+			[invitations.columns.recordCategoryId]:
+				invitation.category === null ? null : category(invitation.category, invitation.resource),
+			[invitations.columns.resourceId]: resource(invitation.resource),
+			[invitations.columns.roleId]: role(invitation.role),
+		}),
+	);
 
-  // Set last, so no write seeding makes afterwards can move them.
-  await inTurn(
-    Object.entries(fixture.resources ?? {}).filter(
-      ([, { registeredAt, updatedAt }]) =>
-        registeredAt !== undefined || updatedAt !== undefined,
-    ),
-    ([externalId, { registeredAt, updatedAt }]) =>
-      client.query(
-        `UPDATE ${qualified(resources)} SET ${pg.escapeIdentifier(resources.columns.registeredAt)} = coalesce($1::timestamptz, ${pg.escapeIdentifier(resources.columns.registeredAt)}), ${pg.escapeIdentifier(resources.columns.updatedAt)} = coalesce($2::timestamptz, ${pg.escapeIdentifier(resources.columns.updatedAt)}) WHERE ${pg.escapeIdentifier(resources.columns.id)} = $3`,
-        [registeredAt ?? null, updatedAt ?? null, resource(externalId)],
-      ),
-  );
-  const resourceTimes = await storedResourceTimes(
-    client,
-    Object.keys(fixture.resources ?? {}),
-  );
+	// Set last, so no write seeding makes afterwards can move them.
+	await inTurn(
+		Object.entries(fixture.resources ?? {}).filter(
+			([, { registeredAt, updatedAt }]) => registeredAt !== undefined || updatedAt !== undefined,
+		),
+		([externalId, { registeredAt, updatedAt }]) =>
+			client.query(
+				`UPDATE ${qualified(resources)} SET ${pg.escapeIdentifier(resources.columns.registeredAt)} = coalesce($1::timestamptz, ${pg.escapeIdentifier(resources.columns.registeredAt)}), ${pg.escapeIdentifier(resources.columns.updatedAt)} = coalesce($2::timestamptz, ${pg.escapeIdentifier(resources.columns.updatedAt)}) WHERE ${pg.escapeIdentifier(resources.columns.id)} = $3`,
+				[registeredAt ?? null, updatedAt ?? null, resource(externalId)],
+			),
+	);
+	const resourceTimes = await storedResourceTimes(client, Object.keys(fixture.resources ?? {}));
 
-  return {
-    applications: applicationIdsByLabel,
-    categories: categoryIds,
-    fields: fieldIds,
-    grants: grantIds,
-    groups: groupIds,
-    invitations: invitationIds,
-    resourceCategories: resourceCategoryIds,
-    resourceTimes,
-    resources: heldResources,
-    revocations: revocationIds,
-    roles: roleIds,
-    users: userIds,
-  };
+	return {
+		applications: applicationIdsByLabel,
+		categories: categoryIds,
+		fields: fieldIds,
+		grants: grantIds,
+		groups: groupIds,
+		invitations: invitationIds,
+		resourceCategories: resourceCategoryIds,
+		resourceTimes,
+		resources: heldResources,
+		revocations: revocationIds,
+		roles: roleIds,
+		users: userIds,
+	};
 };
 
 /**
@@ -1524,19 +1404,13 @@ const seedWithin = async (
  * @param client a connection with a transaction open.
  * @param actor who acts.
  */
-export const declareActor = async (
-  client: pg.ClientBase,
-  actor: Actor,
-): Promise<void> => {
-  await client.query(
-    'SELECT set_config($1, $2, true), set_config($3, $4, true)',
-    [
-      ACTOR_SETTINGS.type,
-      actor.type,
-      ACTOR_SETTINGS.id,
-      'id' in actor ? actor.id : '',
-    ],
-  );
+export const declareActor = async (client: pg.ClientBase, actor: Actor): Promise<void> => {
+	await client.query('SELECT set_config($1, $2, true), set_config($3, $4, true)', [
+		ACTOR_SETTINGS.type,
+		actor.type,
+		ACTOR_SETTINGS.id,
+		'id' in actor ? actor.id : '',
+	]);
 };
 
 /**
@@ -1548,20 +1422,20 @@ export const declareActor = async (
  * @param work the statements to run, on the same connection.
  */
 export const inTransactionAs = async <Result>(
-  client: pg.ClientBase,
-  actor: Actor,
-  work: () => Promise<Result>,
+	client: pg.ClientBase,
+	actor: Actor,
+	work: () => Promise<Result>,
 ): Promise<Result> => {
-  await client.query('BEGIN');
-  try {
-    await declareActor(client, actor);
-    const result = await work();
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  }
+	await client.query('BEGIN');
+	try {
+		await declareActor(client, actor);
+		const result = await work();
+		await client.query('COMMIT');
+		return result;
+	} catch (error) {
+		await client.query('ROLLBACK');
+		throw error;
+	}
 };
 
 /**
@@ -1581,11 +1455,8 @@ export const inTransactionAs = async <Result>(
  * @param fixture the policy to write.
  * @returns the internal ids written, by the fixture's names.
  */
-export const seedPolicy = (
-  client: pg.ClientBase,
-  fixture: PolicyFixture,
-): Promise<SeededPolicy> =>
-  inTransactionAs(client, SYSTEM_ACTOR, () => seedWithin(client, fixture));
+export const seedPolicy = (client: pg.ClientBase, fixture: PolicyFixture): Promise<SeededPolicy> =>
+	inTransactionAs(client, SYSTEM_ACTOR, () => seedWithin(client, fixture));
 
 /**
  * Fixtures combined into one: each record merged by name, a later fixture's entry winning; each list
@@ -1594,43 +1465,35 @@ export const seedPolicy = (
  *
  * @param policies the fixtures, in order.
  */
-export const mergedPolicy = (
-  ...policies: readonly PolicyFixture[]
-): PolicyFixture =>
-  policies.reduce<PolicyFixture>((merged, policy) => {
-    const issuer = policy.issuer ?? merged.issuer;
-    return {
-      applications: { ...merged.applications, ...policy.applications },
-      categories: { ...merged.categories, ...policy.categories },
-      decisions: [...(merged.decisions ?? []), ...(policy.decisions ?? [])],
-      fields: { ...merged.fields, ...policy.fields },
-      grants: { ...merged.grants, ...policy.grants },
-      groups: { ...merged.groups, ...policy.groups },
-      invitations: [
-        ...(merged.invitations ?? []),
-        ...(policy.invitations ?? []),
-      ],
-      ...(issuer === undefined ? {} : { issuer }),
-      resources: { ...merged.resources, ...policy.resources },
-      revocations: [
-        ...(merged.revocations ?? []),
-        ...(policy.revocations ?? []),
-      ],
-      roles: { ...merged.roles, ...policy.roles },
-      users: { ...merged.users, ...policy.users },
-    };
-  }, {});
+export const mergedPolicy = (...policies: readonly PolicyFixture[]): PolicyFixture =>
+	policies.reduce<PolicyFixture>((merged, policy) => {
+		const issuer = policy.issuer ?? merged.issuer;
+		return {
+			applications: { ...merged.applications, ...policy.applications },
+			categories: { ...merged.categories, ...policy.categories },
+			decisions: [...(merged.decisions ?? []), ...(policy.decisions ?? [])],
+			fields: { ...merged.fields, ...policy.fields },
+			grants: { ...merged.grants, ...policy.grants },
+			groups: { ...merged.groups, ...policy.groups },
+			invitations: [...(merged.invitations ?? []), ...(policy.invitations ?? [])],
+			...(issuer === undefined ? {} : { issuer }),
+			resources: { ...merged.resources, ...policy.resources },
+			revocations: [...(merged.revocations ?? []), ...(policy.revocations ?? [])],
+			roles: { ...merged.roles, ...policy.roles },
+			users: { ...merged.users, ...policy.users },
+		};
+	}, {});
 
 /** A trim in a transaction still open, so a test can look between the trim and its commit. */
 export interface OpenTrim {
-  /** Commits the trim's transaction. */
-  commit(): Promise<void>;
+	/** Commits the trim's transaction. */
+	commit(): Promise<void>;
 
-  /** Rolls the trim's transaction back. */
-  rollback(): Promise<void>;
+	/** Rolls the trim's transaction back. */
+	rollback(): Promise<void>;
 
-  /** The watermark the function returned. */
-  trimmedThrough: bigint;
+	/** The watermark the function returned. */
+	trimmedThrough: bigint;
 }
 
 /**
@@ -1640,27 +1503,25 @@ export interface OpenTrim {
  * @param runtime a connection under the Controller's runtime role, holding no transaction.
  * @throws what the function threw, the transaction rolled back.
  */
-export const trimNoticesOpen = async (
-  runtime: pg.ClientBase,
-): Promise<OpenTrim> => {
-  await runtime.query('BEGIN');
-  try {
-    const { rows } = await runtime.query<{ trimmed_through: string }>(
-      `SELECT ${qualified({ name: POLICY_FUNCTIONS.trimNotices })}()::text AS trimmed_through`,
-    );
-    return {
-      commit: async () => {
-        await runtime.query('COMMIT');
-      },
-      rollback: async () => {
-        await runtime.query('ROLLBACK');
-      },
-      trimmedThrough: BigInt(rows[0]?.trimmed_through ?? '0'),
-    };
-  } catch (error) {
-    await runtime.query('ROLLBACK');
-    throw error;
-  }
+export const trimNoticesOpen = async (runtime: pg.ClientBase): Promise<OpenTrim> => {
+	await runtime.query('BEGIN');
+	try {
+		const { rows } = await runtime.query<{ trimmed_through: string }>(
+			`SELECT ${qualified({ name: POLICY_FUNCTIONS.trimNotices })}()::text AS trimmed_through`,
+		);
+		return {
+			commit: async () => {
+				await runtime.query('COMMIT');
+			},
+			rollback: async () => {
+				await runtime.query('ROLLBACK');
+			},
+			trimmedThrough: BigInt(rows[0]?.trimmed_through ?? '0'),
+		};
+	} catch (error) {
+		await runtime.query('ROLLBACK');
+		throw error;
+	}
 };
 
 /**
@@ -1670,9 +1531,9 @@ export const trimNoticesOpen = async (
  * @returns the watermark the function returned.
  */
 export const trimNotices = async (runtime: pg.ClientBase): Promise<bigint> => {
-  const trim = await trimNoticesOpen(runtime);
-  await trim.commit();
-  return trim.trimmedThrough;
+	const trim = await trimNoticesOpen(runtime);
+	await trim.commit();
+	return trim.trimmedThrough;
 };
 
 /**
@@ -1684,21 +1545,18 @@ export const trimNotices = async (runtime: pg.ClientBase): Promise<bigint> => {
  * @returns the watermark the function returned.
  * @throws what the function threw, such as its refusal of a `maxRows` below 1.
  */
-export const trimNoticesBounded = async (
-  runtime: pg.ClientBase,
-  maxRows: number | null,
-): Promise<bigint> => {
-  const { rows } = await runtime.query<{ trimmed_through: string }>(
-    `SELECT ${qualified({ name: POLICY_FUNCTIONS.trimNotices })}($1::integer)::text AS trimmed_through`,
-    [maxRows],
-  );
-  return BigInt(rows[0]?.trimmed_through ?? '0');
+export const trimNoticesBounded = async (runtime: pg.ClientBase, maxRows: number | null): Promise<bigint> => {
+	const { rows } = await runtime.query<{ trimmed_through: string }>(
+		`SELECT ${qualified({ name: POLICY_FUNCTIONS.trimNotices })}($1::integer)::text AS trimmed_through`,
+		[maxRows],
+	);
+	return BigInt(rows[0]?.trimmed_through ?? '0');
 };
 
 /** The retention sweep's lock, held by a session of the test's. */
 export interface SweepHold {
-  /** Lets the lock go, so the next run of the sweep takes it; a later call does nothing. */
-  release(): Promise<void>;
+	/** Lets the lock go, so the next run of the sweep takes it; a later call does nothing. */
+	release(): Promise<void>;
 }
 
 /**
@@ -1708,21 +1566,17 @@ export interface SweepHold {
  *
  * @param client a connection of the test's, under either role.
  */
-export const holdRetentionSweep = async (
-  client: pg.ClientBase,
-): Promise<SweepHold> => {
-  await client.query('SELECT pg_advisory_lock($1)', [RETENTION_SWEEP.lock]);
-  const state = { held: true };
-  return {
-    release: async () => {
-      if (state.held) {
-        state.held = false;
-        await client.query('SELECT pg_advisory_unlock($1)', [
-          RETENTION_SWEEP.lock,
-        ]);
-      }
-    },
-  };
+export const holdRetentionSweep = async (client: pg.ClientBase): Promise<SweepHold> => {
+	await client.query('SELECT pg_advisory_lock($1)', [RETENTION_SWEEP.lock]);
+	const state = { held: true };
+	return {
+		release: async () => {
+			if (state.held) {
+				state.held = false;
+				await client.query('SELECT pg_advisory_unlock($1)', [RETENTION_SWEEP.lock]);
+			}
+		},
+	};
 };
 
 /**
@@ -1732,8 +1586,7 @@ export const holdRetentionSweep = async (
  *
  * @param person the person, by the provider's subject.
  */
-export const noticeSubject = ({ subject }: { subject: string }): string =>
-  subject;
+export const noticeSubject = ({ subject }: { subject: string }): string => subject;
 
 /**
  * How many people the store holds an identity for by a subject, under any issuer, read through
@@ -1742,15 +1595,12 @@ export const noticeSubject = ({ subject }: { subject: string }): string =>
  * @param client a connection under the migration role.
  * @param subject the identity provider's subject.
  */
-export const usersWithSubject = async (
-  client: pg.ClientBase,
-  subject: string,
-): Promise<number> => {
-  const { rows } = await client.query<{ count: number }>(
-    `SELECT count(DISTINCT ${pg.escapeIdentifier(userIdentities.columns.userId)})::int AS count FROM ${qualified(userIdentities)} WHERE ${pg.escapeIdentifier(userIdentities.columns.idpSubjectId)} = $1`,
-    [subject],
-  );
-  return rows[0]?.count ?? 0;
+export const usersWithSubject = async (client: pg.ClientBase, subject: string): Promise<number> => {
+	const { rows } = await client.query<{ count: number }>(
+		`SELECT count(DISTINCT ${pg.escapeIdentifier(userIdentities.columns.userId)})::int AS count FROM ${qualified(userIdentities)} WHERE ${pg.escapeIdentifier(userIdentities.columns.idpSubjectId)} = $1`,
+		[subject],
+	);
+	return rows[0]?.count ?? 0;
 };
 
 /**
@@ -1764,14 +1614,14 @@ export const usersWithSubject = async (
  * @returns the person's `users.id`.
  */
 export const seedAdministrator = (
-  client: pg.ClientBase,
-  identity: { issuer: string; subject: string },
+	client: pg.ClientBase,
+	identity: { issuer: string; subject: string },
 ): Promise<string> =>
-  inTransactionAs(client, SYSTEM_ACTOR, async () => {
-    const userId = await heldOrWrittenPerson(client, identity);
-    const column = (name: string): string => pg.escapeIdentifier(name);
-    await client.query(
-      `WITH nominated AS (
+	inTransactionAs(client, SYSTEM_ACTOR, async () => {
+		const userId = await heldOrWrittenPerson(client, identity);
+		const column = (name: string): string => pg.escapeIdentifier(name);
+		await client.query(
+			`WITH nominated AS (
          INSERT INTO ${qualified(nominations)} (${column(nominations.columns.nominatedAt)}, ${column(nominations.columns.nominatedBy)}, ${column(nominations.columns.nomineeId)})
          SELECT greatest(clock_timestamp(), (SELECT max(${column(nominations.columns.nominatedAt)}) + interval '1 millisecond' FROM ${qualified(nominations)})), $1, $1
           WHERE NOT EXISTS (SELECT 1 FROM ${qualified(administrators)} WHERE ${column(administrators.columns.userId)} = $1)
@@ -1779,10 +1629,10 @@ export const seedAdministrator = (
        )
        INSERT INTO ${qualified(administrators)} (${column(administrators.columns.acceptedAt)}, ${column(administrators.columns.nominationId)}, ${column(administrators.columns.userId)})
        SELECT clock_timestamp(), nominated.id, $1 FROM nominated`,
-      [userId],
-    );
-    return userId;
-  });
+			[userId],
+		);
+		return userId;
+	});
 
 /**
  * An id seeding wrote, by the fixture's name for it.
@@ -1791,30 +1641,27 @@ export const seedAdministrator = (
  * @param name the fixture's name.
  * @throws naming the name, when seeding wrote nothing by it.
  */
-export const seededId = (
-  ids: Readonly<Record<string, string>>,
-  name: string,
-): string => {
-  const id = Object.hasOwn(ids, name) ? ids[name] : undefined;
-  if (id !== undefined) {
-    return id;
-  }
-  throw new Error(`seeding wrote nothing named ${name}`);
+export const seededId = (ids: Readonly<Record<string, string>>, name: string): string => {
+	const id = Object.hasOwn(ids, name) ? ids[name] : undefined;
+	if (id !== undefined) {
+		return id;
+	}
+	throw new Error(`seeding wrote nothing named ${name}`);
 };
 
 /** A grant as a test looks it up after writing it, through the API or by SQL. */
 export interface GrantLookup {
-  /** As a grant names it: a global category bare or scoped, `resource.<name>`, or `null` for the wildcard; any when absent. */
-  category?: string | null;
+	/** As a grant names it: a global category bare or scoped, `resource.<name>`, or `null` for the wildcard; any when absent. */
+	category?: string | null;
 
-  /** The holder, by the identity provider's subject. */
-  holder: string;
+	/** The holder, by the identity provider's subject. */
+	holder: string;
 
-  /** By externalId. */
-  resource: string;
+	/** By externalId. */
+	resource: string;
 
-  /** By name; any when absent. */
-  role?: string;
+	/** By name; any when absent. */
+	role?: string;
 }
 
 const quotedColumn = (name: string): string => pg.escapeIdentifier(name);
@@ -1823,30 +1670,25 @@ const quotedColumn = (name: string): string => pg.escapeIdentifier(name);
 // cardinality violation when the person holds more than one: the first release records one per
 // person, so a reader assuming one fails, through `readingOneIdentity`, rather than picking one.
 const identityColumnOf = (userId: string, column: string): string =>
-  `(SELECT identity_row.${quotedColumn(column)} FROM ${qualified(userIdentities)} identity_row WHERE identity_row.${quotedColumn(userIdentities.columns.userId)} = ${userId})`;
+	`(SELECT identity_row.${quotedColumn(column)} FROM ${qualified(userIdentities)} identity_row WHERE identity_row.${quotedColumn(userIdentities.columns.userId)} = ${userId})`;
 
 const holdsIdentityBy = (userId: string, subject: string): string =>
-  `EXISTS (SELECT 1 FROM ${qualified(userIdentities)} identity_row WHERE identity_row.${quotedColumn(userIdentities.columns.userId)} = ${userId} AND identity_row.${quotedColumn(userIdentities.columns.idpSubjectId)} = ${subject})`;
+	`EXISTS (SELECT 1 FROM ${qualified(userIdentities)} identity_row WHERE identity_row.${quotedColumn(userIdentities.columns.userId)} = ${userId} AND identity_row.${quotedColumn(userIdentities.columns.idpSubjectId)} = ${subject})`;
 
 const CARDINALITY_VIOLATION = '21000';
 
-const readingOneIdentity = async <Result>(
-  read: () => Promise<Result>,
-): Promise<Result> => {
-  try {
-    return await read();
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      Reflect.get(error, 'code') === CARDINALITY_VIOLATION
-    ) {
-      throw new Error(
-        'a person holds more than one identity in the store, and this reader reads one: the first release records one identity per person',
-        { cause: error },
-      );
-    }
-    throw error;
-  }
+const readingOneIdentity = async <Result>(read: () => Promise<Result>): Promise<Result> => {
+	try {
+		return await read();
+	} catch (error) {
+		if (error instanceof Error && Reflect.get(error, 'code') === CARDINALITY_VIOLATION) {
+			throw new Error(
+				'a person holds more than one identity in the store, and this reader reads one: the first release records one identity per person',
+				{ cause: error },
+			);
+		}
+		throw error;
+	}
 };
 
 /**
@@ -1859,17 +1701,17 @@ const readingOneIdentity = async <Result>(
  * @throws when the store holds no such grant, or more than one.
  */
 export const liveGrantId = async (
-  client: pg.ClientBase,
-  { category, holder, resource, role }: GrantLookup,
+	client: pg.ClientBase,
+	{ category, holder, resource, role }: GrantLookup,
 ): Promise<string> => {
-  const scoped =
-    category === undefined || category === null
-      ? category
-      : category.includes('.')
-        ? category
-        : `${GLOBAL_SCOPE}${category}`;
-  const { rows } = await client.query<{ id: string }>(
-    `SELECT held.${quotedColumn(grants.columns.id)}::text AS id
+	const scoped =
+		category === undefined || category === null
+			? category
+			: category.includes('.')
+				? category
+				: `${GLOBAL_SCOPE}${category}`;
+	const { rows } = await client.query<{ id: string }>(
+		`SELECT held.${quotedColumn(grants.columns.id)}::text AS id
        FROM ${qualified(grants)} held
        JOIN ${qualified(resources)} resource ON resource.${quotedColumn(resources.columns.id)} = held.${quotedColumn(grants.columns.resourceId)}
        JOIN ${qualified(roles)} role ON role.${quotedColumn(roles.columns.id)} = held.${quotedColumn(grants.columns.roleId)}
@@ -1879,15 +1721,13 @@ export const liveGrantId = async (
         AND held.${quotedColumn(grants.columns.revokedAt)} IS NULL
         AND ($3::boolean OR (category.${quotedColumn(categories.columns.scope)} || '.' || category.${quotedColumn(categories.columns.name)}) IS NOT DISTINCT FROM $4::text)
         AND ($5::text IS NULL OR role.${quotedColumn(roles.columns.name)} = $5)`,
-    [holder, resource, scoped === undefined, scoped ?? null, role ?? null],
-  );
-  const [found] = rows;
-  if (found !== undefined && rows.length === 1) {
-    return found.id;
-  }
-  throw new Error(
-    `the store holds ${rows.length} live grants matching that lookup on ${resource}`,
-  );
+		[holder, resource, scoped === undefined, scoped ?? null, role ?? null],
+	);
+	const [found] = rows;
+	if (found !== undefined && rows.length === 1) {
+		return found.id;
+	}
+	throw new Error(`the store holds ${rows.length} live grants matching that lookup on ${resource}`);
 };
 
 /**
@@ -1897,19 +1737,16 @@ export const liveGrantId = async (
  * @param grantId the grant's id.
  * @throws when no grant has that id.
  */
-export const isRevoked = async (
-  client: pg.ClientBase,
-  grantId: string,
-): Promise<boolean> => {
-  const { rows } = await client.query<{ revoked: boolean }>(
-    `SELECT ${quotedColumn(grants.columns.revokedAt)} IS NOT NULL AS revoked FROM ${qualified(grants)} WHERE ${quotedColumn(grants.columns.id)} = $1`,
-    [grantId],
-  );
-  const [row] = rows;
-  if (row !== undefined) {
-    return row.revoked;
-  }
-  throw new Error('no grant has that id');
+export const isRevoked = async (client: pg.ClientBase, grantId: string): Promise<boolean> => {
+	const { rows } = await client.query<{ revoked: boolean }>(
+		`SELECT ${quotedColumn(grants.columns.revokedAt)} IS NOT NULL AS revoked FROM ${qualified(grants)} WHERE ${quotedColumn(grants.columns.id)} = $1`,
+		[grantId],
+	);
+	const [row] = rows;
+	if (row !== undefined) {
+		return row.revoked;
+	}
+	throw new Error('no grant has that id');
 };
 
 /**
@@ -1920,15 +1757,15 @@ export const isRevoked = async (
  * @param revocation the grant's id, and the `users.id` of who revokes it.
  */
 export const revokeGrantInStore = async (
-  client: pg.ClientBase,
-  { grantId, revokedBy }: { grantId: string; revokedBy: string },
+	client: pg.ClientBase,
+	{ grantId, revokedBy }: { grantId: string; revokedBy: string },
 ): Promise<void> => {
-  await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    client.query(
-      `UPDATE ${qualified(grants)} SET ${quotedColumn(grants.columns.revokedAt)} = clock_timestamp(), ${quotedColumn(grants.columns.revokedBy)} = $2 WHERE ${quotedColumn(grants.columns.id)} = $1`,
-      [grantId, revokedBy],
-    ),
-  );
+	await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		client.query(
+			`UPDATE ${qualified(grants)} SET ${quotedColumn(grants.columns.revokedAt)} = clock_timestamp(), ${quotedColumn(grants.columns.revokedBy)} = $2 WHERE ${quotedColumn(grants.columns.id)} = $1`,
+			[grantId, revokedBy],
+		),
+	);
 };
 
 /**
@@ -1943,43 +1780,36 @@ export const revokeGrantInStore = async (
  * @returns the new grant's id.
  */
 export const addAcceptedOwner = (
-  client: pg.ClientBase,
-  {
-    grantedBy,
-    holderUserId,
-    resourceId,
-  }: { grantedBy: string; holderUserId: string; resourceId: string },
+	client: pg.ClientBase,
+	{ grantedBy, holderUserId, resourceId }: { grantedBy: string; holderUserId: string; resourceId: string },
 ): Promise<string> =>
-  inTransactionAs(client, SYSTEM_ACTOR, async () => {
-    const { rows } = await client.query<{ id: string }>(
-      `SELECT ${quotedColumn(roles.columns.id)}::text AS id FROM ${qualified(roles)} WHERE ${quotedColumn(roles.columns.name)} = $1`,
-      [OWNER_ROLE],
-    );
-    const [ownerRole] = rows;
-    if (ownerRole === undefined) {
-      throw new Error(`the store holds no ${OWNER_ROLE} role`);
-    }
-    const grantId = await insertWithId(client, grants, {
-      [grants.columns.expiresAt]: null,
-      [grants.columns.grantedAt]: CLOCK,
-      [grants.columns.grantedBy]: grantedBy,
-      [grants.columns.holderUserId]: holderUserId,
-      [grants.columns.recordCategoryId]: null,
-      [grants.columns.resourceId]: resourceId,
-      [grants.columns.roleId]: ownerRole.id,
-    });
-    await insertRow(client, grantDecisions, {
-      [grantDecisions.columns.capabilities]: await roleCapabilities(
-        client,
-        ownerRole.id,
-      ),
-      [grantDecisions.columns.decidedAt]: CLOCK,
-      [grantDecisions.columns.decision]: 'accepted',
-      [grantDecisions.columns.grantId]: grantId,
-      [grantDecisions.columns.userId]: holderUserId,
-    });
-    return grantId;
-  });
+	inTransactionAs(client, SYSTEM_ACTOR, async () => {
+		const { rows } = await client.query<{ id: string }>(
+			`SELECT ${quotedColumn(roles.columns.id)}::text AS id FROM ${qualified(roles)} WHERE ${quotedColumn(roles.columns.name)} = $1`,
+			[OWNER_ROLE],
+		);
+		const [ownerRole] = rows;
+		if (ownerRole === undefined) {
+			throw new Error(`the store holds no ${OWNER_ROLE} role`);
+		}
+		const grantId = await insertWithId(client, grants, {
+			[grants.columns.expiresAt]: null,
+			[grants.columns.grantedAt]: CLOCK,
+			[grants.columns.grantedBy]: grantedBy,
+			[grants.columns.holderUserId]: holderUserId,
+			[grants.columns.recordCategoryId]: null,
+			[grants.columns.resourceId]: resourceId,
+			[grants.columns.roleId]: ownerRole.id,
+		});
+		await insertRow(client, grantDecisions, {
+			[grantDecisions.columns.capabilities]: await roleCapabilities(client, ownerRole.id),
+			[grantDecisions.columns.decidedAt]: CLOCK,
+			[grantDecisions.columns.decision]: 'accepted',
+			[grantDecisions.columns.grantId]: grantId,
+			[grantDecisions.columns.userId]: holderUserId,
+		});
+		return grantId;
+	});
 
 /**
  * Retires a resource by SQL, under the system actor, in one transaction that also ends its owner
@@ -1996,23 +1826,23 @@ export const addAcceptedOwner = (
  * @throws when the store holds no resource by that externalId, nothing written.
  */
 export const retireInStore = (
-  client: pg.ClientBase,
-  { at, by, externalId }: { at?: Date; by: string; externalId: string },
+	client: pg.ClientBase,
+	{ at, by, externalId }: { at?: Date; by: string; externalId: string },
 ): Promise<readonly string[]> =>
-  inTransactionAs(client, SYSTEM_ACTOR, async () => {
-    const { rows: retired } = await client.query<{
-      id: string;
-      retiredAt: string;
-    }>(
-      `UPDATE ${qualified(resources)} SET ${quotedColumn(resources.columns.retiredAt)} = coalesce($1::timestamptz, clock_timestamp()), ${quotedColumn(resources.columns.retiredBy)} = $2 WHERE ${quotedColumn(resources.columns.externalId)} = $3 RETURNING ${quotedColumn(resources.columns.id)} AS id, ${quotedColumn(resources.columns.retiredAt)}::text AS "retiredAt"`,
-      [at ?? null, by, externalId],
-    );
-    const [resource] = retired;
-    if (resource === undefined) {
-      throw new Error(`the store holds no resource ${externalId}`);
-    }
-    const { rows: ended } = await client.query<{ id: string }>(
-      `UPDATE ${qualified(grants)} held SET ${quotedColumn(grants.columns.revokedAt)} = $1::timestamptz, ${quotedColumn(grants.columns.revokedBy)} = $2
+	inTransactionAs(client, SYSTEM_ACTOR, async () => {
+		const { rows: retired } = await client.query<{
+			id: string;
+			retiredAt: string;
+		}>(
+			`UPDATE ${qualified(resources)} SET ${quotedColumn(resources.columns.retiredAt)} = coalesce($1::timestamptz, clock_timestamp()), ${quotedColumn(resources.columns.retiredBy)} = $2 WHERE ${quotedColumn(resources.columns.externalId)} = $3 RETURNING ${quotedColumn(resources.columns.id)} AS id, ${quotedColumn(resources.columns.retiredAt)}::text AS "retiredAt"`,
+			[at ?? null, by, externalId],
+		);
+		const [resource] = retired;
+		if (resource === undefined) {
+			throw new Error(`the store holds no resource ${externalId}`);
+		}
+		const { rows: ended } = await client.query<{ id: string }>(
+			`UPDATE ${qualified(grants)} held SET ${quotedColumn(grants.columns.revokedAt)} = $1::timestamptz, ${quotedColumn(grants.columns.revokedBy)} = $2
          FROM ${qualified(roles)} role
         WHERE role.${quotedColumn(roles.columns.id)} = held.${quotedColumn(grants.columns.roleId)}
           AND role.${quotedColumn(roles.columns.name)} = $4
@@ -2021,10 +1851,10 @@ export const retireInStore = (
           AND held.${quotedColumn(grants.columns.revokedAt)} IS NULL
           AND (held.${quotedColumn(grants.columns.expiresAt)} IS NULL OR held.${quotedColumn(grants.columns.expiresAt)} > $1::timestamptz)
         RETURNING held.${quotedColumn(grants.columns.id)}::text AS id`,
-      [resource.retiredAt, by, resource.id, OWNER_ROLE],
-    );
-    return ended.map(({ id }) => id).toSorted();
-  });
+			[resource.retiredAt, by, resource.id, OWNER_ROLE],
+		);
+		return ended.map(({ id }) => id).toSorted();
+	});
 
 /**
  * Revokes a principal entirely by SQL, under the system actor, in a transaction of its own.
@@ -2033,21 +1863,21 @@ export const retireInStore = (
  * @param revocation the `users.id` revoked, who revokes, and why.
  */
 export const revokePrincipalInStore = async (
-  client: pg.ClientBase,
-  {
-    reason = 'synthetic revocation for a test',
-    revokedBy,
-    userId,
-  }: { reason?: string; revokedBy: string; userId: string },
+	client: pg.ClientBase,
+	{
+		reason = 'synthetic revocation for a test',
+		revokedBy,
+		userId,
+	}: { reason?: string; revokedBy: string; userId: string },
 ): Promise<void> => {
-  await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    insertRow(client, principalRevocations, {
-      [principalRevocations.columns.reason]: reason,
-      [principalRevocations.columns.revokedAt]: CLOCK,
-      [principalRevocations.columns.revokedBy]: revokedBy,
-      [principalRevocations.columns.userId]: userId,
-    }),
-  );
+	await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		insertRow(client, principalRevocations, {
+			[principalRevocations.columns.reason]: reason,
+			[principalRevocations.columns.revokedAt]: CLOCK,
+			[principalRevocations.columns.revokedBy]: revokedBy,
+			[principalRevocations.columns.userId]: userId,
+		}),
+	);
 };
 
 /**
@@ -2058,15 +1888,15 @@ export const revokePrincipalInStore = async (
  * @param membership the group's and the user's ids.
  */
 export const addGroupMember = async (
-  client: pg.ClientBase,
-  { groupId, userId }: { groupId: string; userId: string },
+	client: pg.ClientBase,
+	{ groupId, userId }: { groupId: string; userId: string },
 ): Promise<void> => {
-  await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    insertRow(client, groupUsers, {
-      [groupUsers.columns.groupId]: groupId,
-      [groupUsers.columns.userId]: userId,
-    }),
-  );
+	await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		insertRow(client, groupUsers, {
+			[groupUsers.columns.groupId]: groupId,
+			[groupUsers.columns.userId]: userId,
+		}),
+	);
 };
 
 /**
@@ -2076,57 +1906,57 @@ export const addGroupMember = async (
  * @param membership the group's and the user's ids.
  */
 export const removeGroupMember = async (
-  client: pg.ClientBase,
-  { groupId, userId }: { groupId: string; userId: string },
+	client: pg.ClientBase,
+	{ groupId, userId }: { groupId: string; userId: string },
 ): Promise<void> => {
-  await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    client.query(
-      `DELETE FROM ${qualified(groupUsers)} WHERE ${quotedColumn(groupUsers.columns.groupId)} = $1 AND ${quotedColumn(groupUsers.columns.userId)} = $2`,
-      [groupId, userId],
-    ),
-  );
+	await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		client.query(
+			`DELETE FROM ${qualified(groupUsers)} WHERE ${quotedColumn(groupUsers.columns.groupId)} = $1 AND ${quotedColumn(groupUsers.columns.userId)} = $2`,
+			[groupId, userId],
+		),
+	);
 };
 
 /** One notice written straight into the table, for a backlog no endpoint makes. */
 export interface NoticeInsert {
-  /** The id of the application a servedResources notice is for: its audience. */
-  audience?: string;
+	/** The id of the application a servedResources notice is for: its audience. */
+	audience?: string;
 
-  /** The transaction's clock by default. */
-  createdAt?: Date;
+	/** The transaction's clock by default. */
+	createdAt?: Date;
 
-  kind: (typeof NOTICE_KINDS)[number];
+	kind: (typeof NOTICE_KINDS)[number];
 
-  /** The externalId a category notice names. */
-  resourceExternalId?: string;
+	/** The externalId a category notice names. */
+	resourceExternalId?: string;
 
-  /** What a principal notice names, as {@link noticeSubject} gives it, written to `idp_subject_id`. */
-  subject?: string;
+	/** What a principal notice names, as {@link noticeSubject} gives it, written to `idp_subject_id`. */
+	subject?: string;
 }
 
 /** A notice as the table holds it, with its row's `xmin`. */
 export interface StoredNotice {
-  audience: string | null;
+	audience: string | null;
 
-  /** When it was written, as seconds since the Unix epoch, in text. */
-  createdAt: string;
+	/** When it was written, as seconds since the Unix epoch, in text. */
+	createdAt: string;
 
-  kind: string;
-  position: bigint;
-  resourceExternalId: string | null;
+	kind: string;
+	position: bigint;
+	resourceExternalId: string | null;
 
-  /** What `idp_subject_id` holds: a principal notice's subject, as {@link noticeSubject} gives it. */
-  subject: string | null;
+	/** What `idp_subject_id` holds: a principal notice's subject, as {@link noticeSubject} gives it. */
+	subject: string | null;
 
-  /**
-   * The id `xmin` holds for the row: that of whichever transaction or subtransaction wrote it. It
-   * cannot show that two rows were written in one top-level transaction, since a trigger writing
-   * inside an `EXCEPTION` block, or any savepoint, gets an id of its own. To show that, hold the
-   * writing transaction open, see that another session reads none of its rows, then see that it reads
-   * every one after the commit. Compare it only between rows the test wrote itself, outside any
-   * subtransaction.
-   */
-  transaction: string;
+	/**
+	 * The id `xmin` holds for the row: that of whichever transaction or subtransaction wrote it. It
+	 * cannot show that two rows were written in one top-level transaction, since a trigger writing
+	 * inside an `EXCEPTION` block, or any savepoint, gets an id of its own. To show that, hold the
+	 * writing transaction open, see that another session reads none of its rows, then see that it reads
+	 * every one after the commit. Compare it only between rows the test wrote itself, outside any
+	 * subtransaction.
+	 */
+	transaction: string;
 }
 
 const { noticeStream, notices } = POLICY_TABLES;
@@ -2141,27 +1971,24 @@ export const LOWEST_POSITION = -9_223_372_036_854_775_808n;
  * @param client a connection under the migration role, holding no transaction.
  * @param rows the notices.
  */
-export const insertNotices = async (
-  client: pg.ClientBase,
-  rows: readonly NoticeInsert[],
-): Promise<void> => {
-  const { columns } = notices;
-  await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    client.query(
-      `INSERT INTO ${qualified(notices)} (${quotedColumn(columns.kind)}, ${quotedColumn(columns.idpSubjectId)}, ${quotedColumn(columns.resourceExternalId)}, ${quotedColumn(columns.audience)}, ${quotedColumn(columns.createdAt)})
+export const insertNotices = async (client: pg.ClientBase, rows: readonly NoticeInsert[]): Promise<void> => {
+	const { columns } = notices;
+	await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		client.query(
+			`INSERT INTO ${qualified(notices)} (${quotedColumn(columns.kind)}, ${quotedColumn(columns.idpSubjectId)}, ${quotedColumn(columns.resourceExternalId)}, ${quotedColumn(columns.audience)}, ${quotedColumn(columns.createdAt)})
          SELECT kind, subject, resource, audience, coalesce(created_at, clock_timestamp())
            FROM unnest($1::text[], $2::text[], $3::text[], $4::uuid[], $5::timestamptz[])
                 WITH ORDINALITY AS row (kind, subject, resource, audience, created_at, ordinal)
           ORDER BY ordinal`,
-      [
-        rows.map(({ kind }) => kind),
-        rows.map(({ subject }) => subject ?? null),
-        rows.map(({ resourceExternalId }) => resourceExternalId ?? null),
-        rows.map(({ audience }) => audience ?? null),
-        rows.map(({ createdAt }) => createdAt ?? null),
-      ],
-    ),
-  );
+			[
+				rows.map(({ kind }) => kind),
+				rows.map(({ subject }) => subject ?? null),
+				rows.map(({ resourceExternalId }) => resourceExternalId ?? null),
+				rows.map(({ audience }) => audience ?? null),
+				rows.map(({ createdAt }) => createdAt ?? null),
+			],
+		),
+	);
 };
 
 /**
@@ -2169,16 +1996,12 @@ export const insertNotices = async (
  *
  * @param client the connection.
  */
-export const highestPosition = async (
-  client: pg.ClientBase,
-): Promise<bigint> => {
-  const { rows } = await client.query<{ position: string | null }>(
-    `SELECT max(${quotedColumn(notices.columns.position)})::text AS position FROM ${qualified(notices)}`,
-  );
-  const position = rows[0]?.position;
-  return position === null || position === undefined
-    ? LOWEST_POSITION
-    : BigInt(position);
+export const highestPosition = async (client: pg.ClientBase): Promise<bigint> => {
+	const { rows } = await client.query<{ position: string | null }>(
+		`SELECT max(${quotedColumn(notices.columns.position)})::text AS position FROM ${qualified(notices)}`,
+	);
+	const position = rows[0]?.position;
+	return position === null || position === undefined ? LOWEST_POSITION : BigInt(position);
 };
 
 /**
@@ -2188,17 +2011,15 @@ export const highestPosition = async (
  * @param position the position to read after: {@link LOWEST_POSITION} for every notice.
  */
 export const noticesAfter = async (
-  client: pg.ClientBase,
-  position: bigint = LOWEST_POSITION,
+	client: pg.ClientBase,
+	position: bigint = LOWEST_POSITION,
 ): Promise<readonly StoredNotice[]> => {
-  const { columns } = notices;
-  const { rows } = await client.query<
-    Omit<StoredNotice, 'position'> & { position: string }
-  >(
-    `SELECT ${quotedColumn(columns.audience)}::text AS audience, extract(epoch FROM ${quotedColumn(columns.createdAt)})::text AS "createdAt", ${quotedColumn(columns.kind)} AS kind, ${quotedColumn(columns.position)}::text AS position, ${quotedColumn(columns.resourceExternalId)} AS "resourceExternalId", ${quotedColumn(columns.idpSubjectId)} AS subject, xmin::text AS transaction FROM ${qualified(notices)} WHERE ${quotedColumn(columns.position)} > $1::bigint ORDER BY ${qualified(notices)}.${quotedColumn(columns.position)}`,
-    [position.toString()],
-  );
-  return rows.map((row) => ({ ...row, position: BigInt(row.position) }));
+	const { columns } = notices;
+	const { rows } = await client.query<Omit<StoredNotice, 'position'> & { position: string }>(
+		`SELECT ${quotedColumn(columns.audience)}::text AS audience, extract(epoch FROM ${quotedColumn(columns.createdAt)})::text AS "createdAt", ${quotedColumn(columns.kind)} AS kind, ${quotedColumn(columns.position)}::text AS position, ${quotedColumn(columns.resourceExternalId)} AS "resourceExternalId", ${quotedColumn(columns.idpSubjectId)} AS subject, xmin::text AS transaction FROM ${qualified(notices)} WHERE ${quotedColumn(columns.position)} > $1::bigint ORDER BY ${qualified(notices)}.${quotedColumn(columns.position)}`,
+		[position.toString()],
+	);
+	return rows.map((row) => ({ ...row, position: BigInt(row.position) }));
 };
 
 /**
@@ -2206,10 +2027,8 @@ export const noticesAfter = async (
  *
  * @param client the connection.
  */
-export const noticePositions = async (
-  client: pg.ClientBase,
-): Promise<readonly bigint[]> =>
-  (await noticesAfter(client)).map(({ position }) => position);
+export const noticePositions = async (client: pg.ClientBase): Promise<readonly bigint[]> =>
+	(await noticesAfter(client)).map(({ position }) => position);
 
 /**
  * The stream's row: its epoch and the trim watermark.
@@ -2217,20 +2036,18 @@ export const noticePositions = async (
  * @param client the connection.
  * @throws when the table holds no row.
  */
-export const readNoticeStream = async (
-  client: pg.ClientBase,
-): Promise<{ epoch: string; trimmedThrough: bigint }> => {
-  const { rows } = await client.query<{
-    epoch: string;
-    trimmedThrough: string;
-  }>(
-    `SELECT ${quotedColumn(noticeStream.columns.epoch)}::text AS epoch, ${quotedColumn(noticeStream.columns.trimmedThrough)}::text AS "trimmedThrough" FROM ${qualified(noticeStream)}`,
-  );
-  const [row] = rows;
-  if (row !== undefined) {
-    return { epoch: row.epoch, trimmedThrough: BigInt(row.trimmedThrough) };
-  }
-  throw new Error('notice_stream holds no row');
+export const readNoticeStream = async (client: pg.ClientBase): Promise<{ epoch: string; trimmedThrough: bigint }> => {
+	const { rows } = await client.query<{
+		epoch: string;
+		trimmedThrough: string;
+	}>(
+		`SELECT ${quotedColumn(noticeStream.columns.epoch)}::text AS epoch, ${quotedColumn(noticeStream.columns.trimmedThrough)}::text AS "trimmedThrough" FROM ${qualified(noticeStream)}`,
+	);
+	const [row] = rows;
+	if (row !== undefined) {
+		return { epoch: row.epoch, trimmedThrough: BigInt(row.trimmedThrough) };
+	}
+	throw new Error('notice_stream holds no row');
 };
 
 /**
@@ -2240,20 +2057,17 @@ export const readNoticeStream = async (
  * @param client a connection under the migration role, holding no transaction.
  * @param throughPosition the position trimmed through.
  */
-export const simulateTrim = async (
-  client: pg.ClientBase,
-  throughPosition: bigint,
-): Promise<void> => {
-  await inTransactionAs(client, SYSTEM_ACTOR, async () => {
-    await client.query(
-      `DELETE FROM ${qualified(notices)} WHERE ${quotedColumn(notices.columns.position)} <= $1::bigint`,
-      [throughPosition.toString()],
-    );
-    await client.query(
-      `UPDATE ${qualified(noticeStream)} SET ${quotedColumn(noticeStream.columns.trimmedThrough)} = $1::bigint`,
-      [throughPosition.toString()],
-    );
-  });
+export const simulateTrim = async (client: pg.ClientBase, throughPosition: bigint): Promise<void> => {
+	await inTransactionAs(client, SYSTEM_ACTOR, async () => {
+		await client.query(
+			`DELETE FROM ${qualified(notices)} WHERE ${quotedColumn(notices.columns.position)} <= $1::bigint`,
+			[throughPosition.toString()],
+		);
+		await client.query(
+			`UPDATE ${qualified(noticeStream)} SET ${quotedColumn(noticeStream.columns.trimmedThrough)} = $1::bigint`,
+			[throughPosition.toString()],
+		);
+	});
 };
 
 /**
@@ -2262,16 +2076,13 @@ export const simulateTrim = async (
  * @param client a connection under the migration role, holding no transaction.
  * @param epoch the epoch: a fresh one by default.
  */
-export const setEpoch = async (
-  client: pg.ClientBase,
-  epoch?: string,
-): Promise<void> => {
-  await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    client.query(
-      `UPDATE ${qualified(noticeStream)} SET ${quotedColumn(noticeStream.columns.epoch)} = coalesce($1::uuid, gen_random_uuid())`,
-      [epoch ?? null],
-    ),
-  );
+export const setEpoch = async (client: pg.ClientBase, epoch?: string): Promise<void> => {
+	await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		client.query(
+			`UPDATE ${qualified(noticeStream)} SET ${quotedColumn(noticeStream.columns.epoch)} = coalesce($1::uuid, gen_random_uuid())`,
+			[epoch ?? null],
+		),
+	);
 };
 
 /**
@@ -2282,28 +2093,28 @@ export const setEpoch = async (
  * @param restore the newest position the dump held, and what became of the epoch.
  */
 export const simulateRestore = async (
-  client: pg.ClientBase,
-  { epoch, keptThrough }: { epoch: 'kept' | 'replaced'; keptThrough: bigint },
+	client: pg.ClientBase,
+	{ epoch, keptThrough }: { epoch: 'kept' | 'replaced'; keptThrough: bigint },
 ): Promise<void> => {
-  await inTransactionAs(client, SYSTEM_ACTOR, async () => {
-    await client.query(
-      `DELETE FROM ${qualified(notices)} WHERE ${quotedColumn(notices.columns.position)} > $1::bigint`,
-      [keptThrough.toString()],
-    );
-    await client.query(
-      `ALTER TABLE ${qualified(notices)} ALTER COLUMN ${quotedColumn(notices.columns.position)} RESTART WITH ${(keptThrough + 1n).toString()}`,
-    );
-  });
-  if (epoch === 'replaced') {
-    await setEpoch(client);
-  }
+	await inTransactionAs(client, SYSTEM_ACTOR, async () => {
+		await client.query(
+			`DELETE FROM ${qualified(notices)} WHERE ${quotedColumn(notices.columns.position)} > $1::bigint`,
+			[keptThrough.toString()],
+		);
+		await client.query(
+			`ALTER TABLE ${qualified(notices)} ALTER COLUMN ${quotedColumn(notices.columns.position)} RESTART WITH ${(keptThrough + 1n).toString()}`,
+		);
+	});
+	if (epoch === 'replaced') {
+		await setEpoch(client);
+	}
 };
 
 /** A sequence's state as a snapshot holds it, for `setval` to put back. */
 interface SequenceState {
-  isCalled: boolean;
-  lastValue: string;
-  name: string;
+	isCalled: boolean;
+	lastValue: string;
+	name: string;
 }
 
 /**
@@ -2311,25 +2122,21 @@ interface SequenceState {
  * what a backup holds. Each table's rows are JSON text, so no value passes through a JavaScript number.
  */
 export interface StoreSnapshot {
-  schema: string;
-  sequences: readonly SequenceState[];
-  tables: readonly { name: string; rows: string }[];
+	schema: string;
+	sequences: readonly SequenceState[];
+	tables: readonly { name: string; rows: string }[];
 }
 
 const quotedIn = (schema: string, name: string): string =>
-  `${pg.escapeIdentifier(schema)}.${pg.escapeIdentifier(name)}`;
+	`${pg.escapeIdentifier(schema)}.${pg.escapeIdentifier(name)}`;
 
-const namesOfKind = async (
-  client: pg.ClientBase,
-  schema: string,
-  kind: 'S' | 'r',
-): Promise<readonly string[]> =>
-  (
-    await client.query<{ name: string }>(
-      'SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relkind = $2 ORDER BY c.relname',
-      [schema, kind],
-    )
-  ).rows.map(({ name }) => name);
+const namesOfKind = async (client: pg.ClientBase, schema: string, kind: 'S' | 'r'): Promise<readonly string[]> =>
+	(
+		await client.query<{ name: string }>(
+			'SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relkind = $2 ORDER BY c.relname',
+			[schema, kind],
+		)
+	).rows.map(({ name }) => name);
 
 /**
  * Takes a snapshot of a database's store as a backup would, while the Controller runs: in one
@@ -2340,108 +2147,90 @@ const namesOfKind = async (
  * @param schema the schema: the one named for Usher by default.
  */
 export const takeStoreSnapshot = async (
-  client: pg.ClientBase,
-  schema: string = USHER_SCHEMA,
+	client: pg.ClientBase,
+	schema: string = USHER_SCHEMA,
 ): Promise<StoreSnapshot> => {
-  await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-  try {
-    const tables = await inTurn(
-      await namesOfKind(client, schema, 'r'),
-      async (name) => {
-        const { rows } = await client.query<{ rows: string }>(
-          `SELECT coalesce(jsonb_agg(to_jsonb(held)), '[]'::jsonb)::text AS rows FROM ${quotedIn(schema, name)} AS held`,
-        );
-        return { name, rows: rows[0]?.rows ?? '[]' };
-      },
-    );
-    const sequences = await inTurn(
-      await namesOfKind(client, schema, 'S'),
-      async (name) => {
-        const { rows } = await client.query<{
-          isCalled: boolean;
-          lastValue: string;
-        }>(
-          `SELECT last_value::text AS "lastValue", is_called AS "isCalled" FROM ${quotedIn(schema, name)}`,
-        );
-        const [state] = rows;
-        if (state !== undefined) {
-          return { ...state, name };
-        }
-        throw new Error(`the sequence ${name} gave no state`);
-      },
-    );
-    await client.query('COMMIT');
-    return { schema, sequences, tables };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  }
+	await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+	try {
+		const tables = await inTurn(await namesOfKind(client, schema, 'r'), async (name) => {
+			const { rows } = await client.query<{ rows: string }>(
+				`SELECT coalesce(jsonb_agg(to_jsonb(held)), '[]'::jsonb)::text AS rows FROM ${quotedIn(schema, name)} AS held`,
+			);
+			return { name, rows: rows[0]?.rows ?? '[]' };
+		});
+		const sequences = await inTurn(await namesOfKind(client, schema, 'S'), async (name) => {
+			const { rows } = await client.query<{
+				isCalled: boolean;
+				lastValue: string;
+			}>(`SELECT last_value::text AS "lastValue", is_called AS "isCalled" FROM ${quotedIn(schema, name)}`);
+			const [state] = rows;
+			if (state !== undefined) {
+				return { ...state, name };
+			}
+			throw new Error(`the sequence ${name} gave no state`);
+		});
+		await client.query('COMMIT');
+		return { schema, sequences, tables };
+	} catch (error) {
+		await client.query('ROLLBACK');
+		throw error;
+	}
 };
 
 // Each table after every table it references, so the foreign keys PostgreSQL checks at each statement
 // hold as the rows go back. A table referencing itself is written in one statement, which they hold
 // at its end.
 const referenceOrder = async (
-  client: pg.ClientBase,
-  schema: string,
-  names: readonly string[],
+	client: pg.ClientBase,
+	schema: string,
+	names: readonly string[],
 ): Promise<readonly string[]> => {
-  const { rows } = await client.query<{
-    referenced: string;
-    referencing: string;
-  }>(
-    `SELECT referencing.relname AS referencing, referenced.relname AS referenced
+	const { rows } = await client.query<{
+		referenced: string;
+		referencing: string;
+	}>(
+		`SELECT referencing.relname AS referencing, referenced.relname AS referenced
        FROM pg_constraint constraint_row
        JOIN pg_class referencing ON referencing.oid = constraint_row.conrelid
        JOIN pg_class referenced ON referenced.oid = constraint_row.confrelid
        JOIN pg_namespace namespace ON namespace.oid = referencing.relnamespace
       WHERE constraint_row.contype = 'f' AND namespace.nspname = $1 AND referencing.oid <> referenced.oid`,
-    [schema],
-  );
-  const placed = (
-    order: readonly string[],
-    remaining: readonly string[],
-  ): readonly string[] => {
-    const ready = remaining.filter((name) =>
-      rows
-        .filter(({ referencing }) => referencing === name)
-        .every(
-          ({ referenced }) =>
-            order.includes(referenced) || !remaining.includes(referenced),
-        ),
-    );
-    if (remaining.length === 0) {
-      return order;
-    }
-    if (ready.length > 0) {
-      return placed(
-        [...order, ...ready],
-        remaining.filter((name) => !ready.includes(name)),
-      );
-    }
-    throw new Error(
-      `the tables ${remaining.join(', ')} reference each other in a cycle, which a restore by statements cannot order`,
-    );
-  };
-  return placed([], names);
+		[schema],
+	);
+	const placed = (order: readonly string[], remaining: readonly string[]): readonly string[] => {
+		const ready = remaining.filter((name) =>
+			rows
+				.filter(({ referencing }) => referencing === name)
+				.every(({ referenced }) => order.includes(referenced) || !remaining.includes(referenced)),
+		);
+		if (remaining.length === 0) {
+			return order;
+		}
+		if (ready.length > 0) {
+			return placed(
+				[...order, ...ready],
+				remaining.filter((name) => !ready.includes(name)),
+			);
+		}
+		throw new Error(
+			`the tables ${remaining.join(', ')} reference each other in a cycle, which a restore by statements cannot order`,
+		);
+	};
+	return placed([], names);
 };
 
-const insertableColumns = async (
-  client: pg.ClientBase,
-  schema: string,
-  name: string,
-): Promise<readonly string[]> =>
-  (
-    await client.query<{ column: string }>(
-      `SELECT attname AS column FROM pg_attribute WHERE attrelid = $1::regclass AND attnum > 0 AND NOT attisdropped AND attgenerated = '' ORDER BY attnum`,
-      [quotedIn(schema, name)],
-    )
-  ).rows.map(({ column }) => column);
+const insertableColumns = async (client: pg.ClientBase, schema: string, name: string): Promise<readonly string[]> =>
+	(
+		await client.query<{ column: string }>(
+			`SELECT attname AS column FROM pg_attribute WHERE attrelid = $1::regclass AND attnum > 0 AND NOT attisdropped AND attgenerated = '' ORDER BY attnum`,
+			[quotedIn(schema, name)],
+		)
+	).rows.map(({ column }) => column);
 
 const TRIGGER_ENABLING: Readonly<Record<string, string>> = Object.freeze({
-  A: 'ENABLE ALWAYS',
-  O: 'ENABLE',
-  R: 'ENABLE REPLICA',
+	A: 'ENABLE ALWAYS',
+	O: 'ENABLE',
+	R: 'ENABLE REPLICA',
 });
 
 /**
@@ -2457,52 +2246,44 @@ const TRIGGER_ENABLING: Readonly<Record<string, string>> = Object.freeze({
  * @param snapshot what {@link takeStoreSnapshot} took.
  */
 export const restoreStoreSnapshot = async (
-  client: pg.ClientBase,
-  { schema, sequences, tables }: StoreSnapshot,
+	client: pg.ClientBase,
+	{ schema, sequences, tables }: StoreSnapshot,
 ): Promise<void> => {
-  const names = tables.map(({ name }) => name);
-  const rowsOf = new Map(tables.map(({ name, rows }) => [name, rows]));
-  await inTransactionAs(client, SYSTEM_ACTOR, async () => {
-    const { rows: triggers } = await client.query<{
-      enabled: string;
-      table: string;
-      trigger: string;
-    }>(
-      `SELECT c.relname AS table, t.tgname AS trigger, t.tgenabled AS enabled FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND NOT t.tgisinternal AND t.tgenabled <> 'D' ORDER BY 1, 2`,
-      [schema],
-    );
-    await inTurn(triggers, ({ table, trigger }) =>
-      client.query(
-        `ALTER TABLE ${quotedIn(schema, table)} DISABLE TRIGGER ${pg.escapeIdentifier(trigger)}`,
-      ),
-    );
-    if (names.length > 0) {
-      await client.query(
-        `TRUNCATE ${names.map((name) => quotedIn(schema, name)).join(', ')}`,
-      );
-    }
-    await inTurn(await referenceOrder(client, schema, names), async (name) => {
-      const columns = (await insertableColumns(client, schema, name))
-        .map((column) => pg.escapeIdentifier(column))
-        .join(', ');
-      await client.query(
-        `INSERT INTO ${quotedIn(schema, name)} (${columns}) OVERRIDING SYSTEM VALUE SELECT ${columns} FROM jsonb_populate_recordset(NULL::${quotedIn(schema, name)}, $1::jsonb)`,
-        [rowsOf.get(name) ?? '[]'],
-      );
-    });
-    await inTurn(sequences, ({ isCalled, lastValue, name }) =>
-      client.query('SELECT setval($1::regclass, $2::bigint, $3)', [
-        quotedIn(schema, name),
-        lastValue,
-        isCalled,
-      ]),
-    );
-    await inTurn(triggers, ({ enabled, table, trigger }) =>
-      client.query(
-        `ALTER TABLE ${quotedIn(schema, table)} ${TRIGGER_ENABLING[enabled] ?? 'ENABLE'} TRIGGER ${pg.escapeIdentifier(trigger)}`,
-      ),
-    );
-  });
+	const names = tables.map(({ name }) => name);
+	const rowsOf = new Map(tables.map(({ name, rows }) => [name, rows]));
+	await inTransactionAs(client, SYSTEM_ACTOR, async () => {
+		const { rows: triggers } = await client.query<{
+			enabled: string;
+			table: string;
+			trigger: string;
+		}>(
+			`SELECT c.relname AS table, t.tgname AS trigger, t.tgenabled AS enabled FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND NOT t.tgisinternal AND t.tgenabled <> 'D' ORDER BY 1, 2`,
+			[schema],
+		);
+		await inTurn(triggers, ({ table, trigger }) =>
+			client.query(`ALTER TABLE ${quotedIn(schema, table)} DISABLE TRIGGER ${pg.escapeIdentifier(trigger)}`),
+		);
+		if (names.length > 0) {
+			await client.query(`TRUNCATE ${names.map((name) => quotedIn(schema, name)).join(', ')}`);
+		}
+		await inTurn(await referenceOrder(client, schema, names), async (name) => {
+			const columns = (await insertableColumns(client, schema, name))
+				.map((column) => pg.escapeIdentifier(column))
+				.join(', ');
+			await client.query(
+				`INSERT INTO ${quotedIn(schema, name)} (${columns}) OVERRIDING SYSTEM VALUE SELECT ${columns} FROM jsonb_populate_recordset(NULL::${quotedIn(schema, name)}, $1::jsonb)`,
+				[rowsOf.get(name) ?? '[]'],
+			);
+		});
+		await inTurn(sequences, ({ isCalled, lastValue, name }) =>
+			client.query('SELECT setval($1::regclass, $2::bigint, $3)', [quotedIn(schema, name), lastValue, isCalled]),
+		);
+		await inTurn(triggers, ({ enabled, table, trigger }) =>
+			client.query(
+				`ALTER TABLE ${quotedIn(schema, table)} ${TRIGGER_ENABLING[enabled] ?? 'ENABLE'} TRIGGER ${pg.escapeIdentifier(trigger)}`,
+			),
+		);
+	});
 };
 
 /**
@@ -2514,12 +2295,10 @@ export const restoreStoreSnapshot = async (
  * @param except the tables left out, as entries of {@link POLICY_TABLES}: none by default.
  */
 export const tablesOf = (
-  snapshot: StoreSnapshot,
-  except: readonly { name: string }[] = [],
+	snapshot: StoreSnapshot,
+	except: readonly { name: string }[] = [],
 ): readonly { name: string; rows: string }[] =>
-  snapshot.tables.filter(({ name }) =>
-    except.every((table) => table.name !== name),
-  );
+	snapshot.tables.filter(({ name }) => except.every((table) => table.name !== name));
 
 /**
  * The rows one table held in a snapshot, parsed; none for a table the snapshot did not read.
@@ -2527,32 +2306,28 @@ export const tablesOf = (
  * @param snapshot what {@link takeStoreSnapshot} took.
  * @param table an entry of {@link POLICY_TABLES}.
  */
-export const rowsIn = (
-  snapshot: StoreSnapshot,
-  table: { name: string },
-): readonly unknown[] => {
-  const held = snapshot.tables.find(({ name }) => name === table.name);
-  const parsed: unknown = JSON.parse(held?.rows ?? '[]');
-  return Array.isArray(parsed) ? parsed : [];
+export const rowsIn = (snapshot: StoreSnapshot, table: { name: string }): readonly unknown[] => {
+	const held = snapshot.tables.find(({ name }) => name === table.name);
+	const parsed: unknown = JSON.parse(held?.rows ?? '[]');
+	return Array.isArray(parsed) ? parsed : [];
 };
 
 /** A hold on the writers of notices naming chosen subjects, installed for one test. */
 export interface NoticeHold {
-  /** Lets every held writer go on. */
-  release(): Promise<void>;
+	/** Lets every held writer go on. */
+	release(): Promise<void>;
 
-  /** Releases any hold and removes the instrumentation. */
-  remove(): Promise<void>;
+	/** Releases any hold and removes the instrumentation. */
+	remove(): Promise<void>;
 
-  /** Settles once as many writers as given wait on the hold, or throws after 10 s. */
-  waitUntilHeld(count?: number): Promise<void>;
+	/** Settles once as many writers as given wait on the hold, or throws after 10 s. */
+	waitUntilHeld(count?: number): Promise<void>;
 }
 
 // A test-reserved pair of advisory lock keys, apart from every key the support code takes.
 const HOLD_LOCK = Object.freeze({ classid: 210, objid: 1 });
 
-const testObject = (name: string): string =>
-  `${pg.escapeIdentifier(USHER_SCHEMA)}.${pg.escapeIdentifier(name)}`;
+const testObject = (name: string): string => `${pg.escapeIdentifier(USHER_SCHEMA)}.${pg.escapeIdentifier(name)}`;
 
 /**
  * Installs #210's holding trigger under the migration role: after a notice naming one of the
@@ -2565,78 +2340,61 @@ const testObject = (name: string): string =>
  * @param subjects what the held notices name, as {@link noticeSubject} gives it.
  */
 export const holdNoticesNaming = async (
-  scope: Cleanup,
-  client: pg.ClientBase,
-  subjects: readonly string[],
+	scope: Cleanup,
+	client: pg.ClientBase,
+	subjects: readonly string[],
 ): Promise<NoticeHold> => {
-  const heldTable = testObject('test_held_notice_subjects');
-  const holdFunction = testObject('test_hold_notice');
-  await client.query(
-    `CREATE TABLE ${heldTable} (idp_subject_id text PRIMARY KEY)`,
-  );
-  await client.query(
-    `INSERT INTO ${heldTable} (idp_subject_id) SELECT unnest($1::text[])`,
-    [subjects],
-  );
-  await client.query(
-    `CREATE FUNCTION ${holdFunction}() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $hold$ BEGIN IF EXISTS (SELECT 1 FROM ${heldTable} WHERE idp_subject_id = NEW.${quotedColumn(notices.columns.idpSubjectId)}) THEN PERFORM pg_advisory_xact_lock(${HOLD_LOCK.classid}, ${HOLD_LOCK.objid}); END IF; RETURN NULL; END $hold$`,
-  );
-  await client.query(
-    `CREATE TRIGGER test_hold_notice AFTER INSERT ON ${qualified(notices)} FOR EACH ROW EXECUTE FUNCTION ${holdFunction}()`,
-  );
-  await client.query('SELECT pg_advisory_lock($1, $2)', [
-    HOLD_LOCK.classid,
-    HOLD_LOCK.objid,
-  ]);
-  const state = { held: true, removed: false };
-  const release = async (): Promise<void> => {
-    if (state.held) {
-      state.held = false;
-      await client.query('SELECT pg_advisory_unlock($1, $2)', [
-        HOLD_LOCK.classid,
-        HOLD_LOCK.objid,
-      ]);
-    }
-  };
-  const remove = async (): Promise<void> => {
-    await release();
-    if (state.removed) {
-      return;
-    }
-    state.removed = true;
-    await client.query(
-      `DROP TRIGGER test_hold_notice ON ${qualified(notices)}`,
-    );
-    await client.query(`DROP FUNCTION ${holdFunction}()`);
-    await client.query(`DROP TABLE ${heldTable}`);
-  };
-  scope.defer(remove);
-  const waiting = async (): Promise<number> => {
-    const { rows } = await client.query<{ waiting: number }>(
-      "SELECT count(*)::int AS waiting FROM pg_locks WHERE locktype = 'advisory' AND classid = $1 AND objid = $2 AND objsubid = 2 AND NOT granted",
-      [HOLD_LOCK.classid, HOLD_LOCK.objid],
-    );
-    return rows[0]?.waiting ?? 0;
-  };
-  return {
-    release,
-    remove,
-    waitUntilHeld: async (count = 1) => {
-      if (
-        await eventually(async () => (await waiting()) >= count, 10_000, 20)
-      ) {
-        return;
-      }
-      throw new Error(
-        `no ${count} writer of a held notice waited on the hold within 10 s`,
-      );
-    },
-  };
+	const heldTable = testObject('test_held_notice_subjects');
+	const holdFunction = testObject('test_hold_notice');
+	await client.query(`CREATE TABLE ${heldTable} (idp_subject_id text PRIMARY KEY)`);
+	await client.query(`INSERT INTO ${heldTable} (idp_subject_id) SELECT unnest($1::text[])`, [subjects]);
+	await client.query(
+		`CREATE FUNCTION ${holdFunction}() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $hold$ BEGIN IF EXISTS (SELECT 1 FROM ${heldTable} WHERE idp_subject_id = NEW.${quotedColumn(notices.columns.idpSubjectId)}) THEN PERFORM pg_advisory_xact_lock(${HOLD_LOCK.classid}, ${HOLD_LOCK.objid}); END IF; RETURN NULL; END $hold$`,
+	);
+	await client.query(
+		`CREATE TRIGGER test_hold_notice AFTER INSERT ON ${qualified(notices)} FOR EACH ROW EXECUTE FUNCTION ${holdFunction}()`,
+	);
+	await client.query('SELECT pg_advisory_lock($1, $2)', [HOLD_LOCK.classid, HOLD_LOCK.objid]);
+	const state = { held: true, removed: false };
+	const release = async (): Promise<void> => {
+		if (state.held) {
+			state.held = false;
+			await client.query('SELECT pg_advisory_unlock($1, $2)', [HOLD_LOCK.classid, HOLD_LOCK.objid]);
+		}
+	};
+	const remove = async (): Promise<void> => {
+		await release();
+		if (state.removed) {
+			return;
+		}
+		state.removed = true;
+		await client.query(`DROP TRIGGER test_hold_notice ON ${qualified(notices)}`);
+		await client.query(`DROP FUNCTION ${holdFunction}()`);
+		await client.query(`DROP TABLE ${heldTable}`);
+	};
+	scope.defer(remove);
+	const waiting = async (): Promise<number> => {
+		const { rows } = await client.query<{ waiting: number }>(
+			"SELECT count(*)::int AS waiting FROM pg_locks WHERE locktype = 'advisory' AND classid = $1 AND objid = $2 AND objsubid = 2 AND NOT granted",
+			[HOLD_LOCK.classid, HOLD_LOCK.objid],
+		);
+		return rows[0]?.waiting ?? 0;
+	};
+	return {
+		release,
+		remove,
+		waitUntilHeld: async (count = 1) => {
+			if (await eventually(async () => (await waiting()) >= count, 10_000, 20)) {
+				return;
+			}
+			throw new Error(`no ${count} writer of a held notice waited on the hold within 10 s`);
+		},
+	};
 };
 
 /** A trigger refusing every notice write, installed for one test. */
 export interface NoticeRefusal {
-  remove(): Promise<void>;
+	remove(): Promise<void>;
 }
 
 /**
@@ -2646,39 +2404,34 @@ export interface NoticeRefusal {
  * @param scope the cleanup removing it.
  * @param client a connection under the migration role.
  */
-export const refuseNoticeWrites = async (
-  scope: Cleanup,
-  client: pg.ClientBase,
-): Promise<NoticeRefusal> => {
-  const refusal = testObject('test_refuse_notice');
-  await client.query(
-    `CREATE FUNCTION ${refusal}() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog AS $refuse$ BEGIN RAISE EXCEPTION 'a test refuses this notice write'; END $refuse$`,
-  );
-  await client.query(
-    `CREATE TRIGGER test_refuse_notice AFTER INSERT ON ${qualified(notices)} FOR EACH ROW EXECUTE FUNCTION ${refusal}()`,
-  );
-  const state = { removed: false };
-  const remove = async (): Promise<void> => {
-    if (state.removed) {
-      return;
-    }
-    state.removed = true;
-    await client.query(
-      `DROP TRIGGER test_refuse_notice ON ${qualified(notices)}`,
-    );
-    await client.query(`DROP FUNCTION ${refusal}()`);
-  };
-  scope.defer(remove);
-  return { remove };
+export const refuseNoticeWrites = async (scope: Cleanup, client: pg.ClientBase): Promise<NoticeRefusal> => {
+	const refusal = testObject('test_refuse_notice');
+	await client.query(
+		`CREATE FUNCTION ${refusal}() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog AS $refuse$ BEGIN RAISE EXCEPTION 'a test refuses this notice write'; END $refuse$`,
+	);
+	await client.query(
+		`CREATE TRIGGER test_refuse_notice AFTER INSERT ON ${qualified(notices)} FOR EACH ROW EXECUTE FUNCTION ${refusal}()`,
+	);
+	const state = { removed: false };
+	const remove = async (): Promise<void> => {
+		if (state.removed) {
+			return;
+		}
+		state.removed = true;
+		await client.query(`DROP TRIGGER test_refuse_notice ON ${qualified(notices)}`);
+		await client.query(`DROP FUNCTION ${refusal}()`);
+	};
+	scope.defer(remove);
+	return { remove };
 };
 
 /** A fault a test injected at the store, until removed. */
 export interface InjectedFault {
-  /** How many inserts into the table the fault has seen, the failed one included, rolled back or not. */
-  attempts(): Promise<number>;
+	/** How many inserts into the table the fault has seen, the failed one included, rolled back or not. */
+	attempts(): Promise<number>;
 
-  /** Drops the fault's trigger, its function and its counter; removing again does nothing. */
-  remove(): Promise<void>;
+	/** Drops the fault's trigger, its function and its counter; removing again does nothing. */
+	remove(): Promise<void>;
 }
 
 /** The schema a fault's counter and function live in, apart from the schema named for Usher, so no read of the store's tables or sequences finds them. */
@@ -2698,56 +2451,52 @@ export const FAULT_SCHEMA = 'usher_test_faults';
  * @param insert which insert fails: 5 for the fifth.
  */
 export const failNthInsert = async (
-  scope: Cleanup,
-  client: pg.ClientBase,
-  table: { name: string },
-  insert: number,
+	scope: Cleanup,
+	client: pg.ClientBase,
+	table: { name: string },
+	insert: number,
 ): Promise<InjectedFault> => {
-  const name = `fault_${randomBytes(6).toString('hex')}`;
-  const inFaultSchema = (object: string): string =>
-    `${pg.escapeIdentifier(FAULT_SCHEMA)}.${pg.escapeIdentifier(object)}`;
-  const counter = inFaultSchema(`${name}_inserts`);
-  const raising = inFaultSchema(name);
-  await client.query(
-    `CREATE SCHEMA IF NOT EXISTS ${pg.escapeIdentifier(FAULT_SCHEMA)}`,
-  );
-  await client.query(`CREATE SEQUENCE ${counter}`);
-  await client.query(
-    `CREATE FUNCTION ${raising}() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $fault$ BEGIN IF nextval(${pg.escapeLiteral(counter)}::regclass) = ${String(Math.trunc(insert))} THEN RAISE EXCEPTION 'a test injected a fault at this insert'; END IF; RETURN NEW; END $fault$`,
-  );
-  await client.query(
-    `CREATE TRIGGER ${pg.escapeIdentifier(name)} BEFORE INSERT ON ${qualified(table)} FOR EACH ROW EXECUTE FUNCTION ${raising}()`,
-  );
-  const state = { removed: false };
-  const remove = async (): Promise<void> => {
-    if (state.removed) {
-      return;
-    }
-    state.removed = true;
-    await client.query(
-      `DROP TRIGGER ${pg.escapeIdentifier(name)} ON ${qualified(table)}`,
-    );
-    await client.query(`DROP FUNCTION ${raising}()`);
-    await client.query(`DROP SEQUENCE ${counter}`);
-  };
-  scope.defer(remove);
-  return {
-    attempts: async () => {
-      const { rows } = await client.query<{ attempts: string }>(
-        `SELECT CASE WHEN is_called THEN last_value ELSE 0 END::text AS attempts FROM ${counter}`,
-      );
-      return Number(rows[0]?.attempts ?? 0);
-    },
-    remove,
-  };
+	const name = `fault_${randomBytes(6).toString('hex')}`;
+	const inFaultSchema = (object: string): string =>
+		`${pg.escapeIdentifier(FAULT_SCHEMA)}.${pg.escapeIdentifier(object)}`;
+	const counter = inFaultSchema(`${name}_inserts`);
+	const raising = inFaultSchema(name);
+	await client.query(`CREATE SCHEMA IF NOT EXISTS ${pg.escapeIdentifier(FAULT_SCHEMA)}`);
+	await client.query(`CREATE SEQUENCE ${counter}`);
+	await client.query(
+		`CREATE FUNCTION ${raising}() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $fault$ BEGIN IF nextval(${pg.escapeLiteral(counter)}::regclass) = ${String(Math.trunc(insert))} THEN RAISE EXCEPTION 'a test injected a fault at this insert'; END IF; RETURN NEW; END $fault$`,
+	);
+	await client.query(
+		`CREATE TRIGGER ${pg.escapeIdentifier(name)} BEFORE INSERT ON ${qualified(table)} FOR EACH ROW EXECUTE FUNCTION ${raising}()`,
+	);
+	const state = { removed: false };
+	const remove = async (): Promise<void> => {
+		if (state.removed) {
+			return;
+		}
+		state.removed = true;
+		await client.query(`DROP TRIGGER ${pg.escapeIdentifier(name)} ON ${qualified(table)}`);
+		await client.query(`DROP FUNCTION ${raising}()`);
+		await client.query(`DROP SEQUENCE ${counter}`);
+	};
+	scope.defer(remove);
+	return {
+		attempts: async () => {
+			const { rows } = await client.query<{ attempts: string }>(
+				`SELECT CASE WHEN is_called THEN last_value ELSE 0 END::text AS attempts FROM ${counter}`,
+			);
+			return Number(rows[0]?.attempts ?? 0);
+		},
+		remove,
+	};
 };
 
 const rowsOf = async (
-  client: pg.ClientBase,
-  text: string,
-  parameters: readonly unknown[] = [],
+	client: pg.ClientBase,
+	text: string,
+	parameters: readonly unknown[] = [],
 ): Promise<readonly Readonly<Record<string, unknown>>[]> =>
-  (await client.query<Record<string, unknown>>(text, [...parameters])).rows;
+	(await client.query<Record<string, unknown>>(text, [...parameters])).rows;
 
 const { applicationKeys, changeRecords, keyFingerprints } = POLICY_TABLES;
 
@@ -2760,22 +2509,19 @@ const { applicationKeys, changeRecords, keyFingerprints } = POLICY_TABLES;
  * @param keyId the key's id.
  * @throws when no stored key has that id.
  */
-export const alterEncryptedKey = async (
-  client: pg.ClientBase,
-  keyId: string,
-): Promise<void> => {
-  const encrypted = quotedColumn(applicationKeys.columns.encryptedKey);
-  const lastByte = `length(${encrypted}) - 1`;
-  const { rowCount } = await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    client.query(
-      `UPDATE ${qualified(applicationKeys)} SET ${encrypted} = set_byte(${encrypted}, ${lastByte}, get_byte(${encrypted}, ${lastByte}) # 1) WHERE ${quotedColumn(applicationKeys.columns.id)}::text = $1`,
-      [keyId],
-    ),
-  );
-  if (rowCount === 1) {
-    return;
-  }
-  throw new Error(`no stored application key has the id ${keyId}`);
+export const alterEncryptedKey = async (client: pg.ClientBase, keyId: string): Promise<void> => {
+	const encrypted = quotedColumn(applicationKeys.columns.encryptedKey);
+	const lastByte = `length(${encrypted}) - 1`;
+	const { rowCount } = await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		client.query(
+			`UPDATE ${qualified(applicationKeys)} SET ${encrypted} = set_byte(${encrypted}, ${lastByte}, get_byte(${encrypted}, ${lastByte}) # 1) WHERE ${quotedColumn(applicationKeys.columns.id)}::text = $1`,
+			[keyId],
+		),
+	);
+	if (rowCount === 1) {
+		return;
+	}
+	throw new Error(`no stored application key has the id ${keyId}`);
 };
 
 /**
@@ -2789,25 +2535,19 @@ export const alterEncryptedKey = async (
  * @param toKeyId the id of the key overwritten by the copy.
  * @throws when either id names no stored key.
  */
-export const copyEncryptedKey = async (
-  client: pg.ClientBase,
-  fromKeyId: string,
-  toKeyId: string,
-): Promise<void> => {
-  const encrypted = quotedColumn(applicationKeys.columns.encryptedKey);
-  const id = quotedColumn(applicationKeys.columns.id);
-  const { rowCount } = await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    client.query(
-      `UPDATE ${qualified(applicationKeys)} AS target SET ${encrypted} = source.${encrypted} FROM ${qualified(applicationKeys)} AS source WHERE source.${id}::text = $1 AND target.${id}::text = $2`,
-      [fromKeyId, toKeyId],
-    ),
-  );
-  if (rowCount === 1) {
-    return;
-  }
-  throw new Error(
-    `no stored application keys have the ids ${fromKeyId} and ${toKeyId}`,
-  );
+export const copyEncryptedKey = async (client: pg.ClientBase, fromKeyId: string, toKeyId: string): Promise<void> => {
+	const encrypted = quotedColumn(applicationKeys.columns.encryptedKey);
+	const id = quotedColumn(applicationKeys.columns.id);
+	const { rowCount } = await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		client.query(
+			`UPDATE ${qualified(applicationKeys)} AS target SET ${encrypted} = source.${encrypted} FROM ${qualified(applicationKeys)} AS source WHERE source.${id}::text = $1 AND target.${id}::text = $2`,
+			[fromKeyId, toKeyId],
+		),
+	);
+	if (rowCount === 1) {
+		return;
+	}
+	throw new Error(`no stored application keys have the ids ${fromKeyId} and ${toKeyId}`);
 };
 
 /**
@@ -2817,26 +2557,26 @@ export const copyEncryptedKey = async (
  * @param client a connection under the migration role.
  */
 export const storedKeyFingerprints = async (
-  client: pg.ClientBase,
+	client: pg.ClientBase,
 ): Promise<readonly { fingerprint: string; keyName: string }[]> =>
-  (
-    await rowsOf(
-      client,
-      `SELECT encode(${quotedColumn(keyFingerprints.columns.fingerprint)}, 'hex') AS fingerprint, ${quotedColumn(keyFingerprints.columns.keyName)} AS key_name FROM ${qualified(keyFingerprints)} ORDER BY key_name`,
-    )
-  ).map((row) => ({
-    fingerprint: String(row['fingerprint']),
-    keyName: String(row['key_name']),
-  }));
+	(
+		await rowsOf(
+			client,
+			`SELECT encode(${quotedColumn(keyFingerprints.columns.fingerprint)}, 'hex') AS fingerprint, ${quotedColumn(keyFingerprints.columns.keyName)} AS key_name FROM ${qualified(keyFingerprints)} ORDER BY key_name`,
+		)
+	).map((row) => ({
+		fingerprint: String(row['fingerprint']),
+		keyName: String(row['key_name']),
+	}));
 
 /** What the policy tables the resource operations write hold, for a test showing that a refusal wrote nothing. */
 export interface PolicySnapshot {
-  applicationResources: readonly unknown[];
-  categories: readonly unknown[];
-  fieldValues: readonly unknown[];
-  fields: readonly unknown[];
-  grants: readonly unknown[];
-  resources: readonly unknown[];
+	applicationResources: readonly unknown[];
+	categories: readonly unknown[];
+	fieldValues: readonly unknown[];
+	fields: readonly unknown[];
+	grants: readonly unknown[];
+	resources: readonly unknown[];
 }
 
 /**
@@ -2846,50 +2586,41 @@ export interface PolicySnapshot {
  *
  * @param client a connection under the migration role.
  */
-export const policySnapshot = async (
-  client: pg.ClientBase,
-): Promise<PolicySnapshot> => {
-  const [
-    servedRows,
-    categoryRows,
-    fieldValueRows,
-    fieldRows,
-    grantRows,
-    resourceRows,
-  ] = await Promise.all([
-    rowsOf(
-      client,
-      `SELECT ${quotedColumn(applicationResources.columns.applicationId)}::text AS application, ${quotedColumn(applicationResources.columns.resourceId)}::text AS resource FROM ${qualified(applicationResources)} ORDER BY 1, 2`,
-    ),
-    rowsOf(
-      client,
-      `SELECT ${quotedColumn(categories.columns.scope)}::text AS scope, ${quotedColumn(categories.columns.name)} AS name, ${quotedColumn(categories.columns.description)} AS description, ${quotedColumn(categories.columns.resourceId)}::text AS resource FROM ${qualified(categories)} ORDER BY 1, 2, 4`,
-    ),
-    rowsOf(
-      client,
-      `SELECT ${quotedColumn(resourceFieldValues.columns.resourceId)}::text AS resource, ${quotedColumn(resourceFieldValues.columns.fieldId)}::text AS field, ${quotedColumn(resourceFieldValues.columns.value)} AS value FROM ${qualified(resourceFieldValues)} ORDER BY 1, 2`,
-    ),
-    rowsOf(
-      client,
-      `SELECT ${quotedColumn(resourceFields.columns.name)} AS name, ${quotedColumn(resourceFields.columns.description)} AS description FROM ${qualified(resourceFields)} ORDER BY 1`,
-    ),
-    rowsOf(
-      client,
-      `SELECT ${quotedColumn(grants.columns.id)}::text AS id, ${quotedColumn(grants.columns.revokedAt)}::text AS revoked FROM ${qualified(grants)} ORDER BY 1`,
-    ),
-    rowsOf(
-      client,
-      `SELECT ${quotedColumn(resources.columns.externalId)} AS external_id, ${quotedColumn(resources.columns.name)} AS name, ${quotedColumn(resources.columns.description)} AS description, ${quotedColumn(resources.columns.baseTier)}::text AS tier, ${quotedColumn(resources.columns.suppressed)} AS suppressed, ${quotedColumn(resources.columns.retiredAt)}::text AS retired, ${quotedColumn(resources.columns.updatedAt)}::text AS updated FROM ${qualified(resources)} ORDER BY 1`,
-    ),
-  ]);
-  return {
-    applicationResources: servedRows,
-    categories: categoryRows,
-    fieldValues: fieldValueRows,
-    fields: fieldRows,
-    grants: grantRows,
-    resources: resourceRows,
-  };
+export const policySnapshot = async (client: pg.ClientBase): Promise<PolicySnapshot> => {
+	const [servedRows, categoryRows, fieldValueRows, fieldRows, grantRows, resourceRows] = await Promise.all([
+		rowsOf(
+			client,
+			`SELECT ${quotedColumn(applicationResources.columns.applicationId)}::text AS application, ${quotedColumn(applicationResources.columns.resourceId)}::text AS resource FROM ${qualified(applicationResources)} ORDER BY 1, 2`,
+		),
+		rowsOf(
+			client,
+			`SELECT ${quotedColumn(categories.columns.scope)}::text AS scope, ${quotedColumn(categories.columns.name)} AS name, ${quotedColumn(categories.columns.description)} AS description, ${quotedColumn(categories.columns.resourceId)}::text AS resource FROM ${qualified(categories)} ORDER BY 1, 2, 4`,
+		),
+		rowsOf(
+			client,
+			`SELECT ${quotedColumn(resourceFieldValues.columns.resourceId)}::text AS resource, ${quotedColumn(resourceFieldValues.columns.fieldId)}::text AS field, ${quotedColumn(resourceFieldValues.columns.value)} AS value FROM ${qualified(resourceFieldValues)} ORDER BY 1, 2`,
+		),
+		rowsOf(
+			client,
+			`SELECT ${quotedColumn(resourceFields.columns.name)} AS name, ${quotedColumn(resourceFields.columns.description)} AS description FROM ${qualified(resourceFields)} ORDER BY 1`,
+		),
+		rowsOf(
+			client,
+			`SELECT ${quotedColumn(grants.columns.id)}::text AS id, ${quotedColumn(grants.columns.revokedAt)}::text AS revoked FROM ${qualified(grants)} ORDER BY 1`,
+		),
+		rowsOf(
+			client,
+			`SELECT ${quotedColumn(resources.columns.externalId)} AS external_id, ${quotedColumn(resources.columns.name)} AS name, ${quotedColumn(resources.columns.description)} AS description, ${quotedColumn(resources.columns.baseTier)}::text AS tier, ${quotedColumn(resources.columns.suppressed)} AS suppressed, ${quotedColumn(resources.columns.retiredAt)}::text AS retired, ${quotedColumn(resources.columns.updatedAt)}::text AS updated FROM ${qualified(resources)} ORDER BY 1`,
+		),
+	]);
+	return {
+		applicationResources: servedRows,
+		categories: categoryRows,
+		fieldValues: fieldValueRows,
+		fields: fieldRows,
+		grants: grantRows,
+		resources: resourceRows,
+	};
 };
 
 /**
@@ -2898,17 +2629,15 @@ export const policySnapshot = async (
  *
  * @param client a connection under the migration role.
  */
-export const storedExternalIds = async (
-  client: pg.ClientBase,
-): Promise<readonly string[]> =>
-  (
-    await rowsOf(
-      client,
-      `SELECT ${quotedColumn(resources.columns.externalId)} AS external_id FROM ${qualified(resources)}`,
-    )
-  )
-    .map((row) => String(row['external_id']))
-    .toSorted();
+export const storedExternalIds = async (client: pg.ClientBase): Promise<readonly string[]> =>
+	(
+		await rowsOf(
+			client,
+			`SELECT ${quotedColumn(resources.columns.externalId)} AS external_id FROM ${qualified(resources)}`,
+		)
+	)
+		.map((row) => String(row['external_id']))
+		.toSorted();
 
 /**
  * A resource's internal id, `resources.id`, which never leaves Usher, read from the store.
@@ -2917,19 +2646,16 @@ export const storedExternalIds = async (
  * @param externalId the resource.
  * @throws when the store holds no resource by that externalId.
  */
-export const resourceIdOf = async (
-  client: pg.ClientBase,
-  externalId: string,
-): Promise<string> => {
-  const [row] = await rowsOf(
-    client,
-    `SELECT ${quotedColumn(resources.columns.id)}::text AS id FROM ${qualified(resources)} WHERE ${quotedColumn(resources.columns.externalId)} = $1`,
-    [externalId],
-  );
-  if (row !== undefined) {
-    return String(row['id']);
-  }
-  throw new Error(`the store holds no resource ${externalId}`);
+export const resourceIdOf = async (client: pg.ClientBase, externalId: string): Promise<string> => {
+	const [row] = await rowsOf(
+		client,
+		`SELECT ${quotedColumn(resources.columns.id)}::text AS id FROM ${qualified(resources)} WHERE ${quotedColumn(resources.columns.externalId)} = $1`,
+		[externalId],
+	);
+	if (row !== undefined) {
+		return String(row['id']);
+	}
+	throw new Error(`the store holds no resource ${externalId}`);
 };
 
 /**
@@ -2940,20 +2666,17 @@ export const resourceIdOf = async (
  * @param subject the identity provider's subject.
  * @throws unless the store holds exactly one person with an identity by that subject.
  */
-export const userIdOf = async (
-  client: pg.ClientBase,
-  subject: string,
-): Promise<string> => {
-  const rows = await rowsOf(
-    client,
-    `SELECT DISTINCT ${quotedColumn(userIdentities.columns.userId)}::text AS id FROM ${qualified(userIdentities)} WHERE ${quotedColumn(userIdentities.columns.idpSubjectId)} = $1`,
-    [subject],
-  );
-  const [row] = rows;
-  if (row !== undefined && rows.length === 1) {
-    return String(row['id']);
-  }
-  throw new Error(`the store holds ${rows.length} principals by that subject`);
+export const userIdOf = async (client: pg.ClientBase, subject: string): Promise<string> => {
+	const rows = await rowsOf(
+		client,
+		`SELECT DISTINCT ${quotedColumn(userIdentities.columns.userId)}::text AS id FROM ${qualified(userIdentities)} WHERE ${quotedColumn(userIdentities.columns.idpSubjectId)} = $1`,
+		[subject],
+	);
+	const [row] = rows;
+	if (row !== undefined && rows.length === 1) {
+		return String(row['id']);
+	}
+	throw new Error(`the store holds ${rows.length} principals by that subject`);
 };
 
 /**
@@ -2963,20 +2686,15 @@ export const userIdOf = async (
  *
  * @param client a connection under the migration role.
  */
-export const internalIdsInStore = async (
-  client: pg.ClientBase,
-): Promise<readonly string[]> =>
-  (
-    await rowsOf(
-      client,
-      [users, userIdentities, resources, roles, categories]
-        .map(
-          (table) =>
-            `SELECT lower(${quotedColumn(table.columns.id)}::text) AS id FROM ${qualified(table)}`,
-        )
-        .join(' UNION ALL '),
-    )
-  ).map((row) => String(row['id']));
+export const internalIdsInStore = async (client: pg.ClientBase): Promise<readonly string[]> =>
+	(
+		await rowsOf(
+			client,
+			[users, userIdentities, resources, roles, categories]
+				.map((table) => `SELECT lower(${quotedColumn(table.columns.id)}::text) AS id FROM ${qualified(table)}`)
+				.join(' UNION ALL '),
+		)
+	).map((row) => String(row['id']));
 
 /**
  * How many grants the store holds on a resource, revoked ones included.
@@ -2984,16 +2702,13 @@ export const internalIdsInStore = async (
  * @param client a connection under the migration role.
  * @param externalId the resource.
  */
-export const grantCountOn = async (
-  client: pg.ClientBase,
-  externalId: string,
-): Promise<number> => {
-  const [row] = await rowsOf(
-    client,
-    `SELECT count(*)::int AS count FROM ${qualified(grants)} held JOIN ${qualified(resources)} resource ON resource.${quotedColumn(resources.columns.id)} = held.${quotedColumn(grants.columns.resourceId)} WHERE resource.${quotedColumn(resources.columns.externalId)} = $1`,
-    [externalId],
-  );
-  return Number(row?.['count'] ?? 0);
+export const grantCountOn = async (client: pg.ClientBase, externalId: string): Promise<number> => {
+	const [row] = await rowsOf(
+		client,
+		`SELECT count(*)::int AS count FROM ${qualified(grants)} held JOIN ${qualified(resources)} resource ON resource.${quotedColumn(resources.columns.id)} = held.${quotedColumn(grants.columns.resourceId)} WHERE resource.${quotedColumn(resources.columns.externalId)} = $1`,
+		[externalId],
+	);
+	return Number(row?.['count'] ?? 0);
 };
 
 /**
@@ -3003,19 +2718,16 @@ export const grantCountOn = async (
  * @param externalId the resource.
  * @throws when the store holds no resource by that externalId.
  */
-export const isRetiredInStore = async (
-  client: pg.ClientBase,
-  externalId: string,
-): Promise<boolean> => {
-  const [row] = await rowsOf(
-    client,
-    `SELECT ${quotedColumn(resources.columns.retiredAt)} IS NOT NULL AS retired FROM ${qualified(resources)} WHERE ${quotedColumn(resources.columns.externalId)} = $1`,
-    [externalId],
-  );
-  if (row !== undefined) {
-    return row['retired'] === true;
-  }
-  throw new Error(`the store holds no resource ${externalId}`);
+export const isRetiredInStore = async (client: pg.ClientBase, externalId: string): Promise<boolean> => {
+	const [row] = await rowsOf(
+		client,
+		`SELECT ${quotedColumn(resources.columns.retiredAt)} IS NOT NULL AS retired FROM ${qualified(resources)} WHERE ${quotedColumn(resources.columns.externalId)} = $1`,
+		[externalId],
+	);
+	if (row !== undefined) {
+		return row['retired'] === true;
+	}
+	throw new Error(`the store holds no resource ${externalId}`);
 };
 
 /**
@@ -3024,19 +2736,16 @@ export const isRetiredInStore = async (
  * @param client a connection under the migration role.
  * @param externalId the resource.
  */
-export const servedByInStore = async (
-  client: pg.ClientBase,
-  externalId: string,
-): Promise<readonly string[]> =>
-  (
-    await rowsOf(
-      client,
-      `SELECT served.${quotedColumn(applicationResources.columns.applicationId)}::text AS application FROM ${qualified(applicationResources)} served JOIN ${qualified(resources)} resource ON resource.${quotedColumn(resources.columns.id)} = served.${quotedColumn(applicationResources.columns.resourceId)} WHERE resource.${quotedColumn(resources.columns.externalId)} = $1`,
-      [externalId],
-    )
-  )
-    .map((row) => String(row['application']))
-    .toSorted();
+export const servedByInStore = async (client: pg.ClientBase, externalId: string): Promise<readonly string[]> =>
+	(
+		await rowsOf(
+			client,
+			`SELECT served.${quotedColumn(applicationResources.columns.applicationId)}::text AS application FROM ${qualified(applicationResources)} served JOIN ${qualified(resources)} resource ON resource.${quotedColumn(resources.columns.id)} = served.${quotedColumn(applicationResources.columns.resourceId)} WHERE resource.${quotedColumn(resources.columns.externalId)} = $1`,
+			[externalId],
+		)
+	)
+		.map((row) => String(row['application']))
+		.toSorted();
 
 /**
  * How many change records the store holds for one table (C1): one per row a change wrote there.
@@ -3044,25 +2753,22 @@ export const servedByInStore = async (
  * @param client a connection under the migration role.
  * @param table an entry of {@link POLICY_TABLES}.
  */
-export const changeRecordCount = async (
-  client: pg.ClientBase,
-  table: { name: string },
-): Promise<number> => {
-  const [row] = await rowsOf(
-    client,
-    `SELECT count(*)::int AS count FROM ${qualified(changeRecords)} WHERE ${quotedColumn(changeRecords.columns.tableName)} = $1`,
-    [table.name],
-  );
-  return Number(row?.['count'] ?? 0);
+export const changeRecordCount = async (client: pg.ClientBase, table: { name: string }): Promise<number> => {
+	const [row] = await rowsOf(
+		client,
+		`SELECT count(*)::int AS count FROM ${qualified(changeRecords)} WHERE ${quotedColumn(changeRecords.columns.tableName)} = $1`,
+		[table.name],
+	);
+	return Number(row?.['count'] ?? 0);
 };
 
 /** A capability as the store holds it, named as `entity.action`. */
 export interface StoredCapability {
-  /** `null` where the store holds none: the one optional column (permissions-model.md). */
-  description: string | null;
+	/** `null` where the store holds none: the one optional column (permissions-model.md). */
+	description: string | null;
 
-  displayName: string;
-  name: string;
+	displayName: string;
+	name: string;
 }
 
 /**
@@ -3072,16 +2778,15 @@ export interface StoredCapability {
  * @param names the capabilities.
  */
 export const storedCapabilities = async (
-  client: pg.ClientBase,
-  names: readonly string[],
+	client: pg.ClientBase,
+	names: readonly string[],
 ): Promise<readonly StoredCapability[]> => {
-  const column = (name: string): string =>
-    `${pg.escapeIdentifier(capabilities.name)}.${quotedColumn(name)}`;
-  const { rows } = await client.query<StoredCapability>(
-    `SELECT ${column(capabilities.columns.description)} AS description, ${column(capabilities.columns.displayName)} AS "displayName", ${column(capabilities.columns.entity)} || '.' || ${column(capabilities.columns.action)} AS name FROM ${qualified(capabilities)} AS ${pg.escapeIdentifier(capabilities.name)} WHERE ${column(capabilities.columns.entity)} || '.' || ${column(capabilities.columns.action)} = ANY($1::text[]) ORDER BY name`,
-    [names],
-  );
-  return rows;
+	const column = (name: string): string => `${pg.escapeIdentifier(capabilities.name)}.${quotedColumn(name)}`;
+	const { rows } = await client.query<StoredCapability>(
+		`SELECT ${column(capabilities.columns.description)} AS description, ${column(capabilities.columns.displayName)} AS "displayName", ${column(capabilities.columns.entity)} || '.' || ${column(capabilities.columns.action)} AS name FROM ${qualified(capabilities)} AS ${pg.escapeIdentifier(capabilities.name)} WHERE ${column(capabilities.columns.entity)} || '.' || ${column(capabilities.columns.action)} = ANY($1::text[]) ORDER BY name`,
+		[names],
+	);
+	return rows;
 };
 
 /**
@@ -3093,23 +2798,20 @@ export const storedCapabilities = async (
  * @returns the times, by externalId, for each resource the store holds.
  */
 export const storedResourceTimes = async (
-  client: pg.ClientBase,
-  externalIds: readonly string[],
+	client: pg.ClientBase,
+	externalIds: readonly string[],
 ): Promise<Readonly<Record<string, ResourceTimes>>> => {
-  const { rows } = await client.query<{
-    externalId: string;
-    registeredAt: Date;
-    updatedAt: Date;
-  }>(
-    `SELECT ${quotedColumn(resources.columns.externalId)} AS "externalId", ${quotedColumn(resources.columns.registeredAt)} AS "registeredAt", ${quotedColumn(resources.columns.updatedAt)} AS "updatedAt" FROM ${qualified(resources)} WHERE ${quotedColumn(resources.columns.externalId)} = ANY($1::text[])`,
-    [externalIds],
-  );
-  return Object.fromEntries(
-    rows.map(({ externalId, registeredAt, updatedAt }) => [
-      externalId,
-      { registeredAt, updatedAt },
-    ]),
-  );
+	const { rows } = await client.query<{
+		externalId: string;
+		registeredAt: Date;
+		updatedAt: Date;
+	}>(
+		`SELECT ${quotedColumn(resources.columns.externalId)} AS "externalId", ${quotedColumn(resources.columns.registeredAt)} AS "registeredAt", ${quotedColumn(resources.columns.updatedAt)} AS "updatedAt" FROM ${qualified(resources)} WHERE ${quotedColumn(resources.columns.externalId)} = ANY($1::text[])`,
+		[externalIds],
+	);
+	return Object.fromEntries(
+		rows.map(({ externalId, registeredAt, updatedAt }) => [externalId, { registeredAt, updatedAt }]),
+	);
 };
 
 /**
@@ -3122,17 +2824,17 @@ export const storedResourceTimes = async (
  * @param times the times, by externalId.
  */
 export const setResourceTimesInStore = async (
-  client: pg.ClientBase,
-  times: Readonly<Record<string, ResourceTimes>>,
+	client: pg.ClientBase,
+	times: Readonly<Record<string, ResourceTimes>>,
 ): Promise<void> => {
-  await inTransactionAs(client, SYSTEM_ACTOR, () =>
-    inTurn(Object.entries(times), ([externalId, { registeredAt, updatedAt }]) =>
-      client.query(
-        `UPDATE ${qualified(resources)} SET ${quotedColumn(resources.columns.registeredAt)} = $1, ${quotedColumn(resources.columns.updatedAt)} = $2 WHERE ${quotedColumn(resources.columns.externalId)} = $3`,
-        [registeredAt, updatedAt, externalId],
-      ),
-    ),
-  );
+	await inTransactionAs(client, SYSTEM_ACTOR, () =>
+		inTurn(Object.entries(times), ([externalId, { registeredAt, updatedAt }]) =>
+			client.query(
+				`UPDATE ${qualified(resources)} SET ${quotedColumn(resources.columns.registeredAt)} = $1, ${quotedColumn(resources.columns.updatedAt)} = $2 WHERE ${quotedColumn(resources.columns.externalId)} = $3`,
+				[registeredAt, updatedAt, externalId],
+			),
+		),
+	);
 };
 
 /**
@@ -3140,51 +2842,51 @@ export const setResourceTimesInStore = async (
  * through `user_identities`; the resource by externalId and each category scoped.
  */
 export interface StoredGrant {
-  /** The record category, scoped as `global.controlled`; `null` for the control plane's wildcard. */
-  category: string | null;
+	/** The record category, scoped as `global.controlled`; `null` for the control plane's wildcard. */
+	category: string | null;
 
-  expiresAt: Date | null;
+	expiresAt: Date | null;
 
-  /** The field category, scoped; `null` for none, as every grant of the first release has. */
-  fieldCategory: string | null;
+	/** The field category, scoped; `null` for none, as every grant of the first release has. */
+	fieldCategory: string | null;
 
-  grantedAt: Date;
-  granterSubject: string;
+	grantedAt: Date;
+	granterSubject: string;
 
-  /** The holder's issuer; `null` for a group's grant. */
-  holderIssuer: string | null;
+	/** The holder's issuer; `null` for a group's grant. */
+	holderIssuer: string | null;
 
-  /** The holder's subject; `null` for a group's grant. */
-  holderSubject: string | null;
+	/** The holder's subject; `null` for a group's grant. */
+	holderSubject: string | null;
 
-  id: string;
+	id: string;
 
-  /** By externalId. */
-  resource: string;
+	/** By externalId. */
+	resource: string;
 
-  revokedAt: Date | null;
+	revokedAt: Date | null;
 
-  /** Who revoked it, by subject; `null` while it is not revoked. */
-  revokerSubject: string | null;
+	/** Who revoked it, by subject; `null` while it is not revoked. */
+	revokerSubject: string | null;
 
-  role: string;
+	role: string;
 }
 
 /** Which grants to read: each member narrows, and none reads them all. */
 export interface GrantFilter {
-  /** The holder, by the identity provider's subject. */
-  holder?: string;
+	/** The holder, by the identity provider's subject. */
+	holder?: string;
 
-  id?: string;
+	id?: string;
 
-  /** By externalId. */
-  resource?: string;
+	/** By externalId. */
+	resource?: string;
 
-  role?: string;
+	role?: string;
 }
 
 const grantColumn = (alias: string, column: string): string =>
-  `${pg.escapeIdentifier(alias)}.${pg.escapeIdentifier(column)}`;
+	`${pg.escapeIdentifier(alias)}.${pg.escapeIdentifier(column)}`;
 
 /**
  * The grants the store holds, revoked ones included, narrowed by the filter: ordered by when each was
@@ -3196,13 +2898,13 @@ const grantColumn = (alias: string, column: string): string =>
  * @throws naming the cause, when a person the grants name holds more than one identity.
  */
 export const storedGrants = async (
-  client: pg.ClientBase,
-  { holder, id, resource, role }: GrantFilter = {},
+	client: pg.ClientBase,
+	{ holder, id, resource, role }: GrantFilter = {},
 ): Promise<readonly StoredGrant[]> => {
-  const held = (column: string): string => grantColumn('held', column);
-  const { rows } = await readingOneIdentity(() =>
-    client.query<StoredGrant>(
-      `SELECT ${grantColumn('record_category', categories.columns.scope)} || '.' || ${grantColumn('record_category', categories.columns.name)} AS category,
+	const held = (column: string): string => grantColumn('held', column);
+	const { rows } = await readingOneIdentity(() =>
+		client.query<StoredGrant>(
+			`SELECT ${grantColumn('record_category', categories.columns.scope)} || '.' || ${grantColumn('record_category', categories.columns.name)} AS category,
               ${held(grants.columns.expiresAt)} AS "expiresAt",
               ${grantColumn('field_category', categories.columns.scope)} || '.' || ${grantColumn('field_category', categories.columns.name)} AS "fieldCategory",
               ${held(grants.columns.grantedAt)} AS "grantedAt",
@@ -3224,10 +2926,10 @@ export const storedGrants = async (
           AND ($3::text IS NULL OR ${grantColumn('resource_row', resources.columns.externalId)} = $3)
           AND ($4::text IS NULL OR ${grantColumn('role_row', roles.columns.name)} = $4)
         ORDER BY "grantedAt", resource, "holderSubject", id`,
-      [id ?? null, holder ?? null, resource ?? null, role ?? null],
-    ),
-  );
-  return rows;
+			[id ?? null, holder ?? null, resource ?? null, role ?? null],
+		),
+	);
+	return rows;
 };
 
 /**
@@ -3236,27 +2938,21 @@ export const storedGrants = async (
  * @param client a connection under the migration role.
  * @param table an entry of {@link POLICY_TABLES}.
  */
-export const rowCountOf = async (
-  client: pg.ClientBase,
-  table: { name: string },
-): Promise<number> => {
-  const [row] = await rowsOf(
-    client,
-    `SELECT count(*)::int AS count FROM ${qualified(table)}`,
-  );
-  return Number(row?.['count'] ?? 0);
+export const rowCountOf = async (client: pg.ClientBase, table: { name: string }): Promise<number> => {
+	const [row] = await rowsOf(client, `SELECT count(*)::int AS count FROM ${qualified(table)}`);
+	return Number(row?.['count'] ?? 0);
 };
 
 /** The tables a grant operation writes, by their names in {@link POLICY_TABLES}, for {@link rowCounts}. */
 export const GRANT_WRITTEN_TABLES = Object.freeze({
-  categories,
-  grantDecisions,
-  grants,
-  invitations,
-  notificationOutbox: POLICY_TABLES.notificationOutbox,
-  resources,
-  userIdentities,
-  users,
+	categories,
+	grantDecisions,
+	grants,
+	invitations,
+	notificationOutbox: POLICY_TABLES.notificationOutbox,
+	resources,
+	userIdentities,
+	users,
 });
 
 /**
@@ -3267,20 +2963,15 @@ export const GRANT_WRITTEN_TABLES = Object.freeze({
  * @param tables the tables by a name for each, such as {@link GRANT_WRITTEN_TABLES}.
  */
 export const rowCounts = async <Name extends string>(
-  client: pg.ClientBase,
-  tables: Readonly<Record<Name, { name: string }>>,
+	client: pg.ClientBase,
+	tables: Readonly<Record<Name, { name: string }>>,
 ): Promise<Readonly<Record<Name, number>>> => {
-  const named = Object.entries<{ name: string }>(tables);
-  const [row] = await rowsOf(
-    client,
-    `SELECT ${named
-      .map(
-        ([key, table]) =>
-          `(SELECT count(*)::int FROM ${qualified(table)}) AS ${pg.escapeIdentifier(key)}`,
-      )
-      .join(', ')}`,
-  );
-  return Object.fromEntries(
-    named.map(([key]) => [key, Number(row?.[key] ?? 0)]),
-  ) as Readonly<Record<Name, number>>;
+	const named = Object.entries<{ name: string }>(tables);
+	const [row] = await rowsOf(
+		client,
+		`SELECT ${named
+			.map(([key, table]) => `(SELECT count(*)::int FROM ${qualified(table)}) AS ${pg.escapeIdentifier(key)}`)
+			.join(', ')}`,
+	);
+	return Object.fromEntries(named.map(([key]) => [key, Number(row?.[key] ?? 0)])) as Readonly<Record<Name, number>>;
 };

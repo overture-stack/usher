@@ -460,9 +460,9 @@ That probe reaches the instance at `127.0.0.1`, so `USHER_HOST` must accept loop
 
 - **A refusal** carries `variables`, naming each variable at fault, and a `message` naming each one with the rule it broke:
 
-  ```json
-  {"level":60,"variables":["USHER_PORT"],"message":"the controller refuses to start: USHER_PORT is missing","time":"2026-11-09T15:01:18.421Z"}
-  ```
+    ```json
+    {"level":60,"variables":["USHER_PORT"],"message":"the controller refuses to start: USHER_PORT is missing","time":"2026-11-09T15:01:18.421Z"}
+    ```
 
 - **Any other failure** carries `error`, the failure's class name, `code`, a SQLSTATE or a system error's code, or both, beside a message naming what failed.
 

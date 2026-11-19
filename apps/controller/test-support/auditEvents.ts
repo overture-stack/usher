@@ -9,10 +9,7 @@ import { POLICY_TABLES, qualified } from './policy.js';
 import { eventually } from './waiting.js';
 
 /** `audit-events.md`, whose Events table the tests read their expectations from (G29). */
-export const AUDIT_EVENTS_DOCUMENT = new URL(
-  '../../../.dev/design/audit-events.md',
-  import.meta.url,
-);
+export const AUDIT_EVENTS_DOCUMENT = new URL('../../../.dev/design/audit-events.md', import.meta.url);
 
 /** The prefix every event type carries on the wire, which the table leaves out. */
 export const EVENT_TYPE_PREFIX = 'bio.overture.';
@@ -22,92 +19,91 @@ export const EVENT_TYPE_PREFIX = 'bio.overture.';
  * the Events table.
  */
 export const AUDIT_EVENT_TYPES = Object.freeze({
-  adminAcceptance: 'admin.acceptance',
-  adminNomination: 'admin.nomination',
-  adminOverride: 'admin.override',
-  admissionShareExceededTally: 'admission.shareExceededTally',
-  applicationKeyConfirmation: 'applicationKey.confirmation',
-  applicationKeyIssuance: 'applicationKey.issuance',
-  applicationKeyRevocation: 'applicationKey.revocation',
-  applicationKeyUnreadable: 'applicationKey.unreadable',
-  applicationRegistration: 'application.registration',
-  applicationServedResourcesChange: 'application.servedResourcesChange',
-  auditRead: 'audit.read',
-  categoryCreation: 'category.creation',
-  channelAssertionRejection: 'channelAssertion.rejection',
-  channelAssertionRejectionTally: 'channelAssertion.rejectionTally',
-  grantCreation: 'grant.creation',
-  grantDecision: 'grant.decision',
-  grantExtension: 'grant.extension',
-  grantRateExceeded: 'grant.rateExceeded',
-  grantReduction: 'grant.reduction',
-  grantRevocation: 'grant.revocation',
-  grantRulesChange: 'grantRules.change',
-  grantSelfCreation: 'grant.selfCreation',
+	adminAcceptance: 'admin.acceptance',
+	adminNomination: 'admin.nomination',
+	adminOverride: 'admin.override',
+	admissionShareExceededTally: 'admission.shareExceededTally',
+	applicationKeyConfirmation: 'applicationKey.confirmation',
+	applicationKeyIssuance: 'applicationKey.issuance',
+	applicationKeyRevocation: 'applicationKey.revocation',
+	applicationKeyUnreadable: 'applicationKey.unreadable',
+	applicationRegistration: 'application.registration',
+	applicationServedResourcesChange: 'application.servedResourcesChange',
+	auditRead: 'audit.read',
+	categoryCreation: 'category.creation',
+	channelAssertionRejection: 'channelAssertion.rejection',
+	channelAssertionRejectionTally: 'channelAssertion.rejectionTally',
+	grantCreation: 'grant.creation',
+	grantDecision: 'grant.decision',
+	grantExtension: 'grant.extension',
+	grantRateExceeded: 'grant.rateExceeded',
+	grantReduction: 'grant.reduction',
+	grantRevocation: 'grant.revocation',
+	grantRulesChange: 'grantRules.change',
+	grantSelfCreation: 'grant.selfCreation',
 	identityProviderConfigurationChange: 'identityProvider.configurationChange',
-  identityRevocation: 'identity.revocation',
-  identityRevocationLift: 'identity.revocationLift',
-  identitySignOut: 'identity.signOut',
-  invitationClaim: 'invitation.claim',
-  invitationCreation: 'invitation.creation',
-  invitationLapse: 'invitation.lapse',
-  logoutTokenRefusal: 'logoutToken.refusal',
-  logoutTokenRefusalTally: 'logoutToken.refusalTally',
-  managementTokenRefusal: 'managementToken.refusal',
-  managementTokenRefusalTally: 'managementToken.refusalTally',
-  importRun: 'import.run',
-  ownershipTransfer: 'ownership.transfer',
-  platformRevocation: 'platform.revocation',
-  resourceDeletion: 'resource.deletion',
-  resourceDetailsUpdate: 'resource.detailsUpdate',
-  resourceOrphaned: 'resource.orphaned',
-  resourceRegistration: 'resource.registration',
-  resourceRestoration: 'resource.restoration',
-  resourceRetirement: 'resource.retirement',
-  resourceRevocation: 'resource.revocation',
-  resourceSuppression: 'resource.suppression',
-  settingsChange: 'settings.change',
-  settingsSeeding: 'settings.seeding',
-  tokenExchange: 'token.exchange',
-  tokenExchangeRefusalTally: 'token.exchangeRefusalTally',
+	identityRevocation: 'identity.revocation',
+	identityRevocationLift: 'identity.revocationLift',
+	identitySignOut: 'identity.signOut',
+	invitationClaim: 'invitation.claim',
+	invitationCreation: 'invitation.creation',
+	invitationLapse: 'invitation.lapse',
+	logoutTokenRefusal: 'logoutToken.refusal',
+	logoutTokenRefusalTally: 'logoutToken.refusalTally',
+	managementTokenRefusal: 'managementToken.refusal',
+	managementTokenRefusalTally: 'managementToken.refusalTally',
+	importRun: 'import.run',
+	ownershipTransfer: 'ownership.transfer',
+	platformRevocation: 'platform.revocation',
+	resourceDeletion: 'resource.deletion',
+	resourceDetailsUpdate: 'resource.detailsUpdate',
+	resourceOrphaned: 'resource.orphaned',
+	resourceRegistration: 'resource.registration',
+	resourceRestoration: 'resource.restoration',
+	resourceRetirement: 'resource.retirement',
+	resourceRevocation: 'resource.revocation',
+	resourceSuppression: 'resource.suppression',
+	settingsChange: 'settings.change',
+	settingsSeeding: 'settings.seeding',
+	tokenExchange: 'token.exchange',
+	tokenExchangeRefusalTally: 'token.exchangeRefusalTally',
 } as const);
 
 /** An event type the tests name, without the prefix. */
-export type AuditEventType =
-  (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT_TYPES];
+export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT_TYPES];
 
 /**
  * The Bridge's events, the keys of its catalogue. The Bridge keeps the catalogue internal, so its
  * names are copied here; when the Bridge adds one, add it. Follows `events.ts` `EVENT_CATALOGUE`.
  */
 export const BRIDGE_EVENT_TYPES: readonly string[] = Object.freeze([
-  'bridge.exchangeTimeoutShort',
-  'bridge.internalError',
-  'bridge.startRefusal',
-  'catalogue.filterLimit',
-  'catalogue.renderingMismatch',
-  'catalogue.resourceListMissing',
-  'category.unenforced',
-  'category.unknown',
-  'category.unmapped',
-  'credential.malformed',
-  'credential.refusal',
-  'notice.applied',
-  'revocationChannel.failure',
-  'revocationChannel.malformed',
-  'revocationChannel.modeChange',
-  'revocationChannel.pushReconnect',
-  'revocationChannel.reset',
-  'token.exchangeFailure',
-  'token.overtaken',
-  'token.rejection',
+	'bridge.exchangeTimeoutShort',
+	'bridge.internalError',
+	'bridge.startRefusal',
+	'catalogue.filterLimit',
+	'catalogue.renderingMismatch',
+	'catalogue.resourceListMissing',
+	'category.unenforced',
+	'category.unknown',
+	'category.unmapped',
+	'credential.malformed',
+	'credential.refusal',
+	'notice.applied',
+	'revocationChannel.failure',
+	'revocationChannel.malformed',
+	'revocationChannel.modeChange',
+	'revocationChannel.pushReconnect',
+	'revocationChannel.reset',
+	'token.exchangeFailure',
+	'token.overtaken',
+	'token.rejection',
 ]);
 
 /** The rows `audit-events.md`'s Open items name post-MVP, which nothing emits in the first release. */
 export const POST_MVP_EVENT_TYPES: readonly string[] = Object.freeze([
-  'custodianship.assignment',
-  'custodianship.removal',
-  'grant.unguarded',
+	'custodianship.assignment',
+	'custodianship.removal',
+	'grant.unguarded',
 ]);
 
 /** A severity, as the table and the Bridge name them. */
@@ -115,11 +111,11 @@ export type Severity = 'critical' | 'error' | 'info' | 'warning';
 
 /** One row of the Events table, each cell as written, the event type without its backticks. */
 export interface EventsTableRow {
-  actor: string;
-  description: string;
-  event: string;
-  fields: string;
-  severity: string;
+	actor: string;
+	description: string;
+	event: string;
+	fields: string;
+	severity: string;
 }
 
 /**
@@ -128,16 +124,16 @@ export interface EventsTableRow {
  * as its `on success` and `on refusal` clauses say.
  */
 export interface EventFieldSets {
-  always: readonly string[];
+	always: readonly string[];
 
-  /**
-   * Fields carried only under the condition their clause states with `when` or `for`, such as
-   * `applicationId` when the assertion names a registered application.
-   */
-  conditional: readonly string[];
+	/**
+	 * Fields carried only under the condition their clause states with `when` or `for`, such as
+	 * `applicationId` when the assertion names a registered application.
+	 */
+	conditional: readonly string[];
 
-  onRefusal: readonly string[];
-  onSuccess: readonly string[];
+	onRefusal: readonly string[];
+	onSuccess: readonly string[];
 }
 
 /**
@@ -149,41 +145,39 @@ export interface EventFieldSets {
  * severity of its own, read before anything else.
  */
 export type EventSeverity =
-  | {
-      field: string;
-      kind: 'byField';
-      withField: Severity;
-      withoutField: Severity;
-    }
-  | { atFirstStart: Severity; kind: 'byFirstStart'; otherwise: Severity }
-  | {
-      byValue: Readonly<Record<string, Severity>>;
-      field: string;
-      kind: 'byValue';
-      otherwise: Severity;
-      whenDenied?: Severity;
-    }
-  | { kind: 'fixed'; severity: Severity; whenDenied?: Severity }
-  | { kind: 'followsResult' }
-  | {
-      /**
-       * Each name a change of the event's `changes` list may name. General, not for one event: a severity by which
-       * names changed is `severity` when any of `names` is among the changes, `otherwise` when none is.
-       */
-      kind: 'byChangedName';
-      names: readonly string[];
-      otherwise: Severity;
-      severity: Severity;
-      whenDenied?: Severity;
-    };
+	| {
+			field: string;
+			kind: 'byField';
+			withField: Severity;
+			withoutField: Severity;
+	  }
+	| { atFirstStart: Severity; kind: 'byFirstStart'; otherwise: Severity }
+	| {
+			byValue: Readonly<Record<string, Severity>>;
+			field: string;
+			kind: 'byValue';
+			otherwise: Severity;
+			whenDenied?: Severity;
+	  }
+	| { kind: 'fixed'; severity: Severity; whenDenied?: Severity }
+	| { kind: 'followsResult' }
+	| {
+			/**
+			 * Each name a change of the event's `changes` list may name. General, not for one event: a severity by which
+			 * names changed is `severity` when any of `names` is among the changes, `otherwise` when none is.
+			 */
+			kind: 'byChangedName';
+			names: readonly string[];
+			otherwise: Severity;
+			severity: Severity;
+			whenDenied?: Severity;
+	  };
 
 /**
  * A row's actor: `system` or `anonymous`, the two the Actor column names as `actorType` does, or the
  * roles it names otherwise (`Custodian, owner or admin`), which no `actorType` matches.
  */
-export type EventActor =
-  | { kind: 'anonymous' | 'system' }
-  | { kind: 'roles'; roles: readonly string[] };
+export type EventActor = { kind: 'anonymous' | 'system' } | { kind: 'roles'; roles: readonly string[] };
 
 /** Whose event a row is: the Bridge's, or the Controller's, every row neither the Bridge's nor post-MVP. */
 export type EventOwner = 'bridge' | 'controller';
@@ -194,20 +188,15 @@ export type EventOwner = 'bridge' | 'controller';
  * Such an event, refused, carries `reason` and records at `warning`, unless its cells say otherwise.
  */
 export interface AuditEventRegistration {
-  actor: EventActor;
-  event: string;
-  fields: EventFieldSets;
-  owner: EventOwner;
-  row: EventsTableRow;
-  severity: EventSeverity;
+	actor: EventActor;
+	event: string;
+	fields: EventFieldSets;
+	owner: EventOwner;
+	row: EventsTableRow;
+	severity: EventSeverity;
 }
 
-const SEVERITIES: readonly Severity[] = [
-  'critical',
-  'error',
-  'info',
-  'warning',
-];
+const SEVERITIES: readonly Severity[] = ['critical', 'error', 'info', 'warning'];
 
 /**
  * The severity cells telling their cases apart in prose rather than by a value a fields cell lists:
@@ -216,27 +205,27 @@ const SEVERITIES: readonly Severity[] = [
  * `PER_CASE_SEVERITIES`.
  */
 const PROSE_CASE_SEVERITIES: readonly {
-  cell: string;
-  severity: EventSeverity;
+	cell: string;
+	severity: EventSeverity;
 }[] = [
-  {
-    cell: '`critical` for a global category, `error` for a resource category',
-    severity: {
-      field: 'resourceId',
-      kind: 'byField',
-      withField: 'error',
-      withoutField: 'critical',
-    },
-  },
-  {
-    cell: '`critical` into cold or uncertain, `info` into normal',
-    severity: {
-      byValue: { cold: 'critical', normal: 'info', uncertain: 'critical' },
-      field: 'toMode',
-      kind: 'byValue',
-      otherwise: 'critical',
-    },
-  },
+	{
+		cell: '`critical` for a global category, `error` for a resource category',
+		severity: {
+			field: 'resourceId',
+			kind: 'byField',
+			withField: 'error',
+			withoutField: 'critical',
+		},
+	},
+	{
+		cell: '`critical` into cold or uncertain, `info` into normal',
+		severity: {
+			byValue: { cold: 'critical', normal: 'info', uncertain: 'critical' },
+			field: 'toMode',
+			kind: 'byValue',
+			otherwise: 'critical',
+		},
+	},
 ];
 
 const FOLLOWS_RESULT = 'follows `result`';
@@ -269,8 +258,7 @@ const VALUE_CLAUSE = /^`(\w+)` for (`\w+`(?:(?:, | or )`\w+`)*)$/u;
 const OTHERWISE_CLAUSE = /^else `(\w+)`$/u;
 
 // A severity cell by which names changed: "`critical` when `a`, `b` or `c` changed; `warning` otherwise".
-const CHANGED_NAMES_CELL =
-  /^`(\w+)` when (`\w+`(?:(?:, | or )`\w+`)*) changed; `(\w+)` otherwise$/u;
+const CHANGED_NAMES_CELL = /^`(\w+)` when (`\w+`(?:(?:, | or )`\w+`)*) changed; `(\w+)` otherwise$/u;
 
 // A severity by which names changed, beside a refusal's: "`warning` when refused; " and then the changed-names cell.
 const REFUSED_CHANGED_NAMES_CELL = /^`(\w+)` when refused; (.+)$/u;
@@ -280,20 +268,20 @@ const REFUSED_CHANGED_NAMES_CELL = /^`(\w+)` when refused; (.+)$/u;
  * the code answered as `reason`, at `warning`, whether it was refused for authority or for content.
  */
 const REFUSED_REQUEST = Object.freeze({
-  reasonMember: 'reason',
-  severity: 'warning',
+	reasonMember: 'reason',
+	severity: 'warning',
 } as const);
 
 const unreadable = (what: string, cell: string): never => {
-  throw new Error(`no ${what} can be read from "${cell}"`);
+	throw new Error(`no ${what} can be read from "${cell}"`);
 };
 
 // The lines under the `## Events` heading, up to the next heading of its level.
 const eventsSection = (markdown: string): readonly string[] => {
-  const lines = markdown.split('\n');
-  const section = lines.slice(lines.indexOf('## Events') + 1);
-  const end = section.findIndex((line) => line.startsWith('## '));
-  return section.slice(0, end === -1 ? section.length : end);
+	const lines = markdown.split('\n');
+	const section = lines.slice(lines.indexOf('## Events') + 1);
+	const end = section.findIndex((line) => line.startsWith('## '));
+	return section.slice(0, end === -1 ? section.length : end);
 };
 
 /**
@@ -302,73 +290,60 @@ const eventsSection = (markdown: string): readonly string[] => {
  *
  * @param markdown the document.
  */
-export const eventsTableRows = (
-  markdown: string,
-): readonly EventsTableRow[] => {
-  const table = eventsSection(markdown)
-    .filter((line) => line.startsWith('|'))
-    .map((line) =>
-      line
-        .split('|')
-        .slice(1, -1)
-        .map((cell) => cell.trim()),
-    );
-  const header = table[0] ?? [];
-  const cellOf = (cells: readonly string[], column: string): string =>
-    cells[header.indexOf(column)] ??
-    unreadable(`${column} cell`, cells.join(' | '));
-  return table.slice(2).map((cells) => ({
-    actor: cellOf(cells, 'Actor'),
-    description: cellOf(cells, 'Description'),
-    event: cellOf(cells, 'Event type').replaceAll('`', ''),
-    fields: cellOf(cells, 'Additional required fields'),
-    severity: cellOf(cells, 'Severity'),
-  }));
+export const eventsTableRows = (markdown: string): readonly EventsTableRow[] => {
+	const table = eventsSection(markdown)
+		.filter((line) => line.startsWith('|'))
+		.map((line) =>
+			line
+				.split('|')
+				.slice(1, -1)
+				.map((cell) => cell.trim()),
+		);
+	const header = table[0] ?? [];
+	const cellOf = (cells: readonly string[], column: string): string =>
+		cells[header.indexOf(column)] ?? unreadable(`${column} cell`, cells.join(' | '));
+	return table.slice(2).map((cells) => ({
+		actor: cellOf(cells, 'Actor'),
+		description: cellOf(cells, 'Description'),
+		event: cellOf(cells, 'Event type').replaceAll('`', ''),
+		fields: cellOf(cells, 'Additional required fields'),
+		severity: cellOf(cells, 'Severity'),
+	}));
 };
 
 // The paragraphs of the Events section outside its table, each on one line.
 const notesIn = (markdown: string): readonly string[] =>
-  eventsSection(markdown)
-    .filter((line) => !line.startsWith('|'))
-    .join('\n')
-    .split(/\n\s*\n/u)
-    .map((paragraph) => paragraph.replaceAll('\n', ' ').trim());
+	eventsSection(markdown)
+		.filter((line) => !line.startsWith('|'))
+		.join('\n')
+		.split(/\n\s*\n/u)
+		.map((paragraph) => paragraph.replaceAll('\n', ' ').trim());
 
-const withoutParentheses = (text: string): string =>
-  text.replaceAll(/\([^)]*\)/gu, '');
+const withoutParentheses = (text: string): string => text.replaceAll(/\([^)]*\)/gu, '');
 
 const backtickedIn = (text: string): readonly string[] =>
-  Array.from(text.matchAll(/`(\w+)`/gu), ([, name]) => name ?? '');
+	Array.from(text.matchAll(/`(\w+)`/gu), ([, name]) => name ?? '');
 
 // The names listed in the note below the table whose bold lead opens with an event's type, such as
 // `import.run`'s counts.
-const namesListedFor = (
-  notes: readonly string[],
-  event: string,
-): readonly string[] =>
-  backtickedIn(
-    notes
-      .find((note) => note.startsWith(`**\`${event}\``))
-      ?.match(NAME_LIST)?.[0] ?? '',
-  );
+const namesListedFor = (notes: readonly string[], event: string): readonly string[] =>
+	backtickedIn(notes.find((note) => note.startsWith(`**\`${event}\``))?.match(NAME_LIST)?.[0] ?? '');
 
 // A clause's items, split at its commas once its parentheses, which hold values its fields may take,
 // are gone. Follows `events.test.ts` `fieldNamesIn` in leaving those values out.
 const itemsOf = (clause: string): readonly string[] =>
-  withoutParentheses(clause)
-    .split(',')
-    .map((item) => item.trim());
+	withoutParentheses(clause)
+		.split(',')
+		.map((item) => item.trim());
 
 // An item's field names, and whether a condition carries them. A condition's names are those before
 // its `when` or `for`: a name after that word is part of the condition, as the `sub` a length is
 // measured on.
-const fieldsOfItem = (
-  item: string,
-): { conditional: boolean; names: readonly string[] } => {
-  const condition = item.search(CONDITION);
-  return condition === -1
-    ? { conditional: false, names: backtickedIn(item) }
-    : { conditional: true, names: backtickedIn(item.slice(0, condition)) };
+const fieldsOfItem = (item: string): { conditional: boolean; names: readonly string[] } => {
+	const condition = item.search(CONDITION);
+	return condition === -1
+		? { conditional: false, names: backtickedIn(item) }
+		: { conditional: true, names: backtickedIn(item.slice(0, condition)) };
 };
 
 /**
@@ -384,121 +359,97 @@ const fieldsOfItem = (
  * @throws when the cell names no field and is not `none`, or points below the table and nothing is
  * listed there.
  */
-export const fieldSetsIn = (
-  cell: string,
-  listedBelow: readonly string[] = [],
-): EventFieldSets => {
-  const clauses = cell.split(';').map((clause) => clause.trim());
-  const namesOf = (
-    clause: string,
-    underCondition: boolean,
-  ): readonly string[] =>
-    itemsOf(clause).flatMap((item) => {
-      const { conditional, names } = fieldsOfItem(item);
-      if (conditional !== underCondition) {
-        return [];
-      }
-      if (names.length === 0 && item.includes(LISTED_BELOW)) {
-        return listedBelow.length > 0
-          ? listedBelow
-          : unreadable('field name listed below the table', cell);
-      }
-      return names;
-    });
-  const byResult = (clause: string): boolean =>
-    clause.startsWith(ON_SUCCESS) || clause.startsWith(ON_REFUSAL);
-  const namesWhere = (holds: (clause: string) => boolean): readonly string[] =>
-    clauses.filter(holds).flatMap((clause) => namesOf(clause, false));
-  const fieldSets: EventFieldSets = {
-    always: namesWhere((clause) => !byResult(clause)),
-    conditional: clauses.flatMap((clause) => namesOf(clause, true)),
-    onRefusal: namesWhere((clause) => clause.startsWith(ON_REFUSAL)),
-    onSuccess: namesWhere((clause) => clause.startsWith(ON_SUCCESS)),
-  };
-  return Object.values(fieldSets).flat().length > 0 || cell === 'none'
-    ? fieldSets
-    : unreadable('field name', cell);
+export const fieldSetsIn = (cell: string, listedBelow: readonly string[] = []): EventFieldSets => {
+	const clauses = cell.split(';').map((clause) => clause.trim());
+	const namesOf = (clause: string, underCondition: boolean): readonly string[] =>
+		itemsOf(clause).flatMap((item) => {
+			const { conditional, names } = fieldsOfItem(item);
+			if (conditional !== underCondition) {
+				return [];
+			}
+			if (names.length === 0 && item.includes(LISTED_BELOW)) {
+				return listedBelow.length > 0 ? listedBelow : unreadable('field name listed below the table', cell);
+			}
+			return names;
+		});
+	const byResult = (clause: string): boolean => clause.startsWith(ON_SUCCESS) || clause.startsWith(ON_REFUSAL);
+	const namesWhere = (holds: (clause: string) => boolean): readonly string[] =>
+		clauses.filter(holds).flatMap((clause) => namesOf(clause, false));
+	const fieldSets: EventFieldSets = {
+		always: namesWhere((clause) => !byResult(clause)),
+		conditional: clauses.flatMap((clause) => namesOf(clause, true)),
+		onRefusal: namesWhere((clause) => clause.startsWith(ON_REFUSAL)),
+		onSuccess: namesWhere((clause) => clause.startsWith(ON_SUCCESS)),
+	};
+	return Object.values(fieldSets).flat().length > 0 || cell === 'none' ? fieldSets : unreadable('field name', cell);
 };
 
 // One clause of a severity cell naming a severity per case.
 type SeverityClause =
-  | { kind: 'denied' | 'otherwise'; severity: Severity }
-  | { kind: 'values'; severity: Severity; values: readonly string[] };
+	| { kind: 'denied' | 'otherwise'; severity: Severity }
+	| { kind: 'values'; severity: Severity; values: readonly string[] };
 
 const severityNamed = (name: string | undefined, cell: string): Severity =>
-  SEVERITIES.find((severity) => severity === name) ??
-  unreadable('severity', cell);
+	SEVERITIES.find((severity) => severity === name) ?? unreadable('severity', cell);
 
 const severityClauseIn = (clause: string, cell: string): SeverityClause => {
-  const denied = DENIED_CLAUSE.exec(clause);
-  if (denied !== null) {
-    return { kind: 'denied', severity: severityNamed(denied[1], cell) };
-  }
-  const otherwise = OTHERWISE_CLAUSE.exec(clause);
-  if (otherwise !== null) {
-    return { kind: 'otherwise', severity: severityNamed(otherwise[1], cell) };
-  }
-  const values = VALUE_CLAUSE.exec(clause);
-  if (values !== null) {
-    return {
-      kind: 'values',
-      severity: severityNamed(values[1], cell),
-      values: backtickedIn(values[2] ?? ''),
-    };
-  }
-  return unreadable('severity', cell);
+	const denied = DENIED_CLAUSE.exec(clause);
+	if (denied !== null) {
+		return { kind: 'denied', severity: severityNamed(denied[1], cell) };
+	}
+	const otherwise = OTHERWISE_CLAUSE.exec(clause);
+	if (otherwise !== null) {
+		return { kind: 'otherwise', severity: severityNamed(otherwise[1], cell) };
+	}
+	const values = VALUE_CLAUSE.exec(clause);
+	if (values !== null) {
+		return {
+			kind: 'values',
+			severity: severityNamed(values[1], cell),
+			values: backtickedIn(values[2] ?? ''),
+		};
+	}
+	return unreadable('severity', cell);
 };
 
 // The field a fields cell lists a value for, in the parentheses after its name.
 const fieldListing = (fieldsCell: string, value: string): string | undefined =>
-  Array.from(fieldsCell.matchAll(/`(\w+)` \(([^)]*)\)/gu)).find(
-    ([, , listed]) => backtickedIn(listed ?? '').includes(value),
-  )?.[1];
+	Array.from(fieldsCell.matchAll(/`(\w+)` \(([^)]*)\)/gu)).find(([, , listed]) =>
+		backtickedIn(listed ?? '').includes(value),
+	)?.[1];
 
 // The field a value of a `for` clause belongs to: the one the fields cell lists it for, or `result`
 // for a value of `result` the cell lists for no field.
 const fieldOfValue = (fieldsCell: string, value: string): string | undefined =>
-  fieldListing(fieldsCell, value) ??
-  (RESULT_VALUES.includes(value) ? RESULT_FIELD : undefined);
+	fieldListing(fieldsCell, value) ?? (RESULT_VALUES.includes(value) ? RESULT_FIELD : undefined);
 
 // A severity cell naming a severity per case, each value's field found by `fieldOfValue`.
 const casedSeverityIn = (cell: string, fieldsCell: string): EventSeverity => {
-  const clauses = cell
-    .split(';')
-    .map((clause) => severityClauseIn(clause.trim(), cell));
-  const severityOf = (kind: SeverityClause['kind']): Severity | undefined =>
-    clauses.find((clause) => clause.kind === kind)?.severity;
-  const otherwise =
-    severityOf('otherwise') ??
-    unreadable('severity for every other case', cell);
-  const whenDenied = severityOf('denied');
-  const denied = whenDenied === undefined ? {} : { whenDenied };
-  const byValue = Object.fromEntries(
-    clauses.flatMap((clause) =>
-      clause.kind === 'values'
-        ? clause.values.map((value): [string, Severity] => [
-            value,
-            clause.severity,
-          ])
-        : [],
-    ),
-  );
-  const fields = [
-    ...new Set(
-      Object.keys(byValue).map(
-        (value) =>
-          fieldOfValue(fieldsCell, value) ??
-          unreadable(`field listing \`${value}\``, cell),
-      ),
-    ),
-  ];
-  const [field, ...others] = fields;
-  if (field === undefined) {
-    return { kind: 'fixed', severity: otherwise, ...denied };
-  }
-  return others.length === 0
-    ? { byValue, field, kind: 'byValue', otherwise, ...denied }
-    : unreadable('severity chosen by one field', cell);
+	const clauses = cell.split(';').map((clause) => severityClauseIn(clause.trim(), cell));
+	const severityOf = (kind: SeverityClause['kind']): Severity | undefined =>
+		clauses.find((clause) => clause.kind === kind)?.severity;
+	const otherwise = severityOf('otherwise') ?? unreadable('severity for every other case', cell);
+	const whenDenied = severityOf('denied');
+	const denied = whenDenied === undefined ? {} : { whenDenied };
+	const byValue = Object.fromEntries(
+		clauses.flatMap((clause) =>
+			clause.kind === 'values' ? clause.values.map((value): [string, Severity] => [value, clause.severity]) : [],
+		),
+	);
+	const fields = [
+		...new Set(
+			Object.keys(byValue).map(
+				(value) => fieldOfValue(fieldsCell, value) ?? unreadable(`field listing \`${value}\``, cell),
+			),
+		),
+	];
+	const [field, ...others] = fields;
+	if (field === undefined) {
+		return { kind: 'fixed', severity: otherwise, ...denied };
+	}
+	return others.length === 0
+		? { byValue, field, kind: 'byValue', otherwise, ...denied }
+		: unreadable('severity chosen by one field', cell);
 };
 
 /**
@@ -516,34 +467,28 @@ const casedSeverityIn = (cell: string, fieldsCell: string): EventSeverity => {
  * @throws for any other cell, for a value no field lists that is not a value of `result`, or for
  * values of two fields.
  */
-export const severityIn = (
-  cell: string,
-  fieldsCell: string = '',
-): EventSeverity => {
-  const single = SEVERITIES.find((severity) => cell === `\`${severity}\``);
-  if (single !== undefined) {
-    return { kind: 'fixed', severity: single };
-  }
-  if (cell === FOLLOWS_RESULT) {
-    return { kind: 'followsResult' };
-  }
-  const refused = REFUSED_CHANGED_NAMES_CELL.exec(cell);
-  const changed = CHANGED_NAMES_CELL.exec(refused?.[2] ?? cell);
-  if (changed !== null) {
-    return {
-      kind: 'byChangedName',
-      names: backtickedIn(changed[2] ?? ''),
-      otherwise: severityNamed(changed[3], cell),
-      severity: severityNamed(changed[1], cell),
-      ...(refused === null
-        ? {}
-        : { whenDenied: severityNamed(refused[1], cell) }),
-    };
-  }
-  return (
-    PROSE_CASE_SEVERITIES.find((perCase) => perCase.cell === cell)?.severity ??
-    casedSeverityIn(cell, fieldsCell)
-  );
+export const severityIn = (cell: string, fieldsCell: string = ''): EventSeverity => {
+	const single = SEVERITIES.find((severity) => cell === `\`${severity}\``);
+	if (single !== undefined) {
+		return { kind: 'fixed', severity: single };
+	}
+	if (cell === FOLLOWS_RESULT) {
+		return { kind: 'followsResult' };
+	}
+	const refused = REFUSED_CHANGED_NAMES_CELL.exec(cell);
+	const changed = CHANGED_NAMES_CELL.exec(refused?.[2] ?? cell);
+	if (changed !== null) {
+		return {
+			kind: 'byChangedName',
+			names: backtickedIn(changed[2] ?? ''),
+			otherwise: severityNamed(changed[3], cell),
+			severity: severityNamed(changed[1], cell),
+			...(refused === null ? {} : { whenDenied: severityNamed(refused[1], cell) }),
+		};
+	}
+	return (
+		PROSE_CASE_SEVERITIES.find((perCase) => perCase.cell === cell)?.severity ?? casedSeverityIn(cell, fieldsCell)
+	);
 };
 
 /**
@@ -552,17 +497,17 @@ export const severityIn = (
  * @param cell the cell, such as `Custodian, owner or admin`.
  */
 export const actorIn = (cell: string): EventActor => {
-  const kind = cell.toLowerCase();
-  if (kind === 'system' || kind === 'anonymous') {
-    return { kind };
-  }
-  return {
-    kind: 'roles',
-    roles: kind
-      .split(/,|\bor\b/u)
-      .map((role) => role.trim())
-      .filter((role) => role.length > 0),
-  };
+	const kind = cell.toLowerCase();
+	if (kind === 'system' || kind === 'anonymous') {
+		return { kind };
+	}
+	return {
+		kind: 'roles',
+		roles: kind
+			.split(/,|\bor\b/u)
+			.map((role) => role.trim())
+			.filter((role) => role.length > 0),
+	};
 };
 
 /**
@@ -573,28 +518,27 @@ export const actorIn = (cell: string): EventActor => {
  * @param event the event type, without the prefix.
  */
 export const ownerOf = (event: string): EventOwner | undefined => {
-  if (POST_MVP_EVENT_TYPES.includes(event)) {
-    return undefined;
-  }
-  return BRIDGE_EVENT_TYPES.includes(event) ? 'bridge' : 'controller';
+	if (POST_MVP_EVENT_TYPES.includes(event)) {
+		return undefined;
+	}
+	return BRIDGE_EVENT_TYPES.includes(event) ? 'bridge' : 'controller';
 };
 
 // A refusable row's field sets, carrying `reason` on refusal unless they carry it already.
 const withRefusalReason = (fields: EventFieldSets): EventFieldSets =>
-  [...fields.always, ...fields.onRefusal].includes(REFUSED_REQUEST.reasonMember)
-    ? fields
-    : {
-        ...fields,
-        onRefusal: [...fields.onRefusal, REFUSED_REQUEST.reasonMember],
-      };
+	[...fields.always, ...fields.onRefusal].includes(REFUSED_REQUEST.reasonMember)
+		? fields
+		: {
+				...fields,
+				onRefusal: [...fields.onRefusal, REFUSED_REQUEST.reasonMember],
+			};
 
 // A refusable row's severity, giving a denied result its own unless its cell gives one or its
 // severity follows `result`.
 const withRefusalSeverity = (severity: EventSeverity): EventSeverity =>
-  (severity.kind === 'fixed' || severity.kind === 'byValue') &&
-  severity.whenDenied === undefined
-    ? { ...severity, whenDenied: REFUSED_REQUEST.severity }
-    : severity;
+	(severity.kind === 'fixed' || severity.kind === 'byValue') && severity.whenDenied === undefined
+		? { ...severity, whenDenied: REFUSED_REQUEST.severity }
+		: severity;
 
 /**
  * What every row of the Events table registers, read, the post-MVP rows left out, and the note's rule
@@ -604,29 +548,29 @@ const withRefusalSeverity = (severity: EventSeverity): EventSeverity =>
  * @throws naming the cell, when a row's fields, severity or actor cannot be read.
  */
 export const readAuditEvents = (
-  markdown: string = readFileSync(AUDIT_EVENTS_DOCUMENT, 'utf8'),
+	markdown: string = readFileSync(AUDIT_EVENTS_DOCUMENT, 'utf8'),
 ): readonly AuditEventRegistration[] => {
-  const notes = notesIn(markdown);
-  return eventsTableRows(markdown).flatMap((row) => {
-    const owner = ownerOf(row.event);
-    if (owner === undefined) {
-      return [];
-    }
-    const actor = actorIn(row.actor);
-    const fields = fieldSetsIn(row.fields, namesListedFor(notes, row.event));
-    const severity = severityIn(row.severity, row.fields);
-    const refusable = owner === 'controller' && actor.kind === 'roles';
-    return [
-      {
-        actor,
-        event: row.event,
-        fields: refusable ? withRefusalReason(fields) : fields,
-        owner,
-        row,
-        severity: refusable ? withRefusalSeverity(severity) : severity,
-      },
-    ];
-  });
+	const notes = notesIn(markdown);
+	return eventsTableRows(markdown).flatMap((row) => {
+		const owner = ownerOf(row.event);
+		if (owner === undefined) {
+			return [];
+		}
+		const actor = actorIn(row.actor);
+		const fields = fieldSetsIn(row.fields, namesListedFor(notes, row.event));
+		const severity = severityIn(row.severity, row.fields);
+		const refusable = owner === 'controller' && actor.kind === 'roles';
+		return [
+			{
+				actor,
+				event: row.event,
+				fields: refusable ? withRefusalReason(fields) : fields,
+				owner,
+				row,
+				severity: refusable ? withRefusalSeverity(severity) : severity,
+			},
+		];
+	});
 };
 
 /**
@@ -634,8 +578,7 @@ export const readAuditEvents = (
  *
  * @param event the event type, as the table names it.
  */
-export const emittedType = (event: string): string =>
-  `${EVENT_TYPE_PREFIX}${event}`;
+export const emittedType = (event: string): string => `${EVENT_TYPE_PREFIX}${event}`;
 
 /**
  * The counts an `import.run` event carries on success, as the note below the Events table lists
@@ -646,30 +589,27 @@ export const emittedType = (event: string): string =>
  * and skipped. The dry run's operational line ({@link DRY_RUN_LOG_LINE}) carries the same ones.
  */
 export const IMPORT_RUN_COUNTS = Object.freeze({
-  allStudyHoldings: 'allStudyHoldings',
-  dataWithoutPolicy: 'dataWithoutPolicy',
-  grantsWritten: 'grantsWritten',
-  resourcesWithoutOwner: 'resourcesWithoutOwner',
-  selfGrantsRefused: 'selfGrantsRefused',
-  studiesRegistered: 'studiesRegistered',
-  studiesReported: 'studiesReported',
-  studiesSkipped: 'studiesSkipped',
+	allStudyHoldings: 'allStudyHoldings',
+	dataWithoutPolicy: 'dataWithoutPolicy',
+	grantsWritten: 'grantsWritten',
+	resourcesWithoutOwner: 'resourcesWithoutOwner',
+	selfGrantsRefused: 'selfGrantsRefused',
+	studiesRegistered: 'studiesRegistered',
+	studiesReported: 'studiesReported',
+	studiesSkipped: 'studiesSkipped',
 } as const);
 
 /**
  * The Controller's rows of the Events table no operation of this epic produces, each with why, so a
  * table-driven suite tells them from a row nothing scripts.
  */
-export const NOT_EMITTED_IN_THIS_EPIC: Readonly<
-  Partial<Record<AuditEventType, string>>
-> = Object.freeze({
-  'admin.override': 'no operation bypassing an instance restriction is defined',
-  'invitation.claim': 'no invitation operation exists in this epic',
-  'invitation.creation': 'no invitation operation exists in this epic',
-  'invitation.lapse': 'no invitation operation exists in this epic',
-  'ownership.transfer':
-    'admin.ts holds no ownership transfer operation (#214 Q14)',
-  'resource.orphaned': 'post-MVP in the first release (#214 Q20)',
+export const NOT_EMITTED_IN_THIS_EPIC: Readonly<Partial<Record<AuditEventType, string>>> = Object.freeze({
+	'admin.override': 'no operation bypassing an instance restriction is defined',
+	'invitation.claim': 'no invitation operation exists in this epic',
+	'invitation.creation': 'no invitation operation exists in this epic',
+	'invitation.lapse': 'no invitation operation exists in this epic',
+	'ownership.transfer': 'admin.ts holds no ownership transfer operation (#214 Q14)',
+	'resource.orphaned': 'post-MVP in the first release (#214 Q20)',
 });
 
 /**
@@ -680,19 +620,15 @@ export const NOT_EMITTED_IN_THIS_EPIC: Readonly<
  * @param data the event's data; a `changes` list of `{ name, ... }` entries, or none.
  */
 export const severityOfChanges = (
-  severity: Extract<EventSeverity, { kind: 'byChangedName' }>,
-  data: Readonly<Record<string, unknown>>,
+	severity: Extract<EventSeverity, { kind: 'byChangedName' }>,
+	data: Readonly<Record<string, unknown>>,
 ): Severity => {
-  const changed = Array.isArray(data['changes'])
-    ? data['changes'].map((change: unknown) =>
-        change !== null && typeof change === 'object'
-          ? String(Reflect.get(change, 'name'))
-          : '',
-      )
-    : [];
-  return severity.names.some((name) => changed.includes(name))
-    ? severity.severity
-    : severity.otherwise;
+	const changed = Array.isArray(data['changes'])
+		? data['changes'].map((change: unknown) =>
+				change !== null && typeof change === 'object' ? String(Reflect.get(change, 'name')) : '',
+			)
+		: [];
+	return severity.names.some((name) => changed.includes(name)) ? severity.severity : severity.otherwise;
 };
 
 /**
@@ -711,8 +647,7 @@ export const LOG_LEVEL_MEMBER = 'level';
  * How every instant in an event is written, `time` and any instant in `data` alike (ruled): RFC 3339
  * in UTC, with the `Z` designator and any fraction of a second.
  */
-export const EVENT_INSTANT_FORM =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u;
+export const EVENT_INSTANT_FORM = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u;
 
 /**
  * The member of a `grant.revocation` naming the event that caused it (ruled). A retirement emits one
@@ -733,8 +668,8 @@ export const CAUSED_BY_MEMBER = 'causedBy';
  * `DECISION_ORIGIN_COLUMN`, holding the same value.
  */
 export const IMPORT_ORIGIN = Object.freeze({
-  member: 'origin',
-  value: 'import',
+	member: 'origin',
+	value: 'import',
 } as const);
 
 /**
@@ -743,8 +678,11 @@ export const IMPORT_ORIGIN = Object.freeze({
  * that wrote it (ruled, "#216's export details, member reasons and the run's event" 3), so every
  * registration, grant and decision a run writes is answerable from the trail to that run.
  */
-export const IMPORT_ORIGIN_EVENT_TYPES: readonly AuditEventType[] =
-  Object.freeze(['grant.creation', 'grant.decision', 'resource.registration']);
+export const IMPORT_ORIGIN_EVENT_TYPES: readonly AuditEventType[] = Object.freeze([
+	'grant.creation',
+	'grant.decision',
+	'resource.registration',
+]);
 
 /**
  * The one operational log line a dry run of the EGO import writes (ruled: at info, naming the
@@ -753,11 +691,11 @@ export const IMPORT_ORIGIN_EVENT_TYPES: readonly AuditEventType[] =
  * `actorId` the administrator's subject, and the run's counts under {@link IMPORT_RUN_COUNTS}' names.
  */
 export const DRY_RUN_LOG_LINE = Object.freeze({
-  actorMember: 'actorId',
-  message: Object.freeze({
-    member: 'message',
-    value: 'egoImport.dryRun',
-  } as const),
+	actorMember: 'actorId',
+	message: Object.freeze({
+		member: 'message',
+		value: 'egoImport.dryRun',
+	} as const),
 } as const);
 
 /**
@@ -768,10 +706,10 @@ export const DRY_RUN_LOG_LINE = Object.freeze({
  * resource's id.
  */
 export const TOKEN_CAP_EVENT = Object.freeze({
-  heldCountMember: 'heldResourceCount',
-  reason: 'tokenOverResponseCap',
-  sizeMember: 'tokenBytes',
-  type: AUDIT_EVENT_TYPES.tokenExchange,
+	heldCountMember: 'heldResourceCount',
+	reason: 'tokenOverResponseCap',
+	sizeMember: 'tokenBytes',
+	type: AUDIT_EVENT_TYPES.tokenExchange,
 } as const);
 
 /**
@@ -794,25 +732,25 @@ export const TOKEN_CAP_EVENT = Object.freeze({
  * denied rather than failed, since a made-up key id or a routine key rotation produces it.
  */
 export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
-  apiKeyVerifierNotConfigured: 'apiKeyVerifierNotConfigured',
-  excessiveLifetime: 'excessiveLifetime',
-  expiredToken: 'expiredToken',
-  invalidSignature: 'invalidSignature',
-  missingCredential: 'missingCredential',
-  missingExpiry: 'missingExpiry',
-  missingIssuedAt: 'missingIssuedAt',
-  missingSubject: 'missingSubject',
-  notYetValid: 'notYetValid',
-  otherAudience: 'otherAudience',
-  otherIssuer: 'otherIssuer',
-  otherType: 'otherType',
-  revokedPlatform: 'revokedPlatform',
-  revokedPrincipal: 'revokedPrincipal',
-  serviceAccountNotPermitted: 'serviceAccountNotPermitted',
-  signedOutSession: 'signedOutSession',
-  signingKeyUnconfirmed: 'signingKeyUnconfirmed',
-  unreadableToken: 'unreadableToken',
-  unrepresentableSubject: 'unrepresentableSubject',
+	apiKeyVerifierNotConfigured: 'apiKeyVerifierNotConfigured',
+	excessiveLifetime: 'excessiveLifetime',
+	expiredToken: 'expiredToken',
+	invalidSignature: 'invalidSignature',
+	missingCredential: 'missingCredential',
+	missingExpiry: 'missingExpiry',
+	missingIssuedAt: 'missingIssuedAt',
+	missingSubject: 'missingSubject',
+	notYetValid: 'notYetValid',
+	otherAudience: 'otherAudience',
+	otherIssuer: 'otherIssuer',
+	otherType: 'otherType',
+	revokedPlatform: 'revokedPlatform',
+	revokedPrincipal: 'revokedPrincipal',
+	serviceAccountNotPermitted: 'serviceAccountNotPermitted',
+	signedOutSession: 'signedOutSession',
+	signingKeyUnconfirmed: 'signingKeyUnconfirmed',
+	unreadableToken: 'unreadableToken',
+	unrepresentableSubject: 'unrepresentableSubject',
 } as const);
 
 /**
@@ -822,21 +760,20 @@ export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
  * {@link REFUSED_SUBJECT_MEMBER}, for each of them but `missingSubject`, `otherType` and
  * `unrepresentableSubject`.
  */
-export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] =
-  Object.freeze([
-    EXCHANGE_REFUSAL_REASONS.excessiveLifetime,
-    EXCHANGE_REFUSAL_REASONS.expiredToken,
-    EXCHANGE_REFUSAL_REASONS.missingExpiry,
-    EXCHANGE_REFUSAL_REASONS.missingIssuedAt,
-    EXCHANGE_REFUSAL_REASONS.missingSubject,
-    EXCHANGE_REFUSAL_REASONS.notYetValid,
-    EXCHANGE_REFUSAL_REASONS.otherAudience,
-    EXCHANGE_REFUSAL_REASONS.otherType,
-    EXCHANGE_REFUSAL_REASONS.revokedPlatform,
-    EXCHANGE_REFUSAL_REASONS.revokedPrincipal,
-    EXCHANGE_REFUSAL_REASONS.signedOutSession,
-    EXCHANGE_REFUSAL_REASONS.unrepresentableSubject,
-  ]);
+export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] = Object.freeze([
+	EXCHANGE_REFUSAL_REASONS.excessiveLifetime,
+	EXCHANGE_REFUSAL_REASONS.expiredToken,
+	EXCHANGE_REFUSAL_REASONS.missingExpiry,
+	EXCHANGE_REFUSAL_REASONS.missingIssuedAt,
+	EXCHANGE_REFUSAL_REASONS.missingSubject,
+	EXCHANGE_REFUSAL_REASONS.notYetValid,
+	EXCHANGE_REFUSAL_REASONS.otherAudience,
+	EXCHANGE_REFUSAL_REASONS.otherType,
+	EXCHANGE_REFUSAL_REASONS.revokedPlatform,
+	EXCHANGE_REFUSAL_REASONS.revokedPrincipal,
+	EXCHANGE_REFUSAL_REASONS.signedOutSession,
+	EXCHANGE_REFUSAL_REASONS.unrepresentableSubject,
+]);
 
 /**
  * The reasons a `managementToken.refusal` records for a management credential it could not read or
@@ -845,13 +782,12 @@ export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] =
  * in the query cannot, which the Management API alone names; or one that cannot be verified, each of
  * those one of {@link EXCHANGE_REFUSAL_REASONS}. Such a refusal names no subject.
  */
-export const UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS: readonly string[] =
-  Object.freeze([
-    'malformedCredential',
-    EXCHANGE_REFUSAL_REASONS.unreadableToken,
-    EXCHANGE_REFUSAL_REASONS.otherIssuer,
-    EXCHANGE_REFUSAL_REASONS.invalidSignature,
-  ]);
+export const UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS: readonly string[] = Object.freeze([
+	'malformedCredential',
+	EXCHANGE_REFUSAL_REASONS.unreadableToken,
+	EXCHANGE_REFUSAL_REASONS.otherIssuer,
+	EXCHANGE_REFUSAL_REASONS.invalidSignature,
+]);
 
 /**
  * The member naming a refused token's subject (ruled): the `sub` of a sign-in or management token
@@ -903,13 +839,13 @@ export const WINDOW_CLOSED_WITHIN_MS = 5_000;
  * subject and the operation.
  */
 export interface ManagementTokenRefusal {
-  actorId: unknown;
-  actorType: unknown;
-  method: unknown;
-  reason: unknown;
-  refusedSubject: unknown;
-  result: unknown;
-  route: unknown;
+	actorId: unknown;
+	actorType: unknown;
+	method: unknown;
+	reason: unknown;
+	refusedSubject: unknown;
+	result: unknown;
+	route: unknown;
 }
 
 /**
@@ -924,17 +860,17 @@ export interface ManagementTokenRefusal {
  * @param refusedSubject the refused token's `sub`, for a token that verified.
  */
 export const managementTokenRefusal = (
-  { method, route }: ManagementRoute,
-  reason: string,
-  refusedSubject?: string,
+	{ method, route }: ManagementRoute,
+	reason: string,
+	refusedSubject?: string,
 ): ManagementTokenRefusal => ({
-  actorId: null,
-  actorType: 'anonymous',
-  method,
-  reason,
-  refusedSubject,
-  result: 'denied',
-  route,
+	actorId: null,
+	actorType: 'anonymous',
+	method,
+	reason,
+	refusedSubject,
+	result: 'denied',
+	route,
 });
 
 /**
@@ -942,30 +878,18 @@ export const managementTokenRefusal = (
  *
  * @param events the events.
  */
-export const managementTokenRefusalsIn = (
-  events: readonly CloudEvent[],
-): readonly ManagementTokenRefusal[] =>
-  ofType(events, AUDIT_EVENT_TYPES.managementTokenRefusal)
-    .map(dataOf)
-    .map(
-      ({
-        actorId,
-        actorType,
-        method,
-        reason,
-        refusedSubject,
-        result,
-        route,
-      }) => ({
-        actorId,
-        actorType,
-        method,
-        reason,
-        refusedSubject,
-        result,
-        route,
-      }),
-    );
+export const managementTokenRefusalsIn = (events: readonly CloudEvent[]): readonly ManagementTokenRefusal[] =>
+	ofType(events, AUDIT_EVENT_TYPES.managementTokenRefusal)
+		.map(dataOf)
+		.map(({ actorId, actorType, method, reason, refusedSubject, result, route }) => ({
+			actorId,
+			actorType,
+			method,
+			reason,
+			refusedSubject,
+			result,
+			route,
+		}));
 
 /**
  * The `managementToken.refusalTally` events among some, in their order, each a window's closing:
@@ -974,19 +898,17 @@ export const managementTokenRefusalsIn = (
  *
  * @param events the events.
  */
-export const refusalTalliesIn = (
-  events: readonly CloudEvent[],
-): readonly Readonly<Record<string, unknown>>[] =>
-  ofType(events, AUDIT_EVENT_TYPES.managementTokenRefusalTally)
-    .map(dataOf)
-    .map((data) => ({
-      actorId: data['actorId'],
-      actorType: data['actorType'],
-      carriesSubject: Object.hasOwn(data, REFUSED_SUBJECT_MEMBER),
-      count: data['count'],
-      reason: data['reason'],
-      windowId: data['windowId'],
-    }));
+export const refusalTalliesIn = (events: readonly CloudEvent[]): readonly Readonly<Record<string, unknown>>[] =>
+	ofType(events, AUDIT_EVENT_TYPES.managementTokenRefusalTally)
+		.map(dataOf)
+		.map((data) => ({
+			actorId: data['actorId'],
+			actorType: data['actorType'],
+			carriesSubject: Object.hasOwn(data, REFUSED_SUBJECT_MEMBER),
+			count: data['count'],
+			reason: data['reason'],
+			windowId: data['windowId'],
+		}));
 
 /**
  * The events among some, the `managementToken.refusal` events aside, carrying a credential refusal's
@@ -994,22 +916,16 @@ export const refusalTalliesIn = (
  *
  * @param events the events.
  */
-export const credentialRefusalsElsewhere = (
-  events: readonly CloudEvent[],
-): readonly CloudEvent[] =>
-  events.filter(
-    (event) =>
-      event.type !== emittedType(AUDIT_EVENT_TYPES.managementTokenRefusal) &&
-      event.type !==
-        emittedType(AUDIT_EVENT_TYPES.managementTokenRefusalTally) &&
-      event.type !== emittedType(AUDIT_EVENT_TYPES.tokenExchange) &&
-      [
-        ...MANAGEMENT_TOKEN_REFUSAL_REASONS,
-        ...UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS,
-      ]
-        .map(String)
-        .includes(String(dataOf(event)['reason'])),
-  );
+export const credentialRefusalsElsewhere = (events: readonly CloudEvent[]): readonly CloudEvent[] =>
+	events.filter(
+		(event) =>
+			event.type !== emittedType(AUDIT_EVENT_TYPES.managementTokenRefusal) &&
+			event.type !== emittedType(AUDIT_EVENT_TYPES.managementTokenRefusalTally) &&
+			event.type !== emittedType(AUDIT_EVENT_TYPES.tokenExchange) &&
+			[...MANAGEMENT_TOKEN_REFUSAL_REASONS, ...UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS]
+				.map(String)
+				.includes(String(dataOf(event)['reason'])),
+	);
 
 /**
  * The reasons a refused channel assertion is recorded under (ruled), one fixed code per cause, never a
@@ -1034,16 +950,16 @@ export const credentialRefusalsElsewhere = (
  * `invalidSignature` need a forged assertion, so their cases are the developer's own suites'.
  */
 export const CHANNEL_ASSERTION_REJECTION_REASONS = Object.freeze({
-  excessiveLifetime: 'excessiveLifetime',
-  expiredAssertion: 'expiredAssertion',
-  invalidSignature: 'invalidSignature',
-  missingAssertion: 'missingAssertion',
-  noLiveKey: 'noLiveKey',
-  notYetValid: 'notYetValid',
-  otherAudience: 'otherAudience',
-  reusedAssertion: 'reusedAssertion',
-  unknownApplication: 'unknownApplication',
-  unreadableAssertion: 'unreadableAssertion',
+	excessiveLifetime: 'excessiveLifetime',
+	expiredAssertion: 'expiredAssertion',
+	invalidSignature: 'invalidSignature',
+	missingAssertion: 'missingAssertion',
+	noLiveKey: 'noLiveKey',
+	notYetValid: 'notYetValid',
+	otherAudience: 'otherAudience',
+	reusedAssertion: 'reusedAssertion',
+	unknownApplication: 'unknownApplication',
+	unreadableAssertion: 'unreadableAssertion',
 } as const);
 
 /**
@@ -1052,14 +968,13 @@ export const CHANNEL_ASSERTION_REJECTION_REASONS = Object.freeze({
  * first refusal of each assertion, and counts every later refusal of it in
  * `channelAssertion.rejectionTally` under its own reason.
  */
-export const CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS: readonly string[] =
-  Object.freeze([
-    CHANNEL_ASSERTION_REJECTION_REASONS.expiredAssertion,
-    CHANNEL_ASSERTION_REJECTION_REASONS.notYetValid,
-    CHANNEL_ASSERTION_REJECTION_REASONS.otherAudience,
-    CHANNEL_ASSERTION_REJECTION_REASONS.excessiveLifetime,
-    CHANNEL_ASSERTION_REJECTION_REASONS.reusedAssertion,
-  ]);
+export const CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS: readonly string[] = Object.freeze([
+	CHANNEL_ASSERTION_REJECTION_REASONS.expiredAssertion,
+	CHANNEL_ASSERTION_REJECTION_REASONS.notYetValid,
+	CHANNEL_ASSERTION_REJECTION_REASONS.otherAudience,
+	CHANNEL_ASSERTION_REJECTION_REASONS.excessiveLifetime,
+	CHANNEL_ASSERTION_REJECTION_REASONS.reusedAssertion,
+]);
 
 /**
  * The reasons a `channelAssertion.rejectionTally` always counts by (ruled): an assertion that cannot
@@ -1067,27 +982,25 @@ export const CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS: readonly string[] =
  * and recorded once each interval. The tally also counts the reasons
  * of {@link CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS} for every refusal not recorded one by one.
  */
-export const CHANNEL_ASSERTION_TALLY_REASONS: readonly string[] = Object.freeze(
-  [
-    CHANNEL_ASSERTION_REJECTION_REASONS.missingAssertion,
-    CHANNEL_ASSERTION_REJECTION_REASONS.unreadableAssertion,
-    CHANNEL_ASSERTION_REJECTION_REASONS.unknownApplication,
-    CHANNEL_ASSERTION_REJECTION_REASONS.noLiveKey,
-    CHANNEL_ASSERTION_REJECTION_REASONS.invalidSignature,
-  ],
-);
+export const CHANNEL_ASSERTION_TALLY_REASONS: readonly string[] = Object.freeze([
+	CHANNEL_ASSERTION_REJECTION_REASONS.missingAssertion,
+	CHANNEL_ASSERTION_REJECTION_REASONS.unreadableAssertion,
+	CHANNEL_ASSERTION_REJECTION_REASONS.unknownApplication,
+	CHANNEL_ASSERTION_REJECTION_REASONS.noLiveKey,
+	CHANNEL_ASSERTION_REJECTION_REASONS.invalidSignature,
+]);
 
 /** One event as a log line carries it: the CloudEvents envelope and its `data`. */
 export interface CloudEvent {
-  /** Any other member the line carries, such as `severity`. */
-  [member: string]: unknown;
+	/** Any other member the line carries, such as `severity`. */
+	[member: string]: unknown;
 
-  data: unknown;
-  id: string;
-  source: string;
-  specversion: string;
-  time: string;
-  type: string;
+	data: unknown;
+	id: string;
+	source: string;
+	specversion: string;
+	time: string;
+	type: string;
 }
 
 // A JSON grammar's scan, refusing an object whose members repeat a name, since JSON.parse keeps the
@@ -1096,70 +1009,56 @@ const WHITESPACE = /[\t\n\r ]*/uy;
 const SCALAR = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/uy;
 const STRING = /"(?:[^"\\\u0000-\u001f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"/uy;
 
-const matchedAt = (
-  pattern: RegExp,
-  text: string,
-  at: number,
-): string | undefined => {
-  pattern.lastIndex = at;
-  return pattern.exec(text)?.[0];
+const matchedAt = (pattern: RegExp, text: string, at: number): string | undefined => {
+	pattern.lastIndex = at;
+	return pattern.exec(text)?.[0];
 };
 
-const skipped = (text: string, at: number): number =>
-  at + (matchedAt(WHITESPACE, text, at) ?? '').length;
+const skipped = (text: string, at: number): number => at + (matchedAt(WHITESPACE, text, at) ?? '').length;
 
 const malformed = (at: number): never => {
-  throw new Error(`the line is not well-formed JSON at character ${at}`);
+	throw new Error(`the line is not well-formed JSON at character ${at}`);
 };
 
-const scannedMembers = (
-  text: string,
-  at: number,
-  seen: ReadonlySet<string>,
-): number => {
-  const keyAt = skipped(text, at);
-  const key = matchedAt(STRING, text, keyAt) ?? malformed(keyAt);
-  const name = String(JSON.parse(key));
-  if (seen.has(name)) {
-    throw new Error(`the line repeats the member ${JSON.stringify(name)}`);
-  }
-  const colon = skipped(text, keyAt + key.length);
-  if (text[colon] !== ':') {
-    return malformed(colon);
-  }
-  const after = skipped(text, scannedValue(text, colon + 1));
-  if (text[after] === ',') {
-    return scannedMembers(text, after + 1, new Set([...seen, name]));
-  }
-  return text[after] === '}' ? after + 1 : malformed(after);
+const scannedMembers = (text: string, at: number, seen: ReadonlySet<string>): number => {
+	const keyAt = skipped(text, at);
+	const key = matchedAt(STRING, text, keyAt) ?? malformed(keyAt);
+	const name = String(JSON.parse(key));
+	if (seen.has(name)) {
+		throw new Error(`the line repeats the member ${JSON.stringify(name)}`);
+	}
+	const colon = skipped(text, keyAt + key.length);
+	if (text[colon] !== ':') {
+		return malformed(colon);
+	}
+	const after = skipped(text, scannedValue(text, colon + 1));
+	if (text[after] === ',') {
+		return scannedMembers(text, after + 1, new Set([...seen, name]));
+	}
+	return text[after] === '}' ? after + 1 : malformed(after);
 };
 
 const scannedElements = (text: string, at: number): number => {
-  const after = skipped(text, scannedValue(text, at));
-  if (text[after] === ',') {
-    return scannedElements(text, after + 1);
-  }
-  return text[after] === ']' ? after + 1 : malformed(after);
+	const after = skipped(text, scannedValue(text, at));
+	if (text[after] === ',') {
+		return scannedElements(text, after + 1);
+	}
+	return text[after] === ']' ? after + 1 : malformed(after);
 };
 
 const scannedValue = (text: string, at: number): number => {
-  const start = skipped(text, at);
-  const opening = text[start];
-  if (opening === '{') {
-    const inside = skipped(text, start + 1);
-    return text[inside] === '}'
-      ? inside + 1
-      : scannedMembers(text, inside, new Set());
-  }
-  if (opening === '[') {
-    const inside = skipped(text, start + 1);
-    return text[inside] === ']' ? inside + 1 : scannedElements(text, inside);
-  }
-  const token =
-    matchedAt(STRING, text, start) ??
-    matchedAt(SCALAR, text, start) ??
-    malformed(start);
-  return start + token.length;
+	const start = skipped(text, at);
+	const opening = text[start];
+	if (opening === '{') {
+		const inside = skipped(text, start + 1);
+		return text[inside] === '}' ? inside + 1 : scannedMembers(text, inside, new Set());
+	}
+	if (opening === '[') {
+		const inside = skipped(text, start + 1);
+		return text[inside] === ']' ? inside + 1 : scannedElements(text, inside);
+	}
+	const token = matchedAt(STRING, text, start) ?? matchedAt(SCALAR, text, start) ?? malformed(start);
+	return start + token.length;
 };
 
 /**
@@ -1168,30 +1067,25 @@ const scannedValue = (text: string, at: number): number => {
  * @param line the line.
  * @throws when the line is not one JSON object, or an object in it repeats a member's name.
  */
-export const jsonObjectOf = (
-  line: string,
-): Readonly<Record<string, unknown>> => {
-  const start = skipped(line, 0);
-  if (line[start] !== '{') {
-    throw new Error('the line is not one JSON object');
-  }
-  const end = skipped(line, scannedValue(line, start));
-  if (end !== line.length) {
-    return malformed(end);
-  }
-  const value: unknown = JSON.parse(line);
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    return value as Readonly<Record<string, unknown>>;
-  }
-  throw new Error('the line is not one JSON object');
+export const jsonObjectOf = (line: string): Readonly<Record<string, unknown>> => {
+	const start = skipped(line, 0);
+	if (line[start] !== '{') {
+		throw new Error('the line is not one JSON object');
+	}
+	const end = skipped(line, scannedValue(line, start));
+	if (end !== line.length) {
+		return malformed(end);
+	}
+	const value: unknown = JSON.parse(line);
+	if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+		return value as Readonly<Record<string, unknown>>;
+	}
+	throw new Error('the line is not one JSON object');
 };
 
-const isCloudEvent = (
-  value: Readonly<Record<string, unknown>>,
-): value is CloudEvent =>
-  ['id', 'source', 'specversion', 'time', 'type'].every(
-    (member) => typeof value[member] === 'string',
-  ) && Object.hasOwn(value, 'data');
+const isCloudEvent = (value: Readonly<Record<string, unknown>>): value is CloudEvent =>
+	['id', 'source', 'specversion', 'time', 'type'].every((member) => typeof value[member] === 'string') &&
+	Object.hasOwn(value, 'data');
 
 /**
  * The events among a log stream's lines, such as `captureLog`'s: every line must be one JSON object
@@ -1200,33 +1094,29 @@ const isCloudEvent = (
  * @param lines the lines, empty ones left out.
  * @throws naming the line, when one is not one JSON object holding each member once.
  */
-export const cloudEventsIn = (
-  lines: readonly string[],
-): readonly CloudEvent[] =>
-  lines.flatMap((line, index) => {
-    try {
-      const value = jsonObjectOf(line);
-      return isCloudEvent(value) ? [value] : [];
-    } catch (error) {
-      throw new Error(
-        `log line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  });
+export const cloudEventsIn = (lines: readonly string[]): readonly CloudEvent[] =>
+	lines.flatMap((line, index) => {
+		try {
+			const value = jsonObjectOf(line);
+			return isCloudEvent(value) ? [value] : [];
+		} catch (error) {
+			throw new Error(`log line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	});
 
 /**
  * The reasons an event whose `result` is `failed` records (ruled): the dependency that failed, a fixed
  * code each, never the dependency's own error.
  */
 export const FAULT_REASONS = Object.freeze({
-  cacheUnavailable: 'cacheUnavailable',
-  directoryUnavailable: 'directoryUnavailable',
-  identityProviderUnavailable: 'identityProviderUnavailable',
-  storeUnavailable: 'storeUnavailable',
+	cacheUnavailable: 'cacheUnavailable',
+	directoryUnavailable: 'directoryUnavailable',
+	identityProviderUnavailable: 'identityProviderUnavailable',
+	storeUnavailable: 'storeUnavailable',
 } as const);
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * An event's `data`, as a log line or an answer of the audit log carries it, failing the test unless
@@ -1234,12 +1124,8 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
  *
  * @param event the event.
  */
-export const dataOf = (event: {
-  readonly data?: unknown;
-}): Readonly<Record<string, unknown>> =>
-  isRecord(event.data)
-    ? event.data
-    : assert.fail("an event's data is not an object");
+export const dataOf = (event: { readonly data?: unknown }): Readonly<Record<string, unknown>> =>
+	isRecord(event.data) ? event.data : assert.fail("an event's data is not an object");
 
 /**
  * The events among the lines a log stream holds, from a mark on.
@@ -1247,10 +1133,8 @@ export const dataOf = (event: {
  * @param log the captured log stream.
  * @param since how many lines to pass over: none by default.
  */
-export const eventsIn = (
-  log: LogCapture,
-  since: number = 0,
-): readonly CloudEvent[] => cloudEventsIn(log.lines().slice(since));
+export const eventsIn = (log: LogCapture, since: number = 0): readonly CloudEvent[] =>
+	cloudEventsIn(log.lines().slice(since));
 
 /**
  * The events of one type, as the table names it.
@@ -1258,11 +1142,8 @@ export const eventsIn = (
  * @param events the events.
  * @param type the event type, without the prefix.
  */
-export const ofType = (
-  events: readonly CloudEvent[],
-  type: AuditEventType,
-): readonly CloudEvent[] =>
-  events.filter((event) => event.type === emittedType(type));
+export const ofType = (events: readonly CloudEvent[], type: AuditEventType): readonly CloudEvent[] =>
+	events.filter((event) => event.type === emittedType(type));
 
 /**
  * The `data` of every event of one type the log stream holds from a mark on, in order, failing the
@@ -1273,19 +1154,18 @@ export const ofType = (
  * @param since how many lines to pass over: none by default.
  */
 export const eventDataOf = (
-  log: LogCapture,
-  type: AuditEventType,
-  since: number = 0,
-): readonly Readonly<Record<string, unknown>>[] =>
-  ofType(eventsIn(log, since), type).map(dataOf);
+	log: LogCapture,
+	type: AuditEventType,
+	since: number = 0,
+): readonly Readonly<Record<string, unknown>>[] => ofType(eventsIn(log, since), type).map(dataOf);
 
 /** Where a wait reads from, and for how long. */
 export interface AwaitOptions {
-  /** Lines to pass over: none by default. */
-  since?: number;
+	/** Lines to pass over: none by default. */
+	since?: number;
 
-  /** The longest wait: 10 s by default. */
-  timeoutMs?: number;
+	/** The longest wait: 10 s by default. */
+	timeoutMs?: number;
 }
 
 /**
@@ -1297,19 +1177,13 @@ export interface AwaitOptions {
  * @param options the mark and the timeout.
  */
 export const awaitEvents = async (
-  log: LogCapture,
-  condition: (events: readonly CloudEvent[]) => boolean,
-  { since = 0, timeoutMs = 10_000 }: AwaitOptions = {},
+	log: LogCapture,
+	condition: (events: readonly CloudEvent[]) => boolean,
+	{ since = 0, timeoutMs = 10_000 }: AwaitOptions = {},
 ): Promise<readonly CloudEvent[]> => {
-  const held = await eventually(
-    async () => condition(eventsIn(log, since)),
-    timeoutMs,
-  );
-  assert.ok(
-    held,
-    `the events awaited never reached the log stream within ${timeoutMs} ms`,
-  );
-  return eventsIn(log, since);
+	const held = await eventually(async () => condition(eventsIn(log, since)), timeoutMs);
+	assert.ok(held, `the events awaited never reached the log stream within ${timeoutMs} ms`);
+	return eventsIn(log, since);
 };
 
 /**
@@ -1321,18 +1195,11 @@ export const awaitEvents = async (
  * @param options how many, 1 by default, the mark and the timeout.
  */
 export const awaitEventsOfType = async (
-  log: LogCapture,
-  type: AuditEventType,
-  { count = 1, ...options }: AwaitOptions & { count?: number } = {},
+	log: LogCapture,
+	type: AuditEventType,
+	{ count = 1, ...options }: AwaitOptions & { count?: number } = {},
 ): Promise<readonly CloudEvent[]> =>
-  ofType(
-    await awaitEvents(
-      log,
-      (events) => ofType(events, type).length >= count,
-      options,
-    ),
-    type,
-  );
+	ofType(await awaitEvents(log, (events) => ofType(events, type).length >= count, options), type);
 
 /**
  * Waits until the log stream holds at least a number of events of one type, failing the test if it
@@ -1343,11 +1210,10 @@ export const awaitEventsOfType = async (
  * @param options how many, 1 by default, the mark and the timeout.
  */
 export const awaitEventData = async (
-  log: LogCapture,
-  type: AuditEventType,
-  options: AwaitOptions & { count?: number } = {},
-): Promise<readonly Readonly<Record<string, unknown>>[]> =>
-  (await awaitEventsOfType(log, type, options)).map(dataOf);
+	log: LogCapture,
+	type: AuditEventType,
+	options: AwaitOptions & { count?: number } = {},
+): Promise<readonly Readonly<Record<string, unknown>>[]> => (await awaitEventsOfType(log, type, options)).map(dataOf);
 
 /**
  * The dry run's operational lines ({@link DRY_RUN_LOG_LINE}) among a log stream's lines, from a mark
@@ -1356,36 +1222,33 @@ export const awaitEventData = async (
  * @param log the captured log stream.
  * @param since how many lines to pass over: none by default.
  */
-export const dryRunLogLines = (
-  log: LogCapture,
-  since: number = 0,
-): readonly Readonly<Record<string, unknown>>[] =>
-  log
-    .lines()
-    .slice(since)
-    .map(jsonObjectOf)
-    .filter(
-      (line) =>
-        line[DRY_RUN_LOG_LINE.message.member] ===
-          DRY_RUN_LOG_LINE.message.value && !Object.hasOwn(line, 'specversion'),
-    );
+export const dryRunLogLines = (log: LogCapture, since: number = 0): readonly Readonly<Record<string, unknown>>[] =>
+	log
+		.lines()
+		.slice(since)
+		.map(jsonObjectOf)
+		.filter(
+			(line) =>
+				line[DRY_RUN_LOG_LINE.message.member] === DRY_RUN_LOG_LINE.message.value &&
+				!Object.hasOwn(line, 'specversion'),
+		);
 
 /** One `audit_log` row as a test reads it. */
 export interface AuditRow {
-  data: unknown;
-  dataschema: string | null;
-  id: string;
+	data: unknown;
+	dataschema: string | null;
+	id: string;
 
-  /**
-   * `occurred_at` in UTC, to the store's microsecond, written `YYYY-MM-DDTHH:MM:SS.ffffff000`: nine
-   * digits of the second, as an event's `time` is compared at.
-   */
-  occurredAtKey: string;
+	/**
+	 * `occurred_at` in UTC, to the store's microsecond, written `YYYY-MM-DDTHH:MM:SS.ffffff000`: nine
+	 * digits of the second, as an event's `time` is compared at.
+	 */
+	occurredAtKey: string;
 
-  severity: unknown;
-  source: string;
-  specversion: string;
-  type: string;
+	severity: unknown;
+	source: string;
+	specversion: string;
+	type: string;
 }
 
 const column = (name: string): string => pg.escapeIdentifier(name);
@@ -1395,14 +1258,12 @@ const column = (name: string): string => pg.escapeIdentifier(name);
  *
  * @param client a connection under the migration role.
  */
-export const auditRows = async (
-  client: pg.ClientBase,
-): Promise<readonly AuditRow[]> => {
-  const { columns } = POLICY_TABLES.auditLog;
-  const { rows } = await client.query<AuditRow>(
+export const auditRows = async (client: pg.ClientBase): Promise<readonly AuditRow[]> => {
+	const { columns } = POLICY_TABLES.auditLog;
+	const { rows } = await client.query<AuditRow>(
 		`SELECT ${column(columns.data)} AS data, ${column(columns.dataSchema)} AS dataschema, ${column(columns.id)}::text AS id, to_char(${column(columns.occurredAt)} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '000' AS "occurredAtKey", ${column(columns.severity)} AS severity, ${column(columns.source)} AS source, ${column(columns.specVersion)} AS specversion, ${column(columns.type)} AS type FROM ${qualified(POLICY_TABLES.auditLog)} ORDER BY ${column(columns.occurredAt)}, ${column(columns.id)}`,
-  );
-  return rows;
+	);
+	return rows;
 };
 
 /**
@@ -1411,11 +1272,9 @@ export const auditRows = async (
  *
  * @param client a connection under the migration role.
  */
-export const auditRowTexts = async (
-  client: pg.ClientBase,
-): Promise<readonly string[]> => {
-  const { rows } = await client.query<{ text: string }>(
-    `SELECT to_jsonb(row_held)::text AS text FROM ${qualified(POLICY_TABLES.auditLog)} AS row_held`,
-  );
-  return rows.map(({ text }) => text);
+export const auditRowTexts = async (client: pg.ClientBase): Promise<readonly string[]> => {
+	const { rows } = await client.query<{ text: string }>(
+		`SELECT to_jsonb(row_held)::text AS text FROM ${qualified(POLICY_TABLES.auditLog)} AS row_held`,
+	);
+	return rows.map(({ text }) => text);
 };

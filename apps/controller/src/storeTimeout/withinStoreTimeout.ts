@@ -1,11 +1,6 @@
 import { CommitUnconfirmed } from './commitUnconfirmed.js';
 import { StoreTimeout } from './storeTimeout.js';
-import type {
-  ConnectionPool,
-  Deadline,
-  Lease,
-  PooledConnection,
-} from './types.js';
+import type { ConnectionPool, Deadline, Lease, PooledConnection } from './types.js';
 
 /**
  * The least time left to a unit's deadline, in milliseconds, for its `COMMIT` to be sent. With less
@@ -17,15 +12,10 @@ export const COMMIT_WINDOW_MILLISECONDS = 100;
 
 // The unit's work bound: its timeout, or the time left to its deadline when shorter, in whole
 // milliseconds, so both limits the store applies to a session can be set to it exactly.
-const workBoundOf = (
-  timeoutMilliseconds: number,
-  deadline: Deadline | undefined,
-): number =>
-  deadline === undefined
-    ? timeoutMilliseconds
-    : Math.floor(
-        Math.min(timeoutMilliseconds, deadline.remainingMilliseconds()),
-      );
+const workBoundOf = (timeoutMilliseconds: number, deadline: Deadline | undefined): number =>
+	deadline === undefined
+		? timeoutMilliseconds
+		: Math.floor(Math.min(timeoutMilliseconds, deadline.remainingMilliseconds()));
 
 /**
  * Runs one unit of store work on a connection of its own, within the store timeout counted from the
@@ -65,77 +55,75 @@ const workBoundOf = (
  * @throws whatever the pool or the work throws otherwise.
  */
 export const withinStoreTimeout = <Connection extends PooledConnection, Result>(
-  pool: ConnectionPool<Connection>,
-  timeoutMilliseconds: number,
-  work: (lease: Lease<Connection>) => Promise<Result>,
-  deadline?: Deadline,
+	pool: ConnectionPool<Connection>,
+	timeoutMilliseconds: number,
+	work: (lease: Lease<Connection>) => Promise<Result>,
+	deadline?: Deadline,
 ): Promise<Result> => {
-  const boundMilliseconds = workBoundOf(timeoutMilliseconds, deadline);
-  if (deadline !== undefined && boundMilliseconds < 1) {
-    return Promise.reject(new StoreTimeout());
-  }
-  return new Promise<Result>((resolve, reject) => {
-    const unit: {
-      held: Connection | undefined;
-      phase: 'abandoned' | 'committing' | 'working';
-      timer: NodeJS.Timeout | undefined;
-    } = { held: undefined, phase: 'working', timer: undefined };
-    const release = (destroy?: boolean): void => {
-      const { held } = unit;
-      unit.held = undefined;
-      held?.release(destroy);
-    };
-    const abandon = (failure: Error): void => {
-      unit.phase = 'abandoned';
-      clearTimeout(unit.timer);
-      release(true);
-      reject(failure);
-    };
-    unit.timer = setTimeout(() => {
-      abandon(new StoreTimeout());
-    }, boundMilliseconds);
-    const sendingCommit = (): void => {
-      if (unit.phase === 'working') {
-        const remaining = deadline?.remainingMilliseconds();
-        if (remaining !== undefined && remaining < COMMIT_WINDOW_MILLISECONDS) {
-          const failure = new StoreTimeout();
-          abandon(failure);
-          throw failure;
-        }
-        unit.phase = 'committing';
-        clearTimeout(unit.timer);
-        unit.timer = setTimeout(
-          () => {
-            abandon(new CommitUnconfirmed());
-          },
-          remaining === undefined
-            ? timeoutMilliseconds
-            : Math.min(timeoutMilliseconds, remaining),
-        );
-      }
-    };
-    const run = async (): Promise<Result> => {
-      const connection = await pool.connect();
-      if (unit.phase === 'abandoned') {
-        connection.release(true);
-        throw new StoreTimeout();
-      }
-      unit.held = connection;
-      return work({ boundMilliseconds, connection, release, sendingCommit });
-    };
-    // Once the unit is abandoned, its promise is settled, and the work's own end changes nothing of
-    // it.
-    run().then(
-      (result) => {
-        clearTimeout(unit.timer);
-        release();
-        resolve(result);
-      },
-      (failure: unknown) => {
-        clearTimeout(unit.timer);
-        release(true);
-        reject(failure);
-      },
-    );
-  });
+	const boundMilliseconds = workBoundOf(timeoutMilliseconds, deadline);
+	if (deadline !== undefined && boundMilliseconds < 1) {
+		return Promise.reject(new StoreTimeout());
+	}
+	return new Promise<Result>((resolve, reject) => {
+		const unit: {
+			held: Connection | undefined;
+			phase: 'abandoned' | 'committing' | 'working';
+			timer: NodeJS.Timeout | undefined;
+		} = { held: undefined, phase: 'working', timer: undefined };
+		const release = (destroy?: boolean): void => {
+			const { held } = unit;
+			unit.held = undefined;
+			held?.release(destroy);
+		};
+		const abandon = (failure: Error): void => {
+			unit.phase = 'abandoned';
+			clearTimeout(unit.timer);
+			release(true);
+			reject(failure);
+		};
+		unit.timer = setTimeout(() => {
+			abandon(new StoreTimeout());
+		}, boundMilliseconds);
+		const sendingCommit = (): void => {
+			if (unit.phase === 'working') {
+				const remaining = deadline?.remainingMilliseconds();
+				if (remaining !== undefined && remaining < COMMIT_WINDOW_MILLISECONDS) {
+					const failure = new StoreTimeout();
+					abandon(failure);
+					throw failure;
+				}
+				unit.phase = 'committing';
+				clearTimeout(unit.timer);
+				unit.timer = setTimeout(
+					() => {
+						abandon(new CommitUnconfirmed());
+					},
+					remaining === undefined ? timeoutMilliseconds : Math.min(timeoutMilliseconds, remaining),
+				);
+			}
+		};
+		const run = async (): Promise<Result> => {
+			const connection = await pool.connect();
+			if (unit.phase === 'abandoned') {
+				connection.release(true);
+				throw new StoreTimeout();
+			}
+			unit.held = connection;
+			return work({ boundMilliseconds, connection, release, sendingCommit });
+		};
+		// Once the unit is abandoned, its promise is settled, and the work's own end changes nothing of
+		// it.
+		run().then(
+			(result) => {
+				clearTimeout(unit.timer);
+				release();
+				resolve(result);
+			},
+			(failure: unknown) => {
+				clearTimeout(unit.timer);
+				release(true);
+				reject(failure);
+			},
+		);
+	});
 };

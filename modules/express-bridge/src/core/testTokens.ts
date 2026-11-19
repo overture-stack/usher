@@ -1,11 +1,6 @@
 import { hkdfSync } from 'node:crypto';
 
-import {
-  CompactEncrypt,
-  EncryptJWT,
-  type JWEHeaderParameters,
-  type JWTPayload,
-} from 'jose';
+import { CompactEncrypt, EncryptJWT, type JWEHeaderParameters, type JWTPayload } from 'jose';
 
 import { SUBKEY_LABELS } from './keys.js';
 
@@ -13,13 +8,12 @@ import { SUBKEY_LABELS } from './keys.js';
 export const TEST_KEY_BYTES: Uint8Array = new Uint8Array(32).fill(7);
 
 /** {@link TEST_KEY_BYTES} as configured: 43 base64url characters. */
-export const TEST_KEY: string =
-  Buffer.from(TEST_KEY_BYTES).toString('base64url');
+export const TEST_KEY: string = Buffer.from(TEST_KEY_BYTES).toString('base64url');
 
 /** A test's changes to a mint: a header to merge over the minted one, and a key to use instead. */
 export interface MintOptions {
-  header?: Partial<JWEHeaderParameters>;
-  key?: Uint8Array;
+	header?: Partial<JWEHeaderParameters>;
+	key?: Uint8Array;
 }
 
 /**
@@ -28,19 +22,16 @@ export interface MintOptions {
  * `options.header` is merged over that header when given, and `options.key` replaces the token
  * subkey when given. Rejects when jose refuses the merged header or the key.
  */
-export const mintUsherToken = (
-  payload: object,
-  options: MintOptions = {},
-): Promise<string> =>
-  // jose's `JWTPayload` admits no `sub: null`, the payload contract's anonymous subject.
-  new EncryptJWT(payload as JWTPayload)
-    .setProtectedHeader({
-      alg: 'dir',
-      enc: 'A256GCM',
-      typ: 'usher+jwt',
-      ...options.header,
-    })
-    .encrypt(options.key ?? subkeyBytes(SUBKEY_LABELS.token));
+export const mintUsherToken = (payload: object, options: MintOptions = {}): Promise<string> =>
+	// jose's `JWTPayload` admits no `sub: null`, the payload contract's anonymous subject.
+	new EncryptJWT(payload as JWTPayload)
+		.setProtectedHeader({
+			alg: 'dir',
+			enc: 'A256GCM',
+			typ: 'usher+jwt',
+			...options.header,
+		})
+		.encrypt(options.key ?? subkeyBytes(SUBKEY_LABELS.token));
 
 /**
  * The bytes of a subkey: HKDF-SHA256 over the application key with an empty salt and `label` as
@@ -48,25 +39,20 @@ export const mintUsherToken = (
  *
  * @param keyBytes the application key; the shared test key when omitted.
  */
-export const subkeyBytes = (
-  label: string,
-  keyBytes: Uint8Array = TEST_KEY_BYTES,
-): Uint8Array =>
-  new Uint8Array(hkdfSync('sha256', keyBytes, new Uint8Array(0), label, 32));
+export const subkeyBytes = (label: string, keyBytes: Uint8Array = TEST_KEY_BYTES): Uint8Array =>
+	new Uint8Array(hkdfSync('sha256', keyBytes, new Uint8Array(0), label, 32));
 
 const mintChannelJwe = (
-  plaintext: object | Uint8Array,
-  typ: string,
-  label: string,
-  { header, key }: MintOptions,
+	plaintext: object | Uint8Array,
+	typ: string,
+	label: string,
+	{ header, key }: MintOptions,
 ): Promise<string> =>
-  new CompactEncrypt(
-    plaintext instanceof Uint8Array
-      ? plaintext
-      : new TextEncoder().encode(JSON.stringify(plaintext)),
-  )
-    .setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ, ...header })
-    .encrypt(key ?? subkeyBytes(label));
+	new CompactEncrypt(
+		plaintext instanceof Uint8Array ? plaintext : new TextEncoder().encode(JSON.stringify(plaintext)),
+	)
+		.setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ, ...header })
+		.encrypt(key ?? subkeyBytes(label));
 
 /**
  * Mints a pushed notice: a compact JWE under `dir` and A256GCM with `typ` `usher-notice+jwt`, under
@@ -75,11 +61,8 @@ const mintChannelJwe = (
  * given, and `options.key` replaces the notice subkey when given. Rejects when jose refuses the
  * merged header or the key.
  */
-export const mintNotice = (
-  notice: object | Uint8Array,
-  options: MintOptions = {},
-): Promise<string> =>
-  mintChannelJwe(notice, 'usher-notice+jwt', SUBKEY_LABELS.notice, options);
+export const mintNotice = (notice: object | Uint8Array, options: MintOptions = {}): Promise<string> =>
+	mintChannelJwe(notice, 'usher-notice+jwt', SUBKEY_LABELS.notice, options);
 
 /**
  * Mints a poll answer: a compact JWE under `dir` and A256GCM with `typ` `usher-poll+jwt`, under the
@@ -87,8 +70,5 @@ export const mintNotice = (
  * as its JSON. `options.header` is merged over that header when given, and `options.key` replaces
  * the poll-answer subkey when given. Rejects when jose refuses the merged header or the key.
  */
-export const mintPollAnswer = (
-  answer: object | Uint8Array,
-  options: MintOptions = {},
-): Promise<string> =>
-  mintChannelJwe(answer, 'usher-poll+jwt', SUBKEY_LABELS.pollAnswer, options);
+export const mintPollAnswer = (answer: object | Uint8Array, options: MintOptions = {}): Promise<string> =>
+	mintChannelJwe(answer, 'usher-poll+jwt', SUBKEY_LABELS.pollAnswer, options);

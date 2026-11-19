@@ -3,20 +3,20 @@ import type { VersionOnePayload } from '../usherToken/index.js';
 
 /** What a payload names beside what the calculation holds and offers. */
 export interface PayloadNames {
-  /** The application the token is issued for, its `aud`. */
-  audience: string;
+	/** The application the token is issued for, its `aud`. */
+	audience: string;
 
-  /** When the token expires, its `exp`, in whole seconds since the Unix epoch. */
-  expiresAt: number;
+	/** When the token expires, its `exp`, in whole seconds since the Unix epoch. */
+	expiresAt: number;
 
-  /** The instant of issue and of the computation, in whole seconds since the Unix epoch. */
-  issuedAt: number;
+	/** The instant of issue and of the computation, in whole seconds since the Unix epoch. */
+	issuedAt: number;
 
-  /** The Controller's own issuer, its `iss`. */
-  issuer: string;
+	/** The Controller's own issuer, its `iss`. */
+	issuer: string;
 
-  /** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
-  subject: string | null;
+	/** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
+	subject: string | null;
 }
 
 /**
@@ -29,23 +29,18 @@ export interface PayloadNames {
  * @param names the audience, the expiry, the instant, the issuer and the subject.
  */
 export const versionOnePayload = (
-  {
-    globalCategories,
-    permissions,
-    resourceCategories,
-    servedResources,
-  }: Calculation,
-  { audience, expiresAt, issuedAt, issuer, subject }: PayloadNames,
+	{ globalCategories, permissions, resourceCategories, servedResources }: Calculation,
+	{ audience, expiresAt, issuedAt, issuer, subject }: PayloadNames,
 ): VersionOnePayload => ({
-  aud: audience,
-  exp: expiresAt,
-  generatedAt: issuedAt,
-  globalCategories,
-  iat: issuedAt,
-  iss: issuer,
-  payloadVersion: 1,
-  permissions,
-  resourceCategories,
-  servedResources,
-  sub: subject,
+	aud: audience,
+	exp: expiresAt,
+	generatedAt: issuedAt,
+	globalCategories,
+	iat: issuedAt,
+	iss: issuer,
+	payloadVersion: 1,
+	permissions,
+	resourceCategories,
+	servedResources,
+	sub: subject,
 });

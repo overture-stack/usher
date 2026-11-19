@@ -1,28 +1,20 @@
 import { hkdfSync, randomUUID, webcrypto } from 'node:crypto';
 
-import type {
-  BridgeEventData,
-  Clock,
-} from '@overture-stack/usher-express-bridge';
+import type { BridgeEventData, Clock } from '@overture-stack/usher-express-bridge';
 import {
-  isLiteralValue,
-  type NonEmpty,
-  type Notice,
-  PAYLOAD_MEMBER_NAMES,
-  PAYLOAD_VERSION,
-  type PermissionsPayload,
-  type PollAnswer,
-  validateNotice,
-  validatePayload,
-  validatePollAnswer,
+	isLiteralValue,
+	type NonEmpty,
+	type Notice,
+	PAYLOAD_MEMBER_NAMES,
+	PAYLOAD_VERSION,
+	type PermissionsPayload,
+	type PollAnswer,
+	validateNotice,
+	validatePayload,
+	validatePollAnswer,
 } from '@overture-stack/usher-types';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
-import {
-  compactDecrypt,
-  decodeProtectedHeader,
-  jwtDecrypt,
-  SignJWT,
-} from 'jose';
+import { compactDecrypt, decodeProtectedHeader, jwtDecrypt, SignJWT } from 'jose';
 
 // Every export below reproduces the Bridge's side of the wire from its source,
 // under modules/express-bridge/src/core/, or modules/types/src/ for what usher-types keeps internal,
@@ -35,25 +27,24 @@ type CryptoKey = webcrypto.CryptoKey;
 export type TokenRejectionReason = BridgeEventData['token.rejection']['reason'];
 
 /** A reason the channel reader refuses a notice or a poll answer, as the Bridge logs it. */
-export type MalformedReason =
-  BridgeEventData['revocationChannel.malformed']['reason'];
+export type MalformedReason = BridgeEventData['revocationChannel.malformed']['reason'];
 
 /**
  * The HKDF label of each subkey derived from the application key. Follows `keys.ts`
  * `SUBKEY_LABELS`.
  */
 export const SUBKEY_LABELS: Readonly<{
-  channelAssertion: string;
-  notice: string;
-  pollAnswer: string;
-  subjectTag: string;
-  token: string;
+	channelAssertion: string;
+	notice: string;
+	pollAnswer: string;
+	subjectTag: string;
+	token: string;
 }> = Object.freeze({
-  channelAssertion: 'usher/v1/channel-assertion',
-  notice: 'usher/v1/notice-encryption',
-  pollAnswer: 'usher/v1/poll-answer',
-  subjectTag: 'usher/v1/subject-tag',
-  token: 'usher/v1/token-encryption',
+	channelAssertion: 'usher/v1/channel-assertion',
+	notice: 'usher/v1/notice-encryption',
+	pollAnswer: 'usher/v1/poll-answer',
+	subjectTag: 'usher/v1/subject-tag',
+	token: 'usher/v1/token-encryption',
 });
 
 /**
@@ -61,20 +52,20 @@ export const SUBKEY_LABELS: Readonly<{
  * `ApplicationKeys`.
  */
 export interface ApplicationKeys {
-  /** Signs the channel assertion: HMAC-SHA256. */
-  channelAssertionKey: CryptoKey;
+	/** Signs the channel assertion: HMAC-SHA256. */
+	channelAssertionKey: CryptoKey;
 
-  /** Decrypts pushed notices: AES-GCM. */
-  noticeKey: CryptoKey;
+	/** Decrypts pushed notices: AES-GCM. */
+	noticeKey: CryptoKey;
 
-  /** Decrypts poll answers: AES-GCM. */
-  pollAnswerKey: CryptoKey;
+	/** Decrypts poll answers: AES-GCM. */
+	pollAnswerKey: CryptoKey;
 
-  /** Tags a subject the way principal notices name it: HMAC-SHA256. */
-  subjectTagKey: CryptoKey;
+	/** Tags a subject the way principal notices name it: HMAC-SHA256. */
+	subjectTagKey: CryptoKey;
 
-  /** Decrypts the Usher token: AES-GCM. */
-  tokenKey: CryptoKey;
+	/** Decrypts the Usher token: AES-GCM. */
+	tokenKey: CryptoKey;
 }
 
 const CANONICAL_KEY = /^[A-Za-z0-9_-]{43}$/u;
@@ -84,27 +75,25 @@ const EMPTY_SALT = new Uint8Array(0);
 const AES_GCM: webcrypto.AesKeyGenParams = { length: 256, name: 'AES-GCM' };
 
 const HMAC_SHA256: webcrypto.HmacImportParams = {
-  hash: 'SHA-256',
-  length: 256,
-  name: 'HMAC',
+	hash: 'SHA-256',
+	length: 256,
+	name: 'HMAC',
 };
 
 const keyBytes = (key: string): Buffer => {
-  const bytes = Buffer.from(key, 'base64url');
-  if (CANONICAL_KEY.test(key) && bytes.toString('base64url') === key) {
-    return bytes;
-  }
+	const bytes = Buffer.from(key, 'base64url');
+	if (CANONICAL_KEY.test(key) && bytes.toString('base64url') === key) {
+		return bytes;
+	}
 
-  throw new RangeError(
-    'the application key is 43 base64url characters in canonical form',
-  );
+	throw new RangeError('the application key is 43 base64url characters in canonical form');
 };
 
 const hkdf = (label: string): webcrypto.HkdfParams => ({
-  hash: 'SHA-256',
-  info: new TextEncoder().encode(label),
-  name: 'HKDF',
-  salt: EMPTY_SALT,
+	hash: 'SHA-256',
+	info: new TextEncoder().encode(label),
+	name: 'HKDF',
+	salt: EMPTY_SALT,
 });
 
 /**
@@ -116,44 +105,33 @@ const hkdf = (label: string): webcrypto.HkdfParams => ({
  * @param key 43 base64url characters in canonical form.
  * @throws {RangeError} for any other value.
  */
-export const importApplicationKey = async (
-  key: string,
-): Promise<ApplicationKeys> => {
-  const bytes = keyBytes(key);
-  try {
-    const base = await webcrypto.subtle.importKey('raw', bytes, 'HKDF', false, [
-      'deriveKey',
-    ]);
-    const derive = (
-      label: string,
-      algorithm: webcrypto.AesKeyGenParams | webcrypto.HmacImportParams,
-      usage: webcrypto.KeyUsage,
-    ): Promise<CryptoKey> =>
-      webcrypto.subtle.deriveKey(hkdf(label), base, algorithm, false, [usage]);
-    const [
-      channelAssertionKey,
-      noticeKey,
-      pollAnswerKey,
-      subjectTagKey,
-      tokenKey,
-    ] = await Promise.all([
-      derive(SUBKEY_LABELS.channelAssertion, HMAC_SHA256, 'sign'),
-      derive(SUBKEY_LABELS.notice, AES_GCM, 'decrypt'),
-      derive(SUBKEY_LABELS.pollAnswer, AES_GCM, 'decrypt'),
-      derive(SUBKEY_LABELS.subjectTag, HMAC_SHA256, 'sign'),
-      derive(SUBKEY_LABELS.token, AES_GCM, 'decrypt'),
-    ]);
+export const importApplicationKey = async (key: string): Promise<ApplicationKeys> => {
+	const bytes = keyBytes(key);
+	try {
+		const base = await webcrypto.subtle.importKey('raw', bytes, 'HKDF', false, ['deriveKey']);
+		const derive = (
+			label: string,
+			algorithm: webcrypto.AesKeyGenParams | webcrypto.HmacImportParams,
+			usage: webcrypto.KeyUsage,
+		): Promise<CryptoKey> => webcrypto.subtle.deriveKey(hkdf(label), base, algorithm, false, [usage]);
+		const [channelAssertionKey, noticeKey, pollAnswerKey, subjectTagKey, tokenKey] = await Promise.all([
+			derive(SUBKEY_LABELS.channelAssertion, HMAC_SHA256, 'sign'),
+			derive(SUBKEY_LABELS.notice, AES_GCM, 'decrypt'),
+			derive(SUBKEY_LABELS.pollAnswer, AES_GCM, 'decrypt'),
+			derive(SUBKEY_LABELS.subjectTag, HMAC_SHA256, 'sign'),
+			derive(SUBKEY_LABELS.token, AES_GCM, 'decrypt'),
+		]);
 
-    return {
-      channelAssertionKey,
-      noticeKey,
-      pollAnswerKey,
-      subjectTagKey,
-      tokenKey,
-    };
-  } finally {
-    bytes.fill(0);
-  }
+		return {
+			channelAssertionKey,
+			noticeKey,
+			pollAnswerKey,
+			subjectTagKey,
+			tokenKey,
+		};
+	} finally {
+		bytes.fill(0);
+	}
 };
 
 /**
@@ -166,9 +144,7 @@ export const importApplicationKey = async (
  * @param label the subkey's label, from {@link SUBKEY_LABELS}.
  */
 export const subkeyBytes = (key: string, label: string): Uint8Array =>
-  new Uint8Array(
-    hkdfSync('sha256', Buffer.from(key, 'base64url'), EMPTY_SALT, label, 32),
-  );
+	new Uint8Array(hkdfSync('sha256', Buffer.from(key, 'base64url'), EMPTY_SALT, label, 32));
 
 /**
  * The per-audience tag of a subject, as principal notices name it: HMAC-SHA256 of the subject under
@@ -177,17 +153,10 @@ export const subkeyBytes = (key: string, label: string): Uint8Array =>
  * @param keys the imported application key.
  * @param subject the subject the decrypted payload names.
  */
-export const subjectTag = async (
-  keys: ApplicationKeys,
-  subject: string,
-): Promise<string> =>
-  Buffer.from(
-    await webcrypto.subtle.sign(
-      'HMAC',
-      keys.subjectTagKey,
-      new TextEncoder().encode(subject),
-    ),
-  ).toString('base64url');
+export const subjectTag = async (keys: ApplicationKeys, subject: string): Promise<string> =>
+	Buffer.from(await webcrypto.subtle.sign('HMAC', keys.subjectTagKey, new TextEncoder().encode(subject))).toString(
+		'base64url',
+	);
 
 /**
  * The audience every channel assertion names. Follows `channelAssertion.ts`
@@ -211,116 +180,96 @@ export const CHANNEL_ASSERTION_LIFETIME_S = 60;
  *   wall clock.
  */
 export const createChannelAssertion = ({
-  application,
-  assertionKey,
-  wallClock,
+	application,
+	assertionKey,
+	wallClock,
 }: {
-  application: string;
-  assertionKey: CryptoKey;
-  wallClock: Clock;
+	application: string;
+	assertionKey: CryptoKey;
+	wallClock: Clock;
 }): (() => Promise<string>) => {
-  return () => {
-    const issuedAt = Math.floor(wallClock.now() / 1000);
-    return new SignJWT({})
-      .setProtectedHeader({ alg: 'HS256', typ: CHANNEL_ASSERTION_TYPE })
-      .setIssuer(application)
-      .setAudience(CHANNEL_ASSERTION_AUDIENCE)
-      .setIssuedAt(issuedAt)
-      .setExpirationTime(issuedAt + CHANNEL_ASSERTION_LIFETIME_S)
-      .setJti(randomUUID())
-      .sign(assertionKey);
-  };
+	return () => {
+		const issuedAt = Math.floor(wallClock.now() / 1000);
+		return new SignJWT({})
+			.setProtectedHeader({ alg: 'HS256', typ: CHANNEL_ASSERTION_TYPE })
+			.setIssuer(application)
+			.setAudience(CHANNEL_ASSERTION_AUDIENCE)
+			.setIssuedAt(issuedAt)
+			.setExpirationTime(issuedAt + CHANNEL_ASSERTION_LIFETIME_S)
+			.setJti(randomUUID())
+			.sign(assertionKey);
+	};
 };
 
 /** What reading an Usher token resolves to. Follows `core.ts` `TokenReading`. */
 export type TokenReading =
-  | { kind: 'payload'; payload: PermissionsPayload }
-  | { kind: 'rejected'; reason: TokenRejectionReason };
+	{ kind: 'payload'; payload: PermissionsPayload } | { kind: 'rejected'; reason: TokenRejectionReason };
 
 /** Reads an Usher token, from its header to the payload validator. Follows `core.ts` `TokenReader`. */
 export interface TokenReader {
-  read(token: string): Promise<TokenReading>;
+	read(token: string): Promise<TokenReading>;
 }
 
 /** What the token reader needs. Follows `tokenReader.ts` `TokenReaderOptions`. */
 export interface TokenReaderOptions {
-  audience: string;
-  issuer: string;
-  payloadVersions: NonEmpty<number>;
+	audience: string;
+	issuer: string;
+	payloadVersions: NonEmpty<number>;
 
-  /** The application key's token subkey, derived for decryption alone. */
-  tokenKey: CryptoKey;
+	/** The application key's token subkey, derived for decryption alone. */
+	tokenKey: CryptoKey;
 
-  wallClock: Clock;
+	wallClock: Clock;
 }
 
 const USHER_TOKEN_TYPE = 'usher+jwt';
 
-const TOKEN_HEADER_MEMBERS: ReadonlySet<string> = new Set([
-  'alg',
-  'enc',
-  'typ',
-]);
+const TOKEN_HEADER_MEMBERS: ReadonlySet<string> = new Set(['alg', 'enc', 'typ']);
 
 const REASONS_BY_CODE: ReadonlyMap<unknown, TokenRejectionReason> = new Map([
-  ['ERR_JOSE_ALG_NOT_ALLOWED', 'algorithmNotAllowed'],
-  ['ERR_JOSE_NOT_SUPPORTED', 'headerUnsupported'],
-  ['ERR_JWE_DECRYPTION_FAILED', 'decryptionFailed'],
-  ['ERR_JWE_INVALID', 'tokenMalformed'],
-  ['ERR_JWT_CLAIM_VALIDATION_FAILED', 'claimRejected'],
-  ['ERR_JWT_EXPIRED', 'expired'],
-  ['ERR_JWT_INVALID', 'claimsNotObject'],
+	['ERR_JOSE_ALG_NOT_ALLOWED', 'algorithmNotAllowed'],
+	['ERR_JOSE_NOT_SUPPORTED', 'headerUnsupported'],
+	['ERR_JWE_DECRYPTION_FAILED', 'decryptionFailed'],
+	['ERR_JWE_INVALID', 'tokenMalformed'],
+	['ERR_JWT_CLAIM_VALIDATION_FAILED', 'claimRejected'],
+	['ERR_JWT_EXPIRED', 'expired'],
+	['ERR_JWT_INVALID', 'claimsNotObject'],
 ] as const);
 
-const PAYLOAD_READERS: ReadonlyMap<unknown, typeof validatePayload> = new Map([
-  [PAYLOAD_VERSION, validatePayload],
-]);
+const PAYLOAD_READERS: ReadonlyMap<unknown, typeof validatePayload> = new Map([[PAYLOAD_VERSION, validatePayload]]);
 
 const rejected = (reason: TokenRejectionReason): TokenReading => ({
-  kind: 'rejected',
-  reason,
+	kind: 'rejected',
+	reason,
 });
 
-const protectedHeaderOf = (
-  token: string,
-): Readonly<Record<string, unknown>> | undefined => {
-  try {
-    return decodeProtectedHeader(token);
-  } catch {
-    return undefined;
-  }
+const protectedHeaderOf = (token: string): Readonly<Record<string, unknown>> | undefined => {
+	try {
+		return decodeProtectedHeader(token);
+	} catch {
+		return undefined;
+	}
 };
 
 const ownValue = (error: unknown, member: string): unknown =>
-  typeof error === 'object' && error !== null
-    ? Object.getOwnPropertyDescriptor(error, member)?.value
-    : undefined;
+	typeof error === 'object' && error !== null ? Object.getOwnPropertyDescriptor(error, member)?.value : undefined;
 
 const isAudienceRefusal = (error: unknown): boolean =>
-  ownValue(error, 'code') === 'ERR_JWT_CLAIM_VALIDATION_FAILED' &&
-  ownValue(error, 'claim') === 'aud' &&
-  ownValue(error, 'reason') === 'check_failed';
+	ownValue(error, 'code') === 'ERR_JWT_CLAIM_VALIDATION_FAILED' &&
+	ownValue(error, 'claim') === 'aud' &&
+	ownValue(error, 'reason') === 'check_failed';
 
 const reasonOf = (error: unknown): TokenRejectionReason =>
-  isAudienceRefusal(error)
-    ? 'audienceRejected'
-    : (REASONS_BY_CODE.get(ownValue(error, 'code')) ?? 'unexpected');
+	isAudienceRefusal(error) ? 'audienceRejected' : (REASONS_BY_CODE.get(ownValue(error, 'code')) ?? 'unexpected');
 
-const readPayload = (
-  payload: Readonly<Record<string, unknown>>,
-  payloadVersions: readonly number[],
-): TokenReading => {
-  const version = payload['payloadVersion'];
-  const reader = payloadVersions.some((listed) => listed === version)
-    ? PAYLOAD_READERS.get(version)
-    : undefined;
-  if (reader === undefined) {
-    return rejected('payloadVersionUnlisted');
-  }
-  const result = reader(payload);
-  return result.success
-    ? { kind: 'payload', payload: result.payload }
-    : rejected('payloadMalformed');
+const readPayload = (payload: Readonly<Record<string, unknown>>, payloadVersions: readonly number[]): TokenReading => {
+	const version = payload['payloadVersion'];
+	const reader = payloadVersions.some((listed) => listed === version) ? PAYLOAD_READERS.get(version) : undefined;
+	if (reader === undefined) {
+		return rejected('payloadVersionUnlisted');
+	}
+	const result = reader(payload);
+	return result.success ? { kind: 'payload', payload: result.payload } : rejected('payloadMalformed');
 };
 
 /**
@@ -334,79 +283,71 @@ const readPayload = (
  * @param options the audience, issuer and payload versions, the token key, and the wall clock.
  */
 export const createTokenReader = ({
-  audience,
-  issuer,
-  payloadVersions,
-  tokenKey,
-  wallClock,
+	audience,
+	issuer,
+	payloadVersions,
+	tokenKey,
+	wallClock,
 }: TokenReaderOptions): TokenReader => ({
-  read: async (token) => {
-    const header = protectedHeaderOf(token);
-    if (header === undefined) {
-      return rejected('headerUnreadable');
-    }
-    if (header['typ'] !== USHER_TOKEN_TYPE) {
-      return rejected('headerType');
-    }
-    if (
-      !Object.keys(header).every((member) => TOKEN_HEADER_MEMBERS.has(member))
-    ) {
-      return rejected('headerMember');
-    }
-    try {
-      const { payload } = await jwtDecrypt(token, tokenKey, {
-        audience,
-        clockTolerance: 0,
-        contentEncryptionAlgorithms: ['A256GCM'],
-        currentDate: new Date(wallClock.now()),
-        issuer,
-        keyManagementAlgorithms: ['dir'],
-        maxDecompressedLength: 0,
-        requiredClaims: [...PAYLOAD_MEMBER_NAMES],
-        typ: USHER_TOKEN_TYPE,
-      });
-      return readPayload(payload, payloadVersions);
-    } catch (error) {
-      return rejected(reasonOf(error));
-    }
-  },
+	read: async (token) => {
+		const header = protectedHeaderOf(token);
+		if (header === undefined) {
+			return rejected('headerUnreadable');
+		}
+		if (header['typ'] !== USHER_TOKEN_TYPE) {
+			return rejected('headerType');
+		}
+		if (!Object.keys(header).every((member) => TOKEN_HEADER_MEMBERS.has(member))) {
+			return rejected('headerMember');
+		}
+		try {
+			const { payload } = await jwtDecrypt(token, tokenKey, {
+				audience,
+				clockTolerance: 0,
+				contentEncryptionAlgorithms: ['A256GCM'],
+				currentDate: new Date(wallClock.now()),
+				issuer,
+				keyManagementAlgorithms: ['dir'],
+				maxDecompressedLength: 0,
+				requiredClaims: [...PAYLOAD_MEMBER_NAMES],
+				typ: USHER_TOKEN_TYPE,
+			});
+			return readPayload(payload, payloadVersions);
+		} catch (error) {
+			return rejected(reasonOf(error));
+		}
+	},
 });
 
 /** What reading a pushed notice resolves to. Follows `channelReader.ts` `NoticeReading`. */
-export type NoticeReading =
-  | { kind: 'malformed'; reason: MalformedReason }
-  | { kind: 'notice'; notice: Notice };
+export type NoticeReading = { kind: 'malformed'; reason: MalformedReason } | { kind: 'notice'; notice: Notice };
 
 /** What reading a poll answer resolves to. Follows `channelReader.ts` `PollAnswerReading`. */
-export type PollAnswerReading =
-  | { answer: PollAnswer; kind: 'answer' }
-  | { kind: 'malformed'; reason: MalformedReason };
+export type PollAnswerReading = { answer: PollAnswer; kind: 'answer' } | { kind: 'malformed'; reason: MalformedReason };
 
 /**
  * Reads what the channel carries, from its header to the usher-types validator. Follows
  * `channelReader.ts` `ChannelReader`.
  */
 export interface ChannelReader {
-  readNotice(jwe: string): Promise<NoticeReading>;
-  readPollAnswer(jwe: string): Promise<PollAnswerReading>;
+	readNotice(jwe: string): Promise<NoticeReading>;
+	readPollAnswer(jwe: string): Promise<PollAnswerReading>;
 }
 
 /** What the channel reader needs. Follows `channelReader.ts` `ChannelReaderOptions`. */
 export interface ChannelReaderOptions {
-  /** Decrypts pushed notices: AES-GCM under the notice subkey. */
-  noticeKey: CryptoKey;
+	/** Decrypts pushed notices: AES-GCM under the notice subkey. */
+	noticeKey: CryptoKey;
 
-  /** Decrypts poll answers: AES-GCM under the poll-answer subkey. */
-  pollAnswerKey: CryptoKey;
+	/** Decrypts poll answers: AES-GCM under the poll-answer subkey. */
+	pollAnswerKey: CryptoKey;
 }
 
 /**
  * The notice versions the Bridge reads, listed on every push connection and every poll. Follows
  * `channelReader.ts` `NOTICE_VERSIONS`.
  */
-export const NOTICE_VERSIONS: Readonly<NonEmpty<number>> = Object.freeze([
-  1,
-] as const);
+export const NOTICE_VERSIONS: Readonly<NonEmpty<number>> = Object.freeze([1] as const);
 
 /**
  * The request header listing the notice versions the Bridge reads, on the poll and the push alike.
@@ -418,51 +359,36 @@ const NOTICE_TYPE = 'usher-notice+jwt';
 
 const POLL_ANSWER_TYPE = 'usher-poll+jwt';
 
-const CHANNEL_HEADER_MEMBERS: ReadonlySet<string> = new Set([
-  'alg',
-  'enc',
-  'typ',
-]);
+const CHANNEL_HEADER_MEMBERS: ReadonlySet<string> = new Set(['alg', 'enc', 'typ']);
 
 const PLAINTEXT = new TextDecoder('utf-8', { fatal: true });
 
-const malformed = (
-  reason: MalformedReason,
-): { kind: 'malformed'; reason: MalformedReason } => ({
-  kind: 'malformed',
-  reason,
+const malformed = (reason: MalformedReason): { kind: 'malformed'; reason: MalformedReason } => ({
+	kind: 'malformed',
+	reason,
 });
 
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null;
+	typeof value === 'object' && value !== null;
 
 const namesUnlistedVersion = (value: unknown): boolean =>
-  isObject(value) &&
-  Object.hasOwn(value, 'v') &&
-  !NOTICE_VERSIONS.some((listed) => listed === value['v']);
+	isObject(value) && Object.hasOwn(value, 'v') && !NOTICE_VERSIONS.some((listed) => listed === value['v']);
 
-const decrypted = async (
-  jwe: string,
-  type: string,
-  key: CryptoKey,
-): Promise<{ value: unknown } | undefined> => {
-  try {
-    const header = decodeProtectedHeader(jwe);
-    if (
-      header.typ !== type ||
-      !Object.keys(header).every((member) => CHANNEL_HEADER_MEMBERS.has(member))
-    ) {
-      return undefined;
-    }
-    const { plaintext } = await compactDecrypt(jwe, key, {
-      contentEncryptionAlgorithms: ['A256GCM'],
-      keyManagementAlgorithms: ['dir'],
-      maxDecompressedLength: 0,
-    });
-    return { value: JSON.parse(PLAINTEXT.decode(plaintext)) as unknown };
-  } catch {
-    return undefined;
-  }
+const decrypted = async (jwe: string, type: string, key: CryptoKey): Promise<{ value: unknown } | undefined> => {
+	try {
+		const header = decodeProtectedHeader(jwe);
+		if (header.typ !== type || !Object.keys(header).every((member) => CHANNEL_HEADER_MEMBERS.has(member))) {
+			return undefined;
+		}
+		const { plaintext } = await compactDecrypt(jwe, key, {
+			contentEncryptionAlgorithms: ['A256GCM'],
+			keyManagementAlgorithms: ['dir'],
+			maxDecompressedLength: 0,
+		});
+		return { value: JSON.parse(PLAINTEXT.decode(plaintext)) as unknown };
+	} catch {
+		return undefined;
+	}
 };
 
 /**
@@ -475,16 +401,13 @@ const decrypted = async (
  * @param key the key it should open under, such as a notice or poll-answer subkey.
  * @throws when it does not open under that key, or its plaintext is not UTF-8.
  */
-export const plaintextOf = async (
-  jwe: string,
-  key: CryptoKey | Uint8Array,
-): Promise<string> => {
-  const { plaintext } = await compactDecrypt(jwe, key, {
-    contentEncryptionAlgorithms: ['A256GCM'],
-    keyManagementAlgorithms: ['dir'],
-    maxDecompressedLength: 0,
-  });
-  return PLAINTEXT.decode(plaintext);
+export const plaintextOf = async (jwe: string, key: CryptoKey | Uint8Array): Promise<string> => {
+	const { plaintext } = await compactDecrypt(jwe, key, {
+		contentEncryptionAlgorithms: ['A256GCM'],
+		keyManagementAlgorithms: ['dir'],
+		maxDecompressedLength: 0,
+	});
+	return PLAINTEXT.decode(plaintext);
 };
 
 /**
@@ -498,41 +421,32 @@ export const plaintextOf = async (
  *
  * @param options the notice and poll-answer subkeys.
  */
-export const createChannelReader = ({
-  noticeKey,
-  pollAnswerKey,
-}: ChannelReaderOptions): ChannelReader => ({
-  readNotice: async (jwe) => {
-    const read = await decrypted(jwe, NOTICE_TYPE, noticeKey);
-    if (read === undefined) {
-      return malformed('noticeUnreadable');
-    }
-    if (namesUnlistedVersion(read.value)) {
-      return malformed('versionUnlisted');
-    }
-    const result = validateNotice(read.value);
-    return result.success
-      ? { kind: 'notice', notice: result.notice }
-      : malformed('noticeUnreadable');
-  },
+export const createChannelReader = ({ noticeKey, pollAnswerKey }: ChannelReaderOptions): ChannelReader => ({
+	readNotice: async (jwe) => {
+		const read = await decrypted(jwe, NOTICE_TYPE, noticeKey);
+		if (read === undefined) {
+			return malformed('noticeUnreadable');
+		}
+		if (namesUnlistedVersion(read.value)) {
+			return malformed('versionUnlisted');
+		}
+		const result = validateNotice(read.value);
+		return result.success ? { kind: 'notice', notice: result.notice } : malformed('noticeUnreadable');
+	},
 
-  readPollAnswer: async (jwe) => {
-    const read = await decrypted(jwe, POLL_ANSWER_TYPE, pollAnswerKey);
-    if (read === undefined) {
-      return malformed('answerUnreadable');
-    }
-    const notices =
-      isObject(read.value) && Object.hasOwn(read.value, 'notices')
-        ? read.value['notices']
-        : undefined;
-    if (Array.isArray(notices) && notices.some(namesUnlistedVersion)) {
-      return malformed('versionUnlisted');
-    }
-    const result = validatePollAnswer(read.value);
-    return result.success
-      ? { answer: result.answer, kind: 'answer' }
-      : malformed('answerUnreadable');
-  },
+	readPollAnswer: async (jwe) => {
+		const read = await decrypted(jwe, POLL_ANSWER_TYPE, pollAnswerKey);
+		if (read === undefined) {
+			return malformed('answerUnreadable');
+		}
+		const notices =
+			isObject(read.value) && Object.hasOwn(read.value, 'notices') ? read.value['notices'] : undefined;
+		if (Array.isArray(notices) && notices.some(namesUnlistedVersion)) {
+			return malformed('versionUnlisted');
+		}
+		const result = validatePollAnswer(read.value);
+		return result.success ? { answer: result.answer, kind: 'answer' } : malformed('answerUnreadable');
+	},
 });
 
 /**
@@ -543,20 +457,18 @@ export const PUSH_BUFFER_CHARACTERS: number = 64 * 1024;
 
 /** What one read of a notice stream's body gives. */
 export type EventStreamRead =
-  | { events: readonly EventSourceMessage[]; kind: 'events' }
-  | { kind: 'ended' }
-  | { kind: 'overflow' };
+	{ events: readonly EventSourceMessage[]; kind: 'events' } | { kind: 'ended' } | { kind: 'overflow' };
 
 /** Reads a notice stream's body chunk by chunk, as the Bridge's push does. */
 export interface EventStreamReader {
-  /** Cancels the body, settling once it is cancelled. */
-  cancel(): Promise<void>;
+	/** Cancels the body, settling once it is cancelled. */
+	cancel(): Promise<void>;
 
-  /**
-   * Reads one chunk: the events it completed, in order and possibly none; `ended` once the body
-   * ends; or `overflow` once the parser would buffer more than {@link PUSH_BUFFER_CHARACTERS}.
-   */
-  read(): Promise<EventStreamRead>;
+	/**
+	 * Reads one chunk: the events it completed, in order and possibly none; `ended` once the body
+	 * ends; or `overflow` once the parser would buffer more than {@link PUSH_BUFFER_CHARACTERS}.
+	 */
+	read(): Promise<EventStreamRead>;
 }
 
 /**
@@ -567,38 +479,36 @@ export interface EventStreamReader {
  *
  * @param body the response body.
  */
-export const createEventStreamReader = (
-  body: ReadableStream<Uint8Array>,
-): EventStreamReader => {
-  const pending: EventSourceMessage[] = [];
-  const overflow = { seen: false };
-  const parser = createParser({
-    maxBufferSize: PUSH_BUFFER_CHARACTERS,
-    onError: (error) => {
-      if (error.type === 'max-buffer-size-exceeded') {
-        overflow.seen = true;
-      }
-    },
-    onEvent: (event) => pending.push(event),
-  });
-  const decoder = new TextDecoder();
-  const reader = body.getReader();
+export const createEventStreamReader = (body: ReadableStream<Uint8Array>): EventStreamReader => {
+	const pending: EventSourceMessage[] = [];
+	const overflow = { seen: false };
+	const parser = createParser({
+		maxBufferSize: PUSH_BUFFER_CHARACTERS,
+		onError: (error) => {
+			if (error.type === 'max-buffer-size-exceeded') {
+				overflow.seen = true;
+			}
+		},
+		onEvent: (event) => pending.push(event),
+	});
+	const decoder = new TextDecoder();
+	const reader = body.getReader();
 
-  return {
-    cancel: () => reader.cancel(),
+	return {
+		cancel: () => reader.cancel(),
 
-    read: async () => {
-      const { done, value } = await reader.read();
-      if (done) {
-        return { kind: 'ended' };
-      }
-      parser.feed(decoder.decode(value, { stream: true }));
-      if (overflow.seen) {
-        return { kind: 'overflow' };
-      }
-      return { events: pending.splice(0), kind: 'events' };
-    },
-  };
+		read: async () => {
+			const { done, value } = await reader.read();
+			if (done) {
+				return { kind: 'ended' };
+			}
+			parser.feed(decoder.decode(value, { stream: true }));
+			if (overflow.seen) {
+				return { kind: 'overflow' };
+			}
+			return { events: pending.splice(0), kind: 'events' };
+		},
+	};
 };
 
 /**
@@ -609,7 +519,4 @@ export const createEventStreamReader = (
  * @param value any value.
  */
 export const isUsableResource = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  value.length > 0 &&
-  value !== '__proto__' &&
-  isLiteralValue(value);
+	typeof value === 'string' && value.length > 0 && value !== '__proto__' && isLiteralValue(value);

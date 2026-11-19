@@ -1,7 +1,4 @@
-import type {
-  CategoryPermissions,
-  PermissionsPayload,
-} from '@overture-stack/usher-types';
+import type { CategoryPermissions, PermissionsPayload } from '@overture-stack/usher-types';
 
 /**
  * One grant: its resource, category, entity, any field category and action, and for a record grant
@@ -10,30 +7,16 @@ import type {
  */
 type Grant = string;
 
-const grantsOfEntry = (
-  resource: string,
-  category: string,
-  entry: CategoryPermissions,
-): readonly Grant[] => [
-  ...(['artifact', 'revision'] as const).flatMap((entity) =>
-    (entry[entity] ?? []).map((action) =>
-      JSON.stringify([resource, category, entity, action]),
-    ),
-  ),
-  ...(entry.record ?? []).map((action) =>
-    JSON.stringify([
-      resource,
-      category,
-      'record',
-      action,
-      Object.hasOwn(entry, 'field') ? 'byField' : 'whole',
-    ]),
-  ),
-  ...Object.entries(entry.field ?? {}).flatMap(([fieldCategory, actions]) =>
-    actions.map((action) =>
-      JSON.stringify([resource, category, 'field', fieldCategory, action]),
-    ),
-  ),
+const grantsOfEntry = (resource: string, category: string, entry: CategoryPermissions): readonly Grant[] => [
+	...(['artifact', 'revision'] as const).flatMap((entity) =>
+		(entry[entity] ?? []).map((action) => JSON.stringify([resource, category, entity, action])),
+	),
+	...(entry.record ?? []).map((action) =>
+		JSON.stringify([resource, category, 'record', action, Object.hasOwn(entry, 'field') ? 'byField' : 'whole']),
+	),
+	...Object.entries(entry.field ?? {}).flatMap(([fieldCategory, actions]) =>
+		actions.map((action) => JSON.stringify([resource, category, 'field', fieldCategory, action])),
+	),
 ];
 
 /**
@@ -42,16 +25,12 @@ const grantsOfEntry = (
  *
  * @param permissions a validated payload's permissions.
  */
-export const grantSet = (
-  permissions: PermissionsPayload['permissions'],
-): ReadonlySet<Grant> =>
-  new Set(
-    Object.entries(permissions).flatMap(([resource, entries]) =>
-      Object.entries(entries).flatMap(([category, entry]) =>
-        grantsOfEntry(resource, category, entry),
-      ),
-    ),
-  );
+export const grantSet = (permissions: PermissionsPayload['permissions']): ReadonlySet<Grant> =>
+	new Set(
+		Object.entries(permissions).flatMap(([resource, entries]) =>
+			Object.entries(entries).flatMap(([category, entry]) => grantsOfEntry(resource, category, entry)),
+		),
+	);
 
 /**
  * Whether the principal holds only the open tier: every grant in the principal's payload also
@@ -64,10 +43,7 @@ export const grantSet = (
  *   when no anonymous payload is held.
  */
 export const holdsOnlyOpenTier = (
-  payload: PermissionsPayload,
-  anonymousGrants: ReadonlySet<Grant> | undefined,
+	payload: PermissionsPayload,
+	anonymousGrants: ReadonlySet<Grant> | undefined,
 ): boolean =>
-  anonymousGrants !== undefined &&
-  [...grantSet(payload.permissions)].every((grant) =>
-    anonymousGrants.has(grant),
-  );
+	anonymousGrants !== undefined && [...grantSet(payload.permissions)].every((grant) => anonymousGrants.has(grant));

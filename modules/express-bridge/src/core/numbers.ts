@@ -6,9 +6,9 @@
  * @throws {RangeError} naming `what`, never the value, for anything else.
  */
 export const positiveWhole = (value: number, what: string): number => {
-  if (Number.isSafeInteger(value) && value > 0) {
-    return value;
-  }
+	if (Number.isSafeInteger(value) && value > 0) {
+		return value;
+	}
 
-  throw new RangeError(`${what} is a positive whole number`);
+	throw new RangeError(`${what} is a positive whole number`);
 };

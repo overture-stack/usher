@@ -6,11 +6,11 @@ import { ControllerError } from '../failures/index.js';
  * code; its message names no value.
  */
 export class StoreTimeout extends ControllerError {
-  readonly code = 'storeTimeout';
+	readonly code = 'storeTimeout';
 
-  override readonly name = 'StoreTimeout';
+	override readonly name = 'StoreTimeout';
 
-  constructor() {
-    super('the store did not answer within the store timeout');
-  }
+	constructor() {
+		super('the store did not answer within the store timeout');
+	}
 }

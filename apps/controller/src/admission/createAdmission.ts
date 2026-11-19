@@ -1,21 +1,16 @@
 import { admissionShare } from './admissionShare.js';
-import type {
-  Admission,
-  AdmissionSettings,
-  Admitted,
-  ExchangeKind,
-} from './types.js';
+import type { Admission, AdmissionSettings, Admitted, ExchangeKind } from './types.js';
 
 /** An application's exchanges in flight on the instance: all of them, and the anonymous ones. */
 interface InFlight {
-  anonymous: number;
-  total: number;
+	anonymous: number;
+	total: number;
 }
 
 /** Every exchange in flight on the instance: by application, and all of them together. */
 interface Held {
-  byApplication: ReadonlyMap<string, InFlight>;
-  total: number;
+	byApplication: ReadonlyMap<string, InFlight>;
+	total: number;
 }
 
 const NONE_IN_FLIGHT: InFlight = Object.freeze({ anonymous: 0, total: 0 });
@@ -45,69 +40,58 @@ const OVER_SHARE: Admitted<never> = Object.freeze({ kind: 'overShare' });
  *
  * @param settings the pool's size and the registered count.
  */
-export const createAdmission = ({
-  poolSize,
-  registeredCount,
-}: AdmissionSettings): Admission => {
-  const state: { held: Held } = {
-    held: { byApplication: new Map(), total: 0 },
-  };
+export const createAdmission = ({ poolSize, registeredCount }: AdmissionSettings): Admission => {
+	const state: { held: Held } = {
+		held: { byApplication: new Map(), total: 0 },
+	};
 
-  const inFlightOf = (applicationId: string): InFlight =>
-    state.held.byApplication.get(applicationId) ?? NONE_IN_FLIGHT;
+	const inFlightOf = (applicationId: string): InFlight =>
+		state.held.byApplication.get(applicationId) ?? NONE_IN_FLIGHT;
 
-  const admits = (applicationId: string, kind: ExchangeKind): boolean => {
-    const held = inFlightOf(applicationId);
-    return (
-      held.total < admissionShare(poolSize, registeredCount()) ||
-      state.held.total < poolSize ||
-      (kind === 'anonymous' && held.anonymous === 0)
-    );
-  };
+	const admits = (applicationId: string, kind: ExchangeKind): boolean => {
+		const held = inFlightOf(applicationId);
+		return (
+			held.total < admissionShare(poolSize, registeredCount()) ||
+			state.held.total < poolSize ||
+			(kind === 'anonymous' && held.anonymous === 0)
+		);
+	};
 
-  // An application with nothing in flight is dropped, so the counts hold only what is in flight.
-  const adjust = (
-    applicationId: string,
-    kind: ExchangeKind,
-    by: number,
-  ): void => {
-    const held = inFlightOf(applicationId);
-    const next: InFlight = {
-      anonymous: held.anonymous + (kind === 'anonymous' ? by : 0),
-      total: held.total + by,
-    };
-    state.held = {
-      byApplication:
-        next.total > 0
-          ? new Map([...state.held.byApplication, [applicationId, next]])
-          : new Map(
-              [...state.held.byApplication].filter(
-                ([holder]) => holder !== applicationId,
-              ),
-            ),
-      total: state.held.total + by,
-    };
-  };
+	// An application with nothing in flight is dropped, so the counts hold only what is in flight.
+	const adjust = (applicationId: string, kind: ExchangeKind, by: number): void => {
+		const held = inFlightOf(applicationId);
+		const next: InFlight = {
+			anonymous: held.anonymous + (kind === 'anonymous' ? by : 0),
+			total: held.total + by,
+		};
+		state.held = {
+			byApplication:
+				next.total > 0
+					? new Map([...state.held.byApplication, [applicationId, next]])
+					: new Map([...state.held.byApplication].filter(([holder]) => holder !== applicationId)),
+			total: state.held.total + by,
+		};
+	};
 
-  return {
-    inFlight: () => state.held.total,
+	return {
+		inFlight: () => state.held.total,
 
-    // The check and the take run in one turn, before any await, so no two exchanges take the last
-    // place.
-    within: async <Result>(
-      applicationId: string,
-      kind: ExchangeKind,
-      work: () => Promise<Result>,
-    ): Promise<Admitted<Result>> => {
-      if (!admits(applicationId, kind)) {
-        return OVER_SHARE;
-      }
-      adjust(applicationId, kind, 1);
-      try {
-        return { kind: 'admitted', result: await work() };
-      } finally {
-        adjust(applicationId, kind, -1);
-      }
-    },
-  };
+		// The check and the take run in one turn, before any await, so no two exchanges take the last
+		// place.
+		within: async <Result>(
+			applicationId: string,
+			kind: ExchangeKind,
+			work: () => Promise<Result>,
+		): Promise<Admitted<Result>> => {
+			if (!admits(applicationId, kind)) {
+				return OVER_SHARE;
+			}
+			adjust(applicationId, kind, 1);
+			try {
+				return { kind: 'admitted', result: await work() };
+			} finally {
+				adjust(applicationId, kind, -1);
+			}
+		},
+	};
 };

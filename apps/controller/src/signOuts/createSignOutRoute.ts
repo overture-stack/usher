@@ -1,9 +1,4 @@
-import type {
-  FastifyError,
-  FastifyReply,
-  FastifyRequest,
-  RouteOptions,
-} from 'fastify';
+import type { FastifyError, FastifyReply, FastifyRequest, RouteOptions } from 'fastify';
 
 import type { Actor } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
@@ -15,17 +10,8 @@ import { readLogoutRequest } from './readLogoutRequest.js';
 import { readLogoutToken } from './readLogoutToken.js';
 import { recordSignOut } from './recordSignOut.js';
 import { logoutTokenRefusalEvent } from './refusalEvents.js';
-import {
-  BODY_LIMIT_BYTES,
-  SIGN_OUT_PROBLEMS,
-  sendSignOutProblem,
-} from './signOutProblems.js';
-import type {
-  SignOut,
-  SignOutRouteSettings,
-  SwitchedOffLogoutReason,
-  UnverifiedLogoutReason,
-} from './types.js';
+import { BODY_LIMIT_BYTES, SIGN_OUT_PROBLEMS, sendSignOutProblem } from './signOutProblems.js';
+import type { SignOut, SignOutRouteSettings, SwitchedOffLogoutReason, UnverifiedLogoutReason } from './types.js';
 
 /** The path the identity provider's back-channel logout is sent to. */
 export const SIGN_OUT_PATH = '/backchannel-logout';
@@ -47,9 +33,9 @@ const CONTENT_PARSING = 'FST_ERR_CTP_';
 // The reason each of the verifier's reasons is refused under. It covers every reason the verifier
 // gives, so a reason added there fails to compile here rather than reaching the audit trail unlisted.
 const UNVERIFIED_REASONS = {
-  invalidSignature: 'invalidSignature',
-  otherIssuer: 'otherIssuer',
-  unreadableToken: 'unreadableToken',
+	invalidSignature: 'invalidSignature',
+	otherIssuer: 'otherIssuer',
+	unreadableToken: 'unreadableToken',
 } as const satisfies Readonly<Record<UnverifiedReason, UnverifiedLogoutReason>>;
 
 const ANONYMOUS: Actor = Object.freeze({ type: 'anonymous' });
@@ -59,22 +45,20 @@ const SWITCHED_OFF_REASON: SwitchedOffLogoutReason = 'backChannelLogoutOff';
 
 const SYSTEM: Actor = Object.freeze({ type: 'system' });
 
-type Admission =
-  | { kind: 'admitted'; signOut: SignOut }
-  | { kind: 'refused'; problem: Problem };
+type Admission = { kind: 'admitted'; signOut: SignOut } | { kind: 'refused'; problem: Problem };
 
 type Committing = { failure: unknown; kind: 'failed' } | { kind: 'committed' };
 
 const refusedWith = (problem: Problem): Admission => ({
-  kind: 'refused',
-  problem,
+	kind: 'refused',
+	problem,
 });
 
 // The failure by its code alone, where it carries one that is an identifier, since a message may quote
 // a value.
 const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
-  const code = failureCodeOf(failure);
-  return code === undefined ? {} : { code };
+	const code = failureCodeOf(failure);
+	return code === undefined ? {} : { code };
 };
 
 /**
@@ -112,149 +96,144 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * @param settings the verifier, the windows, the trail, the log, and the configuration the route reads.
  */
 export const createSignOutRoute = ({
-  eventLog,
-  refusals,
-  settings,
-  tokenVerifier,
-  trail,
+	eventLog,
+	refusals,
+	settings,
+	tokenVerifier,
+	trail,
 }: SignOutRouteSettings): RouteOptions => {
-  const admit = async (request: FastifyRequest): Promise<Admission> => {
-    const reading = readLogoutRequest({
-      body: request.body instanceof Uint8Array ? request.body : undefined,
-      contentType: request.headers['content-type'],
-      url: request.raw.url ?? '',
-    });
-    if (reading.kind === 'refused') {
-      return refusedWith(reading.problem);
-    }
-    if (!settings.backChannelLogout) {
-      await refusals.refuse(
-        { reason: SWITCHED_OFF_REASON, route: 'logout' },
-        () =>
-          trail.recordEvent(
-            ANONYMOUS,
-            logoutTokenRefusalEvent({
-              reason: SWITCHED_OFF_REASON,
-              sourceIp: request.ip,
-              subject: undefined,
-            }),
-          ),
-        (id) => id,
-      );
-      return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
-    }
-    const verification = await tokenVerifier.verify(reading.token);
-    if (verification.kind === 'keysUnavailable') {
-      return refusedWith(SIGN_OUT_PROBLEMS.identityProviderUnavailable);
-    }
-    if (verification.kind === 'signingKeyUnconfirmed') {
-      return refusedWith(SIGN_OUT_PROBLEMS.signingKeyUnconfirmed);
-    }
-    if (verification.kind === 'unverified') {
-      const reason = UNVERIFIED_REASONS[verification.reason];
-      await refusals.refuse(
-        { reason, route: 'logout' },
-        () =>
-          trail.recordEvent(
-            ANONYMOUS,
-            logoutTokenRefusalEvent({
-              reason,
-              sourceIp: request.ip,
-              subject: undefined,
-            }),
-          ),
-        (id) => id,
-      );
-      return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
-    }
-    const token = readLogoutToken(verification, settings, settings.clock.now());
-    if (token.kind === 'accepted') {
-      return { kind: 'admitted', signOut: token.signOut };
-    }
-    await refusals.refuse(
-      {
-        reason: token.reason,
-        route: 'logout',
-        tokenDigest: tokenDigestOf(reading.token),
-      },
-      () =>
-        trail.recordEvent(
-          ANONYMOUS,
-          logoutTokenRefusalEvent({
-            reason: token.reason,
-            sourceIp: request.ip,
-            subject: token.subject,
-          }),
-        ),
-      (id) => id,
-    );
-    return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
-  };
+	const admit = async (request: FastifyRequest): Promise<Admission> => {
+		const reading = readLogoutRequest({
+			body: request.body instanceof Uint8Array ? request.body : undefined,
+			contentType: request.headers['content-type'],
+			url: request.raw.url ?? '',
+		});
+		if (reading.kind === 'refused') {
+			return refusedWith(reading.problem);
+		}
+		if (!settings.backChannelLogout) {
+			await refusals.refuse(
+				{ reason: SWITCHED_OFF_REASON, route: 'logout' },
+				() =>
+					trail.recordEvent(
+						ANONYMOUS,
+						logoutTokenRefusalEvent({
+							reason: SWITCHED_OFF_REASON,
+							sourceIp: request.ip,
+							subject: undefined,
+						}),
+					),
+				(id) => id,
+			);
+			return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
+		}
+		const verification = await tokenVerifier.verify(reading.token);
+		if (verification.kind === 'keysUnavailable') {
+			return refusedWith(SIGN_OUT_PROBLEMS.identityProviderUnavailable);
+		}
+		if (verification.kind === 'signingKeyUnconfirmed') {
+			return refusedWith(SIGN_OUT_PROBLEMS.signingKeyUnconfirmed);
+		}
+		if (verification.kind === 'unverified') {
+			const reason = UNVERIFIED_REASONS[verification.reason];
+			await refusals.refuse(
+				{ reason, route: 'logout' },
+				() =>
+					trail.recordEvent(
+						ANONYMOUS,
+						logoutTokenRefusalEvent({
+							reason,
+							sourceIp: request.ip,
+							subject: undefined,
+						}),
+					),
+				(id) => id,
+			);
+			return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
+		}
+		const token = readLogoutToken(verification, settings, settings.clock.now());
+		if (token.kind === 'accepted') {
+			return { kind: 'admitted', signOut: token.signOut };
+		}
+		await refusals.refuse(
+			{
+				reason: token.reason,
+				route: 'logout',
+				tokenDigest: tokenDigestOf(reading.token),
+			},
+			() =>
+				trail.recordEvent(
+					ANONYMOUS,
+					logoutTokenRefusalEvent({
+						reason: token.reason,
+						sourceIp: request.ip,
+						subject: token.subject,
+					}),
+				),
+			(id) => id,
+		);
+		return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
+	};
 
-  const commit = (signOut: SignOut, sourceIp: string): Promise<Committing> =>
-    trail
-      .inTransaction(SYSTEM, (transaction) =>
-        recordSignOut(
-          transaction,
-          {
-            issuer: settings.identityProviderIssuer,
-            retentionSeconds: settings.signInTokenMaximumLifetimeSeconds,
-            schema: settings.databaseSchema,
-            sourceIp,
-          },
-          signOut,
-        ),
-      )
-      .then(
-        (): Committing => ({ kind: 'committed' }),
-        (failure: unknown): Committing => ({ failure, kind: 'failed' }),
-      );
+	const commit = (signOut: SignOut, sourceIp: string): Promise<Committing> =>
+		trail
+			.inTransaction(SYSTEM, (transaction) =>
+				recordSignOut(
+					transaction,
+					{
+						issuer: settings.identityProviderIssuer,
+						retentionSeconds: settings.signInTokenMaximumLifetimeSeconds,
+						schema: settings.databaseSchema,
+						sourceIp,
+					},
+					signOut,
+				),
+			)
+			.then(
+				(): Committing => ({ kind: 'committed' }),
+				(failure: unknown): Committing => ({ failure, kind: 'failed' }),
+			);
 
-  // A commit the store did not confirm may have taken effect, and the trail's own line names it.
-  const failed = (reply: FastifyReply, failure: unknown): FastifyReply => {
-    if (failure instanceof CommitUnconfirmed) {
-      return sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.outcomeUnknown);
-    }
-    eventLog.error(SIGN_OUT_STORE_FAILED, {
-      ...codeOf(failure),
-      route: SIGN_OUT_PATH,
-    });
-    return sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.storeUnavailable);
-  };
+	// A commit the store did not confirm may have taken effect, and the trail's own line names it.
+	const failed = (reply: FastifyReply, failure: unknown): FastifyReply => {
+		if (failure instanceof CommitUnconfirmed) {
+			return sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.outcomeUnknown);
+		}
+		eventLog.error(SIGN_OUT_STORE_FAILED, {
+			...codeOf(failure),
+			route: SIGN_OUT_PATH,
+		});
+		return sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.storeUnavailable);
+	};
 
-  return {
-    bodyLimit: BODY_LIMIT_BYTES,
-    errorHandler: (error: FastifyError, _request, reply) => {
-      const code = failureCodeOf(error);
-      if (code === BODY_TOO_LARGE) {
-        return sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.bodyTooLarge);
-      }
-      if (
-        code?.startsWith(CONTENT_PARSING) === true &&
-        (error.statusCode ?? 500) < 500
-      ) {
-        return sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.unreadableBody);
-      }
-      eventLog.error(SIGN_OUT_UNEXPECTED_FAILURE, {
-        error: code ?? failureNameOf(error),
-        route: SIGN_OUT_PATH,
-      });
-      return reply.sent
-        ? undefined
-        : sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.internalError);
-    },
-    exposeHeadRoute: false,
-    handler: async (request, reply) => {
-      const admission = await admit(request);
-      if (admission.kind === 'refused') {
-        return sendSignOutProblem(reply, admission.problem);
-      }
-      const committing = await commit(admission.signOut, request.ip);
-      return committing.kind === 'committed'
-        ? reply.code(200).header('cache-control', 'no-store').send()
-        : failed(reply, committing.failure);
-    },
-    method: 'POST',
-    url: SIGN_OUT_PATH,
-  };
+	return {
+		bodyLimit: BODY_LIMIT_BYTES,
+		errorHandler: (error: FastifyError, _request, reply) => {
+			const code = failureCodeOf(error);
+			if (code === BODY_TOO_LARGE) {
+				return sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.bodyTooLarge);
+			}
+			if (code?.startsWith(CONTENT_PARSING) === true && (error.statusCode ?? 500) < 500) {
+				return sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.unreadableBody);
+			}
+			eventLog.error(SIGN_OUT_UNEXPECTED_FAILURE, {
+				error: code ?? failureNameOf(error),
+				route: SIGN_OUT_PATH,
+			});
+			return reply.sent ? undefined : sendSignOutProblem(reply, SIGN_OUT_PROBLEMS.internalError);
+		},
+		exposeHeadRoute: false,
+		handler: async (request, reply) => {
+			const admission = await admit(request);
+			if (admission.kind === 'refused') {
+				return sendSignOutProblem(reply, admission.problem);
+			}
+			const committing = await commit(admission.signOut, request.ip);
+			return committing.kind === 'committed'
+				? reply.code(200).header('cache-control', 'no-store').send()
+				: failed(reply, committing.failure);
+		},
+		method: 'POST',
+		url: SIGN_OUT_PATH,
+	};
 };

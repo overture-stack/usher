@@ -15,8 +15,8 @@ import type { SeededPolicySettings } from './types.js';
  *   database role may not write it.
  */
 export const writeSeededPolicy = async (
-  transaction: AuditTransaction<pg.ClientBase>,
-  settings: SeededPolicySettings,
+	transaction: AuditTransaction<pg.ClientBase>,
+	settings: SeededPolicySettings,
 ): Promise<void> => {
-  await seedVocabulary(transaction.connection, settings.databaseSchema);
+	await seedVocabulary(transaction.connection, settings.databaseSchema);
 };

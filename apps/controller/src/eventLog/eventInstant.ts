@@ -6,5 +6,4 @@
  * @param milliseconds the instant, in milliseconds since the Unix epoch.
  * @throws {RangeError} for a value no date holds.
  */
-export const eventInstant = (milliseconds: number): string =>
-  new Date(milliseconds).toISOString();
+export const eventInstant = (milliseconds: number): string => new Date(milliseconds).toISOString();

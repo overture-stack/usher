@@ -28,8 +28,7 @@ const readSetting = <Name extends SettingName>(
 
 /** What reading the seed file's text as members gave: the one JSON object it holds, or the rule the text breaks. */
 export type SeedMembersReading =
-	| { kind: 'read'; members: Readonly<Record<string, unknown>> }
-	| { kind: 'refused'; rule: string };
+	{ kind: 'read'; members: Readonly<Record<string, unknown>> } | { kind: 'refused'; rule: string };
 
 /**
  * Reads the seed file's text as the one JSON object it holds, its members as written, with no setting read

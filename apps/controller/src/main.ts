@@ -11,19 +11,19 @@ const STOP_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 process.on('uncaughtException', reportUncaughtFailure('the controller failed'));
 
 const run = async (): Promise<void> => {
-  const controller = createController(readConfiguration(process.env));
-  STOP_SIGNALS.forEach((signal) =>
-    process.once(signal, () => {
-      controller.stop().catch(reportFailure('the controller failed to stop'));
-    }),
-  );
-  try {
-    await controller.start();
-  } catch (failure) {
-    // The failure to start is what is reported; a stop failing after it changes nothing reported.
-    await controller.stop().catch(() => undefined);
-    throw failure;
-  }
+	const controller = createController(readConfiguration(process.env));
+	STOP_SIGNALS.forEach((signal) =>
+		process.once(signal, () => {
+			controller.stop().catch(reportFailure('the controller failed to stop'));
+		}),
+	);
+	try {
+		await controller.start();
+	} catch (failure) {
+		// The failure to start is what is reported; a stop failing after it changes nothing reported.
+		await controller.stop().catch(() => undefined);
+		throw failure;
+	}
 };
 
 run().catch(reportFailure('the controller failed to start'));

@@ -14,58 +14,58 @@ import { startRecordingServer } from './recordingServer.js';
 
 /** Who calls the API, and where: the Controller's URL and the caller's management token. */
 export interface AdminCaller {
-  /** The bearer credential; `null` sends no `authorization` header. */
-  token: string | null;
+	/** The bearer credential; `null` sends no `authorization` header. */
+	token: string | null;
 
-  /** The Controller's URL, ending in `/`. */
-  url: URL;
+	/** The Controller's URL, ending in `/`. */
+	url: URL;
 }
 
 /** Departures from an operation's own request, for the malformed-request tests. */
 export interface AdminOverrides {
-  /** A raw body sent in place of the operation's JSON. */
-  body?: string;
+	/** A raw body sent in place of the operation's JSON. */
+	body?: string;
 
-  /** Members merged over the operation's JSON body. */
-  extraMembers?: Readonly<Record<string, unknown>>;
+	/** Members merged over the operation's JSON body. */
+	extraMembers?: Readonly<Record<string, unknown>>;
 
-  /** Headers merged over the operation's, by lower-case name; one set to `undefined` is left out. */
-  headers?: Readonly<Record<string, string | undefined>>;
+	/** Headers merged over the operation's, by lower-case name; one set to `undefined` is left out. */
+	headers?: Readonly<Record<string, string | undefined>>;
 
-  /** Query parameters added to the operation's, each name once. */
-  query?: Readonly<Record<string, string>>;
+	/** Query parameters added to the operation's, each name once. */
+	query?: Readonly<Record<string, string>>;
 }
 
 /** An RFC 9457 problem details object, as the API answers a refusal, carrying a `code` (C2). */
 export interface ProblemDetails {
-  code: string;
-  detail?: string;
-  instance?: string;
-  status?: number;
-  title?: string;
-  type?: string;
+	code: string;
+	detail?: string;
+	instance?: string;
+	status?: number;
+	title?: string;
+	type?: string;
 }
 
 /** An answer: the status, the headers, the body parsed when it is JSON, and its problem details on a refusal. */
 export interface AdminResponse {
-  /** The body parsed as JSON, for any JSON media type; `undefined` for an empty or other body. */
-  body: unknown;
+	/** The body parsed as JSON, for any JSON media type; `undefined` for an empty or other body. */
+	body: unknown;
 
-  headers: Headers;
+	headers: Headers;
 
-  /** The body, when it is `application/problem+json` carrying a string `code`. */
-  problem: ProblemDetails | undefined;
+	/** The body, when it is `application/problem+json` carrying a string `code`. */
+	problem: ProblemDetails | undefined;
 
-  status: number;
+	status: number;
 
-  /** The body's text, whatever its media type. */
-  text: string;
+	/** The body's text, whatever its media type. */
+	text: string;
 }
 
 /** An answer to a grant's creation, carrying the new grant's id when the API answered with one. */
 export interface GrantCreated extends AdminResponse {
-  /** The body's `id`, the grant's opaque id, when it is a string; `undefined` otherwise. */
-  grantId: string | undefined;
+	/** The body's `id`, the grant's opaque id, when it is a string; `undefined` otherwise. */
+	grantId: string | undefined;
 }
 
 /** A resource's access level, its base tier, as the API names it. */
@@ -81,8 +81,8 @@ export type Holder = { email: string } | { subject: string };
  * one; the application's id is generated.
  */
 export interface ApplicationRegistration {
-  description?: string;
-  displayName: string;
+	description?: string;
+	displayName: string;
 }
 
 /**
@@ -96,24 +96,24 @@ export const APPLICATION_LIVE_KEY_LIMIT = 2;
 
 /** What registering a resource sends. */
 export interface ResourceRegistration {
-  /**
-   * Required: a registration naming none is refused 422 (ruled). Optional here alone, so a test can
-   * send a registration without it.
-   */
-  accessLevel?: AccessLevel;
+	/**
+	 * Required: a registration naming none is refused 422 (ruled). Optional here alone, so a test can
+	 * send a registration without it.
+	 */
+	accessLevel?: AccessLevel;
 
-  /** The applications serving it from registration on, by id. */
-  applications?: readonly string[];
+	/** The applications serving it from registration on, by id. */
+	applications?: readonly string[];
 
-  description?: string;
-  displayName: string;
-  externalId: string;
+	description?: string;
+	displayName: string;
+	externalId: string;
 
-  /** Values of the instance's resource fields, by field name. */
-  fields?: Readonly<Record<string, string>>;
+	/** Values of the instance's resource fields, by field name. */
+	fields?: Readonly<Record<string, string>>;
 
-  /** Its first owners, written as owner grants in the registration's transaction. */
-  owners?: readonly Holder[];
+	/** Its first owners, written as owner grants in the registration's transaction. */
+	owners?: readonly Holder[];
 }
 
 /**
@@ -124,108 +124,107 @@ export const EXTERNAL_ID_MAXIMUM_LENGTH = 128;
 
 /** What updating a resource sends, as a JSON Merge Patch: an absent member is left as it is, and `null` clears. */
 export interface ResourceUpdate {
-  accessLevel?: AccessLevel;
-  description?: string | null;
-  displayName?: string;
+	accessLevel?: AccessLevel;
+	description?: string | null;
+	displayName?: string;
 
-  /** Field values set, or cleared with `null`, by field name. */
-  fields?: Readonly<Record<string, string | null>>;
+	/** Field values set, or cleared with `null`, by field name. */
+	fields?: Readonly<Record<string, string | null>>;
 }
 
 /** What registering a global category sends. */
 export interface CategoryRegistration {
-  description?: string;
+	description?: string;
 
-  /** Its name alone: `controlled`, which the API answers as `global.controlled`. */
-  name: string;
+	/** Its name alone: `controlled`, which the API answers as `global.controlled`. */
+	name: string;
 }
 
 /** What updating a category sends, as a JSON Merge Patch. */
 export interface CategoryUpdate {
-  description?: string | null;
+	description?: string | null;
 }
 
 /** What defining a resource field sends. */
 export interface ResourceFieldDefinition {
-  description?: string;
-  name: string;
+	description?: string;
+	name: string;
 }
 
 /** What creating a grant sends. */
 export interface GrantCreation {
-  /** A scoped category name, `global.controlled`; absent on an owner's grant, and on a submitter's, which takes the instance's. */
-  category?: string;
+	/** A scoped category name, `global.controlled`; absent on an owner's grant, and on a submitter's, which takes the instance's. */
+	category?: string;
 
-  /** An instant with an offset; the grant never expires when absent. */
-  expiresAt?: string;
+	/** An instant with an offset; the grant never expires when absent. */
+	expiresAt?: string;
 
-  holder: Holder;
+	holder: Holder;
 
-  /** By externalId. */
-  resource: string;
+	/** By externalId. */
+	resource: string;
 
-  role: string;
+	role: string;
 }
 
 /** What an administrator's self-grant sends: the caller is the holder, and the expiry is required. */
 export interface SelfGrantCreation {
-  category?: string;
-  expiresAt: string;
-  resource: string;
-  role: string;
+	category?: string;
+	expiresAt: string;
+	resource: string;
+	role: string;
 }
 
 /** What answering a grant sends: the decision, and the capabilities the person was shown. */
 export interface GrantDecision {
-  /** As `entity.action` names. */
-  capabilities: readonly string[];
+	/** As `entity.action` names. */
+	capabilities: readonly string[];
 
-  decision: 'accepted' | 'rejected';
+	decision: 'accepted' | 'rejected';
 }
 
 /** The audit log's query parameters (#214 Q13), each optional. */
 export interface AuditQuery {
-  actorId?: string;
+	actorId?: string;
 
-  /** The page to continue from, as the previous page named it. */
-  cursor?: string;
+	/** The page to continue from, as the previous page named it. */
+	cursor?: string;
 
-  /** The earliest `time`, inclusive: an instant with an offset. */
-  from?: string;
+	/** The earliest `time`, inclusive: an instant with an offset. */
+	from?: string;
 
-  /** The most events on a page. */
-  limit?: number;
+	/** The most events on a page. */
+	limit?: number;
 
-  /** A resource, by externalId. */
-  resourceId?: string;
+	/** A resource, by externalId. */
+	resourceId?: string;
 
-  severity?: string;
+	severity?: string;
 
-  /** The latest `time`, exclusive: an instant with an offset. */
-  to?: string;
+	/** The latest `time`, exclusive: an instant with an offset. */
+	to?: string;
 
-  /** A full event type, such as `bio.overture.grant.creation`. */
-  type?: string;
+	/** A full event type, such as `bio.overture.grant.creation`. */
+	type?: string;
 }
 
 /** What a logout token names, for {@link mintLogoutToken}. */
 export interface LogoutTokenOptions {
-  /** The client the logout token is addressed to, one of the Controller's back-channel logout audiences. */
-  audience: string;
+	/** The client the logout token is addressed to, one of the Controller's back-channel logout audiences. */
+	audience: string;
 
-  /** Claims and header members over the logout token's own, and the key and lifetime. */
-  mint?: MintOptions;
+	/** Claims and header members over the logout token's own, and the key and lifetime. */
+	mint?: MintOptions;
 
-  /** The session ended, as `sid`. */
-  sessionId?: string;
+	/** The session ended, as `sid`. */
+	sessionId?: string;
 
-  /** The person signed out, as `sub`. */
-  subject?: string;
+	/** The person signed out, as `sub`. */
+	subject?: string;
 }
 
 /** The back-channel logout event's member in a logout token's `events` claim. */
-export const BACK_CHANNEL_LOGOUT_EVENT =
-  'http://schemas.openid.net/event/backchannel-logout';
+export const BACK_CHANNEL_LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout';
 
 const JSON_MEDIA = 'application/json';
 
@@ -237,77 +236,67 @@ const FORM_MEDIA = 'application/x-www-form-urlencoded';
 
 // Access-token claims the stand-in adds by default that a logout token never carries.
 const ACCESS_TOKEN_ONLY_CLAIMS = Object.freeze({
-  acr: undefined,
-  azp: undefined,
-  email: undefined,
-  email_verified: undefined,
-  preferred_username: undefined,
-  realm_access: undefined,
-  scope: undefined,
-  sid: undefined,
-  sub: undefined,
-  typ: undefined,
+	acr: undefined,
+	azp: undefined,
+	email: undefined,
+	email_verified: undefined,
+	preferred_username: undefined,
+	realm_access: undefined,
+	scope: undefined,
+	sid: undefined,
+	sub: undefined,
+	typ: undefined,
 });
 
 const segment = (value: string): string => encodeURIComponent(value);
 
 const PATHS = {
-  apiDocs: 'api-docs',
-  apiDocsContract: 'api-docs/openapi.json',
-  application: (id: string): string => `admin/applications/${segment(id)}`,
-  applicationKey: (id: string, keyId: string): string =>
-    `admin/applications/${segment(id)}/keys/${segment(keyId)}`,
-  applicationKeys: (id: string): string =>
-    `admin/applications/${segment(id)}/keys`,
-  applications: 'admin/applications',
-  audit: 'admin/audit',
-  backChannelLogout: 'backchannel-logout',
-  categories: 'admin/categories',
-  category: (scopedName: string): string =>
-    `admin/categories/${segment(scopedName)}`,
-  egoImport: 'admin/imports/ego',
-  globalRevocation: 'admin/revocations/global',
-  grant: (id: string): string => `admin/grants/${segment(id)}`,
-  grantDecisions: (id: string): string =>
-    `admin/grants/${segment(id)}/decisions`,
-  grants: 'admin/grants',
-  liveness: 'health/live',
-  nominationAcceptance: (id: string): string =>
-    `admin/nominations/${segment(id)}/acceptance`,
-  nominations: 'admin/nominations',
-  identityRevocationLifts: 'admin/people/revocations/lifts',
-  identityRevocations: 'admin/people/revocations',
-  ownGrants: 'admin/me/grants',
-  ownNominations: 'admin/me/nominations',
-  personGrants: 'admin/people/grants',
-  readiness: 'health/ready',
-  resource: (externalId: string): string =>
-    `admin/resources/${segment(externalId)}`,
-  resourceAction: (externalId: string, action: string): string =>
-    `admin/resources/${segment(externalId)}/${action}`,
-  resourceApplication: (externalId: string, application: string): string =>
-    `admin/resources/${segment(externalId)}/applications/${segment(application)}`,
-  resourceFields: 'admin/resource-fields',
-  resources: 'admin/resources',
-  settings: 'admin/settings',
-  grantRules: 'admin/settings/grant-rules',
-  roleCapabilities: (role: string): string =>
-    `admin/roles/${segment(role)}/capabilities`,
-  selfGrants: 'admin/grants/self',
+	apiDocs: 'api-docs',
+	apiDocsContract: 'api-docs/openapi.json',
+	application: (id: string): string => `admin/applications/${segment(id)}`,
+	applicationKey: (id: string, keyId: string): string => `admin/applications/${segment(id)}/keys/${segment(keyId)}`,
+	applicationKeys: (id: string): string => `admin/applications/${segment(id)}/keys`,
+	applications: 'admin/applications',
+	audit: 'admin/audit',
+	backChannelLogout: 'backchannel-logout',
+	categories: 'admin/categories',
+	category: (scopedName: string): string => `admin/categories/${segment(scopedName)}`,
+	egoImport: 'admin/imports/ego',
+	globalRevocation: 'admin/revocations/global',
+	grant: (id: string): string => `admin/grants/${segment(id)}`,
+	grantDecisions: (id: string): string => `admin/grants/${segment(id)}/decisions`,
+	grants: 'admin/grants',
+	liveness: 'health/live',
+	nominationAcceptance: (id: string): string => `admin/nominations/${segment(id)}/acceptance`,
+	nominations: 'admin/nominations',
+	identityRevocationLifts: 'admin/people/revocations/lifts',
+	identityRevocations: 'admin/people/revocations',
+	ownGrants: 'admin/me/grants',
+	ownNominations: 'admin/me/nominations',
+	personGrants: 'admin/people/grants',
+	readiness: 'health/ready',
+	resource: (externalId: string): string => `admin/resources/${segment(externalId)}`,
+	resourceAction: (externalId: string, action: string): string => `admin/resources/${segment(externalId)}/${action}`,
+	resourceApplication: (externalId: string, application: string): string =>
+		`admin/resources/${segment(externalId)}/applications/${segment(application)}`,
+	resourceFields: 'admin/resource-fields',
+	resources: 'admin/resources',
+	settings: 'admin/settings',
+	grantRules: 'admin/settings/grant-rules',
+	roleCapabilities: (role: string): string => `admin/roles/${segment(role)}/capabilities`,
+	selfGrants: 'admin/grants/self',
 } as const;
 
 /** A Management API operation as its route names it: its method and its path's template. */
 export interface ManagementRoute {
-  method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
+	method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
-  /** The template, its parameters in braces, as the contract writes it: `/admin/grants/{id}`. */
-  route: string;
+	/** The template, its parameters in braces, as the contract writes it: `/admin/grants/{id}`. */
+	route: string;
 }
 
-const routes = (
-  route: string,
-  methods: readonly ManagementRoute['method'][],
-): readonly ManagementRoute[] => methods.map((method) => ({ method, route }));
+const routes = (route: string, methods: readonly ManagementRoute['method'][]): readonly ManagementRoute[] =>
+	methods.map((method) => ({ method, route }));
 
 /**
  * Every Management API operation as the contract's routes name them (`openapi.json`, the paths under
@@ -315,46 +304,42 @@ const routes = (
  * matched (ruled), never anything taken from the request line.
  */
 export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
-  ...routes('/admin/applications', ['POST']),
-  ...routes('/admin/applications/{id}', ['GET']),
-  ...routes('/admin/applications/{id}/keys', ['POST']),
-  ...routes('/admin/applications/{id}/keys/{keyId}', ['DELETE']),
-  ...routes('/admin/audit', ['GET']),
-  ...routes('/admin/categories', ['GET', 'POST']),
-  ...routes('/admin/categories/{scopedName}', ['PATCH']),
-  ...routes('/admin/grants', ['POST']),
-  ...routes('/admin/grants/self', ['POST']),
-  ...routes('/admin/grants/{id}', ['DELETE', 'PATCH']),
-  ...routes('/admin/grants/{id}/decisions', ['POST']),
-  ...routes('/admin/me/grants', ['GET']),
-  ...routes('/admin/me/nominations', ['GET']),
-  ...routes('/admin/imports/ego', ['POST']),
-  ...routes('/admin/nominations', ['POST']),
-  ...routes('/admin/nominations/{id}/acceptance', ['POST']),
-  ...routes('/admin/people/grants', ['POST']),
-  ...routes('/admin/people/revocations', ['POST']),
-  ...routes('/admin/people/revocations/lifts', ['POST']),
-  ...routes('/admin/resource-fields', ['GET', 'POST']),
-  ...routes('/admin/resources', ['GET', 'POST']),
-  ...routes('/admin/resources/{externalId}', ['DELETE', 'GET', 'PATCH']),
-  ...routes('/admin/resources/{externalId}/applications/{applicationId}', [
-    'DELETE',
-    'PUT',
-  ]),
-  ...routes('/admin/resources/{externalId}/grants', ['GET']),
-  ...routes('/admin/resources/{externalId}/restoration', ['POST']),
-  ...routes('/admin/resources/{externalId}/retirement', ['POST']),
-  ...routes('/admin/resources/{externalId}/revocations', ['POST']),
-  ...routes('/admin/resources/{externalId}/submitters/removal', ['POST']),
-  ...routes('/admin/resources/{externalId}/suppression', ['POST']),
-  ...routes('/admin/revocations/global', ['POST']),
-  ...routes('/admin/roles/{name}/capabilities', ['PUT']),
-  ...routes('/admin/settings', ['GET', 'PATCH']),
-  ...routes('/admin/settings/grant-rules', ['GET', 'PUT']),
+	...routes('/admin/applications', ['POST']),
+	...routes('/admin/applications/{id}', ['GET']),
+	...routes('/admin/applications/{id}/keys', ['POST']),
+	...routes('/admin/applications/{id}/keys/{keyId}', ['DELETE']),
+	...routes('/admin/audit', ['GET']),
+	...routes('/admin/categories', ['GET', 'POST']),
+	...routes('/admin/categories/{scopedName}', ['PATCH']),
+	...routes('/admin/grants', ['POST']),
+	...routes('/admin/grants/self', ['POST']),
+	...routes('/admin/grants/{id}', ['DELETE', 'PATCH']),
+	...routes('/admin/grants/{id}/decisions', ['POST']),
+	...routes('/admin/me/grants', ['GET']),
+	...routes('/admin/me/nominations', ['GET']),
+	...routes('/admin/imports/ego', ['POST']),
+	...routes('/admin/nominations', ['POST']),
+	...routes('/admin/nominations/{id}/acceptance', ['POST']),
+	...routes('/admin/people/grants', ['POST']),
+	...routes('/admin/people/revocations', ['POST']),
+	...routes('/admin/people/revocations/lifts', ['POST']),
+	...routes('/admin/resource-fields', ['GET', 'POST']),
+	...routes('/admin/resources', ['GET', 'POST']),
+	...routes('/admin/resources/{externalId}', ['DELETE', 'GET', 'PATCH']),
+	...routes('/admin/resources/{externalId}/applications/{applicationId}', ['DELETE', 'PUT']),
+	...routes('/admin/resources/{externalId}/grants', ['GET']),
+	...routes('/admin/resources/{externalId}/restoration', ['POST']),
+	...routes('/admin/resources/{externalId}/retirement', ['POST']),
+	...routes('/admin/resources/{externalId}/revocations', ['POST']),
+	...routes('/admin/resources/{externalId}/submitters/removal', ['POST']),
+	...routes('/admin/resources/{externalId}/suppression', ['POST']),
+	...routes('/admin/revocations/global', ['POST']),
+	...routes('/admin/roles/{name}/capabilities', ['PUT']),
+	...routes('/admin/settings', ['GET', 'PATCH']),
+	...routes('/admin/settings/grant-rules', ['GET', 'PUT']),
 ]);
 
-const isParameter = (segment: string): boolean =>
-  segment.startsWith('{') && segment.endsWith('}');
+const isParameter = (segment: string): boolean => segment.startsWith('{') && segment.endsWith('}');
 
 /**
  * The Management API route a request reaches, matched as a router matches one: segment by segment, a
@@ -364,22 +349,18 @@ const isParameter = (segment: string): boolean =>
  * @param method the request's method.
  * @param target the request's path, from the Controller's root, with or without a query.
  */
-export const managementRouteOf = (
-  method: string,
-  target: string,
-): ManagementRoute | undefined => {
-  const sent = (target.split('?')[0] ?? '').split('/').filter(Boolean);
-  const literalCount = ({ route }: ManagementRoute): number =>
-    route.split('/').filter((part) => part.length > 0 && !isParameter(part))
-      .length;
-  return MANAGEMENT_ROUTES.filter((candidate) => {
-    const parts = candidate.route.split('/').filter(Boolean);
-    return (
-      candidate.method === method.toUpperCase() &&
-      parts.length === sent.length &&
-      parts.every((part, index) => isParameter(part) || part === sent[index])
-    );
-  }).toSorted((first, second) => literalCount(second) - literalCount(first))[0];
+export const managementRouteOf = (method: string, target: string): ManagementRoute | undefined => {
+	const sent = (target.split('?')[0] ?? '').split('/').filter(Boolean);
+	const literalCount = ({ route }: ManagementRoute): number =>
+		route.split('/').filter((part) => part.length > 0 && !isParameter(part)).length;
+	return MANAGEMENT_ROUTES.filter((candidate) => {
+		const parts = candidate.route.split('/').filter(Boolean);
+		return (
+			candidate.method === method.toUpperCase() &&
+			parts.length === sent.length &&
+			parts.every((part, index) => isParameter(part) || part === sent[index])
+		);
+	}).toSorted((first, second) => literalCount(second) - literalCount(first))[0];
 };
 
 /**
@@ -391,132 +372,109 @@ export const managementRouteOf = (
  * @throws when the operation sends nothing, or its request matches no route.
  */
 export const managementRouteOfOperation = async (
-  operation: (recorded: AdminCaller) => Promise<AdminResponse>,
+	operation: (recorded: AdminCaller) => Promise<AdminResponse>,
 ): Promise<ManagementRoute> => {
-  const recorder = await startRecordingServer();
-  try {
-    await operation({ token: null, url: recorder.url });
-  } finally {
-    await recorder.stop();
-  }
-  const [sent] = recorder.requests;
-  if (sent === undefined) {
-    throw new Error('the operation sent nothing');
-  }
-  const matched = managementRouteOf(sent.method, sent.target);
-  if (matched !== undefined) {
-    return matched;
-  }
-  throw new Error(`no route matches ${sent.method} ${sent.target}`);
+	const recorder = await startRecordingServer();
+	try {
+		await operation({ token: null, url: recorder.url });
+	} finally {
+		await recorder.stop();
+	}
+	const [sent] = recorder.requests;
+	if (sent === undefined) {
+		throw new Error('the operation sent nothing');
+	}
+	const matched = managementRouteOf(sent.method, sent.target);
+	if (matched !== undefined) {
+		return matched;
+	}
+	throw new Error(`no route matches ${sent.method} ${sent.target}`);
 };
 
 interface Operation {
-  /** The body's media type: JSON by default, Merge Patch for an update. */
-  contentType?: string;
+	/** The body's media type: JSON by default, Merge Patch for an update. */
+	contentType?: string;
 
-  /** The JSON body, if the operation sends one. */
-  json?: Readonly<Record<string, unknown>>;
+	/** The JSON body, if the operation sends one. */
+	json?: Readonly<Record<string, unknown>>;
 
-  method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
-  path: string;
-  query?: Readonly<Record<string, string>>;
+	method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
+	path: string;
+	query?: Readonly<Record<string, string>>;
 }
 
 const isProblem = (value: unknown): value is ProblemDetails =>
-  typeof value === 'object' &&
-  value !== null &&
-  typeof Reflect.get(value, 'code') === 'string';
+	typeof value === 'object' && value !== null && typeof Reflect.get(value, 'code') === 'string';
 
 const parsedJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return undefined;
-  }
+	try {
+		return JSON.parse(text) as unknown;
+	} catch {
+		return undefined;
+	}
 };
 
 const mediaTypeIn = (headers: Headers): string =>
-  (headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
+	(headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
 
 /**
  * An answer's media type: its `content-type` without parameters, lower-cased; empty when it has none.
  *
  * @param response the answer.
  */
-export const mediaTypeOf = (response: Pick<AdminResponse, 'headers'>): string =>
-  mediaTypeIn(response.headers);
+export const mediaTypeOf = (response: Pick<AdminResponse, 'headers'>): string => mediaTypeIn(response.headers);
 
-const answerOf = (
-  status: number,
-  headers: Headers,
-  text: string,
-): AdminResponse => {
-  const mediaType = mediaTypeIn(headers);
-  const body =
-    mediaType === JSON_MEDIA || mediaType.endsWith('+json')
-      ? parsedJson(text)
-      : undefined;
-  return {
-    body,
-    headers,
-    problem: mediaType === PROBLEM_MEDIA && isProblem(body) ? body : undefined,
-    status,
-    text,
-  };
+const answerOf = (status: number, headers: Headers, text: string): AdminResponse => {
+	const mediaType = mediaTypeIn(headers);
+	const body = mediaType === JSON_MEDIA || mediaType.endsWith('+json') ? parsedJson(text) : undefined;
+	return {
+		body,
+		headers,
+		problem: mediaType === PROBLEM_MEDIA && isProblem(body) ? body : undefined,
+		status,
+		text,
+	};
 };
 
 const responseOf = async (response: Response): Promise<AdminResponse> =>
-  answerOf(response.status, response.headers, await response.text());
+	answerOf(response.status, response.headers, await response.text());
 
-const urlFor = (
-  base: URL,
-  path: string,
-  query: Readonly<Record<string, string>>,
-): URL => {
-  const url = new URL(path, base);
-  Object.entries(query).forEach(([name, value]) =>
-    url.searchParams.set(name, value),
-  );
-  return url;
+const urlFor = (base: URL, path: string, query: Readonly<Record<string, string>>): URL => {
+	const url = new URL(path, base);
+	Object.entries(query).forEach(([name, value]) => url.searchParams.set(name, value));
+	return url;
 };
 
 const send = async (
-  { token, url }: AdminCaller,
-  { contentType = JSON_MEDIA, json, method, path, query = {} }: Operation,
-  {
-    body,
-    extraMembers = {},
-    headers = {},
-    query: extraQuery = {},
-  }: AdminOverrides = {},
+	{ token, url }: AdminCaller,
+	{ contentType = JSON_MEDIA, json, method, path, query = {} }: Operation,
+	{ body, extraMembers = {}, headers = {}, query: extraQuery = {} }: AdminOverrides = {},
 ): Promise<AdminResponse> => {
-  const sentBody =
-    body ??
-    (json === undefined && Object.keys(extraMembers).length === 0
-      ? undefined
-      : JSON.stringify({ ...json, ...extraMembers }));
-  const response = await fetch(urlFor(url, path, { ...query, ...extraQuery }), {
-    ...(sentBody === undefined ? {} : { body: sentBody }),
-    headers: mergedHeaders(
-      {
-        accept: `${JSON_MEDIA}, ${PROBLEM_MEDIA}`,
-        ...(token === null ? {} : { authorization: `Bearer ${token}` }),
-        ...(sentBody === undefined ? {} : { 'content-type': contentType }),
-      },
-      headers,
-    ),
-    method,
-    redirect: 'manual',
-  });
-  return responseOf(response);
+	const sentBody =
+		body ??
+		(json === undefined && Object.keys(extraMembers).length === 0
+			? undefined
+			: JSON.stringify({ ...json, ...extraMembers }));
+	const response = await fetch(urlFor(url, path, { ...query, ...extraQuery }), {
+		...(sentBody === undefined ? {} : { body: sentBody }),
+		headers: mergedHeaders(
+			{
+				accept: `${JSON_MEDIA}, ${PROBLEM_MEDIA}`,
+				...(token === null ? {} : { authorization: `Bearer ${token}` }),
+				...(sentBody === undefined ? {} : { 'content-type': contentType }),
+			},
+			headers,
+		),
+		method,
+		redirect: 'manual',
+	});
+	return responseOf(response);
 };
 
 const withGrantId = (response: AdminResponse): GrantCreated => {
-  const id: unknown =
-    typeof response.body === 'object' && response.body !== null
-      ? Reflect.get(response.body, 'id')
-      : undefined;
-  return { ...response, grantId: typeof id === 'string' ? id : undefined };
+	const id: unknown =
+		typeof response.body === 'object' && response.body !== null ? Reflect.get(response.body, 'id') : undefined;
+	return { ...response, grantId: typeof id === 'string' ? id : undefined };
 };
 
 /**
@@ -526,16 +484,13 @@ const withGrantId = (response: AdminResponse): GrantCreated => {
  * @param operation what the test asked for, for the failure's message.
  * @throws when the status is outside 200 to 299.
  */
-export const assertSucceeded = (
-  response: AdminResponse,
-  operation: string,
-): void => {
-  if (response.status >= 200 && response.status < 300) {
-    return;
-  }
-  throw new Error(
-    `${operation} was answered ${response.status}${response.problem === undefined ? '' : ` ${response.problem.code}`}`,
-  );
+export const assertSucceeded = (response: AdminResponse, operation: string): void => {
+	if (response.status >= 200 && response.status < 300) {
+		return;
+	}
+	throw new Error(
+		`${operation} was answered ${response.status}${response.problem === undefined ? '' : ` ${response.problem.code}`}`,
+	);
 };
 
 /**
@@ -544,8 +499,7 @@ export const assertSucceeded = (
  *
  * @param controllerUrl the Controller's URL, ending in `/`.
  */
-export const backChannelLogoutUrl = (controllerUrl: URL): URL =>
-  new URL(PATHS.backChannelLogout, controllerUrl);
+export const backChannelLogoutUrl = (controllerUrl: URL): URL => new URL(PATHS.backChannelLogout, controllerUrl);
 
 /**
  * Registers an application and issues its first key, for platform administrators:
@@ -558,15 +512,11 @@ export const backChannelLogoutUrl = (controllerUrl: URL): URL =>
  * @param overrides departures from the request.
  */
 export const registerApplication = (
-  caller: AdminCaller,
-  registration: ApplicationRegistration,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	registration: ApplicationRegistration,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { json: { ...registration }, method: 'POST', path: PATHS.applications },
-    overrides,
-  );
+	send(caller, { json: { ...registration }, method: 'POST', path: PATHS.applications }, overrides);
 
 /**
  * Issues another key for an application, for platform administrators, sending no body:
@@ -578,15 +528,10 @@ export const registerApplication = (
  * @param overrides departures from the request.
  */
 export const issueApplicationKey = (
-  caller: AdminCaller,
-  applicationId: string,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(
-    caller,
-    { method: 'POST', path: PATHS.applicationKeys(applicationId) },
-    overrides,
-  );
+	caller: AdminCaller,
+	applicationId: string,
+	overrides?: AdminOverrides,
+): Promise<AdminResponse> => send(caller, { method: 'POST', path: PATHS.applicationKeys(applicationId) }, overrides);
 
 /**
  * Revokes one of an application's keys, for platform administrators:
@@ -600,21 +545,21 @@ export const issueApplicationKey = (
  * @param overrides departures from the request.
  */
 export const revokeApplicationKey = (
-  caller: AdminCaller,
-  applicationId: string,
-  keyId: string,
-  { reason }: { reason?: string } = {},
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	applicationId: string,
+	keyId: string,
+	{ reason }: { reason?: string } = {},
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      ...(reason === undefined ? {} : { json: { reason } }),
-      method: 'DELETE',
-      path: PATHS.applicationKey(applicationId, keyId),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			...(reason === undefined ? {} : { json: { reason } }),
+			method: 'DELETE',
+			path: PATHS.applicationKey(applicationId, keyId),
+		},
+		overrides,
+	);
 
 /**
  * Reads an application and every key it was issued, for platform administrators:
@@ -626,15 +571,10 @@ export const revokeApplicationKey = (
  * @param overrides departures from the request.
  */
 export const readApplication = (
-  caller: AdminCaller,
-  applicationId: string,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(
-    caller,
-    { method: 'GET', path: PATHS.application(applicationId) },
-    overrides,
-  );
+	caller: AdminCaller,
+	applicationId: string,
+	overrides?: AdminOverrides,
+): Promise<AdminResponse> => send(caller, { method: 'GET', path: PATHS.application(applicationId) }, overrides);
 
 /**
  * Registers a resource: `POST /admin/resources`.
@@ -644,15 +584,11 @@ export const readApplication = (
  * @param overrides departures from the request.
  */
 export const registerResource = (
-  caller: AdminCaller,
-  registration: ResourceRegistration,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	registration: ResourceRegistration,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { json: { ...registration }, method: 'POST', path: PATHS.resources },
-    overrides,
-  );
+	send(caller, { json: { ...registration }, method: 'POST', path: PATHS.resources }, overrides);
 
 /**
  * Reads a resource: `GET /admin/resources/{externalId}`, the externalId percent-encoded.
@@ -662,11 +598,10 @@ export const registerResource = (
  * @param overrides departures from the request.
  */
 export const readResource = (
-  caller: AdminCaller,
-  externalId: string,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(caller, { method: 'GET', path: PATHS.resource(externalId) }, overrides);
+	caller: AdminCaller,
+	externalId: string,
+	overrides?: AdminOverrides,
+): Promise<AdminResponse> => send(caller, { method: 'GET', path: PATHS.resource(externalId) }, overrides);
 
 /**
  * Updates a resource's details, access level and field values: `PATCH /admin/resources/{externalId}`
@@ -678,21 +613,21 @@ export const readResource = (
  * @param overrides departures from the request.
  */
 export const updateResource = (
-  caller: AdminCaller,
-  externalId: string,
-  update: ResourceUpdate,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	externalId: string,
+	update: ResourceUpdate,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      contentType: MERGE_PATCH_MEDIA,
-      json: { ...update },
-      method: 'PATCH',
-      path: PATHS.resource(externalId),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			contentType: MERGE_PATCH_MEDIA,
+			json: { ...update },
+			method: 'PATCH',
+			path: PATHS.resource(externalId),
+		},
+		overrides,
+	);
 
 /**
  * Lists the resources the caller may see: `GET /admin/resources`.
@@ -700,16 +635,13 @@ export const updateResource = (
  * @param caller the Controller and the caller's token.
  * @param overrides departures from the request, its paging parameters included.
  */
-export const listResources = (
-  caller: AdminCaller,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(caller, { method: 'GET', path: PATHS.resources }, overrides);
+export const listResources = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.resources }, overrides);
 
 /** An optional reason, beside the departures from an operation's own request. */
 export interface ReasonedOverrides extends AdminOverrides {
-  /** Sent as the body's `reason`; no body is sent without one. */
-  reason?: string;
+	/** Sent as the body's `reason`; no body is sent without one. */
+	reason?: string;
 }
 
 /**
@@ -722,19 +654,19 @@ export interface ReasonedOverrides extends AdminOverrides {
  *   from the request.
  */
 export const suppressResource = (
-  caller: AdminCaller,
-  externalId: string,
-  { reason, ...overrides }: ReasonedOverrides = {},
+	caller: AdminCaller,
+	externalId: string,
+	{ reason, ...overrides }: ReasonedOverrides = {},
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      ...(reason === undefined ? {} : { json: { reason } }),
-      method: 'POST',
-      path: PATHS.resourceAction(externalId, 'suppression'),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			...(reason === undefined ? {} : { json: { reason } }),
+			method: 'POST',
+			path: PATHS.resourceAction(externalId, 'suppression'),
+		},
+		overrides,
+	);
 
 /**
  * Restores a suppressed resource: `POST /admin/resources/{externalId}/restoration`, carrying a body
@@ -746,19 +678,19 @@ export const suppressResource = (
  *   from the request.
  */
 export const restoreResource = (
-  caller: AdminCaller,
-  externalId: string,
-  { reason, ...overrides }: ReasonedOverrides = {},
+	caller: AdminCaller,
+	externalId: string,
+	{ reason, ...overrides }: ReasonedOverrides = {},
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      ...(reason === undefined ? {} : { json: { reason } }),
-      method: 'POST',
-      path: PATHS.resourceAction(externalId, 'restoration'),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			...(reason === undefined ? {} : { json: { reason } }),
+			method: 'POST',
+			path: PATHS.resourceAction(externalId, 'restoration'),
+		},
+		overrides,
+	);
 
 /**
  * Retires a resource no live grant or pending invitation names (#320 B):
@@ -769,15 +701,11 @@ export const restoreResource = (
  * @param overrides departures from the request.
  */
 export const retireResource = (
-  caller: AdminCaller,
-  externalId: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	externalId: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { method: 'POST', path: PATHS.resourceAction(externalId, 'retirement') },
-    overrides,
-  );
+	send(caller, { method: 'POST', path: PATHS.resourceAction(externalId, 'retirement') }, overrides);
 
 /**
  * Deletes a registration that never held a grant or an invitation (#320 D):
@@ -788,15 +716,10 @@ export const retireResource = (
  * @param overrides departures from the request.
  */
 export const deleteResource = (
-  caller: AdminCaller,
-  externalId: string,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(
-    caller,
-    { method: 'DELETE', path: PATHS.resource(externalId) },
-    overrides,
-  );
+	caller: AdminCaller,
+	externalId: string,
+	overrides?: AdminOverrides,
+): Promise<AdminResponse> => send(caller, { method: 'DELETE', path: PATHS.resource(externalId) }, overrides);
 
 /**
  * Adds one application to a resource's served set (#211 Q5), succeeding without a write when it is
@@ -808,16 +731,12 @@ export const deleteResource = (
  * @param overrides departures from the request.
  */
 export const serveResource = (
-  caller: AdminCaller,
-  externalId: string,
-  application: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	externalId: string,
+	application: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { method: 'PUT', path: PATHS.resourceApplication(externalId, application) },
-    overrides,
-  );
+	send(caller, { method: 'PUT', path: PATHS.resourceApplication(externalId, application) }, overrides);
 
 /**
  * Removes one application from a resource's served set:
@@ -829,19 +748,19 @@ export const serveResource = (
  * @param overrides departures from the request.
  */
 export const stopServingResource = (
-  caller: AdminCaller,
-  externalId: string,
-  application: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	externalId: string,
+	application: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      method: 'DELETE',
-      path: PATHS.resourceApplication(externalId, application),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			method: 'DELETE',
+			path: PATHS.resourceApplication(externalId, application),
+		},
+		overrides,
+	);
 
 /**
  * Registers a global category (#211 Q8): `POST /admin/categories`.
@@ -851,15 +770,11 @@ export const stopServingResource = (
  * @param overrides departures from the request.
  */
 export const registerCategory = (
-  caller: AdminCaller,
-  registration: CategoryRegistration,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	registration: CategoryRegistration,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { json: { ...registration }, method: 'POST', path: PATHS.categories },
-    overrides,
-  );
+	send(caller, { json: { ...registration }, method: 'POST', path: PATHS.categories }, overrides);
 
 /**
  * Updates a category (#211 Q8): `PATCH /admin/categories/{scopedName}` as a JSON Merge Patch.
@@ -870,21 +785,21 @@ export const registerCategory = (
  * @param overrides departures from the request.
  */
 export const updateCategory = (
-  caller: AdminCaller,
-  scopedName: string,
-  update: CategoryUpdate,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	scopedName: string,
+	update: CategoryUpdate,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      contentType: MERGE_PATCH_MEDIA,
-      json: { ...update },
-      method: 'PATCH',
-      path: PATHS.category(scopedName),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			contentType: MERGE_PATCH_MEDIA,
+			json: { ...update },
+			method: 'PATCH',
+			path: PATHS.category(scopedName),
+		},
+		overrides,
+	);
 
 /**
  * Lists the categories (#211 Q8): `GET /admin/categories`.
@@ -892,11 +807,8 @@ export const updateCategory = (
  * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
  */
-export const listCategories = (
-  caller: AdminCaller,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(caller, { method: 'GET', path: PATHS.categories }, overrides);
+export const listCategories = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.categories }, overrides);
 
 /**
  * Defines a resource field, instance-wide (#207 Q8): `POST /admin/resource-fields`. A resource's
@@ -907,15 +819,11 @@ export const listCategories = (
  * @param overrides departures from the request.
  */
 export const defineResourceField = (
-  caller: AdminCaller,
-  definition: ResourceFieldDefinition,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	definition: ResourceFieldDefinition,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { json: { ...definition }, method: 'POST', path: PATHS.resourceFields },
-    overrides,
-  );
+	send(caller, { json: { ...definition }, method: 'POST', path: PATHS.resourceFields }, overrides);
 
 /**
  * Lists the resource fields: `GET /admin/resource-fields`.
@@ -923,11 +831,8 @@ export const defineResourceField = (
  * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
  */
-export const listResourceFields = (
-  caller: AdminCaller,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(caller, { method: 'GET', path: PATHS.resourceFields }, overrides);
+export const listResourceFields = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.resourceFields }, overrides);
 
 /**
  * Creates a grant, its holder by subject or by address (#212 Q1): `POST /admin/grants`.
@@ -938,17 +843,11 @@ export const listResourceFields = (
  * @returns the answer, with the new grant's id read from its body's `id`.
  */
 export const createGrant = async (
-  caller: AdminCaller,
-  creation: GrantCreation,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	creation: GrantCreation,
+	overrides?: AdminOverrides,
 ): Promise<GrantCreated> =>
-  withGrantId(
-    await send(
-      caller,
-      { json: { ...creation }, method: 'POST', path: PATHS.grants },
-      overrides,
-    ),
-  );
+	withGrantId(await send(caller, { json: { ...creation }, method: 'POST', path: PATHS.grants }, overrides));
 
 /**
  * Adds a submitter to a study by address: a grant of the `submitter` role naming no category, which
@@ -960,16 +859,12 @@ export const createGrant = async (
  * @param overrides departures from the request.
  */
 export const addSubmitter = (
-  caller: AdminCaller,
-  externalId: string,
-  email: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	externalId: string,
+	email: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  createGrant(
-    caller,
-    { holder: { email }, resource: externalId, role: 'submitter' },
-    overrides,
-  );
+	createGrant(caller, { holder: { email }, resource: externalId, role: 'submitter' }, overrides);
 
 /**
  * Removes a submitter from a study by address, the address in the body (#212 Q1):
@@ -981,20 +876,20 @@ export const addSubmitter = (
  * @param overrides departures from the request.
  */
 export const removeSubmitter = (
-  caller: AdminCaller,
-  externalId: string,
-  email: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	externalId: string,
+	email: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      json: { email },
-      method: 'POST',
-      path: PATHS.resourceAction(externalId, 'submitters/removal'),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			json: { email },
+			method: 'POST',
+			path: PATHS.resourceAction(externalId, 'submitters/removal'),
+		},
+		overrides,
+	);
 
 /**
  * Creates the caller's own grant, which is its acceptance (#212 Q14): `POST /admin/grants/self`.
@@ -1005,17 +900,11 @@ export const removeSubmitter = (
  * @returns the answer, with the new grant's id read from its body's `id`.
  */
 export const createSelfGrant = async (
-  caller: AdminCaller,
-  creation: SelfGrantCreation,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	creation: SelfGrantCreation,
+	overrides?: AdminOverrides,
 ): Promise<GrantCreated> =>
-  withGrantId(
-    await send(
-      caller,
-      { json: { ...creation }, method: 'POST', path: PATHS.selfGrants },
-      overrides,
-    ),
-  );
+	withGrantId(await send(caller, { json: { ...creation }, method: 'POST', path: PATHS.selfGrants }, overrides));
 
 /**
  * Revokes a grant: `DELETE /admin/grants/{id}`, carrying a body only when a reason is given.
@@ -1026,20 +915,20 @@ export const createSelfGrant = async (
  * @param overrides departures from the request.
  */
 export const revokeGrant = (
-  caller: AdminCaller,
-  grantId: string,
-  { reason }: { reason?: string } = {},
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	grantId: string,
+	{ reason }: { reason?: string } = {},
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      ...(reason === undefined ? {} : { json: { reason } }),
-      method: 'DELETE',
-      path: PATHS.grant(grantId),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			...(reason === undefined ? {} : { json: { reason } }),
+			method: 'DELETE',
+			path: PATHS.grant(grantId),
+		},
+		overrides,
+	);
 
 /**
  * Answers a grant as its recipient: `POST /admin/grants/{id}/decisions`.
@@ -1050,20 +939,20 @@ export const revokeGrant = (
  * @param overrides departures from the request.
  */
 export const answerGrant = (
-  caller: AdminCaller,
-  grantId: string,
-  decision: GrantDecision,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	grantId: string,
+	decision: GrantDecision,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      json: { ...decision },
-      method: 'POST',
-      path: PATHS.grantDecisions(grantId),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			json: { ...decision },
+			method: 'POST',
+			path: PATHS.grantDecisions(grantId),
+		},
+		overrides,
+	);
 
 /**
  * Changes a grant's expiry, or removes it with `null`: `PATCH /admin/grants/{id}` as a JSON Merge
@@ -1075,21 +964,21 @@ export const answerGrant = (
  * @param overrides departures from the request.
  */
 export const changeGrantExpiry = (
-  caller: AdminCaller,
-  grantId: string,
-  expiresAt: string | null,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	grantId: string,
+	expiresAt: string | null,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      contentType: MERGE_PATCH_MEDIA,
-      json: { expiresAt },
-      method: 'PATCH',
-      path: PATHS.grant(grantId),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			contentType: MERGE_PATCH_MEDIA,
+			json: { expiresAt },
+			method: 'PATCH',
+			path: PATHS.grant(grantId),
+		},
+		overrides,
+	);
 
 /**
  * Changes a grant's role: `PATCH /admin/grants/{id}` as a JSON Merge Patch.
@@ -1100,21 +989,21 @@ export const changeGrantExpiry = (
  * @param overrides departures from the request.
  */
 export const changeGrantRole = (
-  caller: AdminCaller,
-  grantId: string,
-  role: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	grantId: string,
+	role: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      contentType: MERGE_PATCH_MEDIA,
-      json: { role },
-      method: 'PATCH',
-      path: PATHS.grant(grantId),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			contentType: MERGE_PATCH_MEDIA,
+			json: { role },
+			method: 'PATCH',
+			path: PATHS.grant(grantId),
+		},
+		overrides,
+	);
 
 /**
  * Lists the grants on a resource (#213): `GET /admin/resources/{externalId}/grants`.
@@ -1124,15 +1013,11 @@ export const changeGrantRole = (
  * @param overrides departures from the request, its paging parameters included.
  */
 export const listResourceGrants = (
-  caller: AdminCaller,
-  externalId: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	externalId: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { method: 'GET', path: PATHS.resourceAction(externalId, 'grants') },
-    overrides,
-  );
+	send(caller, { method: 'GET', path: PATHS.resourceAction(externalId, 'grants') }, overrides);
 
 /**
  * Lists a person's grants by exact address, the address in the body (#213 Q2):
@@ -1143,15 +1028,10 @@ export const listResourceGrants = (
  * @param overrides departures from the request.
  */
 export const listPersonGrants = (
-  caller: AdminCaller,
-  email: string,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(
-    caller,
-    { json: { email }, method: 'POST', path: PATHS.personGrants },
-    overrides,
-  );
+	caller: AdminCaller,
+	email: string,
+	overrides?: AdminOverrides,
+): Promise<AdminResponse> => send(caller, { json: { email }, method: 'POST', path: PATHS.personGrants }, overrides);
 
 /**
  * Lists the caller's own grants (#213 Q3): `GET /admin/me/grants`.
@@ -1159,11 +1039,8 @@ export const listPersonGrants = (
  * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
  */
-export const listOwnGrants = (
-  caller: AdminCaller,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(caller, { method: 'GET', path: PATHS.ownGrants }, overrides);
+export const listOwnGrants = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.ownGrants }, overrides);
 
 /**
  * Nominates Usher's first administrator, as the first user: `POST /admin/nominations`, taking
@@ -1174,15 +1051,11 @@ export const listOwnGrants = (
  * @param overrides departures from the request.
  */
 export const nominate = (
-  caller: AdminCaller,
-  nomination: { nominee: { subject: string } },
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	nomination: { nominee: { subject: string } },
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { json: { ...nomination }, method: 'POST', path: PATHS.nominations },
-    overrides,
-  );
+	send(caller, { json: { ...nomination }, method: 'POST', path: PATHS.nominations }, overrides);
 
 /**
  * Accepts a nomination naming the caller: `POST /admin/nominations/{id}/acceptance`, taking no
@@ -1193,15 +1066,11 @@ export const nominate = (
  * @param overrides departures from the request.
  */
 export const acceptNomination = (
-  caller: AdminCaller,
-  nominationId: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	nominationId: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { method: 'POST', path: PATHS.nominationAcceptance(nominationId) },
-    overrides,
-  );
+	send(caller, { method: 'POST', path: PATHS.nominationAcceptance(nominationId) }, overrides);
 
 /**
  * Lists the nominations naming the caller: `GET /admin/me/nominations`.
@@ -1209,11 +1078,8 @@ export const acceptNomination = (
  * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
  */
-export const listOwnNominations = (
-  caller: AdminCaller,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(caller, { method: 'GET', path: PATHS.ownNominations }, overrides);
+export const listOwnNominations = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.ownNominations }, overrides);
 
 /**
  * Revokes a principal's identity entirely (#210 Q1, #212): `POST /admin/people/revocations`, the
@@ -1224,19 +1090,19 @@ export const listOwnNominations = (
  * @param overrides departures from the request.
  */
 export const revokeIdentity = (
-  caller: AdminCaller,
-  revocation: { reason: string; subject: string },
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	revocation: { reason: string; subject: string },
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      json: { ...revocation },
-      method: 'POST',
-      path: PATHS.identityRevocations,
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			json: { ...revocation },
+			method: 'POST',
+			path: PATHS.identityRevocations,
+		},
+		overrides,
+	);
 
 /**
  * Lifts a principal's standing revocation: `POST /admin/people/revocations/lifts`, the subject in
@@ -1247,15 +1113,11 @@ export const revokeIdentity = (
  * @param overrides departures from the request.
  */
 export const liftIdentityRevocation = (
-  caller: AdminCaller,
-  subject: string,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	subject: string,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    { json: { subject }, method: 'POST', path: PATHS.identityRevocationLifts },
-    overrides,
-  );
+	send(caller, { json: { subject }, method: 'POST', path: PATHS.identityRevocationLifts }, overrides);
 
 /**
  * Revokes every user of a resource at once (#210 Q1): `POST /admin/resources/{externalId}/revocations`.
@@ -1266,20 +1128,20 @@ export const liftIdentityRevocation = (
  * @param overrides departures from the request.
  */
 export const revokeResourceUsers = (
-  caller: AdminCaller,
-  externalId: string,
-  revocation: { reason: string },
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	externalId: string,
+	revocation: { reason: string },
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      json: { ...revocation },
-      method: 'POST',
-      path: PATHS.resourceAction(externalId, 'revocations'),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			json: { ...revocation },
+			method: 'POST',
+			path: PATHS.resourceAction(externalId, 'revocations'),
+		},
+		overrides,
+	);
 
 /**
  * Revokes globally, confirmed in the request (#210 Q1): `POST /admin/revocations/global`.
@@ -1289,19 +1151,19 @@ export const revokeResourceUsers = (
  * @param overrides departures from the request, such as a body without the confirmation.
  */
 export const revokeGlobally = (
-  caller: AdminCaller,
-  revocation: { reason: string },
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	revocation: { reason: string },
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      json: { confirm: true, ...revocation },
-      method: 'POST',
-      path: PATHS.globalRevocation,
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			json: { confirm: true, ...revocation },
+			method: 'POST',
+			path: PATHS.globalRevocation,
+		},
+		overrides,
+	);
 
 /**
  * Replaces the capabilities a role carries: `PUT /admin/roles/{name}/capabilities`.
@@ -1312,20 +1174,20 @@ export const revokeGlobally = (
  * @param overrides departures from the request.
  */
 export const changeRoleCapabilities = (
-  caller: AdminCaller,
-  role: string,
-  capabilities: readonly string[],
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	role: string,
+	capabilities: readonly string[],
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      json: { capabilities },
-      method: 'PUT',
-      path: PATHS.roleCapabilities(role),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			json: { capabilities },
+			method: 'PUT',
+			path: PATHS.roleCapabilities(role),
+		},
+		overrides,
+	);
 
 /**
  * Reads the audit log (#214): `GET /admin/audit`, with the parameters given.
@@ -1335,21 +1197,19 @@ export const changeRoleCapabilities = (
  * @param overrides departures from the request, such as a parameter the API does not know.
  */
 export const readAudit = (
-  caller: AdminCaller,
-  query: AuditQuery = {},
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	query: AuditQuery = {},
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      method: 'GET',
-      path: PATHS.audit,
-      query: Object.fromEntries(
-        Object.entries(query).map(([name, value]) => [name, String(value)]),
-      ),
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			method: 'GET',
+			path: PATHS.audit,
+			query: Object.fromEntries(Object.entries(query).map(([name, value]) => [name, String(value)])),
+		},
+		overrides,
+	);
 
 /**
  * Reads the grant rules: `GET /admin/settings/grant-rules`.
@@ -1357,11 +1217,8 @@ export const readAudit = (
  * @param caller the Controller and an administrator's token.
  * @param overrides departures from the request.
  */
-export const readGrantRules = (
-  caller: AdminCaller,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(caller, { method: 'GET', path: PATHS.grantRules }, overrides);
+export const readGrantRules = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.grantRules }, overrides);
 
 /**
  * Replaces the whole list of grant rules: `PUT /admin/settings/grant-rules`.
@@ -1371,15 +1228,10 @@ export const readGrantRules = (
  * @param overrides departures from the request.
  */
 export const changeGrantRules = (
-  caller: AdminCaller,
-  grantRules: unknown,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(
-    caller,
-    { json: { grantRules }, method: 'PUT', path: PATHS.grantRules },
-    overrides,
-  );
+	caller: AdminCaller,
+	grantRules: unknown,
+	overrides?: AdminOverrides,
+): Promise<AdminResponse> => send(caller, { json: { grantRules }, method: 'PUT', path: PATHS.grantRules }, overrides);
 
 /**
  * Reads every setting but the grant rules: `GET /admin/settings`.
@@ -1387,11 +1239,8 @@ export const changeGrantRules = (
  * @param caller the Controller and an administrator's token.
  * @param overrides departures from the request.
  */
-export const readSettings = (
-  caller: AdminCaller,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  send(caller, { method: 'GET', path: PATHS.settings }, overrides);
+export const readSettings = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.settings }, overrides);
 
 /**
  * Changes some settings, all or nothing: `PATCH /admin/settings`, in `application/merge-patch+json`.
@@ -1401,20 +1250,20 @@ export const readSettings = (
  * @param overrides departures from the request.
  */
 export const updateSettings = (
-  caller: AdminCaller,
-  update: Readonly<Record<string, unknown>>,
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	update: Readonly<Record<string, unknown>>,
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      contentType: 'application/merge-patch+json',
-      json: update,
-      method: 'PATCH',
-      path: PATHS.settings,
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			contentType: 'application/merge-patch+json',
+			json: update,
+			method: 'PATCH',
+			path: PATHS.settings,
+		},
+		overrides,
+	);
 
 /**
  * Imports EGO's study groups from an export of them, as assumed: `POST /admin/imports/ego`, for
@@ -1432,27 +1281,24 @@ export const updateSettings = (
  * @param overrides departures from the request.
  */
 export const importFromEgo = (
-  caller: AdminCaller,
-  egoExport: unknown,
-  {
-    apply = false,
-    audiences,
-  }: { apply?: boolean; audiences: readonly string[] },
-  overrides?: AdminOverrides,
+	caller: AdminCaller,
+	egoExport: unknown,
+	{ apply = false, audiences }: { apply?: boolean; audiences: readonly string[] },
+	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
-  send(
-    caller,
-    {
-      json: {
-        ...(apply ? { apply } : {}),
-        audiences: [...audiences],
-        export: egoExport,
-      },
-      method: 'POST',
-      path: PATHS.egoImport,
-    },
-    overrides,
-  );
+	send(
+		caller,
+		{
+			json: {
+				...(apply ? { apply } : {}),
+				audiences: [...audiences],
+				export: egoExport,
+			},
+			method: 'POST',
+			path: PATHS.egoImport,
+		},
+		overrides,
+	);
 
 /**
  * Posts a logout token to the back-channel logout endpoint (#210 Q8): `POST /backchannel-logout`,
@@ -1463,35 +1309,31 @@ export const importFromEgo = (
  * @param overrides departures from the request, such as a JSON body or the token in the query.
  */
 export const postBackChannelLogout = async (
-  controllerUrl: URL,
-  logoutToken: string,
-  { body, headers = {}, query = {} }: AdminOverrides = {},
+	controllerUrl: URL,
+	logoutToken: string,
+	{ body, headers = {}, query = {} }: AdminOverrides = {},
 ): Promise<AdminResponse> => {
-  const response = await fetch(
-    urlFor(controllerUrl, PATHS.backChannelLogout, query),
-    {
-      body:
-        body ?? new URLSearchParams({ logout_token: logoutToken }).toString(),
-      headers: mergedHeaders({ 'content-type': FORM_MEDIA }, headers),
-      method: 'POST',
-      redirect: 'manual',
-    },
-  );
-  return responseOf(response);
+	const response = await fetch(urlFor(controllerUrl, PATHS.backChannelLogout, query), {
+		body: body ?? new URLSearchParams({ logout_token: logoutToken }).toString(),
+		headers: mergedHeaders({ 'content-type': FORM_MEDIA }, headers),
+		method: 'POST',
+		redirect: 'manual',
+	});
+	return responseOf(response);
 };
 
 const unauthenticatedGet = async (
-  controllerUrl: URL,
-  path: string,
-  { headers = {}, query = {} }: AdminOverrides = {},
+	controllerUrl: URL,
+	path: string,
+	{ headers = {}, query = {} }: AdminOverrides = {},
 ): Promise<AdminResponse> =>
-  responseOf(
-    await fetch(urlFor(controllerUrl, path, query), {
-      headers: mergedHeaders({}, headers),
-      method: 'GET',
-      redirect: 'manual',
-    }),
-  );
+	responseOf(
+		await fetch(urlFor(controllerUrl, path, query), {
+			headers: mergedHeaders({}, headers),
+			method: 'GET',
+			redirect: 'manual',
+		}),
+	);
 
 /**
  * Asks for the API documentation page: `GET /api-docs`, unauthenticated.
@@ -1499,11 +1341,8 @@ const unauthenticatedGet = async (
  * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
  */
-export const readApiDocsPage = (
-  controllerUrl: URL,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  unauthenticatedGet(controllerUrl, PATHS.apiDocs, overrides);
+export const readApiDocsPage = (controllerUrl: URL, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	unauthenticatedGet(controllerUrl, PATHS.apiDocs, overrides);
 
 /**
  * Asks for the contract the API documentation page shows: `GET /api-docs/openapi.json`,
@@ -1512,11 +1351,8 @@ export const readApiDocsPage = (
  * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
  */
-export const readApiDocsContract = (
-  controllerUrl: URL,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  unauthenticatedGet(controllerUrl, PATHS.apiDocsContract, overrides);
+export const readApiDocsContract = (controllerUrl: URL, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	unauthenticatedGet(controllerUrl, PATHS.apiDocsContract, overrides);
 
 /**
  * Asks whether the Controller is ready to serve (#214 Q18): `GET /health/ready`, unauthenticated,
@@ -1525,11 +1361,8 @@ export const readApiDocsContract = (
  * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
  */
-export const readReadiness = (
-  controllerUrl: URL,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  unauthenticatedGet(controllerUrl, PATHS.readiness, overrides);
+export const readReadiness = (controllerUrl: URL, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	unauthenticatedGet(controllerUrl, PATHS.readiness, overrides);
 
 /**
  * Asks whether the Controller's process should go on running (#214 Q18): `GET /health/live`,
@@ -1539,11 +1372,8 @@ export const readReadiness = (
  * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
  */
-export const readLiveness = (
-  controllerUrl: URL,
-  overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-  unauthenticatedGet(controllerUrl, PATHS.liveness, overrides);
+export const readLiveness = (controllerUrl: URL, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	unauthenticatedGet(controllerUrl, PATHS.liveness, overrides);
 
 /**
  * Mints a logout token from the identity provider stand-in, shaped as OpenID Connect Back-Channel
@@ -1555,27 +1385,27 @@ export const readLiveness = (
  * @param options the client, the subject and the session, and anything over them.
  */
 export const mintLogoutToken = (
-  provider: IdentityProvider,
-  { audience, mint = {}, sessionId, subject }: LogoutTokenOptions,
+	provider: IdentityProvider,
+	{ audience, mint = {}, sessionId, subject }: LogoutTokenOptions,
 ): Promise<string> =>
-  provider.mint({
-    lifetimeSeconds: 120,
-    ...mint,
-    claims: {
-      ...ACCESS_TOKEN_ONLY_CLAIMS,
-      aud: [audience],
-      events: { [BACK_CHANNEL_LOGOUT_EVENT]: {} },
-      ...(sessionId === undefined ? {} : { sid: sessionId }),
-      ...(subject === undefined ? {} : { sub: subject }),
-      ...mint.claims,
-    },
-    header: { typ: 'logout+jwt', ...mint.header },
-  });
+	provider.mint({
+		lifetimeSeconds: 120,
+		...mint,
+		claims: {
+			...ACCESS_TOKEN_ONLY_CLAIMS,
+			aud: [audience],
+			events: { [BACK_CHANNEL_LOGOUT_EVENT]: {} },
+			...(sessionId === undefined ? {} : { sid: sessionId }),
+			...(subject === undefined ? {} : { sub: subject }),
+			...mint.claims,
+		},
+		header: { typ: 'logout+jwt', ...mint.header },
+	});
 
 /** What a management token needs from the configuration. */
 export type ManagementTokenConfiguration = Pick<
-  ControllerConfiguration,
-  'firstUserRole' | 'managementAudience' | 'managementClients'
+	ControllerConfiguration,
+	'firstUserRole' | 'managementAudience' | 'managementClients'
 >;
 
 /**
@@ -1590,35 +1420,31 @@ export type ManagementTokenConfiguration = Pick<
  * @param firstUser whether the token carries the first-user role.
  */
 export const managementClaims = (
-  provider: IdentityProvider,
-  {
-    firstUserRole,
-    managementAudience,
-    managementClients,
-  }: ManagementTokenConfiguration,
-  person: Person,
-  firstUser: boolean,
+	provider: IdentityProvider,
+	{ firstUserRole, managementAudience, managementClients }: ManagementTokenConfiguration,
+	person: Person,
+	firstUser: boolean,
 ): Readonly<Record<string, unknown>> => {
-  const [client] = managementClients;
-  if (client !== undefined) {
-    const realm = new URL(provider.issuer).pathname.split('/').at(-1) ?? '';
-    return {
-      aud: [managementAudience],
-      azp: client,
-      email: person.email,
-      preferred_username: person.email,
-      realm_access: {
-        roles: [
-          `default-roles-${realm}`,
-          'offline_access',
-          'uma_authorization',
-          ...(firstUser ? [firstUserRole] : []),
-        ],
-      },
-      sub: person.subject,
-    };
-  }
-  throw new Error('a management token needs a configured management client');
+	const [client] = managementClients;
+	if (client !== undefined) {
+		const realm = new URL(provider.issuer).pathname.split('/').at(-1) ?? '';
+		return {
+			aud: [managementAudience],
+			azp: client,
+			email: person.email,
+			preferred_username: person.email,
+			realm_access: {
+				roles: [
+					`default-roles-${realm}`,
+					'offline_access',
+					'uma_authorization',
+					...(firstUser ? [firstUserRole] : []),
+				],
+			},
+			sub: person.subject,
+		};
+	}
+	throw new Error('a management token needs a configured management client');
 };
 
 /**
@@ -1630,25 +1456,22 @@ export const managementClaims = (
  * @param options whether the token carries the first-user role, and anything over its claims.
  */
 export const mintManagementToken = (
-  provider: IdentityProvider,
-  configuration: ManagementTokenConfiguration,
-  person: Person,
-  {
-    firstUser = false,
-    mint = {},
-  }: { firstUser?: boolean; mint?: MintOptions } = {},
+	provider: IdentityProvider,
+	configuration: ManagementTokenConfiguration,
+	person: Person,
+	{ firstUser = false, mint = {} }: { firstUser?: boolean; mint?: MintOptions } = {},
 ): Promise<string> =>
-  provider.mint({
-    ...mint,
-    claims: {
-      ...managementClaims(provider, configuration, person, firstUser),
-      ...mint.claims,
-    },
-  });
+	provider.mint({
+		...mint,
+		claims: {
+			...managementClaims(provider, configuration, person, firstUser),
+			...mint.claims,
+		},
+	});
 
 const problem = <Code extends string, Status extends number>(
-  code: Code,
-  status: Status,
+	code: Code,
+	status: Status,
 ): Readonly<{ code: Code; status: Status }> => Object.freeze({ code, status });
 
 /**
@@ -1707,51 +1530,46 @@ const problem = <Code extends string, Status extends number>(
  *   read-only role).
  */
 export const PROBLEMS = Object.freeze({
-  administratorGrantsNoConsumerAccess: problem(
-    'administratorGrantsNoConsumerAccess',
-    403,
-  ),
-  administratorOnly: problem('administratorOnly', 403),
-  administratorSelfOwnership: problem('administratorSelfOwnership', 403),
-  alreadyExists: problem('alreadyExists', 409),
-  alreadyHolds: problem('alreadyHolds', 409),
-  applicationKeyLimit: problem('applicationKeyLimit', 409),
-  applicationKeyNotFound: problem('applicationKeyNotFound', 404),
-  applicationNotFound: problem('applicationNotFound', 404),
-  bodyTooLarge: problem('bodyTooLarge', 413),
-  directoryUnavailable: problem('directoryUnavailable', 503),
-  doesNotHold: problem('doesNotHold', 409),
-  firstAdministratorAccepted: problem('firstAdministratorAccepted', 409),
-  grantNotFound: problem('grantNotFound', 404),
-  grantsOrInvitationsRemain: problem('grantsOrInvitationsRemain', 409),
-  holderNotFound: problem('holderNotFound', 404),
-  importInProgress: problem('importInProgress', 409),
-  importNeedsAnAudience: problem('importNeedsAnAudience', 422),
-  importNotConfigured: problem('importNotConfigured', 503),
-  noAdministratorYet: problem('noAdministratorYet', 403),
-  noAuthorityOnResource: problem('noAuthorityOnResource', 403),
-  nominationNotFound: problem('nominationNotFound', 404),
-  nominationSuperseded: problem('nominationSuperseded', 409),
-  nomineeNotFound: problem('nomineeNotFound', 404),
-  notFirstUser: problem('notFirstUser', 403),
-  ownerGrantsDoNotExpire: problem('ownerGrantsDoNotExpire', 422),
-  ownersAndAdministratorsOnly: problem('ownersAndAdministratorsOnly', 403),
-  registrationHasHistory: problem('registrationHasHistory', 422),
-  resourceNeedsAnOwner: problem('resourceNeedsAnOwner', 409),
-  resourceNotFound: problem('resourceNotFound', 404),
-  serviceAccountNotPermitted: problem('serviceAccountNotPermitted', 403),
-  storeUnavailable: problem('storeUnavailable', 503),
-  unknownApplication: problem('unknownApplication', 422),
-  unsupportedMediaType: problem('unsupportedMediaType', 415),
+	administratorGrantsNoConsumerAccess: problem('administratorGrantsNoConsumerAccess', 403),
+	administratorOnly: problem('administratorOnly', 403),
+	administratorSelfOwnership: problem('administratorSelfOwnership', 403),
+	alreadyExists: problem('alreadyExists', 409),
+	alreadyHolds: problem('alreadyHolds', 409),
+	applicationKeyLimit: problem('applicationKeyLimit', 409),
+	applicationKeyNotFound: problem('applicationKeyNotFound', 404),
+	applicationNotFound: problem('applicationNotFound', 404),
+	bodyTooLarge: problem('bodyTooLarge', 413),
+	directoryUnavailable: problem('directoryUnavailable', 503),
+	doesNotHold: problem('doesNotHold', 409),
+	firstAdministratorAccepted: problem('firstAdministratorAccepted', 409),
+	grantNotFound: problem('grantNotFound', 404),
+	grantsOrInvitationsRemain: problem('grantsOrInvitationsRemain', 409),
+	holderNotFound: problem('holderNotFound', 404),
+	importInProgress: problem('importInProgress', 409),
+	importNeedsAnAudience: problem('importNeedsAnAudience', 422),
+	importNotConfigured: problem('importNotConfigured', 503),
+	noAdministratorYet: problem('noAdministratorYet', 403),
+	noAuthorityOnResource: problem('noAuthorityOnResource', 403),
+	nominationNotFound: problem('nominationNotFound', 404),
+	nominationSuperseded: problem('nominationSuperseded', 409),
+	nomineeNotFound: problem('nomineeNotFound', 404),
+	notFirstUser: problem('notFirstUser', 403),
+	ownerGrantsDoNotExpire: problem('ownerGrantsDoNotExpire', 422),
+	ownersAndAdministratorsOnly: problem('ownersAndAdministratorsOnly', 403),
+	registrationHasHistory: problem('registrationHasHistory', 422),
+	resourceNeedsAnOwner: problem('resourceNeedsAnOwner', 409),
+	resourceNotFound: problem('resourceNotFound', 404),
+	serviceAccountNotPermitted: problem('serviceAccountNotPermitted', 403),
+	storeUnavailable: problem('storeUnavailable', 503),
+	unknownApplication: problem('unknownApplication', 422),
+	unsupportedMediaType: problem('unsupportedMediaType', 415),
 });
 
 type Problems = typeof PROBLEMS;
 
 /** A problem code, of the status given or of any. */
 export type ProblemCode<Status extends number = number> = {
-  [Name in keyof Problems]: Problems[Name]['status'] extends Status
-    ? Problems[Name]['code']
-    : never;
+	[Name in keyof Problems]: Problems[Name]['status'] extends Status ? Problems[Name]['code'] : never;
 }[keyof Problems];
 
 /**
@@ -1765,28 +1583,23 @@ export type ProblemCode<Status extends number = number> = {
  * @param standsInForAuthority whether the not-found answer hid a refusal of authority on something
  *   that exists.
  */
-export const deniedEventReason = (
-  received: ProblemCode,
-  standsInForAuthority: boolean,
-): ProblemCode =>
-  standsInForAuthority &&
-  (received === PROBLEMS.resourceNotFound.code ||
-    received === PROBLEMS.grantNotFound.code)
-    ? PROBLEMS.noAuthorityOnResource.code
-    : received;
+export const deniedEventReason = (received: ProblemCode, standsInForAuthority: boolean): ProblemCode =>
+	standsInForAuthority && (received === PROBLEMS.resourceNotFound.code || received === PROBLEMS.grantNotFound.code)
+		? PROBLEMS.noAuthorityOnResource.code
+		: received;
 
 /**
  * The reasons a caller may give for revoking a grant (ruled): a fixed code each, sent as `reason` and
  * recorded on its `grant.revocation`.
  */
 export const GRANT_REVOCATION_REASONS = Object.freeze({
-  accessNoLongerNeeded: 'accessNoLongerNeeded',
-  accessReview: 'accessReview',
-  custodianRequest: 'custodianRequest',
-  grantedInError: 'grantedInError',
-  holderLeftProject: 'holderLeftProject',
-  requestedByHolder: 'requestedByHolder',
-  termsViolation: 'termsViolation',
+	accessNoLongerNeeded: 'accessNoLongerNeeded',
+	accessReview: 'accessReview',
+	custodianRequest: 'custodianRequest',
+	grantedInError: 'grantedInError',
+	holderLeftProject: 'holderLeftProject',
+	requestedByHolder: 'requestedByHolder',
+	termsViolation: 'termsViolation',
 } as const);
 
 /**
@@ -1795,8 +1608,8 @@ export const GRANT_REVOCATION_REASONS = Object.freeze({
  * `resourceRetired`, recorded for each owner grant a retirement ends.
  */
 export const SYSTEM_ASSIGNED_REASONS = Object.freeze({
-  resourceRetired: 'resourceRetired',
-  unspecified: 'unspecified',
+	resourceRetired: 'resourceRetired',
+	unspecified: 'unspecified',
 } as const);
 
 /**
@@ -1805,24 +1618,24 @@ export const SYSTEM_ASSIGNED_REASONS = Object.freeze({
  * refused 422.
  */
 export const APPLICATION_KEY_REVOCATION_REASONS = Object.freeze({
-  compromised: 'compromised',
-  retired: 'retired',
-  rotated: 'rotated',
+	compromised: 'compromised',
+	retired: 'retired',
+	rotated: 'rotated',
 } as const);
 
 /** The reasons for revoking every user of a resource (ruled), recorded on its `resource.revocation`. */
 export const RESOURCE_REVOCATION_REASONS = Object.freeze({
-  credentialCompromise: 'credentialCompromise',
-  custodianRequest: 'custodianRequest',
-  keyCompromise: 'keyCompromise',
-  securityIncident: 'securityIncident',
+	credentialCompromise: 'credentialCompromise',
+	custodianRequest: 'custodianRequest',
+	keyCompromise: 'keyCompromise',
+	securityIncident: 'securityIncident',
 } as const);
 
 /** The reasons for a global revocation (ruled), recorded on its `platform.revocation`. */
 export const PLATFORM_REVOCATION_REASONS = Object.freeze({
-  credentialCompromise: 'credentialCompromise',
-  keyCompromise: 'keyCompromise',
-  securityIncident: 'securityIncident',
+	credentialCompromise: 'credentialCompromise',
+	keyCompromise: 'keyCompromise',
+	securityIncident: 'securityIncident',
 } as const);
 
 /**
@@ -1831,25 +1644,25 @@ export const PLATFORM_REVOCATION_REASONS = Object.freeze({
  * decided.
  */
 export const IDENTITY_REVOCATION_REASONS = Object.freeze({
-  accountClosed: 'accountClosed',
-  credentialCompromise: 'credentialCompromise',
-  securityIncident: 'securityIncident',
-  termsViolation: 'termsViolation',
+	accountClosed: 'accountClosed',
+	credentialCompromise: 'credentialCompromise',
+	securityIncident: 'securityIncident',
+	termsViolation: 'termsViolation',
 } as const);
 
 /** The reasons a caller may give for suppressing a resource (ruled); optional, `unspecified` recorded when absent. */
 export const SUPPRESSION_REASONS = Object.freeze({
-  consentWithdrawn: 'consentWithdrawn',
-  custodianRequest: 'custodianRequest',
-  dataQualityIssue: 'dataQualityIssue',
-  legalRequest: 'legalRequest',
-  securityIncident: 'securityIncident',
+	consentWithdrawn: 'consentWithdrawn',
+	custodianRequest: 'custodianRequest',
+	dataQualityIssue: 'dataQualityIssue',
+	legalRequest: 'legalRequest',
+	securityIncident: 'securityIncident',
 } as const);
 
 /** The reasons a caller may give for restoring a resource (ruled); optional, `unspecified` recorded when absent. */
 export const RESTORATION_REASONS = Object.freeze({
-  custodianRequest: 'custodianRequest',
-  issueResolved: 'issueResolved',
+	custodianRequest: 'custodianRequest',
+	issueResolved: 'issueResolved',
 } as const);
 
 /**
@@ -1868,8 +1681,8 @@ export const FIELD_CATEGORY_MEMBER = 'fieldCategory';
  * the body (ruled, "#216: faults mid-run, 401 and 413" 4); {@link namesBodyLimit} reads the detail.
  */
 export const BODY_LIMIT_BYTES = Object.freeze({
-  egoImport: 10_485_760,
-  everyOther: 65_536,
+	egoImport: 10_485_760,
+	everyOther: 65_536,
 });
 
 /**
@@ -1880,13 +1693,8 @@ export const BODY_LIMIT_BYTES = Object.freeze({
  * @param problem the refusal's problem details.
  * @param limit the limit, in bytes, such as one of {@link BODY_LIMIT_BYTES}.
  */
-export const namesBodyLimit = (
-  problem: ProblemDetails | undefined,
-  limit: number,
-): boolean =>
-  new RegExp(`(?<!\\d)${String(limit)}(?!\\d)`, 'u').test(
-    problem?.detail ?? '',
-  );
+export const namesBodyLimit = (problem: ProblemDetails | undefined, limit: number): boolean =>
+	new RegExp(`(?<!\\d)${String(limit)}(?!\\d)`, 'u').test(problem?.detail ?? '');
 
 /**
  * The query parameters a listing takes (#213 Q4, Q5, Q10): the page's cursor and size, as the audit
@@ -1894,59 +1702,56 @@ export const namesBodyLimit = (
  * grants and retired resources; anyone else asking is refused 403 `administratorOnly`.
  */
 export const LISTING_QUERY = Object.freeze({
-  cursor: 'cursor',
-  includeRetired: 'includeRetired',
-  includeRevoked: 'includeRevoked',
-  limit: 'limit',
+	cursor: 'cursor',
+	includeRetired: 'includeRetired',
+	includeRevoked: 'includeRevoked',
+	limit: 'limit',
 } as const);
 
 /** The overrides asking a listing for revoked grants (#213 Q4). */
 export const INCLUDING_REVOKED: AdminOverrides = Object.freeze({
-  query: { [LISTING_QUERY.includeRevoked]: 'true' },
+	query: { [LISTING_QUERY.includeRevoked]: 'true' },
 });
 
 /** The overrides asking a listing for retired resources (#213 Q10). */
 export const INCLUDING_RETIRED: AdminOverrides = Object.freeze({
-  query: { [LISTING_QUERY.includeRetired]: 'true' },
+	query: { [LISTING_QUERY.includeRetired]: 'true' },
 });
 
 /** A grant's state as a listing names it (#213 Q4); `accepted` and `rejected` as decisions name them (#212 Q15). */
 export const GRANT_STATES = Object.freeze({
-  accepted: 'accepted',
-  expired: 'expired',
-  pending: 'pending',
-  rejected: 'rejected',
-  revoked: 'revoked',
+	accepted: 'accepted',
+	expired: 'expired',
+	pending: 'pending',
+	rejected: 'rejected',
+	revoked: 'revoked',
 } as const);
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const member = (value: unknown, name: string): unknown =>
-  isRecord(value) && Object.hasOwn(value, name) ? value[name] : undefined;
+	isRecord(value) && Object.hasOwn(value, name) ? value[name] : undefined;
 
-const recordsIn = (
-  value: unknown,
-): readonly Readonly<Record<string, unknown>>[] | undefined =>
-  Array.isArray(value) && value.every(isRecord) ? value : undefined;
+const recordsIn = (value: unknown): readonly Readonly<Record<string, unknown>>[] | undefined =>
+	Array.isArray(value) && value.every(isRecord) ? value : undefined;
 
-const sortedIfList = (value: unknown): unknown =>
-  Array.isArray(value) ? value.map(String).toSorted() : value;
+const sortedIfList = (value: unknown): unknown => (Array.isArray(value) ? value.map(String).toSorted() : value);
 
 /** A capability as the caller's own listing shows what a grant would let them do (#213). */
 export interface CapabilityView {
-  description: unknown;
-  displayName: unknown;
+	description: unknown;
+	displayName: unknown;
 
-  /** As `entity.action`. */
-  name: unknown;
+	/** As `entity.action`. */
+	name: unknown;
 }
 
 /** A grant's latest decision as a listing shows it: what was decided, when, and what was shown. */
 export interface DecisionView {
-  capabilities: unknown;
-  decidedAt: unknown;
-  decision: unknown;
+	capabilities: unknown;
+	decidedAt: unknown;
+	decision: unknown;
 }
 
 /**
@@ -1955,9 +1760,9 @@ export interface DecisionView {
  * longer knows, whose `hasAccount` is `false`.
  */
 export interface HolderView {
-  email: unknown;
-  hasAccount: unknown;
-  subject: unknown;
+	email: unknown;
+	hasAccount: unknown;
+	subject: unknown;
 }
 
 /**
@@ -1969,24 +1774,24 @@ export interface HolderView {
  * (`true` for an administrator's own grant) and `state` (one of {@link GRANT_STATES}).
  */
 export interface GrantView {
-  capabilities: readonly CapabilityView[] | undefined;
-  category: unknown;
-  decision: DecisionView | undefined;
-  expiresAt: unknown;
-  grantedAt: unknown;
+	capabilities: readonly CapabilityView[] | undefined;
+	category: unknown;
+	decision: DecisionView | undefined;
+	expiresAt: unknown;
+	grantedAt: unknown;
 
-  /** The member whole, for a test asserting what it holds and nothing more. */
-  grantedBy: unknown;
+	/** The member whole, for a test asserting what it holds and nothing more. */
+	grantedBy: unknown;
 
-  granterName: unknown;
-  granterSubject: unknown;
-  holder: HolderView | undefined;
-  id: unknown;
-  resource: unknown;
-  revokedAt: unknown;
-  role: unknown;
-  selfGrant: unknown;
-  state: unknown;
+	granterName: unknown;
+	granterSubject: unknown;
+	holder: HolderView | undefined;
+	id: unknown;
+	resource: unknown;
+	revokedAt: unknown;
+	role: unknown;
+	selfGrant: unknown;
+	state: unknown;
 }
 
 /**
@@ -2000,58 +1805,58 @@ export interface GrantView {
  * declined ones left out (#213 Q8); a holder who owns nothing gets no such member.
  */
 export interface ResourceView {
-  accessLevel: unknown;
+	accessLevel: unknown;
 
-  /** Sorted, when the member is a list. */
-  applications: unknown;
+	/** Sorted, when the member is a list. */
+	applications: unknown;
 
-  /** Sorted, when the member is a list. */
-  categories: unknown;
+	/** Sorted, when the member is a list. */
+	categories: unknown;
 
-  /** `null` whether the member is `null` or absent, as a cleared description reads either way. */
-  description: unknown;
+	/** `null` whether the member is `null` or absent, as a cleared description reads either way. */
+	description: unknown;
 
-  displayName: unknown;
-  externalId: unknown;
+	displayName: unknown;
+	externalId: unknown;
 
-  /** `{}` when the member is no object; a cleared value is absent. */
-  fields: Readonly<Record<string, unknown>>;
+	/** `{}` when the member is no object; a cleared value is absent. */
+	fields: Readonly<Record<string, unknown>>;
 
-  grants: readonly GrantView[] | undefined;
-  grantSummary: unknown;
-  registeredAt: unknown;
+	grants: readonly GrantView[] | undefined;
+	grantSummary: unknown;
+	registeredAt: unknown;
 
-  /** The `subject` of the `registeredBy` object; `undefined` when the member is no object. */
-  registrantSubject: unknown;
+	/** The `subject` of the `registeredBy` object; `undefined` when the member is no object. */
+	registrantSubject: unknown;
 
-  retired: unknown;
-  suppressed: unknown;
-  updatedAt: unknown;
+	retired: unknown;
+	suppressed: unknown;
+	updatedAt: unknown;
 }
 
 const capabilityView = (value: unknown): CapabilityView => ({
-  description: member(value, 'description'),
-  displayName: member(value, 'displayName'),
-  name: member(value, 'name'),
+	description: member(value, 'description'),
+	displayName: member(value, 'displayName'),
+	name: member(value, 'name'),
 });
 
 const decisionView = (value: unknown): DecisionView | undefined =>
-  isRecord(value)
-    ? {
-        capabilities: member(value, 'capabilities'),
-        decidedAt: member(value, 'decidedAt'),
-        decision: member(value, 'decision'),
-      }
-    : undefined;
+	isRecord(value)
+		? {
+				capabilities: member(value, 'capabilities'),
+				decidedAt: member(value, 'decidedAt'),
+				decision: member(value, 'decision'),
+			}
+		: undefined;
 
 const holderView = (value: unknown): HolderView | undefined =>
-  isRecord(value)
-    ? {
-        email: member(value, 'email'),
-        hasAccount: member(value, 'hasAccount'),
-        subject: member(value, 'subject'),
-      }
-    : undefined;
+	isRecord(value)
+		? {
+				email: member(value, 'email'),
+				hasAccount: member(value, 'hasAccount'),
+				subject: member(value, 'subject'),
+			}
+		: undefined;
 
 /**
  * A grant entry read as a {@link GrantView}.
@@ -2059,21 +1864,21 @@ const holderView = (value: unknown): HolderView | undefined =>
  * @param value one entry of a listing's grants.
  */
 export const grantView = (value: unknown): GrantView => ({
-  capabilities: recordsIn(member(value, 'capabilities'))?.map(capabilityView),
-  category: member(value, 'category'),
-  decision: decisionView(member(value, 'decision')),
-  expiresAt: member(value, 'expiresAt'),
-  grantedAt: member(value, 'grantedAt'),
-  grantedBy: member(value, 'grantedBy'),
-  granterName: member(member(value, 'grantedBy'), 'name'),
-  granterSubject: member(member(value, 'grantedBy'), 'subject'),
-  holder: holderView(member(value, 'holder')),
-  id: member(value, 'id'),
-  resource: member(value, 'resource'),
-  revokedAt: member(value, 'revokedAt'),
-  role: member(value, 'role'),
-  selfGrant: member(value, 'selfGrant'),
-  state: member(value, 'state'),
+	capabilities: recordsIn(member(value, 'capabilities'))?.map(capabilityView),
+	category: member(value, 'category'),
+	decision: decisionView(member(value, 'decision')),
+	expiresAt: member(value, 'expiresAt'),
+	grantedAt: member(value, 'grantedAt'),
+	grantedBy: member(value, 'grantedBy'),
+	granterName: member(member(value, 'grantedBy'), 'name'),
+	granterSubject: member(member(value, 'grantedBy'), 'subject'),
+	holder: holderView(member(value, 'holder')),
+	id: member(value, 'id'),
+	resource: member(value, 'resource'),
+	revokedAt: member(value, 'revokedAt'),
+	role: member(value, 'role'),
+	selfGrant: member(value, 'selfGrant'),
+	state: member(value, 'state'),
 });
 
 /**
@@ -2082,23 +1887,23 @@ export const grantView = (value: unknown): GrantView => ({
  * @param value the entry.
  */
 export const resourceView = (value: unknown): ResourceView => {
-  const fields = member(value, 'fields');
-  return {
-    accessLevel: member(value, 'accessLevel'),
-    applications: sortedIfList(member(value, 'applications')),
-    categories: sortedIfList(member(value, 'categories')),
-    description: member(value, 'description') ?? null,
-    displayName: member(value, 'displayName'),
-    externalId: member(value, 'externalId'),
-    fields: isRecord(fields) ? fields : {},
-    grants: recordsIn(member(value, 'grants'))?.map(grantView),
-    grantSummary: member(value, 'grantSummary'),
-    registeredAt: member(value, 'registeredAt'),
-    registrantSubject: member(member(value, 'registeredBy'), 'subject'),
-    retired: member(value, 'retired'),
-    suppressed: member(value, 'suppressed'),
-    updatedAt: member(value, 'updatedAt'),
-  };
+	const fields = member(value, 'fields');
+	return {
+		accessLevel: member(value, 'accessLevel'),
+		applications: sortedIfList(member(value, 'applications')),
+		categories: sortedIfList(member(value, 'categories')),
+		description: member(value, 'description') ?? null,
+		displayName: member(value, 'displayName'),
+		externalId: member(value, 'externalId'),
+		fields: isRecord(fields) ? fields : {},
+		grants: recordsIn(member(value, 'grants'))?.map(grantView),
+		grantSummary: member(value, 'grantSummary'),
+		registeredAt: member(value, 'registeredAt'),
+		registrantSubject: member(member(value, 'registeredBy'), 'subject'),
+		retired: member(value, 'retired'),
+		suppressed: member(value, 'suppressed'),
+		updatedAt: member(value, 'updatedAt'),
+	};
 };
 
 /**
@@ -2107,13 +1912,8 @@ export const resourceView = (value: unknown): ResourceView => {
  * @param response the answer.
  * @param label what the answer was to, for the failure's message.
  */
-export const bodyObjectOf = (
-  response: AdminResponse,
-  label: string,
-): Readonly<Record<string, unknown>> =>
-  isRecord(response.body)
-    ? response.body
-    : assert.fail(`${label} answered no JSON object`);
+export const bodyObjectOf = (response: AdminResponse, label: string): Readonly<Record<string, unknown>> =>
+	isRecord(response.body) ? response.body : assert.fail(`${label} answered no JSON object`);
 
 /**
  * A registration's or a read's answer as a {@link ResourceView}, failing the test unless its body is
@@ -2122,10 +1922,8 @@ export const bodyObjectOf = (
  * @param response the answer.
  * @param label what the answer was to, for the failure's message.
  */
-export const resourceViewOf = (
-  response: AdminResponse,
-  label: string,
-): ResourceView => resourceView(bodyObjectOf(response, label));
+export const resourceViewOf = (response: AdminResponse, label: string): ResourceView =>
+	resourceView(bodyObjectOf(response, label));
 
 /**
  * Reads a resource, failing the test unless the read succeeds, and gives it as the answer shows it.
@@ -2133,56 +1931,47 @@ export const resourceViewOf = (
  * @param caller who reads.
  * @param externalId the resource.
  */
-export const readResourceView = async (
-  caller: AdminCaller,
-  externalId: string,
-): Promise<ResourceView> => {
-  const response = await readResource(caller, externalId);
-  assertSucceeded(response, `reading ${externalId}`);
-  return resourceViewOf(response, `reading ${externalId}`);
+export const readResourceView = async (caller: AdminCaller, externalId: string): Promise<ResourceView> => {
+	const response = await readResource(caller, externalId);
+	assertSucceeded(response, `reading ${externalId}`);
+	return resourceViewOf(response, `reading ${externalId}`);
 };
 
 /** An application key in the answer to its issue: the one answer holding its value. */
 export interface IssuedApplicationKey {
-  /** The key's id, a uuid. */
-  id: string;
+	/** The key's id, a uuid. */
+	id: string;
 
-  /** The key: 32 bytes as 43 base64url characters, for the application's Bridge. */
-  value: string;
+	/** The key: 32 bytes as 43 base64url characters, for the application's Bridge. */
+	value: string;
 }
 
 /** An application in the answer to its registration, carrying its first key. */
 export interface RegisteredApplication {
-  /** `null` for none, and for one empty once trimmed. */
-  description: string | null;
+	/** `null` for none, and for one empty once trimmed. */
+	description: string | null;
 
-  displayName: string;
+	displayName: string;
 
-  /** The application's generated id, a uuid: its audience. */
-  id: string;
+	/** The application's generated id, a uuid: its audience. */
+	id: string;
 
-  key: IssuedApplicationKey;
+	key: IssuedApplicationKey;
 }
 
 const stringMember = (value: unknown, name: string, label: string): string => {
-  const held = member(value, name);
-  return typeof held === 'string'
-    ? held
-    : assert.fail(`${label} answered no string ${name}`);
+	const held = member(value, name);
+	return typeof held === 'string' ? held : assert.fail(`${label} answered no string ${name}`);
 };
 
-const nullableStringMember = (
-  value: unknown,
-  name: string,
-  label: string,
-): string | null => {
-  const held = member(value, name);
-  return held === null ? null : stringMember(value, name, label);
+const nullableStringMember = (value: unknown, name: string, label: string): string | null => {
+	const held = member(value, name);
+	return held === null ? null : stringMember(value, name, label);
 };
 
 const issuedKeyIn = (value: unknown, label: string): IssuedApplicationKey => ({
-  id: stringMember(value, 'id', label),
-  value: stringMember(value, 'value', label),
+	id: stringMember(value, 'id', label),
+	value: stringMember(value, 'value', label),
 });
 
 /**
@@ -2192,10 +1981,8 @@ const issuedKeyIn = (value: unknown, label: string): IssuedApplicationKey => ({
  * @param response the answer.
  * @param label what the answer was to, for the failure's message.
  */
-export const issuedApplicationKeyOf = (
-  response: AdminResponse,
-  label: string,
-): IssuedApplicationKey => issuedKeyIn(bodyObjectOf(response, label), label);
+export const issuedApplicationKeyOf = (response: AdminResponse, label: string): IssuedApplicationKey =>
+	issuedKeyIn(bodyObjectOf(response, label), label);
 
 /**
  * The application in the answer to a registration, `{ id, displayName, description, key }`, failing
@@ -2205,92 +1992,88 @@ export const issuedApplicationKeyOf = (
  * @param response the answer.
  * @param label what the answer was to, for the failure's message.
  */
-export const registeredApplicationOf = (
-  response: AdminResponse,
-  label: string,
-): RegisteredApplication => {
-  const body = bodyObjectOf(response, label);
-  return {
-    description: nullableStringMember(body, 'description', label),
-    displayName: stringMember(body, 'displayName', label),
-    id: stringMember(body, 'id', label),
-    key: issuedKeyIn(member(body, 'key'), `${label}, its key`),
-  };
+export const registeredApplicationOf = (response: AdminResponse, label: string): RegisteredApplication => {
+	const body = bodyObjectOf(response, label);
+	return {
+		description: nullableStringMember(body, 'description', label),
+		displayName: stringMember(body, 'displayName', label),
+		id: stringMember(body, 'id', label),
+		key: issuedKeyIn(member(body, 'key'), `${label}, its key`),
+	};
 };
 
 /** The member names of a key in an application's read, sorted: never its value. */
 export const APPLICATION_KEY_MEMBERS: readonly string[] = Object.freeze([
-  'confirmedAt',
-  'id',
-  'issuedAt',
-  'issuedBy',
-  'revokedAt',
-  'revokedBy',
+	'confirmedAt',
+	'id',
+	'issuedAt',
+	'issuedBy',
+	'revokedAt',
+	'revokedBy',
 ]);
 
 /** A key in an application's read, each member taken from the answer unchanged. */
 export interface ApplicationKeyView {
-  /**
-   * When the first exchange carrying a channel assertion verified under the key was answered, whatever
-   * the answer, a 403 for its sign-in token included; `null` until then.
-   */
-  confirmedAt: unknown;
+	/**
+	 * When the first exchange carrying a channel assertion verified under the key was answered, whatever
+	 * the answer, a 403 for its sign-in token included; `null` until then.
+	 */
+	confirmedAt: unknown;
 
-  id: unknown;
-  issuedAt: unknown;
+	id: unknown;
+	issuedAt: unknown;
 
-  /** The member whole: `{ subject }`. */
-  issuedBy: unknown;
+	/** The member whole: `{ subject }`. */
+	issuedBy: unknown;
 
-  /** Every member name held by the entry, sorted, for a test finding one beyond {@link APPLICATION_KEY_MEMBERS}. */
-  members: readonly string[];
+	/** Every member name held by the entry, sorted, for a test finding one beyond {@link APPLICATION_KEY_MEMBERS}. */
+	members: readonly string[];
 
-  /** `null` for a live key. */
-  revokedAt: unknown;
+	/** `null` for a live key. */
+	revokedAt: unknown;
 
-  /** The member whole: `{ subject }`, or `null` for a live key. */
-  revokedBy: unknown;
+	/** The member whole: `{ subject }`, or `null` for a live key. */
+	revokedBy: unknown;
 }
 
 /** An application in its read, each member taken from the answer unchanged. */
 export interface ApplicationView {
-  description: unknown;
-  displayName: unknown;
-  id: unknown;
+	description: unknown;
+	displayName: unknown;
+	id: unknown;
 
-  /** In the answer's order, which is `issuedAt`'s; `undefined` when the member is no list of objects. */
-  keys: readonly ApplicationKeyView[] | undefined;
+	/** In the answer's order, which is `issuedAt`'s; `undefined` when the member is no list of objects. */
+	keys: readonly ApplicationKeyView[] | undefined;
 
-  registeredAt: unknown;
+	registeredAt: unknown;
 
-  /** The member whole: `{ subject }`. */
-  registeredBy: unknown;
+	/** The member whole: `{ subject }`. */
+	registeredBy: unknown;
 }
 
 /** A key in the answer to its revocation, each member taken from the answer unchanged. */
 export interface RevokedApplicationKeyView {
-  id: unknown;
+	id: unknown;
 
-  /** Every member name held by the answer, sorted. */
-  members: readonly string[];
+	/** Every member name held by the answer, sorted. */
+	members: readonly string[];
 
-  revokedAt: unknown;
+	revokedAt: unknown;
 
-  /** The member whole: `{ subject }`. */
-  revokedBy: unknown;
+	/** The member whole: `{ subject }`. */
+	revokedBy: unknown;
 }
 
-const memberNames = (value: unknown): readonly string[] =>
-  isRecord(value) ? Object.keys(value).toSorted() : [];
+const memberNames = (value: unknown): readonly string[] => (isRecord(value) ? Object.keys(value).toSorted() : []);
 
 const applicationKeyView = (value: unknown): ApplicationKeyView => ({
-  confirmedAt: member(value, 'confirmedAt'),
-  id: member(value, 'id'),
-  issuedAt: member(value, 'issuedAt'),
-  issuedBy: member(value, 'issuedBy'),
-  members: memberNames(value),
-  revokedAt: member(value, 'revokedAt'),
-  revokedBy: member(value, 'revokedBy'),
+	confirmedAt: member(value, 'confirmedAt'),
+	id: member(value, 'id'),
+	issuedAt: member(value, 'issuedAt'),
+	issuedBy: member(value, 'issuedBy'),
+	members: memberNames(value),
+	revokedAt: member(value, 'revokedAt'),
+	revokedBy: member(value, 'revokedBy'),
 });
 
 /**
@@ -2300,12 +2083,12 @@ const applicationKeyView = (value: unknown): ApplicationKeyView => ({
  * @param value the answer's body.
  */
 export const applicationView = (value: unknown): ApplicationView => ({
-  description: member(value, 'description'),
-  displayName: member(value, 'displayName'),
-  id: member(value, 'id'),
-  keys: recordsIn(member(value, 'keys'))?.map(applicationKeyView),
-  registeredAt: member(value, 'registeredAt'),
-  registeredBy: member(value, 'registeredBy'),
+	description: member(value, 'description'),
+	displayName: member(value, 'displayName'),
+	id: member(value, 'id'),
+	keys: recordsIn(member(value, 'keys'))?.map(applicationKeyView),
+	registeredAt: member(value, 'registeredAt'),
+	registeredBy: member(value, 'registeredBy'),
 });
 
 /**
@@ -2314,10 +2097,8 @@ export const applicationView = (value: unknown): ApplicationView => ({
  * @param response the answer.
  * @param label what the answer was to, for the failure's message.
  */
-export const applicationViewOf = (
-  response: AdminResponse,
-  label: string,
-): ApplicationView => applicationView(bodyObjectOf(response, label));
+export const applicationViewOf = (response: AdminResponse, label: string): ApplicationView =>
+	applicationView(bodyObjectOf(response, label));
 
 /**
  * Reads an application, failing the test unless the read succeeds, and gives its
@@ -2326,13 +2107,10 @@ export const applicationViewOf = (
  * @param caller who reads: a platform administrator.
  * @param applicationId the application's id.
  */
-export const readApplicationView = async (
-  caller: AdminCaller,
-  applicationId: string,
-): Promise<ApplicationView> => {
-  const response = await readApplication(caller, applicationId);
-  assertSucceeded(response, `reading application ${applicationId}`);
-  return applicationViewOf(response, `reading application ${applicationId}`);
+export const readApplicationView = async (caller: AdminCaller, applicationId: string): Promise<ApplicationView> => {
+	const response = await readApplication(caller, applicationId);
+	assertSucceeded(response, `reading application ${applicationId}`);
+	return applicationViewOf(response, `reading application ${applicationId}`);
 };
 
 /**
@@ -2342,17 +2120,14 @@ export const readApplicationView = async (
  * @param response the answer.
  * @param label what the answer was to, for the failure's message.
  */
-export const revokedApplicationKeyOf = (
-  response: AdminResponse,
-  label: string,
-): RevokedApplicationKeyView => {
-  const body = bodyObjectOf(response, label);
-  return {
-    id: member(body, 'id'),
-    members: memberNames(body),
-    revokedAt: member(body, 'revokedAt'),
-    revokedBy: member(body, 'revokedBy'),
-  };
+export const revokedApplicationKeyOf = (response: AdminResponse, label: string): RevokedApplicationKeyView => {
+	const body = bodyObjectOf(response, label);
+	return {
+		id: member(body, 'id'),
+		members: memberNames(body),
+		revokedAt: member(body, 'revokedAt'),
+		revokedBy: member(body, 'revokedBy'),
+	};
 };
 
 /**
@@ -2361,26 +2136,19 @@ export const revokedApplicationKeyOf = (
  *
  * @param response the answer.
  */
-export const cacheDirectivesOf = (
-  response: Pick<AdminResponse, 'headers'>,
-): readonly string[] =>
-  (response.headers.get('cache-control') ?? '')
-    .split(',')
-    .map((directive) => (directive.split('=')[0] ?? '').trim().toLowerCase())
-    .filter((directive) => directive.length > 0);
+export const cacheDirectivesOf = (response: Pick<AdminResponse, 'headers'>): readonly string[] =>
+	(response.headers.get('cache-control') ?? '')
+		.split(',')
+		.map((directive) => (directive.split('=')[0] ?? '').trim().toLowerCase())
+		.filter((directive) => directive.length > 0);
 
-const listed = (
-  response: AdminResponse,
-  name: string,
-): readonly Readonly<Record<string, unknown>>[] => {
-  assertSucceeded(response, `the listing of ${name}`);
-  const entries = recordsIn(member(response.body, name));
-  if (entries !== undefined) {
-    return entries;
-  }
-  throw new Error(
-    `the listing answered ${response.status} with no list of ${name}`,
-  );
+const listed = (response: AdminResponse, name: string): readonly Readonly<Record<string, unknown>>[] => {
+	assertSucceeded(response, `the listing of ${name}`);
+	const entries = recordsIn(member(response.body, name));
+	if (entries !== undefined) {
+		return entries;
+	}
+	throw new Error(`the listing answered ${response.status} with no list of ${name}`);
 };
 
 /**
@@ -2389,9 +2157,8 @@ const listed = (
  *
  * @param response the answer, which must have succeeded.
  */
-export const listedResources = (
-  response: AdminResponse,
-): readonly ResourceView[] => listed(response, 'resources').map(resourceView);
+export const listedResources = (response: AdminResponse): readonly ResourceView[] =>
+	listed(response, 'resources').map(resourceView);
 
 /**
  * The grants a grants listing answered, in its order: the body's `grants`, for a resource's grants, a
@@ -2400,17 +2167,15 @@ export const listedResources = (
  * @param response the answer, which must have succeeded.
  */
 export const listedGrants = (response: AdminResponse): readonly GrantView[] =>
-  listed(response, 'grants').map(grantView);
+	listed(response, 'grants').map(grantView);
 
 /**
  * The externalIds a resource listing's page answered, in its order.
  *
  * @param response the answer, which must have succeeded.
  */
-export const listedExternalIds = (
-  response: AdminResponse,
-): readonly unknown[] =>
-  listedResources(response).map(({ externalId }) => externalId);
+export const listedExternalIds = (response: AdminResponse): readonly unknown[] =>
+	listedResources(response).map(({ externalId }) => externalId);
 
 /**
  * One resource of a resource listing's page, by externalId.
@@ -2419,17 +2184,12 @@ export const listedExternalIds = (
  * @param externalId the resource.
  * @throws when the page holds no such resource.
  */
-export const listedResource = (
-  response: AdminResponse,
-  externalId: string,
-): ResourceView => {
-  const found = listedResources(response).find(
-    (resource) => resource.externalId === externalId,
-  );
-  if (found !== undefined) {
-    return found;
-  }
-  throw new Error(`the listing holds no ${externalId}`);
+export const listedResource = (response: AdminResponse, externalId: string): ResourceView => {
+	const found = listedResources(response).find((resource) => resource.externalId === externalId);
+	if (found !== undefined) {
+		return found;
+	}
+	throw new Error(`the listing holds no ${externalId}`);
 };
 
 /**
@@ -2439,8 +2199,8 @@ export const listedResource = (
  * @param response a page.
  */
 export const nextCursor = (response: AdminResponse): string | undefined => {
-  const next = member(response.body, 'next');
-  return typeof next === 'string' ? next : undefined;
+	const next = member(response.body, 'next');
+	return typeof next === 'string' ? next : undefined;
 };
 
 /**
@@ -2450,14 +2210,10 @@ export const nextCursor = (response: AdminResponse): string | undefined => {
  * @param list the page's list: `resources`, `grants` or `events`.
  */
 export const pageMembersBeside = (
-  response: AdminResponse,
-  list: 'events' | 'grants' | 'resources',
+	response: AdminResponse,
+	list: 'events' | 'grants' | 'resources',
 ): readonly string[] =>
-  isRecord(response.body)
-    ? Object.keys(response.body).filter(
-        (name) => name !== list && name !== 'next',
-      )
-    : [];
+	isRecord(response.body) ? Object.keys(response.body).filter((name) => name !== list && name !== 'next') : [];
 
 /**
  * Every page of the resource listing, each of a given size at most, from the first to the one naming
@@ -2467,31 +2223,31 @@ export const pageMembersBeside = (
  * @param options the page size, and the most pages read before the listing is taken to never end.
  */
 export const resourcePages = async (
-  caller: AdminCaller,
-  { limit, maximumPages = 20 }: { limit: number; maximumPages?: number },
+	caller: AdminCaller,
+	{ limit, maximumPages = 20 }: { limit: number; maximumPages?: number },
 ): Promise<readonly AdminResponse[]> => {
-  const from = async (
-    cursor: string | undefined,
-    read: readonly AdminResponse[],
-  ): Promise<readonly AdminResponse[]> => {
-    const page = await listResources(caller, {
-      query: {
-        ...(cursor === undefined ? {} : { [LISTING_QUERY.cursor]: cursor }),
-        [LISTING_QUERY.limit]: String(limit),
-      },
-    });
-    assertSucceeded(page, `page ${read.length + 1} of the resources`);
-    const pages = [...read, page];
-    const next = nextCursor(page);
-    if (next === undefined) {
-      return pages;
-    }
-    if (pages.length < maximumPages) {
-      return from(next, pages);
-    }
-    throw new Error(`the listing went on past ${maximumPages} pages`);
-  };
-  return from(undefined, []);
+	const from = async (
+		cursor: string | undefined,
+		read: readonly AdminResponse[],
+	): Promise<readonly AdminResponse[]> => {
+		const page = await listResources(caller, {
+			query: {
+				...(cursor === undefined ? {} : { [LISTING_QUERY.cursor]: cursor }),
+				[LISTING_QUERY.limit]: String(limit),
+			},
+		});
+		assertSucceeded(page, `page ${read.length + 1} of the resources`);
+		const pages = [...read, page];
+		const next = nextCursor(page);
+		if (next === undefined) {
+			return pages;
+		}
+		if (pages.length < maximumPages) {
+			return from(next, pages);
+		}
+		throw new Error(`the listing went on past ${maximumPages} pages`);
+	};
+	return from(undefined, []);
 };
 
 /**
@@ -2500,15 +2256,13 @@ export const resourcePages = async (
  *
  * @param grant the listed grant.
  */
-export const holderOf = (
-  grant: GrantView,
-): { email: string | undefined; noAccount: boolean; subject: unknown } => {
-  const email = grant.holder?.email;
-  return {
-    email: typeof email === 'string' ? email : undefined,
-    noAccount: grant.holder?.hasAccount === false,
-    subject: grant.holder?.subject,
-  };
+export const holderOf = (grant: GrantView): { email: string | undefined; noAccount: boolean; subject: unknown } => {
+	const email = grant.holder?.email;
+	return {
+		email: typeof email === 'string' ? email : undefined,
+		noAccount: grant.holder?.hasAccount === false,
+		subject: grant.holder?.subject,
+	};
 };
 
 /**
@@ -2516,16 +2270,10 @@ export const holderOf = (
  *
  * @param summary the `grantSummary` member.
  */
-export const rolesHeld = (
-  summary: unknown,
-): Readonly<Record<string, unknown>> =>
-  isRecord(summary)
-    ? Object.fromEntries(
-        Object.entries(summary).filter(
-          ([, count]) => typeof count !== 'number' || count > 0,
-        ),
-      )
-    : {};
+export const rolesHeld = (summary: unknown): Readonly<Record<string, unknown>> =>
+	isRecord(summary)
+		? Object.fromEntries(Object.entries(summary).filter(([, count]) => typeof count !== 'number' || count > 0))
+		: {};
 
 /**
  * Whether a read's body carries a grant summary at all, which one read by a holder who owns nothing
@@ -2533,29 +2281,23 @@ export const rolesHeld = (
  *
  * @param body the read's body.
  */
-export const carriesGrantSummary = (body: unknown): boolean =>
-  isRecord(body) && Object.hasOwn(body, 'grantSummary');
+export const carriesGrantSummary = (body: unknown): boolean => isRecord(body) && Object.hasOwn(body, 'grantSummary');
 
 /** A category as the category listing shows it: its scoped name and its description. */
 export interface CategoryView {
-  description: unknown;
-  name: unknown;
+	description: unknown;
+	name: unknown;
 }
 
-const namedEntries = (
-  response: AdminResponse,
-  list: string,
-): readonly { description: unknown; name: unknown }[] => {
-  const entries = bodyObjectOf(response, `listing ${list}`)[list];
-  assert.ok(Array.isArray(entries), `the listing holds a list of ${list}`);
-  return entries
-    .map((entry: unknown) => ({
-      description: member(entry, 'description') ?? null,
-      name: member(entry, 'name'),
-    }))
-    .toSorted((first, second) =>
-      String(first.name).localeCompare(String(second.name)),
-    );
+const namedEntries = (response: AdminResponse, list: string): readonly { description: unknown; name: unknown }[] => {
+	const entries = bodyObjectOf(response, `listing ${list}`)[list];
+	assert.ok(Array.isArray(entries), `the listing holds a list of ${list}`);
+	return entries
+		.map((entry: unknown) => ({
+			description: member(entry, 'description') ?? null,
+			name: member(entry, 'name'),
+		}))
+		.toSorted((first, second) => String(first.name).localeCompare(String(second.name)));
 };
 
 /**
@@ -2564,14 +2306,12 @@ const namedEntries = (
  *
  * @param response the listing's answer.
  */
-export const categoriesOf = (
-  response: AdminResponse,
-): readonly CategoryView[] => namedEntries(response, 'categories');
+export const categoriesOf = (response: AdminResponse): readonly CategoryView[] => namedEntries(response, 'categories');
 
 /** A resource field as the field listing shows it: its name and its description. */
 export interface ResourceFieldView {
-  description: unknown;
-  name: unknown;
+	description: unknown;
+	name: unknown;
 }
 
 /**
@@ -2579,17 +2319,16 @@ export interface ResourceFieldView {
  *
  * @param response the listing's answer.
  */
-export const resourceFieldsOf = (
-  response: AdminResponse,
-): readonly ResourceFieldView[] => namedEntries(response, 'fields');
+export const resourceFieldsOf = (response: AdminResponse): readonly ResourceFieldView[] =>
+	namedEntries(response, 'fields');
 
 /** One page of `GET /admin/audit`. */
 export interface AuditPage {
-  /** The page's events, each as the API answers it. */
-  events: readonly Readonly<Record<string, unknown>>[];
+	/** The page's events, each as the API answers it. */
+	events: readonly Readonly<Record<string, unknown>>[];
 
-  /** The cursor to the next page, absent on the last. */
-  next: string | undefined;
+	/** The cursor to the next page, absent on the last. */
+	next: string | undefined;
 }
 
 /**
@@ -2599,27 +2338,27 @@ export interface AuditPage {
  * @param response the answer.
  */
 export const auditPageOf = (response: AdminResponse): AuditPage => {
-  assert.equal(response.status, 200, 'the audit log was read');
-  const events = member(response.body, 'events');
-  assert.ok(Array.isArray(events), 'the page holds an events list');
-  return {
-    events: events.map((event: unknown) =>
-      isRecord(event) ? event : assert.fail('a page entry is not an object'),
-    ),
-    next: nextCursor(response),
-  };
+	assert.equal(response.status, 200, 'the audit log was read');
+	const events = member(response.body, 'events');
+	assert.ok(Array.isArray(events), 'the page holds an events list');
+	return {
+		events: events.map((event: unknown) =>
+			isRecord(event) ? event : assert.fail('a page entry is not an object'),
+		),
+		next: nextCursor(response),
+	};
 };
 
 /** What two refusals are compared by: everything a caller can tell apart but the `instance`. */
 export interface ComparableRefusal {
-  /** The `www-authenticate` header, or `null`. */
-  authenticate: string | null;
+	/** The `www-authenticate` header, or `null`. */
+	authenticate: string | null;
 
-  /** The body parsed when it is JSON, its `instance` left out; the text otherwise. */
-  body: unknown;
+	/** The body parsed when it is JSON, its `instance` left out; the text otherwise. */
+	body: unknown;
 
-  mediaType: string;
-  status: number;
+	mediaType: string;
+	status: number;
 }
 
 /**
@@ -2629,25 +2368,20 @@ export interface ComparableRefusal {
  *
  * @param response the answer.
  */
-export const comparableRefusal = (
-  response: AdminResponse,
-): ComparableRefusal => {
-  const parsed = response.body ?? response.text;
-  return {
-    authenticate: response.headers.get('www-authenticate'),
-    body: isRecord(parsed)
-      ? Object.fromEntries(
-          Object.entries(parsed).filter(([name]) => name !== 'instance'),
-        )
-      : parsed,
-    mediaType: mediaTypeOf(response),
-    status: response.status,
-  };
+export const comparableRefusal = (response: AdminResponse): ComparableRefusal => {
+	const parsed = response.body ?? response.text;
+	return {
+		authenticate: response.headers.get('www-authenticate'),
+		body: isRecord(parsed)
+			? Object.fromEntries(Object.entries(parsed).filter(([name]) => name !== 'instance'))
+			: parsed,
+		mediaType: mediaTypeOf(response),
+		status: response.status,
+	};
 };
 
 /** The shape of a JSON value: each member's name and the shape of its value, and each value's JSON type. */
-export type Shape =
-  readonly Shape[] | string | { readonly [member: string]: Shape };
+export type Shape = readonly Shape[] | string | { readonly [member: string]: Shape };
 
 /**
  * A JSON value's shape, for answers that must be indistinguishable whatever values they carry.
@@ -2655,30 +2389,30 @@ export type Shape =
  * @param value the parsed value.
  */
 export const shapeOf = (value: unknown): Shape => {
-  if (Array.isArray(value)) {
-    return value.map((item: unknown) => shapeOf(item));
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .toSorted(([first], [second]) => first.localeCompare(second))
-        .map(([name, held]): [string, Shape] => [name, shapeOf(held)]),
-    );
-  }
-  return value === null ? 'null' : typeof value;
+	if (Array.isArray(value)) {
+		return value.map((item: unknown) => shapeOf(item));
+	}
+	if (isRecord(value)) {
+		return Object.fromEntries(
+			Object.entries(value)
+				.toSorted(([first], [second]) => first.localeCompare(second))
+				.map(([name, held]): [string, Shape] => [name, shapeOf(held)]),
+		);
+	}
+	return value === null ? 'null' : typeof value;
 };
 
 /** What two successful answers are compared by for being indistinguishable. */
 export interface ComparableSuccess {
-  /** Every header's name, lower-cased and sorted, so a header sent for one outcome alone tells them apart. */
-  headerNames: readonly string[];
+	/** Every header's name, lower-cased and sorted, so a header sent for one outcome alone tells them apart. */
+	headerNames: readonly string[];
 
-  mediaType: string;
+	mediaType: string;
 
-  /** The body's {@link shapeOf}; `string` for a body that is no JSON. */
-  shape: Shape;
+	/** The body's {@link shapeOf}; `string` for a body that is no JSON. */
+	shape: Shape;
 
-  status: number;
+	status: number;
 }
 
 /**
@@ -2689,24 +2423,21 @@ export interface ComparableSuccess {
  *
  * @param response the answer.
  */
-export const comparableSuccess = (
-  response: AdminResponse,
-): ComparableSuccess => ({
-  headerNames: [...new Set(response.headers.keys())].toSorted(),
-  mediaType: mediaTypeOf(response),
-  shape:
-    response.body === undefined ? typeof response.text : shapeOf(response.body),
-  status: response.status,
+export const comparableSuccess = (response: AdminResponse): ComparableSuccess => ({
+	headerNames: [...new Set(response.headers.keys())].toSorted(),
+	mediaType: mediaTypeOf(response),
+	shape: response.body === undefined ? typeof response.text : shapeOf(response.body),
+	status: response.status,
 });
 
 /** A refusal as a test expects it: its status, and its problem's code where a ruling names one. */
 export interface ExpectedRefusal {
-  code?: string;
-  status: number;
+	code?: string;
+	status: number;
 }
 
 const outcomeOf = (response: AdminResponse): string =>
-  `${response.status}${response.problem === undefined ? '' : ` ${response.problem.code}`}`;
+	`${response.status}${response.problem === undefined ? '' : ` ${response.problem.code}`}`;
 
 /**
  * Fails unless an answer is the refusal expected (C2): its status; RFC 9457 problem details, as
@@ -2717,32 +2448,20 @@ const outcomeOf = (response: AdminResponse): string =>
  * @param expected the status, and the code where a ruling names one.
  * @param label what was refused, for the failure's message.
  */
-export const assertRefused = (
-  response: AdminResponse,
-  { code, status }: ExpectedRefusal,
-  label: string,
-): void => {
-  assert.equal(
-    response.status,
-    status,
-    `${label}: answered ${outcomeOf(response)}`,
-  );
-  assert.equal(mediaTypeOf(response), PROBLEM_MEDIA, `${label}: media type`);
-  assert.equal(
-    typeof response.problem?.code,
-    'string',
-    `${label}: a problem's code`,
-  );
-  if (code !== undefined) {
-    assert.equal(response.problem?.code, code, `${label}: the problem's code`);
-  }
-  if (status === 401) {
-    assert.match(
-      response.headers.get('www-authenticate') ?? '',
-      /^Bearer(?:\s|,|$)/u,
-      `${label}: WWW-Authenticate names the Bearer scheme`,
-    );
-  }
+export const assertRefused = (response: AdminResponse, { code, status }: ExpectedRefusal, label: string): void => {
+	assert.equal(response.status, status, `${label}: answered ${outcomeOf(response)}`);
+	assert.equal(mediaTypeOf(response), PROBLEM_MEDIA, `${label}: media type`);
+	assert.equal(typeof response.problem?.code, 'string', `${label}: a problem's code`);
+	if (code !== undefined) {
+		assert.equal(response.problem?.code, code, `${label}: the problem's code`);
+	}
+	if (status === 401) {
+		assert.match(
+			response.headers.get('www-authenticate') ?? '',
+			/^Bearer(?:\s|,|$)/u,
+			`${label}: WWW-Authenticate names the Bearer scheme`,
+		);
+	}
 };
 
 /**
@@ -2751,10 +2470,8 @@ export const assertRefused = (
  * @param response the answer.
  * @param label what was refused, for the failure's message.
  */
-export const assertUnreadable = (
-  response: AdminResponse,
-  label: string,
-): void => assertRefused(response, { status: 400 }, label);
+export const assertUnreadable = (response: AdminResponse, label: string): void =>
+	assertRefused(response, { status: 400 }, label);
 
 /**
  * Fails unless an answer refuses the credential: 401 with `WWW-Authenticate: Bearer` (C2).
@@ -2762,10 +2479,8 @@ export const assertUnreadable = (
  * @param response the answer.
  * @param label what was refused, for the failure's message.
  */
-export const assertCredentialRefused = (
-  response: AdminResponse,
-  label: string,
-): void => assertRefused(response, { status: 401 }, label);
+export const assertCredentialRefused = (response: AdminResponse, label: string): void =>
+	assertRefused(response, { status: 401 }, label);
 
 /**
  * Fails unless an answer is a 403 carrying the code given (C2).
@@ -2774,11 +2489,8 @@ export const assertCredentialRefused = (
  * @param label what was refused, for the failure's message.
  * @param code the problem's code.
  */
-export const assertForbidden = (
-  response: AdminResponse,
-  label: string,
-  code: ProblemCode<403>,
-): void => assertRefused(response, { code, status: 403 }, label);
+export const assertForbidden = (response: AdminResponse, label: string, code: ProblemCode<403>): void =>
+	assertRefused(response, { code, status: 403 }, label);
 
 /**
  * Fails unless an answer is a 404 carrying the code given (C2).
@@ -2787,11 +2499,8 @@ export const assertForbidden = (
  * @param label what was refused, for the failure's message.
  * @param code the problem's code.
  */
-export const assertNotFound = (
-  response: AdminResponse,
-  label: string,
-  code: ProblemCode<404>,
-): void => assertRefused(response, { code, status: 404 }, label);
+export const assertNotFound = (response: AdminResponse, label: string, code: ProblemCode<404>): void =>
+	assertRefused(response, { code, status: 404 }, label);
 
 /**
  * Fails unless an answer is a 409 carrying the code given (C2).
@@ -2800,11 +2509,8 @@ export const assertNotFound = (
  * @param label what was refused, for the failure's message.
  * @param code the problem's code.
  */
-export const assertConflict = (
-  response: AdminResponse,
-  label: string,
-  code: ProblemCode<409>,
-): void => assertRefused(response, { code, status: 409 }, label);
+export const assertConflict = (response: AdminResponse, label: string, code: ProblemCode<409>): void =>
+	assertRefused(response, { code, status: 409 }, label);
 
 /**
  * Fails unless an answer refuses a body's media type: 415 `unsupportedMediaType` (ruled).
@@ -2812,10 +2518,8 @@ export const assertConflict = (
  * @param response the answer.
  * @param label what was refused, for the failure's message.
  */
-export const assertUnsupportedMediaType = (
-  response: AdminResponse,
-  label: string,
-): void => assertRefused(response, PROBLEMS.unsupportedMediaType, label);
+export const assertUnsupportedMediaType = (response: AdminResponse, label: string): void =>
+	assertRefused(response, PROBLEMS.unsupportedMediaType, label);
 
 /**
  * Fails unless an answer refuses a well-formed request for breaking a rule: 422, with the code given
@@ -2825,16 +2529,8 @@ export const assertUnsupportedMediaType = (
  * @param label what was refused, for the failure's message.
  * @param code the problem's code, if a ruling names one.
  */
-export const assertRuleBroken = (
-  response: AdminResponse,
-  label: string,
-  code?: ProblemCode<422>,
-): void =>
-  assertRefused(
-    response,
-    { ...(code === undefined ? {} : { code }), status: 422 },
-    label,
-  );
+export const assertRuleBroken = (response: AdminResponse, label: string, code?: ProblemCode<422>): void =>
+	assertRefused(response, { ...(code === undefined ? {} : { code }), status: 422 }, label);
 
 /**
  * Fails unless an answer is a 503, with the code given where a ruling names one, such as
@@ -2844,16 +2540,8 @@ export const assertRuleBroken = (
  * @param label what was refused, for the failure's message.
  * @param code the problem's code, if a ruling names one.
  */
-export const assertUnavailable = (
-  response: AdminResponse,
-  label: string,
-  code?: ProblemCode<503>,
-): void =>
-  assertRefused(
-    response,
-    { ...(code === undefined ? {} : { code }), status: 503 },
-    label,
-  );
+export const assertUnavailable = (response: AdminResponse, label: string, code?: ProblemCode<503>): void =>
+	assertRefused(response, { ...(code === undefined ? {} : { code }), status: 503 }, label);
 
 /**
  * Fails unless a refusal's problem details say, in their `title` or `detail`, what a pattern
@@ -2863,137 +2551,121 @@ export const assertUnavailable = (
  * @param pattern what the text must say.
  * @param label what was refused, for the failure's message.
  */
-export const assertProblemSays = (
-  response: AdminResponse,
-  pattern: RegExp,
-  label: string,
-): void =>
-  assert.match(
-    [response.problem?.title ?? '', response.problem?.detail ?? ''].join('\n'),
-    pattern,
-    `${label}: the problem's text`,
-  );
+export const assertProblemSays = (response: AdminResponse, pattern: RegExp, label: string): void =>
+	assert.match(
+		[response.problem?.title ?? '', response.problem?.detail ?? ''].join('\n'),
+		pattern,
+		`${label}: the problem's text`,
+	);
 
 /** Departures from an operation's own request that `fetch` cannot send. */
 export interface RawDepartures {
-  /**
-   * Every `authorization` line sent, in order, each a header line of its own: the caller's bearer
-   * credential once by default; none for an empty list.
-   */
-  authorizations?: readonly string[];
+	/**
+	 * Every `authorization` line sent, in order, each a header line of its own: the caller's bearer
+	 * credential once by default; none for an empty list.
+	 */
+	authorizations?: readonly string[];
 
-  /** The `content-type` sent: the operation's own by default; `null` sends no such header at all. */
-  contentType?: string | null;
+	/** The `content-type` sent: the operation's own by default; `null` sends no such header at all. */
+	contentType?: string | null;
 }
 
 const REPLAYED_APART: ReadonlySet<string> = new Set([
-  'authorization',
-  'connection',
-  'content-length',
-  'content-type',
-  'host',
+	'authorization',
+	'connection',
+	'content-length',
+	'content-type',
+	'host',
 ]);
 
 const replayed = (
-  url: URL,
-  {
-    body,
-    headers,
-    method,
-  }: {
-    body: string;
-    headers: Readonly<Record<string, string | readonly string[]>>;
-    method: string;
-  },
+	url: URL,
+	{
+		body,
+		headers,
+		method,
+	}: {
+		body: string;
+		headers: Readonly<Record<string, string | readonly string[]>>;
+		method: string;
+	},
 ): Promise<AdminResponse> =>
-  new Promise((resolve, reject) => {
-    const outgoing = httpRequest(
-      url,
-      {
-        headers: Object.fromEntries(
-          Object.entries(headers).map(([name, value]) => [
-            name,
-            typeof value === 'string' ? value : [...value],
-          ]),
-        ),
-        method,
-      },
-      (incoming) => {
-        const chunks: Buffer[] = [];
-        incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
-        incoming.on('end', () => {
-          const received = new Headers();
-          incoming.rawHeaders.forEach((value, index, raw) => {
-            if (index % 2 === 1) {
-              received.append(raw[index - 1] ?? '', value);
-            }
-          });
-          resolve(
-            answerOf(
-              incoming.statusCode ?? 0,
-              received,
-              Buffer.concat(chunks).toString('utf8'),
-            ),
-          );
-        });
-        incoming.on('error', reject);
-      },
-    );
-    outgoing.on('error', reject);
-    outgoing.end(body);
-  });
+	new Promise((resolve, reject) => {
+		const outgoing = httpRequest(
+			url,
+			{
+				headers: Object.fromEntries(
+					Object.entries(headers).map(([name, value]) => [
+						name,
+						typeof value === 'string' ? value : [...value],
+					]),
+				),
+				method,
+			},
+			(incoming) => {
+				const chunks: Buffer[] = [];
+				incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+				incoming.on('end', () => {
+					const received = new Headers();
+					incoming.rawHeaders.forEach((value, index, raw) => {
+						if (index % 2 === 1) {
+							received.append(raw[index - 1] ?? '', value);
+						}
+					});
+					resolve(answerOf(incoming.statusCode ?? 0, received, Buffer.concat(chunks).toString('utf8')));
+				});
+				incoming.on('error', reject);
+			},
+		);
+		outgoing.on('error', reject);
+		outgoing.end(body);
+	});
 
 interface ReplayedRequest {
-  /** The body the operation sent. */
-  body: string;
+	/** The body the operation sent. */
+	body: string;
 
-  /** The headers to send, `content-length` aside: the operation's own, with the departures. */
-  headers: Readonly<Record<string, string | readonly string[]>>;
+	/** The headers to send, `content-length` aside: the operation's own, with the departures. */
+	headers: Readonly<Record<string, string | readonly string[]>>;
 
-  method: string;
-  url: URL;
+	method: string;
+	url: URL;
 }
 
 // The operation is first sent to a recording server, so its path, its other headers and its body
 // stay this module's, then replayed to the Controller with the departures.
 const recordedOperation = async (
-  caller: AdminCaller,
-  operation: (recorded: AdminCaller) => Promise<AdminResponse>,
-  { authorizations, contentType }: RawDepartures,
+	caller: AdminCaller,
+	operation: (recorded: AdminCaller) => Promise<AdminResponse>,
+	{ authorizations, contentType }: RawDepartures,
 ): Promise<ReplayedRequest> => {
-  const recorder = await startRecordingServer();
-  try {
-    await operation({ token: caller.token, url: recorder.url });
-  } finally {
-    await recorder.stop();
-  }
-  const [sent] = recorder.requests;
-  if (sent === undefined) {
-    throw new Error('the operation sent nothing');
-  }
-  const authorizationLines =
-    authorizations ?? (caller.token === null ? [] : [`Bearer ${caller.token}`]);
-  const sentContentType =
-    contentType === undefined ? sent.headers['content-type'] : contentType;
-  const kept = Object.fromEntries(
-    Object.entries(sent.headers).flatMap(([name, value]) =>
-      REPLAYED_APART.has(name) || value === undefined ? [] : [[name, value]],
-    ),
-  );
-  return {
-    body: sent.body,
-    headers: {
-      ...kept,
-      ...(authorizationLines.length === 0
-        ? {}
-        : { authorization: authorizationLines }),
-      ...(sentContentType === undefined || sentContentType === null
-        ? {}
-        : { 'content-type': sentContentType }),
-    },
-    method: sent.method,
-    url: new URL(sent.target.replace(/^\//u, ''), caller.url),
-  };
+	const recorder = await startRecordingServer();
+	try {
+		await operation({ token: caller.token, url: recorder.url });
+	} finally {
+		await recorder.stop();
+	}
+	const [sent] = recorder.requests;
+	if (sent === undefined) {
+		throw new Error('the operation sent nothing');
+	}
+	const authorizationLines = authorizations ?? (caller.token === null ? [] : [`Bearer ${caller.token}`]);
+	const sentContentType = contentType === undefined ? sent.headers['content-type'] : contentType;
+	const kept = Object.fromEntries(
+		Object.entries(sent.headers).flatMap(([name, value]) =>
+			REPLAYED_APART.has(name) || value === undefined ? [] : [[name, value]],
+		),
+	);
+	return {
+		body: sent.body,
+		headers: {
+			...kept,
+			...(authorizationLines.length === 0 ? {} : { authorization: authorizationLines }),
+			...(sentContentType === undefined || sentContentType === null ? {} : { 'content-type': sentContentType }),
+		},
+		method: sent.method,
+		url: new URL(sent.target.replace(/^\//u, ''), caller.url),
+	};
 };
 
 /**
@@ -3008,47 +2680,43 @@ const recordedOperation = async (
  * @param departures the `authorization` lines and the `content-type` sent in place of the operation's.
  */
 export const sendRaw = async (
-  caller: AdminCaller,
-  operation: (recorded: AdminCaller) => Promise<AdminResponse>,
-  departures: RawDepartures = {},
+	caller: AdminCaller,
+	operation: (recorded: AdminCaller) => Promise<AdminResponse>,
+	departures: RawDepartures = {},
 ): Promise<AdminResponse> => {
-  const { body, headers, method, url } = await recordedOperation(
-    caller,
-    operation,
-    departures,
-  );
-  return replayed(url, {
-    body,
-    headers: {
-      ...headers,
-      'content-length': String(Buffer.byteLength(body)),
-    },
-    method,
-  });
+	const { body, headers, method, url } = await recordedOperation(caller, operation, departures);
+	return replayed(url, {
+		body,
+		headers: {
+			...headers,
+			'content-length': String(Buffer.byteLength(body)),
+		},
+		method,
+	});
 };
 
 /** A large body, and how slowly it is sent. */
 export interface SlowBody extends RawDepartures {
-  /** The body sent in place of the operation's own, as bytes. */
-  body: Uint8Array;
+	/** The body sent in place of the operation's own, as bytes. */
+	body: Uint8Array;
 
-  /** How many bytes each write sends: 64 KiB by default. */
-  chunkBytes?: number;
+	/** How many bytes each write sends: 64 KiB by default. */
+	chunkBytes?: number;
 
-  /** How long to wait after each write before the next, in milliseconds: 20 by default. */
-  intervalMs?: number;
+	/** How long to wait after each write before the next, in milliseconds: 20 by default. */
+	intervalMs?: number;
 }
 
 /** What a slowly sent operation was answered, and how much of its body had gone when the answer came. */
 export interface SlowlySent extends AdminResponse {
-  /** Whether the answer's status line arrived before the last of the body had been written. */
-  answeredBeforeBodyEnded: boolean;
+	/** Whether the answer's status line arrived before the last of the body had been written. */
+	answeredBeforeBodyEnded: boolean;
 
-  /** How many of the body's bytes had been written when the answer's status line arrived. */
-  bytesSentBeforeAnswer: number;
+	/** How many of the body's bytes had been written when the answer's status line arrived. */
+	bytesSentBeforeAnswer: number;
 
-  /** The body's length in bytes, as its `content-length` announced it. */
-  bodyBytes: number;
+	/** The body's length in bytes, as its `content-length` announced it. */
+	bodyBytes: number;
 }
 
 /**
@@ -3066,80 +2734,71 @@ export interface SlowlySent extends AdminResponse {
  *   `content-type` sent in place of the operation's.
  */
 export const sendSlowly = async (
-  caller: AdminCaller,
-  operation: (recorded: AdminCaller) => Promise<AdminResponse>,
-  { body, chunkBytes = 65_536, intervalMs = 20, ...departures }: SlowBody,
+	caller: AdminCaller,
+	operation: (recorded: AdminCaller) => Promise<AdminResponse>,
+	{ body, chunkBytes = 65_536, intervalMs = 20, ...departures }: SlowBody,
 ): Promise<SlowlySent> => {
-  const { headers, method, url } = await recordedOperation(
-    caller,
-    operation,
-    departures,
-  );
-  return new Promise((resolve, reject) => {
-    const state: { bytesAtAnswer: number | undefined; written: number } = {
-      bytesAtAnswer: undefined,
-      written: 0,
-    };
-    const outgoing = httpRequest(url, {
-      headers: {
-        ...Object.fromEntries(
-          Object.entries(headers).map(([name, value]) => [
-            name,
-            typeof value === 'string' ? value : [...value],
-          ]),
-        ),
-        'content-length': String(body.byteLength),
-      },
-      method,
-    });
-    outgoing.on('response', (incoming) => {
-      state.bytesAtAnswer = state.written;
-      const chunks: Buffer[] = [];
-      incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
-      incoming.on('error', reject);
-      incoming.on('end', () => {
-        const received = new Headers();
-        incoming.rawHeaders.forEach((value, index, raw) => {
-          if (index % 2 === 1) {
-            received.append(raw[index - 1] ?? '', value);
-          }
-        });
-        outgoing.destroy();
-        resolve({
-          ...answerOf(
-            incoming.statusCode ?? 0,
-            received,
-            Buffer.concat(chunks).toString('utf8'),
-          ),
-          answeredBeforeBodyEnded:
-            (state.bytesAtAnswer ?? body.byteLength) < body.byteLength,
-          bodyBytes: body.byteLength,
-          bytesSentBeforeAnswer: state.bytesAtAnswer ?? body.byteLength,
-        });
-      });
-    });
-    outgoing.on('error', (error) => {
-      if (state.bytesAtAnswer === undefined) {
-        reject(error);
-      }
-    });
-    const writeFrom = async (offset: number): Promise<void> => {
-      if (state.bytesAtAnswer !== undefined || outgoing.destroyed) {
-        return;
-      }
-      if (offset >= body.byteLength) {
-        outgoing.end();
-        return;
-      }
-      const chunk = body.subarray(offset, offset + chunkBytes);
-      outgoing.write(chunk);
-      state.written = offset + chunk.byteLength;
-      await delay(intervalMs);
-      await writeFrom(offset + chunk.byteLength);
-    };
-    outgoing.flushHeaders();
-    void writeFrom(0);
-  });
+	const { headers, method, url } = await recordedOperation(caller, operation, departures);
+	return new Promise((resolve, reject) => {
+		const state: { bytesAtAnswer: number | undefined; written: number } = {
+			bytesAtAnswer: undefined,
+			written: 0,
+		};
+		const outgoing = httpRequest(url, {
+			headers: {
+				...Object.fromEntries(
+					Object.entries(headers).map(([name, value]) => [
+						name,
+						typeof value === 'string' ? value : [...value],
+					]),
+				),
+				'content-length': String(body.byteLength),
+			},
+			method,
+		});
+		outgoing.on('response', (incoming) => {
+			state.bytesAtAnswer = state.written;
+			const chunks: Buffer[] = [];
+			incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+			incoming.on('error', reject);
+			incoming.on('end', () => {
+				const received = new Headers();
+				incoming.rawHeaders.forEach((value, index, raw) => {
+					if (index % 2 === 1) {
+						received.append(raw[index - 1] ?? '', value);
+					}
+				});
+				outgoing.destroy();
+				resolve({
+					...answerOf(incoming.statusCode ?? 0, received, Buffer.concat(chunks).toString('utf8')),
+					answeredBeforeBodyEnded: (state.bytesAtAnswer ?? body.byteLength) < body.byteLength,
+					bodyBytes: body.byteLength,
+					bytesSentBeforeAnswer: state.bytesAtAnswer ?? body.byteLength,
+				});
+			});
+		});
+		outgoing.on('error', (error) => {
+			if (state.bytesAtAnswer === undefined) {
+				reject(error);
+			}
+		});
+		const writeFrom = async (offset: number): Promise<void> => {
+			if (state.bytesAtAnswer !== undefined || outgoing.destroyed) {
+				return;
+			}
+			if (offset >= body.byteLength) {
+				outgoing.end();
+				return;
+			}
+			const chunk = body.subarray(offset, offset + chunkBytes);
+			outgoing.write(chunk);
+			state.written = offset + chunk.byteLength;
+			await delay(intervalMs);
+			await writeFrom(offset + chunk.byteLength);
+		};
+		outgoing.flushHeaders();
+		void writeFrom(0);
+	});
 };
 
 /**
@@ -3150,30 +2809,30 @@ export const sendSlowly = async (
  * frame, a source path, and a socket's error codes.
  */
 export const INTERNAL_DETAIL: readonly RegExp[] = Object.freeze([
-  /duplicate key value violates unique constraint "/u,
-  /violates (?:unique|foreign key|check|not-null|exclusion) constraint/u,
-  /null value in column "/u,
-  /\bKey \([^)]*\)=\(/u,
-  /\b(?:DETAIL|HINT):/u,
-  /\brelation "/u,
-  /\bcolumn "[^"]*" (?:does not exist|of relation)/u,
-  /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)*_(?:check|excl|fkey|idx|key|pkey|unique)\b/u,
-  /\bSQLSTATE\b/u,
-  /\bpg_[a-z_]+/u,
-  /\bSELECT\b[^]*\bFROM\b/u,
-  /\bINSERT INTO\b/u,
-  /\bUPDATE\s+\S+\s+SET\b/u,
-  /\bDELETE FROM\b/u,
-  /Unexpected end of JSON input/u,
-  /\bJSON at position \d+/u,
-  /Unexpected token \S+(?:,| in JSON)/u,
-  /is not valid JSON/u,
-  /\bSyntaxError\b/u,
-  /\n\s+at\s/u,
-  /node:internal/u,
-  /node_modules/u,
-  /\.[cm]?[jt]s:\d+/u,
-  /\bE(?:CONNREFUSED|CONNRESET|PIPE|TIMEDOUT)\b/u,
+	/duplicate key value violates unique constraint "/u,
+	/violates (?:unique|foreign key|check|not-null|exclusion) constraint/u,
+	/null value in column "/u,
+	/\bKey \([^)]*\)=\(/u,
+	/\b(?:DETAIL|HINT):/u,
+	/\brelation "/u,
+	/\bcolumn "[^"]*" (?:does not exist|of relation)/u,
+	/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)*_(?:check|excl|fkey|idx|key|pkey|unique)\b/u,
+	/\bSQLSTATE\b/u,
+	/\bpg_[a-z_]+/u,
+	/\bSELECT\b[^]*\bFROM\b/u,
+	/\bINSERT INTO\b/u,
+	/\bUPDATE\s+\S+\s+SET\b/u,
+	/\bDELETE FROM\b/u,
+	/Unexpected end of JSON input/u,
+	/\bJSON at position \d+/u,
+	/Unexpected token \S+(?:,| in JSON)/u,
+	/is not valid JSON/u,
+	/\bSyntaxError\b/u,
+	/\n\s+at\s/u,
+	/node:internal/u,
+	/node_modules/u,
+	/\.[cm]?[jt]s:\d+/u,
+	/\bE(?:CONNREFUSED|CONNRESET|PIPE|TIMEDOUT)\b/u,
 ]);
 
 /**
@@ -3183,12 +2842,9 @@ export const INTERNAL_DETAIL: readonly RegExp[] = Object.freeze([
  * @param text an answer's body, or any text a caller receives.
  * @param internalIds identifiers that never leave Usher, such as policy.ts's `internalIdsInStore`.
  */
-export const internalDetailIn = (
-  text: string,
-  internalIds: readonly string[] = [],
-): readonly string[] => [
-  ...INTERNAL_DETAIL.filter((pattern) => pattern.test(text)).map(String),
-  ...internalIds.filter((id) => text.toLowerCase().includes(id.toLowerCase())),
+export const internalDetailIn = (text: string, internalIds: readonly string[] = []): readonly string[] => [
+	...INTERNAL_DETAIL.filter((pattern) => pattern.test(text)).map(String),
+	...internalIds.filter((id) => text.toLowerCase().includes(id.toLowerCase())),
 ];
 
 /**
@@ -3199,22 +2855,19 @@ export const internalDetailIn = (
  * @param value a parsed value.
  */
 export const stringsIn = (value: unknown): readonly string[] => {
-  if (typeof value === 'string') {
-    return [value];
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return [String(value)];
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap(stringsIn);
-  }
-  if (isRecord(value)) {
-    return Object.entries(value).flatMap(([name, held]) => [
-      name,
-      ...stringsIn(held),
-    ]);
-  }
-  return [];
+	if (typeof value === 'string') {
+		return [value];
+	}
+	if (typeof value === 'number' || typeof value === 'boolean') {
+		return [String(value)];
+	}
+	if (Array.isArray(value)) {
+		return value.flatMap(stringsIn);
+	}
+	if (isRecord(value)) {
+		return Object.entries(value).flatMap(([name, held]) => [name, ...stringsIn(held)]);
+	}
+	return [];
 };
 
 const UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u;
@@ -3228,22 +2881,17 @@ const UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u;
  * @param label what the member is, for the failure's message.
  */
 export const instantOf = (value: unknown, label = 'the member'): number => {
-  const milliseconds =
-    typeof value === 'string' && UTC_INSTANT.test(value)
-      ? Date.parse(value)
-      : Number.NaN;
-  return Number.isFinite(milliseconds)
-    ? milliseconds
-    : assert.fail(`${label} is no UTC instant ending in Z`);
+	const milliseconds = typeof value === 'string' && UTC_INSTANT.test(value) ? Date.parse(value) : Number.NaN;
+	return Number.isFinite(milliseconds) ? milliseconds : assert.fail(`${label} is no UTC instant ending in Z`);
 };
 
 /** Who a caller is beyond the default, and where it calls. */
 export interface CallerOptions {
-  /** Claims and options over the management token's. */
-  mint?: MintOptions;
+	/** Claims and options over the management token's. */
+	mint?: MintOptions;
 
-  /** The instance called: the harness's Controller by default. */
-  url?: URL;
+	/** The instance called: the harness's Controller by default. */
+	url?: URL;
 }
 
 /**
@@ -3255,15 +2903,11 @@ export interface CallerOptions {
  *   instance called.
  */
 export const administratorCaller = async (
-  harness: Pick<Harness, 'tokens' | 'url'>,
-  {
-    mint = {},
-    person = PEOPLE.administrator,
-    url,
-  }: CallerOptions & { person?: Person } = {},
+	harness: Pick<Harness, 'tokens' | 'url'>,
+	{ mint = {}, person = PEOPLE.administrator, url }: CallerOptions & { person?: Person } = {},
 ): Promise<AdminCaller> => ({
-  token: await harness.tokens.administrator(person, mint),
-  url: url ?? harness.url,
+	token: await harness.tokens.administrator(person, mint),
+	url: url ?? harness.url,
 });
 
 /**
@@ -3275,12 +2919,12 @@ export const administratorCaller = async (
  * @param options claims over the token's, and the instance called.
  */
 export const firstUserCaller = async (
-  harness: Pick<Harness, 'tokens' | 'url'>,
-  person: Person,
-  { mint = {}, url }: CallerOptions = {},
+	harness: Pick<Harness, 'tokens' | 'url'>,
+	person: Person,
+	{ mint = {}, url }: CallerOptions = {},
 ): Promise<AdminCaller> => ({
-  token: await harness.tokens.firstUser(person, mint),
-  url: url ?? harness.url,
+	token: await harness.tokens.firstUser(person, mint),
+	url: url ?? harness.url,
 });
 
 /**
@@ -3292,10 +2936,10 @@ export const firstUserCaller = async (
  * @param options claims over the token's, and the instance called.
  */
 export const personCaller = async (
-  harness: Pick<Harness, 'tokens' | 'url'>,
-  person: Person,
-  { mint = {}, url }: CallerOptions = {},
+	harness: Pick<Harness, 'tokens' | 'url'>,
+	person: Person,
+	{ mint = {}, url }: CallerOptions = {},
 ): Promise<AdminCaller> => ({
-  token: await harness.tokens.management(person, mint),
-  url: url ?? harness.url,
+	token: await harness.tokens.management(person, mint),
+	url: url ?? harness.url,
 });

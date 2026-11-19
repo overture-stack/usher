@@ -8,8 +8,7 @@ import { readCaFile } from './caFile.js';
 import type { StoreConnectionSettings, StoreLog } from './types.js';
 
 /** The line written by a start allowed a database connection that does not verify the server it reaches. */
-export const UNVERIFIED_CONNECTION_ALLOWED =
-  'store.unverifiedConnectionAllowed';
+export const UNVERIFIED_CONNECTION_ALLOWED = 'store.unverifiedConnectionAllowed';
 
 /** The CA certificates for verifying a connection's server, read as the connection opens. */
 export type CaCertificates = () => string | string[];
@@ -17,14 +16,11 @@ export type CaCertificates = () => string | string[];
 // TLS options whose CA certificates are read as each connection opens rather than once: for every
 // connection's TLS handshake, the driver copies these options' own members into that handshake's
 // options, so a getter among them is read at each one.
-const readAtEachConnection = (
-  ssl: ConnectionOptions,
-  caCertificates: CaCertificates,
-): ConnectionOptions =>
-  Object.defineProperty({ ...ssl }, 'ca', {
-    enumerable: true,
-    get: caCertificates,
-  });
+const readAtEachConnection = (ssl: ConnectionOptions, caCertificates: CaCertificates): ConnectionOptions =>
+	Object.defineProperty({ ...ssl }, 'ca', {
+		enumerable: true,
+		get: caCertificates,
+	});
 
 /**
  * How the Controller connects to its store: the connection URL's settings, with the password from
@@ -40,25 +36,21 @@ const readAtEachConnection = (
  * @param caCertificates the CA certificates named by `sslrootcert`, read as each connection opens.
  */
 export const storeConnection = (
-  {
-    databasePassword,
-    databaseUrl,
-    storeTimeoutMilliseconds,
-  }: StoreConnectionSettings,
-  caCertificates?: CaCertificates,
+	{ databasePassword, databaseUrl, storeTimeoutMilliseconds }: StoreConnectionSettings,
+	caCertificates?: CaCertificates,
 ): pg.PoolConfig => {
-  const parsed = parseIntoClientConfig(databaseUrl);
-  const { ssl } = parsed;
-  return {
-    ...parsed,
-    ...(caCertificates !== undefined && typeof ssl === 'object'
-      ? { ssl: readAtEachConnection(ssl, caCertificates) }
-      : {}),
-    connectionTimeoutMillis: storeTimeoutMilliseconds,
-    idle_in_transaction_session_timeout: storeTimeoutMilliseconds,
-    password: databasePassword,
-    statement_timeout: storeTimeoutMilliseconds,
-  };
+	const parsed = parseIntoClientConfig(databaseUrl);
+	const { ssl } = parsed;
+	return {
+		...parsed,
+		...(caCertificates !== undefined && typeof ssl === 'object'
+			? { ssl: readAtEachConnection(ssl, caCertificates) }
+			: {}),
+		connectionTimeoutMillis: storeTimeoutMilliseconds,
+		idle_in_transaction_session_timeout: storeTimeoutMilliseconds,
+		password: databasePassword,
+		statement_timeout: storeTimeoutMilliseconds,
+	};
 };
 
 /**
@@ -71,16 +63,16 @@ export const storeConnection = (
  * @param log where a change to the file, or its becoming unreadable, is written.
  */
 export const databaseCaFile = (
-  { databaseUrl }: Pick<StoreConnectionSettings, 'databaseUrl'>,
-  log: Pick<StoreLog, 'error' | 'warning'>,
+	{ databaseUrl }: Pick<StoreConnectionSettings, 'databaseUrl'>,
+	log: Pick<StoreLog, 'error' | 'warning'>,
 ): CaCertificates | undefined => {
-  const parsed: Readonly<Record<string, unknown>> = {
-    ...parseIntoClientConfig(databaseUrl),
-  };
-  const path = parsed['sslrootcert'];
-  return typeof path === 'string' && path !== ''
-    ? readCaFile(path, { log, variable: ENVIRONMENT_VARIABLES.databaseUrl })
-    : undefined;
+	const parsed: Readonly<Record<string, unknown>> = {
+		...parseIntoClientConfig(databaseUrl),
+	};
+	const path = parsed['sslrootcert'];
+	return typeof path === 'string' && path !== ''
+		? readCaFile(path, { log, variable: ENVIRONMENT_VARIABLES.databaseUrl })
+		: undefined;
 };
 
 /** The line naming an idle connection the pool lost. */
@@ -90,8 +82,8 @@ export const IDLE_CONNECTION_LOST = 'store.idleConnectionLost';
 // left out with every other member of the error, since a server's message or detail may hold a value
 // from the store, and no database error text reaches a line.
 const failureOf = (error: Error): Readonly<Record<string, string>> => {
-  const code: unknown = 'code' in error ? error.code : undefined;
-  return typeof code === 'string' ? { code } : {};
+	const code: unknown = 'code' in error ? error.code : undefined;
+	return typeof code === 'string' ? { code } : {};
 };
 
 /**
@@ -109,18 +101,18 @@ const failureOf = (error: Error): Readonly<Record<string, string>> => {
  *   them.
  */
 export const openStore = (
-  configuration: StoreConnectionSettings,
-  log: Pick<StoreLog, 'error'>,
-  connections: number,
-  caCertificates?: CaCertificates,
+	configuration: StoreConnectionSettings,
+	log: Pick<StoreLog, 'error'>,
+	connections: number,
+	caCertificates?: CaCertificates,
 ): pg.Pool => {
-  const pool = new pg.Pool({
-    ...storeConnection(configuration, caCertificates),
-    max: connections,
-  });
-  // Unheard, an idle connection's error would end the process.
-  pool.on('error', (error) => {
-    log.error(IDLE_CONNECTION_LOST, failureOf(error));
-  });
-  return pool;
+	const pool = new pg.Pool({
+		...storeConnection(configuration, caCertificates),
+		max: connections,
+	});
+	// Unheard, an idle connection's error would end the process.
+	pool.on('error', (error) => {
+		log.error(IDLE_CONNECTION_LOST, failureOf(error));
+	});
+	return pool;
 };

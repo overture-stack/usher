@@ -1,31 +1,19 @@
 import type { RecordAction } from '@overture-stack/usher-types';
 
 import type { GrantRuleRecipient, GrantRules } from '../settings/index.js';
-import {
-  calculationOf,
-  type HeldEntry,
-  nonEmpty,
-  reachableOf,
-  UNMARKED_CATEGORY,
-} from './heldEntries.js';
-import type {
-  AudiencePolicy,
-  BaseTier,
-  Calculation,
-  ConferringRule,
-  ServedResource,
-} from './types.js';
+import { calculationOf, type HeldEntry, nonEmpty, reachableOf, UNMARKED_CATEGORY } from './heldEntries.js';
+import type { AudiencePolicy, BaseTier, Calculation, ConferringRule, ServedResource } from './types.js';
 
 /** A grant rule conferring record actions on the unmarked records of every resource at one base tier. */
 export interface Conferral {
-  /** The record actions it confers, in its order; none confers nothing. */
-  actions: readonly RecordAction[];
+	/** The record actions it confers, in its order; none confers nothing. */
+	actions: readonly RecordAction[];
 
-  /** The recipient the grant rule confers on. */
-  rule: ConferringRule;
+	/** The recipient the grant rule confers on. */
+	rule: ConferringRule;
 
-  /** The base tier of the resources whose unmarked records it reaches. */
-  tier: BaseTier;
+	/** The base tier of the resources whose unmarked records it reaches. */
+	tier: BaseTier;
 }
 
 /**
@@ -37,27 +25,27 @@ export interface Conferral {
  * @param recipients the recipients whose entries are taken.
  */
 export const grantRuleConferrals = (
-  rules: GrantRules,
-  recipients: readonly GrantRuleRecipient[],
+	rules: GrantRules,
+	recipients: readonly GrantRuleRecipient[],
 ): readonly Conferral[] =>
-  rules
-    .filter(({ to }) => recipients.includes(to))
-    .flatMap(({ resources, to }) =>
-      resources.flatMap(({ accessLevel, categories }) =>
-        categories.map(({ actions }) => ({
-          actions,
-          rule: to,
-          tier: accessLevel,
-        })),
-      ),
-    );
+	rules
+		.filter(({ to }) => recipients.includes(to))
+		.flatMap(({ resources, to }) =>
+			resources.flatMap(({ accessLevel, categories }) =>
+				categories.map(({ actions }) => ({
+					actions,
+					rule: to,
+					tier: accessLevel,
+				})),
+			),
+		);
 
 /** What the rules confer: their entries, and the rules conferring at least one. */
 export interface RuleEntries {
-  entries: readonly HeldEntry[];
+	entries: readonly HeldEntry[];
 
-  /** Each rule conferring an entry, once, in the order given. */
-  rules: readonly ConferringRule[];
+	/** Each rule conferring an entry, once, in the order given. */
+	rules: readonly ConferringRule[];
 }
 
 /**
@@ -70,33 +58,27 @@ export interface RuleEntries {
  * @param conferrals the rules, each with its actions and the base tier it reaches, in the order they
  *   are named.
  */
-export const ruleEntries = (
-  served: readonly ServedResource[],
-  conferrals: readonly Conferral[],
-): RuleEntries => {
-  const conferring = conferrals.flatMap(({ actions, rule, tier }) => {
-    const conferred = nonEmpty(actions);
-    return conferred === undefined ? [] : [{ actions: conferred, rule, tier }];
-  });
-  const held = reachableOf(served).flatMap((resource) =>
-    conferring
-      .filter(({ tier }) => tier === resource.baseTier)
-      .map((conferral) => ({ conferral, resource })),
-  );
-  return {
-    entries: held.map(({ conferral, resource }) => ({
-      category: UNMARKED_CATEGORY,
-      externalId: resource.externalId,
-      permissions: { record: [...conferral.actions] },
-    })),
-    rules: conferring
-      .map(({ rule }) => rule)
-      .filter(
-        (rule, index, named) =>
-          named.indexOf(rule) === index &&
-          held.some(({ conferral }) => conferral.rule === rule),
-      ),
-  };
+export const ruleEntries = (served: readonly ServedResource[], conferrals: readonly Conferral[]): RuleEntries => {
+	const conferring = conferrals.flatMap(({ actions, rule, tier }) => {
+		const conferred = nonEmpty(actions);
+		return conferred === undefined ? [] : [{ actions: conferred, rule, tier }];
+	});
+	const held = reachableOf(served).flatMap((resource) =>
+		conferring.filter(({ tier }) => tier === resource.baseTier).map((conferral) => ({ conferral, resource })),
+	);
+	return {
+		entries: held.map(({ conferral, resource }) => ({
+			category: UNMARKED_CATEGORY,
+			externalId: resource.externalId,
+			permissions: { record: [...conferral.actions] },
+		})),
+		rules: conferring
+			.map(({ rule }) => rule)
+			.filter(
+				(rule, index, named) =>
+					named.indexOf(rule) === index && held.some(({ conferral }) => conferral.rule === rule),
+			),
+	};
 };
 
 /**
@@ -113,10 +95,7 @@ export const ruleEntries = (
  * @param conferrals the rules, each with its actions and the base tier it reaches, in the order they
  *   are named.
  */
-export const ruleCalculation = (
-  policy: AudiencePolicy,
-  conferrals: readonly Conferral[],
-): Calculation => {
-  const { entries, rules } = ruleEntries(policy.served, conferrals);
-  return calculationOf(policy, entries, { grantCount: 0, rules });
+export const ruleCalculation = (policy: AudiencePolicy, conferrals: readonly Conferral[]): Calculation => {
+	const { entries, rules } = ruleEntries(policy.served, conferrals);
+	return calculationOf(policy, entries, { grantCount: 0, rules });
 };

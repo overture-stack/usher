@@ -1,54 +1,30 @@
 import pg from 'pg';
 
 import { ENVIRONMENT_VARIABLES } from '../configuration/index.js';
-import type {
-  Actor,
-  AuditTrail,
-  AuditTransaction,
-  EventLog,
-} from '../eventLog/index.js';
+import type { Actor, AuditTrail, AuditTransaction, EventLog } from '../eventLog/index.js';
+import { ControllerError, type StartProblem, StartRefusal } from '../failures/index.js';
+import { type Migration, MIGRATION_UNKNOWN, migrationUnknownFields, unknownMigrations } from '../migrations/index.js';
 import {
-  ControllerError,
-  type StartProblem,
-  StartRefusal,
-} from '../failures/index.js';
-import {
-  type Migration,
-  MIGRATION_UNKNOWN,
-  migrationUnknownFields,
-  unknownMigrations,
-} from '../migrations/index.js';
-import {
-  type SettingsSource,
-  type SignInTokenMaximumRow,
-  type StoredSetting,
-  readSignInTokenMaximumHistory,
-  readStoredSettings,
-  signInTokenMaximumHistoryStatement,
+	type SettingsSource,
+	type SignInTokenMaximumRow,
+	type StoredSetting,
+	readSignInTokenMaximumHistory,
+	readStoredSettings,
+	signInTokenMaximumHistoryStatement,
 } from '../settings/index.js';
-import {
-  CommitUnconfirmed,
-  type StoreReader,
-  StoreTimeout,
-} from '../storeTimeout/index.js';
+import { CommitUnconfirmed, type StoreReader, StoreTimeout } from '../storeTimeout/index.js';
 import { connectionProblemOf } from './connectionProblemOf.js';
 import { recordIdentityProvider } from './identityProviderRecord.js';
 import { checkKeyEncryptionKey } from './keyEncryptionKeyCheck.js';
+import { readRecordedMigrations, unknownMigrationsProblem } from './migrationRecord.js';
 import {
-  readRecordedMigrations,
-  unknownMigrationsProblem,
-} from './migrationRecord.js';
-import {
-  type GrantBeyondUse,
-  grantsBeyondUse,
-  privilegeProblems,
-  readHeldPrivileges,
-  writesTables,
+	type GrantBeyondUse,
+	grantsBeyondUse,
+	privilegeProblems,
+	readHeldPrivileges,
+	writesTables,
 } from './rolePrivileges.js';
-import {
-  readStatementLimits,
-  statementLimitProblems,
-} from './statementLimits.js';
+import { readStatementLimits, statementLimitProblems } from './statementLimits.js';
 import type { PreparedStore, StoreSettings } from './types.js';
 import { writeSeededPolicy } from './writeSeededPolicy.js';
 
@@ -64,147 +40,129 @@ export const GRANT_BEYOND_USE = 'store.grantBeyondUse';
 // The store's answering in time is a property of the store the URL names; the timeout is named in the
 // rule, so a timeout set too low is still found from the refusal.
 const UNANSWERED: StartProblem = {
-  rule: `names a store that did not answer the start within the time ${ENVIRONMENT_VARIABLES.storeTimeoutMilliseconds} allows`,
-  variable: ENVIRONMENT_VARIABLES.databaseUrl,
+	rule: `names a store that did not answer the start within the time ${ENVIRONMENT_VARIABLES.storeTimeoutMilliseconds} allows`,
+	variable: ENVIRONMENT_VARIABLES.databaseUrl,
 };
 
 // A start whose writes may or may not have committed cannot serve on them.
 const UNCONFIRMED: StartProblem = {
-  rule: `names a store that did not confirm the start's commit within the time ${ENVIRONMENT_VARIABLES.storeTimeoutMilliseconds} allows`,
-  variable: ENVIRONMENT_VARIABLES.databaseUrl,
+	rule: `names a store that did not confirm the start's commit within the time ${ENVIRONMENT_VARIABLES.storeTimeoutMilliseconds} allows`,
+	variable: ENVIRONMENT_VARIABLES.databaseUrl,
 };
 
 interface Prepared {
-  tolerated: readonly GrantBeyondUse[];
-  writes: boolean;
+	tolerated: readonly GrantBeyondUse[];
+	writes: boolean;
 }
 
 // What the start's transaction is given beside its settings: the release's migrations, and where
 // the migrations it refuses are written.
 interface StartContext {
-  log: Pick<EventLog, 'error'>;
-  migrations: readonly Migration[];
+	log: Pick<EventLog, 'error'>;
+	migrations: readonly Migration[];
 }
 
 // Refuses a store recording a migration this release does not know, read before any other table of
 // the schema, since a later release may record what this one never reads.
 const refuseUnknownMigrations = async (
-  connection: pg.ClientBase,
-  schema: string,
-  { log, migrations }: StartContext,
+	connection: pg.ClientBase,
+	schema: string,
+	{ log, migrations }: StartContext,
 ): Promise<void> => {
-  const unknown = unknownMigrations(
-    migrations,
-    await readRecordedMigrations(connection, schema),
-  );
-  if (unknown.length > 0) {
-    log.error(MIGRATION_UNKNOWN, migrationUnknownFields(unknown, 'start'));
-    throw new StartRefusal([unknownMigrationsProblem(unknown)]);
-  }
+	const unknown = unknownMigrations(migrations, await readRecordedMigrations(connection, schema));
+	if (unknown.length > 0) {
+		log.error(MIGRATION_UNKNOWN, migrationUnknownFields(unknown, 'start'));
+		throw new StartRefusal([unknownMigrationsProblem(unknown)]);
+	}
 };
 
 // Reads the settings the store holds, the grant rules included, and holds every setting but the grant
 // rules in the source with the generation they were read at. A setting the store refuses refuses the start,
 // naming it. The Controller's service-account role must differ from the realm role the first user is named by.
 const readStartSettings = async (
-  connection: pg.ClientBase,
-  settings: StoreSettings,
-  source: Pick<SettingsSource, 'hold'>,
+	connection: pg.ClientBase,
+	settings: StoreSettings,
+	source: Pick<SettingsSource, 'hold'>,
 ): Promise<void> => {
-  const schema = settings.databaseSchema;
-  // The generation is read before the settings. A change committed between the two reads then leaves the
-  // held generation older than the held values, so the next tick reads again. The other order would hold
-  // stale values under a current generation until the next change.
-  const generationRows = await connection.query<{ generation: string }>(
-    `SELECT generation::text AS generation FROM ${pg.escapeIdentifier(schema)}.settings_generation`,
-  );
-  const [generation] = generationRows.rows;
-  if (generation === undefined) {
-    throw new ControllerError('the store holds no settings generation');
-  }
-  const { rows } = await connection.query<StoredSetting>(
-    `SELECT name, value FROM ${pg.escapeIdentifier(schema)}.settings`,
-  );
-  const reading = readStoredSettings(rows);
-  if (reading.kind === 'refused') {
-    throw new StartRefusal(
-      reading.problems.map(({ rule, setting }) => ({ rule, setting })),
-    );
-  }
-  const { grantRules: _grantRules, ...held } = reading.settings;
-  if (
-    held.backChannelLogout &&
-    settings.backChannelLogoutAudiences.length === 0
-  ) {
-    throw new StartRefusal([
-      {
-        rule: "must list the platform's client identifiers while the backChannelLogout setting is on, or set backChannelLogout to false",
-        variable: ENVIRONMENT_VARIABLES.backChannelLogoutAudiences,
-      },
-    ]);
-  }
-  if (
-    'realmRole' in held.firstUser &&
-    held.firstUser.realmRole === settings.serviceAccountRole
-  ) {
-    throw new StartRefusal([
-      {
-        rule: 'must name a role other than the realm role the firstUser setting names',
-        variable: ENVIRONMENT_VARIABLES.serviceAccountRole,
-      },
-    ]);
-  }
-  const history = await connection.query<SignInTokenMaximumRow>(
-    signInTokenMaximumHistoryStatement(schema),
-  );
-  const maximums = readSignInTokenMaximumHistory(history.rows);
-  if (maximums.kind === 'refused') {
-    throw new StartRefusal(
-      maximums.problems.map(({ rule, setting }) => ({ rule, setting })),
-    );
-  }
-  source.hold(held, generation.generation, maximums.history);
+	const schema = settings.databaseSchema;
+	// The generation is read before the settings. A change committed between the two reads then leaves the
+	// held generation older than the held values, so the next tick reads again. The other order would hold
+	// stale values under a current generation until the next change.
+	const generationRows = await connection.query<{ generation: string }>(
+		`SELECT generation::text AS generation FROM ${pg.escapeIdentifier(schema)}.settings_generation`,
+	);
+	const [generation] = generationRows.rows;
+	if (generation === undefined) {
+		throw new ControllerError('the store holds no settings generation');
+	}
+	const { rows } = await connection.query<StoredSetting>(
+		`SELECT name, value FROM ${pg.escapeIdentifier(schema)}.settings`,
+	);
+	const reading = readStoredSettings(rows);
+	if (reading.kind === 'refused') {
+		throw new StartRefusal(reading.problems.map(({ rule, setting }) => ({ rule, setting })));
+	}
+	const { grantRules: _grantRules, ...held } = reading.settings;
+	if (held.backChannelLogout && settings.backChannelLogoutAudiences.length === 0) {
+		throw new StartRefusal([
+			{
+				rule: "must list the platform's client identifiers while the backChannelLogout setting is on, or set backChannelLogout to false",
+				variable: ENVIRONMENT_VARIABLES.backChannelLogoutAudiences,
+			},
+		]);
+	}
+	if ('realmRole' in held.firstUser && held.firstUser.realmRole === settings.serviceAccountRole) {
+		throw new StartRefusal([
+			{
+				rule: 'must name a role other than the realm role the firstUser setting names',
+				variable: ENVIRONMENT_VARIABLES.serviceAccountRole,
+			},
+		]);
+	}
+	const history = await connection.query<SignInTokenMaximumRow>(signInTokenMaximumHistoryStatement(schema));
+	const maximums = readSignInTokenMaximumHistory(history.rows);
+	if (maximums.kind === 'refused') {
+		throw new StartRefusal(maximums.problems.map(({ rule, setting }) => ({ rule, setting })));
+	}
+	source.hold(held, generation.generation, maximums.history);
 };
 
 // Checks the store and writes what a start writes, giving the grants beyond the release's that the
 // start tolerates and whether the role writes.
 const prepareInTransaction = async (
-  transaction: AuditTransaction<pg.ClientBase>,
-  settings: StoreSettings,
-  context: StartContext,
-  source: Pick<SettingsSource, 'hold'>,
+	transaction: AuditTransaction<pg.ClientBase>,
+	settings: StoreSettings,
+	context: StartContext,
+	source: Pick<SettingsSource, 'hold'>,
 ): Promise<Prepared> => {
-  const { connection } = transaction;
-  await connection.query('SELECT pg_advisory_xact_lock($1)', [START_LOCK]);
-  const limits = await readStatementLimits(connection);
-  const held = await readHeldPrivileges(connection, settings.databaseSchema);
-  const problems = [
-    ...statementLimitProblems(limits, settings.storeTimeoutMilliseconds),
-    ...privilegeProblems(held),
-  ];
-  if (problems.length > 0) {
-    throw new StartRefusal(problems);
-  }
-  await refuseUnknownMigrations(connection, settings.databaseSchema, context);
-  await readStartSettings(connection, settings, source);
-  await checkKeyEncryptionKey(connection, settings);
-  // After the key check: a store under another key-encryption key is refused before anything is recorded.
-  await recordIdentityProvider(transaction, settings);
-  await writeSeededPolicy(transaction, settings);
-  return { tolerated: grantsBeyondUse(held), writes: writesTables(held) };
+	const { connection } = transaction;
+	await connection.query('SELECT pg_advisory_xact_lock($1)', [START_LOCK]);
+	const limits = await readStatementLimits(connection);
+	const held = await readHeldPrivileges(connection, settings.databaseSchema);
+	const problems = [...statementLimitProblems(limits, settings.storeTimeoutMilliseconds), ...privilegeProblems(held)];
+	if (problems.length > 0) {
+		throw new StartRefusal(problems);
+	}
+	await refuseUnknownMigrations(connection, settings.databaseSchema, context);
+	await readStartSettings(connection, settings, source);
+	await checkKeyEncryptionKey(connection, settings);
+	// After the key check: a store under another key-encryption key is refused before anything is recorded.
+	await recordIdentityProvider(transaction, settings);
+	await writeSeededPolicy(transaction, settings);
+	return { tolerated: grantsBeyondUse(held), writes: writesTables(held) };
 };
 
 // The refusal a failure of the start's transaction earns, or the failure itself when it is no fault of
 // a variable's.
 const refusalFor = (failure: unknown): unknown => {
-  if (failure instanceof StoreTimeout) {
-    return new StartRefusal([UNANSWERED]);
-  }
-  if (failure instanceof CommitUnconfirmed) {
-    return new StartRefusal([UNCONFIRMED]);
-  }
-  const problem = connectionProblemOf(failure);
-  return problem === undefined ? failure : new StartRefusal([problem]);
+	if (failure instanceof StoreTimeout) {
+		return new StartRefusal([UNANSWERED]);
+	}
+	if (failure instanceof CommitUnconfirmed) {
+		return new StartRefusal([UNCONFIRMED]);
+	}
+	const problem = connectionProblemOf(failure);
+	return problem === undefined ? failure : new StartRefusal([problem]);
 };
 
 /**
@@ -254,27 +212,27 @@ const refusalFor = (failure: unknown): unknown => {
  *   `COMMIT` the store did not confirm.
  */
 export const prepareStore = async <Connection extends pg.ClientBase>(
-  trail: Pick<AuditTrail<Connection>, 'inTransaction'>,
-  settings: StoreSettings,
-  log: Pick<EventLog, 'error' | 'warning'>,
-  migrations: readonly Migration[],
-  source: Pick<SettingsSource, 'hold'>,
+	trail: Pick<AuditTrail<Connection>, 'inTransaction'>,
+	settings: StoreSettings,
+	log: Pick<EventLog, 'error' | 'warning'>,
+	migrations: readonly Migration[],
+	source: Pick<SettingsSource, 'hold'>,
 ): Promise<PreparedStore> => {
-  const { tolerated, writes } = await trail
-    .inTransaction(SYSTEM, (transaction) =>
-      prepareInTransaction(transaction, settings, { log, migrations }, source),
-    )
-    .catch((failure: unknown) => {
-      throw refusalFor(failure);
-    });
-  tolerated.forEach(({ column, object, privilege }) => {
-    log.warning(GRANT_BEYOND_USE, {
-      ...(column === undefined ? {} : { column }),
-      object,
-      privilege,
-    });
-  });
-  return { writes };
+	const { tolerated, writes } = await trail
+		.inTransaction(SYSTEM, (transaction) =>
+			prepareInTransaction(transaction, settings, { log, migrations }, source),
+		)
+		.catch((failure: unknown) => {
+			throw refusalFor(failure);
+		});
+	tolerated.forEach(({ column, object, privilege }) => {
+		log.warning(GRANT_BEYOND_USE, {
+			...(column === undefined ? {} : { column }),
+			object,
+			privilege,
+		});
+	});
+	return { writes };
 };
 
 /**
@@ -291,17 +249,14 @@ export const prepareStore = async <Connection extends pg.ClientBase>(
  * @throws any other failure of the read, as it was thrown.
  */
 export const checkStatementLimits = async (
-  reader: Pick<StoreReader, 'query'>,
-  settings: Pick<StoreSettings, 'storeTimeoutMilliseconds'>,
+	reader: Pick<StoreReader, 'query'>,
+	settings: Pick<StoreSettings, 'storeTimeoutMilliseconds'>,
 ): Promise<void> => {
-  const limits = await readStatementLimits(reader).catch((failure: unknown) => {
-    throw refusalFor(failure);
-  });
-  const problems = statementLimitProblems(
-    limits,
-    settings.storeTimeoutMilliseconds,
-  );
-  if (problems.length > 0) {
-    throw new StartRefusal(problems);
-  }
+	const limits = await readStatementLimits(reader).catch((failure: unknown) => {
+		throw refusalFor(failure);
+	});
+	const problems = statementLimitProblems(limits, settings.storeTimeoutMilliseconds);
+	if (problems.length > 0) {
+		throw new StartRefusal(problems);
+	}
 };

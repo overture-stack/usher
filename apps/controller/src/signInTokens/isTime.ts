@@ -3,5 +3,4 @@
  *
  * @param value the claim's value.
  */
-export const isTime = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
+export const isTime = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);

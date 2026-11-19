@@ -5,29 +5,23 @@ import type { KeySetFetchFailure } from './types.js';
 // open for long.
 const FETCH_TIMEOUT_MILLISECONDS = 5000;
 
-const LOOPBACK_HOSTS: ReadonlySet<string> = new Set([
-  '127.0.0.1',
-  '[::1]',
-  'localhost',
-]);
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['127.0.0.1', '[::1]', 'localhost']);
 
 /**
  * What one step of a fetch gave: its value, or the fixed cause it failed for, one of the key set's
  * causes unless another set of causes is named.
  */
 export type Step<Value, Cause extends string = KeySetFetchFailure> =
-  { cause: Cause; kind: 'failed' } | { kind: 'obtained'; value: Value };
+	{ cause: Cause; kind: 'failed' } | { kind: 'obtained'; value: Value };
 
 /**
  * A step that failed, for the fixed cause given.
  *
  * @param cause why it failed.
  */
-export const failed = <Cause extends string>(
-  cause: Cause,
-): Step<never, Cause> => ({
-  cause,
-  kind: 'failed',
+export const failed = <Cause extends string>(cause: Cause): Step<never, Cause> => ({
+	cause,
+	kind: 'failed',
 });
 
 /**
@@ -36,8 +30,8 @@ export const failed = <Cause extends string>(
  * @param value what it gave.
  */
 export const obtained = <Value>(value: Value): Step<Value, never> => ({
-  kind: 'obtained',
-  value,
+	kind: 'obtained',
+	value,
 });
 
 /**
@@ -45,26 +39,20 @@ export const obtained = <Value>(value: Value): Step<Value, never> => ({
  *
  * @param value the value.
  */
-export const isRecord = (
-  value: unknown,
-): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+export const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // A URL reached over https, or over http to a loopback host alone, so it crosses no network in the
 // clear.
 const isSecure = (url: URL): boolean =>
-  url.protocol === 'https:' ||
-  (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname));
+	url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname));
 
-const parsedJson = <Cause extends string>(
-  text: string,
-  unreadable: Cause,
-): Step<unknown, Cause> => {
-  try {
-    return obtained(JSON.parse(text));
-  } catch {
-    return failed(unreadable);
-  }
+const parsedJson = <Cause extends string>(text: string, unreadable: Cause): Step<unknown, Cause> => {
+	try {
+		return obtained(JSON.parse(text));
+	} catch {
+		return failed(unreadable);
+	}
 };
 
 /**
@@ -76,19 +64,19 @@ const parsedJson = <Cause extends string>(
  * @param unreadable the cause a body that is not JSON fails for.
  */
 export const fetchedJson = async <Cause extends string>(
-  url: URL,
-  unreadable: Cause,
+	url: URL,
+	unreadable: Cause,
 ): Promise<Step<unknown, Cause | 'status'>> => {
-  const response = await fetch(url, {
-    headers: { accept: 'application/json' },
-    redirect: 'manual',
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MILLISECONDS),
-  });
-  if (response.status === 200) {
-    return parsedJson(await response.text(), unreadable);
-  }
-  await response.body?.cancel();
-  return failed('status');
+	const response = await fetch(url, {
+		headers: { accept: 'application/json' },
+		redirect: 'manual',
+		signal: AbortSignal.timeout(FETCH_TIMEOUT_MILLISECONDS),
+	});
+	if (response.status === 200) {
+		return parsedJson(await response.text(), unreadable);
+	}
+	await response.body?.cancel();
+	return failed('status');
 };
 
 /** An issuer's discovery document: a JSON object, its members as the provider named them. */
@@ -103,15 +91,15 @@ export type DiscoveryDocument = Readonly<Record<string, unknown>>;
  * @param issuer the trusted issuer, as its tokens carry it.
  */
 export const discoveryDocument = async (
-  issuer: string,
+	issuer: string,
 ): Promise<Step<DiscoveryDocument, 'discoveryIssuer' | 'status'>> => {
-  const discovery = await fetchedJson(discoveryUrl(issuer), 'discoveryIssuer');
-  if (discovery.kind === 'failed') {
-    return discovery;
-  }
-  return isRecord(discovery.value) && discovery.value['issuer'] === issuer
-    ? obtained(discovery.value)
-    : failed('discoveryIssuer');
+	const discovery = await fetchedJson(discoveryUrl(issuer), 'discoveryIssuer');
+	if (discovery.kind === 'failed') {
+		return discovery;
+	}
+	return isRecord(discovery.value) && discovery.value['issuer'] === issuer
+		? obtained(discovery.value)
+		: failed('discoveryIssuer');
 };
 
 /**
@@ -121,11 +109,9 @@ export const discoveryDocument = async (
  * @param discovery the issuer's discovery document.
  */
 export const keySetUrl = (discovery: DiscoveryDocument): Step<URL> => {
-  const named = discovery['jwks_uri'];
-  const url = typeof named === 'string' ? URL.parse(named) : null;
-  return url !== null && isSecure(url)
-    ? obtained(url)
-    : failed('keySetLocation');
+	const named = discovery['jwks_uri'];
+	const url = typeof named === 'string' ? URL.parse(named) : null;
+	return url !== null && isSecure(url) ? obtained(url) : failed('keySetLocation');
 };
 
 /**
@@ -139,21 +125,14 @@ export const keySetUrl = (discovery: DiscoveryDocument): Step<URL> => {
  * @param issuer the trusted issuer, whose origin the endpoint must have.
  */
 export const issuerEndpoint = (
-  discovery: DiscoveryDocument,
-  member: string,
-  issuer: string,
+	discovery: DiscoveryDocument,
+	member: string,
+	issuer: string,
 ): Step<URL, 'endpointLocation' | 'endpointOrigin'> => {
-  const named = discovery[member];
-  const url = typeof named === 'string' ? URL.parse(named) : null;
-  if (
-    url !== null &&
-    isSecure(url) &&
-    url.username === '' &&
-    url.password === ''
-  ) {
-    return url.origin === new URL(issuer).origin
-      ? obtained(url)
-      : failed('endpointOrigin');
-  }
-  return failed('endpointLocation');
+	const named = discovery[member];
+	const url = typeof named === 'string' ? URL.parse(named) : null;
+	if (url !== null && isSecure(url) && url.username === '' && url.password === '') {
+		return url.origin === new URL(issuer).origin ? obtained(url) : failed('endpointOrigin');
+	}
+	return failed('endpointLocation');
 };

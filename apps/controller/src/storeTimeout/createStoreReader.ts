@@ -12,15 +12,9 @@ import { withinStoreTimeout } from './withinStoreTimeout.js';
  * @param pool the Controller's pool of store connections.
  * @param timeoutMilliseconds the store timeout.
  */
-export const createStoreReader = (
-  pool: ConnectionPool<pg.PoolClient>,
-  timeoutMilliseconds: number,
-): StoreReader => ({
-  query: <Row extends pg.QueryResultRow>(
-    text: string,
-    values?: readonly unknown[],
-  ): Promise<pg.QueryResult<Row>> =>
-    withinStoreTimeout(pool, timeoutMilliseconds, ({ connection }) =>
-      connection.query<Row>(text, values === undefined ? values : [...values]),
-    ),
+export const createStoreReader = (pool: ConnectionPool<pg.PoolClient>, timeoutMilliseconds: number): StoreReader => ({
+	query: <Row extends pg.QueryResultRow>(text: string, values?: readonly unknown[]): Promise<pg.QueryResult<Row>> =>
+		withinStoreTimeout(pool, timeoutMilliseconds, ({ connection }) =>
+			connection.query<Row>(text, values === undefined ? values : [...values]),
+		),
 });
