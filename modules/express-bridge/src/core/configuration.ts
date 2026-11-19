@@ -1,4 +1,8 @@
-import type { NonEmpty, ValidationProblem } from '@overture-stack/usher-types';
+import {
+  BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+  type NonEmpty,
+  type ValidationProblem,
+} from '@overture-stack/usher-types';
 
 import type { Clock, Clocks } from './clocks.js';
 import type { BridgeLogger, START_REFUSAL_REASONS } from './events.js';
@@ -6,7 +10,7 @@ import type { BridgeLogger, START_REFUSAL_REASONS } from './events.js';
 /** The rule named by a refusal to start. */
 export type StartRefusalReason = (typeof START_REFUSAL_REASONS)[number];
 
-/** The bounds on the bridge's stores, and how long the failure store holds an entry. */
+/** The bounds on the Bridge's stores, and how long the failure store holds an entry. */
 export interface StoreBounds {
   /** How long a rejected token or a failed exchange is held, from 1 s to 60 s; 10 s by default. */
   failureHoldMs: number;
@@ -17,22 +21,22 @@ export interface StoreBounds {
   /** The most accepted credentials held at once, each with its resolved access; 10000 by default. */
   positiveMax: number;
 
-  /** The most credentials refused by the controller held at once; 10000 by default. */
+  /** The most credentials refused by the Controller held at once; 10000 by default. */
   refusalMax: number;
 }
 
 /**
- * What a host passes to the bridge. The bridge reads nothing from the environment; the host supplies
+ * What a host passes to the Bridge. The Bridge reads nothing from the environment; the host supplies
  * every value. Each optional member left out takes its value from {@link CONFIGURATION_DEFAULTS}.
  */
 export interface BridgeConfiguration {
   /**
    * The audience named by this application's Usher tokens, which also identifies the application in
-   * every channel assertion. One bridge serves an audience in a process.
+   * every channel assertion. One Bridge serves an audience in a process.
    */
   audience: string;
 
-  /** The controller's base URL: https, or plain http only to loopback. */
+  /** The Controller's base URL: https, or plain http only to loopback. */
   controllerUrl: string | URL;
 
   /**
@@ -41,14 +45,22 @@ export interface BridgeConfiguration {
    */
   eventSource: string;
 
-  /** How long an exchange with the controller may run before it is abandoned as a timeout; 5 s by default. */
+  /**
+   * The Bridge's timeout for an exchange: how long an exchange with the Controller may run before it
+   * is abandoned as a timeout. By default `BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS` from
+   * `@overture-stack/usher-types`, 5 s, which is also its minimum: the Controller's deadline for an
+   * exchange plus the margin. The Controller answers every exchange by its deadline, and the margin
+   * leaves time for the network and for writing the answer. Below the minimum, the Bridge may give up
+   * on an answer the Controller gives in time, and its start logs `bridge.exchangeTimeoutShort` at
+   * warning. A shorter value is not refused, since the Bridge cannot see the Controller's deadline.
+   */
   exchangeTimeoutMs?: number;
 
   /**
    * The most clauses a record key's filter may hold, counted as OpenSearch counts them once it has
    * rewritten the query; 1024 by default. A principal whose grants render past it is denied that key
-   * with `filter-limit`. The bridge does not compare it with the search engine's own clause limit:
-   * above that limit, a filter passed by the bridge can still be refused by the engine.
+   * with `filter-limit`. The Bridge does not compare it with the search engine's own clause limit:
+   * above that limit, a filter passed by the Bridge can still be refused by the engine.
    */
   filterClauseLimit?: number;
 
@@ -58,12 +70,6 @@ export interface BridgeConfiguration {
    */
   graceMs?: number;
 
-  /**
-   * The most new exchanges in flight at once; 64 by default. A request needing one beyond it is
-   * answered as unavailable and counted as overloaded.
-   */
-  inFlightMax?: number;
-
   /** The issuer required in every accepted Usher token. */
   issuer: string;
 
@@ -72,19 +78,19 @@ export interface BridgeConfiguration {
 
   /**
    * How long past its own `exp` a signed sign-in token is still passed on rather than refused
-   * locally: a finite number of at least zero, 60 s by default. Below the controller's own tolerance,
-   * the bridge refuses tokens the controller would accept.
+   * locally: a finite number of at least zero, 60 s by default. Below the Controller's own tolerance,
+   * the Bridge refuses tokens the Controller would accept.
    */
   localRefusalClockToleranceMs?: number;
 
-  /** Receives every event emitted by the bridge, as described for {@link BridgeLogger}. */
+  /** Receives every event emitted by the Bridge, as described for {@link BridgeLogger}. */
   logger: BridgeLogger;
 
   /** The monotonic clock; `performance.now()` when omitted. */
   monotonicClock?: Clock;
 
   /**
-   * The Usher token payload versions read by this bridge, sent with every exchange: a non-empty list
+   * The Usher token payload versions read by this Bridge, sent with every exchange: a non-empty list
    * of distinct positive whole numbers, each readable by the token reader.
    */
   payloadVersions: NonEmpty<number>;
@@ -112,18 +118,18 @@ export interface BridgeConfiguration {
 
   /**
    * How long the push may stay silent before it is replaced: at most `pollIntervalMs`, and 25 s by
-   * default whatever the poll interval. Under twice the controller's heartbeat plus its jitter, a
+   * default whatever the poll interval. Under twice the Controller's heartbeat plus its jitter, a
    * healthy push is replaced as silent.
    */
   pushIdleMs?: number;
 
   /**
-   * The most bytes read from the controller's answer to an exchange or a poll before it is refused
+   * The most bytes read from the Controller's answer to an exchange or a poll before it is refused
    * unread; 1 MiB by default.
    */
   responseCapBytes?: number;
 
-  /** Bounds on the bridge's stores; each one left out takes its default. */
+  /** Bounds on the Bridge's stores; each one left out takes its default. */
   stores?: Partial<StoreBounds>;
 
   /**
@@ -142,14 +148,13 @@ export interface ResolvedConfiguration {
   audience: string;
   clocks: Clocks;
 
-  /** The controller's base URL, ending in `/` so that every request URL built relative to it keeps its path. */
+  /** The Controller's base URL, ending in `/` so that every request URL built relative to it keeps its path. */
   controllerUrl: URL;
 
   eventSource: string;
   exchangeTimeoutMs: number;
   filterClauseLimit: number;
   graceMs: number;
-  inFlightMax: number;
   issuer: string;
   key: string;
   localRefusalClockToleranceMs: number;
@@ -178,7 +183,7 @@ export type ConfigurationCheck =
     };
 
 /**
- * Every default, frozen so that no bridge in the process can change another's. A configuration
+ * Every default, frozen so that no Bridge in the process can change another's. A configuration
  * giving no `pollRecoveryIntervalMs` gets the smaller of the value here and its own
  * `pollIntervalMs`.
  */
@@ -186,7 +191,6 @@ export const CONFIGURATION_DEFAULTS: Readonly<{
   exchangeTimeoutMs: number;
   filterClauseLimit: number;
   graceMs: number;
-  inFlightMax: number;
   localRefusalClockToleranceMs: number;
   pollDeadlineMs: number;
   pollIntervalMs: number;
@@ -196,16 +200,15 @@ export const CONFIGURATION_DEFAULTS: Readonly<{
   stores: Readonly<StoreBounds>;
   tokenTtlMs: number;
 }> = Object.freeze({
-  exchangeTimeoutMs: 5_000,
+  exchangeTimeoutMs: BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
   filterClauseLimit: 1_024,
   graceMs: 60_000,
-  inFlightMax: 64,
   localRefusalClockToleranceMs: 60_000,
   pollDeadlineMs: 10_000,
   pollIntervalMs: 30_000,
   pollRecoveryIntervalMs: 10_000,
   // Fixed rather than derived from the poll interval: a derived one could fall below what the
-  // controller's heartbeat needs and replace a healthy push as silent.
+  // Controller's heartbeat needs and replace a healthy push as silent.
   pushIdleMs: 25_000,
   responseCapBytes: 1_048_576,
   stores: Object.freeze({
@@ -257,7 +260,7 @@ const LOOPBACK_HOSTS: ReadonlySet<string> = new Set([
 
 const FAILURE_HOLD_BOUNDS = { max: 60_000, min: 1_000 } as const;
 
-/** The least poll interval and recovery interval, so a mistyped value cannot flood the controller. */
+/** The least poll interval and recovery interval, so a mistyped value cannot flood the Controller. */
 const POLL_INTERVAL_MIN_MS = 1_000;
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -282,7 +285,6 @@ const rangedSettings = (
   ['exchangeTimeoutMs', input.exchangeTimeoutMs, 1],
   ['filterClauseLimit', input.filterClauseLimit, 1],
   ['graceMs', input.graceMs, 1],
-  ['inFlightMax', input.inFlightMax, 1],
   ['pollDeadlineMs', input.pollDeadlineMs, 1],
   ['pollIntervalMs', input.pollIntervalMs, POLL_INTERVAL_MIN_MS],
   [
@@ -400,10 +402,6 @@ export const checkConfiguration = (
       CONFIGURATION_DEFAULTS.filterClauseLimit,
     ),
     graceMs: orDefault(input.graceMs, CONFIGURATION_DEFAULTS.graceMs),
-    inFlightMax: orDefault(
-      input.inFlightMax,
-      CONFIGURATION_DEFAULTS.inFlightMax,
-    ),
     pollDeadlineMs: orDefault(
       input.pollDeadlineMs,
       CONFIGURATION_DEFAULTS.pollDeadlineMs,

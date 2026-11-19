@@ -70,16 +70,19 @@ grant through the same permissions system that governs all users.
 
 ## EGO replacement scope
 
-Usher is a full replacement for EGO, not an integration partner. The migration path for
+Usher is a full replacement for EGO, not an integration partner. The replacement path for
 EGO-based instances (primarily iMS):
 
-1. **Resource migration.** Enumerate EGO groups named by a study's identifier and a prefix the
+1. **Resource import.** Enumerate EGO groups named by a study's identifier and a prefix the
    deployment configures, for example `STUDY-<id>`; a study may have several, one per service that
    reads them. Create one Usher resource per study, mapping the study identifier to the resource's
    name and metadata.
-2. **Resource user migration.** Map EGO group members to Usher `grants` rows. EGO user UUIDs resolve
+2. **Membership import.** Map EGO group members to Usher `grants` rows. EGO user UUIDs resolve
    to Keycloak user IDs (both systems use Keycloak-issued UUIDs for the same user population).
-3. **Policy migration.** EGO policies (each named like its group, such as `STUDY-<id>`, with
+   A membership naming the administrator running the import is refused and never written, as
+   the standard grant endpoint refuses self-targeting; that administrator reaches the resource
+   through the self-grant flow below.
+3. **Policy import.** EGO policies (each named like its group, such as `STUDY-<id>`, with
    `WRITE` permission for the corresponding group) map to Usher category grants. The category in
    Usher is instance-specific; the studies management service's implicit "access to this study"
    becomes an explicit category grant (for example, `registered` or `controlled_access` depending
@@ -87,29 +90,29 @@ EGO-based instances (primarily iMS):
 4. **Service retirement.** The studies management service (the orchestration layer over EGO) is
    retired. Its operations (creating a study group, adding a member, removing a member) become
    Usher admin API calls.
-5. **Host application migration.** What must migrate is any code that either calls EGO's
+5. **Host application change.** What must change is any code that either calls EGO's
    authorization endpoints or builds request context from EGO-derived claims. Two categories:
 
    - **Services calling EGO endpoints directly.** Portals and gateway APIs that validate EGO
      tokens or resolve EGO group memberships before serving requests. These are updated to use
-     Usher's bridge and token exchange. For services that verify tokens by public key (RS256),
-     **key rotation is a required migration step, distinct from code changes**: Keycloak uses its
+     Usher's Bridge and token exchange. For services that verify tokens by public key (RS256),
+     **key rotation is a required step of the replacement, distinct from code changes**: Keycloak uses its
      own signing key pair, so the configured public key at each dependent service must be updated
      to the Keycloak signing key before the first Keycloak-issued token is accepted. A service
      still configured with EGO's public key will reject all Keycloak-issued tokens at the signature
-     verification step, regardless of any other migration work.
+     verification step, regardless of any other replacement work.
    - **Authorization callbacks reading EGO-populated context.** Search instances may currently
      express authorization by reading EGO claims that a host application placed into request
      context. That callback code lives in the host application's own repo, not in the data
      service's repo, and would not appear in any audit of the ushered service itself. Identify and
-     migrate these in the same pass.
+     change these in the same pass.
 
    Ushered services that perform no authentication themselves
    (for example, a search-server instance relying entirely on host-supplied context) are not
-   in scope for that migration as shipped: there is no EGO call to repoint. What requires migration
+   in scope for that replacement as shipped: there is no EGO call to repoint. What requires change
    is the host code that constructs that context.
 
-This migration must be planned and coordinated before any EGO infrastructure is deprovisioned.
+This replacement must be planned and coordinated before any EGO infrastructure is deprovisioned.
 
 ---
 
@@ -139,60 +142,53 @@ This migration must be planned and coordinated before any EGO infrastructure is 
 
 ### How Usher determines admin status
 
-Usher reads admin status from the validated OIDC token on every request to the admin API. No
-database lookup is required; the token claim is authoritative.
-
-The claim check is OIDC-provider-specific and configurable via the OIDC connector:
-
-- **Keycloak (default connector):** `realm_access.roles` contains the configured admin
-  role name (default: `usher-platform-admin`).
-- **Generic OIDC connector:** a configurable top-level claim (e.g. `usher_admin: true`), or a
-  path in the token namespace, evaluated against a configured expected value.
-
-Usher never caches or persists admin status between requests. The token is validated and the claim
-is inspected on every admin API call. This is the fail-secure default: if the IdP revokes the
-admin role, the next token issued will not carry the claim, and that user's access to the admin
-API ends at the next token expiry. Keep IdP token lifetimes short (15 minutes or less; see the
-Non-obvious constraints section), which is the identity provider's own setting rather than the
-Usher token's five-minute default.
+Usher keeps its own list of admins and reads admin status from it on every request to the
+Management API. The identity provider's role confers nothing once the first admin has accepted, so
+every act that makes an admin is Usher's own and recorded in its audit log, whoever administers the
+identity provider. Usher never caches admin status between requests, so a change to the list holds
+from the next request.
 
 **Adversarial framing:** if an admin account is compromised, the attacker gains grant
-management power. But every action they take is logged, they do not gain silent unlogged data
-access, and their admin status disappears automatically when the IdP role is revoked.
+management power. But every action they take is logged, and they do not gain silent unlogged data
+access.
 
 ---
 
 ## Bootstrap: how the first admin is established
 
-Usher has no bootstrap logic of its own. The identity provider handles this entirely.
+The seed file names a first user, by a realm role or by the person's subject at the identity
+provider, and the first user nominates the first admin. Usher has no admin until one accepts:
 
-**For Keycloak (the default):**
+1. A Keycloak administrator gives Kim the first-user role the seed file names, `usher-first-user` by
+   default. Where the seed file names Kim's subject instead, nothing is configured in Keycloak.
+2. Kim signs in. Usher records Kim as a base user, so the audit log can name who nominated the first
+   admin.
+3. Kim nominates the first admin: themself, or a user who has signed in at least once.
+4. The nominee accepts, and Usher records its first admin.
+5. From then on the first-user role confers nothing, whoever holds it. Kim is a base user unless
+   Kim was the nominee.
 
-1. At Keycloak instance time, a Keycloak administrator is created via Keycloak's own
-   bootstrap mechanism (the `KC_BOOTSTRAP_ADMIN_USERNAME` / `KC_BOOTSTRAP_ADMIN_PASSWORD`
-   environment variables, set before first launch). In Overture's instances, Terraform's Keycloak
-   provider configures the realm and its clients at deploy time, reducing the need for manual
-   Keycloak UI work.
-2. That Keycloak admin creates a realm for Usher and defines a realm role named
-   `usher-platform-admin` (the exact name is configurable in the Usher connector config).
-3. The Keycloak admin assigns that role to the user who will be the first Usher admin.
-4. When that user authenticates, their OIDC token carries the `usher-platform-admin` claim.
-   Usher reads the claim, recognizes admin status, and the management API and UI become
-   available. No Usher-side initialization is required.
+**Until an admin has accepted, every Management API operation answers `403`**, except the first
+user nominating and the nominee accepting. The health routes and the token exchange answer as
+usual: nothing is registered yet, so a token reaches nothing.
 
-Usher has no `BOOTSTRAP_ADMIN_EMAIL` configuration, no `platform_admins` table, and no startup
-warning for missing admins. Adding or removing admins is a Keycloak (or IdP) operation.
-Usher application code has no role in that lifecycle.
+**Each step is recorded:** the nomination, and its acceptance, which makes the first admin and is
+recorded at `critical`.
 
-**For alternative OIDC providers:** the concept is identical. The provider-specific mechanism
-for assigning the admin signal to a user (a role, a group, a custom claim) is
-configured in the connector. Usher reads the result from the token.
+**Built after the first release, each as a forward migration:** admins nominating and removing
+admins, recovery when no admin can sign in, an admin owning a resource they registered, and adding
+grants from a list of email addresses. Recovery is a command in the Controller's image, run once the
+way the schema migration command is, so it needs no particular pipeline, and its procedure in
+docs/deployment.md § Break-glass access serves any platform.
+
+**For alternative OIDC providers:** the provider's mechanism for marking the first user (a role, a
+group, a custom claim) is configured in the connector, and confers nothing once an admin exists.
 
 **Security note:** the Keycloak realm administrator credential is infrastructure-tier: store it
 in a secrets manager, scope it tightly, and log its use at the instance platform level.
-Usher's audit log records application-layer policy changes; Keycloak's own audit logs record
-IdP-level admin operations. Both are needed for a complete audit trail (see the Non-obvious
-constraints section).
+Usher's audit log records application-layer policy changes, the making of admins among them;
+Keycloak's own audit logs record IdP-level admin operations. Both are needed for a complete audit
+trail (see the Non-obvious constraints section).
 
 ---
 
@@ -299,8 +295,9 @@ decision.
 
 An admin who needs to view data across all resources without a self-grant (for example, a portal
 admin responding to a governance inquiry) can be accommodated at the
-adapter layer rather than through an Usher token entry. The PEP adapter detects the
-`usher-platform-admin` role in the IdP token and applies no SQON filter for that request.
+adapter layer rather than through an Usher token entry. The PEP adapter learns that the principal
+is on Usher's list of admins, never from a role in the IdP token, and applies no SQON filter for
+that request. How an adapter learns it is designed with the bypass, which is not built.
 
 This is distinct from the self-grant flow:
 
@@ -373,23 +370,44 @@ decision on PHI implications before design begins.
 
 ## Service accounts
 
-Automated processes (Lyric at ingest, migration tooling, monitoring scripts) need to interact
+Automated processes (Lyric at ingest, import tooling, monitoring scripts) need to interact
 with Usher without being admins. A service account is a narrowly-scoped, non-human
 identity with an explicitly enumerated permission set.
 
 ### Authentication
 
-Keycloak client credentials flow (OAuth 2.0 `client_credentials` grant, machine-to-machine, no
-user login involved). The Keycloak client for the service has a realm role identifying it as a
-Usher service account (for example, `usher-service-account`). Usher reads this from the token
-to distinguish service account requests from human user requests.
+A service account signs in through the identity provider's client credentials grant (OAuth 2.0
+`client_credentials`: machine to machine, with no user signing in). In Keycloak, a Keycloak client,
+the provider's record of an application, with that grant enabled is given a service-account user,
+and every token issued to it names that user's subject in `sub`. Usher knows a service account by
+that issuer and subject, as it knows a user by theirs.
 
-### Permission model
+### Registration and permissions
 
-Keycloak provides authentication and the coarse-grained signal that the token belongs to a
-service account. Usher maintains its own `service_accounts` table keyed on the `client_id` from
-the token, recording which specific permissions that service account holds. Admins
-manage this table through the Usher management UI.
+An administrator registers a service account by its Keycloak client. Usher looks up the client's
+service-account user once, through the identity provider's user lookup (the connector's lookup
+through the provider's admin API, in the capability table below), and stores that user's subject,
+with the client's id as its display name. It refuses the registration unless the lookup reports
+the user as a service account. The lookup reads with a credential limited to viewing users and
+clients, so the connector can change nothing in the identity provider.
+
+**Where no lookup can say, the registration is recorded as unconfirmed.** The administrator gives
+the subject, read from a token issued to the client, and Usher records the registration as
+unconfirmed at `warning`, so a subject entered in error, a user's in place of a client's, shows in
+the audit trail rather than passing silently. Closing this gap is on the
+[roadmap](../roadmap.md).
+
+**A service account's permissions are held against its registered subject, like any principal's,
+and nothing else in a token decides them:** not `azp`, which a user's token carries too, naming the
+application the user signed in through, and not `client_id` or a realm role.
+
+**A recreated client starts with nothing.** Recreating the client in the identity provider gives
+it a new service-account user, so the new client holds no permission until it is registered again,
+and never inherits a deleted client's.
+
+**At the exchange, a service account holds the baseline and its own grants.** The signed-in rule
+confers on users alone. Each Keycloak client using the client credentials grant must issue tokens
+carrying at least one of the signs under Service account detection below.
 
 Fine-grained permissions (`resource.register` and `category.associate` are examples, and the
 vocabulary is in [permissions-model.md](permissions-model.md#the-capability-vocabulary)) live in
@@ -408,11 +426,12 @@ handles fine-grained authorization.
   write only data-plane grants, never a control-plane one, which is a restriction on the plane
   rather than on a level.
 - They cannot read or modify audit log entries.
-- All service account actions are logged with the `client_id` as the actor, distinguishable
-  from human admin actions in the audit trail.
-- Admins can revoke all permissions for a service account by removing or disabling
-  its entry in the `service_accounts` table. The next service account request will fail the
-  permission check.
+- All service account actions are logged with the service account's subject as the actor, its
+  `actorType` `serviceAccount`, distinguishable from human admin actions in the audit trail.
+- Admins can revoke all permissions for a service account by removing or disabling its
+  registration. Its next request fails the permission check, and the removal sends a principal's
+  revocation on the notice stream, so every Bridge drops the Usher tokens it holds for the account
+  before they expire.
 
 ### Lyric use case
 
@@ -491,16 +510,21 @@ which is why CloudEvents puts routable facts in the envelope.
 
 ## OIDC connector design
 
-Usher reads all admin state from the validated OIDC token. The connector interface must expose:
+Usher reads identity from the validated OIDC token, and admin status from its own list. The connector
+interface must expose:
 
 - **Token validation:** verify signature against the provider's JWKS, check expiry and issuer.
-- **Claim extraction:** pull `sub` (user subject), `email`, and the admin indicator.
-- **Admin claim configuration:** the claim path and value to check are configurable. Default for
-  Keycloak: `realm_access.roles` contains `usher-platform-admin`. For a generic OIDC provider:
-  a configurable top-level claim path and expected value.
-- **Service account detection:** distinguish client credentials tokens from user tokens. For
-  Keycloak: the presence of `azp` (authorized party) and the absence of a human-user `sub`
-  indicate a service account token.
+- **Claim extraction:** pull `sub` (user subject), `email`, and the first-user indicator.
+- **First-user claim configuration:** the claim path and value marking the first user are
+  configurable. Default for Keycloak: `realm_access.roles` contains `usher-first-user`. For a
+  generic OIDC provider: a configurable top-level claim path and expected value. The claim matters
+  only until the first admin accepts.
+- **Service account detection, for refusal only:** where an operation is for users alone, a token
+  carrying any sign of a service account is refused. In Keycloak, the signs are a `client_id` claim,
+  a `preferred_username` starting `service-account-`, or the realm role the instance configures as
+  `USHER_SERVICE_ACCOUNT_ROLE`. Any one sign suffices, so a misread token is refused rather than
+  admitted. Detection never grants anything: a service
+  account's permissions follow its registered subject alone.
 
 The connector is the only component that knows it is talking to a specific provider. The rest of
 Usher's code works with a validated, normalized claim set. The monorepo will contain a
@@ -580,20 +604,20 @@ database access controls are a separate layer. Document this boundary in the ins
 architecture document.
 
 **Keycloak admin operations are outside Usher's audit scope:** actions taken by Keycloak realm
-administrators (assigning or revoking the admin role, disabling user accounts) are
+administrators (assigning the first-user role, disabling user accounts) are
 logged by Keycloak's own audit system, not by Usher's audit log. The boundary must be explicitly
 documented so that security auditors understand that Usher's audit log is not a complete record
 of all privilege changes on the platform. Both logs are required for a complete audit trail.
 
-**Whoever manages a realm's users can make a platform admin:** in Keycloak, holding `manage-users` for a
-realm is enough to assign any role in that realm that is not one of Keycloak's own admin roles, and `usher-platform-admin` is not one. So every administrator who manages the realm's
-users can make someone a platform admin, themselves included, and is trusted at that level: a
-realm's administrators are its system administrators (accepted 2026-10-13). A role meant only for
-user support must get its rights through Keycloak's fine-grained admin permissions rather than
-`manage-users`, so that it cannot assign roles. Such an assignment is recorded only in Keycloak's
-own audit log, as the constraint above says.
+**Whoever manages a realm's users can name a first user, and that confers nothing once an admin
+exists:** in Keycloak, holding `manage-users` for a realm is enough to assign any role in that realm
+that is not one of Keycloak's own admin roles, and `usher-first-user` is not one. Until the first
+admin accepts, a realm's administrators are trusted at that level, since a first user they name
+nominates that admin (accepted 2026-10-13, narrowed 2026-11-15 to the time before the first admin).
+A role meant only for user support must get its rights through Keycloak's fine-grained admin
+permissions rather than `manage-users`, so that it cannot assign roles.
 
-**Token TTL bounds the deprovisioning lag:** when an admin's role is revoked in the identity
+**Token TTL bounds the deprovisioning lag:** when an admin's account is disabled in the identity
 provider, any token they already hold remains valid until expiry. Instances must configure short
 IdP token lifetimes (15 minutes or less) to bound this exposure window. Usher's fail-secure
 default means it always reads the claim from the current token; it never trusts a cached admin

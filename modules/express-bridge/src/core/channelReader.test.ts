@@ -105,6 +105,7 @@ suite('createChannelReader', () => {
 
     for (const [description, key] of [
       ['the poll-answer subkey', subkeyBytes(SUBKEY_LABELS.pollAnswer)],
+      ['the token subkey', subkeyBytes(SUBKEY_LABELS.token)],
       ['the application key itself', TEST_KEY_BYTES],
       [
         "another application's notice subkey",

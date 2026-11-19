@@ -24,7 +24,7 @@ interface NoCredentialPrincipal {
 }
 
 /**
- * A principal presenting a credential not confirmed by the bridge, served only while suspended and
+ * A principal presenting a credential not confirmed by the Bridge, served only while suspended and
  * carrying no subject.
  */
 interface UnconfirmedPrincipal {
@@ -44,7 +44,7 @@ interface ConfirmedPrincipal {
   openTierOnly: boolean;
 
   /**
-   * The identity vouched for by the controller, for log events and for decisions about its own
+   * The identity vouched for by the Controller, for log events and for decisions about its own
    * data.
    */
   subject: string;
@@ -55,7 +55,7 @@ interface ConfirmedPrincipal {
 /** A principal whose confirmed credential's grants are on hold. */
 interface SuspendedPrincipal {
   /**
-   * The identity vouched for by the controller, for attribution in log events alone and never a
+   * The identity vouched for by the Controller, for attribution in log events alone and never a
    * basis for any decision.
    */
   attributionOnlySubject: string;
@@ -68,8 +68,8 @@ interface SuspendedPrincipal {
 /**
  * Who a request is served as, told apart by `credential`:
  * - `none`: no credential is presented;
- * - `unconfirmed`: the credential presented is not confirmed by the bridge;
- * - `confirmed`: the controller vouched for the credential's subject.
+ * - `unconfirmed`: the credential presented is not confirmed by the Bridge;
+ * - `confirmed`: the Controller vouched for the credential's subject.
  *
  * A confirmed principal is also told apart by `suspended`. Only one whose grants hold carries
  * `subject`, so the type gives access to `subject` only once `suspended` is known to be false. A
@@ -82,7 +82,7 @@ export type UsherPrincipal =
   | UnconfirmedPrincipal;
 
 /**
- * A request's access, the same from every bridge: plain, JSON-shaped data carrying decisions,
+ * A request's access, the same from every Bridge: plain, JSON-shaped data carrying decisions,
  * never the token, the payload or the grants behind them.
  */
 export interface UsherRequestAccess {

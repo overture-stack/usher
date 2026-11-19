@@ -15,7 +15,7 @@ export interface ChannelCore {
   /** A check was recorded; `checkStartedAt` is its first page's start on the monotonic clock, in ms. */
   confirmChannel(checkStartedAt: number): void;
 
-  /** History was lost: the controller answered 410 to the poll or the push. */
+  /** History was lost: the Controller answered 410 to the poll or the push. */
   reset(): void;
 }
 
@@ -37,7 +37,7 @@ export interface ChannelOptions {
   /** Signs a fresh channel assertion on each call. */
   assertion: () => Promise<string>;
 
-  /** The controller's base URL, ending in `/`. */
+  /** The Controller's base URL, ending in `/`. */
   controllerUrl: URL;
 
   core: ChannelCore;

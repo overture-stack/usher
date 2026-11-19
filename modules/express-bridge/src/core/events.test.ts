@@ -7,7 +7,7 @@ import {
   type BridgeLogger,
   createChannelFailureTally,
   createEventLog,
-  createOverloadTally,
+  createExchangeFailureTally,
   EVENT_CATALOGUE,
   type EventDefinition,
   type Severity,
@@ -849,8 +849,15 @@ suite('EVENT_CATALOGUE', () => {
   });
 });
 
-suite('createOverloadTally', () => {
-  test('logs nothing until its interval ends, then one token.exchangeFailure counting every overloaded request', (context) => {
+suite('createExchangeFailureTally', () => {
+  /** Each logged failure as its cause and count, in the order of its cause's name. */
+  const failuresLogged = (lines: readonly LoggedLine[]) =>
+    lines
+      .map(({ object }) => object['data'] as { cause: string; count: number })
+      .map(({ cause, count }) => ({ cause, count }))
+      .toSorted((first, second) => first.cause.localeCompare(second.cause));
+
+  test('logs nothing until its interval ends, then one token.exchangeFailure for each cause, carrying its count', (context) => {
     context.mock.timers.enable({ apis: ['setTimeout'] });
     const logger = recordingLogger();
     const events = createEventLog({
@@ -858,23 +865,43 @@ suite('createOverloadTally', () => {
       source: SOURCE,
       wallClock: wallAt(0),
     });
-    const tally = createOverloadTally(events);
+    const tally = createExchangeFailureTally(events);
 
-    tally.record();
-    tally.record();
-    tally.record();
+    tally.record('overloaded');
+    tally.record('backedOff');
+    tally.record('admissionShareExceeded');
+    tally.record('backedOff');
+    tally.record('retryAfter');
+    tally.record('overloaded');
+    tally.record('backedOff');
     context.mock.timers.tick(59_999);
     const beforeTheInterval = logger.lines.length;
     context.mock.timers.tick(1);
 
     assert.equal(beforeTheInterval, 0);
+    assert.deepEqual(failuresLogged(logger.lines), [
+      { cause: 'admissionShareExceeded', count: 1 },
+      { cause: 'backedOff', count: 3 },
+      { cause: 'overloaded', count: 2 },
+      { cause: 'retryAfter', count: 1 },
+    ]);
     assert.deepEqual(
-      logger.lines.map(({ object }) => object['data']),
-      [{ actorId: null, actorType: 'system', cause: 'overloaded', count: 3 }],
+      logger.lines.map(({ level, object }) => [
+        level,
+        object['severity'],
+        object['type'],
+        (object['data'] as { actorType: string }).actorType,
+      ]),
+      Array.from({ length: 4 }, () => [
+        'warn',
+        'warning',
+        'bio.overture.token.exchangeFailure',
+        'system',
+      ]),
     );
   });
 
-  test('starts a fresh count after logging, and logs nothing for an interval with no overload', (context) => {
+  test('starts a fresh count after logging, and logs nothing for an interval with no failure', (context) => {
     context.mock.timers.enable({ apis: ['setTimeout'] });
     const logger = recordingLogger();
     const events = createEventLog({
@@ -882,23 +909,21 @@ suite('createOverloadTally', () => {
       source: SOURCE,
       wallClock: wallAt(0),
     });
-    const tally = createOverloadTally(events);
+    const tally = createExchangeFailureTally(events);
 
-    tally.record();
+    tally.record('overloaded');
     context.mock.timers.tick(60_000);
     context.mock.timers.tick(120_000);
-    tally.record();
+    tally.record('overloaded');
     context.mock.timers.tick(60_000);
 
-    assert.deepEqual(
-      logger.lines.map(
-        ({ object }) => (object['data'] as { count: number }).count,
-      ),
-      [1, 1],
-    );
+    assert.deepEqual(failuresLogged(logger.lines), [
+      { cause: 'overloaded', count: 1 },
+      { cause: 'overloaded', count: 1 },
+    ]);
   });
 
-  test('logs the count held when it stops, so no overloaded request goes unrecorded', (context) => {
+  test('logs the counts held when it stops, so no failure counted goes unrecorded', (context) => {
     context.mock.timers.enable({ apis: ['setTimeout'] });
     const logger = recordingLogger();
     const events = createEventLog({
@@ -906,22 +931,21 @@ suite('createOverloadTally', () => {
       source: SOURCE,
       wallClock: wallAt(0),
     });
-    const tally = createOverloadTally(events);
+    const tally = createExchangeFailureTally(events);
 
-    tally.record();
-    tally.record();
+    tally.record('overloaded');
+    tally.record('retryAfter');
+    tally.record('overloaded');
     tally.stop();
     context.mock.timers.tick(60_000);
 
-    assert.deepEqual(
-      logger.lines.map(
-        ({ object }) => (object['data'] as { count: number }).count,
-      ),
-      [2],
-    );
+    assert.deepEqual(failuresLogged(logger.lines), [
+      { cause: 'overloaded', count: 2 },
+      { cause: 'retryAfter', count: 1 },
+    ]);
   });
 
-  test('ignores a request shed once it has stopped, arming no timer and logging nothing for it', (context) => {
+  test('ignores a failure counted once it has stopped, arming no timer and logging nothing for it', (context) => {
     const timersLeft = liveTimers(context);
     const logger = recordingLogger();
     const events = createEventLog({
@@ -929,11 +953,11 @@ suite('createOverloadTally', () => {
       source: SOURCE,
       wallClock: wallAt(0),
     });
-    const tally = createOverloadTally(events);
+    const tally = createExchangeFailureTally(events);
 
     tally.stop();
-    tally.record();
-    tally.record();
+    tally.record('overloaded');
+    tally.record('backedOff');
     const timersAfterRecording = timersLeft();
     tally.stop();
 

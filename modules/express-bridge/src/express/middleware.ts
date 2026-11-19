@@ -68,7 +68,7 @@ export const ANSWERS: Readonly<{
 /** How long a client is asked to wait before retrying a 503. */
 export const RETRY_AFTER_SECONDS = 5;
 
-// Re-exported so the bridge's consumers need not import usher-types, where it lives because a
+// Re-exported so the Bridge's consumers need not import usher-types, where it lives because a
 // portal's browser code reads it without Express.
 export { SUSPENDED_HEADER };
 
@@ -102,7 +102,7 @@ export const readBearerCredential = (request: Request): CredentialRead => {
   if (lines.length > 1) {
     return { kind: 'malformed', reason: 'multiple' };
   }
-  // The controller decides which characters a credential may hold.
+  // The Controller decides which characters a credential may hold.
   return scheme?.toLowerCase() === 'bearer' && value !== undefined
     ? { credential: value, kind: 'credential' }
     : { kind: 'malformed', reason: 'scheme' };
@@ -138,7 +138,7 @@ const answer = (
  * Express a promise and never calls `next` with an error. It reads no request body, and sets no CORS
  * header beyond adding `WWW-Authenticate` or `Usher-Suspended` to `Access-Control-Expose-Headers`.
  *
- * @param core the bridge core, or anything resolving and reporting as it does.
+ * @param core the Bridge core, or anything resolving and reporting as it does.
  * @param options the host's credential source, when it is not the `Authorization` header. When
  *   omitted, {@link readBearerCredential} reads the credential and `Vary` names `Authorization`.
  */

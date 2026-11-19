@@ -1,0 +1,19 @@
+# The settings, none of them secret, for running the controller and its schema migration command on
+# this machine against the services started by compose.yaml. Give this file before .env:
+#
+#     node --env-file=compose/host-settings --env-file=.env dist/migrate.js
+#     node --env-file=compose/host-settings --env-file=.env dist/main.js
+#
+# The services publish their ports on 127.0.0.1 alone. The seed file is ./seed.json, found by default.
+# The audience list is set because relaying is on by default; Keycloak posts sign-outs to the image
+# profile's controller, so this controller receives none.
+USHER_BACK_CHANNEL_LOGOUT_AUDIENCES=usher-ui
+USHER_DATABASE_SCHEMA=usher
+USHER_DATABASE_URL=postgres://usher_controller@127.0.0.1:5432/usher
+USHER_HOST=127.0.0.1
+USHER_IDENTITY_PROVIDER_ISSUER=http://127.0.0.1:8080/realms/overture
+USHER_INSTANCE_NAME=usher-host-1
+USHER_MANAGEMENT_AUDIENCE=usher-management
+USHER_MANAGEMENT_CLIENTS=usher-ui
+USHER_PORT=3000
+USHER_SCHEMA_MIGRATION_DATABASE_URL=postgres://usher_migration@127.0.0.1:5432/usher

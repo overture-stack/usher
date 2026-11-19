@@ -126,7 +126,7 @@ getting it wrong fails silently in one direction and loudly in the other.
 
 Categories are independent axes: holding a grant for one category does not imply holding a grant
 for another, even within the same resource. What a category name means in terms of actual records
-or fields is instance configuration that lives in the enforcement adapter, not in the controller.
+or fields is instance configuration that lives in the enforcement adapter, not in the Controller.
 
 ### Category grants
 
@@ -153,7 +153,7 @@ Local administrators can revoke an externally-originated grant. Local policy can
 access downward; it cannot grant access not covered by a Visa. The `granted_by` column records the
 origin (internal admin ID or external Visa issuer identifier) for auditability.
 
-**Grant expiry.** The `expires_at` field supports time-limited grants. The controller resolves
+**Grant expiry.** The `expires_at` field supports time-limited grants. The Controller resolves
 expiry when it computes a permissions payload, so a lapsed grant is absent from the next token rather
 than revoked, and the token is issued to expire with the first grant on it to lapse, so it stops
 being honoured when that grant lapses. No revocation event is emitted and nothing
@@ -702,7 +702,7 @@ acting on one becomes an action on whichever entity it joins.
 says whoever governs the category decides which resources carry it. `resource.associateCategory`
 says the resource's owner decides. Those are different answers, and choosing a name quietly chooses
 one, so it waits on custodian scoping. What does not wait: the act emits no audit event today, and
-it is the write that changes what every principal reaches and clears the controller's payload cache.
+it is the write that changes what every principal reaches and clears the Controller's payload cache.
 An event is owed whichever side wins.
 
 ## Entity schema
@@ -874,7 +874,7 @@ the grant records the granter's decision, and a decision row records a grantee's
 Bo rejecting the same grant is an ordinary outcome, and neither touches the grant. Revocation
 therefore acts in one place rather than requiring every path to be found and closed separately.
 
-**`capabilities` is a vocabulary rather than policy, and it lives in controller configuration.** Usher
+**`capabilities` is a vocabulary rather than policy, and it lives in Controller configuration.** Usher
 needs it only so that a permission can name a capability and a management interface can offer the
 right choices. Configuration rather than registration, because a service's capability set changes
 when the service is released rather than at runtime, and a release is already a reviewed change.
@@ -965,7 +965,7 @@ than their omission reading as oversight:
 - `audit_log`. Its events and common fields are listed in
   [audit-events.md](audit-events.md), and the open question is retention against erasure rather
   than shape.
-- **A category version on `resources`.** A change to a resource's categories clears the controller's
+- **A category version on `resources`.** A change to a resource's categories clears the Controller's
   payload cache instead, so nothing counts those changes; a per-principal last-policy-change
   timestamp was rejected earlier because a principal-scoped marker cannot see a resource gaining a
   category. See the fast-path decision in [decisions.md](decisions.md).
@@ -978,12 +978,12 @@ with no categories is ungrantable, since a grant would have nothing to name.
 **`base_tier` and `suppressed` on `resources`.** The base tier is the least access to a resource's
 records, and never a description of the whole resource. Its unmarked records sit at that tier, open,
 registered or by grant, and each of the resource's categories adds a restriction on top of it: a
-resource with base tier open can hold controlled records that need a grant of their own. It is
-copied from the platform's default when the resource is registered, so changing the default later
-changes only resources registered afterwards. What the open and registered tiers grant, `read`
-unless narrowed, is the controller's runtime configuration and is stored nowhere. `suppressed` hides
-the resource from results without touching any grant, set by `resource.suppress` and cleared by
-`resource.restore`.
+resource with base tier open can hold controlled records that need a grant of their own. Each
+registration names it; the platform holds no default. What the open and registered tiers grant is
+set by the instance's grant rules, count, view and export by default, held in its store and changed
+through the Controller.
+`suppressed` hides the resource from results without touching any grant, set by `resource.suppress`
+and cleared by `resource.restore`.
 
 **User identifier discipline.** `users.id` is Usher's own identifier, used by `grants`,
 `grant_decisions` and every other reference inside Usher, and it never leaves Usher. Outside Usher a
@@ -1023,8 +1023,8 @@ The grant attaches only to **an account that holds the invited address, verified
 3. The recipient's account holds a different address. Nothing binds, and the steward invites them
    again at the address their account holds.
 
-Matching rows are migrated to `grants`, with no decision row until the recipient answers, under the
-account's Keycloak subject, and the `invitations` row is deleted after migration. A lookup by address
+Matching rows are claimed into `grants`, with no decision row until the recipient answers, under the
+account's Keycloak subject, and the `invitations` row is deleted after claiming. A lookup by address
 matches any of the account's verified addresses, and only a verified address may bind a grant:
 otherwise claiming an address would be enough to collect grants intended for whoever holds it.
 
@@ -1110,7 +1110,7 @@ acting.
 **Each of these acts is audited.** Creation, the recipient's answer, the binding of an invited
 identity, and revocation each produce an audit entry.
 
-**Claiming an access invitation from an existing account.** The migration above fires when a new
+**Claiming an access invitation from an existing account.** The claim above fires when a new
 account verifies the invited address, which leaves a gap: an invitee whose account already holds that
 address, verified, triggers nothing, so the pending row would wait with nothing to resolve it.
 
@@ -1469,9 +1469,9 @@ categories using the same model that governs record-level access. A user's categ
 determine which fields they can see. A user who holds the `indigenous_data` grant sees fields tagged
 `indigenous_data`; without it, those fields are absent.
 
-**The tagging lives in adapter configuration, not in the controller.** An earlier sketch put it in a
+**The tagging lives in adapter configuration, not in the Controller.** An earlier sketch put it in a
 `field_categories(field_name, category_id)` table here, which would have contradicted the principle
-outright: the controller never learns a field name, and the resource field mapping already lives in adapter
+outright: the Controller never learns a field name, and the resource field mapping already lives in adapter
 config for exactly that reason. Column tagging belongs beside it. That deletes a table rather than
 adding one.
 
@@ -1494,7 +1494,7 @@ this design that exceeds what the seam can express. Established against the firs
 interface rather than inferred.
 
 **That relocates the work and raises its cost.** It is not a mapping added beside the resource field
-mapping; it is a second return channel from the bridge to the adapter, or a widened one, carrying what
+mapping; it is a second return channel from the Bridge to the adapter, or a widened one, carrying what
 to project alongside what to select. Anything that assumed field restriction was configuration should
 be read again with that in mind.
 
@@ -1682,7 +1682,7 @@ cascade, applied in order:
 never changes regardless of ownership transfers. `owner` is a role that can move.
 
 **No-owner invariant.** Operations that would leave a resource without an owner are blocked. If a
-resource becomes ownerless through an abnormal path (data migration, database inconsistency), the
+resource becomes ownerless through an abnormal path (an import, a database inconsistency), the
 system must notify the system administrator. The admin assigns a new owner, which in the first
 release needs no further approval, and the new owner accepts the ownership grant as any grant is
 accepted. Until then the admin may suppress the resource, `resource.suppress`, without resetting
@@ -1865,7 +1865,7 @@ modifying data. Every change is audited in both directions, and what it does to 
 holding grants is covered below.
 
 **Note: a resource with no categories cannot be created.** The choice is required rather than
-defaulted, so skipping it is not an available path. Should one exist anyway, through migration or an
+defaulted, so skipping it is not an available path. Should one exist anyway, through an import or an
 inconsistency, it is invalid: it is not queryable, and it is flagged as needing categorization rather
 than treated as open. That last part is the whole reason for requiring the choice, since a resource
 carrying no categories would otherwise be reachable by everyone by omission.
@@ -2004,12 +2004,12 @@ corresponding grants.
 specific subset of their category (e.g. "indigenous records from community X only"), a grant can
 optionally carry a SQON filter expression that further narrows the records it covers within the
 category. This is a data model extension (an optional `sqon` field on `grants`); it
-requires SQON evaluation permission in the bridge and is deferred to post-MVP.
+requires SQON evaluation permission in the Bridge and is deferred to post-MVP.
 
 ### Role permissions
 
 **Resolved.** A role carries a named set of permissions, and `role_permissions` records which.
-The permissions themselves divide by plane, which decides who enforces them: the controller checks
+The permissions themselves divide by plane, which decides who enforces them: the Controller checks
 a control-plane permission on an admin call, and an adapter checks a data-plane one before a query
 runs. The vocabulary and the roles at each plane are in
 [../docs/atlas/roadmap/rabac-alignment.md](../docs/atlas/roadmap/rabac-alignment.md).
@@ -2117,7 +2117,7 @@ Three MVP paths, none yet chosen:
 made, never written as grants copied onto the new submission at submission time. Copied grants
 outlive the access that produced them, so revoking someone's study access leaves them reading every
 submission made while they held it, silently. Copied grants are also already written when finer
-granularity arrives later, making a narrowing into a data migration. A derivation can simply be
+granularity arrives later, making a narrowing into a data rewrite. A derivation can simply be
 narrowed.
 
 This decision affects: the Lyric service account model (what Usher operations does the service
@@ -2127,11 +2127,11 @@ account perform at submission time?); the entity schema (does submission create 
 **Note on identifier availability.** Current submission tokens carry `context.user.email` but not
 `context.user.sub`. If option 1 or 2 requires creating grants bound to a specific user at
 submission time, the Keycloak `sub` must be present in the token forwarded by the submission service.
-This is a token schema change that must be coordinated with the IdP migration.
+This is a token schema change that must be coordinated with the change of identity provider.
 
 **Current state (iMS submission service).** Read authorization is not implemented: GET requests
 bypass auth middleware entirely, `allowedReadOrganizations` is hardcoded empty, and read
-controllers have no per-organization check. This is a confirmed implementation gap, not a
+Controllers have no per-organization check. This is a confirmed implementation gap, not a
 deliberate design choice. References:
 [submission-service tech-debt](https://github.com/imicroseq/submission-service/blob/a7b6439aa420801939ab6190c75ff6de1ad6d8f9/.dev/tech-debt.md#L27-L29);
 [ego-integration-current-state.md](https://github.com/imicroseq/submission-service/blob/main/.dev/docs/auth/ego-integration-current-state.md).

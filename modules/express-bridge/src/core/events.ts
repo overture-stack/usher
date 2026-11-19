@@ -18,7 +18,7 @@ export interface BridgeLogger {
 }
 
 /**
- * The bridge's mode, derived from the revocation channel's checks and the anonymous payload:
+ * The Bridge's mode, derived from the revocation channel's checks and the anonymous payload:
  *
  * - `cold` from start until an anonymous payload has been accepted and a check recorded, and again
  *   once the grace period has lapsed with no anonymous payload held;
@@ -27,7 +27,7 @@ export interface BridgeLogger {
  */
 export type BridgeMode = 'cold' | 'normal' | 'uncertain';
 
-/** Where inside the bridge an unexpected failure happened. */
+/** Where inside the Bridge an unexpected failure happened. */
 export const INTERNAL_ERROR_STAGES = [
   'attach',
   'extract',
@@ -94,13 +94,23 @@ const CHANNEL_FAILURE_CAUSES = [
   'status',
   'timeout',
 ] as const;
+
+/** The causes of `token.exchangeFailure` logged once for each exchange. */
 const EXCHANGE_FAILURE_CAUSES = [
   'assertionRefused',
   'network',
-  'overloaded',
   'status',
   'timeout',
 ] as const;
+
+/** The causes of `token.exchangeFailure` counted, each logged once per interval with its count. */
+const TALLIED_EXCHANGE_FAILURE_CAUSES = [
+  'admissionShareExceeded',
+  'backedOff',
+  'overloaded',
+  'retryAfter',
+] as const;
+
 const MALFORMED_CREDENTIAL_REASONS = ['multiple', 'query', 'scheme'] as const;
 const NOTICE_KINDS = [
   'baseline',
@@ -133,6 +143,17 @@ type OneOf<Values extends readonly string[]> = Values[number];
 
 /** The fields carried by each event, keyed by the event's name. */
 export interface BridgeEventData {
+  /**
+   * Logged once at start when the configured exchange timeout is below the Controller's exchange
+   * deadline plus the margin, so the Bridge may give up on an answer the Controller gives in time.
+   */
+  'bridge.exchangeTimeoutShort': {
+    /** The exchange timeout the Bridge runs with, in milliseconds. */
+    exchangeTimeoutMs: number;
+
+    /** The least exchange timeout that waits out the Controller's deadline and the margin, in milliseconds. */
+    minimumMs: number;
+  };
   'bridge.internalError': { stage: OneOf<typeof INTERNAL_ERROR_STAGES> };
   'bridge.startRefusal': { reason: OneOf<typeof START_REFUSAL_REASONS> };
   'catalogue.filterLimit': {
@@ -200,8 +221,13 @@ export interface BridgeEventData {
   };
   'revocationChannel.reset': Record<string, never>;
   'token.exchangeFailure':
-    | { cause: Exclude<OneOf<typeof EXCHANGE_FAILURE_CAUSES>, 'overloaded'> }
-    | { cause: 'overloaded'; count: number };
+    | { cause: OneOf<typeof EXCHANGE_FAILURE_CAUSES> }
+    | {
+        cause: TalliedExchangeFailureCause;
+
+        /** How many of this cause were counted in the interval, or, at a stop, so far. */
+        count: number;
+      };
   'token.overtaken': { outcome: OneOf<typeof OVERTAKEN_OUTCOMES> };
   'token.rejection': { reason: OneOf<typeof TOKEN_REJECTION_REASONS> };
 }
@@ -262,6 +288,11 @@ const oneOf = (values: readonly string[]): FieldKind => ({
 export const EVENT_CATALOGUE: Readonly<
   Record<BridgeEventName, EventDefinition>
 > = {
+  'bridge.exchangeTimeoutShort': {
+    actorType: 'system',
+    fields: { exchangeTimeoutMs: count, minimumMs: count },
+    severity: 'warning',
+  },
   'bridge.internalError': {
     actorType: 'system',
     fields: { stage: oneOf(INTERNAL_ERROR_STAGES) },
@@ -363,7 +394,13 @@ export const EVENT_CATALOGUE: Readonly<
   },
   'token.exchangeFailure': {
     actorType: 'system',
-    fields: { cause: oneOf(EXCHANGE_FAILURE_CAUSES), count },
+    fields: {
+      cause: oneOf([
+        ...EXCHANGE_FAILURE_CAUSES,
+        ...TALLIED_EXCHANGE_FAILURE_CAUSES,
+      ]),
+      count,
+    },
     severity: 'warning',
   },
   'token.overtaken': {
@@ -551,25 +588,27 @@ const createTally = <Cause extends string>(
   };
 };
 
-/** Counts overloaded requests, so a flood of them becomes one event per interval. */
-export interface OverloadTally {
-  /** Counts one overloaded request; ignored once stopped. */
-  record(): void;
-
-  /** Logs any count held and cancels the interval, for good: a record after it is ignored. */
-  stop(): void;
-}
+/**
+ * A cause of `token.exchangeFailure` counted rather than logged one by one:
+ * - `admissionShareExceeded`, an exchange answered `503 admissionShareExceeded`;
+ * - `backedOff`, a request answered without an exchange while the Bridge backs off;
+ * - `overloaded`, a request turned away by the in-flight bound;
+ * - `retryAfter`, a credential, or the anonymous fetch, held for the `Retry-After` of any other 503.
+ */
+export type TalliedExchangeFailureCause = OneOf<
+  typeof TALLIED_EXCHANGE_FAILURE_CAUSES
+>;
 
 /**
- * Creates the tally of requests shed beyond the in-flight bound, whose one event per interval is a
- * `token.exchangeFailure` with cause `overloaded`, carrying the count.
+ * Creates the tally of the exchange failures counted rather than logged one by one, whose one event
+ * per cause per interval is a `token.exchangeFailure` carrying that cause's count.
  */
-export const createOverloadTally = (events: EventLog): OverloadTally => {
-  const tally = createTally<'overloaded'>((cause, count) =>
+export const createExchangeFailureTally = (
+  events: EventLog,
+): Tally<TalliedExchangeFailureCause> =>
+  createTally((cause, count) =>
     events.emit('token.exchangeFailure', { cause, count }),
   );
-  return { record: () => tally.record('overloaded'), stop: tally.stop };
-};
 
 /**
  * Creates the tally of the revocation channel's failed checks, whose one event per cause per

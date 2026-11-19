@@ -35,7 +35,7 @@ export interface PushOptions {
   /** Signs a fresh channel assertion on each call. */
   assertion: () => Promise<string>;
 
-  /** The controller's base URL, ending in `/`. */
+  /** The Controller's base URL, ending in `/`. */
   controllerUrl: URL;
 
   events: EventLog;
@@ -98,7 +98,7 @@ const endingForStatus = (status: number): Ending => {
 };
 
 /**
- * Creates the push, which reads the controller's `notices/stream` as Server-Sent Events, resuming
+ * Creates the push, which reads the Controller's `notices/stream` as Server-Sent Events, resuming
  * after its push position with `Last-Event-ID`, or opening from `headPosition` while it holds none.
  * The push confirms no check, and its timers are unreferenced.
  *

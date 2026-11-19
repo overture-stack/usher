@@ -9,7 +9,7 @@ import {
 
 import { SUBKEY_LABELS } from './keys.js';
 
-/** The application key shared by the tests and their controller mock, as bytes. */
+/** The application key shared by the tests and their Controller mock, as bytes. */
 export const TEST_KEY_BYTES: Uint8Array = new Uint8Array(32).fill(7);
 
 /** {@link TEST_KEY_BYTES} as configured: 43 base64url characters. */
@@ -24,9 +24,9 @@ export interface MintOptions {
 
 /**
  * Mints an Usher token: the whole payload, `sub: null` included, under `dir` and A256GCM with `typ`
- * `usher+jwt`, with a fresh IV on every mint. `options.header` is merged over that header when
- * given, and `options.key` replaces the shared test key when given. Rejects when jose refuses the
- * merged header or the key.
+ * `usher+jwt`, under the token subkey of the shared test key, with a fresh IV on every mint.
+ * `options.header` is merged over that header when given, and `options.key` replaces the token
+ * subkey when given. Rejects when jose refuses the merged header or the key.
  */
 export const mintUsherToken = (
   payload: object,
@@ -40,7 +40,7 @@ export const mintUsherToken = (
       typ: 'usher+jwt',
       ...options.header,
     })
-    .encrypt(options.key ?? TEST_KEY_BYTES);
+    .encrypt(options.key ?? subkeyBytes(SUBKEY_LABELS.token));
 
 /**
  * The bytes of a subkey: HKDF-SHA256 over the application key with an empty salt and `label` as

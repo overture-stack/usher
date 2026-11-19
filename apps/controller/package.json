@@ -1,0 +1,39 @@
+{
+  "dependencies": {
+    "fastify": "catalog:",
+    "jose": "catalog:",
+    "pg": "catalog:",
+    "pg-connection-string": "catalog:",
+    "pino": "catalog:",
+    "swagger-ui-dist": "catalog:"
+  },
+  "devDependencies": {
+    "@overture-stack/usher-express-bridge": "workspace:^",
+    "@overture-stack/usher-types": "workspace:^",
+    "@testcontainers/postgresql": "catalog:",
+    "@testcontainers/valkey": "catalog:",
+    "@types/express-serve-static-core": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "eventsource-parser": "catalog:",
+    "express": "catalog:",
+    "fast-check": "catalog:",
+    "prettier": "catalog:",
+    "testcontainers": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "name": "@overture-stack/usher-controller",
+  "private": true,
+  "scripts": {
+    "build": "tsdown",
+    "test": "tsx --conditions=@overture-stack/source --test --test-global-setup=test-support/globalSetup.ts",
+    "test:newest": "USHER_TEST_POSTGRESQL=newest tsx --conditions=@overture-stack/source --test --test-global-setup=test-support/globalSetup.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module"
+}

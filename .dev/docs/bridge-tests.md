@@ -1,14 +1,14 @@
 # Bridge tests: the step 2 plan
 
 In the build order in [phase-1.md](phase-1.md), step 2 is the
-bridge, `@overture-stack/usher-express-bridge`, in this repository: its tests first, with the
-controller mocked, then the bridge itself, then the bridge and the Arranger adapter tested together.
+Bridge, `@overture-stack/usher-express-bridge`, in this repository: its tests first, with the
+Controller mocked, then the Bridge itself, then the Bridge and the Arranger adapter tested together.
 This file is the plan for those tests. The adapter's own plan is step 1's, in Arranger's repository
 at `.dev/docs/arranger-auth/usher-adapter-tests.md`, and this one picks up exactly where it stops.
 
 The build order's two rules apply here as they did there. **The consumer's tests decide the
 interface's shape, and the case table decides its answers.** The adapter has already fixed what it
-needs from the bridge; these tests fix what the bridge needs from the controller.
+needs from the Bridge; these tests fix what the Bridge needs from the Controller.
 
 ---
 
@@ -22,10 +22,10 @@ needs from the bridge; these tests fix what the bridge needs from the controller
 | Caching, and every way a cached token is dropped                      | here                                        |
 | The degraded modes: within the grace period, uncertain, and cold      | here                                        |
 | Attaching the request's access in Express                             | here                                        |
-| The bridge's own log events                                           | here                                        |
-| The bridge and the Arranger adapter together                          | here, at the end of the step                |
-| What the controller computes from grants, groups and decisions        | step 3, the controller's tests              |
-| The schema behind the controller                                      | the schema session, after this plan settles |
+| The Bridge's own log events                                           | here                                        |
+| The Bridge and the Arranger adapter together                          | here, at the end of the step                |
+| What the Controller computes from grants, groups and decisions        | step 3, the Controller's tests              |
+| The schema behind the Controller                                      | the schema session, after this plan settles |
 | Bridges for other frameworks                                          | each its own thin layer over the same core  |
 
 ---
@@ -35,13 +35,13 @@ needs from the bridge; these tests fix what the bridge needs from the controller
 The case table's principal, Ana, has accepted a grant on HEART_STUDY's `controlled` records (case
 5), and this is her first request of the day to the search application.
 
-1. The bridge's middleware, mounted ahead of the GraphQL routers, takes her sign-in token from the
+1. The Bridge's middleware, mounted ahead of the GraphQL routers, takes her sign-in token from the
    request.
-2. Its cache holds no Usher token for her, so it calls the controller mock's exchange with the
+2. Its cache holds no Usher token for her, so it calls the Controller mock's exchange with the
    sign-in token, the application's audience, and the payload versions it can read.
 3. The mock answers with an encrypted token holding case 5's payload from `principals.json`.
-4. The bridge decrypts it with the application's key and checks its type, audience and expiry, and
-   that its payload version is one it listed.
+4. The Bridge decrypts it with the token subkey of the application's key and checks its type,
+   audience and expiry, and that its payload version is one it listed.
 5. It validates the payload against that version's schema.
 6. For each key the adapter registered, it renders an enforcement result from the payload and that
    key's mapping, checks a record narrowing against that payload and the clause limit, and checks
@@ -49,23 +49,23 @@ The case table's principal, Ana, has accepted a grant on HEART_STUDY's `controll
 7. It builds the request's access, her subject and those results, and attaches it with
    `attachAccess` to `res.locals.usher`.
 8. Her next request inside the token's lifetime goes from step 1 to step 6 from the cache, with no
-   call to the controller.
+   call to the Controller.
 
-The value attached in step 7 is exactly what step 1's fake bridge attaches for case 5. That equality
+The value attached in step 7 is exactly what step 1's fake Bridge attaches for case 5. That equality
 is what closes the chain between the two plans.
 
 ---
 
-## The controller mock
+## The Controller mock
 
 The mock follows phase-1's rules for mocks.
 
-- **Seeded from the case table, never from what the bridge asks for.** Its payloads are the entries
+- **Seeded from the case table, never from what the Bridge asks for.** Its payloads are the entries
   in `.dev/design/conformance/principals.json`, keyed by principal.
 - **It refuses anything outside its set.** An unknown principal, an audience it does not serve or a
-  payload version it does not hold is refused, the way the real controller would refuse it.
+  payload version it does not hold is refused, the way the real Controller would refuse it.
 - **It issues real tokens**, encrypted with a test key for the application under test, because
-  decrypting them is what the bridge is for.
+  decrypting them is what the Bridge is for.
 - **It can be stopped**, which is how the grace period, the uncertain mode and the cold start are
   tested.
 - **It serves the channels as scripted events:** revocation notices pushed and polled, category
@@ -74,8 +74,8 @@ The mock follows phase-1's rules for mocks.
   under it, as `resourceCategories`. So does every resource served by the audience, held or not, as
   `servedResources`.
 
-Every endpoint and event the mock serves is a contract the real controller then implements in step 3. That list is the output this plan exists to produce, collected under "What this settles for the
-controller" below.
+Every endpoint and event the mock serves is a contract the real Controller then implements in step 3. That list is the output this plan exists to produce, collected under "What this settles for the
+Controller" below.
 
 ---
 
@@ -88,11 +88,11 @@ the conditions read. A registration gives each key its resource field name, each
 defines as a condition over records, each resource's own categories as conditions under that
 resource, and the global categories it declares absent.
 
-**Expected outputs:** step 1's fixture rows. For each case those rows cover, the bridge must render
-exactly the result step 1's fake bridge holds. The bridge also takes every other case in the case
-table, since rendering is the bridge's job and the adapter only passes results through.
+**Expected outputs:** step 1's fixture rows. For each case those rows cover, the Bridge must render
+exactly the result step 1's fake Bridge holds. The Bridge also takes every other case in the case
+table, since rendering is the Bridge's job and the adapter only passes results through.
 
-**Cases that belong to the bridge alone**, because no payload or no adapter row expresses them:
+**Cases that belong to the Bridge alone**, because no payload or no adapter row expresses them:
 
 | Case                                                                                                                   | Expected                                                                                                                                                                                                       |
 | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -123,7 +123,7 @@ table, since rendering is the bridge's job and the adapter only passes results t
 | every record narrowing rendered from the corpus                                                                        | passes the rendering guard                                                                                                                                                                                     |
 | a record narrowing counting one clause more than `filterClauseLimit`                                                   | `deny`, `filter-limit`, and one `catalogue.filterLimit` per key and payload rendered, an error naming the catalogue and the configured limit; at exactly the limit, served                                     |
 | case 33, a revoked identity                                                                                            | refused at the exchange with `401`, before any query runs                                                                                                                                                      |
-| case 34, an expired sign-in token                                                                                      | refused with `401`, never served as anonymous: by the bridge, with no exchange, once past its `exp` by the tolerance, and by the exchange before that                                                          |
+| case 34, an expired sign-in token                                                                                      | refused with `401`, never served as anonymous: by the Bridge, with no exchange, once past its `exp` by the tolerance, and by the exchange before that                                                          |
 
 Cases 33 and 34 are why `principals.json` omits them: neither produces a payload, so their
 expectation is a refusal and lives here.
@@ -140,19 +140,19 @@ Test names state the requirement.
 | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | a sign-in token and an empty cache                                                                            | one exchange, carrying the token, the audience and the payload versions it can read                                                                                                                 |
 | no sign-in token                                                                                              | the anonymous exchange, with no token sent, and a payload with a null subject                                                                                                                       |
-| a sign-in token the controller refuses as expired or invalid                                                  | case 34: `401`, nothing attached, and no query runs                                                                                                                                                 |
+| a sign-in token the Controller refuses as expired or invalid                                                  | case 34: `401`, nothing attached, and no query runs                                                                                                                                                 |
 | a principal whose identity is revoked                                                                         | case 33: the same `401` and the same text; only the log names the reason                                                                                                                            |
-| a three-part signed token whose own `exp` has passed                                                          | refused locally with the same `401`, under the bridge's `localRefusalClockToleranceMs`, 60 s by default, with no exchange, and never stored in the refusal store                                    |
+| a three-part signed token whose own `exp` has passed                                                          | refused locally with the same `401`, under the Bridge's `localRefusalClockToleranceMs`, 60 s by default, with no exchange, and never stored in the refusal store                                    |
 | an opaque credential, such as an API key                                                                      | exchanged, never refused locally                                                                                                                                                                    |
-| a controller answering `401`, its refusal of the channel assertion                                            | unavailable: `503`, never cached as a refusal, logged as `token.exchangeFailure` with the cause `assertionRefused`, and at startup the bridge stays cold with the reason of a probable key mismatch |
-| an anonymous token whose `aud` does not name this application                                                 | rejected as `audienceRejected`, and the bridge stays cold, logging `revocationChannel.modeChange` with the reason `probableAudienceMismatch` once however often it fetches                          |
+| a Controller answering `401`, its refusal of the channel assertion                                            | unavailable: `503`, never cached as a refusal, logged as `token.exchangeFailure` with the cause `assertionRefused`, and at startup the Bridge stays cold with the reason of a probable key mismatch |
+| an anonymous token whose `aud` does not name this application                                                 | rejected as `audienceRejected`, and the Bridge stays cold, logging `revocationChannel.modeChange` with the reason `probableAudienceMismatch` once however often it fetches                          |
 | two `Authorization` lines, a scheme other than `Bearer`, or an `access_token` query parameter                 | `400` with `error="invalid_request"`, never exchanged and never served as anonymous                                                                                                                 |
-| an Usher token the bridge cannot read, from its header to the validator                                       | treated as not received: `503`, a fixed reason code logged, and the failure held briefly so a broken controller is not asked again on every request                                                 |
+| an Usher token the Bridge cannot read, from its header to the validator                                       | treated as not received: `503`, a fixed reason code logged, and the failure held briefly so a broken Controller is not asked again on every request                                                 |
 | an anonymous exchange answered with a non-null `sub`, or one carrying a credential answered with a null `sub` | the same: not received, `503`                                                                                                                                                                       |
 | concurrent requests carrying one sign-in token                                                                | one exchange                                                                                                                                                                                        |
-| more exchanges in flight than the bridge allows                                                               | `503` for those beyond it                                                                                                                                                                           |
+| more exchanges in flight than the Bridge allows                                                               | `503` for those beyond it                                                                                                                                                                           |
 | an exchange failing for one principal while the notice stream is healthy                                      | that principal served the open tier, marked open-tier only and suspended, and the failure logged                                                                                                    |
-| a controller unreachable                                                                                      | the degraded modes below apply                                                                                                                                                                      |
+| a Controller unreachable                                                                                      | the degraded modes below apply                                                                                                                                                                      |
 
 **Every refused identity gets one response**: `401`, with `WWW-Authenticate: Bearer error="invalid_token"` and the fixed text "Sign in again for a new token, or leave the token out to get the data available to everyone." An expired, an invalid and a revoked identity are told apart in the log alone, so a refusal never tells a token's holder that the account was revoked. A client renews its sign-in token once, and a 401 that persists after a successful renewal is final for that token. A portal then keeps the person signed in, replaces the view with its own refusal, and offers Log out, leaving that choice to the person.
 
@@ -164,13 +164,13 @@ Test names state the requirement.
 | a token whose `aud` does not name this application, beside the same token for this application, read by jose                                                                               | the first rejected as `audienceRejected`, at the core and end to end, and the second served               |
 | a token for another issuer, or missing `aud`                                                                                                                                               | rejected as `claimRejected`, never `audienceRejected`                                                     |
 | a token whose ciphertext was altered                                                                                                                                                       | rejected                                                                                                  |
-| a payload version the bridge did not list                                                                                                                                                  | treated as malformed                                                                                      |
+| a payload version the Bridge did not list                                                                                                                                                  | treated as malformed                                                                                      |
 | `global.unmarked` on HEART_STUDY partitioned by field, then two requests inside the token's lifetime                                                                                       | no HEART_STUDY record through that entry, with exactly one `category.unenforced` recorded for the payload |
 | `globalCategories`, `resourceCategories` or `servedResources` absent or `null`                                                                                                             | malformed: treated as not received, the application reports unavailable, and the rejection is logged      |
 | `resourceCategories` naming a resource `permissions` does not, or omitting one it does, a held category listed in neither member, or `servedResources` leaving out a resource either names | malformed: treated as not received, the application reports unavailable, and the rejection is logged      |
 | a bare `open`, or an unknown prefix such as `local.pilot`                                                                                                                                  | malformed: treated as not received, the application reports unavailable, and the rejection is logged      |
 
-The last two rows are phase-1's table for the case its controller never produces; the bridge's tests
+The last two rows are phase-1's table for the case its Controller never produces; the Bridge's tests
 build those payloads themselves rather than the mock issuing them.
 
 ### Rendering
@@ -186,9 +186,9 @@ build those payloads themselves rather than the mock issuing them.
 | each node a filter holds                                          | weighed as OpenSearch counts it: an `in` 1, an `in` on `__missing__` 2, a range 2, each `not` 1, an `and` or an `or` nothing                                                               |
 | every result                                                      | accepted by the validator in `@overture-stack/usher-types` before it is attached                                                                                                           |
 
-**The narrowing excludes what is not held, one clause per category.** An `and` of the held test, a test withholding the known resources not held, one exclusion for each category some held resource lacks, and the unmarked clause for the held resources whose unmarked records are not held. It grows with categories rather than with resources times categories, which matters once a deployment serves hundreds of studies. These tests read each narrowing back through `parseRecordNarrowing` and compare what it says with the payload and the registration; the suites run together with the adapter compare records, since structure is the bridge's concern and records are what a person sees.
+**The narrowing excludes what is not held, one clause per category.** An `and` of the held test, a test withholding the known resources not held, one exclusion for each category some held resource lacks, and the unmarked clause for the held resources whose unmarked records are not held. It grows with categories rather than with resources times categories, which matters once a deployment serves hundreds of studies. These tests read each narrowing back through `parseRecordNarrowing` and compare what it says with the payload and the registration; the suites run together with the adapter compare records, since structure is the Bridge's concern and records are what a person sees.
 
-**The bridge's two guards stand between a rendered narrowing and the request.** A lost exclusion widens access, so the rendering guard reads every record narrowing back and compares what it says with what it must say, computed from the payload and the registration in a module importing nothing from rendering: the held resources, the complement, each category's condition with its lacking list, and the unmarked clause. Lists compare as sets and conditions by their normalized JSON, and any difference, or a filter the parse refuses, denies the key with `rendering-mismatch`. The tests tamper with one rendered narrowing seven ways, each a fault rendering could make: one exclusion removed, a lacking list shortened by one resource, a complement missing a value, an extra held resource, the unmarked clause dropped, an excluded condition altered, and a missing clause dropped, which the parse refuses. Only a narrowing passing that guard meets the clause guard. It counts the filter's clauses as OpenSearch counts them once it has rewritten the query, since that engine counts across the whole query, rather than counting SQON nodes, and denies the key with `filter-limit` past `filterClauseLimit`, 1024 by default. `filter-limit` means the grants are more than the catalogue's filter can express, not a rule the person broke. These are the bridge's own pair: the "two guards" of [decisions.md](../design/decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches) are the rendering guard and Arranger's refusal of an empty group.
+**The Bridge's two guards stand between a rendered narrowing and the request.** A lost exclusion widens access, so the rendering guard reads every record narrowing back and compares what it says with what it must say, computed from the payload and the registration in a module importing nothing from rendering: the held resources, the complement, each category's condition with its lacking list, and the unmarked clause. Lists compare as sets and conditions by their normalized JSON, and any difference, or a filter the parse refuses, denies the key with `rendering-mismatch`. The tests tamper with one rendered narrowing seven ways, each a fault rendering could make: one exclusion removed, a lacking list shortened by one resource, a complement missing a value, an extra held resource, the unmarked clause dropped, an excluded condition altered, and a missing clause dropped, which the parse refuses. Only a narrowing passing that guard meets the clause guard. It counts the filter's clauses as OpenSearch counts them once it has rewritten the query, since that engine counts across the whole query, rather than counting SQON nodes, and denies the key with `filter-limit` past `filterClauseLimit`, 1024 by default. `filter-limit` means the grants are more than the catalogue's filter can express, not a rule the person broke. These are the Bridge's own pair: the "two guards" of [decisions.md](../design/decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches) are the rendering guard and Arranger's refusal of an empty group.
 
 ### Cache
 
@@ -197,19 +197,19 @@ build those payloads themselves rather than the mock issuing them.
 | a second request carrying the same sign-in token                                               | no exchange                                                                                                                                                        |
 | a sign-in token forged to carry a cached principal's subject                                   | exchanged, never served from the cache, and refused                                                                                                                |
 | an entry past the earlier of its Usher token's `exp` and its sign-in token's `exp`             | dropped, so the next request exchanges again                                                                                                                       |
-| a sign-in token refused by the controller, sent again inside the TTL and before its `exp`      | refused from the refusal store, with no exchange                                                                                                                   |
-| a refusal at its TTL on the monotonic clock, or at its sign-in token's `exp` on the wall clock | the controller asked again; a millisecond before, refused from the store                                                                                           |
+| a sign-in token refused by the Controller, sent again inside the TTL and before its `exp`      | refused from the refusal store, with no exchange                                                                                                                   |
+| a refusal at its TTL on the monotonic clock, or at its sign-in token's `exp` on the wall clock | the Controller asked again; a millisecond before, refused from the store                                                                                           |
 | a flood of unique refused tokens                                                               | the refusal store evicts its own entries, and no principal's entry is evicted                                                                                      |
 | the positive, refusal or failure store full, and one entry more                                | its least recently used entry evicted, so that principal is exchanged again, that refusal asked again, or that failure no longer held; an entry used since is kept |
 | 4,097 distinct rendered results                                                                | the least recently used interned result evicted; one used since is still shared                                                                                    |
 | two principals                                                                                 | separate entries, and neither's access ever attached to the other's request                                                                                        |
 | anonymous requests                                                                             | one shared entry, fetched at startup and kept fresh                                                                                                                |
 
-**The cache is keyed by a SHA-256 digest of the whole sign-in token, never by a claim inside it.** The bridge never validates a sign-in token itself, so a subject read from one is whatever its sender wrote. Entries are also indexed by the subject from the decrypted Usher payload, which the bridge can trust, so a notice naming a principal finds every entry of theirs. Positive entries and refusals live in separate bounded stores.
+**The cache is keyed by a SHA-256 digest of the whole sign-in token, never by a claim inside it.** The Bridge never validates a sign-in token itself, so a subject read from one is whatever its sender wrote. Entries are also indexed by the subject from the decrypted Usher payload, which the Bridge can trust, so a notice naming a principal finds every entry of theirs. Positive entries and refusals live in separate bounded stores.
 
 ### Revocation and invalidation
 
-**One notice stream carries every kind**, pushed and polled alike: a principal's revocation, a category change, the baseline change, a global revocation and a sign-out. Each notice holds a position in one sequence the controller issues. A pushed event carries it as its id, a reconnecting push resumes with `Last-Event-ID`, and the poll asks for the notices after a position rather than after a time, so neither clock skew nor a late-committing write loses one.
+**One notice stream carries every kind**, pushed and polled alike: a principal's revocation, a category change, the baseline change, a global revocation and a sign-out. Each notice holds a position in one sequence the Controller issues. A pushed event carries it as its id, a reconnecting push resumes with `Last-Event-ID`, and the poll asks for the notices after a position rather than after a time, so neither clock skew nor a late-committing write loses one.
 
 | Given                                      | Then                                                                                                     |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -219,8 +219,8 @@ build those payloads themselves rather than the mock issuing them.
 | a category change announced for a resource | every entry naming that resource dropped, the anonymous one included, and every other kept               |
 | a baseline-change notice                   | every entry dropped, the anonymous one included, since every payload carries the baseline; refusals kept |
 | a global revocation                        | every entry dropped, refusals included                                                                   |
-| a sign-out from the identity provider      | relayed by the controller as a principal notice, so every bridge drops that person's entries             |
-| a poll answered within its deadline        | a successful check, timed on the bridge's own clock                                                      |
+| a sign-out from the identity provider      | relayed by the Controller as a principal notice, so every Bridge drops that person's entries             |
+| a poll answered within its deadline        | a successful check, timed on the Bridge's own clock                                                      |
 | a poll not answered within its deadline    | aborted at the deadline, no check, and retried at once                                                   |
 | a push event, with every poll held back    | its notices applied, but no check, so the grace period still runs out                                    |
 
@@ -234,9 +234,9 @@ build those payloads themselves rather than the mock issuing them.
 | the anonymous entry at its TTL on the monotonic clock, before its own `exp` | in normal mode, anonymous requests answered `503`; a millisecond before, served                                                                                                                                                                                                                                           |
 | uncertain, and the anonymous payload's own `exp` passing                    | still honoured, until the stream returns                                                                                                                                                                                                                                                                                  |
 | uncertain, then the stream returning                                        | read from the last position, every notice applied before any grant is honoured again, then normal, and the mode change logged                                                                                                                                                                                             |
-| the controller unreachable since the bridge started                         | cold: `503` before any read path runs, nothing attached                                                                                                                                                                                                                                                                   |
+| the Controller unreachable since the Bridge started                         | cold: `503` before any read path runs, nothing attached                                                                                                                                                                                                                                                                   |
 
-**What an application does with a suspended principal is its adapter's to test**, since only the application knows which operation a request is: a search is served the open tier, a suspended principal's export answers `503`, a fetch that only a grant could answer answers `503` for a missing object too, and a write answers `503`. The rule is in [adapter-integration.md](../design/adapter-integration.md). The bridge's part is the two marks.
+**What an application does with a suspended principal is its adapter's to test**, since only the application knows which operation a request is: a search is served the open tier, a suspended principal's export answers `503`, a fetch that only a grant could answer answers `503` for a missing object too, and a write answers `503`. The rule is in [adapter-integration.md](../design/adapter-integration.md). The Bridge's part is the two marks.
 
 ### The Express layer
 
@@ -256,30 +256,30 @@ build those payloads themselves rather than the mock issuing them.
 
 ### Together with the adapter
 
-Step 1's suites through the GraphQL router run once more, with this bridge and the controller mock
-in place of step 1's fake bridge. Every row must still pass. A row that passes against the fake and
-fails against the real bridge is a disagreement between the two plans, and it is settled before
+Step 1's suites through the GraphQL router run once more, with this Bridge and the Controller mock
+in place of step 1's fake Bridge. Every row must still pass. A row that passes against the fake and
+fails against the real Bridge is a disagreement between the two plans, and it is settled before
 either is changed.
 
 ---
 
-## What this settles for the controller
+## What this settles for the Controller
 
-These are the contracts the mock serves. They are what the real controller implements in step 3,
+These are the contracts the mock serves. They are what the real Controller implements in step 3,
 and the channel half of the schema is designed from them.
 
-| Contract                      | What the bridge's tests fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Contract                      | What the Bridge's tests fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The exchange                  | `POST` to `exchange` under the controller URL, authenticated by the channel assertion as the stream is, so the audience is the assertion's and never a body field; a JSON body of the credential, absent when anonymous, and the payload versions the bridge reads; answered `200` with the compact JWE as `application/jwt` and `Cache-Control: no-store`; one `403` with a fixed body for an expired, invalid or revoked identity, and `401` only for a refused channel assertion, as HTTP reads the request's own `Authorization`; an Usher token's `exp` capped at the sign-in token's `exp` |
-| The notice stream             | one sequence across every kind, pushed with event ids and polled after a position. Positions must follow commit order, so the controller serializes notice writes or serves a poll only below its oldest open transaction. Under the controller URL: the poll is `GET notices?after=<cursor>&nonce=<nonce>`, or `head=true` in place of `after`, and the push is `GET notices/stream` with `Accept: text/event-stream`; both carry the channel assertion and an `Usher-Notice-Versions` header listing the notice versions the bridge reads, comma-separated                                     |
-| Category-change announcements | what identifies the resource, and how a bridge learns which entries name it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Sign-outs                     | the controller receives the identity provider's back-channel logout, and relays it as a principal notice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| The exchange                  | `POST` to `exchange` under the Controller URL, authenticated by the channel assertion as the stream is, so the audience is the assertion's and never a body field; a JSON body of the credential, absent when anonymous, and the payload versions the Bridge reads; answered `200` with the compact JWE as `application/jwt` and `Cache-Control: no-store`; one `403` with a fixed body for an expired, invalid or revoked identity, and `401` only for a refused channel assertion, as HTTP reads the request's own `Authorization`; an Usher token's `exp` capped at the sign-in token's `exp` |
+| The notice stream             | one sequence across every kind, pushed with event ids and polled after a position. Positions must follow commit order, so the Controller serializes notice writes or serves a poll only below its oldest open transaction. Under the Controller URL: the poll is `GET notices?after=<cursor>&nonce=<nonce>`, or `head=true` in place of `after`, and the push is `GET notices/stream` with `Accept: text/event-stream`; both carry the channel assertion and an `Usher-Notice-Versions` header listing the notice versions the Bridge reads, comma-separated                                     |
+| Category-change announcements | what identifies the resource, and how a Bridge learns which entries name it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Sign-outs                     | the Controller receives the identity provider's back-channel logout, and relays it as a principal notice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | The baseline-change notice    | its shape                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Category members              | computed with the payload from the same snapshot: `globalCategories` listing every concrete global category Usher defines, and `resourceCategories` listing, for every resource named in `permissions`, its own categories, held or not; both present even when empty, and refreshed by the category-change notice that drops entries naming the resource                                                                                                                                                                                                                                        |
 | Served resources              | computed with the payload from the same snapshot: `servedResources` listing every resource served by the audience, held or not, each once, every resource `permissions` and `resourceCategories` name among them; present even when the audience serves none                                                                                                                                                                                                                                                                                                                                     |
 | Resource identifiers          | literal values: registration refuses a name holding any marker in the list `usher-types` exports as `SPECIAL_VALUE_MARKERS`                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Clock tolerance               | the controller's tolerance for a sign-in token's `exp` never exceeds the bridges' local-refusal tolerance, 60 s by default, or a bridge would refuse a token the controller accepts                                                                                                                                                                                                                                                                                                                                                                                                              |
-| The subject tag               | HMAC-SHA256 of the subject under the subkey derived from the application key with HKDF-SHA256, an empty salt and the info `usher/v1/subject-tag`, encoded as base64url without padding; the controller and the bridge produce the same string                                                                                                                                                                                                                                                                                                                                                    |
+| Clock tolerance               | the Controller's tolerance for a sign-in token's `exp` never exceeds the Bridges' local-refusal tolerance, 60 s by default, or a Bridge would refuse a token the Controller accepts                                                                                                                                                                                                                                                                                                                                                                                                              |
+| The subject tag               | HMAC-SHA256 of the subject under the subkey derived from the application key with HKDF-SHA256, an empty salt and the info `usher/v1/subject-tag`, encoded as base64url without padding; the Controller and the Bridge produce the same string                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
 
@@ -313,13 +313,13 @@ and the channel half of the schema is designed from them.
 
 ## Open for review
 
-- **The poll deadline's default**, set with the controller, below the grace period less the poll
+- **The poll deadline's default**, set with the Controller, below the grace period less the poll
   interval. The liveness rows are written to the rule that a check is only a poll answered within its
   deadline.
-- **The bound on exchanges in flight**, which the controller sets and tells its bridges. Its row
-  holds whatever the number is; how a bridge learns it adds rows when it is designed.
-- **Whether the controller mock outlives the controller**, wired to the conformance corpus as phase-1
+- **The bound on exchanges in flight**, which the Controller sets and tells its Bridges. Its row
+  holds whatever the number is; how a Bridge learns it adds rows when it is designed.
+- **Whether the Controller mock outlives the Controller**, wired to the conformance corpus as phase-1
   suggests, or retires when step 3 lands.
-- **`generatedAt` acting on its own.** A bridge forcing a recomputation once a payload passes some age
+- **`generatedAt` acting on its own.** A Bridge forcing a recomputation once a payload passes some age
   is open and unbuilt, so nothing here tests it.
 - **Writes during the uncertain mode** answer `503`. Queueing them until the stream returns is revisited with the submission step, which is the first that writes.

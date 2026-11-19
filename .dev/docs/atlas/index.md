@@ -38,10 +38,10 @@ on disk against entries here; a sweep starting from either list cannot find what
 ## Bridge
 
 - [Bridge core and Express layer](bridge/core-and-express-layer.md): research; the framework-free core, its state machine, bounded stores, coalescing and in-flight bound, and the thin Express layer
-- [jose for the Usher token](bridge/jose-usher-token.md): research; how the bridge decrypts and validates the Usher token with jose, every option pinned, and how the controller mock mints tokens
-- [Packaging the bridge](bridge/packaging-and-toolchain.md): research; ESM-only packages built by tsdown, declarations across TypeScript versions, the Express Locals declaration and the test toolchain
+- [jose for the Usher token](bridge/jose-usher-token.md): research; how the Bridge decrypts and validates the Usher token with jose, every option pinned, and how the Controller mock mints tokens
+- [Packaging the Bridge](bridge/packaging-and-toolchain.md): research; ESM-only packages built by tsdown, declarations across TypeScript versions, the Express Locals declaration and the test toolchain
 - [Revocation notice stream](bridge/revocation-notice-stream.md): research; push over SSE read with fetch, a poll that always runs, two positions, and both liveness rules
-- [Sign-in signature precheck](bridge/signin-signature-precheck.md): research; why the bridge does not check a sign-in token's signature before the exchange, and the flood that leaves open
+- [Sign-in signature precheck](bridge/signin-signature-precheck.md): research; why the Bridge does not check a sign-in token's signature before the exchange, and the flood that leaves open
 
 ## Practice
 

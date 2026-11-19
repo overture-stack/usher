@@ -22,7 +22,7 @@ paste them into scripts and pipelines. Keeping the format costs nothing and is n
 went this way.
 
 **What it costs, stated plainly.** The check runs in Usher's exchange path, so Keycloak and the
-plugin become an availability dependency. The rate is the mitigating fact: a bridge exchanges once
+plugin become an availability dependency. The rate is the mitigating fact: a Bridge exchanges once
 per TTL window per principal rather than once per request, so a hundred requests a minute is one
 check every five minutes, not five hundred.
 
@@ -71,8 +71,8 @@ on Usher's path it will quietly do less. That is a usability problem rather than
 to the interface: the profile view already needs to show a person what they hold, so it can offer the
 scope choices rather than accept free text.
 
-**Migration.** Song and Score consume EGO-style scopes today. Those scopes stop mattering as the two
-services move to Usher enforcement, so this is a program-level migration rather than a field-format change,
+**EGO replacement.** Song and Score consume EGO-style scopes today. Those scopes stop mattering as the two
+services move to Usher enforcement, so this is a program-level change rather than a field-format change,
 and both forms exist in the meantime.
 
 **Open: the format.** Usher enforces at resource level for MVP, so the system can actually narrow a
@@ -146,7 +146,7 @@ A stored key whose scope does not parse is unreadable rather than unrecognized, 
 on the whole key rather than on one entry. A format settled while keys are already being issued in it
 therefore breaks keys rather than degrading them.
 
-If both forms coexist during migration, both have to satisfy the suffix rule, or the model changes
+If both forms coexist during the replacement, both have to satisfy the suffix rule, or the model changes
 before either does.
 
 ---

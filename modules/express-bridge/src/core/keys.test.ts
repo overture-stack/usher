@@ -19,7 +19,7 @@ import {
 const KEY_BYTES = Buffer.alloc(32, 7);
 const KEY = KEY_BYTES.toString('base64url');
 
-/** The subkey a controller derives with node:crypto, which the bridge's WebCrypto derivation must match. */
+/** The subkey a Controller derives with node:crypto, which the Bridge's WebCrypto derivation must match. */
 const controllerSubkey = (label: string): Buffer =>
   Buffer.from(hkdfSync('sha256', KEY_BYTES, new Uint8Array(0), label, 32));
 
@@ -46,15 +46,53 @@ const decrypted = async (
   ).toString('utf8');
 
 suite('importApplicationKey', () => {
-  test('imports the token key from the application key itself, decrypting what was sealed under it', async () => {
+  test('labels each subkey as the controller labels it, one label for each use, the Usher token included', () => {
+    assert.deepEqual(SUBKEY_LABELS, {
+      channelAssertion: 'usher/v1/channel-assertion',
+      notice: 'usher/v1/notice-encryption',
+      pollAnswer: 'usher/v1/poll-answer',
+      subjectTag: 'usher/v1/subject-tag',
+      token: 'usher/v1/token-encryption',
+    });
+  });
+
+  test('derives the token key as the controller does, from its own label, decrypting what was sealed under that subkey', async () => {
     const keys = await importApplicationKey(KEY);
 
     const opened = await decrypted(
       keys.tokenKey,
-      aesGcmSealed(KEY_BYTES, 'an Usher token'),
+      aesGcmSealed(
+        controllerSubkey('usher/v1/token-encryption'),
+        'an Usher token',
+      ),
     );
 
     assert.equal(opened, 'an Usher token');
+  });
+
+  test('refuses with the token key what was sealed under the application key itself or under another of its subkeys', async () => {
+    const keys = await importApplicationKey(KEY);
+    const others = [
+      KEY_BYTES,
+      controllerSubkey(SUBKEY_LABELS.notice),
+      controllerSubkey(SUBKEY_LABELS.pollAnswer),
+    ];
+
+    const refusals = await Promise.all(
+      others.map((keyBytes) =>
+        decrypted(keys.tokenKey, aesGcmSealed(keyBytes, 'an Usher token')).then(
+          () => 'decrypted',
+          (error: unknown) =>
+            error instanceof Error ? error.name : 'not an error',
+        ),
+      ),
+    );
+
+    assert.deepEqual(refusals, [
+      'OperationError',
+      'OperationError',
+      'OperationError',
+    ]);
   });
 
   test('derives the notice and poll-answer keys as the controller does, from their own labels', async () => {

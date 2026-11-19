@@ -58,7 +58,7 @@ const rejectOnAbort = (signal: AbortSignal, reject: (error: Error) => void) => {
   });
 };
 
-/** A controller answering each request as `respond` says, recording what it was asked. */
+/** A Controller answering each request as `respond` says, recording what it was asked. */
 const fakeController = (
   respond: (request: SeenRequest, index: number) => Answer | Promise<Answer>,
 ) => {
@@ -108,7 +108,7 @@ const fakeController = (
   return { fetch, requests };
 };
 
-/** A 200 answering `request` as the controller would, echoing its nonce and `after`. */
+/** A 200 answering `request` as the Controller would, echoing its nonce and `after`. */
 const echoing = async (
   request: SeenRequest,
   members: Record<string, unknown> = {},
@@ -377,7 +377,7 @@ suite('createPoll', () => {
     }
 
     /**
-     * A controller answering each request from `script`, keyed by the cursor asked after or `head`,
+     * A Controller answering each request from `script`, keyed by the cursor asked after or `head`,
      * and 503 for one it has no page for or once `limit` requests have been made, so a check that
      * never stops asking still ends.
      */
@@ -1459,7 +1459,7 @@ suite('createPoll', () => {
   suite('while checks are failing', () => {
     /**
      * Ticks to 1 ms before `delayMs` has passed, then to its end, and returns how many requests the
-     * controller had seen before it ended.
+     * Controller had seen before it ended.
      */
     const requestsBefore = async (
       context: TestContext,

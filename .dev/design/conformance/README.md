@@ -10,7 +10,7 @@ hosting it are separate, and moving it is a step of its own.
 Each entry is a principal and the `PermissionsPayload` handed to an application on their behalf by a
 conformance run. The payloads are verbatim in the shape defined by
 [security-workflow.md](../security-workflow.md#the-payload-as-a-type), so an adapter can deserialize
-them with the bridge's own type.
+them with the Bridge's own type.
 
 **It is an input, never an expectation.** What an application should serve given one of these lives
 in `expectations.json`. The split matters because the two answer different questions of different
@@ -20,7 +20,7 @@ systems, and one file cannot hold both.
 
 Every entry traces to a numbered case in
 [token-calculation.md](../token-calculation.md#the-cases-that-force-each-branch), carried in its
-`case` field. Those cases assert what the controller _computes_; this file is the computed result,
+`case` field. Those cases assert what the Controller _computes_; this file is the computed result,
 which is the input to what an application then _serves_. The two corpora chain at exactly this file.
 
 Cases that produce no payload are absent, with a `notes` entry saying why. Case 25 is the clear one:
@@ -97,7 +97,7 @@ Cases 28 to 35 were computed against a second configuration, and each carries
     The audience serves all four resources.
 
 Two of its cases have no payload and are listed under `omitted`, both refusals: 33 at the exchange,
-and 34 at the bridge once the sign-in token is past its `exp` by the bridge's tolerance, or at the
+and 34 at the Bridge once the sign-in token is past its `exp` by the Bridge's tolerance, or at the
 exchange before that. Each belongs to those components' tests rather than to a payload.
 
 ## What each payload says a resource offers
@@ -157,7 +157,7 @@ a key. Whether withholding, case 21's mechanism, is configured in the registrati
 payload, a case already names both, so case 21 needs only records carrying the field read by
 withholding, each still served or withheld.
 
-**A case enters `expectations.json` only once it is implementable.** The bridge's test reading the
+**A case enters `expectations.json` only once it is implementable.** The Bridge's test reading the
 file, `modules/express-bridge/src/core/rendering.conformance.test.ts`, and `.dev/check-fixtures.py`
 each fail on a case there marked `"implementable": false` in `principals.json`, rather than skipping
 it: a skip would let the flag switch an assertion off with nothing announcing it.
@@ -169,7 +169,7 @@ One entry carries `"implementable": false`, case 21. It is a case rather than a 
 is a description.
 
 It carries an ordinary payload, case 05's, since nothing in a payload can express withholding, and
-that payload is what a correct controller emits. It is the only case distinguishing the two readings
+that payload is what a correct Controller emits. It is the only case distinguishing the two readings
 of the model, additive grants against a narrowed ceiling, and until something can withhold, no test
 can catch an implementation that gets the direction wrong. Writing it before the feature pins the
 invariant.

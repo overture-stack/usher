@@ -27,9 +27,9 @@ data through an MCP server, which calls the search server that holds it.
    server (OAuth 2.0 Token Exchange, RFC 8693, supported by Keycloak from 26.2). The new token's `azp`
    names the MCP server, the client that asked for it.
 4. The MCP server calls the search server with the exchanged token.
-5. The search server's bridge exchanges that token with Usher's controller as it does any sign-in
+5. The search server's Bridge exchanges that token with Usher's Controller as it does any sign-in
    token, sending its own audience identifier, as it already does.
-6. The controller validates the token, its audience included, computes the person's permissions,
+6. The Controller validates the token, its audience included, computes the person's permissions,
    and records the person as the subject and the MCP server as the actor.
 7. The adapter narrows the query to the person's grants, so the MCP server receives exactly what the
    person would see asking directly, and nothing more.
@@ -41,11 +41,11 @@ is decided by that person's grants alone, and Usher's trail records both, so it 
 read this for Ana" rather than "the assistant read this". A client never gains access by acting for
 someone, and a client reading for nobody is a service account with grants of its own. The
 alternative, a client holding broad grants and filtering for each person itself, puts enforcement
-back inside the client, which is what the bridge exists to prevent.
+back inside the client, which is what the Bridge exists to prevent.
 
 **B: a sign-in token works only at an application it is addressed to.** Decided 2026-10-16. The
-controller accepts a sign-in token from a bridge only when the token's `aud` claim names that
-bridge's application. The identity provider writes the addresses, and Usher checks them; the
+Controller accepts a sign-in token from a Bridge only when the token's `aud` claim names that
+Bridge's application. The identity provider writes the addresses, and Usher checks them; the
 identity provider enforces nothing. The threat is a token captured at one place, on a device, in a
 log or by a proxy, being replayed directly at an application it was not meant for.
 

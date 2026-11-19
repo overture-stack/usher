@@ -1,0 +1,37 @@
+# The build context holds only what an image build reads: the workspace's manifests and lockfile, the
+# base TypeScript settings, and the controller's own folder. Anything else, such as .git, .dev,
+# .claude and its worktrees, and the libraries' sources, never enters it.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!apps/controller/
+**/seed.json
+!modules/*/package.json
+
+# Within what is let in: installed dependencies, build output, test builds, logs, coverage, packed
+# packages and every environment file.
+**/node_modules
+**/dist
+**/*.tmp
+**/*.log
+**/coverage
+**/*.tgz
+**/*.tsbuildinfo
+**/.env*
+**/.DS_Store
+
+# The controller's local development setup, which no image build reads.
+apps/controller/compose.yaml
+apps/controller/compose/
+apps/controller/scripts/
+
+# The controller's tests and its development guide, which no image build reads either, so a change to
+# them alone leaves the image unchanged. Its contract, openapi.json, stays in, since the build bundles
+# it.
+apps/controller/test/
+apps/controller/test-support/
+apps/controller/DEVELOPMENT.md
+apps/controller/tsdown.config.test.ts
+apps/controller/**/*.test.ts

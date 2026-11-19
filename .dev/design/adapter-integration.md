@@ -9,7 +9,7 @@ and response bodies, error codes, and the compile-time field names and types for
 ## Concept
 
 Each Overture application integrates with Usher via a **PEP adapter**: a library package specific
-to that app, working with the shared bridge. Their responsibilities together:
+to that app, working with the shared Bridge. Their responsibilities together:
 
 1. Intercept incoming requests and extract the user's IdP bearer token.
 2. Exchange the IdP token for an Usher token in JWE form (on first request or after TTL expiry).
@@ -19,42 +19,42 @@ to that app, working with the shared bridge. Their responsibilities together:
 5. Maintain the revocation channel (push subscription + poll fallback).
 6. Enter revocation-uncertain mode and suspend sessions if the revocation channel goes dark.
 
-Items 1-3 and 5-6 are implemented by the shared bridge library (`@overture-stack/usher-express-bridge`),
-whose middleware the host application mounts, and the bridge renders each enforcement result. Each
-app-specific adapter (`@overture-stack/arranger-usher-adapter`, etc.) is handed the bridge and
+Items 1-3 and 5-6 are implemented by the shared Bridge library (`@overture-stack/usher-express-bridge`),
+whose middleware the host application mounts, and the Bridge renders each enforcement result. Each
+app-specific adapter (`@overture-stack/arranger-usher-adapter`, etc.) is handed the Bridge and
 adds item 4.
 
 ---
 
 ## Decided
 
-**JWE decryption is the bridge's responsibility, not the adapter's.** The bridge holds the
+**JWE decryption is the Bridge's responsibility, not the adapter's.** The Bridge holds the
 decryption key (provisioned at application deploy time), decrypts and validates each Usher token,
 and never hands the raw JWE, any key or the payload itself to the adapter.
 
-**The bridge builds the filter; the adapter applies it.** The adapter hands the bridge, for each
+**The Bridge builds the filter; the adapter applies it.** The adapter hands the Bridge, for each
 catalogue it serves, the field names its mapping uses, and gets back one enforcement result per
 catalogue: `deny` with a reason, `narrow` with a filter, or `allow`. Its job is to apply that result
-at its own service's hook. See "The adapter supplies the field name, and the bridge builds the
+at its own service's hook. See "The adapter supplies the field name, and the Bridge builds the
 predicate" in [decisions.md](decisions.md).
 
-**How an adapter receives the bridge, and each request's result.**
+**How an adapter receives the Bridge, and each request's result.**
 
-- The adapter takes the bridge as a parameter and depends at runtime only on
-  `@overture-stack/usher-types`. It takes the bridge's interface and the registration types from the
-  bridge package with `import type`, which is erased at build. The host application imports the real
-  bridge and mounts its middleware, so an adapter's own tests use a fake bridge, and an application
+- The adapter takes the Bridge as a parameter and depends at runtime only on
+  `@overture-stack/usher-types`. It takes the Bridge's interface and the registration types from the
+  Bridge package with `import type`, which is erased at build. The host application imports the real
+  Bridge and mounts its middleware, so an adapter's own tests use a fake Bridge, and an application
   that never mounts Usher never loads it.
-- The bridge's middleware resolves the request's access before any read path runs, and attaches it
+- The Bridge's middleware resolves the request's access before any read path runs, and attaches it
   to the framework's own per-request store. The host carries that store to every read path
   unchanged.
 - Three failures are told apart. A catalogue with no mapping is a startup error. A configured
   catalogue missing from a request's results is a deny. A request that reaches the adapter with no
-  results at all means the bridge's middleware never ran, so the adapter throws and logs an
+  results at all means the Bridge's middleware never ran, so the adapter throws and logs an
   error-level event instead of denying quietly.
-- Past its grace period the bridge suspends every granted permission: it serves the open tier alone,
-  marked open-tier only, with each signed-in principal marked suspended. A bridge that has not
-  reached the controller since it started serves nothing and answers 503 itself, before any read
+- Past its grace period the Bridge suspends every granted permission: it serves the open tier alone,
+  marked open-tier only, with each signed-in principal marked suspended. A Bridge that has not
+  reached the Controller since it started serves nothing and answers 503 itself, before any read
   path runs. See [security-workflow.md](security-workflow.md), "In revocation-uncertain mode".
 - An adapter answers a suspended principal by what the open tier can settle, the same in every
   application:
@@ -72,12 +72,12 @@ predicate" in [decisions.md](decisions.md).
   **In GraphQL, a 503 is an error code rather than a status.** A GraphQL response's status speaks
   for the whole request, so a refused operation answers with a GraphQL error carrying a stable code
   that means temporarily unavailable, with no data, while an HTTP route such as an export answers
-  503 itself. Either way the text and the retry interval are the bridge's own for its 503, so a
+  503 itself. Either way the text and the retry interval are the Bridge's own for its 503, so a
   client meets one answer whichever layer refused. Such a refusal is logged as its own event, never
   as the failure that signals a misconfiguration.
 
-  **The interface's notice comes from one header, set by the bridge.** Every response to a suspended
-  principal carries `Usher-Suspended: true`, set by the bridge's Express layer and exposed to
+  **The interface's notice comes from one header, set by the Bridge.** Every response to a suspended
+  principal carries `Usher-Suspended: true`, set by the Bridge's Express layer and exposed to
   browsers through `Access-Control-Expose-Headers`, so an interface shows the notice the same way in
   every application, whatever its API. A principal presenting no credential never carries it, and
   nor does a confirmed one whose grants hold. A client compares against the header's name and value
@@ -91,25 +91,25 @@ predicate" in [decisions.md](decisions.md).
   records visible to the principal. Each application marks it its own way; Arranger's is in
   [client-integration.md](client-integration.md) § Downloads.
 
-- **Readiness follows the bridge only while it is cold.** An application reports itself not ready
-  until its bridge leaves cold, since a cold bridge serves nothing, and ready in every mode after,
+- **Readiness follows the Bridge only while it is cold.** An application reports itself not ready
+  until its Bridge leaves cold, since a cold Bridge serves nothing, and ready in every mode after,
   uncertain included, since the open tier keeps flowing through a silence. Readiness that dropped an
-  uncertain bridge would take open data offline on every instance whenever the channel goes quiet,
+  uncertain Bridge would take open data offline on every instance whenever the channel goes quiet,
   and would let anyone able to cut the channel take the service down. Liveness never depends on the
-  bridge, or a controller outage becomes a restart loop.
+  Bridge, or a Controller outage becomes a restart loop.
 - **Federated search is refused under access control until the federation posture is decided.** A
   narrowing forwarded to another instance cannot be verified there, and would tell that instance
   what the principal holds. An application whose configuration combines the two refuses to start,
   and one wired that way regardless fails each federated request as a misconfiguration. See the
   roadmap's "Federation posture".
 
-- A refused identity, whether expired, invalid or revoked, is answered by the bridge with one `401`
+- A refused identity, whether expired, invalid or revoked, is answered by the Bridge with one `401`
   and one fixed text before any read path runs, so a refusal never says which it was.
   Its `WWW-Authenticate` challenge, like the `400`'s, is exposed to browsers through
   `Access-Control-Expose-Headers`, so an interface calling from another origin can tell a refused
   identity from any other `401`.
 
-**The request's access is one value, the same from every bridge.** It is plain, JSON-shaped data,
+**The request's access is one value, the same from every Bridge.** It is plain, JSON-shaped data,
 defined with its validator in `@overture-stack/usher-types`:
 
     UsherRequestAccess
@@ -122,11 +122,11 @@ defined with its validator in `@overture-stack/usher-types`:
 - `version` lets an adapter refuse a shape it was not built for, so a later extension, such as
   field-level restrictions, fails closed in an older adapter rather than being half read.
 - `credential` states what the principal presented, so no adapter infers a state from a missing
-  value: `none` for no credential, `unconfirmed` for one the bridge has not confirmed, and `confirmed`
-  for one the controller vouched for. A credential is confirmed while the bridge holds a live entry
+  value: `none` for no credential, `unconfirmed` for one the Bridge has not confirmed, and `confirmed`
+  for one the Controller vouched for. A credential is confirmed while the Bridge holds a live entry
   for it from an exchange, or when this request's own exchange verified it. An expired entry, or one
-  dropped by a notice, confirms nothing, so the principal falls back to `unconfirmed`. The bridge only
-  decodes a sign-in token and the controller checks its signature at the exchange, so the `sub` of
+  dropped by a notice, confirms nothing, so the principal falls back to `unconfirmed`. The Bridge only
+  decodes a sign-in token and the Controller checks its signature at the exchange, so the `sub` of
   an unconfirmed credential is never trusted.
 - `subject` is the trusted identity, for log events and for decisions about the principal's own
   data, such as a saved set's owner. Only a confirmed principal whose grants hold carries it. A
@@ -136,7 +136,7 @@ defined with its validator in `@overture-stack/usher-types`:
   is present, and an adapter logs `credential` beside it, so a null is never read as a state.
 - `openTierOnly` says the results hold the open tier alone, and never whether anything was withheld
   from a result.
-- `suspended` says a signed-in principal's grants are on hold: the bridge is in its uncertain mode,
+- `suspended` says a signed-in principal's grants are on hold: the Bridge is in its uncertain mode,
   or this principal's exchange failed while the notice stream is healthy. A principal presenting no
   credential is never suspended, and an unconfirmed one always is: signed in, identity unconfirmed,
   and served the open tier. It lets an adapter tell "holds only open data" from "grants on hold",
@@ -144,17 +144,17 @@ defined with its validator in `@overture-stack/usher-types`:
 - It never carries the token, the payload or the grants: the adapter receives decisions, not their
   inputs.
 
-Being plain data, it can be published as a JSON Schema, so a bridge written in another language
+Being plain data, it can be published as a JSON Schema, so a Bridge written in another language
 produces the same value.
 
 **Each framework's own per-request store carries it, under the key `usher`.** `attachAccess` validates
 and freezes the value and writes it to the store it is handed; `readAccess` returns it, and throws
 when it is missing, invalid or of an unknown version. Adapters read only through `readAccess`, never by
-the key. Each bridge's thin framework layer uses the store its framework provides, staying idiomatic
+the key. Each Bridge's thin framework layer uses the store its framework provides, staying idiomatic
 rather than inventing one: `res.locals` in Express, a request decorator in Fastify, `ctx.state` in Koa.
 Nothing about the value depends on which. The store is explicit rather than an `AsyncLocalStorage`,
 so an adapter's callback depends only on what it is handed. Typing the store follows the same split: the
-bridge for a framework declares `usher` on that framework's store type, such as Express's `Locals`,
+Bridge for a framework declares `usher` on that framework's store type, such as Express's `Locals`,
 while `@overture-stack/usher-types` stays free of any framework.
 
 **A saved set records how it was saved, as a state, and its creator's identity never leaves the
@@ -182,15 +182,15 @@ told keeps its earlier sharing rules, apart from the creator's identity, which n
 - **A set saved before these states existed is read as unattributed**, by a written rule rather than
   from the missing value.
 
-**User IDs (not email addresses) are the identifiers in all API interactions.** The bridge
-presents the user's Keycloak subject (`sub` claim) to the controller's token exchange endpoint.
+**User IDs (not email addresses) are the identifiers in all API interactions.** The Bridge
+presents the user's Keycloak subject (`sub` claim) to the Controller's token exchange endpoint.
 The `PermissionsPayload` carries the `sub` as the user identifier. Any adapter feature that needs to
 display a user's name or email (for example, a "shared with me" listing showing who shared a
 resource) resolves that display information by calling the Keycloak admin API at the portal/app
 layer, not by reading email from Usher.
 
 **Adapter config shape is the adapter's own concern, not an Usher pattern.** Usher's contract
-with the adapter ends at the enforcement result, rendered by the bridge from the payload and the
+with the adapter ends at the enforcement result, rendered by the Bridge from the payload and the
 mapping the adapter supplies. How the adapter applies that result at its service's own hook, and how
 it describes its mapping, are the adapter's design problem. Each adapter defines its own config schema
 appropriate to its target service. Examples:
@@ -290,7 +290,7 @@ Per protected type, per request:
 category is a condition in the category mapping, and `unmarked` has no condition of its own: it is the
 records matching none. So the filter's exclusions are negative where the resource test is positive,
 which is inherent to requiring every category a record matches, and it is where the guards in
-[decisions.md](decisions.md) come from: the bridge checks the rendered filter against its payload,
+[decisions.md](decisions.md) come from: the Bridge checks the rendered filter against its payload,
 and a record missing a field a condition reads counts as in that category.
 
 **How the clauses compose, which is an invariant rather than an implementation note.**
@@ -422,7 +422,7 @@ The general form is worth recognizing, because it appeared twice on this path fr
 directions: **a safety property attributed to the wrong layer.** Operator documentation attributed
 a behaviour to a name. Separately, a finding that a submission service "fails secure on empty query
 combinations" attributed that guarantee to the query language when it belonged to a particular
-library pairing, so it inverts silently on migration. Neither misattribution produces an error when
+library pairing, so it inverts silently when that pairing changes. Neither misattribution produces an error when
 what it depends on changes, which is why the check has to be execution and not reading.
 
 **Enforcement must be installed at every layer that serves protected data.** An instance where
@@ -435,8 +435,8 @@ token issued for a resource covers both layers, but each layer must have an adap
 and enforces it. Omitting an adapter at any layer is a deliberate architectural decision that leaves
 that path open, not an acceptable default.
 
-**Platform admin bypass is an adapter-layer decision.** A PEP adapter may detect the
-`usher-platform-admin` role in the IdP token and skip SQON filter injection for that request,
+**Platform admin bypass is an adapter-layer decision.** A PEP adapter may learn that the principal
+is on Usher's list of admins, never from a role in the IdP token, and skip SQON filter injection for that request,
 allowing platform admins to query without category restrictions. This bypass does not produce
 an Usher token entry; the adapter must log each bypass event with user ID, timestamp, and reason
 (`platform_admin_bypass`). The bypass is optional per adapter and per instance; see
@@ -473,30 +473,30 @@ not mean "deny all"; it means "exclude nothing from scope." The existence-denial
 (unauthorized users must not learn that records exist, even through aggregate counts) survives only
 if the rejection happens before any result is computed.
 
-**Fail-secure when the bridge cannot deliver a resolved permissions payload.** If the bridge cannot
-complete the token exchange (Usher unreachable since the bridge started, or decryption failed), the
+**Fail-secure when the Bridge cannot deliver a resolved permissions payload.** If the Bridge cannot
+complete the token exchange (Usher unreachable since the Bridge started, or decryption failed), the
 upstream middleware layer must return 503 before the translation callback is invoked. Past the grace
-period, a bridge that started cleanly serves the open tier alone instead, as above. The callback must never be called with a null or absent
-permissions payload; the fail-secure principle extends to the grants-not-yet-loaded case: the bridge
+period, a Bridge that started cleanly serves the open tier alone instead, as above. The callback must never be called with a null or absent
+permissions payload; the fail-secure principle extends to the grants-not-yet-loaded case: the Bridge
 yields 503, not an empty-access token.
 
 ## Known requirements
 
-The full responsibility split between bridge and adapter is in [architecture.md](architecture.md).
+The full responsibility split between Bridge and adapter is in [architecture.md](architecture.md).
 The lists below summarize the requirements relevant to implementation, including specifics not
 captured in the component description.
 
 **Bridge (`@overture-stack/usher-express-bridge`), shared by all adapters:**
 
-- Hold its own application's JWE key. The key is symmetric: the controller generates it when the
+- Hold its own application's JWE key. The key is symmetric: the Controller generates it when the
   application is registered, and the application receives it once, through its own secrets.
   Rotation is the part still open
-- Exchange the user's IdP bearer token for an Usher token in JWE form with the controller; for
+- Exchange the user's IdP bearer token for an Usher token in JWE form with the Controller; for
   unauthenticated requests, perform the exchange with no bearer token to receive an
   anonymous Usher token containing only open-tier grants
 - Decrypt and validate the Usher token, and render one enforcement result per catalogue from it
   and the adapter's mapping, following the producer rules in [decisions.md](decisions.md) ("The
-  bridge's filters carry no empty group, no empty exclusion and no pivot")
+  Bridge's filters carry no empty group, no empty exclusion and no pivot")
 - Cache the Usher token; validate locally within the TTL window
 - Maintain the revocation channel: SSE or WebSocket push with reconnection logic, and poll
   fallback at a configurable interval
@@ -511,10 +511,10 @@ captured in the component description.
 
 **Adapter (per-app, e.g. The Arranger adapter), specific to each integration:**
 
-- Supply the bridge, for each catalogue it serves, the field names its mapping uses
+- Supply the Bridge, for each catalogue it serves, the field names its mapping uses
 - Read each request's enforcement results from the request context, and apply each catalogue's
   result at the app's own hook: deny, narrow and allow, each by its own expression
-- TTL, grace period, and poll interval must be configurable per bridge
+- TTL, grace period, and poll interval must be configurable per Bridge
 
 Arranger-specific design (enforcement results to SQON server-side filters, the two-layer
 request/callback contract, Phase 0 audit consequences, and the mock-first implementation
@@ -525,7 +525,7 @@ as the entry point for the adapter design proper. The Phase 0 audit that identif
 paths on the current enforcement seam is in
 [`phase-0-audit.md`](https://github.com/overture-stack/arranger/blob/main/.dev/docs/arranger-auth/phase-0-audit.md).
 
-**Logging (shared responsibility between bridge and adapter):**
+**Logging (shared responsibility between Bridge and adapter):**
 
 Usher logs who holds what grants and when that changes. It has no visibility
 into whether a token was used or what data was returned. Access decisions happen at the adapter
@@ -540,7 +540,7 @@ its filter callback, since only the callback knows a result was applied:
 | `access_enforcement.permitted`   | info  | `catalogue`, `credential`, `enforcement`, `readPath`, `requestId`, `suspended`, `userId` |
 | `access_enforcement.unavailable` | warn  | `catalogue`, `credential`, `readPath`, `requestId`, `suspended`, `userId`                |
 
-`enforcement` is the arm the bridge returned, `narrow` or `allow`, recorded whenever the adapter ran.
+`enforcement` is the arm the Bridge returned, `narrow` or `allow`, recorded whenever the adapter ran.
 A boolean saying only whether a filter was applied cannot tell a catalogue open by configuration
 from a narrowed request, and a missing entry is what enforcement not running looks like. `reason` is
 the deny's own, `no-grants` or `unknown-resource`, or `no-result` for a configured catalogue missing
@@ -573,19 +573,19 @@ to apply its own filter beside Usher's refuses to start, naming both, rather tha
 Dropping its own would serve what it meant to withhold, and dropping Usher's would turn enforcement
 off while the switch says on.
 
-**Every application reads the bridge's configuration under the same names**, and only while its
+**Every application reads the Bridge's configuration under the same names**, and only while its
 access enforcement is on. A missing or malformed value refuses startup, naming the variable and never
 its value. Whitespace around the key's value is ignored, since it is never part of a key and a
-pasted value often carries it. The bridge's tuning options keep their defaults, with no variable
+pasted value often carries it. The Bridge's tuning options keep their defaults, with no variable
 until one is needed.
 
 | Variable                 | Feeds                                           | Rule                                                                       |
 | ------------------------ | ----------------------------------------------- | -------------------------------------------------------------------------- |
 | `USHER_KEY`              | the application's key                           | a secret, shown once when the key is issued; never committed, never logged |
 | `USHER_AUDIENCE`         | the application's audience identifier           | the identifier Usher generated when the application was registered         |
-| `USHER_CONTROLLER_URL`   | where the controller answers                    | `https`, or `http` to a loopback address only                              |
-| `USHER_EVENT_SOURCE`     | the CloudEvents `source` of the bridge's events | the same on every replica of the application                               |
-| `USHER_ISSUER`           | the issuer Usher's tokens carry                 | the controller's own                                                       |
+| `USHER_CONTROLLER_URL`   | where the Controller answers                    | `https`, or `http` to a loopback address only                              |
+| `USHER_EVENT_SOURCE`     | the CloudEvents `source` of the Bridge's events | the same on every replica of the application                               |
+| `USHER_ISSUER`           | the issuer Usher's tokens carry                 | the Controller's own                                                       |
 | `USHER_PAYLOAD_VERSIONS` | the payload versions the application reads      | optional: a comma-separated list, `1` by default                           |
 
 ---
@@ -600,8 +600,8 @@ covers both vocabularies rather than categories alone. The list of categories li
 nothing connects the two, so every instance transcribes Usher's dictionary into each adapter's
 configuration by hand, once per schema, and keeps it in step by remembering to.
 
-**The proposal.** An introspection endpoint on the controller returning the category dictionary,
-reachable only by a bridge and encrypted under a subkey derived from that application's key.
+**The proposal.** An introspection endpoint on the Controller returning the category dictionary,
+reachable only by a Bridge and encrypted under a subkey derived from that application's key.
 Adapter configuration is then generated against it rather than copied.
 
 **What it carries, and what it must not.** Usher has only category names, so that is all it carries:
@@ -612,8 +612,9 @@ would make it a second and unaudited read of the policy store.
 **Why it is encrypted rather than open.** The dictionary is disclosive on its own: it names what
 kinds of governed data exist on the platform. A subkey derived from the requesting application's key
 reuses the key material already provisioned for Usher tokens, adds no new distribution problem, and
-keeps the list unreadable to anything that is not a bridge. The application key itself encrypts Usher
-tokens and nothing else; every other use derives its own subkey, as the notice stream does.
+keeps the list unreadable to anything that is not a Bridge. The application key itself is only ever
+the HKDF input for every subkey, and every use, Usher tokens included, has its own subkey, so no key
+serves two purposes.
 
 **The check it was first proposed for runs on the payload instead.** Computing `unmarked` by
 complement needs a compensating control: where `unmarked` means "carrying none of the mapped
@@ -642,11 +643,11 @@ harmless if they arrive late.
 reason as revocation: the cases that can wait are the ones that widen, and the case that cannot is
 the one that narrows.
 
-**Mapping is configured application-side first, then in the controller, and both before any record
+**Mapping is configured application-side first, then in the Controller, and both before any record
 carrying the category's value is indexed**, because the check compares registrations with what Usher
 declares and never reads the data, and because the two orders fail differently. Map the category in the adapter before defining it in Usher, and the adapter's
 predicate subtracts from `unmarked` while nothing yet grants the category: matching records are hidden
-until Usher catches up. Define it in Usher first, and once a resource offers it, the bridge withholds
+until Usher catches up. Define it in Usher first, and once a resource offers it, the Bridge withholds
 that resource from every catalogue not yet mapping it: closed as well, but the whole resource rather
 than its matching records, until the adapter catches up. Without the check below, that order served
 the matching records to everyone.
@@ -655,8 +656,8 @@ the matching records to everyone.
 
 | Mismatch                                                   | What it means                                               | Response                                                         |
 | ---------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |
-| the controller knows categories the adapter does not       | the adapter cannot select records it is supposed to exclude | refuse: this is the leak                                         |
-| the adapter maps categories the controller does not define | predicates nobody grants against, hiding records needlessly | warn, once this endpoint gives the full list: nothing is exposed |
+| the Controller knows categories the adapter does not       | the adapter cannot select records it is supposed to exclude | refuse: this is the leak                                         |
+| the adapter maps categories the Controller does not define | predicates nobody grants against, hiding records needlessly | warn, once this endpoint gives the full list: nothing is exposed |
 
 **What a registration carries**, for each catalogue: the resource field name, the category mapping
 (each global category's condition, and each resource category's condition under its resource), the
@@ -664,9 +665,9 @@ categories declared absent, an optional resource list, and whether the catalogue
 configuration. An adapter registers at startup, so a corrected
 mapping takes effect when the application starts again.
 
-**The check runs in the bridge, catalogue by catalogue, and withholds resources rather than blocking
+**The check runs in the Bridge, catalogue by catalogue, and withholds resources rather than blocking
 an application.** A mapping belongs to one catalogue and a token covers the whole application, so
-the controller cannot withhold a resource from one catalogue alone. The bridge holds both halves: each
+the Controller cannot withhold a resource from one catalogue alone. The Bridge holds both halves: each
 catalogue's mapping and declared absences from the adapter's registration, and what Usher defines
 from the payload's `globalCategories` and `resourceCategories`. A resource category the catalogue
 does not define withholds the resource offering it:
@@ -689,10 +690,10 @@ fault "the leak".
 
 ### Decryption key distribution
 
-Settled: the key is symmetric, one per controller-and-application pair. The controller generates it
+Settled: the key is symmetric, one per Controller-and-application pair. The Controller generates it
 when the application is registered and keeps it encrypted, and the application receives it once,
 through its own secrets; see [schema.md](schema.md) § Applications. Adapters hold none. What remains
-open is rotation, the key-encryption key's included: how often, how a bridge picks up a new key
+open is rotation, the key-encryption key's included: how often, how a Bridge picks up a new key
 without dropping in-flight tokens, and how an admin sees that an old key has stopped being used.
 `confirmed_at` cannot say so, since it marks the first replica to use the new key, never the last.
 
@@ -707,10 +708,10 @@ Options considered and not taken:
 - Prescribing one delivery for every deployment, such as a variable set by hand at deploy time:
   deployments already keep secrets in their own ways, and one prescribed route would bind them all
   to it
-- Issued by the controller itself via a key-exchange endpoint requiring mutual TLS or a bootstrap
+- Issued by the Controller itself via a key-exchange endpoint requiring mutual TLS or a bootstrap
   token
 
-Key rotation strategy (frequency, how the bridge picks up a new key without downtime) is also
+Key rotation strategy (frequency, how the Bridge picks up a new key without downtime) is also
 open. A rotation scheme must allow the old key to remain valid for in-flight tokens during the
 switchover window.
 
@@ -725,7 +726,7 @@ subscription endpoints all need a formal contract before adapters can be built.
 **Closed.** The payload is written as a type, member by member, in
 [security-workflow.md: The payload as a type](security-workflow.md#the-payload-as-a-type). It is
 keyed by resource identifier, then by category, then by the entity acted on, then the actions held.
-No role name travels in it, because the controller resolves a role to capabilities before writing the
+No role name travels in it, because the Controller resolves a role to capabilities before writing the
 token, so an adapter tests capabilities and never has to learn what an instance means by `viewer`. The
 entity level exists because bare action names stop being readable once more than one entity can be
 acted on: `view` alone does not say whether it is `record.view` or `field.view`. Versions are
@@ -744,7 +745,7 @@ A predicate and a projection are different things, and the callback returns only
 
 **Established against the first integration's own interface rather than inferred**, where the hook's
 type is a function from context to a query node with no vocabulary for field visibility. So field
-restriction needs a second return channel from the bridge, or a widened one, carrying what to project
+restriction needs a second return channel from the Bridge, or a widened one, carrying what to project
 alongside what to select. It is the first requirement in this design outside the seam's vocabulary,
 and it is why field restriction is post-MVP for reasons beyond scope.
 
@@ -810,7 +811,7 @@ into an oracle. Whoever owns schema generation owns that constraint.
 ### Per-app translation design
 
 How should the translation layer (permissions payload to app-native filter) be structured? Should
-the bridge provide a translation interface implemented by each app adapter, or is
+the Bridge provide a translation interface implemented by each app adapter, or is
 the translation entirely the adapter's concern with no shared abstraction? The answer affects how
 testable and consistent constraint enforcement is across apps.
 
@@ -918,7 +919,7 @@ requirement raising it, consent withdrawal, which currently has no home in the m
 When the enforcement adapter filters on a field in a search index that encodes the access level
 (for example, a field marking whether a document belongs to an open or restricted resource),
 a change to that access level in Usher does not automatically propagate to the index. The
-revocation channel propagates grant revocations to the bridge and adapter, but the indexed field
+revocation channel propagates grant revocations to the Bridge and adapter, but the indexed field
 reflects the state at the last reindex. Between an access-level change and the completion of a
 reindex, the two layers may disagree.
 

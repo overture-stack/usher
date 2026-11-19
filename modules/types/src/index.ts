@@ -19,6 +19,11 @@ export type {
   EnforcementValidationResult,
 } from './enforcement.js';
 export { validateEnforcement } from './enforcement.js';
+export {
+  BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+  CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS,
+  EXCHANGE_DEADLINE_MARGIN_MILLISECONDS,
+} from './exchangeDeadline.js';
 export type {
   Notice,
   NoticeValidationResult,

@@ -58,7 +58,7 @@ one needs both grants, and the trace shows what happens otherwise:
 
 That is the conjunction under "A category is a condition over records" in
 [decisions.md](../../../design/decisions.md): every category a record matches must be held. Since
-categories became conditions, a record carries every category it matches and the bridge enforces
+categories became conditions, a record carries every category it matches and the Bridge enforces
 resource categories, so enforcement no longer holds local categories back. What remains is an owner
 creating one, which needs `category.create` bounded to one resource.
 
@@ -91,10 +91,10 @@ No flow in the first release has an owner creating a category, and `category.cre
 admins only. The conjunction above is a precondition as well.
 
 **The prefix ships in the first release**, along with the scope beside each category's name in the
-schema, so adding local categories later renames nothing. A first-release bridge accepts a
+schema, so adding local categories later renames nothing. A first-release Bridge accepts a
 `resource.` entry, lets it reach nothing, and records it as `category.unenforced`, which is safe for
 the principal holding it and nothing more: a local category also restricts its records, so no
-resource may define one while an application serving it runs a bridge that only drops them. See
+resource may define one while an application serving it runs a Bridge that only drops them. See
 "Category names carry their scope from the first release" in
 [decisions.md](../../../design/decisions.md).
 

@@ -1,18 +1,30 @@
 allowBuilds:
   '@scarf/scarf': false # telemetry, blocked before it can arrive as a transitive dependency
+  cpu-features: false # an optional native build, which ssh2 loads only when present
   esbuild: false
+  protobufjs: false # its postinstall only prints a version-scheme warning
+  ssh2: false # an optional crypto binding; ssh2 runs without it
 
 blockExoticSubdeps: true
 
 catalog:
+  '@testcontainers/postgresql': ^12.2.1
+  '@testcontainers/valkey': ^12.2.1
   '@types/express-serve-static-core': ^5.1.3
   '@types/node': ^24.19.2
+  '@types/pg': ^8.23.1
   eventsource-parser: ^4.1.3
   express: ^5.3.0
   express4: npm:express@^4.22.3
   fast-check: ^4.10.2
+  fastify: ^5.12.8
   jose: ^6.2.15
+  pg: ^8.23.1
+  pg-connection-string: ^2.14.1
+  pino: ^10.4.0
   prettier: ^3.9.10
+  swagger-ui-dist: 5.34.1
+  testcontainers: ^12.2.1
   tsdown: 0.23.5
   tsx: ^4.23.15
   typescript: ~7.0.2
@@ -20,6 +32,16 @@ catalog:
   zod: ^4.6.7
 
 minimumReleaseAge: 1440
+
+overrides:
+  # @scarf/scarf, a dependency of swagger-ui-dist, reports each install to Scarf's analytics service.
+  # This project carries no telemetry it did not add on purpose, so the dependency is removed;
+  # swagger-ui-dist serves its files without it
+  '@scarf/scarf': '-'
+  # archiver-utils, under testcontainers' archiver, requires glob ^10, which carries
+  # GHSA-3g3m-2fjr-6pw4 and, through its minimatch, GHSA-g3hv-75wg-m249; glob 14 keeps the sync
+  # call archiver-utils makes
+  'archiver-utils>glob': ^14.0.3
 
 packages:
   - apps/*

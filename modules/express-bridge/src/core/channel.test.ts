@@ -39,7 +39,7 @@ type Override = { status: number } | undefined;
 type PollOverride = Override | 'hang' | 'network';
 
 /**
- * A controller serving the poll and the push from one notice log, positions `c-<n>`. A test can move
+ * A Controller serving the poll and the push from one notice log, positions `c-<n>`. A test can move
  * head, or answer a poll or a stream connection otherwise.
  */
 const noticeController = () => {

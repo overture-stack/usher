@@ -52,7 +52,7 @@ What actually needs specifying is what the package asks Usher for, plus how a po
 second is small and the first has one consumer.
 
 **The package renders and does not fetch, which puts the server side on the host.** Reading a
-decrypted token is the bridge's job and the bridge cannot run in a browser, so a package that fetched
+decrypted token is the Bridge's job and the Bridge cannot run in a browser, so a package that fetched
 for itself would need a server in every host before any host could use it. One that renders from data
 it is handed works in a server-rendered portal and a browser-only one alike, with each supplying the
 data by whatever means it has. The host decrypts, because the host holds the key.
@@ -67,16 +67,16 @@ Stage rather than preferences:
   with variants by class composition. Custom properties are the one input common to both, since
   Tailwind v4 defines its theme as them, shadcn's convention is CSS variables for colour, and a
   CSS-in-JS runtime reads `var(--x)` without difficulty. A theme object would be correct for a host
-  today and wrong for the same host after a migration already decided.
+  today and wrong for the same host after a move already decided.
 
   **The two-stack case is the expected path rather than a hedge.** The first host's move to the
   utility-class stack is decided and unstarted, with no replacement framework chosen, so this package
-  ships while that host is still on CSS-in-JS and the host migrates underneath it afterwards. Same
+  ships while that host is still on CSS-in-JS and the host moves stacks underneath it afterwards. Same
   package, same host, two stacks, in that order, with no re-theming in between. That is what the
   custom-properties input is for, and without it the package would need retheming exactly when
   the host has the least attention to spare.
 
-  **On the older stack the host supplies the bridge**, which is work to expect rather than to
+  **On the older stack the host supplies the Bridge**, which is work to expect rather than to
   discover: a host themed by a JS object emits those values as custom properties on a root element,
   and the package reads them without knowing which stack produced them. Small, and it belongs to the
   host because only the host knows its own theme.
@@ -129,7 +129,7 @@ lessons are recorded here and the example is not cited as a place to look.
 described something other than what a package must support: a client-side session check framed as a
 browser-only architecture, the host's outgoing styling system, and an unmerged pull request
 described as one of the platform's packages. Each was caught, none by this side. Where a
-host is mid-migration, "how it works now" and "what it will need" diverge, and a published interface
+host is between stacks, "how it works now" and "what it will need" diverge, and a published interface
 has to be built against the second.
 
 The practice that follows is cheap: label an integration fact as current implementation or durable

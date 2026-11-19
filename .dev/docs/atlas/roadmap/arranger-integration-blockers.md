@@ -3,7 +3,7 @@
 Eleven items surfaced by preparing the first adapter integration. They belong here rather than in
 the integration's own repository because each one is a question about Usher's model, a decision for
 the developer alone, or an answer owed by an instance; none is waiting on adapter work. Per-instance
-specifics belong in that integration's own repository, following the same split as the migration
+specifics belong in that integration's own repository, following the same split as the import
 item.
 
 Grouped by what each is blocked on, because that is what decides who can move it.
@@ -76,7 +76,7 @@ apart. See "A refusal carries no
 exception, and expiry is announced rather than inferred" in `.dev/design/decisions.md`. A status code
 is an implementation detail of the first case rather than the goal of it.
 
-So the open question is whether the bridge-to-adapter result grows to give the adapter an actionable
+So the open question is whether the Bridge-to-adapter result grows to give the adapter an actionable
 reason, and if so which reasons are safe to expose to a principal who may not hold the resource at
 all.
 

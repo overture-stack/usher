@@ -9,8 +9,13 @@ import {
 } from '@overture-stack/usher-types';
 import { SignJWT } from 'jose';
 
-import { importApplicationKey } from './keys.js';
-import { mintUsherToken, TEST_KEY } from './testTokens.js';
+import { importApplicationKey, SUBKEY_LABELS } from './keys.js';
+import {
+  mintUsherToken,
+  subkeyBytes,
+  TEST_KEY,
+  TEST_KEY_BYTES,
+} from './testTokens.js';
 import { createTokenReader } from './tokenReader.js';
 
 const corpus = JSON.parse(
@@ -124,7 +129,7 @@ suite('createTokenReader', () => {
   });
 
   suite('the algorithms and the key', () => {
-    test('rejects a key-wrapping algorithm, even under the application key, as algorithmNotAllowed', async () => {
+    test('rejects a key-wrapping algorithm, even under the token key, as algorithmNotAllowed', async () => {
       const token = await mintUsherToken(ANA, { header: { alg: 'A256KW' } });
 
       assert.equal(await reasonFor(token), 'algorithmNotAllowed');
@@ -139,13 +144,20 @@ suite('createTokenReader', () => {
       assert.equal(await reasonFor(token), 'algorithmNotAllowed');
     });
 
-    test('rejects a token under another application key as decryptionFailed', async () => {
-      const token = await mintUsherToken(ANA, {
-        key: new Uint8Array(32).fill(9),
-      });
+    for (const [description, key] of [
+      [
+        "another application's token subkey",
+        subkeyBytes(SUBKEY_LABELS.token, new Uint8Array(32).fill(9)),
+      ],
+      ['the application key itself', TEST_KEY_BYTES],
+      ['the notice subkey', subkeyBytes(SUBKEY_LABELS.notice)],
+    ] as const) {
+      test(`rejects a token under ${description} as decryptionFailed`, async () => {
+        const token = await mintUsherToken(ANA, { key });
 
-      assert.equal(await reasonFor(token), 'decryptionFailed');
-    });
+        assert.equal(await reasonFor(token), 'decryptionFailed');
+      });
+    }
 
     test('rejects altered ciphertext as decryptionFailed', async () => {
       const parts = (await mintUsherToken(ANA)).split('.');

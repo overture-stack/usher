@@ -22,7 +22,7 @@ This is a hard design boundary. A decision is computed from the policy alone, th
 filter returned to the requesting application, which is where it meets the data. That covers
 content-based rules such as "access if fieldA equals X": the rule names a field and a value, and
 the application resolves it. The data itself is never modified as a side effect of a policy
-decision. There are no permission-driven data migrations and no field redactions written back to
+decision. There are no permission-driven data rewrites and no field redactions written back to
 the source. No synthetic columns are added to support access logic.
 
 This matters for two reasons:
@@ -31,7 +31,7 @@ This matters for two reasons:
 corrupt, alter, or annotate source records. Any system that reads the underlying store directly
 (outside Usher's control) sees exactly what was submitted.
 
-**Non-invasive adoption.** Usher can be applied to an existing dataset without any migration or
+**Non-invasive adoption.** Usher can be applied to an existing dataset without any rewrite or
 transformation of the stored records. The access policy layer is additive and external. The data
 layer is untouched.
 
@@ -109,7 +109,7 @@ and mean opposite things.
 Analogy: the usher checking your ticket. They don't make the rules; they apply them. They tell you
 which section you're allowed into and what you're not allowed to bring in.
 
-In Usher: the controller, the central service. It receives a user identity and validates it with
+In Usher: the Controller, the central service. It receives a user identity and validates it with
 the IdP, then looks up that user's grants in the database and returns an encrypted Usher token.
 
 ### PAP: Policy Administration Point
@@ -139,7 +139,7 @@ The PEP (door + staff) is what physically stops you from entering.
 
 In Usher: two pieces working together inside the application that serves the data.
 
-The **bridge** (`@overture-stack/usher-express-bridge`) is a shared library. It obtains the Usher token
+The **Bridge** (`@overture-stack/usher-express-bridge`) is a shared library. It obtains the Usher token
 from Usher, decrypts it, and works out one of three answers: deny the request, narrow it with a
 filter, or allow it unrestricted.
 
@@ -344,8 +344,8 @@ organizing principle for how Usher's permissions model is applied in practice.
 
 **Open:** no authentication required. Data is publicly accessible to any user, including anonymous
 requests. Aggregated statistics, counts without record-level detail, and published datasets with
-no privacy risk fall into this tier. The bridge requests an anonymous Usher token from the
-controller, with no IdP bearer needed. The controller returns a token containing only open-tier
+no privacy risk fall into this tier. The Bridge requests an anonymous Usher token from the
+Controller, with no IdP bearer needed. The Controller returns a token containing only open-tier
 grants. This keeps all access, including anonymous requests, audited and fail-secure.
 
 **Registered:** the user must have a confirmed identity and must have accepted the platform's
@@ -378,7 +378,7 @@ implement the Controlled tier. The Open and Registered tiers come out of that sa
 sitting beside it: a resource's unrestricted records are reachable by everyone holding a grant in it
 (Registered), and by anyone at all in an instance whose baseline confers that category (Open).
 
-The controller computes grants across all three tiers in a single additive pipeline. For how, see
+The Controller computes grants across all three tiers in a single additive pipeline. For how, see
 [security-workflow.md: Permission computation pipeline](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md#permission-computation-pipeline).
 
 ---
@@ -509,14 +509,14 @@ Analogy: a sealed, tamper-evident envelope. Only the recipient with the right ke
 read the contents. The seal proves it was not already opened and resealed.
 
 Usher issues Usher tokens as JWE. The token never reaches a browser. It travels from Usher to the
-ushered service that holds the bridge. The bridge decrypts it there.
+ushered service that holds the Bridge. The Bridge decrypts it there.
 
 **Why encrypt a token that never reaches a browser?** Two reasons.
 
 **Each application gets its own key.** An Usher token is issued for one application. Encrypting it
-to that application's key means no other application can read it. If Usher ever computed a token
-for the wrong recipient, that recipient would fail to decrypt it rather than quietly honour it. The
-mistake becomes a visible error instead of a silent leak.
+under a key derived from that application's own key means no other application can read it. If
+Usher ever computed a token for the wrong recipient, that recipient would fail to decrypt it rather
+than quietly honour it. The mistake becomes a visible error instead of a silent leak.
 
 **Grant contents stay out of places they might otherwise land.** Logs, error reports, crash dumps
 and tracing spans all collect whatever passes through them. An encrypted payload in any of those
@@ -536,7 +536,7 @@ the user. A short TTL limits the window of exposure: a stolen token is useless a
 The tradeoff runs the other way too. A shorter TTL means more re-issuance. More re-issuance means
 more calls to Usher, and so more load and latency.
 
-Usher combines a short TTL with local validation. The bridge validates and caches the token, so no
+Usher combines a short TTL with local validation. The Bridge validates and caches the token, so no
 call to Usher happens on each request. That gives a short exposure window without per-request
 overhead.
 
@@ -560,12 +560,12 @@ stop someone from entering, your only options are:
    are invalid".
 
 Usher uses approach (3), with the signal kept next to whatever changed rather than on the person.
-The controller caches the payload it computed for each principal, and anything altering what that
+The Controller caches the payload it computed for each principal, and anything altering what that
 principal holds deletes the entry, so absence means recompute. A change to a resource's categories
-clears every cached payload, since it can change what anyone reaches. On refresh the controller
-reissues from the cache only when the entry is still there. The cache is the controller's own
+clears every cached payload, since it can change what anyone reaches. On refresh the Controller
+reissues from the cache only when the entry is still there. The cache is the Controller's own
 state, so nothing sent with the request decides whether a cached answer is still fresh. Meanwhile
-the revocation signal reaches bridges by push (immediate, best effort) and poll (configurable
+the revocation signal reaches Bridges by push (immediate, best effort) and poll (configurable
 interval, reliable fallback).
 
 A marker on the principal was the first design and does not work, which is worth knowing because it
@@ -600,7 +600,7 @@ Analogy: a fire door.
 - Fail-open: the door opens when power fails. People can exit, but so can unauthorized parties.
   Prioritizes egress over containment.
 
-Usher's revocation channel is fail-secure. If the bridge cannot confirm revocation status within a
+Usher's revocation channel is fail-secure. If the Bridge cannot confirm revocation status within a
 configurable grace period, it suspends active sessions until connectivity is restored. Suspended
 sessions resume when Usher is reachable again, without requiring re-authentication. That differs
 from an expired Passport Visa, which does require re-authenticating, because the two failures are
@@ -731,7 +731,7 @@ records while only reading controlled ones. Two independent grants, and holding 
 either covers.
 
 **Role and ownership both resolve before the token is written, which is why neither appears in it.**
-A role is how access is granted rather than how it is enforced: the controller resolves a role to
+A role is how access is granted rather than how it is enforced: the Controller resolves a role to
 permissions first, so an adapter tests permissions and never has to learn what an instance means by
 "viewer". Ownership is a power over how access is managed, exercised against Usher itself, so
 anything enforcing a query has its answer already.
@@ -742,13 +742,13 @@ authoritative schema, written as the `PermissionsPayload` type received by the a
 [security-workflow.md: The payload as a
 type](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md#the-payload-as-a-type).
 
-The app's bridge reads the permissions payload and turns it into a filter for each catalogue, and the
+The app's Bridge reads the permissions payload and turns it into a filter for each catalogue, and the
 app adapter (PEP) applies that filter to the outgoing query, before the query reaches the data layer. The payload is enforced server-side, not client-side. The client never
 receives data it was not supposed to see. It cannot bypass the payload by modifying the query.
 
 Usher tokens are the core mechanism by which Usher delegates enforcement to per-app adapters,
 without requiring those adapters to understand the full policy model. The adapter does not need to
-know why a user is excluded from certain data. It only needs to apply the filter the bridge gives it, in
+know why a user is excluded from certain data. It only needs to apply the filter the Bridge gives it, in
 its app's native query format.
 
 Each Usher token is scoped to a specific **audience**: the application service that requested it.

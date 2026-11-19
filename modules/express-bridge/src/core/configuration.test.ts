@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import type { ValidationProblem } from '@overture-stack/usher-types';
+import {
+  BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+  type ValidationProblem,
+} from '@overture-stack/usher-types';
 
 import {
   type BridgeConfiguration,
@@ -57,7 +60,6 @@ suite('checkConfiguration', () => {
         exchangeTimeoutMs: configuration?.exchangeTimeoutMs,
         filterClauseLimit: configuration?.filterClauseLimit,
         graceMs: configuration?.graceMs,
-        inFlightMax: configuration?.inFlightMax,
         localRefusalClockToleranceMs:
           configuration?.localRefusalClockToleranceMs,
         pollDeadlineMs: configuration?.pollDeadlineMs,
@@ -72,7 +74,6 @@ suite('checkConfiguration', () => {
         exchangeTimeoutMs: 5_000,
         filterClauseLimit: 1_024,
         graceMs: 60_000,
-        inFlightMax: 64,
         localRefusalClockToleranceMs: 60_000,
         pollDeadlineMs: 10_000,
         pollIntervalMs: 30_000,
@@ -95,6 +96,19 @@ suite('checkConfiguration', () => {
     );
   });
 
+  test("takes the bridge's exchange timeout shared through usher-types as its default, the controller's deadline plus the margin", () => {
+    const check = checkConfiguration(minimal());
+
+    assert.equal(
+      CONFIGURATION_DEFAULTS.exchangeTimeoutMs,
+      BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+    );
+    assert.equal(
+      check.ok ? check.configuration.exchangeTimeoutMs : undefined,
+      BRIDGE_EXCHANGE_TIMEOUT_MILLISECONDS,
+    );
+  });
+
   test('normalizes the controller URL to end in a slash, so a request built relative to it keeps its path', () => {
     const check = checkConfiguration(minimal());
 
@@ -103,6 +117,17 @@ suite('checkConfiguration', () => {
       : undefined;
 
     assert.equal(exchange, 'https://usher.example.org/api/exchange');
+  });
+
+  test('reads no in-flight bound, neither refusing one given nor keeping it', () => {
+    const check = checkWith({ inFlightMax: 0 });
+
+    assert.equal(check.ok, true);
+    assert.equal(
+      check.ok && Object.hasOwn(check.configuration, 'inFlightMax'),
+      false,
+    );
+    assert.equal(Object.hasOwn(CONFIGURATION_DEFAULTS, 'inFlightMax'), false);
   });
 
   test('keeps a value given in place of a default', () => {
@@ -447,7 +472,6 @@ suite('checkConfiguration', () => {
         { payloadVersions: [1.5] },
         'payloadVersionsInvalid',
       ],
-      ['a zero in-flight bound', { inFlightMax: 0 }, 'numberOutOfRange'],
       [
         'a fractional exchange timeout',
         { exchangeTimeoutMs: 2.5 },

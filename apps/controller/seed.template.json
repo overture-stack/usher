@@ -1,0 +1,7 @@
+{
+	"issuer": "https://usher.example.org",
+	"eventSource": "https://usher.example.org/controller",
+	"firstUser": {
+		"realmRole": "usher-first-user"
+	}
+}

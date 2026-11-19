@@ -48,7 +48,7 @@ type Reply =
   | 'stream'
   | { bodiless?: boolean; contentType?: string; status: number };
 
-/** A controller answering each connection as `reply` says; a test writes into each stream it opens. */
+/** A Controller answering each connection as `reply` says; a test writes into each stream it opens. */
 const fakeController = (
   reply: (index: number) => Promise<Reply> | Reply = () => 'stream',
 ) => {
@@ -917,7 +917,7 @@ suite('createPush', () => {
       const { noticeKey, pollAnswerKey } = await importApplicationKey(TEST_KEY);
       const channel = createChannelReader({ noticeKey, pollAnswerKey });
       const gate = deferred<undefined>();
-      const reading = { count: 0 };
+      const reading = { count: 0, finished: 0 };
       const controller = fakeController();
       const { head, push, recorded } = await pushWith(
         context,
@@ -929,7 +929,9 @@ suite('createPush', () => {
               if (reading.count === 2) {
                 await gate.promise;
               }
-              return channel.readNotice(jwe);
+              const notice = await channel.readNotice(jwe);
+              reading.finished += 1;
+              return notice;
             },
           },
         },
@@ -944,6 +946,9 @@ suite('createPush', () => {
       head.position = undefined;
       push.forget();
       gate.resolve(undefined);
+      // The reconnect is scheduled once the forgotten read returns, and the read decrypts on the
+      // thread pool, so the clock moves only once it has.
+      await until(() => reading.finished === 2);
       await settle();
       const position = push.position();
       head.position = 'c-70';

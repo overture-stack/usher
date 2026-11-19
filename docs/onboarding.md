@@ -106,7 +106,7 @@ The rule behind the "What they reach" column is one line: a grant reaches the re
 
 **At the Open tier, everyone holds the open grant.** It is the one grant held without asking, signed in or not, and it reaches a resource's unmarked records. At the Registered tier, anyone signed in holds it instead. At the Controlled tier, nobody holds it until someone is deliberately granted it. That is how records not marked by any category stay reachable even when they are not open.
 
-**A new resource starts at the platform's default, and can be moved to another tier later.** Usher lets a platform make unmarked records Open by default, or not. Where it does, submitters are shown a warning, so nobody publishes openly without being aware of it. Where the default is Controlled, a new resource's records are reachable by nobody until someone is granted that access.
+**A new resource starts at the tier its registration names, and can be moved to another tier later.** A submitter choosing Open is shown a warning, so nobody publishes openly without being aware of it. A resource registered at Controlled has records reachable by nobody until someone is granted that access.
 
 Grants are also what let two people differ on one resource: both may hold its open grant while one may only read those records and the other may change them as well.
 
@@ -274,9 +274,9 @@ This keeps the rules consistent as the platform grows. Adding an application doe
 
 ### Usher never touches the data it protects
 
-No records are rewritten, no columns added, no migration run. The rules are applied at the moment of the query.
+No records are rewritten and no columns added. The rules are applied at the moment of the query.
 
-Applying rules at query time is what separates adopting a policy system from undertaking a data migration. A platform can turn Usher on without altering the data it holds, and turning it off leaves nothing behind to clean up.
+Applying rules at query time is what separates adopting a policy system from undertaking a data rewrite. A platform can turn Usher on without altering the data it holds, and turning it off leaves nothing behind to clean up.
 
 ### The Usher token is encrypted, short-lived, and never reaches the person asking
 
@@ -383,8 +383,8 @@ None of this is needed to follow the document. It is here so the vocabulary is n
     <dd>One kind of approval a dataset's records can require, named by the platform that defines it, such as controlled or community-governed. Every category in the first release is defined for the whole platform, and a later release adds categories local to one dataset. Defined by a condition over the records' own fields, of which a field and a value is the simplest: a resource's field says which records belong together, a category's condition says which of them need an approval, and a record may belong to several categories. Reaching those particular records means holding an approval naming that category on that dataset; the dataset's other records answer to whichever category they carry instead. Every dataset also has "unmarked", for the records not marked by any other category, and its tier decides who reaches them. Which condition defines a category is configuration, not something Usher decides.</dd>
     <dt>Custodian</dt>
     <dd>Someone with authority over access to a particular kind of data, typically on behalf of the community that contributed it, and able to act without platform administrator rights.  Called a custodian rather than a steward because the requirements this design answers to already use "data steward" for a dataset's owner, which is the Owner above rather than this role.</dd>
-    <dt>Adapter, or bridge</dt>
-    <dd>The small component inside each application that fetches Usher's answer and applies it before a query runs. Where enforcement actually happens. This document treats it as one thing; engineers split it in two, the bridge, a shared library that fetches and reads Usher's answer the same way in every application, and the adapter, written for each application, which applies that answer to that application's own queries.</dd>
+    <dt>Adapter, or Bridge</dt>
+    <dd>The small component inside each application that fetches Usher's answer and applies it before a query runs. Where enforcement actually happens. This document treats it as one thing; engineers split it in two, the Bridge, a shared library that fetches and reads Usher's answer the same way in every application, and the adapter, written for each application, which applies that answer to that application's own queries.</dd>
     <dt>Platform</dt>
     <dd>One running Usher and the applications it serves, holding its own datasets, its own categories and its own grants. Engineers call this an instance. Where this document says a platform decides something, it means a choice made once for that Usher and applying across the applications it serves. The software every such platform is built from is called Overture, never the platform.</dd>
     <dt>Ushered application</dt>

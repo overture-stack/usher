@@ -10,6 +10,7 @@
     "@types/node": "catalog:",
     "express": "catalog:",
     "express4": "catalog:",
+    "fast-check": "catalog:",
     "tsdown": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
