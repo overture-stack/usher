@@ -166,14 +166,14 @@ first exchange, is renewed at each refresh, and ends when the Bridge drops it or
 **Each open item below is an event that ends or changes one**, and each has been recorded separately
 with its own fix:
 
-| Event                          | What the Bridges do                                                                                                                               | Status                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| a grant is revoked             | the channel names the principal, and Bridges drop that principal's token                                                                          | designed                         |
-| a resource's categories change | the stream names the resource to the applications serving it, whose Bridges drop every token naming it                                            | decided, filtered by audience    |
-| a person signs out             | the Controller receives the identity provider's back-channel logout and relays it as a principal notice, so every Bridge drops the person's token | decided                          |
-| a person is revoked            | the exchange refuses them with `401`, and a principal notice drops their token everywhere                                                         | proposed: schema.md's decision A |
-| announcements arrive late      | only a poll answered within its deadline resets the grace clock, so the grace period bounds the delay                                             | decided                          |
-| an upload is in flight         | a different kind of session, revocable or not                                                                                                     | open, in its own item            |
+| Event                          | What the Bridges do                                                                                                                               | Status                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| a grant is revoked             | the channel names the principal, and Bridges drop that principal's token                                                                          | designed                      |
+| a resource's categories change | the stream names the resource to the applications serving it, whose Bridges drop every token naming it                                            | decided, filtered by audience |
+| a person signs out             | the Controller receives the identity provider's back-channel logout and relays it as a principal notice, so every Bridge drops the person's token | decided                       |
+| a person is revoked            | the exchange refuses them with `401`, and a principal notice drops their token everywhere                                                         | built: principal revocations  |
+| announcements arrive late      | only a poll answered within its deadline resets the grace clock, so the grace period bounds the delay                                             | decided                       |
+| an upload is in flight         | a different kind of session, revocable or not                                                                                                     | open, in its own item         |
 
 **Several copies of one application each hold their own cache**, so every announcement has to reach
 every copy. Subscribing each copy to the channel already does that, and any change to the channel
@@ -183,22 +183,6 @@ must keep that property.
 holds a token in which application. It would give an administrator that view, at the cost of
 duplicating the Bridges' state in Usher. The rows depend on identity-provider features, listed under
 the connector design in [admin-model.md](admin-model.md).
-
-**[MEDIUM] `revoked_at` is a scalar; reinstatement and multiple revocations are undefined.**
-Downgraded, because most of the premise went with the per-user marker. `revoked_at` lives on the
-grant, not on the user, and a grant is revoked once and never reinstated: restoring access writes a
-new grant, with its own identity, its own `granted_at`, and its own decision row. So there is no
-overwritten timestamp and no history to reconstruct, and a token issued between two revocations named
-grants that are each separately revoked.
-
-What stays open is narrower and belongs with the same unanswered question as everything else about
-stopping a principal outright: revoking a _person_ rather than a grant has no settled storage, so
-whether that is a sweep over their grants or a marker on `users` decides whether reinstatement is
-many writes or one. See blocker 6 in [../docs/phase-1.md](../docs/phase-1.md).
-
-**Answered by [schema.md](schema.md)'s decision A (proposed 2026-10-04).** Revoking a person is a row
-in `principal_revocations`, and reinstating them lifts it, so each is one write, the history survives
-a lift, and a second revocation is a second row.
 
 ---
 
@@ -232,17 +216,16 @@ decision rather than a design defect, and it is the half that has a deadline.
 
 ## Token contract
 
-**[MEDIUM] Three BCP 225 items are open, and the corpus now cites that BCP for a fourth.**
+**[MEDIUM] Two BCP 225 items are open, and the corpus cites that BCP for the others.**
 RFC 8725 is the JWT Best Current Practices. Explicit typing, §3.11, is closed: `typ` is `usher+jwt`,
-recorded in [decisions.md](decisions.md). Three remain, all header decisions, all cheap, and leaving
-them open while citing the BCP for the one that was taken is the part that needs closing.
+recorded in [decisions.md](decisions.md). Verifying `alg` and `enc` rather than reading them, §3.1, is
+closed in code: the Bridge accepts only `dir` and `A256GCM` when it reads a token or a notice. Two
+remain, both header decisions, both cheap, and leaving them open while citing the BCP for the ones
+taken is the part that needs closing.
 
-1. **§3.1, verify `alg` and `enc` rather than reading them.** The algorithm is pinned as what the
-   Controller emits. Nothing says the Bridge pins it on read, which is the shape of this class of
-   bug: a JOSE library handed a token honours the header it finds.
-2. **§3.6, no compression before encryption.** `zip` is unstated. It must be explicitly never used,
+1. **§3.6, no compression before encryption.** `zip` is unstated. It must be explicitly never used,
    because compressing a payload before encrypting it leaks plaintext through ciphertext length.
-3. **§3.10, do not trust `kid` blindly.** There is no `kid` yet, and it is the unnamed answer to the
+2. **§3.10, do not trust `kid` blindly.** There is no `kid` yet, and it is the unnamed answer to the
    open key-rotation question, so the rule and the mechanism arrive together or neither does.
 
 §3.2, §3.7, §3.8, §3.9 and §3.12 are covered. See the RFC 9068 comparison in
@@ -604,19 +587,12 @@ with backoff and jitter, and the notices they missed arrive by poll meanwhile. T
 how many push connections a surviving instance must absorb, stays a named requirement of the
 high-availability design.
 
-**[MEDIUM] Migration tooling DDL access undermines the INSERT-only audit constraint.**
-Schema migrations require elevated database privileges (ALTER TABLE, DROP COLUMN). If migration
-tooling runs with credentials that include the audit table, the INSERT-only constraint is
-vacuously satisfied at the application layer while being bypassed at the migration layer. The
-security boundary between migration-time database access and runtime application access should
-be described: separate database roles, separate credential paths, and a policy for what migration
-scripts are permitted to do with the audit table.
-
-**Proposed resolution: [schema.md](schema.md)'s decision H, with the policy added.** Migrations run
-at deployment under a role and credentials of their own, and the running Controller's role cannot
-alter the schema or touch the audit log beyond inserting. The policy for migrations: one may add to
-the audit table's structure, columns or indexes, and never updates, deletes or rewrites its rows,
-which review of each migration checks.
+**[LOW] What a migration may do to the audit log is not written where migrations are reviewed.**
+Migrations run under a role and credentials of their own, and the running Controller's role can
+neither alter the schema nor write to the audit log beyond inserting, which every start checks, per
+[schema.md](schema.md). What remains is the policy for migrations themselves: one may add to the
+audit table's structure, columns or indexes, and never updates, deletes or rewrites its rows. Review
+of each migration checks it, so it belongs beside the migrations, where a reviewer reads it.
 
 ---
 
@@ -763,45 +739,6 @@ Options to consider: periodic re-validation of Visa-sourced grants on token exch
 from the Visa Issuer on revocation; or an explicit operator-triggered revocation via the
 management API when informed that a data access committee has withdrawn an approval.
 
-**[MEDIUM] No "revoke user everywhere" API despite it being the primary emergency operation.**
-`security-workflow.md` describes "single user" as the standard revocation scope. `admin-model.md`
-describes a global `GET /admin/users` endpoint as explicitly not implemented; lookup is scoped
-to resources. An admin performing emergency revocation for a user who holds grants in many
-resources (or whose roles are unknown) must iterate across all resources to find
-and revoke each one. The most critical emergency operation has no direct API path. A
-`POST /admin/users/{id}/revoke` endpoint that sets `revoked_at` regardless of which resources they hold grants in
-should be considered as a v1 requirement.
-
-**A mechanism is now proposed, and it is not an endpoint that iterates.** A status on the principal,
-read by grant validation, so that freezing someone is one write rather than a sweep across every
-grant they hold:
-
-| Status    | What grant validation does                                                                                    |
-| --------- | ------------------------------------------------------------------------------------------------------------- |
-| `active`  | grants resolve normally                                                                                       |
-| `revoked` | grants resolve to nothing, and the grants themselves are untouched                                            |
-| `blocked` | as revoked, and any attempt to grant this principal access warns the author and notifies someone for approval |
-
-**Why a status rather than a bulk revoke.** Setting `revoked_at` across every grant destroys what
-was held, so restoring access means reconstructing it from an audit trail. A status leaves the grants
-intact and gates them, which makes the operation reversible and makes "what did they hold while
-frozen" answerable. It also gives the emergency operation one row to write, which is what makes it
-fast enough to be an emergency operation.
-
-**What it still needs.** Who may set it, whether `blocked` differs from `suspended` by more than the
-warning, who receives the approval notice, and how it interacts with the cached payload, which must
-be deleted on any status change for the freeze to take effect inside one TTL rather than at the end
-of one.
-
-**[schema.md](schema.md)'s decision A is this mechanism (2026-10-04).** The `revoked` row is a
-principal revocation: one row written, the grants untouched, lifted to reverse it. The exchange then
-refuses the principal with `401`, as case 33 does, and a principal notice drops their entries at every
-Bridge, so a freeze takes effect within the revocation bound rather than at the end of a TTL. The row
-read `suspended` until that word was given to a different state: a principal whose grants are held
-back by a Bridge in its uncertain mode, answered `503` and resuming by itself (see the glossary). A
-freeze is lifted by someone rather than resumed, so it is a revocation. Still open: who may revoke and
-lift, and whether `blocked` earns a state of its own.
-
 **[POST-V1] Trusted-issuers governance for GA4GH Passports is not described.**
 Same scope as the Visa revocation item above. Original finding:
 Adding a new Visa Issuer (a new collaborating data access committee) requires updating Keycloak's
@@ -818,15 +755,6 @@ query? Grant events are in the Controller's audit log. Data access events (if lo
 in the PEP adapter's log (Arranger, Lyric). Correlating these across systems requires a shared
 identifier (a self-grant ID, or a correlation token) that links the grant audit record to
 downstream data access records. Neither the identifier nor the correlation mechanism is described.
-
-**[LOW] Valkey failure mode is not described.**
-`architecture.md` documents Valkey's two roles (shared cache and revocation pub/sub backbone)
-but does not describe failure behaviour. If Valkey is unavailable: Controller instances cannot
-coordinate push revocation events; the fast-path cache is inaccessible (falls back to full
-policy recompute). Is the system in a degraded-but-safe mode (poll-only revocation, slower
-propagation, higher Controller load)? Or does Valkey unavailability trigger fail-secure across
-all Bridges? The failure mode should be a named design choice, not an implicit consequence of
-implementation.
 
 **[HIGH] How Usher learns about a person's identities, and how they relate over time, is not designed.**
 The question: Usher names every person by an identity provider's subject, and learns about that
