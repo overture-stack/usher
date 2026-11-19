@@ -1,0 +1,4 @@
+# Commits git blame passes over, given `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
+# Formatter output alone, under prettier.config.ts.
+a92d0c1ad134f6c11ecf8a4438c3435bb5b46d44
