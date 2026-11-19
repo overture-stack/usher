@@ -153,8 +153,8 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * never from the token; a store that cannot say is answered 503, recording nothing. Until Usher has
  * an administrator, every operation but those answered before the first one is refused 403
  * `noAdministratorYet`, a service account included; a service account is refused 403, and so is
- * anyone but a platform administrator for an operation of theirs alone, and anyone whose token
- * lacks the first-user role for an operation of the first user's alone. Then the query, refused 400
+ * anyone but a platform administrator for an operation of theirs alone, and anyone who is not
+ * the first user for an operation of the first user's alone. Then the query, refused 400
  * for an operation taking none, and the body are read, and the operation run. What the operation
  * answers is sent once the steps it names to run after its commit have run, as is the answer to a
  * change whose `COMMIT` went unconfirmed; a refusal or any other failure runs none. A success

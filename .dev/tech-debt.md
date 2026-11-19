@@ -75,12 +75,17 @@ cannot load, as the legacy CLI does.
 standalone: no
 context: waits on that Prettier release.
 
-In `apps/controller/test/database/storeTimeout.test.ts`, the suite on the Controller's start failed
-twice in one PostgreSQL 18 run while a shared Docker daemon was under load: "refuses a start on a
-connection that drops the controller's statement limits, as a pooler dropping startup parameters
-does, naming the database URL" and "refuses a start the store will not sign in, naming the password
-for a refused password and the database URL for a database the store lacks". Each passed on every
-run alone, and the same suite failed on CI's two-CPU pod. Each must pass under load as it does
-alone.
-fix: establish why each fails under load, and make it pass under load as it does alone.
+In `apps/controller/test/database/storeTimeout.test.ts`, three cases failed under load and passed
+on every run alone. The suite on the Controller's start failed twice in one PostgreSQL 18 run while
+a shared Docker daemon was under load, and on CI's two-CPU pod: "refuses a start on a connection
+that drops the controller's statement limits, as a pooler dropping startup parameters does, naming
+the database URL" and "refuses a start the store will not sign in, naming the password for a
+refused password and the database URL for a database the store lacks". On CI's two-CPU pod, "answers
+a Management API request 503 storeUnavailable within about the store timeout while the store is
+paused, writing nothing, and serves the next once the store answers" failed before its request,
+its harness's start refused for not answering within the store timeout. Each must pass under load
+as it does alone.
+fix: every instance in the file now starts within four times the compressed store timeout, since
+an instance's whole start runs within its store timeout; confirm on CI's pod that each case passes,
+and establish the cause of any that still fails.
 standalone: yes

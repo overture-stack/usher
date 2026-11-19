@@ -85,8 +85,8 @@ const noInput = (): InputReading<undefined> => ({
  * read from the configured clock, and a person is found by the identity of a subject under the
  * trusted issuer.
  *
- * Nominating, `POST /admin/nominations`, is for the first user alone: a caller whose token lacks
- * the first-user role is refused 403 `notFirstUser` before the body is read. Its body names the
+ * Nominating, `POST /admin/nominations`, is for the first user alone: a caller who is not the first
+ * user is refused 403 `notFirstUser` before the body is read. Its body names the
  * nominee, read with {@link readNominationRequest}. Then an administrator already accepted is
  * refused 409 `firstAdministratorAccepted`; only then is a nominee who is neither the caller nor a
  * person Usher has met refused 404 `nomineeNotFound`. The caller is recorded on first meeting, as a
