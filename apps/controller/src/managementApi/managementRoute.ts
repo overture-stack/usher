@@ -28,7 +28,7 @@ import {
   unreadableBody,
 } from './problems.js';
 import { readManagementClaims } from './readManagementClaims.js';
-import { readJsonBody } from './requestBody.js';
+import { MERGE_PATCH_MEDIA_TYPE, readJsonBody } from './requestBody.js';
 import type {
   EventMembers,
   InputReading,
@@ -428,6 +428,7 @@ export const managementRoute = <Input>(
     const read = readJsonBody(
       request.body instanceof Uint8Array ? request.body : undefined,
       request.headers['content-type'],
+      operation.method === 'PATCH' ? MERGE_PATCH_MEDIA_TYPE : undefined,
     );
     if (read.kind === 'refused') {
       return refusedFor(read.problem);

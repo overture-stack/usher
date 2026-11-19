@@ -3,6 +3,7 @@ import { suite, test } from 'node:test';
 
 import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import type { TokenClaims, TokenHeader } from '../identityProvider/index.js';
+import type { FirstUser } from '../settings/index.js';
 import {
   EXCESSIVE_LIFETIME,
   MISSING_ISSUED_AT,
@@ -16,11 +17,11 @@ const SECONDS = Math.floor(NOW / 1000);
 const MAXIMUM_LIFETIME_SECONDS = 3600;
 
 const SETTINGS = Object.freeze({
-  firstUserRole: 'usher-first-user',
+  firstUser: { realmRole: 'usher-first-user' },
   managementAudience: 'usher-management',
   managementClients: ['usher-ui', 'usher-cli'],
   serviceAccountRole: 'usher-service-account',
-  signInTokenMaximumLifetimeSeconds: MAXIMUM_LIFETIME_SECONDS,
+  signInTokenMaximumFor: () => MAXIMUM_LIFETIME_SECONDS,
 });
 
 const HEADER: TokenHeader = Object.freeze({
@@ -59,6 +60,16 @@ const read = (
     NOW,
   );
 
+const readAs = (
+  firstUser: FirstUser,
+  departures?: Readonly<Record<string, unknown>>,
+) =>
+  readManagementClaims(
+    { claims: claimsWith(departures), header: HEADER },
+    { ...SETTINGS, firstUser },
+    NOW,
+  );
+
 const refusal = (reason: string, subject = 'subject-ana') => ({
   kind: 'refused',
   reason,
@@ -72,10 +83,32 @@ suite("reading a verified management token's claims", () => {
       principal: {
         firstUser: true,
         subject: 'subject-ana',
+        tokenLifetimeSeconds: 310,
         type: 'human',
       },
       session: { issuedAt: SECONDS - 10, sid: 'session-1' },
     });
+  });
+
+  test('takes the person whose subject the first user names as the first user, whatever roles the token holds', () => {
+    const reading = readAs(
+      { subject: 'subject-ana' },
+      { realm_access: { roles: ['offline_access'] } },
+    );
+
+    assert.deepEqual(
+      reading.kind === 'accepted' ? reading.principal.firstUser : undefined,
+      true,
+    );
+  });
+
+  test('takes no one holding the first-user realm role as the first user, when the first user is named by subject', () => {
+    const reading = readAs({ subject: 'subject-other' });
+
+    assert.deepEqual(
+      reading.kind === 'accepted' ? reading.principal.firstUser : undefined,
+      false,
+    );
   });
 
   test('reads a person without the first-user role, or holding it in another letter case, as no first user', () => {
@@ -99,7 +132,7 @@ suite("reading a verified management token's claims", () => {
 
     assert.deepEqual(
       reading.kind === 'accepted' ? Object.keys(reading.principal) : [],
-      ['firstUser', 'subject', 'type'],
+      ['firstUser', 'subject', 'tokenLifetimeSeconds', 'type'],
     );
   });
 
@@ -115,6 +148,7 @@ suite("reading a verified management token's claims", () => {
       {
         firstUser: true,
         subject: 'subject-ana',
+        tokenLifetimeSeconds: 310,
         type: 'serviceAccount',
       },
     );

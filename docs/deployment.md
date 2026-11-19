@@ -22,7 +22,7 @@ A first deployment takes these steps, in order, each one detailed in its section
 1. Create the database and its two roles: [PostgreSQL](#postgresql), [The two database roles](#the-two-database-roles).
 2. Make the two keys: [Keys](#keys).
 3. Set up the realm: [The identity provider](#the-identity-provider).
-4. Set the variables, from what steps 1 to 3 made: [Variables](#variables).
+4. Set the variables and write the seed file, from what steps 1 to 3 made: [Variables](#variables), [The seed file](#the-seed-file).
 5. Run the image once as the schema migration command: [The image](#the-image), [Schema migration before each rollout](#schema-migration-before-each-rollout).
 6. Start the Controller's instances, and wait for `GET /health/ready` to answer 200: [Readiness and liveness](#readiness-and-liveness).
 7. Have the first user nominate Usher's first administrator, and the nominee accept, since every other Management API operation is refused until then: [The identity provider](#the-identity-provider).
@@ -49,7 +49,7 @@ Set the arguments alone to choose a command, and leave the entrypoint as it is.
 
 ## Variables
 
-Each command reads its settings from environment variables once, at start, and checks every one before using any. A refusal lists every rule broken, naming each variable and never its value. The process then ends with exit code 1, before it connects to anything.
+Each command reads its configuration from environment variables once, at start, and checks every one before using any. A refusal lists every rule broken, naming each variable and never its value. The process then ends with exit code 1, before it connects to anything.
 
 | Kind     | Meaning                                                                                                            |
 | -------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -60,9 +60,11 @@ Each command reads its settings from environment variables once, at start, and c
 **Unless its row says otherwise, a variable takes one value on every instance sharing the store.** Two kinds of row say otherwise:
 
 - **Per instance.** `USHER_INSTANCE_NAME` differs on every instance. `USHER_HOST` and `USHER_PORT` are each instance's own listening address.
-- **Both commands, alike.** The schema migration command creates the schema in `USHER_DATABASE_SCHEMA`, grants to the runtime role named in `USHER_DATABASE_URL`, and stores the notice retention floor: the sum of `USHER_TOKEN_LIFETIME_SECONDS`, `USHER_RETENTION_GRACE_SECONDS` and `USHER_RETENTION_MARGIN_SECONDS`. The Controller relies on all five, so give both commands these values from one source.
+- **Both commands, alike.** The schema migration command creates the schema in `USHER_DATABASE_SCHEMA` and grants to the runtime role named in `USHER_DATABASE_URL`. The Controller relies on that schema and role, so give both commands these values from one source.
 
 A whole number is written in digits alone, with no sign, decimal point or unit. A comma-separated list has the whitespace around each entry left out, and an empty entry between two commas is refused.
+
+**A replaced variable is refused.** Both commands refuse a start with a variable that a setting now holds, set, empty or not, naming `USHER_SEED_FILE` as its replacement. The settings are under [Settings](#settings).
 
 ### Listening
 
@@ -77,8 +79,6 @@ A whole number is written in digits alone, with no sign, decimal point or unit. 
 | Variable              | Kind     | What it is, and its rule                                                                                                                                                  |
 | --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `USHER_INSTANCE_NAME` | Required | **Per instance.** This instance's name, carried as `data.instance` by every event it records. Give each instance sharing the store its own, such as its host or pod name. |
-| `USHER_EVENT_SOURCE`  | Required | The CloudEvents `source` carried by every event, such as `https://usher.example.org/controller`. It names the deployment, never one instance.                             |
-| `USHER_ISSUER`        | Required | The Controller's own issuer: the `iss` of every Usher token.                                                                                                              |
 
 ### The database
 
@@ -108,55 +108,16 @@ The Controller never reads these two, so give them to the schema migration comma
 | `USHER_KEY_ENCRYPTION_KEY` | Secret | The key-encryption key, encrypting every stored application key. See [Keys](#keys). |
 | `USHER_CURSOR_KEY`         | Secret | The key encrypting every notice stream cursor. See [Keys](#keys).                   |
 
-### The identity provider's settings
+### The identity provider's configuration
 
-| Variable                                       | Kind                              | What it is, and its rule                                                                                                                                                                                                                            |
-| ---------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_IDENTITY_PROVIDER_ISSUER`               | Required                          | The realm's issuer, exactly as its tokens carry it in `iss`, such as `https://idp.example.org/realms/platform`. It is an https URL, or an http URL to a loopback host alone (`localhost`, `127.0.0.1` or `[::1]`), and it never carries a password. |
-| `USHER_FIRST_USER_ROLE`                        | Optional: `usher-first-user`      | The realm role naming the first user, who nominates Usher's first administrator and holds no power in Usher once one has accepted. A start with `USHER_ADMINISTRATOR_ROLE` set, empty or not, is refused, naming this variable as its replacement.  |
-| `USHER_SERVICE_ACCOUNT_ROLE`                   | Optional: `usher-service-account` | The realm role marking a service account's token, which is refused on every Management API operation, whether or not it also carries the role in `USHER_FIRST_USER_ROLE`. It must name a role other than that one.                                  |
-| `USHER_MANAGEMENT_AUDIENCE`                    | Required                          | The audience required in every management token's `aud`: the Management API's identifier at the identity provider, such as `usher-management`.                                                                                                      |
-| `USHER_MANAGEMENT_CLIENTS`                     | Required                          | The client identifiers the management UI signs in through, as a comma-separated list. A management token's `azp` must be one of them. An empty value is an empty list, accepting no management token.                                               |
-| `USHER_API_DOCS_CLIENT`                        | Optional: none                    | The client used by the API documentation page at `/api-docs` to sign people in, which must be one of `USHER_MANAGEMENT_CLIENTS` exactly. Unset or empty means no page. Its requirements are under [The identity provider](#the-identity-provider).  |
-| `USHER_BACK_CHANNEL_LOGOUT_AUDIENCES`          | Required                          | The audiences allowed in a back-channel logout token's `aud`, as a comma-separated list: the platform's client identifiers. An empty value is an empty list.                                                                                        |
-| `USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS` | Required                          | The longest lifetime of a sign-in or management token accepted by the Controller, in seconds: a whole number of at least 1.                                                                                                                         |
-
-### Token lifetime and notice retention
-
-The sum of these three durations is the notice retention floor: how long each notice is kept at least, for Bridges to read. The schema migration command stores it, and refuses a floor above 2147483647 seconds.
-
-| Variable                         | Kind          | What it is, and its rule                                                                                                                                    |
-| -------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_TOKEN_LIFETIME_SECONDS`   | Optional: 300 | **Both commands, alike.** How long an Usher token lives, in seconds: a whole number of at least 1.                                                          |
-| `USHER_RETENTION_GRACE_SECONDS`  | Optional: 60  | **Both commands, alike.** The grace period counted by the retention floor beyond the token lifetime, in seconds: a whole number of at least 0.              |
-| `USHER_RETENTION_MARGIN_SECONDS` | Optional: 30  | **Both commands, alike.** The margin added by the retention floor beyond the token lifetime and the grace period, in seconds: a whole number of at least 0. |
-
-### The notice channel
-
-| Variable                                | Kind            | What it is, and its rule                                                                                                            |
-| --------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_HEARTBEAT_MILLISECONDS`          | Optional: 10000 | How long an open notice stream may stay silent before a heartbeat: a whole number from 1 to 2147483647.                             |
-| `USHER_NOTICE_PAGE_LIMIT`               | Optional: 500   | The most notices carried by one poll answer before it names a next page: a whole number of at least 1.                              |
-| `USHER_NOTICE_REREAD_MILLISECONDS`      | Optional: 2000  | How often each instance reads the notice stream again when nothing has woken it: a whole number from 1 to 2147483647.               |
-| `USHER_STREAM_LIMIT_PER_AUDIENCE`       | Optional: 64    | How many push streams one audience, an ushered application, may hold open on one instance: a whole number of at least 1.            |
-| `USHER_STREAM_MAXIMUM_LIFETIME_SECONDS` | Optional: 900   | How long a notice stream stays open at most, in seconds: a whole number of at least 60.                                             |
-| `USHER_STREAM_QUEUE_LIMIT`              | Optional: 1000  | The most notices queued for one stream before the stream is closed for a reader that stopped reading: a whole number of at least 1. |
-
-### Access policy
-
-| Variable               | Kind                          | What it is, and its rule                                                                                                                                                                                             |
-| ---------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_BASELINE`       | Optional: `count,view,export` | The record actions conferred on everyone, anonymous visitors included, as a comma-separated list drawn from `count`, `view` and `export`, each named once. An empty value confers none. Any other action is refused. |
-| `USHER_SIGNED_IN_RULE` | Optional: `count,view,export` | The record actions conferred on every signed-in principal, under the rules of `USHER_BASELINE`.                                                                                                                      |
-
-A start under a baseline or signed-in rule differing from those recorded in the store records the new rules, with a `baseline.change` event at warning, since every principal's reach changes with them.
-
-### Grants
-
-| Variable                   | Kind                        | What it is, and its rule                                                                                                                                                                       |
-| -------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USHER_GRANT_AUTO_ACCEPT`  | Optional: `false`           | Whether a grant is accepted as it is created, its holder's acceptance recorded with it, showing what the grant's role confers then, so no holder answers it: `true` or `false`, in lower case. |
-| `USHER_SUBMITTER_CATEGORY` | Optional: `global.unmarked` | The record category a `submitter` grant naming none takes, as a payload names it: `global.` followed by the name of a global category, which holds no dot.                                     |
+| Variable                              | Kind                              | What it is, and its rule                                                                                                                                                                                                                                            |
+| ------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USHER_IDENTITY_PROVIDER_ISSUER`      | Required                          | The realm's issuer, exactly as its tokens carry it in `iss`, such as `https://idp.example.org/realms/platform`. It is an https URL, or an http URL to a loopback host alone (`localhost`, `127.0.0.1` or `[::1]`), and it never carries a password.                 |
+| `USHER_SERVICE_ACCOUNT_ROLE`          | Optional: `usher-service-account` | The realm role marking a service account's token, which is refused on every Management API operation, whether or not it also carries the first user's role. It must name a role other than the `realmRole` of the `firstUser` setting, when that setting names one. |
+| `USHER_MANAGEMENT_AUDIENCE`           | Required                          | The audience required in every management token's `aud`: the Management API's identifier at the identity provider, such as `usher-management`.                                                                                                                      |
+| `USHER_MANAGEMENT_CLIENTS`            | Required                          | The client identifiers the management UI signs in through, as a comma-separated list. A management token's `azp` must be one of them. An empty value is an empty list, accepting no management token.                                                               |
+| `USHER_API_DOCS_CLIENT`               | Optional: none                    | The client used by the API documentation page at `/api-docs` to sign people in, which must be one of `USHER_MANAGEMENT_CLIENTS` exactly. Unset or empty means no page. Its requirements are under [The identity provider](#the-identity-provider).                  |
+| `USHER_BACK_CHANNEL_LOGOUT_AUDIENCES` | Required                          | The audiences allowed in a back-channel logout token's `aud`, as a comma-separated list: the platform's client identifiers. An empty value is an empty list.                                                                                                        |
 
 ---
 
@@ -176,6 +137,111 @@ The same commands make passwords needing no quoting in a shell or an environment
 
 - **The key-encryption key encrypts every stored application key.** The store's first start records a fingerprint derived from it, and a later start under any other key is refused. Every instance uses the same key, and without it no stored application key can be read.
 - **The cursor key encrypts the cursors handed to Bridges reading the notice stream.** Every instance uses the same key, since any instance may answer a Bridge's next poll.
+
+---
+
+## The seed file
+
+The seed file is a JSON object that seeds an instance's settings into a store holding none. It holds no secrets: a credential stays in the Controller's environment, as [Variables](#variables) describes.
+
+The schema migration command reads it on every run, from the path in `USHER_SEED_FILE`. The default path is `./seed.json`, relative to the command's working directory, which is `/app/seed.json` in the image. Mount the file at that path, or set the variable to the path where it is.
+
+On a later run, a file that cannot be read warns with the system's reason for the failure, and a file that is not one JSON object warns with the problem its text breaks; neither warning shows the file's content, and the run succeeds without changing the stored settings. On a first run, a file that cannot be read refuses the run, as a missing one does.
+
+| Member                         | Required                                          | What it gives                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issuer`                       | Yes, on a first run                               | Usher's own issuer: the `iss` of every Usher token                                                                                            |
+| `eventSource`                  | Yes, on a first run                               | The CloudEvents `source` carried by every event, naming the deployment, such as `https://usher.example.org/controller`                        |
+| `firstUser`                    | No, default `{ "realmRole": "usher-first-user" }` | Exactly one of `realmRole`, a realm role's name, or `subject`, a person's `sub` at the identity provider. Naming both, or neither, is refused |
+| Any other [setting](#settings) | No                                                | A first value for that setting. Omitted, it takes its default                                                                                 |
+
+`issuer`, `eventSource` and `firstUser` are fixed after the first run, whatever the file later says.
+
+An example for an install that relays sign-outs:
+
+```json
+{
+  "backChannelLogout": true,
+  "eventSource": "https://usher.example.org/controller",
+  "firstUser": {
+    "realmRole": "usher-first-user"
+  },
+  "issuer": "https://usher.example.org"
+}
+```
+
+An install that cannot relay sign-outs writes `"backChannelLogout": false` in place of `true`, as [Sign-outs](#sign-outs) describes.
+
+**The first run** validates the whole file, seeds every setting with the file's value where it gives one and the default otherwise, and records one `settings.seeding` event as the system, naming every seeded setting, `firstUser` included. It writes `settings.seedFileRead` at info, with the path. A first run with no file at the path is refused, naming `USHER_SEED_FILE`, after it writes `settings.seedFileMissing` at error, with the path and the variable. A file lacking `issuer` or `eventSource`, or breaking any other rule, is refused, naming `USHER_SEED_FILE`.
+
+**A later run** that finds settings in the store compares the file with the members the first run seeded, and changes nothing. It writes `settings.seedFileUnchanged` at info when they match. When they differ, it writes `settings.seedFileChanged` at warning, naming each top-level key the file added, changed or removed, and never a value. A later run with no file at the path writes nothing about it.
+
+**Editing the file after the first run changes no setting.** Changes go through the Controller, as [Changing a setting](#changing-a-setting) describes. A wrong `firstUser` on a fresh install is fixed by rebuilding that install, since only the first run seeds it.
+
+---
+
+## Settings
+
+Usher's own values are settings: the grant rules, the token and retention durations, the notice channel's limits, and whether sign-outs are relayed. Each instance keeps its settings in its store, each with a default, and reads them from there, so every instance acts on the same values. The seed file may give a first value for any of them. A value from elsewhere, such as a secret or the identity provider's identifiers, is configuration in the environment, as [Variables](#variables) describes.
+
+The Controller reads every setting from the store at its start, and refuses to start when one is missing or invalid, naming the setting and its rule, never its value.
+
+| Setting                             | Default                               | What it is, and its rule                                                                                                              |
+| ----------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `grantRules`                        | see [Grant rules](#grant-rules)       | The record actions conferred on everyone, and on every signed-in principal, by access level                                           |
+| `signInTokenMaximumLifetimeSeconds` | 300                                   | The longest lifetime of a sign-in or management token accepted, in seconds: a whole number of at least 1                              |
+| `tokenLifetimeSeconds`              | 300                                   | How long an Usher token lives, in seconds: a whole number of at least 1                                                               |
+| `retentionGraceSeconds`             | 60                                    | The grace period counted by the notice retention floor beyond the token lifetime, in seconds: a whole number of at least 0            |
+| `retentionMarginSeconds`            | 30                                    | The margin the notice retention floor adds beyond the token lifetime and the grace period, in seconds: a whole number of at least 0   |
+| `heartbeatMilliseconds`             | 10000                                 | How long an open notice stream may stay silent before a heartbeat: a whole number from 1 to 2147483647                                |
+| `noticePageLimit`                   | 500                                   | The most notices carried by one poll answer before it names a next page: a whole number of at least 1                                 |
+| `noticeRereadMilliseconds`          | 2000                                  | How often each instance reads the notice stream and the settings again when nothing has woken it: a whole number from 1 to 2147483647 |
+| `streamLimitPerAudience`            | 64                                    | How many push streams one audience may hold open on one instance: a whole number of at least 1                                        |
+| `streamMaximumLifetimeSeconds`      | 900                                   | How long a notice stream stays open at most, in seconds: a whole number of at least 60                                                |
+| `streamQueueLimit`                  | 1000                                  | The most notices queued for one stream before the stream is closed for a reader that stopped reading: a whole number of at least 1    |
+| `grantAutoAccept`                   | `false`                               | Whether a grant is accepted as it is created, its holder's acceptance recorded with it: `true` or `false`                             |
+| `submitterCategory`                 | `global.unmarked`                     | The record category a `submitter` grant naming none takes: `global.` followed by the name of a global category, which holds no dot    |
+| `backChannelLogout`                 | `true`                                | Whether sign-outs are relayed, as [Sign-outs](#sign-outs) describes                                                                   |
+| `issuer`                            | none                                  | Usher's own issuer, from the seed file. Fixed after the first run                                                                     |
+| `eventSource`                       | none                                  | The CloudEvents `source` of every event, from the seed file. Fixed after the first run                                                |
+| `firstUser`                         | `{ "realmRole": "usher-first-user" }` | The first user, from the seed file. Fixed after the first run                                                                         |
+
+### Changing a setting
+
+- `PATCH /admin/settings` takes any subset of the changeable settings, validates them together, and applies them in one transaction, all or nothing. It refuses an unknown name, a fixed setting, and `grantRules`. Each change is recorded as one `settings.change`, its admin as the actor, carrying each `name`, `value` and `previousValue`. Its severity is `critical` when a change names `grantAutoAccept`, `submitterCategory`, `backChannelLogout`, `signInTokenMaximumLifetimeSeconds`, `tokenLifetimeSeconds`, `retentionGraceSeconds` or `retentionMarginSeconds`, and `warning` otherwise.
+- It refuses a `signInTokenMaximumLifetimeSeconds` that the calling admin's own token would fail under, since that would lock the admin out. It refuses `backChannelLogout: true` while `USHER_BACK_CHANNEL_LOGOUT_AUDIENCES` is empty.
+- `GET /admin/settings` reads every setting, the fixed ones included. `GET /admin/settings/grant-rules` reads the grant rules, and `PUT /admin/settings/grant-rules` replaces the whole list. A replacement is recorded as `grantRules.change` at `critical`, carrying `grantRules` and `previousGrantRules`, and sends the baseline notice to every Bridge.
+- Only platform administrators may call these, as with the rest of the Management API.
+- A change reaches every instance within one `noticeRereadMilliseconds`. The grant rules are read by each exchange, so they apply to the next exchange on every instance.
+- A lowered retention setting takes effect at once. A Bridge whose cursor is trimmed past the new floor is answered `410` and resets, so no notice is missed.
+
+### Grant rules
+
+The grant rules are a list of entries. Each names who it is for and what it reaches:
+
+- `to`: `everyone`, which includes the anonymous visitor, or `signedIn`.
+- `resources`: a list of items, each with an `accessLevel`, `open` or `registered`, and its `categories`.
+- `categories`: a list of items, each with a `name`, which is `global.unmarked` for now, and `actions`, a list drawn from `count`, `view` and `export`.
+
+A grant rule grants its actions on the unmarked records of each resource at its access level, as a grant does. Every plural key holds a list, even one with a single entry or none. A duplicate entry, an unknown key, and a single value where a list belongs are refused.
+
+The default: everyone counts, views and exports open resources, and every signed-in principal does the same on open and registered ones.
+
+The API validates a change before it is stored, so only a row edited outside the API can break the rules, as the next section describes.
+
+### A stored setting that breaks its rule
+
+A row edited outside the API can break its rule. Each instance then keeps the last valid value of that setting, and writes `settings.storedInvalid` at error on each reread while the row stays invalid. The line names the setting and its rule, never its value. Readiness stays ready.
+
+Grant rules are the exception. An invalid stored grant rule makes readiness unready with the cause `storedSettingsInvalid`, and each exchange is answered `503` with the problem code `storedSettingsInvalid`, issuing nothing. A start refuses an invalid or missing row. A failed read of the settings is written as `settings.readFailed` at error, by its failure's code.
+
+To recover, correct the row to a value its rule accepts. The next reread takes it, and for the grant rules the next exchange does, and the lines stop.
+
+### Sign-outs
+
+`backChannelLogout` is `true` by default, so sign-outs are relayed: the identity provider posts each logout token to the Controller, and the audiences the Controller accepts in it are those in `USHER_BACK_CHANNEL_LOGOUT_AUDIENCES`, the platform's client identifiers. With relaying on and that list empty, the Controller refuses to start, naming the setting and the variable.
+
+An install that cannot relay sets `false`. Each start then writes a warning, and the back-channel logout route refuses every logout token before verifying it, with the reason `backChannelLogoutOff`, answered `400` `logoutTokenRefused` and recorded as `logoutToken.refusal`. The audience list is then ignored.
 
 ---
 
@@ -254,7 +320,7 @@ At each start, before anything listens, the Controller reads every privilege hel
 - `CREATE` on the database, or on any of its schemas;
 - ownership of the Controller's schema or of anything in it, or the right to grant on any of them;
 - `TRUNCATE` or `TRIGGER` on any table in the schema;
-- any write beyond what the migrations grant, `INSERT` included, on an append-only table: `audit_log`, `change_records`, `grant_decisions`, `key_fingerprints` or `notices`.
+- any write beyond what the migrations grant, `INSERT` included, on an append-only table: `audit_log`, `change_records`, `grant_decisions`, `key_fingerprints`, `nominations` or `notices`.
 
 It also refuses a role allowed to write some table but not to insert into `audit_log`, since a change could then go unrecorded. A missing schema, or one unusable by the role, is refused naming `USHER_DATABASE_SCHEMA`. So is a schema holding no record of applied migrations, `schema_migrations`, or one whose record the role may not read: run the schema migration command, which creates the record and grants the runtime role reading it.
 
@@ -266,14 +332,14 @@ It also refuses a role allowed to write some table but not to insert into `audit
 
 **Run the image once with the arguments `dist/migrate.js`, as a one-shot job, before each rollout of the Controller, and roll out only once it has succeeded.** It reads these variables. Give the Controller's instances neither of the first two.
 
-| Variable                                                                                          | What the command takes from it                                                                                |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `USHER_SCHEMA_MIGRATION_DATABASE_URL`                                                             | Its connection, as the schema migration role                                                                  |
-| `USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD`                                                        | That role's password                                                                                          |
-| `USHER_DATABASE_URL`                                                                              | The runtime role's name alone. The command never reads `USHER_DATABASE_PASSWORD`, so leave it out of the job. |
-| `USHER_DATABASE_SCHEMA`                                                                           | The schema it creates and migrates                                                                            |
-| `USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION`                                                      | Whether its own connection may leave the host without verifying the server, as for the Controller             |
-| `USHER_TOKEN_LIFETIME_SECONDS`, `USHER_RETENTION_GRACE_SECONDS`, `USHER_RETENTION_MARGIN_SECONDS` | The notice retention floor, their sum, which it stores                                                        |
+| Variable                                     | What the command takes from it                                                                                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USHER_SCHEMA_MIGRATION_DATABASE_URL`        | Its connection, as the schema migration role                                                                                                                  |
+| `USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD`   | That role's password                                                                                                                                          |
+| `USHER_DATABASE_URL`                         | The runtime role's name alone. The command never reads `USHER_DATABASE_PASSWORD`, so leave it out of the job.                                                 |
+| `USHER_DATABASE_SCHEMA`                      | The schema it creates and migrates                                                                                                                            |
+| `USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION` | Whether its own connection may leave the host without verifying the server, as for the Controller                                                             |
+| `USHER_SEED_FILE`                            | The seed file's path, read on every run: seeding the settings on a first run, comparing the file on a later one, as [The seed file](#the-seed-file) describes |
 
 A run goes through these steps, and every refusal comes before anything is written:
 
@@ -284,13 +350,13 @@ A run goes through these steps, and every refusal comes before anything is writt
 5. It refuses a database whose record departs from this release's migrations: a migration it does not hold, one changed since it was applied, or one missing below an applied one.
 6. It creates the record of applied migrations, `schema_migrations`, when the schema has none, and grants the runtime role reading it.
 7. It applies each pending migration in a transaction of its own, which records it.
-8. It stores the notice retention floor, when it differs from the stored one.
+8. On a first run, it seeds the settings from the seed file; on a later run, it compares the file and changes nothing, as [The seed file](#the-seed-file) and [Settings](#settings) describe.
 
-| Outcome                          | What it writes                                                                                                                                            | Exit code                           |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| Success                          | One line at info on standard output, with the message `schemaMigrations.applied`, `applied` naming each migration it applied, and `retentionFloorSeconds` | 0                                   |
-| Refusal or failure               | One fatal line on standard error, as [Logs](#logs) describes                                                                                              | 1                                   |
-| Stopped by `SIGTERM` or `SIGINT` | One fatal line on standard error, saying the run was stopped                                                                                              | 143 for `SIGTERM`, 130 for `SIGINT` |
+| Outcome                          | What it writes                                                                                                                                                                                        | Exit code                           |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Success                          | One line at info on standard output, with the message `schemaMigrations.applied`, `applied` naming each migration it applied, and `settingsSeeded`, which is true on the run that seeded the settings | 0                                   |
+| Refusal or failure               | One fatal line on standard error, as [Logs](#logs) describes                                                                                                                                          | 1                                   |
+| Stopped by `SIGTERM` or `SIGINT` | One fatal line on standard error, saying the run was stopped                                                                                                                                          | 143 for `SIGTERM`, 130 for `SIGINT` |
 
 **To check a run and the rollout after it:**
 
@@ -298,7 +364,7 @@ A run goes through these steps, and every refusal comes before anything is writt
 2. After the rollout, the Controller reports itself ready, which confirms its database records no migration this release does not know.
 3. A Controller that does not become ready says why in its `schema.migrationUnknown` line or its readiness cause, as [Readiness and liveness](#readiness-and-liveness) describes.
 
-- **A run on a current database applies nothing**, so `applied` is an empty list. All it may change is the retention floor, and the runtime role's reading of `schema_migrations` where that was revoked. Changing any of the three durations therefore takes a run, with the new values, before the Controller rolls out with them.
+- **A run on a current database applies nothing**, so `applied` is an empty list. It may change only the runtime role's reading of `schema_migrations` where that was revoked. Settings change through the Controller, so no run is needed to change one.
 - **A failed migration leaves none of itself applied**, and every migration before it stays applied. Run the command again to apply the rest.
 - **Connecting is bounded at 30 seconds, but statements are not**, since a migration's changes to the schema may run long. Give the job a deadline of your platform's own, such as a Kubernetes Job's `activeDeadlineSeconds`, so a run that stops making progress cannot hold a rollout indefinitely.
 - **A stop rolls back the migration in flight.** The first `SIGTERM` or `SIGINT` ends the run's connection, and every migration committed before it stays applied. A second signal ends the process at once. The run's session checks every second that its client is still connected, so even a process ended outright has its session ended by the server within about a second, rolling back and releasing the lock.
@@ -318,11 +384,13 @@ The Controller trusts one realm of one identity provider. Its requirements, in K
 - **Tokens signed with an asymmetric algorithm**: RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384 or ES512. The Controller accepts no symmetric algorithm.
 - **Bearer access tokens from every client.** Every client sending tokens to an ushered application or to the Management API, the management UI among them, sends bearer access tokens, never a token bound to a key held by the client (DPoP), since the Controller is handed the token alone and cannot check the client's proof of possession.
 - **A subject, an audience and an issue time in every access token.** Every access token sent to an ushered application is a full one carrying a subject (`sub`), an audience (`aud`) naming the application's id as registered with Usher, added as the management UI client's audience is below, and the time it was issued (`iat`), never a reduced form leaving them out (Keycloak's lightweight access token, for one), since the Controller refuses a token missing any of them.
-- **Access tokens living no longer than `USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS`.** For every client sending tokens to an ushered application or to the Management API, the access token lifespan, the realm's or the client's own where it sets one, is at most that many seconds, since the Controller refuses a token living longer.
-- **The first-user role.** A realm role named as in `USHER_FIRST_USER_ROLE`, carried in each access token's `realm_access.roles`, held by whoever nominates Usher's first administrator. Usher keeps its own list of administrators and reads it on every Management API request, so no realm role makes an administrator. Until an administrator has accepted, the Controller refuses every Management API operation with `403` `noAdministratorYet`, but for the first user nominating an administrator through `POST /admin/nominations`, the nominee accepting through `POST /admin/nominations/{id}/acceptance`, and a nominee listing their nominations through `GET /admin/me/nominations`; the health routes and the token exchange answer as usual. The nominee is the first user themself, or a person who has signed in through the realm and reached Usher before. The first user may nominate again while no administrator has accepted, and only the latest nomination may be accepted. Once an administrator has accepted, the role confers nothing, whoever holds it. Until then, whoever may assign the realm's roles can give the first-user role to anyone, themselves included, and so nominate; in Keycloak, `manage-users` is enough. Grant the role to one person, and have the first administrator accept soon after the Controller first starts.
+- **Access tokens living no longer than the `signInTokenMaximumLifetimeSeconds` setting.** For every client sending tokens to an ushered application or to the Management API, the access token lifespan, the realm's or the client's own where it sets one, is at most that many seconds, since the Controller refuses a token living longer.
+- **The first user.** The `firstUser` setting names either a realm role, carried in each access token's `realm_access.roles` and held by whoever nominates Usher's first administrator, or a person by `subject`, the `sub` claim at the identity provider, who needs no role. Usher keeps its own list of administrators and reads it on every Management API request, so no realm role makes an administrator. Until an administrator has accepted, the Controller refuses every Management API operation with `403` `noAdministratorYet`, but for the first user nominating an administrator through `POST /admin/nominations`, the nominee accepting through `POST /admin/nominations/{id}/acceptance`, and a nominee listing their nominations through `GET /admin/me/nominations`; the health routes and the token exchange answer as usual. The nominee is the first user themself, or a person who has signed in through the realm and reached Usher before. The first user may nominate again while no administrator has accepted, and only the latest nomination may be accepted. Once an administrator has accepted, the first user confers nothing, whoever it is. Until then, where the first user is a realm role, whoever may assign the realm's roles can give it to anyone, themselves included, and so nominate; in Keycloak, `manage-users` is enough. Give the role to one person, or name one person's subject, and have the first administrator accept soon after the Controller first starts.
 - **A client for the management UI.** Its access tokens carry the audience in `USHER_MANAGEMENT_AUDIENCE` in their `aud`, which in Keycloak takes an audience mapper. Its client id is listed in `USHER_MANAGEMENT_CLIENTS`, since the Controller checks each management token's `azp` against that list. The management UI signs people in through the authorization code flow with PKCE, as a public client. Every management token carries `sub`, `exp` and `iat`.
-- **A client for the API documentation page**, where `USHER_API_DOCS_CLIENT` is set. It is a public client using the authorization code flow with PKCE, Keycloak's standard flow, with every other flow off. Its redirect URI is `/api-docs/oauth2-redirect.html` at the Controller's origin as browsers reach it, such as `https://usher.example.org/api-docs/oauth2-redirect.html`, and that origin is one of its web origins, so the page can fetch its tokens. It carries the same audience mapper as the management UI's client, and its client id is listed in `USHER_MANAGEMENT_CLIENTS`. Its access tokens carry the role in `USHER_FIRST_USER_ROLE`, so the first user can nominate through the page, which in Keycloak takes that role in the client's scope wherever its full scope is off. The identity provider's discovery document names its authorization and token endpoints at the issuer's origin, with no user name or password in them. The page's contract, at `/api-docs/openapi.json`, is answered `503` while the Controller cannot read these endpoints from the discovery document.
+- **A client for the API documentation page**, where `USHER_API_DOCS_CLIENT` is set. It is a public client using the authorization code flow with PKCE, Keycloak's standard flow, with every other flow off. Its redirect URI is `/api-docs/oauth2-redirect.html` at the Controller's origin as browsers reach it, such as `https://usher.example.org/api-docs/oauth2-redirect.html`, and that origin is one of its web origins, so the page can fetch its tokens. It carries the same audience mapper as the management UI's client, and its client id is listed in `USHER_MANAGEMENT_CLIENTS`. Its access tokens carry the realm role the `firstUser` setting names, where it names one, so the first user can nominate through the page, which in Keycloak takes that role in the client's scope wherever its full scope is off. The identity provider's discovery document names its authorization and token endpoints at the issuer's origin, with no user name or password in them. The page's contract, at `/api-docs/openapi.json`, is answered `503` while the Controller cannot read these endpoints from the discovery document.
 - **Access tokens living 15 minutes or less.** The Controller reads the first-user role from each token, never from a cache, so removing the role takes effect only as the tokens issued before its removal expire.
+
+**The store records the identity provider's identifiers.** The Controller reads six identifiers from its environment: the identity provider's issuer, the management audience and clients, the client of the API documentation page, the service account role and the logout audiences. At each start it compares them with the stored ones. Where any differ, the start records an `identityProvider.configurationChange` naming what changed, at `critical` when the issuer, the management audience, the management clients or the service account role changed and at `warning` otherwise, and then stores the new values. A first recording fills the record with no event. The record says what changed and when, and never who: the start acts as the system. A rolling deploy whose instances read different values records the changes back and forth, one for each start that finds a difference.
 
 ---
 
@@ -349,16 +417,17 @@ Where `USHER_API_DOCS_CLIENT` is set, these calls can also be made from a browse
 | `GET /health/live`  | 200 until a log write fails, 503 from then on        | Liveness   |
 | `GET /health/ready` | 200 while the instance is ready, 503 while it is not | Readiness  |
 
-An instance is ready while all five hold, checked in this order:
+An instance is ready while all six hold, checked in this order:
 
 1. It has started, and is not stopping.
 2. Every line it has written has reached its log stream.
 3. Its store answers a probe within `USHER_STORE_TIMEOUT_MILLISECONDS`.
 4. Its store records no migration this release does not know, in a record its role may read.
-5. Its store does not answer as read-only, for an instance with a role allowed to write.
+5. Its store holds valid grant rules, as [Settings](#settings) describes.
+6. Its store does not answer as read-only, for an instance with a role allowed to write.
 
 - **The store's answer is reused for one second**, so however often readiness is asked, the store is probed at most once a second.
-- **Each change of readiness is logged when readiness is next asked.** Becoming unready is `readiness.lost` at warning, with its `cause`: `stopping`, `logUnwritable`, `storeTimeout`, a SQLSTATE, `storeFailed` for a failure carrying no code, `migrationRecordUnreadable`, `migrationUnknown`, or `readOnly`. Becoming ready again is `readiness.restored` at info.
+- **Each change of readiness is logged when readiness is next asked.** Becoming unready is `readiness.lost` at warning, with its `cause`: `stopping`, `logUnwritable`, `storeTimeout`, a SQLSTATE, `storeFailed` for a failure carrying no code, `migrationRecordUnreadable`, `migrationUnknown`, `storedSettingsInvalid`, or `readOnly`. Becoming ready again is `readiness.restored` at info.
 - **With the cause `migrationRecordUnreadable`, the schema holds no record of applied migrations, or the role may not read it.** Run the schema migration command, which creates the record and grants the runtime role reading it.
 - **With the cause `migrationUnknown`, the store records a migration this release does not know**, including one changed since it was applied. The instance writes `schema.migrationUnknown` at error once each time it becomes unready for this cause, however often readiness is asked. Its `migrations` names each such migration by its `name`, with `checksumDiffers` set to `true` for one the release holds under that name with another checksum, and its `refused` is `readiness`. A refused start writes the same line with `refused` set to `start`. A recorded name not in migration form, four digits then lower-case words joined by underscores, is written as `a name not in migration form`. The cure is to deploy a release that knows every applied migration, as [Schema migration before each rollout](#schema-migration-before-each-rollout) describes.
 - **Once its log stream fails to take a line, an instance fails liveness as well as readiness, until it is restarted.** A restart is the only recovery, and no line can report the failure, since the stream it would go to is the one that failed. So the liveness probe is the signal: an instance restarting over and over points at its log stream.
@@ -380,7 +449,7 @@ That probe reaches the instance at `127.0.0.1`, so `USHER_HOST` must accept loop
 **Standard output carries one JSON object per line.** Each holds a numeric `level`: 30 for info, 40 for warning and 50 for error.
 
 - **An operational line** carries `message`, its name, such as `readiness.lost`, with its fields and `time`.
-- **An event** carries a CloudEvents 1.0 envelope: `id`, `source` from `USHER_EVENT_SOURCE`, a `type` starting `bio.overture.`, `time`, `severity`, and `data` naming the actor and, as `instance`, the value of `USHER_INSTANCE_NAME`. Each event is also stored in the database's `audit_log`.
+- **An event** carries a CloudEvents 1.0 envelope: `id`, `source` from the `eventSource` setting, a `type` starting `bio.overture.`, `time`, `severity`, and `data` naming the actor and, as `instance`, the value of `USHER_INSTANCE_NAME`. Each event is also stored in the database's `audit_log`.
 
 **A single `retention.sweepFailed` line, at error, means the instance's retention sweep, which each second deletes the records of exchanged sessions whose sign-in tokens have expired, the sign-out records more than the Controller's clock tolerance of 30 seconds past their expiry, and the notices past the retention floor, has stopped deleting until one of its runs succeeds**: it is written once as the runs start failing, naming the `cause`, so a fault that persists, such as a missing grant, writes that one line and nothing more.
 
@@ -400,4 +469,4 @@ That probe reaches the instance at `127.0.0.1`, so `USHER_HOST` must accept loop
 
 **This release has no procedure for recovering when no platform administrator can sign in.** Usher's administrators are those its own store holds, read on every Management API request, and an administrator is made only by accepting a nomination.
 
-- **No identity provider role restores an administrator.** The role in `USHER_FIRST_USER_ROLE` confers nothing once an administrator has accepted, whoever holds it, and no other realm role makes one.
+- **No identity provider role restores an administrator.** The first user confers nothing once an administrator has accepted, whoever it is, and no other realm role makes one.

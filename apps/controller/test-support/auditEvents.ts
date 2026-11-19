@@ -33,7 +33,6 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
   applicationRegistration: 'application.registration',
   applicationServedResourcesChange: 'application.servedResourcesChange',
   auditRead: 'audit.read',
-  baselineChange: 'baseline.change',
   categoryCreation: 'category.creation',
   channelAssertionRejection: 'channelAssertion.rejection',
   channelAssertionRejectionTally: 'channelAssertion.rejectionTally',
@@ -43,7 +42,9 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
   grantRateExceeded: 'grant.rateExceeded',
   grantReduction: 'grant.reduction',
   grantRevocation: 'grant.revocation',
+  grantRulesChange: 'grantRules.change',
   grantSelfCreation: 'grant.selfCreation',
+	identityProviderConfigurationChange: 'identityProvider.configurationChange',
   identityRevocation: 'identity.revocation',
   identityRevocationLift: 'identity.revocationLift',
   identitySignOut: 'identity.signOut',
@@ -65,6 +66,8 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
   resourceRetirement: 'resource.retirement',
   resourceRevocation: 'resource.revocation',
   resourceSuppression: 'resource.suppression',
+  settingsChange: 'settings.change',
+  settingsSeeding: 'settings.seeding',
   tokenExchange: 'token.exchange',
   tokenExchangeRefusalTally: 'token.exchangeRefusalTally',
 } as const);
@@ -141,8 +144,8 @@ export interface EventFieldSets {
  * A row's severity, as its cell names it: one severity; one that follows the event's `result`; one
  * chosen by a field's value, as the key revocation's is by `reason`, the mode change's by `toMode`
  * and the import run's by `result`; category.unmapped's two, told apart by whether the event carries
- * a field; or the baseline change's two, told apart by whether the start recording it is the store's
- * first, which no field carries. One severity or one chosen by value may give a denied result a
+ * a field; or two told apart by whether the start recording them is the store's first, which no field
+ * carries. One severity or one chosen by value may give a denied result a
  * severity of its own, read before anything else.
  */
 export type EventSeverity =
@@ -161,7 +164,18 @@ export type EventSeverity =
       whenDenied?: Severity;
     }
   | { kind: 'fixed'; severity: Severity; whenDenied?: Severity }
-  | { kind: 'followsResult' };
+  | { kind: 'followsResult' }
+  | {
+      /**
+       * Each name a change of the event's `changes` list may name. General, not for one event: a severity by which
+       * names changed is `severity` when any of `names` is among the changes, `otherwise` when none is.
+       */
+      kind: 'byChangedName';
+      names: readonly string[];
+      otherwise: Severity;
+      severity: Severity;
+      whenDenied?: Severity;
+    };
 
 /**
  * A row's actor: `system` or `anonymous`, the two the Actor column names as `actorType` does, or the
@@ -198,8 +212,7 @@ const SEVERITIES: readonly Severity[] = [
 /**
  * The severity cells telling their cases apart in prose rather than by a value a fields cell lists:
  * category.unmapped's, by whether the event carries the resource, which only a resource category's
- * does; the mode change's, by the mode it enters; and the baseline change's, by whether the start
- * recording it is the store's first. The Bridge's two follow its `events.test.ts`
+ * does; and the mode change's, by the mode it enters. The Bridge's two follow its `events.test.ts`
  * `PER_CASE_SEVERITIES`.
  */
 const PROSE_CASE_SEVERITIES: readonly {
@@ -222,14 +235,6 @@ const PROSE_CASE_SEVERITIES: readonly {
       field: 'toMode',
       kind: 'byValue',
       otherwise: 'critical',
-    },
-  },
-  {
-    cell: "`info` at the store's first start; else `warning`",
-    severity: {
-      atFirstStart: 'info',
-      kind: 'byFirstStart',
-      otherwise: 'warning',
     },
   },
 ];
@@ -262,6 +267,13 @@ const DENIED_CLAUSE = /^`(\w+)` when refused$/u;
 const VALUE_CLAUSE = /^`(\w+)` for (`\w+`(?:(?:, | or )`\w+`)*)$/u;
 
 const OTHERWISE_CLAUSE = /^else `(\w+)`$/u;
+
+// A severity cell by which names changed: "`critical` when `a`, `b` or `c` changed; `warning` otherwise".
+const CHANGED_NAMES_CELL =
+  /^`(\w+)` when (`\w+`(?:(?:, | or )`\w+`)*) changed; `(\w+)` otherwise$/u;
+
+// A severity by which names changed, beside a refusal's: "`warning` when refused; " and then the changed-names cell.
+const REFUSED_CHANGED_NAMES_CELL = /^`(\w+)` when refused; (.+)$/u;
 
 /**
  * The note's rule for a refused Management API request: the operation's own event, `denied`, carrying
@@ -515,6 +527,19 @@ export const severityIn = (
   if (cell === FOLLOWS_RESULT) {
     return { kind: 'followsResult' };
   }
+  const refused = REFUSED_CHANGED_NAMES_CELL.exec(cell);
+  const changed = CHANGED_NAMES_CELL.exec(refused?.[2] ?? cell);
+  if (changed !== null) {
+    return {
+      kind: 'byChangedName',
+      names: backtickedIn(changed[2] ?? ''),
+      otherwise: severityNamed(changed[3], cell),
+      severity: severityNamed(changed[1], cell),
+      ...(refused === null
+        ? {}
+        : { whenDenied: severityNamed(refused[1], cell) }),
+    };
+  }
   return (
     PROSE_CASE_SEVERITIES.find((perCase) => perCase.cell === cell)?.severity ??
     casedSeverityIn(cell, fieldsCell)
@@ -646,6 +671,29 @@ export const NOT_EMITTED_IN_THIS_EPIC: Readonly<
     'admin.ts holds no ownership transfer operation (#214 Q14)',
   'resource.orphaned': 'post-MVP in the first release (#214 Q20)',
 });
+
+/**
+ * The severity a `byChangedName` severity gives an event whose `changes` list names each change's `name`:
+ * `severity` when any of the severity's names is among them, `otherwise` when none is.
+ *
+ * @param severity the severity, read from its cell by {@link severityIn}.
+ * @param data the event's data; a `changes` list of `{ name, ... }` entries, or none.
+ */
+export const severityOfChanges = (
+  severity: Extract<EventSeverity, { kind: 'byChangedName' }>,
+  data: Readonly<Record<string, unknown>>,
+): Severity => {
+  const changed = Array.isArray(data['changes'])
+    ? data['changes'].map((change: unknown) =>
+        change !== null && typeof change === 'object'
+          ? String(Reflect.get(change, 'name'))
+          : '',
+      )
+    : [];
+  return severity.names.some((name) => changed.includes(name))
+    ? severity.severity
+    : severity.otherwise;
+};
 
 /**
  * The CloudEvents extension attribute an event's line carries its severity in (#214 Q2), as the

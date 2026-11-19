@@ -89,7 +89,7 @@ describes:
 | `audience`      | the application's `id`, in the answer registering it                                                                               |
 | `key`           | the `key.value` in that same answer, the only answer that shows it                                                                 |
 | `controllerUrl` | where the application reaches the controller: https, or plain http only to `127.0.0.1`, `localhost` or `[::1]`                     |
-| `issuer`        | the Controller's `USHER_ISSUER`, the `iss` of every Usher token                                                                    |
+| `issuer`        | the Controller's `issuer` setting, the `iss` of every Usher token                                                                  |
 | `eventSource`   | the application's own: a URI reference naming this deployment rather than one replica, the `source` of every event the Bridge logs |
 
 Each route mounted after the middleware reads its request's access from `res.locals` with

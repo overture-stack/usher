@@ -56,7 +56,7 @@ export const PROBLEMS = Object.freeze({
     'notFirstUser',
     403,
     'Not the first user',
-    "Only the first user nominates Usher's first administrator: a principal whose token holds the first-user role.",
+		"Only the first user nominates Usher's first administrator: the principal the configured first user names.",
   ),
   outcomeUnknown: problem(
     'outcomeUnknown',
@@ -99,6 +99,12 @@ export const PROBLEMS = Object.freeze({
     415,
     'Unsupported media type',
     'Send the body as application/json, in UTF-8.',
+  ),
+  unsupportedMergePatch: problem(
+    'unsupportedMediaType',
+    415,
+    'Unsupported media type',
+    'Send the body as application/merge-patch+json, in UTF-8.',
   ),
 });
 

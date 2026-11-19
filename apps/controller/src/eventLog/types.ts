@@ -1,5 +1,5 @@
-import type { ControllerConfiguration } from '../configuration/index.js';
 import type { Deadline } from '../storeTimeout/index.js';
+import type { ControllerSettings } from '../settings/index.js';
 
 /** A value JSON can hold, as a line's field or an event's data carries it. */
 export type JsonValue =
@@ -79,10 +79,7 @@ export interface EventLog {
 }
 
 /** What the log is created from: the clock its lines' times are read from, and the stream they go to. */
-export type EventLogSettings = Pick<
-  ControllerConfiguration,
-  'clock' | 'logStream'
->;
+export type EventLogSettings = Pick<ControllerSettings, 'clock' | 'logStream'>;
 
 /**
  * Who acts, by the kinds `audit-events.md` names: a person or a service account by the identity
@@ -108,7 +105,6 @@ export type AuditEventType =
   | 'applicationKey.revocation'
   | 'applicationKey.unreadable'
   | 'audit.read'
-  | 'baseline.change'
   | 'category.creation'
   | 'channelAssertion.rejection'
   | 'channelAssertion.rejectionTally'
@@ -119,9 +115,11 @@ export type AuditEventType =
   | 'grant.reduction'
   | 'grant.revocation'
   | 'grant.selfCreation'
+  | 'grantRules.change'
   | 'identity.revocation'
   | 'identity.revocationLift'
   | 'identity.signOut'
+  | 'identityProvider.configurationChange'
   | 'invitation.claim'
   | 'invitation.creation'
   | 'invitation.lapse'
@@ -140,6 +138,8 @@ export type AuditEventType =
   | 'resource.retirement'
   | 'resource.revocation'
   | 'resource.suppression'
+  | 'settings.change'
+  | 'settings.seeding'
   | 'token.exchange'
   | 'token.exchangeRefusalTally';
 
@@ -299,7 +299,7 @@ export interface AuditTrailSettings<Connection extends TrailConnection> {
    * and the store timeout each transaction runs within.
    */
   settings: Pick<
-    ControllerConfiguration,
+    ControllerSettings,
     | 'clock'
     | 'databaseSchema'
     | 'eventSource'

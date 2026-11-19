@@ -6,6 +6,9 @@ import type { UnknownMigration } from '../migrations/index.js';
  * records as applied that this release does not know.
  */
 export interface StoreProbe {
+	/** Whether the grant rules the store holds read as valid. */
+	grantRulesValid: boolean;
+
   readOnly: boolean;
   unknownMigrations: readonly UnknownMigration[];
 }

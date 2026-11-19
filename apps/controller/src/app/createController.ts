@@ -73,7 +73,13 @@ import {
 import {
   createSignOutRoute,
   logoutTokenRefusalTallyEvent,
+  SIGN_OUTS_RELAYING_OFF,
 } from '../signOuts/index.js';
+import {
+  createSettingsRoutes,
+  createSettingsSource,
+  liveSettingsOf,
+} from '../settings/index.js';
 import {
   checkStatementLimits,
   databaseCaFile,
@@ -159,7 +165,8 @@ const READINESS_CONNECTIONS = 1;
  *
  * Every start allowed a database connection that does not verify the server it reaches writes one
  * line at warning, {@link UNVERIFIED_CONNECTION_ALLOWED}, naming the variable allowing it, before
- * anything else. Every connection opening over TLS verifies the server against the CA file the
+ * anything else. Every start with the `backChannelLogout` setting off writes one line at warning,
+ * {@link SIGN_OUTS_RELAYING_OFF}, naming the setting, before the instance listens. Every connection opening over TLS verifies the server against the CA file the
  * database URL names in `sslrootcert` as that file is at that moment, so a CA certificate reissued
  * takes effect with no restart; a change to the file, or its becoming unreadable, is written once.
  *
@@ -240,14 +247,22 @@ export const createController = (
     readinessStore,
     configuration.storeTimeoutMilliseconds,
   );
+  // The stored settings the instance holds, read by the start and reread on a timer; every part reads
+  // the setting it uses from the view laid over the configuration.
+  const settingsSource = createSettingsSource({
+    log: eventLog,
+    reader,
+    schema: configuration.databaseSchema,
+  });
+  const settings = liveSettingsOf(configuration, settingsSource);
   const trail = createAuditTrail<pg.PoolClient>({
     eventLog,
-    settings: configuration,
+    settings,
     store: controlStore,
   });
   const exchangeTrail = createAuditTrail<pg.PoolClient>({
     eventLog,
-    settings: configuration,
+    settings,
     store: exchangeStore,
   });
   // One instance's windows for the credentials refused at the Management API, the back-channel
@@ -329,7 +344,7 @@ export const createController = (
     keyRing,
     reader: createNoticeReader(reader, configuration.databaseSchema),
     rejections,
-    settings: configuration,
+    settings,
     usedAssertions: createUsedAssertions(configuration.clock),
     verifier: assertionVerifier,
   });
@@ -343,7 +358,10 @@ export const createController = (
   // What each step a Management API operation may name runs.
   const namedSteps: Readonly<
     Record<AfterCommitStepName, AfterCommitStep['run']>
-  > = { keyReload: () => keyRing.reload() };
+  > = {
+    keyReload: () => keyRing.reload(),
+    settingsReread: () => settingsSource.reread(),
+  };
   // One verifier for every route verifying the identity provider's tokens, so the keys fetched for
   // one are held for all, and their fetches share one cooldown.
   const tokenVerifier = createTokenVerifier(configuration, eventLog);
@@ -366,19 +384,18 @@ export const createController = (
     judgeCredential: (credential, context) =>
       judgeSignInCredential(credential, {
         ...context,
-        signInTokenMaximumLifetimeSeconds:
-          configuration.signInTokenMaximumLifetimeSeconds,
+        signInTokenMaximumFor: settings.signInTokenMaximumFor,
         verifier: tokenVerifier,
       }),
     keyConfirmations: createKeyConfirmations({
       eventLog,
-      settings: configuration,
+      settings,
       trail: exchangeTrail,
     }),
     lateRequestThresholdMilliseconds: LATE_REQUEST_THRESHOLD_MILLISECONDS,
     monotonicNow: () => performance.now(),
     refusals,
-    settings: configuration,
+    settings,
     sharesExceeded,
     tokenLimitBytes: TOKEN_LIMIT_BYTES,
     trail: exchangeTrail,
@@ -393,7 +410,7 @@ export const createController = (
         log: eventLog,
         steps: names.map((name) => ({ name, run: namedSteps[name] })),
       }),
-    settings: configuration,
+    settings,
     storedRefusal: (question) =>
       readStoredRefusal(reader, configuration.databaseSchema, question),
     tokenVerifier,
@@ -405,11 +422,12 @@ export const createController = (
     log: eventLog,
     monotonicNow: () => performance.now(),
     probeStore: async () => {
-      const { readOnly, recorded } = await readStoreProbe(
+      const { grantRulesValid, readOnly, recorded } = await readStoreProbe(
         readinessReader,
         configuration.databaseSchema,
       );
       return {
+        grantRulesValid,
         readOnly,
         unknownMigrations: unknownMigrations(lifecycle.migrations, recorded),
       };
@@ -426,14 +444,14 @@ export const createController = (
     ...createApplicationRoutes(
       {
         cipher,
-        settings: configuration,
+        settings,
         store: reader,
         trail: wakingTrail,
       },
       management,
     ),
     ...createResourceRoutes(
-      { settings: configuration, store: reader, trail: wakingTrail },
+      { settings, store: reader, trail: wakingTrail },
       management,
     ),
     ...createGrantRoutes(
@@ -443,7 +461,7 @@ export const createController = (
             issuer: configuration.identityProviderIssuer,
             schema: configuration.databaseSchema,
           }),
-        settings: configuration,
+        settings,
         store: reader,
         trail: wakingTrail,
       },
@@ -456,7 +474,21 @@ export const createController = (
             issuer: configuration.identityProviderIssuer,
             schema: configuration.databaseSchema,
           }),
-        settings: configuration,
+        settings,
+        store: reader,
+        trail: wakingTrail,
+      },
+      management,
+    ),
+    ...createSettingsRoutes(
+      {
+        administratorStoreOf: (connection) =>
+          sqlAdministratorStore(connection, {
+            issuer: configuration.identityProviderIssuer,
+            schema: configuration.databaseSchema,
+          }),
+        settings,
+        source: settingsSource,
         store: reader,
         trail: wakingTrail,
       },
@@ -467,7 +499,7 @@ export const createController = (
     createSignOutRoute({
       eventLog,
       refusals,
-      settings: configuration,
+      settings,
       tokenVerifier,
       trail: wakingTrail,
     }),
@@ -489,8 +521,14 @@ export const createController = (
       configuration,
       eventLog,
       migrations,
+      settingsSource,
     );
     lifecycle.writes = writes;
+    if (!settings.backChannelLogout) {
+      eventLog.warning(SIGN_OUTS_RELAYING_OFF, {
+        setting: 'backChannelLogout',
+      });
+    }
     // Checks the statement limits of the exchange's and readiness's pools. The control pool's must
     // already have been checked, in prepareStore's transaction.
     await Promise.all(
@@ -501,6 +539,7 @@ export const createController = (
     await keyRing.start();
     await server.listen({ host: configuration.host, port: configuration.port });
     refusals.start();
+    settingsSource.start();
     assertionRejections.start();
     sharesExceeded.start();
     // A role that may only read deletes nothing, so its runs could only fail.
@@ -528,6 +567,7 @@ export const createController = (
           assertionRefusals.stop().then(() => assertionRejections.stop()),
           sharesExceeded.stop(),
           keyRing.stop(),
+          settingsSource.stop(),
           sweepStopped,
         ]);
       }

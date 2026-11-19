@@ -1,6 +1,6 @@
--- The notice stream bridges read, its trimming, the policy generation the payload cache is keyed by,
--- and the digest of the rules the controller last started with; then the triggers writing a policy
--- change's notices and raising the generation in the changing transaction.
+-- The notice stream bridges read, its trimming and the policy generation the payload cache is keyed by;
+-- then the triggers writing a policy change's notices and raising the generation in the changing
+-- transaction.
 
 -- One table carries every kind of notice. A principal notice names an identity provider subject, a
 -- category notice a resource by its identifier, and a servedResources notice the application whose
@@ -30,8 +30,9 @@ CREATE TABLE notice_stream (
 
 INSERT INTO notice_stream (epoch, trimmed_through) VALUES (gen_random_uuid(), 0);
 
--- The retention floor each migration run stores, which the controller's role may read and never
--- write, so it can never trim a notice a bridge may still act on.
+-- The retention floor, which the trigger on the retention settings writes in the changing transaction, so
+-- it always follows them. The Controller's role may read it and never write it, so it can never trim a
+-- notice a Bridge may still act on.
 CREATE TABLE notice_retention (
   singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
   floor_seconds integer NOT NULL CHECK (floor_seconds > 0)
@@ -45,13 +46,6 @@ CREATE TABLE policy_generation (
 );
 
 INSERT INTO policy_generation (generation) VALUES (0);
-
--- The digest of the baseline and the signed-in rule the controller last started with.
-CREATE TABLE rules_digest (
-  singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
-  digest text NOT NULL,
-  recorded_at timestamptz NOT NULL
-);
 
 -- An identity's position is drawn as each row is formed, before the transaction commits, so two
 -- writers could commit out of position order and a reader between them would pass the earlier for
@@ -430,10 +424,6 @@ BEGIN
 END
 $$;
 
--- A start under changed rules writes one baseline notice; a start under the same rules, none.
-CREATE TRIGGER write_notices_on_update AFTER UPDATE ON rules_digest
-  FOR EACH ROW WHEN (OLD.digest IS DISTINCT FROM NEW.digest) EXECUTE FUNCTION notify_baseline_change();
-
 CREATE FUNCTION notify_global_revocation() RETURNS trigger
   LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT
 AS $$
@@ -449,9 +439,6 @@ CREATE TRIGGER write_notices AFTER INSERT ON global_revocations
 GRANT SELECT, INSERT ON notices TO :"runtime_role";
 
 GRANT SELECT ON notice_stream, notice_retention, policy_generation TO :"runtime_role";
-
-GRANT SELECT, INSERT ON rules_digest TO :"runtime_role";
-GRANT UPDATE (digest, recorded_at) ON rules_digest TO :"runtime_role";
 
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA :"schema" FROM PUBLIC;
 

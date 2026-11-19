@@ -13,13 +13,10 @@ const NOW = Date.UTC(2026, 10, 18, 9, 30);
 
 const freshKey = (): string => randomBytes(32).toString('base64url');
 
-const SETTINGS: StoreSettings = {
-	baseline: ['count'],
+const SETTINGS: Pick<StoreSettings, 'clock' | 'databaseSchema' | 'keyEncryptionKey'> = {
 	clock: { now: () => NOW },
 	databaseSchema: 'usher',
 	keyEncryptionKey: freshKey(),
-	signedInRule: ['count', 'view', 'export'],
-	storeTimeoutMilliseconds: 5000,
 };
 
 interface Sent {

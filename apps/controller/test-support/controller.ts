@@ -1,12 +1,23 @@
 import { spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { access, mkdtemp, writeFile } from 'node:fs/promises';
 import { connect, createServer } from 'node:net';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
+import type {
+  MigrationOptions as CommandMigrationOptions,
+  SeedFile,
+} from '../src/migrations/index.js';
 import type { RecordAction } from '@overture-stack/usher-types';
+import type {
+  GrantRuleAction,
+  GrantRules,
+  Settings,
+} from '../src/settings/index.js';
 
 import type { AuditEventType, Severity } from './auditEvents.js';
 import { type BuiltEntry, builtEntry } from './build.js';
@@ -30,10 +41,11 @@ export interface ControllerApplication {
 }
 
 /**
- * The settings the Controller reads, as the harness gives them: each field but the clock and the log
- * stream travels in an environment variable of its own, written by {@link environmentFor}, and the
- * config module reads it from there. A default named below is the Controller's when the environment
- * leaves that variable unset.
+ * The settings the Controller reads, as the harness gives them: each field but the clock, the log
+ * stream and the {@link StoredField}s travels in an environment variable of its own, written by
+ * {@link environmentFor}, and the config module reads it from there. A stored field is written to the
+ * store instead, by {@link storedSettingsOf}, and the Controller reads it from there at its start. A
+ * default named below is the Controller's when the environment leaves that variable unset.
  */
 export interface ControllerSettings {
   /**
@@ -53,7 +65,10 @@ export interface ControllerSettings {
   /** The `aud` values a back-channel logout token may carry: the platform's client identifiers. */
   backChannelLogoutAudiences: readonly string[];
 
-  /** The record actions the baseline confers on everyone, anonymous visitors included; count, view and export by default. */
+  /**
+   * The actions the grant rules confer on open resources for everyone, anonymous visitors included, and
+   * for signed-in principals too; count, view and export by default. Stored as the grant rules.
+   */
   baseline: readonly RecordAction[];
 
   /**
@@ -181,7 +196,10 @@ export interface ControllerSettings {
    */
   signInTokenMaximumLifetimeSeconds: number;
 
-  /** The record actions the signed-in rule confers on every signed-in principal; count, view and export by default. */
+  /**
+   * The actions the grant rules confer on registered resources for every signed-in principal; count, view
+   * and export by default. Stored as the grant rules.
+   */
   signedInRule: readonly RecordAction[];
 
   /**
@@ -325,11 +343,10 @@ export interface MigrationOptions {
   databaseUrl: string;
 
   /**
-   * The notice retention floor in seconds, the token lifetime plus the grace period and the margin,
-   * which the migrations store for the trimming function to read. The deployment sets it, so the
-   * Controller's own role can never lower it (R3).
+   * Every setting a first run seeds, as the seed file gives them: the test's own values, and the
+   * defaults the template gives the rest.
    */
-  retentionFloorSeconds: number;
+  settings: Settings;
 
   /** The Controller's runtime role, created by the deployment, to which the migrations grant. */
   runtimeRole: string;
@@ -345,20 +362,15 @@ export interface MigrationOptions {
  * The migrations module's export: applies migrations up to a target, all of them by default,
  * settling once its connections have closed.
  */
-export type Migrate = (options: MigrationOptions) => Promise<void>;
+export type Migrate = (options: CommandMigrationOptions) => Promise<void>;
 
 /**
- * The rules and settings the policy a Controller's start seeds is written under: the baseline and the
- * signed-in rule whose digest it records, the schema, the clock its recording time is read from, and
- * the event source and instance its `baseline.change` event names.
+ * The settings the policy a Controller's start seeds is written under: the schema, and the clock its
+ * recording time is read from. The grant rules are not among them: the store holds them as a setting.
  */
 export interface SeededPolicySettings {
-  baseline: readonly RecordAction[];
   clock: Clock;
   databaseSchema: string;
-  eventSource: string;
-  instanceName: string;
-  signedInRule: readonly RecordAction[];
 }
 
 /** A connection the seeded policy is written on, such as a `pg.Client` under the migration role. */
@@ -374,8 +386,7 @@ interface SeedingTransaction {
 
 /**
  * The store module's export writing the policy a start seeds, in a transaction the audit trail holds:
- * the capability vocabulary and the seeded roles a store lacks, and the digest of the rules with its
- * `baseline.change` event when it differs from the one recorded.
+ * the capability vocabulary and the seeded roles a store lacks.
  */
 export type WriteSeededPolicy = (
   transaction: SeedingTransaction,
@@ -455,7 +466,9 @@ export interface AuditTrailOptions<Connection extends TrailConnection> {
    * The clock events' times are read from, the store's schema, the event source, the instance's name,
    * and the store timeout each transaction runs within.
    */
-  settings: Omit<SeededPolicySettings, 'baseline' | 'signedInRule'> & {
+  settings: Pick<SeededPolicySettings, 'clock' | 'databaseSchema'> & {
+    eventSource: string;
+    instanceName: string;
     storeTimeoutMilliseconds: number;
   };
 
@@ -532,17 +545,131 @@ const CONTROLLER_MODULES = {
 /** The least a stream's maximum lifetime may be configured to, in seconds; a lower one is refused. */
 export const STREAM_MAXIMUM_LIFETIME_FLOOR_SECONDS = 60;
 
-/** A setting the Controller reads from an environment variable of its own: every one but the clock and the log stream. */
+/**
+ * A setting the Controller reads from the store rather than its environment: the harness writes it there
+ * as the schema's owner, from {@link storedSettingsOf}, before the Controller starts. `baseline` and
+ * `signedInRule` are the actions of the grant rules, which the store holds as one setting.
+ */
+export type StoredField =
+  | 'autoAccept'
+  | 'baseline'
+  | 'eventSource'
+  | 'firstUserRole'
+  | 'heartbeatMilliseconds'
+  | 'issuer'
+  | 'noticePageLimit'
+  | 'noticeRereadMilliseconds'
+  | 'retentionGraceSeconds'
+  | 'retentionMarginSeconds'
+  | 'signInTokenMaximumLifetimeSeconds'
+  | 'signedInRule'
+  | 'streamLimitPerAudience'
+  | 'streamMaximumLifetimeSeconds'
+  | 'streamQueueLimit'
+  | 'submitterCategory'
+  | 'tokenLifetimeSeconds';
+
+/**
+ * A setting the Controller reads from an environment variable of its own: every one but the clock, the log
+ * stream and the {@link StoredField}s.
+ */
 export type FieldWithVariable = Exclude<
   keyof ControllerSettings,
-  'clock' | 'logStream'
+  'clock' | 'logStream' | StoredField
 >;
+
+// The grant rules confer only count, view and export, so a harness action of another kind is refused here rather than
+// stored as a rule that cannot hold it.
+const grantActionOf = (action: RecordAction): GrantRuleAction => {
+  if (action === 'count' || action === 'export' || action === 'view') {
+    return action;
+  }
+  throw new Error(`the grant rules confer count, view and export, not `);
+};
+
+/**
+ * The grant rules a harness's `baseline` and `signedInRule` give: everyone reads open resources in the
+ * baseline's actions, signed-in principals read the same on open resources and the signed-in rule's on
+ * registered ones, each on `global.unmarked`. The product's default is this shape with count, view and
+ * export in both, so a harness that leaves both at their defaults holds the default rules.
+ *
+ * @param rules the baseline and the signed-in rule's actions.
+ */
+export const grantRulesOf = ({
+  baseline,
+  signedInRule,
+}: Pick<ControllerSettings, 'baseline' | 'signedInRule'>): GrantRules => {
+  const categoriesOf = (actions: readonly RecordAction[]) =>
+    actions.length === 0
+      ? []
+      : [
+          {
+            actions: actions.map(grantActionOf),
+            name: 'global.unmarked' as const,
+          },
+        ];
+  return [
+    {
+      resources: [{ accessLevel: 'open', categories: categoriesOf(baseline) }],
+      to: 'everyone',
+    },
+    {
+      resources: [
+        { accessLevel: 'open', categories: categoriesOf(baseline) },
+        { accessLevel: 'registered', categories: categoriesOf(signedInRule) },
+      ],
+      to: 'signedIn',
+    },
+  ];
+};
+
+/**
+ * The values of the settings a configuration gives the store, by the store's name for each: every
+ * {@link StoredField}, the grant rules from the baseline and the signed-in rule, and the first user as its
+ * realm role.
+ *
+ * @param configuration the harness's configuration, or the stored fields of one.
+ */
+export const storedSettingsOf = ({
+  autoAccept,
+  baseline,
+  eventSource,
+  firstUserRole,
+  heartbeatMilliseconds,
+  issuer,
+  noticePageLimit,
+  noticeRereadMilliseconds,
+  retentionGraceSeconds,
+  retentionMarginSeconds,
+  signInTokenMaximumLifetimeSeconds,
+  signedInRule,
+  streamLimitPerAudience,
+  streamMaximumLifetimeSeconds,
+  streamQueueLimit,
+  submitterCategory,
+  tokenLifetimeSeconds,
+}: Pick<ControllerSettings, StoredField>): Partial<Settings> => ({
+  eventSource,
+  firstUser: { realmRole: firstUserRole },
+  grantAutoAccept: autoAccept,
+  grantRules: grantRulesOf({ baseline, signedInRule }),
+  heartbeatMilliseconds,
+  issuer,
+  noticePageLimit,
+  noticeRereadMilliseconds,
+  retentionGraceSeconds,
+  retentionMarginSeconds,
+  signInTokenMaximumLifetimeSeconds,
+  streamLimitPerAudience,
+  streamMaximumLifetimeSeconds,
+  streamQueueLimit,
+  submitterCategory,
+  tokenLifetimeSeconds,
+});
 
 const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   apiDocsClient: 'USHER_API_DOCS_CLIENT',
-  autoAccept: 'USHER_GRANT_AUTO_ACCEPT',
   backChannelLogoutAudiences: 'USHER_BACK_CHANNEL_LOGOUT_AUDIENCES',
-  baseline: 'USHER_BASELINE',
   cursorKey: 'USHER_CURSOR_KEY',
   databaseAllowUnverifiedConnection:
     'USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION',
@@ -551,31 +678,15 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
   databasePassword: 'USHER_DATABASE_PASSWORD',
   databaseSchema: 'USHER_DATABASE_SCHEMA',
   databaseUrl: 'USHER_DATABASE_URL',
-  eventSource: 'USHER_EVENT_SOURCE',
-  firstUserRole: 'USHER_FIRST_USER_ROLE',
-  heartbeatMilliseconds: 'USHER_HEARTBEAT_MILLISECONDS',
   host: 'USHER_HOST',
   identityProviderIssuer: 'USHER_IDENTITY_PROVIDER_ISSUER',
   instanceName: 'USHER_INSTANCE_NAME',
-  issuer: 'USHER_ISSUER',
   keyEncryptionKey: 'USHER_KEY_ENCRYPTION_KEY',
   managementAudience: 'USHER_MANAGEMENT_AUDIENCE',
   managementClients: 'USHER_MANAGEMENT_CLIENTS',
-  noticePageLimit: 'USHER_NOTICE_PAGE_LIMIT',
-  noticeRereadMilliseconds: 'USHER_NOTICE_REREAD_MILLISECONDS',
   port: 'USHER_PORT',
-  retentionGraceSeconds: 'USHER_RETENTION_GRACE_SECONDS',
-  retentionMarginSeconds: 'USHER_RETENTION_MARGIN_SECONDS',
   serviceAccountRole: 'USHER_SERVICE_ACCOUNT_ROLE',
-  signInTokenMaximumLifetimeSeconds:
-    'USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS',
-  signedInRule: 'USHER_SIGNED_IN_RULE',
   storeTimeoutMilliseconds: 'USHER_STORE_TIMEOUT_MILLISECONDS',
-  streamLimitPerAudience: 'USHER_STREAM_LIMIT_PER_AUDIENCE',
-  streamMaximumLifetimeSeconds: 'USHER_STREAM_MAXIMUM_LIFETIME_SECONDS',
-  streamQueueLimit: 'USHER_STREAM_QUEUE_LIMIT',
-  submitterCategory: 'USHER_SUBMITTER_CATEGORY',
-  tokenLifetimeSeconds: 'USHER_TOKEN_LIFETIME_SECONDS',
   trustedProxies: 'USHER_TRUSTED_PROXIES',
 };
 
@@ -646,9 +757,7 @@ const loadExport = async <Exported>(
  */
 export const environmentFor = ({
   apiDocsClient,
-  autoAccept,
   backChannelLogoutAudiences,
-  baseline,
   cursorKey,
   databaseAllowUnverifiedConnection,
   databaseControlConnections,
@@ -656,37 +765,20 @@ export const environmentFor = ({
   databasePassword,
   databaseSchema,
   databaseUrl,
-  eventSource,
-  firstUserRole,
-  heartbeatMilliseconds,
   host,
   identityProviderIssuer,
   instanceName,
-  issuer,
   keyEncryptionKey,
   managementAudience,
   managementClients,
-  noticePageLimit,
-  noticeRereadMilliseconds,
   port,
-  retentionGraceSeconds,
-  retentionMarginSeconds,
   serviceAccountRole,
-  signInTokenMaximumLifetimeSeconds,
-  signedInRule,
   storeTimeoutMilliseconds,
-  streamLimitPerAudience,
-  streamMaximumLifetimeSeconds,
-  streamQueueLimit,
-  submitterCategory,
-  tokenLifetimeSeconds,
   trustedProxies,
 }: ControllerSettings): Readonly<Record<string, string>> => ({
   [VARIABLE_NAMES.apiDocsClient]: apiDocsClient,
-  [VARIABLE_NAMES.autoAccept]: String(autoAccept),
   [VARIABLE_NAMES.backChannelLogoutAudiences]:
     backChannelLogoutAudiences.join(','),
-  [VARIABLE_NAMES.baseline]: baseline.join(','),
   [VARIABLE_NAMES.cursorKey]: cursorKey,
   [VARIABLE_NAMES.databaseAllowUnverifiedConnection]: String(
     databaseAllowUnverifiedConnection,
@@ -700,34 +792,15 @@ export const environmentFor = ({
   [VARIABLE_NAMES.databasePassword]: databasePassword,
   [VARIABLE_NAMES.databaseSchema]: databaseSchema,
   [VARIABLE_NAMES.databaseUrl]: databaseUrl,
-  [VARIABLE_NAMES.eventSource]: eventSource,
-  [VARIABLE_NAMES.firstUserRole]: firstUserRole,
-  [VARIABLE_NAMES.heartbeatMilliseconds]: String(heartbeatMilliseconds),
   [VARIABLE_NAMES.host]: host,
   [VARIABLE_NAMES.identityProviderIssuer]: identityProviderIssuer,
   [VARIABLE_NAMES.instanceName]: instanceName,
-  [VARIABLE_NAMES.issuer]: issuer,
   [VARIABLE_NAMES.keyEncryptionKey]: keyEncryptionKey,
   [VARIABLE_NAMES.managementAudience]: managementAudience,
   [VARIABLE_NAMES.managementClients]: managementClients.join(','),
-  [VARIABLE_NAMES.noticePageLimit]: String(noticePageLimit),
-  [VARIABLE_NAMES.noticeRereadMilliseconds]: String(noticeRereadMilliseconds),
   [VARIABLE_NAMES.port]: String(port),
-  [VARIABLE_NAMES.retentionGraceSeconds]: String(retentionGraceSeconds),
-  [VARIABLE_NAMES.retentionMarginSeconds]: String(retentionMarginSeconds),
   [VARIABLE_NAMES.serviceAccountRole]: serviceAccountRole,
-  [VARIABLE_NAMES.signInTokenMaximumLifetimeSeconds]: String(
-    signInTokenMaximumLifetimeSeconds,
-  ),
-  [VARIABLE_NAMES.signedInRule]: signedInRule.join(','),
   [VARIABLE_NAMES.storeTimeoutMilliseconds]: String(storeTimeoutMilliseconds),
-  [VARIABLE_NAMES.streamLimitPerAudience]: String(streamLimitPerAudience),
-  [VARIABLE_NAMES.streamMaximumLifetimeSeconds]: String(
-    streamMaximumLifetimeSeconds,
-  ),
-  [VARIABLE_NAMES.streamQueueLimit]: String(streamQueueLimit),
-  [VARIABLE_NAMES.submitterCategory]: submitterCategory,
-  [VARIABLE_NAMES.tokenLifetimeSeconds]: String(tokenLifetimeSeconds),
   [VARIABLE_NAMES.trustedProxies]: trustedProxies.join(','),
 });
 
@@ -782,7 +855,14 @@ export const startController = async (
  */
 export const migrate = async (options: MigrationOptions): Promise<void> => {
   const apply = await loadExport<Migrate>(CONTROLLER_MODULES.migrations);
-  await apply(options);
+  const { settings, ...rest } = options;
+  await apply({
+    ...rest,
+    seed: (): Promise<SeedFile> =>
+      Promise.resolve({ kind: 'present', text: JSON.stringify(settings) }),
+    clock: { now: () => Date.now() },
+    eventLog: { error: () => undefined, writeEvent: () => undefined },
+  });
 };
 
 /**
@@ -804,17 +884,20 @@ export const createAuditTrail = async <Connection extends TrailConnection>(
 /** The Controller's store timeout where its configuration names none, in milliseconds. */
 export const DEFAULT_STORE_TIMEOUT_MILLISECONDS = 5000;
 
+// The names the seam's trail gives events it never writes: the seeded policy records none.
+const SEAM_EVENT_SOURCE = 'usher-seeded-policy-seam';
+
+const SEAM_INSTANCE_NAME = 'usher-seeded-policy-seam';
+
 /**
  * Writes the policy a Controller's start seeds, through the Controller's own code, on the connection
  * given: in one transaction its audit trail holds as the system, within the Controller's default store
- * timeout, the capability vocabulary and the seeded roles the store lacks, and the digest of the rules
- * with its `baseline.change` event's row when it differs from the one recorded. The event's line goes
- * nowhere, since there is no log stream. A store already holding all of it is written nothing, so it
- * can run again on the same store. No privilege or key-encryption key is checked: that is the start's
- * alone.
+ * timeout, the capability vocabulary and the seeded roles the store lacks. A store already holding all of
+ * it is written nothing, so it can run again on the same store. No privilege or key-encryption key is
+ * checked: that is the start's alone.
  *
  * @param connection the connection, holding no transaction; it is left open.
- * @param settings the rules, the schema, the clock, and the source and instance the event names.
+ * @param settings the schema and the clock.
  * @throws until the modules exist, the seam's message that one is missing.
  */
 export const writeSeededPolicy = async (
@@ -824,8 +907,11 @@ export const writeSeededPolicy = async (
   const [trail, write] = await Promise.all([
     createAuditTrail({
       eventLog: { error: () => undefined, writeEvent: () => undefined },
+      // The seeded policy records no event, so the names the trail gives its events are never written.
       settings: {
         ...settings,
+        eventSource: SEAM_EVENT_SOURCE,
+        instanceName: SEAM_INSTANCE_NAME,
         storeTimeoutMilliseconds: DEFAULT_STORE_TIMEOUT_MILLISECONDS,
       },
       store: {
@@ -1089,6 +1175,7 @@ export const spawnWithUncaughtFailure = async (
 };
 
 const SCHEMA_MIGRATION_VARIABLE_NAMES = {
+  seedFile: 'USHER_SEED_FILE',
   databasePassword: 'USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD',
   databaseUrl: 'USHER_SCHEMA_MIGRATION_DATABASE_URL',
 } as const;
@@ -1110,7 +1197,16 @@ const SCHEMA_MIGRATION_TIMEOUT_MS = 30_000;
  * What a run of the schema migration command is told: every option of the in-process `migrate` but
  * a target, since the command applies every migration.
  */
-export type SchemaMigrationCommandOptions = Omit<MigrationOptions, 'target'>;
+export type SchemaMigrationCommandOptions = Omit<
+  MigrationOptions,
+  'settings' | 'target'
+> & {
+  /**
+   * The seed file a first run seeds from, as {@link writeSeedFile} writes it; none for a run on a
+   * database already seeded, which reads no file.
+   */
+  seedFile?: string;
+};
 
 /**
  * The environment the schema migration command reads for a run's options. The URL's password, which
@@ -1122,8 +1218,8 @@ export type SchemaMigrationCommandOptions = Omit<MigrationOptions, 'target'>;
  * @param options the run's options, such as the in-process `migrate` takes, but a target.
  */
 export const schemaMigrationEnvironmentFor = ({
+  seedFile,
   databaseUrl,
-  retentionFloorSeconds,
   runtimeRole,
   schema,
 }: SchemaMigrationCommandOptions): Readonly<Record<string, string>> => {
@@ -1133,11 +1229,11 @@ export const schemaMigrationEnvironmentFor = ({
   const runtimeUrl = new URL(url);
   runtimeUrl.username = runtimeRole;
   return {
+    ...(seedFile === undefined
+      ? {}
+      : { [SCHEMA_MIGRATION_VARIABLE_NAMES.seedFile]: seedFile }),
     [VARIABLE_NAMES.databaseSchema]: schema,
     [VARIABLE_NAMES.databaseUrl]: runtimeUrl.href,
-    [VARIABLE_NAMES.retentionGraceSeconds]: '0',
-    [VARIABLE_NAMES.retentionMarginSeconds]: '0',
-    [VARIABLE_NAMES.tokenLifetimeSeconds]: String(retentionFloorSeconds),
     [SCHEMA_MIGRATION_VARIABLE_NAMES.databasePassword]: password,
     [SCHEMA_MIGRATION_VARIABLE_NAMES.databaseUrl]: url.href,
   };
@@ -1178,11 +1274,26 @@ export const spawnSchemaMigrationCommand = async (
 };
 
 /**
+ * Writes a seed file holding the settings given, in a folder of its own, and returns its path: the
+ * file a first run of the schema migration command seeds from.
+ *
+ * @param settings every setting, as the file holds them.
+ */
+export const writeSeedFile = async (
+  settings: Settings,
+): Promise<string> => {
+  const folder = await mkdtemp(join(tmpdir(), 'usher-seed-'));
+  const path = join(folder, 'seed.json');
+  await writeFile(path, JSON.stringify(settings));
+  return path;
+};
+
+/**
  * Applies every one of the Controller's migrations through the run's build of the schema migration
  * command, run as a deployment runs it.
  *
- * @param options the schema migration role's connection URL, the retention floor, the runtime role
- *   and the schema.
+ * @param options the schema migration role's connection URL, the seed file, the runtime role and
+ *   the schema.
  * @returns each line the command wrote to standard output, parsed.
  * @throws {Error} carrying what the command wrote, when it ends other than with exit code 0.
  */

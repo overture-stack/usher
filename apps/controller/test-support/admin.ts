@@ -289,6 +289,8 @@ const PATHS = {
     `admin/resources/${segment(externalId)}/applications/${segment(application)}`,
   resourceFields: 'admin/resource-fields',
   resources: 'admin/resources',
+  settings: 'admin/settings',
+  grantRules: 'admin/settings/grant-rules',
   roleCapabilities: (role: string): string =>
     `admin/roles/${segment(role)}/capabilities`,
   selfGrants: 'admin/grants/self',
@@ -347,6 +349,8 @@ export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
   ...routes('/admin/resources/{externalId}/suppression', ['POST']),
   ...routes('/admin/revocations/global', ['POST']),
   ...routes('/admin/roles/{name}/capabilities', ['PUT']),
+  ...routes('/admin/settings', ['GET', 'PATCH']),
+  ...routes('/admin/settings/grant-rules', ['GET', 'PUT']),
 ]);
 
 const isParameter = (segment: string): boolean =>
@@ -1343,6 +1347,71 @@ export const readAudit = (
       query: Object.fromEntries(
         Object.entries(query).map(([name, value]) => [name, String(value)]),
       ),
+    },
+    overrides,
+  );
+
+/**
+ * Reads the grant rules: `GET /admin/settings/grant-rules`.
+ *
+ * @param caller the Controller and an administrator's token.
+ * @param overrides departures from the request.
+ */
+export const readGrantRules = (
+  caller: AdminCaller,
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  send(caller, { method: 'GET', path: PATHS.grantRules }, overrides);
+
+/**
+ * Replaces the whole list of grant rules: `PUT /admin/settings/grant-rules`.
+ *
+ * @param caller the Controller and an administrator's token.
+ * @param grantRules the list, sent as the request's `grantRules` member.
+ * @param overrides departures from the request.
+ */
+export const changeGrantRules = (
+  caller: AdminCaller,
+  grantRules: unknown,
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  send(
+    caller,
+    { json: { grantRules }, method: 'PUT', path: PATHS.grantRules },
+    overrides,
+  );
+
+/**
+ * Reads every setting but the grant rules: `GET /admin/settings`.
+ *
+ * @param caller the Controller and an administrator's token.
+ * @param overrides departures from the request.
+ */
+export const readSettings = (
+  caller: AdminCaller,
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  send(caller, { method: 'GET', path: PATHS.settings }, overrides);
+
+/**
+ * Changes some settings, all or nothing: `PATCH /admin/settings`, in `application/merge-patch+json`.
+ *
+ * @param caller the Controller and an administrator's token.
+ * @param update the settings changed, by name.
+ * @param overrides departures from the request.
+ */
+export const updateSettings = (
+  caller: AdminCaller,
+  update: Readonly<Record<string, unknown>>,
+  overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+  send(
+    caller,
+    {
+      contentType: 'application/merge-patch+json',
+      json: update,
+      method: 'PATCH',
+      path: PATHS.settings,
     },
     overrides,
   );

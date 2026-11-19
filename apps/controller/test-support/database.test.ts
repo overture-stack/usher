@@ -15,9 +15,12 @@ import {
   type DatabaseTemplate,
   holdTable,
   TEMPLATE_RETENTION_FLOOR_SECONDS,
+  TEMPLATE_SETTINGS,
+  templateSeededWith,
   untilBlocked,
   untilWaiting,
   USHER_SCHEMA,
+  USHER_TEMPLATE,
   whileHolding,
   writerIsWaiting,
 } from './database.js';
@@ -160,32 +163,17 @@ suite('a database for each test file', () => {
   });
 });
 
-// A migration run again on an up-to-date database changes nothing but the floor, as the deployment
-// command's must, so this stand-in is written to run twice.
-const rerunnableTemplate = (
-  migrations: MigrationOptions[],
-): DatabaseTemplate => ({
-  migrate: async (options) => {
-    migrations.push(options);
-    const postgres = new pg.Client({ connectionString: options.databaseUrl });
-    await postgres.connect();
-    try {
-      const schema = pg.escapeIdentifier(options.schema);
-      await postgres.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
-      await postgres.query(
-        `CREATE TABLE IF NOT EXISTS ${schema}.notice_retention (singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton), floor_seconds integer NOT NULL)`,
-      );
-      await postgres.query(
-        `INSERT INTO ${schema}.notice_retention (floor_seconds) VALUES ($1) ON CONFLICT (singleton) DO UPDATE SET floor_seconds = EXCLUDED.floor_seconds`,
-        [options.retentionFloorSeconds],
-      );
-    } finally {
-      await postgres.end();
-    }
-  },
-  name: `harness_rerunnable_${randomBytes(6).toString('hex')}`,
-  schema: USHER_SCHEMA,
-});
+// A setting's value as text, read from its row of the settings table.
+const settingOf = async (
+  postgres: pg.Client,
+  name: string,
+): Promise<string | undefined> => {
+  const { rows } = await postgres.query<{ value: string }>(
+    "SELECT value #>> '{}' AS value FROM usher.settings WHERE name = $1",
+    [name],
+  );
+  return rows[0]?.value;
+};
 
 const floorOf = async (postgres: pg.Client): Promise<number | undefined> => {
   const { rows } = await postgres.query<{ floor_seconds: number }>(
@@ -208,30 +196,23 @@ const databaseNamed = async (
 };
 
 suite('the retention floor a database is created with', () => {
-  test("migrates the template with the template's floor, and sets another on a clone by running the migrations again, as a deployment does", async (context) => {
-    const migrations: MigrationOptions[] = [];
-    const template = rerunnableTemplate(migrations);
-
-    const lowered = await createTestDatabase(template, {
+  test('sets a clone floor through the three durations its store holds, leaving the template and other clones at theirs', async (context) => {
+    const lowered = await createTestDatabase(USHER_TEMPLATE, {
       retentionFloorSeconds: 120,
     });
-    const usual = await createTestDatabase(template);
+    const usual = await createTestDatabase(USHER_TEMPLATE);
     context.after(() => Promise.all([lowered.close(), usual.close()]));
+    const loweredOwner = await lowered.connect('migration');
 
     assert.deepEqual(
-      migrations.map(({ databaseUrl, retentionFloorSeconds }) => ({
-        database: new URL(databaseUrl).pathname.slice(1),
-        retentionFloorSeconds,
-      })),
-      [
-        {
-          database: template.name,
-          retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
-        },
-        { database: lowered.name, retentionFloorSeconds: 120 },
-      ],
+      {
+        grace: await settingOf(loweredOwner, 'retentionGraceSeconds'),
+        margin: await settingOf(loweredOwner, 'retentionMarginSeconds'),
+        token: await settingOf(loweredOwner, 'tokenLifetimeSeconds'),
+      },
+      { grace: '0', margin: '0', token: '120' },
     );
-    assert.equal(await floorOf(await lowered.connect('migration')), 120);
+    assert.equal(await floorOf(loweredOwner), 120);
     assert.equal(
       await floorOf(await usual.connect('migration')),
       TEMPLATE_RETENTION_FLOOR_SECONDS,
@@ -467,5 +448,17 @@ suite('a template whose migration fails', () => {
     const observer = await database.connect('migration');
 
     assert.equal(await databaseCount(observer, failing.name), 0);
+  });
+});
+
+suite('the template a seeded database is cloned from', () => {
+  test("is the Controller's own for the template's seed, and one shared template for each other seed", () => {
+    const seeded = { ...TEMPLATE_SETTINGS, issuer: 'https://elsewhere.example.org' };
+    const sameSeed = { ...TEMPLATE_SETTINGS, issuer: 'https://elsewhere.example.org' };
+
+    assert.equal(templateSeededWith(TEMPLATE_SETTINGS), USHER_TEMPLATE);
+    assert.notEqual(templateSeededWith(seeded), USHER_TEMPLATE);
+    assert.equal(templateSeededWith(seeded), templateSeededWith(sameSeed));
+    assert.notEqual(templateSeededWith(seeded).name, USHER_TEMPLATE.name);
   });
 });

@@ -158,7 +158,7 @@ suite('the contract the API documentation page serves', () => {
     const managed = before.filter(({ operation }) =>
       (operation.security ?? []).some(namesManagementToken),
     );
-    assert.equal(managed.length, 38);
+    assert.equal(managed.length, 42);
     after.forEach(({ label, operation }, index) => {
       const committedSecurity = before[index]?.operation.security;
       assert.deepEqual(
@@ -183,7 +183,7 @@ suite('the contract the API documentation page serves', () => {
     assert.equal(Object.hasOwn(served, 'servers'), false);
     assert.equal(
       JSON.stringify(served).split('"identityProviderSignIn"').length - 1,
-      39,
+      43,
     );
   });
 

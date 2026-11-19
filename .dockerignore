@@ -7,6 +7,7 @@
 !pnpm-workspace.yaml
 !tsconfig.base.json
 !apps/controller/
+**/seed.json
 !modules/*/package.json
 
 # Within what is let in: installed dependencies, build output, test builds, logs, coverage, packed

@@ -74,7 +74,11 @@ const answering = (
 suite("reading an audience's policy", () => {
   test("reads the global categories and the audience's served resources in one statement, so from one snapshot, binding the audience and naming the schema's tables", async () => {
     const { connection, statements } = answering([
-      { globalCategories: ['controlled', 'unmarked'], served: SERVED },
+      {
+        globalCategories: ['controlled', 'unmarked'],
+        grantRules: [],
+        served: SERVED,
+      },
     ]);
 
     const policy = await readAudiencePolicy(
@@ -85,16 +89,32 @@ suite("reading an audience's policy", () => {
 
     assert.deepEqual(policy, {
       globalCategories: ['controlled', 'unmarked'],
+      grantRules: { kind: 'read', rules: [] },
       served: SERVED,
     });
     assert.equal(statements.length, 1);
     assert.deepEqual(statements[0]?.values, [AUDIENCE]);
-    ['application_resources', 'categories', 'resources'].forEach((table) =>
-      assert.ok(
-        statements[0]?.text.includes(`"usher ""test""".${table}`),
-        table,
-      ),
+    ['application_resources', 'categories', 'resources', 'settings'].forEach(
+      (table) =>
+        assert.ok(
+          statements[0]?.text.includes(`"usher ""test""".${table}`),
+          table,
+        ),
     );
+  });
+
+  test('gives the grant rules the store holds as refused, with the rule they break, where the stored value breaks it', async () => {
+    const { connection } = answering([
+      {
+        globalCategories: [],
+        grantRules: [{ resources: [], to: 'anyone' }],
+        served: SERVED,
+      },
+    ]);
+
+    const policy = await readAudiencePolicy(connection, 'usher', AUDIENCE);
+
+    assert.equal(policy.grantRules.kind, 'refused');
   });
 
   test('throws when the store answers the read with no row', async () => {
@@ -110,6 +130,7 @@ suite("reading an audience's policy", () => {
       const { connection, statements } = answering([
         {
           globalCategories: ['controlled', 'unmarked'],
+          grantRules: [],
           grants: GRANTS,
           served: SERVED,
         },
@@ -124,6 +145,7 @@ suite("reading an audience's policy", () => {
 
       assert.deepEqual(policy, {
         globalCategories: ['controlled', 'unmarked'],
+        grantRules: { kind: 'read', rules: [] },
         grants: GRANTS,
         served: SERVED,
       });

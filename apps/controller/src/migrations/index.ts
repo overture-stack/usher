@@ -1,4 +1,4 @@
-export { LARGEST_RETENTION_FLOOR_SECONDS, migrate } from './migrate.js';
+export { migrate } from './migrate.js';
 export {
   MIGRATIONS_REFUSE_TO_RUN,
   MigrationRefusal,
@@ -10,6 +10,8 @@ export type {
   MigrationOptions,
   MigrationOutcome,
   RefusedOption,
+  SeedFile,
+  SeedFileOutcome,
   UnknownMigration,
   UnknownMigrationRefusal,
 } from './types.js';

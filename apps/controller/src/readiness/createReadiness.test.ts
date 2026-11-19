@@ -88,7 +88,7 @@ const answeringStore = (): {
 } => {
   const state = { asked: 0 };
   const answers: { outcome: Error | StoreProbe } = {
-    outcome: { readOnly: false, unknownMigrations: [] },
+    outcome: { grantRulesValid: true, readOnly: false, unknownMigrations: [] },
   };
   return {
     answers,
@@ -189,7 +189,11 @@ suite("the controller's readiness", () => {
     store.answers.outcome = failureWith('storeTimeout');
     clock.advance(STORE_PROBE_INTERVAL_MILLISECONDS);
     const unanswering = await readiness.isReady();
-    store.answers.outcome = { readOnly: false, unknownMigrations: [] };
+    store.answers.outcome = {
+      grantRulesValid: true,
+      readOnly: false,
+      unknownMigrations: [],
+    };
     clock.advance(STORE_PROBE_INTERVAL_MILLISECONDS);
     const answeringAgain = await readiness.isReady();
 
@@ -218,7 +222,11 @@ suite("the controller's readiness", () => {
     await askAfterInterval();
     store.answers.outcome = failureWith('storeTimeout');
     await askAfterInterval();
-    store.answers.outcome = { readOnly: false, unknownMigrations: [] };
+    store.answers.outcome = {
+      grantRulesValid: true,
+      readOnly: false,
+      unknownMigrations: [],
+    };
     await askAfterInterval();
     await askAfterInterval();
 
@@ -245,7 +253,11 @@ suite("the controller's readiness", () => {
 
   test('is unready while the store reads as read-only on an instance whose role writes, and ready on one whose role only reads', async () => {
     const store = answeringStore();
-    store.answers.outcome = { readOnly: true, unknownMigrations: [] };
+    store.answers.outcome = {
+      grantRulesValid: true,
+      readOnly: true,
+      unknownMigrations: [],
+    };
     const writing = lines();
     const reading = lines();
     const writer = createReadiness(
@@ -318,7 +330,11 @@ suite("the controller's readiness", () => {
     probes.answer(failureWith('storeTimeout'));
     const answers = await Promise.all([first, whileInFlight]);
     const next = readiness.isReady();
-    probes.answer({ readOnly: false, unknownMigrations: [] });
+    probes.answer({
+      grantRulesValid: true,
+      readOnly: false,
+      unknownMigrations: [],
+    });
 
     assert.equal(askedInFlight, 1);
     assert.deepEqual(answers, [false, false]);
@@ -326,9 +342,32 @@ suite("the controller's readiness", () => {
     assert.equal(probes.asked(), 2);
   });
 
+  test('is unready, naming the stored settings as the cause before a read-only store, while the stored grant rules read as invalid', async () => {
+    const store = answeringStore();
+    store.answers.outcome = {
+      grantRulesValid: false,
+      readOnly: true,
+      unknownMigrations: [],
+    };
+    const writing = lines();
+    const readiness = createReadiness(
+      serving({ log: writing.log, probeStore: store.probeStore }),
+    );
+
+    assert.equal(await readiness.isReady(), false);
+    assert.deepEqual(
+      writing.written.map(({ fields }) => fields),
+      [{ cause: 'storedSettingsInvalid' }],
+    );
+  });
+
   test('is unready while the store records a migration this release does not know, naming that cause before a read-only store, whether its role writes or only reads', async () => {
     const store = answeringStore();
-    store.answers.outcome = { readOnly: true, unknownMigrations: [LATER] };
+    store.answers.outcome = {
+      grantRulesValid: true,
+      readOnly: true,
+      unknownMigrations: [LATER],
+    };
     const writing = lines();
     const reading = lines();
     const writer = createReadiness(
@@ -369,18 +408,31 @@ suite("the controller's readiness", () => {
 
     await readiness.isReady();
     store.answers.outcome = {
+      grantRulesValid: true,
       readOnly: false,
       unknownMigrations: [CHANGED, LATER],
     };
     await askAfterInterval();
     await askAfterInterval();
-    store.answers.outcome = { readOnly: false, unknownMigrations: [LATER] };
+    store.answers.outcome = {
+      grantRulesValid: true,
+      readOnly: false,
+      unknownMigrations: [LATER],
+    };
     await askAfterInterval();
-    store.answers.outcome = { readOnly: false, unknownMigrations: [] };
+    store.answers.outcome = {
+      grantRulesValid: true,
+      readOnly: false,
+      unknownMigrations: [],
+    };
     await askAfterInterval();
     store.answers.outcome = failureWith('storeTimeout');
     await askAfterInterval();
-    store.answers.outcome = { readOnly: false, unknownMigrations: [LATER] };
+    store.answers.outcome = {
+      grantRulesValid: true,
+      readOnly: false,
+      unknownMigrations: [LATER],
+    };
     await askAfterInterval();
     await askAfterInterval();
 

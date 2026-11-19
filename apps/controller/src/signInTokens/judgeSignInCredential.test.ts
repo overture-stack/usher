@@ -92,7 +92,7 @@ const answering = ({ full = verified(), held = verified() }: Answers = {}): {
     context: {
       audience: AUDIENCE,
       now: NOW,
-      signInTokenMaximumLifetimeSeconds: MAXIMUM_LIFETIME_SECONDS,
+			signInTokenMaximumFor: () => MAXIMUM_LIFETIME_SECONDS,
       verifier: {
         verify: async (token) => {
           asked.push({ method: 'verify', token });

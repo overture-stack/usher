@@ -117,7 +117,9 @@ interface Refusal {
 
 /** What an exchange answers once its `token.exchange` has committed. */
 type Answer =
-  { kind: 'issued'; token: string } | (Refusal & { kind: 'refused' });
+  | { kind: 'issued'; token: string }
+  | (Refusal & { kind: 'refused' })
+  | { kind: 'storedSettingsInvalid' };
 
 /**
  * What an exchange's own work gave: its answer, the failure that kept its transaction from committing,
@@ -187,6 +189,19 @@ const storeFailureOf = (sourceIp: string): AuditEvent => ({
   actor: ANONYMOUS,
   ...failedExchangeEvent({ reason: 'storeUnavailable', sourceIp }),
 });
+
+// The answer an exchange gives when the grant rules the store holds break their rule: the exchange is
+// recorded failed as storedSettingsInvalid, its actor anonymous, and nothing is issued.
+const storedSettingsInvalidAnswer = async (
+  record: (event: AuditEvent) => Promise<unknown>,
+  sourceIp: string,
+): Promise<Answer> => {
+  await record({
+    actor: ANONYMOUS,
+    ...failedExchangeEvent({ reason: 'storedSettingsInvalid', sourceIp }),
+  });
+  return { kind: 'storedSettingsInvalid' };
+};
 
 // The bytes a token takes as the `200` body sends it: its compact form, as UTF-8.
 const bodyBytesOf = (token: string): number => Buffer.byteLength(token, 'utf8');
@@ -573,7 +588,13 @@ export const createExchange = ({
           settings.databaseSchema,
           key.applicationId,
         );
-        const calculation = anonymousCalculation(policy, settings.baseline);
+        if (policy.grantRules.kind === 'refused') {
+          return storedSettingsInvalidAnswer(record, sourceIp);
+        }
+        const calculation = anonymousCalculation(
+          policy,
+          policy.grantRules.rules,
+        );
         const payload = anonymousPayload(calculation, {
           audience: key.applicationId,
           issuedAt: Math.floor(settings.clock.now() / 1000),
@@ -736,10 +757,12 @@ export const createExchange = ({
       key.applicationId,
       person,
     );
+    if (policy.grantRules.kind === 'refused') {
+      return storedSettingsInvalidAnswer(record, sourceIp);
+    }
     const calculation = signedInCalculation(policy, {
-      baseline: settings.baseline,
+      grantRules: policy.grantRules.rules,
       issuedAt,
-      signedInRule: settings.signedInRule,
     });
     const payload = signedInPayload(calculation, {
       audience: key.applicationId,
@@ -952,6 +975,12 @@ export const createExchange = ({
         reply,
         outcome.problem,
         outcome.retryAfterSeconds,
+      );
+    }
+    if (outcome.kind === 'storedSettingsInvalid') {
+      return sendExchangeProblem(
+        reply,
+        EXCHANGE_PROBLEMS.storedSettingsInvalid,
       );
     }
     if (outcome.failure instanceof CommitUnconfirmed) {

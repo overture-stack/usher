@@ -49,7 +49,11 @@ const failureFields = (
   failure: unknown,
 ): Readonly<Record<string, unknown>> => {
   if (failure instanceof StartRefusal) {
-    return { variables: failure.variables, message: failure.message };
+    return {
+      variables: failure.variables,
+      ...(failure.settings.length === 0 ? {} : { settings: failure.settings }),
+      message: failure.message,
+    };
   }
   if (failure instanceof ControllerError) {
     const causeCode = failureCodeOf(failure.cause);

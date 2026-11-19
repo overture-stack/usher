@@ -59,16 +59,13 @@ const validEnvironment = async (): Promise<Record<string, string>> => ({
   USHER_DATABASE_PASSWORD: randomBytes(12).toString('hex'),
   USHER_DATABASE_SCHEMA: 'usher',
   USHER_DATABASE_URL: `postgres://usher_controller@${LOOPBACK}:${await unusedPort()}/usher`,
-  USHER_EVENT_SOURCE: 'https://usher.example.org/controller',
   USHER_HOST: LOOPBACK,
   USHER_IDENTITY_PROVIDER_ISSUER: 'http://127.0.0.1:8080/realms/usher-test',
   USHER_INSTANCE_NAME: 'usher-test-1',
-  USHER_ISSUER: 'https://usher.example.org',
   USHER_KEY_ENCRYPTION_KEY: randomBytes(32).toString('base64url'),
   USHER_MANAGEMENT_AUDIENCE: 'usher-management-test',
   USHER_MANAGEMENT_CLIENTS: 'usher-ui-test',
   USHER_PORT: String(await unusedPort()),
-  USHER_SIGN_IN_TOKEN_MAXIMUM_LIFETIME_SECONDS: '3600',
 });
 
 const linesOf = (text: string): readonly unknown[] =>

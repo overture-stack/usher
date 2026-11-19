@@ -19,6 +19,7 @@ import {
   DATABASE_ROLES,
   type DatabaseTemplate,
   TEMPLATE_RETENTION_FLOOR_SECONDS,
+  TEMPLATE_SETTINGS,
   USHER_SCHEMA,
 } from './database.js';
 import { ENVIRONMENT_VARIABLES } from './controller.js';
@@ -38,6 +39,7 @@ import {
   restoreSnapshot,
   retentionFloorSeconds,
   standInAdministrator,
+  STARTED_STORE_TEMPLATE,
   startHarness,
   startReadOnlyInstance,
   suiteHarness,
@@ -56,7 +58,6 @@ import {
   qualified,
   readNoticeStream,
   seedPolicy,
-  STARTED_STORE_TEMPLATE,
   storedExternalIds,
 } from './policy.js';
 import { cleanupFor } from './waiting.js';
@@ -294,6 +295,18 @@ const recordingSchemaOnly = (
       await postgres.query(
         `CREATE SCHEMA IF NOT EXISTS ${pg.escapeIdentifier(options.schema)}`,
       );
+      await postgres.query(
+        `CREATE TABLE IF NOT EXISTS ${pg.escapeIdentifier(options.schema)}.settings (name text PRIMARY KEY, value jsonb NOT NULL, changed_at timestamptz NOT NULL DEFAULT now())`,
+      );
+      // Every setting the template seeds, so a start on this stand-in reads each of them from its store.
+      await Promise.all(
+        Object.entries(TEMPLATE_SETTINGS).map(([name, value]) =>
+          postgres.query(
+            `INSERT INTO ${pg.escapeIdentifier(options.schema)}.settings (name, value) VALUES ($1, $2::jsonb) ON CONFLICT DO NOTHING`,
+            [name, JSON.stringify(value)],
+          ),
+        ),
+      );
     } finally {
       await postgres.end();
     }
@@ -336,7 +349,7 @@ suite('a harness whose controller refuses to start', () => {
     assert.deepEqual(await settledHandles(before), before);
   });
 
-  test("puts its database on a test file's own PostgreSQL when given one, with the floor its configuration gives, and leaves nothing there it started", async (context) => {
+  test("puts its database on a test file's own PostgreSQL when given one, and leaves nothing there it started", async (context) => {
     const dedicated = await startDedicatedPostgresql();
     context.after(() => dedicated.remove());
     const migrations: MigrationOptions[] = [];
@@ -353,23 +366,11 @@ suite('a harness whose controller refuses to start', () => {
     );
 
     assert.deepEqual(
-      migrations.map(({ databaseUrl, retentionFloorSeconds: floor }) => ({
-        floor,
+      migrations.map(({ databaseUrl }) => ({
         port: new URL(databaseUrl).port,
         template: new URL(databaseUrl).pathname === `/${template.name}`,
       })),
-      [
-        {
-          floor: TEMPLATE_RETENTION_FLOOR_SECONDS,
-          port: new URL(dedicated.container.url).port,
-          template: true,
-        },
-        {
-          floor: 210,
-          port: new URL(dedicated.container.url).port,
-          template: false,
-        },
-      ],
+      [{ port: new URL(dedicated.container.url).port, template: true }],
     );
     assert.deepEqual(await clusterState(dedicated.container.url), {
       databases: [template.name],

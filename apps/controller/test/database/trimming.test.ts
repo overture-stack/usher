@@ -26,6 +26,7 @@ import {
   qualified,
   trimNoticesBounded,
 } from '../../test-support/policy.js';
+import { inTransactionAs } from '../../test-support/policy.js';
 
 const { noticeRetention, noticeStream, notices } = POLICY_TABLES;
 
@@ -237,6 +238,23 @@ suite('trimming the notice stream', () => {
       [aged],
     );
   });
+	test('trims by a floor lowered in the settings from the change that lowers it, with no restart', async (context) => {
+		const database = await openDatabase(context);
+		const owner = await database.connect('migration');
+		await clearStream(owner);
+		const controller = await database.connect('runtime');
+		const notice = await insertAged(owner, 'baseline', 200);
+		assert.deepEqual(await positionsHeld(owner), [notice]);
+
+		await inTransactionAs(controller, { type: 'system' }, async () => {
+			await controller.query("UPDATE usher.settings SET value = '30' WHERE name = 'tokenLifetimeSeconds'");
+			await controller.query("UPDATE usher.settings SET value = '0' WHERE name = 'retentionGraceSeconds'");
+			await controller.query("UPDATE usher.settings SET value = '0' WHERE name = 'retentionMarginSeconds'");
+		});
+		await trim(controller);
+
+		assert.deepEqual(await positionsHeld(owner), []);
+	});
 });
 
 // Ages past the floor of a database opened by default, and well within it.

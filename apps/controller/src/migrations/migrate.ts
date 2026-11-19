@@ -1,7 +1,14 @@
 import pg from 'pg';
 import { parseIntoClientConfig } from 'pg-connection-string';
 
-import { ControllerError } from '../failures/index.js';
+import { SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES } from '../configuration/index.js';
+import { ControllerError, StartRefusal } from '../failures/index.js';
+import {
+  type Settings,
+  readSeedFile,
+  readSeedMembers,
+} from '../settings/index.js';
+import { compareSeed } from './compareSeed.js';
 import {
   MIGRATIONS_REFUSE_TO_RUN,
   MigrationRefusal,
@@ -9,20 +16,20 @@ import {
 import { pendingMigrations } from './pendingMigrations.js';
 import { readMigrations } from './readMigrations.js';
 import { substituteNames } from './substituteNames.js';
+import { seedSettings } from './seedSettings.js';
 import type {
   AppliedMigration,
   Migration,
   MigrationNames,
   MigrationOptions,
   MigrationOutcome,
+  SeedFile,
+  SeedFileOutcome,
 } from './types.js';
 
 // Held by a run for its whole session, so two runs on one database apply each migration once. The
 // notice stream takes a key of its own; the two never meet.
 const MIGRATION_LOCK = 8_617_207_001;
-
-/** The longest retention floor a run stores, in seconds: its column is an `integer`. */
-export const LARGEST_RETENTION_FLOOR_SECONDS = 2_147_483_647;
 
 const CONNECTION_TIMEOUT_MILLISECONDS = 30_000;
 
@@ -34,7 +41,7 @@ const CLIENT_CHECK_MILLISECONDS = 1000;
 
 const RECORD_TABLE = 'schema_migrations';
 
-const RETENTION_TABLE = 'notice_retention';
+const SETTINGS_TABLE = 'settings';
 
 const refusal = (rule: string): ControllerError =>
   new ControllerError(`${MIGRATIONS_REFUSE_TO_RUN}: ${rule}`);
@@ -47,19 +54,6 @@ const stoppedRun = (cause: unknown): ControllerError =>
 
 const qualified = (schema: string, table: string): string =>
   `${pg.escapeIdentifier(schema)}.${pg.escapeIdentifier(table)}`;
-
-const checkedFloor = (seconds: number): number => {
-  if (
-    Number.isInteger(seconds) &&
-    seconds >= 1 &&
-    seconds <= LARGEST_RETENTION_FLOOR_SECONDS
-  ) {
-    return seconds;
-  }
-  throw refusal(
-    `retentionFloorSeconds must be a whole number of seconds from 1 to ${LARGEST_RETENTION_FLOOR_SECONDS}`,
-  );
-};
 
 const checkedName = (option: string, name: string): string => {
   if (name !== '') {
@@ -202,29 +196,81 @@ const applyMigration = async (
   }
 };
 
-// Run again on an up-to-date database, this and the record's grant are all a run can change, the
-// floor only when it differs. The floor is stored once the migration creating its table has
-// applied, and the answer is whether it was.
-const storeRetentionFloor = async (
+// Whether the schema holds the settings table, which a migration creates and a first run seeds.
+const settingsTablePresent = async (
   client: pg.ClientBase,
   schema: string,
-  floorSeconds: number,
 ): Promise<boolean> => {
-  const retention = qualified(schema, RETENTION_TABLE);
   const { rows } = await client.query<{ present: boolean }>(
     'SELECT to_regclass($1) IS NOT NULL AS present',
-    [retention],
+    [qualified(schema, SETTINGS_TABLE)],
   );
-  const present = rows[0]?.present === true;
-  if (present) {
-    await client.query(
-      `INSERT INTO ${retention} AS stored (floor_seconds) VALUES ($1)
-         ON CONFLICT (singleton) DO UPDATE SET floor_seconds = excluded.floor_seconds
-         WHERE stored.floor_seconds IS DISTINCT FROM excluded.floor_seconds`,
-      [floorSeconds],
-    );
+  return rows[0]?.present === true;
+};
+
+// Whether the settings table holds any setting: a run is a first run, which seeds them, when it does not.
+const settingsStored = async (
+  client: pg.ClientBase,
+  schema: string,
+): Promise<boolean> => {
+  if (!(await settingsTablePresent(client, schema))) {
+    return false;
   }
-  return present;
+  const stored = await client.query<{ stored: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM ${qualified(schema, SETTINGS_TABLE)}) AS stored`,
+  );
+  return stored.rows[0]?.stored === true;
+};
+
+// A refusal laid on the seed file, naming the variable that sets its path and never a value.
+const seedRefusal = (rules: readonly string[]): StartRefusal =>
+  new StartRefusal(
+    rules.map((rule) => ({
+      rule,
+      variable: SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.seedFile,
+    })),
+    MIGRATIONS_REFUSE_TO_RUN,
+  );
+
+// A first run seeds from the file it reads, so a file absent, unreadable, or one that breaks a rule, refuses the run
+// before anything is written, naming the variable that sets its path and never a value.
+const firstRunSeed = (
+  file: SeedFile,
+): { members: Readonly<Record<string, unknown>>; settings: Settings } => {
+  if (file.kind === 'absent') {
+    throw new MigrationRefusal('seedFile', 'is missing, which a first run needs');
+  }
+  if (file.kind === 'unreadable') {
+    throw new MigrationRefusal('seedFile', `cannot be read (${file.reason})`);
+  }
+  const members = readSeedMembers(file.text);
+  if (members.kind === 'refused') {
+    throw seedRefusal([members.rule]);
+  }
+  const reading = readSeedFile(file.text);
+  if (reading.kind === 'refused') {
+    throw seedRefusal(reading.rules);
+  }
+  return { members: members.members, settings: reading.settings };
+};
+
+// A later run compares the file it reads with the members the first run stored, changing nothing. A file that cannot
+// be read, or is not one JSON object, is named in the outcome and never refuses the run.
+const compareLaterSeed = async (
+  client: pg.ClientBase,
+  schema: string,
+  file: SeedFile,
+): Promise<SeedFileOutcome> => {
+  if (file.kind === 'absent') {
+    return { kind: 'absent' };
+  }
+  if (file.kind === 'unreadable') {
+    return { kind: 'unreadable', reason: file.reason };
+  }
+  const members = readSeedMembers(file.text);
+  return members.kind === 'refused'
+    ? { kind: 'invalid', problem: members.rule }
+    : compareSeed(client, schema, members.members);
 };
 
 // The driver ends an attempt past its connection timeout with an error carrying no code, told from
@@ -254,7 +300,9 @@ const connectWithin = async (
 };
 
 interface RunSettings {
-  floorSeconds: number;
+  seed: () => Promise<SeedFile>;
+  clock: MigrationOptions['clock'];
+  eventLog: MigrationOptions['eventLog'];
   known: readonly Migration[];
   runtimeRole: string;
   schema: string;
@@ -265,7 +313,9 @@ interface RunSettings {
 const migrateOn = async (
   client: pg.Client,
   {
-    floorSeconds,
+    seed,
+    clock,
+    eventLog,
     known,
     runtimeRole,
     schema,
@@ -295,15 +345,35 @@ const migrateOn = async (
       await appliedMigrations(client, schema),
       target,
     );
+    const firstRun = !(await settingsStored(client, schema));
+    const file = await seed();
+    const loaded = firstRun ? firstRunSeed(file) : undefined;
     await ensureRecord(client, { runtimeRole, schema });
     await pending.reduce<Promise<void>>(async (earlier, migration) => {
       await earlier;
       await applyMigration(client, migration, { runtimeRole, schema });
     }, Promise.resolve());
-    const stored = await storeRetentionFloor(client, schema, floorSeconds);
+    if (loaded !== undefined && (await settingsTablePresent(client, schema))) {
+      await seedSettings(client, {
+        clock,
+        eventLog,
+        members: loaded.members,
+        schema,
+        settings: loaded.settings,
+      });
+      return {
+        applied: pending.map(({ name }) => name),
+        seedFile: { kind: 'seeded' },
+        settingsSeeded: true,
+      };
+    }
+    const seedFile: SeedFileOutcome = firstRun
+      ? { kind: 'absent' }
+      : await compareLaterSeed(client, schema, file);
     return {
       applied: pending.map(({ name }) => name),
-      ...(stored ? { retentionFloorSeconds: floorSeconds } : {}),
+      seedFile,
+      settingsSeeded: false,
     };
   } finally {
     signal?.removeEventListener('abort', stop);
@@ -320,8 +390,12 @@ const migrateOn = async (
  * holds changed. Then it creates the record of applied migrations when the schema lacks one, and
  * grants the runtime role reading it, which the Controller's start requires. A target already
  * passed applies nothing. Each migration commits with its record, so a failure keeps every
- * migration before it. Last, the run stores the retention floor, so on an up-to-date database a run
- * changes nothing but the floor and the record's grant. It settles once its connection has closed.
+ * migration before it. On a first run, one that finds no settings in the schema, the run reads the
+ * seed file before writing anything, and seeds every setting once its migrations have applied, storing the
+ * file's members as the seed row, with the event recording the seeding. A later run reads the file when one is at
+ * its path and compares its members with the stored ones, changing nothing, so on an up-to-date database it
+ * changes nothing but the record's grant. A later run's file that cannot be read, or is not one JSON object, is named
+ * in the outcome and never refuses the run. It settles once its connection has closed.
  * The URL is parsed rather than handed to the driver whole, since the driver lets a URL's own
  * settings, its empty password included, override any given beside it. Connecting and signing in
  * are limited by the connection timeout; statements are not. The run's session checks every second
@@ -329,8 +403,9 @@ const migrateOn = async (
  * ends too, rolling back the migration in flight and releasing the run's lock.
  *
  * @param options the schema migration role's connection URL and password, the connection timeout,
- *   the retention floor, the runtime role, the schema, the signal stopping the run, and the target.
- * @returns the migrations the run applied, by name, and the retention floor it stored.
+ *   the seed file's reader, the clock and the event log, the runtime role, the schema, the signal
+ *   stopping the run, and the target.
+ * @returns the migrations the run applied, by name, and whether it seeded the settings.
  * @throws {MigrationRefusal} laid on the URL when no store answered within the connection timeout,
  *   or on the runtime role or the schema at fault; otherwise naming the rule broken, or the migration
  *   that failed with the database's error as its cause, or the driver's own failure to connect. Once
@@ -340,7 +415,6 @@ const migrateOn = async (
 export const migrate = async (
   options: MigrationOptions,
 ): Promise<MigrationOutcome> => {
-  const floorSeconds = checkedFloor(options.retentionFloorSeconds);
   const runtimeRole = checkedName('runtimeRole', options.runtimeRole);
   const schema = checkedName('schema', options.schema);
   const timeoutMilliseconds =
@@ -362,7 +436,9 @@ export const migrate = async (
     return await migrateOn(
       client,
       {
-        floorSeconds,
+        seed: options.seed,
+        clock: options.clock,
+        eventLog: options.eventLog,
         known,
         runtimeRole,
         schema,

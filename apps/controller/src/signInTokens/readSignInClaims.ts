@@ -79,14 +79,14 @@ const refused = (
  *
  * @param token the token's claims and protected header.
  * @param context the calling application's id, the instant, and the longest lifetime a sign-in token
- *   may have.
+ *   issued at an instant may have.
  */
 export const readSignInClaims = (
   token: TokenContents,
   {
     audience,
     now,
-    signInTokenMaximumLifetimeSeconds,
+    signInTokenMaximumFor,
   }: Omit<SignInJudgementContext, 'verifier'>,
 ): SignInClaimsReading => {
   if (isLogoutToken(token) || !isKeycloakAccessToken(token)) {
@@ -98,11 +98,7 @@ export const readSignInClaims = (
     return refused(names.reason);
   }
   const { subject } = names;
-  const currency = currencyOf(
-    claims,
-    { signInTokenMaximumLifetimeSeconds },
-    now,
-  );
+  const currency = currencyOf(claims, { signInTokenMaximumFor }, now);
   if (currency.kind === 'refused') {
     return refused(currency.reason, subject);
   }

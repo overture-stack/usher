@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import type { RecordAction } from '@overture-stack/usher-types';
-
+import type { GrantRuleAction, GrantRules } from '../settings/index.js';
 import { anonymousCalculation } from './anonymousCalculation.js';
 import { signedInCalculation } from './signedInCalculation.js';
 import type {
@@ -12,7 +11,33 @@ import type {
   ServedResource,
 } from './types.js';
 
-const VIEW: readonly RecordAction[] = ['view'];
+const VIEW: readonly GrantRuleAction[] = ['view'];
+
+// The grant rules the baseline and the signed-in rule stand for: the baseline's actions for everyone on
+// open resources' unmarked records, and the signed-in rule's for signed-in principals on registered ones.
+const rulesOf = (
+  baseline: readonly GrantRuleAction[],
+  signedInRule: readonly GrantRuleAction[],
+): GrantRules => [
+  {
+    resources: [
+      {
+        accessLevel: 'open',
+        categories: [{ actions: baseline, name: 'global.unmarked' }],
+      },
+    ],
+    to: 'everyone',
+  },
+  {
+    resources: [
+      {
+        accessLevel: 'registered',
+        categories: [{ actions: signedInRule, name: 'global.unmarked' }],
+      },
+    ],
+    to: 'signedIn',
+  },
+];
 
 const ISSUED_AT = 1_767_225_600;
 
@@ -81,13 +106,13 @@ const holding = (
     baseline = [],
     signedInRule = [],
   }: {
-    baseline?: readonly RecordAction[];
-    signedInRule?: readonly RecordAction[];
+    baseline?: readonly GrantRuleAction[];
+    signedInRule?: readonly GrantRuleAction[];
   } = {},
 ): ReturnType<typeof signedInCalculation> =>
   signedInCalculation(
     { globalCategories: GRANT_GLOBALS, grants, served: GRANT_SERVED },
-    { baseline, issuedAt: ISSUED_AT, signedInRule },
+    { grantRules: rulesOf(baseline, signedInRule), issuedAt: ISSUED_AT },
   );
 
 // The same policy holding no grant, as the rule tests read it.
@@ -98,19 +123,21 @@ const ruleOnly = (policy: AudiencePolicy): PrincipalPolicy => ({
 
 const signedInUnder = (
   policy: AudiencePolicy,
-  baseline: readonly RecordAction[],
-  signedInRule: readonly RecordAction[],
+  baseline: readonly GrantRuleAction[],
+  signedInRule: readonly GrantRuleAction[],
 ): ReturnType<typeof signedInCalculation> =>
   signedInCalculation(ruleOnly(policy), {
-    baseline,
+    grantRules: rulesOf(baseline, signedInRule),
     issuedAt: ISSUED_AT,
-    signedInRule,
   });
 
 suite('the signed-in calculation', () => {
   suite('the signed-in rule, against its own configuration', () => {
-    test('case 28: gives an anonymous visitor under the baseline the open resources alone, neither the registered nor the granted one', () => {
-      const { permissions } = anonymousCalculation(RULE_POLICY, VIEW);
+    test('case 28: gives an anonymous visitor under the everyone rule the open resources alone, neither the registered nor the granted one', () => {
+      const { permissions } = anonymousCalculation(
+        RULE_POLICY,
+        rulesOf(VIEW, []),
+      );
 
       assert.deepEqual(permissions, {
         HEART_STUDY: UNMARKED_VIEW,
@@ -118,8 +145,11 @@ suite('the signed-in calculation', () => {
       });
     });
 
-    test('case 29: gives an anonymous visitor nothing with the baseline off', () => {
-      const { permissions } = anonymousCalculation(RULE_POLICY, []);
+    test('case 29: gives an anonymous visitor nothing with the everyone rule empty', () => {
+      const { permissions } = anonymousCalculation(
+        RULE_POLICY,
+        rulesOf([], []),
+      );
 
       assert.deepEqual(permissions, {});
     });
@@ -134,7 +164,7 @@ suite('the signed-in calculation', () => {
       });
     });
 
-    test('case 31: gives a signed-in principal holding no grant the registered resource alone with the baseline off, reaching no open resource', () => {
+    test('case 31: gives a signed-in principal holding no grant the registered resource alone with the everyone rule empty, reaching no open resource', () => {
       const { permissions } = signedInUnder(RULE_POLICY, [], VIEW);
 
       assert.deepEqual(permissions, { MEMBERS_ARCHIVE: UNMARKED_VIEW });
@@ -143,7 +173,7 @@ suite('the signed-in calculation', () => {
     test("case 32: accumulates the rules' entries and an accepted viewer grant on HEART_STUDY's controlled records, neither replacing the other", () => {
       const { permissions } = signedInCalculation(
         { ...RULE_POLICY, grants: [grant()] },
-        { baseline: VIEW, issuedAt: ISSUED_AT, signedInRule: VIEW },
+        { grantRules: rulesOf(VIEW, VIEW), issuedAt: ISSUED_AT },
       );
 
       assert.deepEqual(permissions, {
@@ -167,7 +197,7 @@ suite('the signed-in calculation', () => {
             }),
           ],
         },
-        { baseline: VIEW, issuedAt: ISSUED_AT, signedInRule: VIEW },
+        { grantRules: rulesOf(VIEW, VIEW), issuedAt: ISSUED_AT },
       );
 
       assert.deepEqual(permissions['SEALED_ARCHIVE'], {
@@ -176,7 +206,7 @@ suite('the signed-in calculation', () => {
     });
   });
 
-  test("confers each rule's own actions, in its order: the baseline's on open resources and the signed-in rule's on registered ones", () => {
+  test("confers each rule's own actions, in its order: everyone's on open resources and the signed-in rule's on registered ones", () => {
     const { permissions } = signedInUnder(
       RULE_POLICY,
       ['count', 'view', 'export'],
@@ -201,26 +231,26 @@ suite('the signed-in calculation', () => {
     assert.equal(grantCount, 0);
   });
 
-  test('names both rules, the baseline first, when each confers on a resource', () => {
+  test('names both recipients, everyone first, when each confers on a resource', () => {
     const { rules } = signedInUnder(RULE_POLICY, VIEW, VIEW);
 
-    assert.deepEqual(rules, ['baseline', 'signedIn']);
+    assert.deepEqual(rules, ['everyone', 'signedIn']);
   });
 
-  test('names the signed-in rule alone under an empty baseline', () => {
+  test('names the signed-in rule alone under an empty everyone rule', () => {
     const { rules } = signedInUnder(RULE_POLICY, [], VIEW);
 
     assert.deepEqual(rules, ['signedIn']);
   });
 
-  test('confers nothing under an empty signed-in rule and names no signed-in rule, the baseline conferring as for anyone', () => {
+  test('confers nothing under an empty signed-in rule and names no signed-in rule, the everyone rule conferring as for anyone', () => {
     const calculation = signedInUnder(RULE_POLICY, VIEW, []);
 
     assert.deepEqual(calculation.permissions, {
       HEART_STUDY: UNMARKED_VIEW,
       OPEN_ATLAS: UNMARKED_VIEW,
     });
-    assert.deepEqual(calculation.rules, ['baseline']);
+    assert.deepEqual(calculation.rules, ['everyone']);
   });
 
   test('names no rule where neither rule reaches a resource the audience serves', () => {
@@ -266,7 +296,7 @@ suite('the signed-in calculation', () => {
       'OPEN_ATLAS',
       'HEART_STUDY',
     ]);
-    assert.deepEqual(calculation.rules, ['baseline']);
+    assert.deepEqual(calculation.rules, ['everyone']);
   });
 
   test('names a retired resource in neither permissions, resourceCategories nor servedResources, at either tier', () => {
@@ -291,7 +321,7 @@ suite('the signed-in calculation', () => {
       'HEART_STUDY',
     ]);
     assert.deepEqual(calculation.servedResources, ['HEART_STUDY']);
-    assert.deepEqual(calculation.rules, ['baseline']);
+    assert.deepEqual(calculation.rules, ['everyone']);
   });
 
   test("offers what the anonymous calculation offers: every concrete global category, every held resource's own categories, and every resource served", () => {
@@ -345,6 +375,39 @@ suite('the signed-in calculation', () => {
         'HEART_STUDY',
       ],
     });
+  });
+
+  test('unions the actions of the everyone and signedIn entries reaching one open resource, each action named once, the first named first', () => {
+    const { permissions, rules } = signedInCalculation(ruleOnly(RULE_POLICY), {
+      grantRules: [
+        {
+          resources: [
+            {
+              accessLevel: 'open',
+              categories: [{ actions: ['view'], name: 'global.unmarked' }],
+            },
+          ],
+          to: 'everyone',
+        },
+        {
+          resources: [
+            {
+              accessLevel: 'open',
+              categories: [
+                { actions: ['count', 'view'], name: 'global.unmarked' },
+              ],
+            },
+          ],
+          to: 'signedIn',
+        },
+      ],
+      issuedAt: ISSUED_AT,
+    });
+
+    assert.deepEqual(permissions['OPEN_ATLAS'], {
+      'global.unmarked': { record: ['view', 'count'] },
+    });
+    assert.deepEqual(rules, ['everyone', 'signedIn']);
   });
 
   suite('the recorded grants reaching a signed-in principal', () => {
@@ -570,7 +633,7 @@ suite('the signed-in calculation', () => {
           record: ['view', 'count', 'export', 'create', 'update'],
         },
       });
-      assert.deepEqual(calculation.rules, ['baseline']);
+      assert.deepEqual(calculation.rules, ['everyone']);
       assert.equal(calculation.grantCount, 1);
     });
 
@@ -696,7 +759,7 @@ suite('the signed-in calculation', () => {
       const calculation = holding([grant(), grant()], { baseline: VIEW });
 
       assert.equal(calculation.grantCount, 2);
-      assert.deepEqual(calculation.rules, ['baseline']);
+      assert.deepEqual(calculation.rules, ['everyone']);
     });
 
     test("lists a resource held through a grant alone under resourceCategories with its own categories, and names no rule for a grant's entry", () => {

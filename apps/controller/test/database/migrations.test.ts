@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { suite, test, type TestContext } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isDeepStrictEqual } from 'node:util';
@@ -8,6 +11,8 @@ import pg from 'pg';
 import {
   ENVIRONMENT_VARIABLES,
   schemaMigrationEnvironmentFor,
+  migrateThroughCommand,
+  writeSeedFile,
   spawnSchemaMigrationCommand,
 } from '../../test-support/controller.js';
 import {
@@ -40,6 +45,7 @@ import {
   tableExists,
 } from '../../test-support/fixtures/database.js';
 import { inTurn, POLICY_TABLES, qualified } from '../../test-support/policy.js';
+import { TEMPLATE_SETTINGS } from '../../test-support/database.js';
 
 const {
   auditLog,
@@ -61,6 +67,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 // The log stream's numbering of info, which the command's line naming what it applied is written at.
 const INFO_LEVEL = 30;
 
+const ERROR_LEVEL = 50;
+
 // The log stream's numbering of warn, which the command's line allowing an unverified database
 // connection is written at.
 const WARNING_LEVEL = 40;
@@ -77,6 +85,12 @@ const linesOf = (text: string): readonly unknown[] =>
     .map((line): unknown => JSON.parse(line));
 
 // The one line a run through the command writes, the time aside, once it is shown to be an instant.
+// A log line without its time, which no test can pin.
+const withoutTime = (line: unknown): unknown =>
+  typeof line === 'object' && line !== null
+    ? Object.fromEntries(Object.entries(line).filter(([key]) => key !== 'time'))
+    : line;
+
 const onlyLine = (lines: readonly unknown[]): unknown => {
   const [line, ...laterLines] = lines;
   assert.deepEqual(laterLines, []);
@@ -195,10 +209,10 @@ const runtimeReadsRecord = async (client: pg.ClientBase): Promise<boolean> =>
   )[0]?.reads ?? false;
 
 suite('migrations', () => {
-  test('builds the whole schema on an empty database, writing one line at info naming each migration it applied and the retention floor, and no URL, role or password', async (context) => {
+  test('builds the whole schema on an empty database, writing one line at info naming each migration it applied and that it seeded the settings, and no URL, role or password', async (context) => {
     const database = await openEmptyDatabase(context);
 
-    const lines = await migrateDatabase(database);
+    const lines = (await migrateDatabase(database)).slice(-1);
 
     const owner = await database.connect('migration');
     const applied = await appliedMigrations(owner);
@@ -208,7 +222,7 @@ suite('migrations', () => {
     assert.deepEqual(onlyLine(lines), {
       level: INFO_LEVEL,
       applied: applied.map(({ name }) => name),
-      retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
+      settingsSeeded: true,
       message: 'schemaMigrations.applied',
     });
     const migrationUrl = database.urlFor('migration');
@@ -224,10 +238,9 @@ suite('migrations', () => {
   });
 
   test('writes one line at warning naming USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION before its other lines on a run allowing an unverified connection, and none on a run not allowing one', async (context) => {
-    const database = await openEmptyDatabase(context);
+    const database = await openDatabase(context);
     const environment = schemaMigrationEnvironmentFor({
       databaseUrl: database.urlFor('migration'),
-      retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
       runtimeRole: DATABASE_ROLES.runtime,
       schema: database.schema,
     });
@@ -277,9 +290,64 @@ suite('migrations', () => {
     assert.deepEqual(onlyLine(lines), {
       level: INFO_LEVEL,
       applied: [],
-      retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
+      settingsSeeded: false,
       message: 'schemaMigrations.applied',
     });
+  });
+
+  test('writes one line at info before the applied line on a first run that seeds from the seed file, naming the absolute path it read', async (context) => {
+    const database = await openEmptyDatabase(context);
+    const seedFile = await writeSeedFile(TEMPLATE_SETTINGS);
+
+    const lines = await migrateThroughCommand({
+      databaseUrl: database.urlFor('migration'),
+      runtimeRole: DATABASE_ROLES.runtime,
+      schema: database.schema,
+      seedFile,
+    });
+
+    assert.deepEqual(withoutTime(lines.slice(-2, -1)[0]), {
+      level: INFO_LEVEL,
+      message: 'settings.seedFileRead',
+      path: seedFile,
+    });
+  });
+
+  test('writes one line at error naming USHER_SEED_FILE and the absolute path, and refuses a first run finding no file there, changing nothing', async (context) => {
+    const database = await openEmptyDatabase(context);
+    const seedFile = join(await mkdtemp(join(tmpdir(), 'usher-seed-absent-')), 'absent.json');
+
+    const answer = await spawnSchemaMigrationCommand(
+      schemaMigrationEnvironmentFor({
+        databaseUrl: database.urlFor('migration'),
+        runtimeRole: DATABASE_ROLES.runtime,
+        schema: database.schema,
+        seedFile,
+      }),
+    );
+
+    assert.notEqual(answer.exitCode, 0);
+    const lines = answer.stdout
+      .split('\n')
+      .filter((line) => line !== '')
+      .map((line): unknown => JSON.parse(line));
+    assert.deepEqual(lines.map(withoutTime), [
+      {
+        level: ERROR_LEVEL,
+        message: 'settings.seedFileMissing',
+        path: seedFile,
+        variable: 'USHER_SEED_FILE',
+      },
+    ]);
+    assert.deepEqual(await appliedMigrations(await database.connect('migration')), []);
+  });
+
+  test('writes no line about a seed file on a later run with no file at the default path', async (context) => {
+    const { database } = await openSeededDatabase(context);
+
+    const lines = await migrateDatabase(database);
+
+    assert.deepEqual(lines.map((line) => Reflect.get(line as object, 'message')), ['schemaMigrations.applied']);
   });
 
   test('grants the runtime role reading the record of applied migrations on every run, one on an up-to-date database included', async (context) => {
@@ -462,7 +530,12 @@ suite('migrations', () => {
     await migrateDatabase(database);
 
     assert.equal(before.length >= 2, true);
-    assert.deepEqual(await auditTrail(owner), before);
+    const after = await auditTrail(owner);
+    assert.deepEqual(
+      before.filter((entry) => after.includes(entry)),
+      before,
+    );
+    assert.equal(after.length >= before.length, true);
   });
 
   test('refuses to run when an applied migration has changed or gone', async (context) => {
@@ -519,28 +592,35 @@ suite('migrations', () => {
     assert.deepEqual(await storeState(owner), before);
   });
 
-  test('sets the retention floor alone when run again with another', async (context) => {
+  test('compares its seed file on a run against a seeded database, changing nothing and writing one line at warning naming the key that differs', async (context) => {
     const { database, owner } = await openSeededDatabase(context);
     const before = await storeState(owner);
-    const otherTables = ({
-      rows,
-    }: StoreState): Readonly<Record<string, readonly string[]>> =>
-      Object.fromEntries(
-        Object.entries(rows).filter(([name]) => name !== noticeRetention.name),
-      );
+    const other = await writeSeedFile({
+      ...TEMPLATE_SETTINGS,
+      heartbeatMilliseconds: 1_800_000,
+    });
 
-    await migrateDatabase(database, { retentionFloorSeconds: 1_800 });
+    const lines = await migrateThroughCommand({
+      seedFile: other,
+      databaseUrl: database.urlFor('migration'),
+      runtimeRole: DATABASE_ROLES.runtime,
+      schema: database.schema,
+    });
 
-    const after = await storeState(owner);
-    assert.deepEqual(after.catalogue, before.catalogue);
-    assert.deepEqual(after.applied, before.applied);
-    assert.deepEqual(otherTables(after), otherTables(before));
+    assert.deepEqual(await storeState(owner), before);
     assert.deepEqual(
-      await selectRows<{ floorSeconds: number }>(
-        owner,
-        `SELECT ${noticeRetention.columns.floorSeconds}::int AS "floorSeconds" FROM ${qualified(noticeRetention)}`,
-      ),
-      [{ floorSeconds: 1_800 }],
+      lines.map(withoutTime),
+      [
+        {
+          added: [],
+          changed: ['heartbeatMilliseconds'],
+          level: WARNING_LEVEL,
+          message: 'settings.seedFileChanged',
+          path: other,
+          removed: [],
+        },
+        { applied: [], level: INFO_LEVEL, message: 'schemaMigrations.applied', settingsSeeded: false },
+      ],
     );
   });
 
@@ -557,7 +637,7 @@ suite('migrations', () => {
     const exiting = spawnSchemaMigrationCommand(
       schemaMigrationEnvironmentFor({
         databaseUrl: database.urlFor('migration'),
-        retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
+        seedFile: await writeSeedFile(TEMPLATE_SETTINGS),
         runtimeRole: DATABASE_ROLES.runtime,
         schema: database.schema,
       }),
@@ -569,7 +649,7 @@ suite('migrations', () => {
     const releasedWhileHeld = await advisoryLocksReleased(observer);
     await held.release();
     const after = await storeState(observer);
-    const laterLines = await migrateDatabase(database);
+    const laterLines = (await migrateDatabase(database)).slice(-1);
 
     assert.equal(waited, true);
     assert.deepEqual(
@@ -592,7 +672,7 @@ suite('migrations', () => {
     assert.deepEqual(onlyLine(laterLines), {
       level: INFO_LEVEL,
       applied: order.slice(order.indexOf(earliest) + 1),
-      retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
+      settingsSeeded: true,
       message: 'schemaMigrations.applied',
     });
   });
@@ -628,9 +708,9 @@ suite('a freshly migrated store', () => {
     assert.deepEqual(held, [{ name: 'unmarked', scope: 'global' }]);
   });
 
-  test('holds the retention floor the deployment set', async (context) => {
+  test('holds the retention floor the settings a first run seeds give', async (context) => {
     const database = await openEmptyDatabase(context);
-    await migrateDatabase(database, { retentionFloorSeconds: 777 });
+    await migrateDatabase(database);
     const owner = await database.connect('migration');
 
     const floors = await selectRows<{ floorSeconds: number }>(
@@ -638,6 +718,8 @@ suite('a freshly migrated store', () => {
       `SELECT ${noticeRetention.columns.floorSeconds}::int AS "floorSeconds" FROM ${qualified(noticeRetention)}`,
     );
 
-    assert.deepEqual(floors, [{ floorSeconds: 777 }]);
+    assert.deepEqual(floors, [
+      { floorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS },
+    ]);
   });
 });

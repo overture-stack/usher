@@ -1,6 +1,6 @@
 import { type AuditEvent, eventInstant } from '../eventLog/index.js';
 import type { WindowClosing } from '../windowedRefusals/index.js';
-import type { LogoutTokenRefusal, UnverifiedLogoutReason } from './types.js';
+import type { LogoutTokenRefusal, SwitchedOffLogoutReason, UnverifiedLogoutReason } from './types.js';
 
 /**
  * The `logoutToken.refusal` recording one refused logout token: its reason, the request's address,
@@ -16,7 +16,7 @@ export const logoutTokenRefusalEvent = ({
   sourceIp,
   subject,
 }: {
-  reason: LogoutTokenRefusal | UnverifiedLogoutReason;
+	reason: LogoutTokenRefusal | SwitchedOffLogoutReason | UnverifiedLogoutReason;
   sourceIp: string;
   subject: string | undefined;
 }): AuditEvent => ({

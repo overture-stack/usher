@@ -6,6 +6,7 @@ import type {
   AppliedMigration,
   UnknownMigration,
 } from '../migrations/index.js';
+import { SETTING_DEFINITIONS } from '../settings/index.js';
 import type { StoreReader } from '../storeTimeout/index.js';
 import { MIGRATION_RECORD } from './rolePrivileges.js';
 
@@ -62,6 +63,9 @@ export const readRecordedMigrations = async (
 
 /** What readiness's probe read of the store. */
 export interface StoreProbeAnswer {
+  /** Whether the stored grant rules read as valid. */
+  grantRulesValid: boolean;
+
   /** Whether the session reads as read-only: true for any answer but `off`. */
   readOnly: boolean;
 
@@ -70,9 +74,9 @@ export interface StoreProbeAnswer {
 }
 
 /**
- * Asks the store readiness's one statement: whether the session reads as read-only, and the
- * migrations the schema records as applied. Any answer but `off` reads as read-only, so a store
- * whose answer cannot be read never passes.
+ * Asks the store readiness's one statement: whether the session reads as read-only, the migrations the
+ * schema records as applied, and whether the grant rules the store holds read as valid. Any answer but
+ * `off` reads as read-only, so a store whose answer cannot be read never passes.
  *
  * @param reader the pool's reader, of readiness's own pool.
  * @param schema the Controller's schema.
@@ -85,8 +89,12 @@ export const readStoreProbe = async (
   schema: string,
 ): Promise<StoreProbeAnswer> => {
   const { rows } = await reader
-    .query<{ readOnly: string; recorded: AppliedMigration[] }>(
-      `SELECT current_setting('transaction_read_only') AS "readOnly", ${recordedMigrations(schema)} AS recorded`,
+    .query<{
+      grantRules: unknown;
+      readOnly: string;
+      recorded: AppliedMigration[];
+    }>(
+      `SELECT current_setting('transaction_read_only') AS "readOnly", ${recordedMigrations(schema)} AS recorded, (SELECT setting.value FROM ${pg.escapeIdentifier(schema)}.settings setting WHERE setting.name = 'grantRules') AS "grantRules"`,
     )
     .catch((failure: unknown) => {
       throw isUnreadableRecord(failure)
@@ -97,7 +105,12 @@ export const readStoreProbe = async (
   if (answer === undefined) {
     throw new MigrationRecordUnreadable();
   }
-  return { readOnly: answer.readOnly !== 'off', recorded: answer.recorded };
+  return {
+    grantRulesValid:
+      SETTING_DEFINITIONS.grantRules.read(answer.grantRules).kind === 'read',
+    readOnly: answer.readOnly !== 'off',
+    recorded: answer.recorded,
+  };
 };
 
 const describedMigration = ({

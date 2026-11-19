@@ -1,6 +1,9 @@
 {
   "clients": [
     {
+      "attributes": {
+        "backchannel.logout.url": "http://127.0.0.1:3001/backchannel-logout"
+      },
       "clientId": "usher-ui",
       "directAccessGrantsEnabled": true,
       "enabled": true,

@@ -8,7 +8,7 @@ import type {
   RefusalRecorder,
   UnverifiedRejectionReason,
 } from '../channelAssertion/index.js';
-import type { ControllerConfiguration } from '../configuration/index.js';
+import type { ControllerSettings } from '../settings/index.js';
 
 /**
  * A place in the notice stream, as a cursor carries it: a position within an epoch, and the creation
@@ -259,7 +259,7 @@ export interface NoticeChannelSettings {
 
   /** The page limit, the timings and the stream limits. */
   settings: Pick<
-    ControllerConfiguration,
+    ControllerSettings,
     | 'heartbeatMilliseconds'
     | 'noticePageLimit'
     | 'noticeRereadMilliseconds'

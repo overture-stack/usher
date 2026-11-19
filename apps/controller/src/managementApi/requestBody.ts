@@ -15,14 +15,17 @@ export type MembersReading =
 
 const JSON_MEDIA_TYPE = 'application/json';
 
+/** The media type a `PATCH` body is sent in: a JSON merge patch. */
+export const MERGE_PATCH_MEDIA_TYPE = 'application/merge-patch+json';
+
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // JSON in UTF-8, the one encoding RFC 8259 allows: a charset parameter naming any other is refused.
-const isJson = (contentType: string | undefined): boolean => {
+const isJson = (contentType: string | undefined, expected: string): boolean => {
   const [mediaType = '', ...parameters] = (contentType ?? '').split(';');
   return (
-    mediaType.trim().toLowerCase() === JSON_MEDIA_TYPE &&
+    mediaType.trim().toLowerCase() === expected &&
     parameters.every((parameter) => {
       const [name = '', value = ''] = parameter.split('=');
       return (
@@ -42,22 +45,32 @@ const decoded = (bytes: Uint8Array): string | undefined => {
 };
 
 /**
- * Reads a request's body as one JSON object: an empty body is none; any other must be
- * `application/json` in UTF-8, refused 415 otherwise, and is refused 400 unless it is valid UTF-8 and
- * JSON holding one object, naming no member twice and none `__proto__`.
+ * Reads a request's body as one JSON object: an empty body is none; any other must be in the media type
+ * given, `application/json` unless it is `application/merge-patch+json`, in UTF-8, refused 415 otherwise,
+ * and is refused 400 unless it is valid UTF-8 and JSON holding one object, naming no member twice and none
+ * `__proto__`.
  *
  * @param bytes the body as received, or none.
  * @param contentType the request's `content-type`.
+ * @param mediaType the media type the body must be in.
  */
 export const readJsonBody = (
   bytes: Uint8Array | undefined,
   contentType: string | undefined,
+  mediaType:
+    typeof JSON_MEDIA_TYPE | typeof MERGE_PATCH_MEDIA_TYPE = JSON_MEDIA_TYPE,
 ): BodyReading => {
   if (bytes === undefined || bytes.length === 0) {
     return { kind: 'absent' };
   }
-  if (!isJson(contentType)) {
-    return { kind: 'refused', problem: PROBLEMS.unsupportedMediaType };
+  if (!isJson(contentType, mediaType)) {
+    return {
+      kind: 'refused',
+      problem:
+        mediaType === JSON_MEDIA_TYPE
+          ? PROBLEMS.unsupportedMediaType
+          : PROBLEMS.unsupportedMergePatch,
+    };
   }
   const text = decoded(bytes);
   if (text === undefined) {

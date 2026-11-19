@@ -431,7 +431,7 @@
     },
     "schemas": {
       "AccessLevel": {
-        "description": "A resource's base tier. An `open` resource's unmarked records reach everyone through the baseline, the anonymous visitor included. A `registered` resource's unmarked records reach every signed-in principal through the signed-in rule. A `grant` resource is reached through a grant alone.",
+        "description": "A resource's base tier. An `open` resource's unmarked records reach whoever the grant rules confer on everyone, the anonymous visitor included. A `registered` resource's unmarked records reach every signed-in principal the grant rules confer on as `signedIn`. A `grant` resource is reached through a grant alone.",
         "enum": ["grant", "open", "registered"],
         "type": "string"
       },
@@ -1132,6 +1132,87 @@
           }
         },
         "required": ["reason"],
+        "type": "object"
+      },
+      "GrantRule": {
+        "additionalProperties": false,
+        "description": "One recipient's grant rule. Each recipient is named by one entry.",
+        "properties": {
+          "resources": {
+            "description": "What it confers, by access level, each access level named once.",
+            "items": {
+              "$ref": "#/components/schemas/GrantRuleResource"
+            },
+            "type": "array"
+          },
+          "to": {
+            "$ref": "#/components/schemas/GrantRuleRecipient"
+          }
+        },
+        "required": ["resources", "to"],
+        "type": "object"
+      },
+      "GrantRuleAction": {
+        "description": "A record action a grant rule confers: reading records, never writing them.",
+        "enum": ["count", "export", "view"],
+        "type": "string"
+      },
+      "GrantRuleCategory": {
+        "additionalProperties": false,
+        "description": "A category a grant rule confers actions on. Only `global.unmarked` is accepted for now.",
+        "properties": {
+          "actions": {
+            "description": "The actions conferred, each named once; empty confers none.",
+            "items": {
+              "$ref": "#/components/schemas/GrantRuleAction"
+            },
+            "type": "array"
+          },
+          "name": {
+            "$ref": "#/components/schemas/ScopedCategoryName"
+          }
+        },
+        "required": ["actions", "name"],
+        "type": "object"
+      },
+      "GrantRuleRecipient": {
+        "description": "Who a grant rule confers on: everyone, or everyone signed in.",
+        "enum": ["everyone", "signedIn"],
+        "type": "string"
+      },
+      "GrantRuleResource": {
+        "additionalProperties": false,
+        "description": "The categories a grant rule confers on one access level of resources.",
+        "properties": {
+          "accessLevel": {
+            "description": "Which resources, by access level: `open` or `registered`.",
+            "enum": ["open", "registered"],
+            "type": "string"
+          },
+          "categories": {
+            "description": "The categories conferred, each named once.",
+            "items": {
+              "$ref": "#/components/schemas/GrantRuleCategory"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["accessLevel", "categories"],
+        "type": "object"
+      },
+      "GrantRules": {
+        "additionalProperties": false,
+        "description": "The whole list of grant rules, one entry per recipient.",
+        "properties": {
+          "grantRules": {
+            "description": "The entries, each for one recipient.",
+            "items": {
+              "$ref": "#/components/schemas/GrantRule"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["grantRules"],
         "type": "object"
       },
       "GrantState": {
@@ -1942,6 +2023,208 @@
         },
         "required": ["expiresAt", "resource", "role"],
         "type": "object"
+      },
+      "Settings": {
+        "additionalProperties": false,
+        "description": "Every setting but the grant rules, each as its value: the changeable ones and the fixed ones alike.",
+        "properties": {
+          "backChannelLogout": {
+            "description": "Whether a back-channel logout from the identity provider is relayed.",
+            "type": "boolean"
+          },
+          "eventSource": {
+            "description": "The source named on every audit event. Fixed after the first run.",
+            "type": "string"
+          },
+          "firstUser": {
+            "description": "Who the first user is: one realm role, or one subject at the identity provider.",
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "description": "The first user by realm role.",
+                "properties": {
+                  "realmRole": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": ["realmRole"],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "The first user by subject.",
+                "properties": {
+                  "subject": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": ["subject"],
+                "type": "object"
+              }
+            ]
+          },
+          "grantAutoAccept": {
+            "description": "Whether a grant request is accepted without review.",
+            "type": "boolean"
+          },
+          "heartbeatMilliseconds": {
+            "description": "The interval between heartbeats on a notice stream, in milliseconds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "issuer": {
+            "description": "The issuer of the tokens Usher returns. Fixed after the first run.",
+            "type": "string"
+          },
+          "noticePageLimit": {
+            "description": "The most notices one page holds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "noticeRereadMilliseconds": {
+            "description": "The interval between rereads of the notice stream, in milliseconds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "retentionGraceSeconds": {
+            "description": "The grace period a notice is kept beyond the token lifetime, in seconds.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "retentionMarginSeconds": {
+            "description": "The margin a notice is kept beyond the grace period, in seconds.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "signInTokenMaximumLifetimeSeconds": {
+            "description": "The longest a sign-in token may live, in seconds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "streamLimitPerAudience": {
+            "description": "The most open notice streams one audience may hold.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "streamMaximumLifetimeSeconds": {
+            "description": "The longest a notice stream stays open, in seconds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "streamQueueLimit": {
+            "description": "The most notices one stream may queue.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "submitterCategory": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScopedCategoryName"
+              }
+            ],
+            "description": "The category a grant request from a submitter is recorded under."
+          },
+          "tokenLifetimeSeconds": {
+            "description": "How long an issued token lives, in seconds.",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "backChannelLogout",
+          "eventSource",
+          "firstUser",
+          "grantAutoAccept",
+          "heartbeatMilliseconds",
+          "issuer",
+          "noticePageLimit",
+          "noticeRereadMilliseconds",
+          "retentionGraceSeconds",
+          "retentionMarginSeconds",
+          "signInTokenMaximumLifetimeSeconds",
+          "streamLimitPerAudience",
+          "streamMaximumLifetimeSeconds",
+          "streamQueueLimit",
+          "submitterCategory",
+          "tokenLifetimeSeconds"
+        ],
+        "type": "object"
+      },
+      "SettingsUpdate": {
+        "additionalProperties": false,
+        "description": "A change of some settings, as a JSON Merge Patch: any subset of the changeable settings, validated together. The grant rules are changed through their own operation, and an empty change is refused.",
+        "properties": {
+          "backChannelLogout": {
+            "description": "Whether a back-channel logout from the identity provider is relayed.",
+            "type": "boolean"
+          },
+          "grantAutoAccept": {
+            "description": "Whether a grant request is accepted without review.",
+            "type": "boolean"
+          },
+          "heartbeatMilliseconds": {
+            "description": "The interval between heartbeats on a notice stream, in milliseconds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "noticePageLimit": {
+            "description": "The most notices one page holds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "noticeRereadMilliseconds": {
+            "description": "The interval between rereads of the notice stream, in milliseconds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "retentionGraceSeconds": {
+            "description": "The grace period a notice is kept beyond the token lifetime, in seconds.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "retentionMarginSeconds": {
+            "description": "The margin a notice is kept beyond the grace period, in seconds.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "signInTokenMaximumLifetimeSeconds": {
+            "description": "The longest a sign-in token may live, in seconds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "streamLimitPerAudience": {
+            "description": "The most open notice streams one audience may hold.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "streamMaximumLifetimeSeconds": {
+            "description": "The longest a notice stream stays open, in seconds.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "streamQueueLimit": {
+            "description": "The most notices one stream may queue.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "submitterCategory": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScopedCategoryName"
+              }
+            ],
+            "description": "The category a grant request from a submitter is recorded under."
+          },
+          "tokenLifetimeSeconds": {
+            "description": "How long an issued token lives, in seconds.",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "minProperties": 1
       },
       "Severity": {
         "enum": ["critical", "error", "info", "warning"],
@@ -6144,6 +6427,425 @@
         "tags": ["Instance"]
       }
     },
+    "/admin/settings": {
+      "get": {
+        "description": "Reads every setting but the grant rules, the fixed ones included, for platform administrators: `issuer`, `eventSource` and `firstUser` are fixed after the first run. It records no audit event.",
+        "operationId": "readSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            },
+            "description": "Every setting but the grant rules, as its value."
+          },
+          "401": {
+            "$ref": "#/components/responses/CredentialRefused"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "administratorOnly",
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "identityProviderUnavailable",
+                            "signingKeyUnconfirmed",
+                            "storedSettingsInvalid",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`storedSettingsInvalid`: a stored setting breaks its rule, so nothing is answered from the settings until its row is corrected; no value is named. `storeUnavailable`: the policy store cannot be read now. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managementToken": []
+          }
+        ],
+        "summary": "Reads the settings",
+        "tags": ["Settings"]
+      },
+      "patch": {
+        "description": "Changes some settings, all or nothing, as a JSON Merge Patch, for platform administrators. Each member names a changeable setting, and `grantRules` is changed through its own operation. A member that is unknown, names a fixed setting or `grantRules`, or holds a value breaking its rule, and a set of values breaking a rule laid across settings, is refused with `400`, the detail naming the member and its rule. A change equal to the stored values writes nothing and records nothing. Otherwise the changes are written in one transaction, and the audit event `settings.change` records each change with its previous value, at `critical` when any critical setting changed and at `warning` otherwise. The instance answering holds the change at once; every other instance holds it within one `noticeRereadMilliseconds`.",
+        "operationId": "updateSettings",
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdate"
+              }
+            }
+          },
+          "description": "The settings changed, by name.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            },
+            "description": "Every setting but the grant rules, as it now stands."
+          },
+          "400": {
+            "$ref": "#/components/responses/Unreadable"
+          },
+          "401": {
+            "$ref": "#/components/responses/CredentialRefused"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "administratorOnly",
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "changeLocksOutCaller",
+                            "backChannelLogoutNeedsAudiences"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`changeLocksOutCaller`: the caller's own access token would fail under the new `signInTokenMaximumLifetimeSeconds`, so the change is refused. `backChannelLogoutNeedsAudiences`: `backChannelLogout` cannot be on while `USHER_BACK_CHANNEL_LOGOUT_AUDIENCES` is empty. Nothing of the change is written."
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/MergePatchOnly"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "identityProviderUnavailable",
+                            "outcomeUnknown",
+                            "signingKeyUnconfirmed",
+                            "storedSettingsInvalid",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`storedSettingsInvalid`: a stored setting breaks its rule, so the change is not made. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token. `signingKeyUnconfirmed`: the access token's signing key is not among those held; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managementToken": []
+          }
+        ],
+        "summary": "Changes some settings",
+        "tags": ["Settings"]
+      }
+    },
+    "/admin/settings/grant-rules": {
+      "get": {
+        "description": "Reads the whole list of grant rules the store holds, for platform administrators. A stored list breaking its rule is answered `503` `storedSettingsInvalid`, naming no value. It records no audit event.",
+        "operationId": "readGrantRules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantRules"
+                }
+              }
+            },
+            "description": "The grant rules as the store holds them."
+          },
+          "401": {
+            "$ref": "#/components/responses/CredentialRefused"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "administratorOnly",
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "identityProviderUnavailable",
+                            "signingKeyUnconfirmed",
+                            "storedSettingsInvalid",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`storedSettingsInvalid`: a stored setting breaks its rule, so nothing is answered from the settings until its row is corrected; no value is named. `storeUnavailable`: the policy store cannot be read now. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managementToken": []
+          }
+        ],
+        "summary": "Reads the grant rules",
+        "tags": ["Settings"]
+      },
+      "put": {
+        "description": "Replaces the whole list of grant rules, for platform administrators. The list is read by the rules the seed file and the store use; a body breaking them is refused with `400`, its detail naming the rule. A list equal to the stored one writes nothing and records nothing, and answers the stored list. Otherwise the change is written in one transaction with the baseline notice it makes, and the audit event `grantRules.change` records it at `critical`, carrying the list given and the list it replaces.",
+        "operationId": "changeGrantRules",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantRules"
+              }
+            }
+          },
+          "description": "The whole list of grant rules.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantRules"
+                }
+              }
+            },
+            "description": "The grant rules now held, the list given or the unchanged list it equals."
+          },
+          "400": {
+            "$ref": "#/components/responses/Unreadable"
+          },
+          "401": {
+            "$ref": "#/components/responses/CredentialRefused"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "administratorOnly",
+                            "noAdministratorYet",
+                            "serviceAccountNotPermitted"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/JsonOnly"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "identityProviderUnavailable",
+                            "outcomeUnknown",
+                            "signingKeyUnconfirmed",
+                            "storedSettingsInvalid",
+                            "storeUnavailable"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "`storedSettingsInvalid`: a stored setting breaks its rule, so the change is not made. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token. `signingKeyUnconfirmed`: the access token's signing key is not among those held; try again once the seconds in `Retry-After` have passed.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managementToken": []
+          }
+        ],
+        "summary": "Replaces the grant rules",
+        "tags": ["Settings"]
+      }
+    },
     "/backchannel-logout": {
       "post": {
         "description": "The identity provider's OpenID Connect back-channel logout endpoint. The body is form-encoded and holds one `logout_token`: a current logout token issued by the configured identity provider for the instance's back-channel logout clients alone, naming a session in `sid`, a subject in `sub`, or both. The header `typ` is `logout+jwt` or `JWT`, in any letter case and with or without the `application/` prefix, or left out.\n\nThe controller commits the sign-out, with a principal notice to every application where the subject is known, before it answers. The exchange then refuses every sign-in token of a session named by the logout token, whenever it was issued. For a logout token naming a subject alone, the exchange refuses each of that subject's sign-in tokens issued at or before the sign-out.\n\nA logout token delivered twice writes one notice. A logout naming a session unseen at any exchange writes no notice, and the sign-in tokens of that session are refused all the same.",
@@ -6738,6 +7440,10 @@
     {
       "description": "Liveness and readiness.",
       "name": "Health"
+    },
+    {
+      "description": "The settings an instance holds in its store, and the grant rules.",
+      "name": "Settings"
     }
   ]
 }

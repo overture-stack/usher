@@ -6,17 +6,13 @@ import type pg from 'pg';
 import {
   AUDIT_EVENT_TYPES,
   auditRows,
-  awaitEventsOfType,
-  type CloudEvent,
   emittedType,
-  eventsIn,
-  ofType,
-  SEVERITY_ATTRIBUTE,
 } from '../../test-support/auditEvents.js';
 import {
   captureLog,
   type ControllerConfiguration,
   ENVIRONMENT_VARIABLES,
+  startController,
   type LogCapture,
 } from '../../test-support/controller.js';
 import { holdTable, untilBlocked } from '../../test-support/database.js';
@@ -26,6 +22,7 @@ import {
   selectRows,
 } from '../../test-support/fixtures/database.js';
 import {
+  HARNESS_MANAGEMENT_CLIENT,
   type Harness,
   startHarness,
   startInstance,
@@ -42,10 +39,13 @@ import {
 } from '../../test-support/policy.js';
 import { type Cleanup, cleanupFor } from '../../test-support/waiting.js';
 
-const { capabilities, notices, rolePermissions, roles, rulesDigest } =
-  POLICY_TABLES;
-
-const { baselineChange } = AUDIT_EVENT_TYPES;
+const {
+  capabilities,
+  identityProviderConfiguration,
+  notices,
+  rolePermissions,
+  roles,
+} = POLICY_TABLES;
 
 // The capability vocabulary of permissions-model.md, each entity in its plane: the data plane's four
 // entities a token's category entry may carry, and the control plane's rows of Usher's own store.
@@ -142,16 +142,6 @@ const storedRoles = async (
   );
 };
 
-const storedDigests = async (
-  client: pg.ClientBase,
-): Promise<readonly string[]> =>
-  (
-    await selectRows<{ digest: string }>(
-      client,
-      `SELECT ${rulesDigest.columns.digest} AS digest FROM ${qualified(rulesDigest)}`,
-    )
-  ).map(({ digest }) => digest);
-
 const noticeCount = async (
   client: pg.ClientBase,
   kind?: string,
@@ -163,57 +153,6 @@ const noticeCount = async (
   );
   return row?.count ?? 0;
 };
-
-/** A `baseline.change` event as a test compares it: its id, severity and data. */
-interface RecordedChange {
-  data: unknown;
-  id: string;
-  severity: unknown;
-}
-
-const recordedChange = ({
-  data,
-  id,
-  severity,
-}: RecordedChange): RecordedChange => ({ data, id, severity });
-
-// The event's rows in `audit_log`, in the order they occurred.
-const changeRows = async (
-  client: pg.ClientBase,
-): Promise<readonly RecordedChange[]> =>
-  (await auditRows(client))
-    .filter(({ type }) => type === emittedType(baselineChange))
-    .map(recordedChange);
-
-const lineOf = (event: CloudEvent): RecordedChange =>
-  recordedChange({
-    data: event.data,
-    id: event.id,
-    severity: event[SEVERITY_ATTRIBUTE],
-  });
-
-// The event's lines a log stream holds from a mark on.
-const changeLines = (
-  log: LogCapture,
-  since: number = 0,
-): readonly RecordedChange[] =>
-  ofType(eventsIn(log, since), baselineChange).map(lineOf);
-
-// What the event records of the rules a configuration starts under, as the system, which names nobody.
-const changeData = ({
-  baseline,
-  instanceName,
-  signedInRule,
-}: Pick<
-  ControllerConfiguration,
-  'baseline' | 'instanceName' | 'signedInRule'
->): Readonly<Record<string, unknown>> => ({
-  actorId: null,
-  actorType: 'system',
-  baseline: baseline.toSorted(),
-  instance: instanceName,
-  signedInRule: signedInRule.toSorted(),
-});
 
 const withoutPermission = (
   client: pg.ClientBase,
@@ -280,16 +219,6 @@ suite('what the controller writes at its start', () => {
     );
   });
 
-  test('records the digest of its rules at its first start, and writes no notice', async (context) => {
-    const { harness } = await startedStore(cleanupFor(context));
-    const migration = harness.clients.migration;
-
-    const digests = await storedDigests(migration);
-
-    assert.equal(digests.length, 1);
-    assert.equal(await noticeCount(migration), 0);
-  });
-
   test('records one fingerprint at its first start, of 32 bytes, under the name keyEncryptionKey', async (context) => {
     const { harness } = await startedStore(cleanupFor(context));
 
@@ -301,19 +230,6 @@ suite('what the controller writes at its start', () => {
         thirtyTwoBytes: /^[\da-f]{64}$/u.test(fingerprint),
       })),
       [{ keyName: 'keyEncryptionKey', thirtyTwoBytes: true }],
-    );
-  });
-
-  test("records one baseline.change at info at the store's first start, its row and its line alike, naming the rules it starts under", async (context) => {
-    const { harness, log } = await startedStore(cleanupFor(context));
-
-    const lines = (await awaitEventsOfType(log, baselineChange)).map(lineOf);
-    const rows = await changeRows(harness.clients.migration);
-
-    assert.deepEqual(rows, lines);
-    assert.deepEqual(
-      rows.map(({ data, severity }) => ({ data, severity })),
-      [{ data: changeData(harness.configuration), severity: 'info' }],
     );
   });
 
@@ -345,114 +261,24 @@ suite('what the controller writes at its start', () => {
     );
   });
 
-  test('writes nothing, and records no event, when it restarts under the same rules', async (context) => {
-    const { harness, log } = await startedStore(cleanupFor(context));
+  test('writes nothing when it restarts on a store it has already started', async (context) => {
+    const { harness } = await startedStore(cleanupFor(context));
     const before = await takeSnapshot(harness);
-    const mark = log.lines().length;
 
     await harness.restart();
 
     assert.deepEqual(await takeSnapshot(harness), before);
-    assert.deepEqual(changeLines(log, mark), []);
   });
 
-  test('records the new digest, one baseline notice and one baseline.change at warning when it starts under a changed baseline', async (context) => {
-    const { harness, log } = await startedStore(cleanupFor(context));
-    const migration = harness.clients.migration;
-    const recorded = await storedDigests(migration);
-    const [first] = await changeRows(migration);
-    const mark = log.lines().length;
-
-    await harness.restart({ baseline: ['view', 'count'] });
-
-    const lines = (
-      await awaitEventsOfType(log, baselineChange, { since: mark })
-    ).map(lineOf);
-    const digests = await storedDigests(migration);
-    assert.equal(digests.length, 1);
-    assert.notDeepEqual(digests, recorded);
-    assert.equal(await noticeCount(migration, 'baseline'), 1);
-    assert.deepEqual(await changeRows(migration), [first, ...lines]);
-    assert.deepEqual(
-      lines.map(({ data, severity }) => ({ data, severity })),
-      [{ data: changeData(harness.configuration), severity: 'warning' }],
-    );
-  });
-
-  test('writes nothing, and records no event, when it starts under a baseline naming the same actions in another order', async (context) => {
-    const { harness, log } = await startedStore(cleanupFor(context));
-    const before = await takeSnapshot(harness);
-    const mark = log.lines().length;
-
-    await harness.restart({
-      baseline: harness.configuration.baseline.toReversed(),
-    });
-
-    assert.deepEqual(await takeSnapshot(harness), before);
-    assert.deepEqual(changeLines(log, mark), []);
-  });
-
-  test('writes one baseline notice and records one baseline.change between instances started together under a changed signed-in rule', async (context) => {
-    const scope = cleanupFor(context);
-    const { harness } = await startedStore(scope);
-    const migration = harness.clients.migration;
-    const [first] = await changeRows(migration);
-    const logs = Array.from({ length: 3 }, () => captureLog());
-    const held = await holdTable(harness.database, rulesDigest);
-    const starting = Promise.all(
-      logs.map((log) =>
-        startInstance(scope, harness, {
-          logStream: log.stream,
-          signedInRule: ['count'],
-        }),
-      ),
-    );
-
-    const overlapping = await untilBlocked(migration, starting, {
-      count: logs.length,
-      deadline: Date.now() + 10_000,
-    }).finally(() => held.release());
-    await starting;
-
-    const lines = logs.flatMap((log) => changeLines(log));
-    assert.equal(overlapping, true);
-    assert.equal(await noticeCount(migration, 'baseline'), 1);
-    assert.equal(lines.length, 1);
-    assert.deepEqual(await changeRows(migration), [first, ...lines]);
-    assert.equal(lines[0]?.severity, 'warning');
-  });
-
-  test('starts on a role that may only read under the rules the store recorded, writing nothing and recording no event', async (context) => {
+  test('starts on a role that may only read on a store it has already started, writing nothing', async (context) => {
     const scope = cleanupFor(context);
     const { harness } = await startedStore(scope);
     const before = await takeSnapshot(harness);
-    const log = captureLog();
 
-    const reading = await startReadOnlyInstance(scope, harness, {
-      logStream: log.stream,
-    });
+    const reading = await startReadOnlyInstance(scope, harness);
     await reading.stop();
 
     assert.deepEqual(await takeSnapshot(harness), before);
-    assert.deepEqual(changeLines(log), []);
-  });
-
-  test('refuses a start on a role that may only read under rules the store has not recorded, naming the database URL, writing nothing and recording no event', async (context) => {
-    const scope = cleanupFor(context);
-    const { harness } = await startedStore(scope);
-    const before = await takeSnapshot(harness);
-    const log = captureLog();
-
-    await assert.rejects(
-      startReadOnlyInstance(scope, harness, {
-        logStream: log.stream,
-        signedInRule: [],
-      }),
-      REFUSED_ON_ITS_ROLE,
-    );
-
-    assert.deepEqual(await takeSnapshot(harness), before);
-    assert.deepEqual(changeLines(log), []);
   });
 
   test('refuses a start on a role that may only read while the store lacks a seeded role, naming the database URL and writing nothing', async (context) => {
@@ -504,3 +330,262 @@ suite('what the controller writes at its start', () => {
     assert.deepEqual(await takeSnapshot(harness), before);
   });
 });
+
+// The identity provider's six identifiers, in the order the store lists them.
+const IDENTIFIER_NAMES = [
+  'apiDocsClient',
+  'backChannelLogoutAudiences',
+  'identityProviderIssuer',
+  'managementAudience',
+  'managementClients',
+  'serviceAccountRole',
+] as const;
+
+const sortedOf = (values: readonly string[]): string[] =>
+  [...values].toSorted();
+
+// The six identifiers as a store holding the configuration records them: the lists sorted.
+const recordOf = (
+  configuration: ControllerConfiguration,
+): Readonly<Record<string, unknown>> => ({
+  apiDocsClient: configuration.apiDocsClient,
+  backChannelLogoutAudiences: sortedOf(
+    configuration.backChannelLogoutAudiences,
+  ),
+  identityProviderIssuer: configuration.identityProviderIssuer,
+  managementAudience: configuration.managementAudience,
+  managementClients: sortedOf(configuration.managementClients),
+  serviceAccountRole: configuration.serviceAccountRole,
+});
+
+const UNRECORDED: Readonly<Record<string, null>> = Object.freeze(
+  Object.fromEntries(IDENTIFIER_NAMES.map((name) => [name, null])),
+);
+
+const EXTRA_CLIENT = 'zz-added-client';
+
+// The six identifiers the store holds, each by name.
+const identityRecord = async (
+  client: pg.ClientBase,
+): Promise<Readonly<Record<string, unknown>>> => {
+  const { columns, name } = identityProviderConfiguration;
+  const rows = await selectRows<{ name: string; value: unknown }>(
+    client,
+    `SELECT ${columns.name} AS name, ${columns.value} AS value FROM ${qualified({ name })} ORDER BY ${columns.name}`,
+  );
+  return Object.fromEntries(rows.map((row) => [row.name, row.value]));
+};
+
+// The audit rows of a configuration change, the system's, in order.
+const configurationChanges = async (
+  client: pg.ClientBase,
+): Promise<readonly { data: unknown; severity: string }[]> =>
+  (await auditRows(client))
+    .filter(
+      ({ type }) =>
+        type ===
+        emittedType(AUDIT_EVENT_TYPES.identityProviderConfigurationChange),
+    )
+    .map(({ data, severity }) => ({ data, severity: String(severity) }));
+
+// The `changes` member of a configuration change's data.
+const changesOf = (data: unknown): unknown =>
+  (data as Record<string, unknown>)['changes'];
+
+// A Controller started and stopped at once on the configuration given, which records what its start records.
+const startAndStop = async (
+  configuration: ControllerConfiguration,
+): Promise<void> => {
+  const running = await startController(configuration);
+  await running.stop();
+};
+
+suite(
+  'what the controller records of the identity provider at its start',
+  () => {
+    test('fills all six identifiers at a first start, recording no change', async (context) => {
+      const log = captureLog();
+      const harness = await startHarness({
+        applications: [],
+        configuration: { logStream: log.stream },
+        startsController: false,
+      });
+      const scope = cleanupFor(context);
+      scope.defer(() => harness.stop());
+      const unrecorded = await identityRecord(harness.clients.migration);
+
+      await harness.startController();
+
+      assert.deepEqual(unrecorded, UNRECORDED);
+      assert.deepEqual(
+        await identityRecord(harness.clients.migration),
+        recordOf(harness.configuration),
+      );
+      assert.deepEqual(
+        await configurationChanges(harness.clients.migration),
+        [],
+      );
+    });
+
+    test('records nothing and writes nothing at a start under the identifiers the store holds', async (context) => {
+      const { harness } = await startedStore(cleanupFor(context));
+      const before = await takeSnapshot(harness);
+
+      await harness.restart();
+
+      assert.deepEqual(await takeSnapshot(harness), before);
+      assert.deepEqual(
+        await configurationChanges(harness.clients.migration),
+        [],
+      );
+    });
+
+    test('records one critical change naming the management clients with their previous list, and stores the new list sorted', async (context) => {
+      const { harness } = await startedStore(cleanupFor(context));
+      const { configuration } = harness;
+      const changed = {
+        ...configuration,
+        managementClients: [
+          ...configuration.managementClients,
+          EXTRA_CLIENT,
+        ].toReversed(),
+      };
+      await harness.stopController();
+
+      await startAndStop(changed);
+
+      assert.deepEqual(
+        (await configurationChanges(harness.clients.migration)).map(
+          ({ data, severity }) => ({
+            changes: changesOf(data),
+            severity,
+          }),
+        ),
+        [
+          {
+            changes: [
+              {
+                name: 'managementClients',
+                previousValue: sortedOf(configuration.managementClients),
+                value: sortedOf(changed.managementClients),
+              },
+            ],
+            severity: 'critical',
+          },
+        ],
+      );
+      assert.deepEqual(
+        await identityRecord(harness.clients.migration),
+        recordOf(changed),
+      );
+    });
+
+    test('records nothing when a changed list holds the same clients in another order', async (context) => {
+      const { harness } = await startedStore(cleanupFor(context));
+      const { configuration } = harness;
+      const clients = [...configuration.managementClients, EXTRA_CLIENT];
+      await harness.stopController();
+      await startAndStop({ ...configuration, managementClients: clients });
+      const before = await takeSnapshot(harness);
+
+      await startAndStop({
+        ...configuration,
+        managementClients: clients.toReversed(),
+      });
+
+      assert.deepEqual(await takeSnapshot(harness), before);
+      assert.equal(
+        (await configurationChanges(harness.clients.migration)).length,
+        1,
+      );
+    });
+
+    test('records one warning change when apiDocsClient alone changes', async (context) => {
+      const { harness } = await startedStore(cleanupFor(context));
+      const { configuration } = harness;
+      await harness.stopController();
+
+      await startAndStop({
+        ...configuration,
+        apiDocsClient: HARNESS_MANAGEMENT_CLIENT,
+      });
+
+      assert.deepEqual(
+        (await configurationChanges(harness.clients.migration)).map(
+          ({ data, severity }) => ({
+            changes: changesOf(data),
+            severity,
+          }),
+        ),
+        [
+          {
+            changes: [
+              {
+                name: 'apiDocsClient',
+                previousValue: '',
+                value: HARNESS_MANAGEMENT_CLIENT,
+              },
+            ],
+            severity: 'warning',
+          },
+        ],
+      );
+    });
+
+    test('records exactly one change when two Controllers start together under new identifiers', async (context) => {
+      const { harness } = await startedStore(cleanupFor(context));
+      const { configuration } = harness;
+      const changed = {
+        ...configuration,
+        managementClients: [...configuration.managementClients, EXTRA_CLIENT],
+      };
+      await harness.stopController();
+
+      const running = await Promise.all([
+        startController(changed),
+        startController(changed),
+      ]);
+      await Promise.all(running.map((instance) => instance.stop()));
+
+      assert.equal(
+        (await configurationChanges(harness.clients.migration)).length,
+        1,
+      );
+      assert.deepEqual(
+        await identityRecord(harness.clients.migration),
+        recordOf(changed),
+      );
+    });
+
+    test('starts on a role that may only read against a record that matches, recording nothing and writing nothing', async (context) => {
+      const scope = cleanupFor(context);
+      const { harness } = await startedStore(scope);
+      const before = await takeSnapshot(harness);
+
+      const reading = await startReadOnlyInstance(scope, harness);
+      await reading.stop();
+
+      assert.deepEqual(
+        await identityRecord(harness.clients.migration),
+        recordOf(harness.configuration),
+      );
+      assert.deepEqual(await takeSnapshot(harness), before);
+    });
+
+    test('refuses a start on a role that may only read when an identifier changed, naming the database URL and writing nothing', async (context) => {
+      const scope = cleanupFor(context);
+      const { harness } = await startedStore(scope);
+      const { configuration } = harness;
+      const before = await takeSnapshot(harness);
+
+      await assert.rejects(
+        startReadOnlyInstance(scope, harness, {
+          managementClients: [...configuration.managementClients, EXTRA_CLIENT],
+        }),
+        REFUSED_ON_ITS_ROLE,
+      );
+
+      assert.deepEqual(await takeSnapshot(harness), before);
+    });
+  },
+);

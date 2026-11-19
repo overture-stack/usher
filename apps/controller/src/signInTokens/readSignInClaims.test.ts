@@ -54,7 +54,7 @@ const read = (
     {
       audience: AUDIENCE,
       now: NOW,
-      signInTokenMaximumLifetimeSeconds: MAXIMUM_LIFETIME_SECONDS,
+			signInTokenMaximumFor: () => MAXIMUM_LIFETIME_SECONDS,
     },
   );
 

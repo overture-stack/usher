@@ -215,13 +215,10 @@ const readerOf = (
  * @param dependencies what every Management API operation's route is built on.
  */
 export const createResourceRoutes = (
-  {
-    settings: { autoAccept, clock, databaseSchema, identityProviderIssuer },
-    store,
-    trail,
-  }: ResourceOperationsSettings,
+  { settings, store, trail }: ResourceOperationsSettings,
   dependencies: ManagementDependencies,
 ): readonly RouteOptions[] => {
+  const { clock, databaseSchema, identityProviderIssuer } = settings;
   const servingChange = (
     change: 'added' | 'removed',
   ): ManagementOperation<undefined> => ({
@@ -341,7 +338,7 @@ export const createResourceRoutes = (
               type: 'resource.registration',
             });
             await writeOwnerGrants({
-              autoAccept,
+              autoAccept: settings.grantAutoAccept,
               grants: sqlGrantStore(connection, {
                 issuer: identityProviderIssuer,
                 schema: databaseSchema,

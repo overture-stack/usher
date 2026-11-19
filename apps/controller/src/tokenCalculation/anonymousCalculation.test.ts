@@ -1,12 +1,24 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import type { RecordAction } from '@overture-stack/usher-types';
-
+import type { GrantRuleAction, GrantRules } from '../settings/index.js';
 import { anonymousCalculation } from './anonymousCalculation.js';
 import type { AudiencePolicy, ServedResource } from './types.js';
 
-const BASELINE: readonly RecordAction[] = ['count', 'view', 'export'];
+const BASELINE: readonly GrantRuleAction[] = ['count', 'view', 'export'];
+
+// The grant rules giving everyone the actions on open resources' unmarked records.
+const everyoneOpen = (actions: readonly GrantRuleAction[]): GrantRules => [
+  {
+    resources: [
+      {
+        accessLevel: 'open',
+        categories: [{ actions, name: 'global.unmarked' }],
+      },
+    ],
+    to: 'everyone',
+  },
+];
 
 const resource = (
   externalId: string,
@@ -34,8 +46,11 @@ const POLICY: AudiencePolicy = {
 const UNMARKED_READ = { 'global.unmarked': { record: BASELINE } };
 
 suite('the anonymous calculation', () => {
-  test("confers the baseline on the unmarked records of every open resource the audience serves, and on no other resource's", () => {
-    const { permissions } = anonymousCalculation(POLICY, BASELINE);
+  test("confers everyone's actions on the unmarked records of every open resource the audience serves, and on no other resource's", () => {
+    const { permissions } = anonymousCalculation(
+      POLICY,
+      everyoneOpen(BASELINE),
+    );
 
     assert.deepEqual(permissions, {
       'STUDY-B2': UNMARKED_READ,
@@ -44,7 +59,10 @@ suite('the anonymous calculation', () => {
   });
 
   test('lists every resource the audience serves in servedResources, held or not', () => {
-    const { servedResources } = anonymousCalculation(POLICY, BASELINE);
+    const { servedResources } = anonymousCalculation(
+      POLICY,
+      everyoneOpen(BASELINE),
+    );
 
     assert.deepEqual(servedResources, [
       'étude « Nord » "A1"',
@@ -55,7 +73,10 @@ suite('the anonymous calculation', () => {
   });
 
   test("lists each held resource's own categories under it, scoped, and names no resource it does not hold", () => {
-    const { resourceCategories } = anonymousCalculation(POLICY, BASELINE);
+    const { resourceCategories } = anonymousCalculation(
+      POLICY,
+      everyoneOpen(BASELINE),
+    );
 
     assert.deepEqual(resourceCategories, {
       'STUDY-B2': [],
@@ -64,7 +85,10 @@ suite('the anonymous calculation', () => {
   });
 
   test('lists every concrete global category, scoped, whether or not anything holds it, and never global.unmarked', () => {
-    const { globalCategories } = anonymousCalculation(POLICY, BASELINE);
+    const { globalCategories } = anonymousCalculation(
+      POLICY,
+      everyoneOpen(BASELINE),
+    );
 
     assert.deepEqual(globalCategories, [
       'global.community-governed',
@@ -81,7 +105,7 @@ suite('the anonymous calculation', () => {
           resource('STUDY-B2'),
         ],
       },
-      BASELINE,
+      everyoneOpen(BASELINE),
     );
 
     assert.deepEqual(Object.keys(calculation.permissions), ['STUDY-B2']);
@@ -95,7 +119,7 @@ suite('the anonymous calculation', () => {
         ...POLICY,
         served: [resource('STUDY-B2', { retired: true }), resource('STUDY-E5')],
       },
-      BASELINE,
+      everyoneOpen(BASELINE),
     );
 
     assert.deepEqual(Object.keys(calculation.permissions), ['STUDY-E5']);
@@ -103,16 +127,19 @@ suite('the anonymous calculation', () => {
     assert.deepEqual(calculation.servedResources, ['STUDY-E5']);
   });
 
-  test('confers exactly the actions the baseline names, in its order', () => {
-    const { permissions } = anonymousCalculation(POLICY, ['view']);
+  test('confers exactly the actions the entry names, in its order', () => {
+    const { permissions } = anonymousCalculation(
+      POLICY,
+      everyoneOpen(['view']),
+    );
 
     assert.deepEqual(permissions['STUDY-B2'], {
       'global.unmarked': { record: ['view'] },
     });
   });
 
-  test('confers nothing under an empty baseline, still listing every offering', () => {
-    const calculation = anonymousCalculation(POLICY, []);
+  test('confers nothing under an empty entry, still listing every offering', () => {
+    const calculation = anonymousCalculation(POLICY, everyoneOpen([]));
 
     assert.deepEqual(calculation, {
       globalCategories: ['global.community-governed', 'global.controlled'],
@@ -129,10 +156,13 @@ suite('the anonymous calculation', () => {
     });
   });
 
-  test('names the baseline as the conferring rule once it confers on any resource, and counts no recorded grant', () => {
-    const { grantCount, rules } = anonymousCalculation(POLICY, BASELINE);
+  test('names everyone as the conferring recipient once it confers on any resource, and counts no recorded grant', () => {
+    const { grantCount, rules } = anonymousCalculation(
+      POLICY,
+      everyoneOpen(BASELINE),
+    );
 
-    assert.deepEqual(rules, ['baseline']);
+    assert.deepEqual(rules, ['everyone']);
     assert.equal(grantCount, 0);
   });
 
@@ -142,7 +172,7 @@ suite('the anonymous calculation', () => {
         globalCategories: [],
         served: [resource('STUDY-C3', { baseTier: 'registered' })],
       },
-      BASELINE,
+      everyoneOpen(BASELINE),
     );
 
     assert.deepEqual(calculation.permissions, {});
@@ -152,7 +182,7 @@ suite('the anonymous calculation', () => {
   test('offers nothing to an audience serving no resource, the global categories aside', () => {
     const calculation = anonymousCalculation(
       { globalCategories: ['unmarked'], served: [] },
-      BASELINE,
+      everyoneOpen(BASELINE),
     );
 
     assert.deepEqual(calculation, {
@@ -163,5 +193,22 @@ suite('the anonymous calculation', () => {
       rules: [],
       servedResources: [],
     });
+  });
+
+  test('confers nothing on an anonymous visitor through a signedIn entry, and names no rule for it', () => {
+    const calculation = anonymousCalculation(POLICY, [
+      {
+        resources: [
+          {
+            accessLevel: 'open',
+            categories: [{ actions: BASELINE, name: 'global.unmarked' }],
+          },
+        ],
+        to: 'signedIn',
+      },
+    ]);
+
+    assert.deepEqual(calculation.permissions, {});
+    assert.deepEqual(calculation.rules, []);
   });
 });

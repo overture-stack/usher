@@ -979,8 +979,9 @@ with no categories is ungrantable, since a grant would have nothing to name.
 records, and never a description of the whole resource. Its unmarked records sit at that tier, open,
 registered or by grant, and each of the resource's categories adds a restriction on top of it: a
 resource with base tier open can hold controlled records that need a grant of their own. Each
-registration names it; the platform holds no default. What the open and registered tiers grant,
-`read` unless narrowed, is the Controller's runtime configuration and is stored nowhere.
+registration names it; the platform holds no default. What the open and registered tiers grant is
+set by the instance's grant rules, count, view and export by default, held in its store and changed
+through the Controller.
 `suppressed` hides the resource from results without touching any grant, set by `resource.suppress`
 and cleared by `resource.restore`.
 

@@ -1,8 +1,10 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import pg from 'pg';
 
+import type { Settings } from '../src/settings/index.js';
 import { runningContainers } from './containerEnvironment.js';
 import {
   type DedicatedContainer,
@@ -46,6 +48,91 @@ export interface DatabaseTemplate {
  * it set by the migrations, run again on its clone.
  */
 export const TEMPLATE_RETENTION_FLOOR_SECONDS = 390;
+
+/**
+ * The settings every template's first run seeds: the harness's own issuer, event source and sign-in token
+ * maximum, and the defaults the Controller's reader gives the rest. The maximum is seeded at the harness's
+ * value rather than the reader's default, so a test's start writes no raise: a token minted before the
+ * start is judged by the maximum the store held since its issue, as the store records it.
+ */
+export const TEMPLATE_SETTINGS: Settings = {
+  backChannelLogout: true,
+  eventSource: 'https://usher.example.org/controller',
+  firstUser: { realmRole: 'usher-first-user' },
+  grantAutoAccept: false,
+  grantRules: [
+    {
+      resources: [
+        {
+          accessLevel: 'open',
+          categories: [
+            { actions: ['count', 'view', 'export'], name: 'global.unmarked' },
+          ],
+        },
+      ],
+      to: 'everyone',
+    },
+    {
+      resources: [
+        {
+          accessLevel: 'open',
+          categories: [
+            { actions: ['count', 'view', 'export'], name: 'global.unmarked' },
+          ],
+        },
+        {
+          accessLevel: 'registered',
+          categories: [
+            { actions: ['count', 'view', 'export'], name: 'global.unmarked' },
+          ],
+        },
+      ],
+      to: 'signedIn',
+    },
+  ],
+  heartbeatMilliseconds: 10000,
+  issuer: 'https://usher.example.org',
+  noticePageLimit: 500,
+  noticeRereadMilliseconds: 2000,
+  retentionGraceSeconds: 60,
+  retentionMarginSeconds: 30,
+  signInTokenMaximumLifetimeSeconds: 3600,
+  streamLimitPerAudience: 64,
+  streamMaximumLifetimeSeconds: 900,
+  streamQueueLimit: 1000,
+  submitterCategory: 'global.unmarked',
+  tokenLifetimeSeconds: 300,
+};
+
+// The templates built for seeds other than TEMPLATE_SETTINGS, by the seed's JSON.
+const seededTemplates = new Map<string, DatabaseTemplate>();
+
+/**
+ * The template a database seeded with the settings given is cloned from. A seed equal to
+ * {@link TEMPLATE_SETTINGS} is the Controller's own template; any other gets a template of its own, built
+ * once per distinct seed and cached, so tests sharing a seed share it. The fixed settings (`eventSource`,
+ * `firstUser` and `issuer`) are kept as first seeded, so a test needing another value of one of them gets a
+ * database seeded with it, and no test writes to a fixed row.
+ *
+ * @param settings the whole of the settings the template's first run seeds.
+ */
+export const templateSeededWith = (settings: Settings): DatabaseTemplate => {
+  if (isDeepStrictEqual(settings, TEMPLATE_SETTINGS)) {
+    return USHER_TEMPLATE;
+  }
+  const key = JSON.stringify(settings);
+  const cached = seededTemplates.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const template: DatabaseTemplate = Object.freeze({
+    migrate: (options: MigrationOptions) => migrate({ ...options, settings }),
+    name: `usher_template_${createHash('sha256').update(key).digest('hex').slice(0, 16)}`,
+    schema: USHER_SCHEMA,
+  });
+  seededTemplates.set(key, template);
+  return template;
+};
 
 /** What a test database is created with beyond its template; each has a default. */
 export interface TestDatabaseOptions {
@@ -170,9 +257,9 @@ const buildTemplate = async (
   try {
     await template.migrate({
       databaseUrl: roleUrl(superuserUrl, 'migration', template.name),
-      retentionFloorSeconds: TEMPLATE_RETENTION_FLOOR_SECONDS,
       runtimeRole: DATABASE_ROLES.runtime,
       schema: template.schema,
+      settings: TEMPLATE_SETTINGS,
     });
   } catch (error) {
     await superuser.query(
@@ -220,8 +307,59 @@ const withSuperuser = async <Result>(
   }
 };
 
-// A floor other than the template's is set the way a deployment sets one, by running the migrations
-// again, which a migration already applied leaves as it is.
+/**
+ * Writes settings to a schema's store as its owner, in one transaction declaring the system as the actor,
+ * so each change is recorded as the store records any other. A setting already holding the value given is
+ * left alone, so a start that writes what the store holds writes nothing. The fixed settings refuse a change
+ * (`eventSource`, `firstUser` and `issuer` are kept as first seeded), so a test varying one needs a database
+ * of its own.
+ *
+ * @param client a connection under the schema's owner role.
+ * @param schema the schema the settings table lives in.
+ * @param settings each setting's name and value, as the JSON the store holds for it: a test may hold a value its
+ *   setting refuses, to see the Controller refuse it.
+ */
+export const writeStoredSettings = async (
+  client: pg.ClientBase,
+  schema: string,
+  settings: Readonly<Record<string, unknown>>,
+): Promise<void> => {
+  const names = Object.keys(settings);
+  if (names.length === 0) {
+    return;
+  }
+  // Read first: the store's statement-level trigger on the settings raises the generation for every statement
+  // it runs, changed rows or none, so a statement is sent only for a value that differs.
+  const { rows } = await client.query<{ name: string; value: unknown }>(
+    `SELECT name, value FROM ${quoted(schema)}.settings WHERE name = ANY($1)`,
+    [names],
+  );
+  const stored = new Map(rows.map(({ name, value }) => [name, value]));
+  const changed = Object.entries(settings).filter(
+    ([name, value]) => !isDeepStrictEqual(stored.get(name), value),
+  );
+  if (changed.length === 0) {
+    return;
+  }
+  await client.query('BEGIN');
+  try {
+    await client.query("SELECT set_config('usher.actor_type', 'system', true)");
+    for (const [name, value] of changed) {
+      await client.query(
+        `UPDATE ${quoted(schema)}.settings SET value = $2::jsonb, changed_at = now() WHERE name = $1 AND value IS DISTINCT FROM $2::jsonb`,
+        [name, JSON.stringify(value)],
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  }
+};
+
+// A floor other than the template's is set on the clone by its schema owner, declaring the system as the
+// actor: the three durations are set, the grace period and the margin to none, so the trigger on the settings
+// sets the notice retention floor to the token lifetime alone.
 const withFloor = async (
   superuserUrl: URL,
   name: string,
@@ -231,26 +369,40 @@ const withFloor = async (
   if (retentionFloorSeconds === TEMPLATE_RETENTION_FLOOR_SECONDS) {
     return;
   }
+  const owner = new pg.Client({
+    connectionString: roleUrl(superuserUrl, 'migration', name),
+  });
   try {
-    await template.migrate({
-      databaseUrl: roleUrl(superuserUrl, 'migration', name),
-      retentionFloorSeconds,
-      runtimeRole: DATABASE_ROLES.runtime,
-      schema: template.schema,
-    });
+    await owner.connect();
+    await owner.query('BEGIN');
+    await owner.query("SELECT set_config('usher.actor_type', 'system', true)");
+    await owner.query(
+      `UPDATE ${quoted(template.schema)}.settings SET value = to_jsonb($1::integer) WHERE name = 'tokenLifetimeSeconds'`,
+      [retentionFloorSeconds],
+    );
+    await owner.query(
+      `UPDATE ${quoted(template.schema)}.settings SET value = to_jsonb(0) WHERE name = 'retentionGraceSeconds'`,
+    );
+    await owner.query(
+      `UPDATE ${quoted(template.schema)}.settings SET value = to_jsonb(0) WHERE name = 'retentionMarginSeconds'`,
+    );
+    await owner.query('COMMIT');
   } catch (error) {
+    await owner.query('ROLLBACK').catch(() => undefined);
     await withSuperuser(superuserUrl, (superuser) =>
       superuser.query(`DROP DATABASE ${quoted(name)} WITH (FORCE)`),
     );
     throw error;
+  } finally {
+    await owner.end().catch(() => undefined);
   }
 };
 
 /**
  * Creates one test file's database: the two roles, once per run on each PostgreSQL; the template,
  * migrated once per run there when first asked for; then a fresh database cloned from it with
- * `CREATE DATABASE ... TEMPLATE`, and a retention floor other than the template's set by running the
- * migrations again on the clone. A template whose migration fails is dropped, and the failure is this
+ * `CREATE DATABASE ... TEMPLATE`, and a retention floor other than the template's set on the clone by
+ * updating its three duration settings as the schema owner. A template whose migration fails is dropped, and the failure is this
  * call's alone, so the test file asking gets that failure and every other file runs on. The
  * superuser does this work and is never handed out.
  *

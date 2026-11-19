@@ -10,7 +10,6 @@ export type {
   ConfigurationEnvironment,
   ControllerConfiguration,
   FieldWithVariable,
-  RetentionDurations,
   SchemaMigrationConfiguration,
   SchemaMigrationFieldWithVariable,
 } from './types.js';

@@ -11,7 +11,7 @@ import type { WindowClosing } from '../windowedRefusals/index.js';
  * Why a fault kept an exchange from being answered, the code answered: the identity provider's keys
  * could not be had, or the store failed the exchange's work.
  */
-export type ExchangeFault = 'identityProviderUnavailable' | 'storeUnavailable';
+export type ExchangeFault = 'identityProviderUnavailable' | 'storedSettingsInvalid' | 'storeUnavailable';
 
 /**
  * Why a credential's exchange was denied: the judgement's refusal; a signing key not confirmed yet,

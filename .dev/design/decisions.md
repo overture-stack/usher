@@ -2693,8 +2693,64 @@ configuration unchanged by everything after: admins nominating and removing admi
 admin can sign in, an admin owning a resource they registered, and adding grants from a list of
 email addresses. Each of those is a forward migration.
 
+**The seed file names the first user (decided 2026-11-18)**, as exactly one of a realm role's
+name or a person's subject at the identity provider, in place of a Controller variable. It is used
+once, until an admin accepts, so it belongs with the other values read once. A person named by
+subject needs nothing configured in the identity provider; a realm role still works where an
+instance prefers one. Naming both, or neither, is refused.
+
 **Rejected: an identity-provider role that makes admins**, the design before this one, for the
 threat above.
+
+---
+
+### An instance's settings live in its store, and change through the Controller
+
+**The need: live traceability.** Each change to a setting is recorded in Usher's own audit log at
+the moment it happens, naming the admin who made it, so an alert can act on it as on any other
+change to policy. A setting changed by a deployment could at best be noticed at the next start, with
+no actor: who changed it is in git and the pipeline, outside Usher's trail. Every Controller instance
+also acts on the same settings.
+
+**Decision (2026-11-18): an instance's settings live in its store, with defaults, and an admin
+changes them through the Controller.** A seed file seeds them once, into a store holding none,
+together with the values read once or never changed after: the first user, Usher's own token
+issuer and its event source. The store keeps what it seeded, with a digest of it. A later run
+compares the file with that and changes nothing either way: an unchanged file is logged as
+unchanged, and an edited one draws a warning naming each top-level key that differs, never its value.
+So none of those can be changed by editing the file. Every Controller instance reads the settings
+from the store.
+
+**The test for where a value lives: does it come from elsewhere, or is it Usher's own?** A value
+from elsewhere stays in the Controller's environment: its secrets, how it reaches its store, where
+it listens and behind which proxies, the instance's name, and the identity provider's identifiers,
+such as its issuer, the management audience and clients, the client of the API documentation page,
+the realm role marking service accounts and the audiences of its logout tokens. A value Usher
+decides for itself is a setting, such as the grant rules, token lifetimes and retention, the notice
+channel's limits, and whether sign-outs are relayed.
+
+**Two conditions come with it:**
+
+- A change to the [grant rules](glossary.md) is recorded at `critical` and sent to every Bridge as
+  the baseline notice, since it changes what every principal reaches.
+- The identity provider's identifiers an admin's own sign-in depends on, its issuer, the management
+  audience and the management clients, come from elsewhere and so stay in the Controller's
+  environment: no change made through the Controller can lock every admin out, and a redeploy can
+  still change them when the identity provider moves.
+
+**The grant rules are written as `grantRules`**: each names who it is for (`to`, either `everyone`
+or `signedIn`), the resources it reaches by their `accessLevel`, the categories by scoped name, such
+as `global.unmarked`, and the record `actions` it grants. A signed-in principal holds the signed-in
+rule's actions on open resources as well as registered ones, so an open resource is never less
+reachable than a registered one. Every plural key holds a collection, however many members.
+
+**Replaces** the Controller configuration that changed only with a release or a deployment
+([schema.md](schema.md) § What is stored where), the baseline's place in the Controller's runtime
+configuration ([permissions-model.md](permissions-model.md)), and the roadmap's rule of 2026-11-09
+that each unit adds its settings as environment variables.
+
+**Rejected: settings in the Controller's environment**, the design before this one: each instance
+read its own copy, a change took a deployment, and Usher's audit log recorded none of them.
 
 ---
 

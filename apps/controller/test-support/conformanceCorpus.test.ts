@@ -24,8 +24,8 @@ import {
   readCorpusExpectation,
   readCorpusIndex,
 } from './conformanceCorpus.js';
-import { startHarness } from './harness.js';
-import { STARTED_STORE_TEMPLATE, storedExternalIds } from './policy.js';
+import { STARTED_STORE_TEMPLATE, startHarness } from './harness.js';
+import { storedExternalIds } from './policy.js';
 
 const PAYLOAD = Object.freeze({
   aud: 'arranger-prod',

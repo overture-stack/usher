@@ -1,6 +1,5 @@
 import type pg from 'pg';
 
-import type { ControllerConfiguration } from '../configuration/index.js';
 import type {
   HeldKeyVerification,
   TokenClaims,
@@ -9,6 +8,7 @@ import type {
 } from '../identityProvider/index.js';
 import type { EXCESSIVE_LIFETIME } from './excessiveLifetime.js';
 import type { MISSING_ISSUED_AT } from './missingIssuedAt.js';
+import type { ControllerSettings } from '../settings/index.js';
 
 /** The session a sign-in token belongs to, as far as it names one. */
 export interface Session {
@@ -47,10 +47,10 @@ export interface StoreReader {
   ): Promise<pg.QueryResult<Row>>;
 }
 
-/** What judging a token's times reads of the configuration: the longest lifetime a token may have. */
+/** What judging a token's times reads of the settings: the longest lifetime a token issued at an instant may have. */
 export type CurrencySettings = Pick<
-  ControllerConfiguration,
-  'signInTokenMaximumLifetimeSeconds'
+  ControllerSettings,
+  'signInTokenMaximumFor'
 >;
 
 /**
@@ -190,7 +190,7 @@ export interface SignInTokenVerifier {
 
 /**
  * What a credential is judged against: the calling application, the instant, the longest lifetime a
- * sign-in token may have, and the verifier.
+ * sign-in token issued at an instant may have, and the verifier.
  */
 export interface SignInJudgementContext {
   /** The calling application's id, which a sign-in token's `aud` must name. */
@@ -199,8 +199,8 @@ export interface SignInJudgementContext {
   /** The instant, in milliseconds since the Unix epoch. */
   now: number;
 
-  /** The most seconds a sign-in token's `exp` may fall after its `iat`, the configuration's. */
-  signInTokenMaximumLifetimeSeconds: number;
+  /** The most seconds a sign-in token's `exp` may fall after its `iat`, judged at that `iat` by the settings. */
+  signInTokenMaximumFor: (issuedAt: number) => number;
 
   verifier: SignInTokenVerifier;
 }

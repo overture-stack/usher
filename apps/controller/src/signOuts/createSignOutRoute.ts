@@ -23,6 +23,7 @@ import {
 import type {
   SignOut,
   SignOutRouteSettings,
+  SwitchedOffLogoutReason,
   UnverifiedLogoutReason,
 } from './types.js';
 
@@ -31,6 +32,9 @@ export const SIGN_OUT_PATH = '/backchannel-logout';
 
 /** The line naming a failure of the store while a sign-out was recorded. */
 export const SIGN_OUT_STORE_FAILED = 'signOuts.storeFailed';
+
+/** The line written at warning on every start that does not relay sign-outs, the `backChannelLogout` setting off. */
+export const SIGN_OUTS_RELAYING_OFF = 'signOuts.relayingOff';
 
 /** The line naming a failure the Controller did not expect, answered `400 internalError`. */
 export const SIGN_OUT_UNEXPECTED_FAILURE = 'signOuts.unexpectedFailure';
@@ -49,6 +53,9 @@ const UNVERIFIED_REASONS = {
 } as const satisfies Readonly<Record<UnverifiedReason, UnverifiedLogoutReason>>;
 
 const ANONYMOUS: Actor = Object.freeze({ type: 'anonymous' });
+
+// The reason every logout token is refused under while the setting is off: keyed by the reason alone.
+const SWITCHED_OFF_REASON: SwitchedOffLogoutReason = 'backChannelLogoutOff';
 
 const SYSTEM: Actor = Object.freeze({ type: 'system' });
 
@@ -74,7 +81,10 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * Creates the route the identity provider's OpenID Connect back-channel logout is sent to,
  * `POST /backchannel-logout`, taking no credential but the logout token itself. A request is read
  * for one form-encoded `logout_token` and no query, refused `400` otherwise, and `400 bodyTooLarge`
- * past 64 KiB; then its token is verified under the trusted issuer's published keys, through the
+ * past 64 KiB. While the `backChannelLogout` setting is off, read at each request, every logout token
+ * is refused before it is verified, as `backChannelLogoutOff`, answered `400 logoutTokenRefused`, its
+ * window keyed by that reason alone and its first refusal recorded naming no subject. Otherwise its
+ * token is verified under the trusted issuer's published keys, through the
  * verifier every route shares, and judged as a logout token for a configured back-channel logout
  * client, current and naming a session, a subject or both, every refusal of the token answered
  * alike, `400 logoutTokenRefused`, so the answer tells no check from another. Each refused token is
@@ -116,6 +126,22 @@ export const createSignOutRoute = ({
     });
     if (reading.kind === 'refused') {
       return refusedWith(reading.problem);
+    }
+    if (!settings.backChannelLogout) {
+      await refusals.refuse(
+        { reason: SWITCHED_OFF_REASON, route: 'logout' },
+        () =>
+          trail.recordEvent(
+            ANONYMOUS,
+            logoutTokenRefusalEvent({
+              reason: SWITCHED_OFF_REASON,
+              sourceIp: request.ip,
+              subject: undefined,
+            }),
+          ),
+        (id) => id,
+      );
+      return refusedWith(SIGN_OUT_PROBLEMS.logoutTokenRefused);
     }
     const verification = await tokenVerifier.verify(reading.token);
     if (verification.kind === 'keysUnavailable') {

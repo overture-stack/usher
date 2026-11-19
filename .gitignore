@@ -18,6 +18,9 @@ coverage/
 .env.local
 .env.*.local
 
+# The schema migration command's seed file, which holds a deployment's first settings
+seed.json
+
 # Editor and operating system
 *.tmp
 .DS_Store

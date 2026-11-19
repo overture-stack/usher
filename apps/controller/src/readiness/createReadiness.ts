@@ -25,6 +25,9 @@ const STORE_FAILED = 'storeFailed';
 
 const MIGRATION_UNKNOWN_CAUSE = 'migrationUnknown';
 
+// The cause naming a stored grant rule that breaks its rule, which the exchange answers as it answers no token.
+const STORED_SETTINGS_INVALID_CAUSE = 'storedSettingsInvalid';
+
 type ProbeOutcome =
   { answer: StoreProbe; kind: 'answered' } | { cause: string; kind: 'failed' };
 
@@ -127,13 +130,16 @@ export const createReadiness = ({
     if (outcome.kind === 'failed') {
       return { cause: outcome.cause, ready: false };
     }
-    const { readOnly, unknownMigrations } = outcome.answer;
+    const { grantRulesValid, readOnly, unknownMigrations } = outcome.answer;
     if (unknownMigrations.length > 0) {
       return {
         cause: MIGRATION_UNKNOWN_CAUSE,
         ready: false,
         unknownMigrations,
       };
+    }
+    if (!grantRulesValid) {
+      return { cause: STORED_SETTINGS_INVALID_CAUSE, ready: false };
     }
     return readOnly && writesStore()
       ? { cause: 'readOnly', ready: false }

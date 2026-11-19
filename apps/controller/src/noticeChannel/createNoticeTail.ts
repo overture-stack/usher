@@ -24,12 +24,14 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * time, each page one statement within the store timeout, until a page holds no more; it hands each
  * page to every live stream, which keeps what reaches its audience, and moves on. It reads when woken
  * and at every reread interval besides, so a notice another instance committed is pushed within that
- * interval; wakes arriving during a read are answered by one read after it. A read finding the epoch
- * replaced, the watermark past the tail's position, or the newest notice below it, as after a restore,
+ * interval, and a changed interval is re-armed at the tick that reads it; wakes arriving during a read are
+ * answered by one read after it. A read finding the epoch replaced, the watermark past the tail's position,
+ * or the newest notice below it, as after a restore,
  * ends every live stream, each Bridge to open its stream again from its own cursor; a read that fails
  * is written to the log by its code, and tried again at the next wake.
  *
- * @param settings the reader, the page limit, the reread interval and the log.
+ * @param settings the reader, the page limit and the reread interval, each read at the moment it is used, and
+ *   the log.
  */
 export const createNoticeTail = ({
   log,
@@ -38,9 +40,9 @@ export const createNoticeTail = ({
   rereadMilliseconds,
 }: {
   log: Pick<ChannelLog, 'error'>;
-  pageLimit: number;
+	pageLimit: () => number;
   reader: NoticeReader;
-  rereadMilliseconds: number;
+	rereadMilliseconds: () => number;
 }): NoticeTail => {
   const state: {
     again: boolean;
@@ -80,7 +82,7 @@ export const createNoticeTail = ({
   };
 
   const readFrom = async (after: bigint, generation: number): Promise<void> => {
-    const page = await reader.after(after, { limit: pageLimit });
+		const page = await reader.after(after, { limit: pageLimit() });
     if (state.generation !== generation || state.stopped) {
       return;
     }
@@ -122,6 +124,20 @@ export const createNoticeTail = ({
     state.reading = reading;
   };
 
+	// Arms the reread interval at the given period, reading the value again at each tick: a value changed since the
+	// interval was armed re-arms it at that tick, so the change takes effect within one interval.
+	const arm = (milliseconds: number): void => {
+		clearInterval(state.timer);
+		state.timer = setInterval(() => {
+			const current = rereadMilliseconds();
+			if (current !== milliseconds) {
+				arm(current);
+			}
+			wake();
+		}, milliseconds);
+		state.timer.unref();
+	};
+
   const join = (stream: LiveStream): boolean => {
     if (state.stopped) {
       return false;
@@ -132,8 +148,7 @@ export const createNoticeTail = ({
     if (state.position === undefined) {
       state.epoch = stream.epoch;
       state.position = stream.scannedThrough();
-      state.timer = setInterval(wake, rereadMilliseconds);
-      state.timer.unref();
+			arm(rereadMilliseconds());
     }
     if (stream.scannedThrough() < state.position) {
       return false;

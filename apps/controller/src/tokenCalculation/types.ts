@@ -5,6 +5,7 @@ import type {
 } from '@overture-stack/usher-types';
 
 import type { Plane } from '../capabilities/index.js';
+import type { GrantRuleRecipient, GrantRules } from '../settings/index.js';
 
 /** The tier a resource's unmarked records sit at, as the store holds it. */
 export type BaseTier = 'grant' | 'open' | 'registered';
@@ -85,8 +86,17 @@ export interface PrincipalPolicy extends AudiencePolicy {
   grants: readonly ReachingGrant[];
 }
 
-/** A rule conferring a grant on a whole class of principals, as `token.exchange` names it in `rules`. */
-export type ConferringRule = 'baseline' | 'signedIn';
+/** The recipient of a grant rule that conferred an entry, as `token.exchange` names it in `rules`. */
+export type ConferringRule = GrantRuleRecipient;
+
+/** The grant rules the store holds, as one read gave them: the rules, or the rule the stored value breaks. */
+export type StoredGrantRules =
+  { kind: 'read'; rules: GrantRules } | { kind: 'refused'; rule: string };
+
+/** What one read of the store gives for one audience, with the grant rules read in the same statement. */
+export type AudiencePolicyReading = AudiencePolicy & {
+  grantRules: StoredGrantRules;
+};
 
 /**
  * What the calculation gives a payload: what the principal holds and what the audience offers, as a

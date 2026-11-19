@@ -465,6 +465,15 @@ The whole policy is built from grants. Each also carries a period and a state sa
 period it sits, and, on its governance side, who granted it and when. As a verb, one word covers the
 act: X grants permissions to Y in Z, and the record of that act is the grant.
 
+**Grant rules** _(the baseline and the signed-in rule)_
+An instance's settings granting record actions to every principal, or to every signed-in principal,
+on the unmarked records of resources at a given base tier.
+
+They grant as a grant does, and the token carries what they grant as ordinary entries, but nothing
+is recorded against a holder: everyone has no subject to record it against. So they are changed as
+settings, through the Controller, and never revoked person by person. Written as `grantRules` in the
+seed file and the Management API.
+
 **Group**
 Collection of principals.
 
@@ -608,6 +617,38 @@ what the creator could reach when the set was saved, so resolving one re-applies
 stored list. A set records how it was saved, as `principal`, `anonymous` or `unattributed`, and its
 creator's identity never leaves the server. See [adapter-integration.md](adapter-integration.md) for
 who reaches which.
+
+**Seed file**
+The JSON file read by the schema migration command to seed an instance's settings into a store
+holding none.
+
+Its path is named by `USHER_SEED_FILE`, `./seed.json` by default. Only the schema migration command
+reads it; the Controller never does.
+
+It must name the issuer and the event source, which have no default. Every other setting in it is
+optional.
+
+A later run that finds settings already stored compares the file with what was seeded, and changes
+nothing either way. An unchanged file is logged as unchanged; an edited one draws a warning naming
+each top-level key that differs, never its value. Every later change goes through the Controller's
+Management API, not the file, and a fixed setting never changes.
+
+It holds no secrets.
+
+**Setting**
+A value held in an instance's store, which an admin changes through the Controller's Management
+API.
+
+A fixed setting is the exception: the issuer, the event source and the first user are set once, by
+the seed file, and never change. The issuer and the event source have no default; every other
+setting has one.
+
+Each change is recorded in Usher's audit log, naming the admin who made it. A first value can come
+from the seed file.
+
+Settings are distinct from the Controller's environment, which holds what comes from elsewhere:
+its secrets, how it reaches its store, and the identity provider's identifiers. Those are never
+called settings.
 
 **Submitter** _(a role, and separately a record of who uploaded)_
 Someone who may write to a resource.

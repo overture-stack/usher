@@ -130,9 +130,9 @@ suite("the instance's tail of the notice stream", () => {
     const { reader, reads } = scriptedReader([]);
     const tail = createNoticeTail({
       log: quietLog(),
-      pageLimit: 2,
+      pageLimit: () => 2,
       reader,
-      rereadMilliseconds: REREAD_MS,
+      rereadMilliseconds: () => REREAD_MS,
     });
 
     tail.wake();
@@ -150,9 +150,9 @@ suite("the instance's tail of the notice stream", () => {
     ]);
     const tail = createNoticeTail({
       log: quietLog(),
-      pageLimit: 2,
+      pageLimit: () => 2,
       reader,
-      rereadMilliseconds: REREAD_MS,
+      rereadMilliseconds: () => REREAD_MS,
     });
     const first = liveStream(5n);
     const second = liveStream(5n);
@@ -175,9 +175,9 @@ suite("the instance's tail of the notice stream", () => {
     const { reader } = scriptedReader([pageOf([baseline(9n)])]);
     const tail = createNoticeTail({
       log: quietLog(),
-      pageLimit: 2,
+      pageLimit: () => 2,
       reader,
-      rereadMilliseconds: REREAD_MS,
+      rereadMilliseconds: () => REREAD_MS,
     });
     tail.join(liveStream(5n));
     tail.wake();
@@ -198,9 +198,9 @@ suite("the instance's tail of the notice stream", () => {
     ]);
     const tail = createNoticeTail({
       log: quietLog(),
-      pageLimit: 2,
+      pageLimit: () => 2,
       reader: scripted.reader,
-      rereadMilliseconds: REREAD_MS,
+      rereadMilliseconds: () => REREAD_MS,
     });
     tail.join(liveStream(5n));
     const release = scripted.hold();
@@ -224,9 +224,9 @@ suite("the instance's tail of the notice stream", () => {
     const { reader, reads } = scriptedReader([]);
     const tail = createNoticeTail({
       log: quietLog(),
-      pageLimit: 2,
+      pageLimit: () => 2,
       reader,
-      rereadMilliseconds: REREAD_MS,
+      rereadMilliseconds: () => REREAD_MS,
     });
     const stream = liveStream(5n);
     tail.join(stream);
@@ -244,6 +244,29 @@ suite("the instance's tail of the notice stream", () => {
     assert.equal(tail.position(), undefined);
   });
 
+  test('re-arms its reread interval at the first tick reading a changed value, so a live tail reads at the new interval from then on', async (context) => {
+    context.mock.timers.enable({ apis: ['setInterval'] });
+    const { reader, reads } = scriptedReader([]);
+    let milliseconds = REREAD_MS;
+    const tail = createNoticeTail({
+      log: quietLog(),
+      pageLimit: () => 2,
+      reader,
+      rereadMilliseconds: () => milliseconds,
+    });
+    tail.join(liveStream(5n));
+
+    milliseconds = REREAD_MS / 4;
+    context.mock.timers.tick(REREAD_MS);
+    await settled();
+    assert.equal(reads.length, 1);
+
+    context.mock.timers.tick(REREAD_MS / 4);
+    await settled();
+    assert.equal(reads.length, 2);
+    await tail.stop();
+  });
+
   test('ends every live stream once a read finds the epoch replaced, the watermark past its position, or the newest notice below it', async () => {
     const cases = [
       pageOf([baseline(6n)], { epoch: OTHER_EPOCH }),
@@ -256,9 +279,9 @@ suite("the instance's tail of the notice stream", () => {
         const { reader } = scriptedReader([page]);
         const tail = createNoticeTail({
           log: quietLog(),
-          pageLimit: 2,
+          pageLimit: () => 2,
           reader,
-          rereadMilliseconds: REREAD_MS,
+          rereadMilliseconds: () => REREAD_MS,
         });
         const streams = [liveStream(5n), liveStream(6n)];
         streams.forEach((stream) => tail.join(stream));
@@ -286,9 +309,9 @@ suite("the instance's tail of the notice stream", () => {
     const { reader } = scriptedReader([]);
     const tail = createNoticeTail({
       log: quietLog(),
-      pageLimit: 2,
+      pageLimit: () => 2,
       reader,
-      rereadMilliseconds: REREAD_MS,
+      rereadMilliseconds: () => REREAD_MS,
     });
     const older = liveStream(50n);
     const newer = liveStream(3n, OTHER_EPOCH);
@@ -310,9 +333,9 @@ suite("the instance's tail of the notice stream", () => {
     const { reader, reads } = scriptedReader([failure, pageOf([baseline(6n)])]);
     const tail = createNoticeTail({
       log,
-      pageLimit: 2,
+      pageLimit: () => 2,
       reader,
-      rereadMilliseconds: REREAD_MS,
+      rereadMilliseconds: () => REREAD_MS,
     });
     const stream = liveStream(5n);
     tail.join(stream);
@@ -337,9 +360,9 @@ suite("the instance's tail of the notice stream", () => {
     const scripted = scriptedReader([pageOf([baseline(6n)])]);
     const tail = createNoticeTail({
       log: quietLog(),
-      pageLimit: 2,
+      pageLimit: () => 2,
       reader: scripted.reader,
-      rereadMilliseconds: REREAD_MS,
+      rereadMilliseconds: () => REREAD_MS,
     });
     const stream = liveStream(5n);
     tail.join(stream);

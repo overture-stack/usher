@@ -177,14 +177,10 @@ const showsRole = (
  * @param dependencies what every Management API operation's route is built on.
  */
 export const createGrantRoutes = (
-  {
-    grantStoreOf,
-    settings: { autoAccept, clock, databaseSchema, submitterCategory },
-    store,
-    trail,
-  }: GrantOperationsSettings,
+  { grantStoreOf, settings, store, trail }: GrantOperationsSettings,
   dependencies: ManagementDependencies,
 ): readonly RouteOptions[] => {
+  const { clock, databaseSchema } = settings;
   const namedGrant = async ({
     params,
   }: NamedByRequest): Promise<EventMembers> => {
@@ -247,7 +243,7 @@ export const createGrantRoutes = (
               refuseWithin(GRANT_PROBLEMS.categoryRequired);
             }
             const scopedName = takesSubmitterCategory
-              ? submitterCategory
+              ? settings.submitterCategory
               : input.category;
             const standing = await grants.readStanding({
               externalId: input.resource,
@@ -294,7 +290,7 @@ export const createGrantRoutes = (
             };
             const written =
               (await writeGrant(grants, record, {
-                autoAccept,
+                autoAccept: settings.grantAutoAccept,
                 category,
                 expiresAt: input.expiresAt ?? null,
                 grantedAt: now,

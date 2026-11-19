@@ -26,7 +26,7 @@ const CALCULATION: Calculation = {
     MEMBERS_ARCHIVE: [],
     'étude « Nord » "A1"': ['resource.local-panel'],
   },
-  rules: ['baseline', 'signedIn'],
+	rules: ['everyone', 'signedIn'],
   servedResources: ['étude « Nord » "A1"', 'MEMBERS_ARCHIVE', 'STUDY-C3'],
 };
 

@@ -43,14 +43,16 @@ const SECONDS = Math.floor(NOW / 1000);
 
 const ISSUER = 'https://auth.example.org/realms/usher';
 
+const MAXIMUM_LIFETIME_SECONDS = 3600;
+
 const SETTINGS = Object.freeze({
   clock: { now: () => NOW },
-  firstUserRole: 'usher-first-user',
+  firstUser: { realmRole: 'usher-first-user' },
   identityProviderIssuer: ISSUER,
   managementAudience: 'usher-management',
   managementClients: ['usher-ui'],
   serviceAccountRole: 'usher-service-account',
-  signInTokenMaximumLifetimeSeconds: 3600,
+  signInTokenMaximumFor: () => MAXIMUM_LIFETIME_SECONDS,
 });
 
 const SHELF_LIMIT = problem(
@@ -571,7 +573,7 @@ suite('admitting a request to a management operation', () => {
     const stand = await standUp(context, {
       verifications: {
         overLong: verified({
-          exp: SECONDS + SETTINGS.signInTokenMaximumLifetimeSeconds,
+          exp: SECONDS + MAXIMUM_LIFETIME_SECONDS,
         }),
         undated: verified({ iat: undefined }),
       },
@@ -1385,6 +1387,7 @@ suite(
           administrator: false,
           firstUser: true,
           subject: 'subject-ana',
+          tokenLifetimeSeconds: 310,
           type: 'human',
         },
       ]);
@@ -1557,6 +1560,7 @@ suite(
             administrator: true,
             firstUser: false,
             subject: 'subject-ana',
+            tokenLifetimeSeconds: 310,
             type: 'human',
           },
           query: [

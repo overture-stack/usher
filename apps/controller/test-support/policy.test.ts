@@ -6,7 +6,11 @@ import pg from 'pg';
 
 import { AUDIT_EVENT_TYPES, auditRows, emittedType } from './auditEvents.js';
 import { createTestDatabase, DATABASE_ROLES } from './database.js';
-import { startHarness, takeSnapshot } from './harness.js';
+import {
+  STARTED_STORE_TEMPLATE,
+  startHarness,
+  takeSnapshot,
+} from './harness.js';
 import {
   ACTOR_SETTINGS,
   addAcceptedOwner,
@@ -57,7 +61,6 @@ import {
   setResourceTimesInStore,
   simulateRestore,
   simulateTrim,
-  STARTED_STORE_TEMPLATE,
   STEWARD,
   STEWARD_SUBJECT,
   storedCapabilities,
@@ -1632,7 +1635,7 @@ suite('a snapshot of the store, and its restore', () => {
 });
 
 suite("the started store's template", () => {
-  test("holds what a controller's first start writes under the harness's configuration, so a start on it writes nothing but the key-encryption key's fingerprint", async (context) => {
+  test("on its template, a first start writes the key-encryption key's fingerprint and fills the identity provider's record, and nothing else", async (context) => {
     const scope = cleanupFor(context);
     const harness = await startHarness({
       applications: [],
@@ -1641,58 +1644,26 @@ suite("the started store's template", () => {
       template: STARTED_STORE_TEMPLATE,
     });
     scope.defer(() => harness.stop());
-    const { keyFingerprints } = POLICY_TABLES;
+    const { identityProviderConfiguration, keyFingerprints } = POLICY_TABLES;
+    const written = [keyFingerprints, identityProviderConfiguration];
     const before = await takeSnapshot(harness);
+    const valuesOf = (
+      snapshot: Awaited<ReturnType<typeof takeSnapshot>>,
+    ): readonly unknown[] =>
+      rowsIn(snapshot, identityProviderConfiguration).map((row) =>
+        Reflect.get(row as object, 'value'),
+      );
 
     await harness.startController();
 
     const after = await takeSnapshot(harness);
-    assert.deepEqual(
-      tablesOf(after, [keyFingerprints]),
-      tablesOf(before, [keyFingerprints]),
-    );
+    assert.deepEqual(tablesOf(after, written), tablesOf(before, written));
     assert.equal(rowsIn(after, keyFingerprints).length, 1);
+    assert.deepEqual(valuesOf(before), Array(6).fill(null));
+    assert.equal(valuesOf(after).length, 6);
+    assert.equal(valuesOf(after).includes(null), false);
   });
 
-  test("records the first start's baseline.change at info, naming the harness's rules, event source and instance", async (context) => {
-    const scope = cleanupFor(context);
-    const harness = await startHarness({
-      applications: [],
-      startsController: false,
-      template: STARTED_STORE_TEMPLATE,
-    });
-    scope.defer(() => harness.stop());
-    const { baseline, eventSource, instanceName, signedInRule } =
-      harness.configuration;
-
-    const rows = await auditRows(harness.clients.migration);
-
-    assert.deepEqual(
-      rows.map(({ data, severity, source, type }) => ({
-        data,
-        severity,
-        source,
-        type,
-      })),
-      [
-        {
-          data: {
-            actorId: null,
-            actorType: 'system',
-            baseline: baseline.toSorted(),
-            instance: instanceName,
-            signedInRule: signedInRule.toSorted(),
-          },
-          severity: 'info',
-          source: eventSource,
-          type: emittedType(AUDIT_EVENT_TYPES.baselineChange),
-        },
-      ],
-    );
-  });
-});
-
-suite('the seeded roles, as a matrix', () => {
   test("holds permissions-model.md's matrix: the data plane's staircase and submitter beside it, and the control plane's two", () => {
     assert.deepEqual(SEEDED_ROLES, {
       admin: {

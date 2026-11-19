@@ -14,33 +14,46 @@ export interface PermittedWrites {
   /** Whether it may delete rows. */
   deletes: boolean;
 
+  /** Whether it may insert rows. */
+  inserts: boolean;
+
   /** The columns it may update, or every column. */
   updates: readonly string[] | 'every column';
 }
 
 /**
- * Every table the release's migrations let the Controller's runtime role write, and how: each takes
- * inserts, and a table named nowhere here is granted for reading alone. Reading is outside this list,
+ * Every table the release's migrations let the Controller's runtime role write, and how: each says whether
+ * it takes inserts, and a table named nowhere here is granted for reading alone. Reading is outside this list,
  * since a read rewrites nothing, and a role that may only read starts. A grant beyond this list is
  * tolerated unless it would change the schema or rewrite history.
  */
 export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
   Object.entries({
-    administrators: { deletes: false, updates: [] },
+    administrators: { deletes: false, inserts: true, updates: [] },
     application_keys: {
       deletes: false,
+      inserts: true,
       updates: ['confirmed_at', 'revoked_at', 'revoked_by'],
     },
-    application_resources: { deletes: true, updates: [] },
-    applications: { deletes: false, updates: ['description', 'display_name'] },
-    audit_log: { deletes: false, updates: [] },
-    capabilities: { deletes: false, updates: ['description', 'display_name'] },
-    categories: { deletes: true, updates: ['description'] },
-    exchanged_sids: { deletes: true, updates: 'every column' },
-    global_revocations: { deletes: false, updates: [] },
-    grant_decisions: { deletes: false, updates: [] },
+    application_resources: { deletes: true, inserts: true, updates: [] },
+    applications: {
+      deletes: false,
+      inserts: true,
+      updates: ['description', 'display_name'],
+    },
+    audit_log: { deletes: false, inserts: true, updates: [] },
+    capabilities: {
+      deletes: false,
+      inserts: true,
+      updates: ['description', 'display_name'],
+    },
+    categories: { deletes: true, inserts: true, updates: ['description'] },
+    exchanged_sids: { deletes: true, inserts: true, updates: 'every column' },
+    global_revocations: { deletes: false, inserts: true, updates: [] },
+    grant_decisions: { deletes: false, inserts: true, updates: [] },
     grants: {
       deletes: false,
+      inserts: true,
       updates: [
         'ended_at',
         'expires_at',
@@ -49,19 +62,30 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
         'role_id',
       ],
     },
-		key_fingerprints: { deletes: false, updates: [] },
-    nominations: { deletes: false, updates: [] },
-    notices: { deletes: false, updates: [] },
-    notification_outbox: { deletes: false, updates: ['delivered_at'] },
+    identity_provider_configuration: {
+      deletes: false,
+      inserts: false,
+      updates: ['recorded_at', 'value'],
+    },
+    key_fingerprints: { deletes: false, inserts: true, updates: [] },
+    nominations: { deletes: false, inserts: true, updates: [] },
+    notices: { deletes: false, inserts: true, updates: [] },
+    notification_outbox: {
+      deletes: false,
+      inserts: true,
+      updates: ['delivered_at'],
+    },
     principal_revocations: {
       deletes: false,
+      inserts: true,
       updates: ['lifted_at', 'lifted_by'],
     },
-    resource_categories: { deletes: true, updates: [] },
-    resource_field_values: { deletes: true, updates: ['value'] },
-    resource_fields: { deletes: true, updates: ['description'] },
+    resource_categories: { deletes: true, inserts: true, updates: [] },
+    resource_field_values: { deletes: true, inserts: true, updates: ['value'] },
+    resource_fields: { deletes: true, inserts: true, updates: ['description'] },
     resources: {
       deletes: true,
+      inserts: true,
       updates: [
         'base_tier',
         'description',
@@ -72,13 +96,21 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
         'updated_at',
       ],
     },
-    role_permissions: { deletes: true, updates: [] },
-    roles: { deletes: false, updates: ['description'] },
-    rules_digest: { deletes: false, updates: ['digest', 'recorded_at'] },
-    sid_sign_outs: { deletes: true, updates: 'every column' },
-    subject_sign_outs: { deletes: true, updates: 'every column' },
-    user_identities: { deletes: false, updates: [] },
-    users: { deletes: false, updates: [] },
+    role_permissions: { deletes: true, inserts: true, updates: [] },
+    roles: { deletes: false, inserts: true, updates: ['description'] },
+    settings: {
+      deletes: false,
+      inserts: false,
+      updates: ['changed_at', 'changed_by', 'value'],
+    },
+    sid_sign_outs: { deletes: true, inserts: true, updates: 'every column' },
+    subject_sign_outs: {
+      deletes: true,
+      inserts: true,
+      updates: 'every column',
+    },
+    user_identities: { deletes: false, inserts: true, updates: [] },
+    users: { deletes: false, inserts: true, updates: [] },
   } satisfies Record<string, PermittedWrites>),
 );
 
@@ -117,6 +149,12 @@ const HISTORY_WRITES: ReadonlySet<string> = new Set([
   'DELETE',
   'INSERT',
   'UPDATE',
+]);
+
+// The tables whose rows are kept as the migrations write them: no row is deleted, though some may be updated.
+const KEPT_TABLES: ReadonlySet<string> = new Set([
+  'identity_provider_configuration',
+  'settings',
 ]);
 
 // Privileges refused on any table: emptying it at once, and attaching behaviour to its writes.
@@ -304,10 +342,10 @@ export const readHeldPrivileges = async (
 
 const permittedPrivileges = (
   permitted: PermittedWrites | undefined,
-): readonly string[] =>
-  permitted === undefined
-    ? []
-    : ['INSERT', ...(permitted.deletes ? ['DELETE'] : [])];
+): readonly string[] => [
+  ...(permitted?.inserts === true ? ['INSERT'] : []),
+  ...(permitted?.deletes === true ? ['DELETE'] : []),
+];
 
 const updatesBeyond = (
   { updatable }: HeldRelation,
@@ -359,7 +397,8 @@ const wordingOf = ({ column, object, privilege }: GrantBeyondUse): string =>
     : `${privilege} (${column}) on ${object}`;
 
 // Whether a privilege beyond the release's would let the role rewrite history or change how a table
-// behaves: TRUNCATE or TRIGGER on any table, and any write on an append-only one.
+// behaves: TRUNCATE or TRIGGER on any table, any write on an append-only one, and a delete from a table
+// whose settings are kept.
 const rewrites = (
   relation: HeldRelation,
   { privilege }: GrantBeyondUse,
@@ -367,7 +406,10 @@ const rewrites = (
   REFUSED_ON_ANY_TABLE.has(privilege) ||
   (relation.kind === 'table' &&
     APPEND_ONLY_TABLES.has(relation.name) &&
-    HISTORY_WRITES.has(privilege));
+    HISTORY_WRITES.has(privilege)) ||
+  (relation.kind === 'table' &&
+    KEPT_TABLES.has(relation.name) &&
+    privilege === 'DELETE');
 
 const relationFindings = (relation: HeldRelation): readonly string[] => [
   ...(relation.owns ? [`ownership of ${relation.name}`] : []),

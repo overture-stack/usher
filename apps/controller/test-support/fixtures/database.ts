@@ -9,13 +9,14 @@ import {
   migrate,
   migrateThroughCommand,
   type MigrationOptions,
+  writeSeedFile,
 } from '../controller.js';
 import {
   createTestDatabase,
   type DatabaseRole,
   DATABASE_ROLES,
   type DatabaseTemplate,
-  TEMPLATE_RETENTION_FLOOR_SECONDS,
+  TEMPLATE_SETTINGS,
   type TestDatabase,
   type TestDatabaseOptions,
   USHER_SCHEMA,
@@ -235,8 +236,8 @@ export const openEmptyDatabase = async (
 
 /** What a migration run is told beyond the database: each has the template's default. */
 export interface MigrationRun {
-  /** The retention floor the run stores: {@link TEMPLATE_RETENTION_FLOOR_SECONDS} by default. */
-  retentionFloorSeconds?: number;
+  /** The seed file a first run seeds from; a database not yet seeded gets the template's settings when absent. */
+  seedFile?: string;
 
   /** The runtime role the migrations grant to: the Controller's, which the deployment creates, by default. */
   runtimeRole?: string;
@@ -247,16 +248,12 @@ export interface MigrationRun {
 
 const migrationOptionsFor = (
   database: TestDatabase,
-  {
-    retentionFloorSeconds = TEMPLATE_RETENTION_FLOOR_SECONDS,
-    runtimeRole = DATABASE_ROLES.runtime,
-    target,
-  }: MigrationRun,
+  { runtimeRole = DATABASE_ROLES.runtime, target }: MigrationRun,
 ): MigrationOptions => ({
   databaseUrl: database.urlFor('migration'),
-  retentionFloorSeconds,
   runtimeRole,
   schema: database.schema,
+  settings: TEMPLATE_SETTINGS,
   ...(target === undefined ? {} : { target }),
 });
 
@@ -266,15 +263,44 @@ const migrationOptionsFor = (
  * runtime role, in the schema named for Usher.
  *
  * @param database the database to migrate.
- * @param run the retention floor and the runtime role.
+ * @param run the runtime role.
  * @returns each line the command wrote to standard output, parsed.
  * @throws {Error} carrying what the command wrote, when the run fails or is refused.
  */
-export const migrateDatabase = (
+export const migrateDatabase = async (
   database: TestDatabase,
-  run: Omit<MigrationRun, 'target'> = {},
+  {
+    seedFile,
+    runtimeRole = DATABASE_ROLES.runtime,
+  }: Omit<MigrationRun, 'target'> = {},
 ): Promise<readonly unknown[]> =>
-  migrateThroughCommand(migrationOptionsFor(database, run));
+  migrateThroughCommand({
+    ...((file) => (file === undefined ? {} : { seedFile: file }))(
+      seedFile ??
+        ((await isSeeded(database))
+          ? undefined
+          : await writeSeedFile(TEMPLATE_SETTINGS)),
+    ),
+    databaseUrl: database.urlFor('migration'),
+    runtimeRole,
+    schema: database.schema,
+  });
+
+// Whether the database holds settings yet: a run against it is a later run, which reads no seed file.
+const isSeeded = async (database: TestDatabase): Promise<boolean> => {
+  const owner = await database.connect('migration');
+  const { rows } = await owner.query<{ present: boolean }>(
+    'SELECT to_regclass($1) IS NOT NULL AS present',
+    [`${pg.escapeIdentifier(database.schema)}.settings`],
+  );
+  if (rows[0]?.present !== true) {
+    return false;
+  }
+  const stored = await owner.query<{ stored: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM ${pg.escapeIdentifier(database.schema)}.settings) AS stored`,
+  );
+  return stored.rows[0]?.stored === true;
+};
 
 /**
  * Runs the Controller's migrations on a database in-process, through the seam's `migrate`, as
@@ -282,7 +308,7 @@ export const migrateDatabase = (
  * run the command never makes.
  *
  * @param database the database to migrate.
- * @param run the retention floor, the runtime role and the target.
+ * @param run the runtime role and the target.
  * @throws {Error} the run's own failure or refusal.
  */
 export const migrateDatabaseInProcess = (
@@ -1823,6 +1849,11 @@ export const DESIGNED_COLUMNS: {
     name: required(TEXT),
     resourceId: required(UUID),
   },
+  identityProviderConfiguration: {
+    name: required(TEXT),
+    recordedAt: optional(INSTANT),
+    value: optional(JSONB),
+  },
   invitations: {
     email: required(TEXT),
     expiresAt: optional(INSTANT),
@@ -1894,6 +1925,16 @@ export const DESIGNED_COLUMNS: {
     id: required(UUID),
     name: required(TEXT),
     plane: required(TEXT),
+  },
+  settings: {
+    changedAt: required(INSTANT),
+    changedBy: optional(UUID),
+    name: required(TEXT),
+    value: required(JSONB),
+  },
+  settingsGeneration: {
+    generation: required(BIGINT),
+    singleton: required(BOOLEAN),
   },
   userIdentities: {
     addedAt: required(INSTANT),

@@ -14,6 +14,7 @@ const ADMINISTRATOR: Principal = Object.freeze({
   administrator: true,
   firstUser: false,
   subject: 'subject-administrator',
+  tokenLifetimeSeconds: 310,
   type: 'human',
 });
 
@@ -21,6 +22,7 @@ const PERSON: Principal = Object.freeze({
   administrator: false,
   firstUser: false,
   subject: 'subject-ana',
+  tokenLifetimeSeconds: 310,
   type: 'human',
 });
 

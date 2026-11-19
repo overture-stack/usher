@@ -46,18 +46,15 @@ const unreachableStore = async (): Promise<ControllerConfiguration> =>
     [ENVIRONMENT_VARIABLES.databasePassword]: randomBytes(12).toString('hex'),
     [ENVIRONMENT_VARIABLES.databaseSchema]: 'usher',
     [ENVIRONMENT_VARIABLES.databaseUrl]: `postgres://usher_controller@${LOOPBACK}:${await unusedPort()}/usher`,
-    [ENVIRONMENT_VARIABLES.eventSource]: 'https://usher.example.org/controller',
     [ENVIRONMENT_VARIABLES.host]: LOOPBACK,
     [ENVIRONMENT_VARIABLES.identityProviderIssuer]:
       'http://127.0.0.1:8080/realms/usher-test',
     [ENVIRONMENT_VARIABLES.instanceName]: 'usher-test-1',
-    [ENVIRONMENT_VARIABLES.issuer]: 'https://usher.example.org',
     [ENVIRONMENT_VARIABLES.keyEncryptionKey]:
       randomBytes(32).toString('base64url'),
     [ENVIRONMENT_VARIABLES.managementAudience]: 'usher-management-test',
     [ENVIRONMENT_VARIABLES.managementClients]: 'usher-ui-test',
     [ENVIRONMENT_VARIABLES.port]: String(await unusedPort()),
-    [ENVIRONMENT_VARIABLES.signInTokenMaximumLifetimeSeconds]: '3600',
   });
 
 suite('a controller', () => {

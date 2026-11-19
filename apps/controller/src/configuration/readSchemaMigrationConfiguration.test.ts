@@ -10,12 +10,13 @@ import { parseIntoClientConfig } from 'pg-connection-string';
 import { StartRefusal } from '../failures/index.js';
 import {
   ENVIRONMENT_VARIABLES,
+  REPLACED_VARIABLES,
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,
 } from './environmentVariables.js';
 import { readSchemaMigrationConfiguration } from './readSchemaMigrationConfiguration.js';
 import type { ConfigurationEnvironment } from './types.js';
 
-const { databasePassword, databaseUrl } =
+const { seedFile, databasePassword, databaseUrl } =
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES;
 
 const {
@@ -23,9 +24,6 @@ const {
   databasePassword: controllerPassword,
   databaseSchema,
   databaseUrl: controllerUrl,
-  retentionGraceSeconds,
-  retentionMarginSeconds,
-  tokenLifetimeSeconds,
 } = ENVIRONMENT_VARIABLES;
 
 // A password holding characters a URL escapes, and whitespace kept as given.
@@ -54,28 +52,33 @@ const refusalOf = (environment: ConfigurationEnvironment): StartRefusal => {
 };
 
 suite("reading the schema migration command's configuration", () => {
-  test("reads every variable into its field, the runtime role the one the controller's URL names and the retention floor the sum of its durations", () => {
-    const configuration = readSchemaMigrationConfiguration({
-      ...REQUIRED,
-      [retentionGraceSeconds]: '10',
-      [retentionMarginSeconds]: '5',
-      [tokenLifetimeSeconds]: '120',
-    });
+  test("reads every variable into its field, the runtime role the one the controller's URL names and the seed file at ./seed.json when none is named", () => {
+    const configuration = readSchemaMigrationConfiguration(REQUIRED);
 
     assert.deepEqual(configuration, {
+      seedFile: './seed.json',
       databaseAllowUnverifiedConnection: false,
       databasePassword: SCHEMA_MIGRATION_PASSWORD,
       databaseUrl: 'postgres://usher_migration@127.0.0.1:5432/usher',
-      retentionFloorSeconds: 135,
       runtimeRole: 'usher_controller',
       schema: 'usher',
     });
   });
 
-  test("takes the controller's defaults for the floor's durations, a 390 s floor", () => {
-    const configuration = readSchemaMigrationConfiguration(REQUIRED);
+  test('reads the seed file as the path given', () => {
+    const configuration = readSchemaMigrationConfiguration({
+      ...REQUIRED,
+      [seedFile]: '/run/usher/seed.json',
+    });
 
-    assert.equal(configuration.retentionFloorSeconds, 300 + 60 + 30);
+    assert.equal(configuration.seedFile, '/run/usher/seed.json');
+  });
+
+  test('refuses a seed file set empty, as an empty text variable is refused', () => {
+    assert.deepEqual(
+      refusalOf({ ...REQUIRED, [seedFile]: '' }).variables,
+      [seedFile],
+    );
   });
 
   test("refuses each required variable left unset, naming every one in one refusal opening with the schema migrations' refusal to run", () => {
@@ -255,19 +258,23 @@ suite("reading the schema migration command's configuration", () => {
     assert.deepEqual(refusal.variables, [databaseUrl]);
   });
 
-  test('refuses durations whose floor is more than its column holds, laying the fault on each', () => {
-    const refusal = refusalOf({
-      ...REQUIRED,
-      [retentionGraceSeconds]: '1',
-      [tokenLifetimeSeconds]: '2147483647',
-    });
+  test('refuses each variable the seed file replaces, set empty or not, naming the seed file and never a value', () => {
+    Object.keys(REPLACED_VARIABLES).forEach((replaced) =>
+      ['', 'sekret-value'].forEach((value) => {
+        const refusal = refusalOf({ ...REQUIRED, [replaced]: value });
 
-    assert.deepEqual(refusal.variables, [
-      retentionGraceSeconds,
-      retentionMarginSeconds,
-      tokenLifetimeSeconds,
-    ]);
-    assert.match(refusal.message, /more than 2147483647 seconds/u);
+        assert.deepEqual(refusal.variables, [replaced], replaced);
+        assert.match(refusal.message, /USHER_SEED_FILE/u);
+        assert.equal(refusal.message.includes('sekret-value'), false, replaced);
+      }),
+    );
+  });
+
+  test('names the seed file as the replacement of every replaced variable', () => {
+    assert.deepEqual(
+      new Set(Object.values(REPLACED_VARIABLES)),
+      new Set([seedFile]),
+    );
   });
 });
 

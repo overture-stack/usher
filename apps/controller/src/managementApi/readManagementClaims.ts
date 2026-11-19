@@ -1,5 +1,6 @@
 import { CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
 import type { TokenClaims } from '../identityProvider/index.js';
+import type { FirstUser } from '../settings/index.js';
 import {
   currencyOf,
   isKeycloakAccessToken,
@@ -24,16 +25,37 @@ const NAMES_READINGS = {
   unrepresentableSubject: { kind: 'unrepresentable' },
 } as const satisfies Readonly<Record<NamesRefusal, ClaimsReading>>;
 
+// The first user is named by a realm role the token holds, compared by its exact name, or by the subject
+// the token names; the token is already verified under the configured issuer.
+const isFirstUser = (
+  claims: TokenClaims,
+  subject: string,
+  firstUser: FirstUser,
+): boolean =>
+  'realmRole' in firstUser
+    ? realmRolesOf(claims).includes(firstUser.realmRole)
+    : subject === firstUser.subject;
+
+// The seconds between a token's issue and its expiry, read once its currency has been judged: both are times then.
+const lifetimeOf = (claims: TokenClaims): number | undefined => {
+  const { exp, iat } = claims;
+  return typeof exp === 'number' && typeof iat === 'number'
+    ? exp - iat
+    : undefined;
+};
+
 const principalOf = (
   claims: TokenClaims,
   subject: string,
+  tokenLifetimeSeconds: number,
   {
-    firstUserRole,
+    firstUser,
     serviceAccountRole,
-  }: Pick<ManagementTokenSettings, 'firstUserRole' | 'serviceAccountRole'>,
+  }: Pick<ManagementTokenSettings, 'firstUser' | 'serviceAccountRole'>,
 ): Omit<Principal, 'administrator'> => ({
-  firstUser: realmRolesOf(claims).includes(firstUserRole),
+  firstUser: isFirstUser(claims, subject, firstUser),
   subject,
+  tokenLifetimeSeconds,
   type: isServiceAccount(claims, serviceAccountRole)
     ? 'serviceAccount'
     : 'human',
@@ -51,22 +73,22 @@ const principalOf = (
  * management API, and its `azp` must name a configured management client. Each refusal from the
  * access-token check on names the token's subject. A token that {@link isServiceAccount} marks as a
  * service account's is read as one, whether or not it also holds the first-user realm role. Whether
- * the token holds the first-user realm role, compared by its exact name, is read; a token says
- * nothing of admin status, which the store holds.
+ * the token is the first user, as the configured first user names it, is read; a token says nothing
+ * of admin status, which the store holds.
  *
  * @param token the token's verified claims and protected header.
- * @param settings the management API's audience and clients, the first-user and service-account
- *   roles, and the longest lifetime a sign-in token may have.
+ * @param settings the management API's audience and clients, the first user, the service-account role,
+ *   and the judgement of the longest lifetime a sign-in token issued at an instant may have.
  * @param now the instant, in milliseconds since the Unix epoch.
  */
 export const readManagementClaims = (
   token: TokenContents,
   {
-    firstUserRole,
+    firstUser,
     managementAudience,
     managementClients,
     serviceAccountRole,
-    signInTokenMaximumLifetimeSeconds,
+    signInTokenMaximumFor,
   }: ManagementTokenSettings,
   now: number,
 ): ClaimsReading => {
@@ -82,24 +104,22 @@ export const readManagementClaims = (
   if (!isKeycloakAccessToken(token)) {
     return refused('otherType');
   }
-  const currency = currencyOf(
-    claims,
-    { signInTokenMaximumLifetimeSeconds },
-    now,
-  );
+  const currency = currencyOf(claims, { signInTokenMaximumFor }, now);
   if (currency.kind === 'refused') {
     return refused(currency.reason);
   }
   const azp = claims['azp'];
+  const tokenLifetimeSeconds = lifetimeOf(claims);
   if (
+    tokenLifetimeSeconds !== undefined &&
     namesAudience(claims, managementAudience) &&
     typeof azp === 'string' &&
     managementClients.includes(azp)
   ) {
     return {
       kind: 'accepted',
-      principal: principalOf(claims, subject, {
-        firstUserRole,
+      principal: principalOf(claims, subject, tokenLifetimeSeconds, {
+        firstUser,
         serviceAccountRole,
       }),
       session: sessionOf(claims),

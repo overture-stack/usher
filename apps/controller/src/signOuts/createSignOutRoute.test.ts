@@ -34,6 +34,7 @@ const SECONDS = NOW / 1000;
 const ISSUER = 'https://auth.example.org/realms/usher';
 
 const SETTINGS = Object.freeze({
+  backChannelLogout: true,
   backChannelLogoutAudiences: ['portal-ui'],
   clock: { now: () => NOW },
   databaseSchema: 'usher',
@@ -97,6 +98,9 @@ interface Stand {
 }
 
 interface StandOptions {
+  /** Whether the route relays sign-outs: true by default. */
+  backChannelLogout?: boolean;
+
   /** Settles when the transaction may commit; at once by default. */
   commit?: Promise<void>;
 
@@ -119,6 +123,7 @@ interface StandOptions {
 const standUp = (
   context: TestContext,
   {
+    backChannelLogout = true,
     commit = Promise.resolve(),
     eventsRecorded = true,
     failure,
@@ -179,7 +184,7 @@ const standUp = (
     createSignOutRoute({
       eventLog: log,
       refusals: stand.windows,
-      settings: SETTINGS,
+      settings: { ...SETTINGS, backChannelLogout },
       tokenVerifier: {
         verify: async (token) => {
           stand.verified.push(token);
@@ -518,6 +523,71 @@ suite('refusing a back-channel logout by its token', () => {
     ]);
     await stand.windows.stop();
 
+    assert.deepEqual(stand.refusals, []);
+  });
+});
+
+suite('refusing every back-channel logout while relaying is off', () => {
+  test('answers 400 logoutTokenRefused to each logout token before verifying it, recording the first as a refusal naming the reason alone, and counting the next in its window', async (context) => {
+    const stand = standUp(context, { backChannelLogout: false });
+
+    const first = await post(stand, { body: formWith(TOKEN) });
+    const second = await post(stand, { body: formWith(OTHER_AUDIENCE_TOKEN) });
+    await stand.windows.stop();
+
+    assert.deepEqual(
+      [first, second].map((answer) => answer.statusCode),
+      [400, 400],
+    );
+    assert.deepEqual([first, second].map(refusalOf), [
+      refusal(400, 'logoutTokenRefused'),
+      refusal(400, 'logoutTokenRefused'),
+    ]);
+    assert.deepEqual(stand.verified, []);
+    assert.deepEqual(
+      stand.refusals.map(({ actor, event }) => ({ actor, event })),
+      [
+        {
+          actor: { type: 'anonymous' },
+          event: {
+            data: {
+              reason: 'backChannelLogoutOff',
+              result: 'denied',
+              sourceIp: '127.0.0.1',
+            },
+            severity: 'warning',
+            type: 'logoutToken.refusal',
+          },
+        },
+        {
+          actor: { type: 'system' },
+          event: {
+            data: {
+              count: 2,
+              firstSeenAt: new Date(NOW).toISOString(),
+              lastSeenAt: new Date(NOW).toISOString(),
+              reason: 'backChannelLogoutOff',
+              windowId: 'event-id',
+            },
+            severity: 'warning',
+            type: 'logoutToken.refusalTally',
+          },
+        },
+      ],
+    );
+  });
+
+  test('answers a request its shape refuses as it does with relaying on, verifying nothing and recording nothing', async (context) => {
+    const stand = standUp(context, { backChannelLogout: false });
+
+    const answer = await post(stand, {
+      url: `${SIGN_OUT_PATH}?${formWith(TOKEN)}`,
+    });
+    await stand.windows.stop();
+
+    assert.equal(answer.statusCode, 400);
+    assert.notEqual(codeOf(answer), 'logoutTokenRefused');
+    assert.deepEqual(stand.verified, []);
     assert.deepEqual(stand.refusals, []);
   });
 });

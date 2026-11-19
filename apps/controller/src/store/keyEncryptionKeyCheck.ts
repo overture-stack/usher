@@ -75,7 +75,7 @@ const recordFingerprint = async (
  */
 export const checkKeyEncryptionKey = async (
   client: pg.ClientBase,
-  { clock, databaseSchema, keyEncryptionKey }: StoreSettings,
+	{ clock, databaseSchema, keyEncryptionKey }: Pick<StoreSettings, 'clock' | 'databaseSchema' | 'keyEncryptionKey'>,
 ): Promise<void> => {
   const table = `${pg.escapeIdentifier(databaseSchema)}.key_fingerprints`;
   const fingerprint = keyFingerprint(keyEncryptionKey);

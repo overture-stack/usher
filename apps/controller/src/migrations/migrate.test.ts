@@ -18,7 +18,9 @@ const optionsFor = (port: number): MigrationOptions => ({
   connectionTimeoutMilliseconds: TEST_TIMEOUT_MILLISECONDS,
   databasePassword: 'unused',
   databaseUrl: `postgres://usher_migration@127.0.0.1:${port}/usher`,
-  retentionFloorSeconds: 390,
+	seed: () => Promise.reject(new Error('the seed file is not read by these tests')),
+	clock: { now: () => 0 },
+	eventLog: { error: () => undefined, writeEvent: () => undefined },
   runtimeRole: 'usher_controller',
   schema: 'usher',
 });

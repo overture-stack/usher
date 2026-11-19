@@ -377,3 +377,28 @@ suite("the controller's database role", () => {
     });
   });
 });
+
+suite('the settings the runtime role holds', () => {
+	test("updates each setting's value, change time and actor alone, and neither inserts into nor deletes from the settings", async (context) => {
+		const { owner } = await openSeededDatabase(context);
+		const settingsTable = qualified(POLICY_TABLES.settings);
+		const [held] = await selectRows<Record<string, boolean>>(
+			owner,
+			`SELECT has_table_privilege($1, $2, 'INSERT') AS inserts,
+			        has_table_privilege($1, $2, 'DELETE') AS deletes,
+			        has_column_privilege($1, $2, 'value', 'UPDATE') AS updates_value,
+			        has_column_privilege($1, $2, 'changed_at', 'UPDATE') AS updates_changed_at,
+			        has_column_privilege($1, $2, 'changed_by', 'UPDATE') AS updates_changed_by,
+			        has_column_privilege($1, $2, 'name', 'UPDATE') AS updates_name`,
+			[DATABASE_ROLES.runtime, settingsTable],
+		);
+		assert.deepEqual(held, {
+			deletes: false,
+			inserts: false,
+			updates_changed_at: true,
+			updates_changed_by: true,
+			updates_name: false,
+			updates_value: true,
+		});
+	});
+});

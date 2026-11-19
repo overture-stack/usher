@@ -56,13 +56,7 @@ export const createNoticeStreams = ({
   cursors,
   eventLog,
   reader,
-  settings: {
-    heartbeatMilliseconds,
-    noticePageLimit,
-    streamLimitPerAudience,
-    streamMaximumLifetimeSeconds,
-    streamQueueLimit,
-  },
+  settings,
   tail,
 }: {
   cursors: Pick<CursorCipher, 'seal'>;
@@ -194,7 +188,7 @@ export const createNoticeStreams = ({
 
     const rearm = (): void => {
       clearTimeout(stream.heartbeat);
-      stream.heartbeat = setTimeout(beat, heartbeatMilliseconds);
+      stream.heartbeat = setTimeout(beat, settings.heartbeatMilliseconds);
       stream.heartbeat.unref();
     };
 
@@ -264,7 +258,10 @@ export const createNoticeStreams = ({
         );
         const last = notices.at(-1)?.position ?? passed;
         stream.scannedThrough = last > passed ? last : passed;
-        if (stream.draining && stream.queue.length > streamQueueLimit) {
+        if (
+          stream.draining &&
+          stream.queue.length > settings.streamQueueLimit
+        ) {
           eventLog.warning(SLOW_STREAM_CLOSED, { applicationId });
           finish('destroy');
           return;
@@ -303,7 +300,7 @@ export const createNoticeStreams = ({
       }
       const next = await reader.after(reached.position, {
         audience: applicationId,
-        limit: noticePageLimit,
+        limit: settings.noticePageLimit,
       });
       if (stream.ended) {
         return;
@@ -319,7 +316,10 @@ export const createNoticeStreams = ({
       end();
     };
 
-    const lifetime = setTimeout(end, streamMaximumLifetimeSeconds * 1000);
+    const lifetime = setTimeout(
+      end,
+      settings.streamMaximumLifetimeSeconds * 1000,
+    );
     lifetime.unref();
 
     state.open.add(held);
@@ -357,7 +357,7 @@ export const createNoticeStreams = ({
       const held = state.reserved.filter(
         (reserved) => reserved === applicationId,
       ).length;
-      if (held >= streamLimitPerAudience) {
+      if (held >= settings.streamLimitPerAudience) {
         return { kind: 'full' };
       }
       state.reserved.push(applicationId);

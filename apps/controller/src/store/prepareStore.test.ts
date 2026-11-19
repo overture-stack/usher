@@ -10,11 +10,15 @@ import { checkStatementLimits, prepareStore } from './prepareStore.js';
 import type { StoreSettings } from './types.js';
 
 const SETTINGS: StoreSettings = {
-  baseline: ['count'],
+  apiDocsClient: 'usher-ui',
+  backChannelLogoutAudiences: ['portal-ui'],
   clock: { now: () => Date.UTC(2026, 10, 5) },
   databaseSchema: 'usher',
+  identityProviderIssuer: 'https://auth.example.org/realms/usher',
   keyEncryptionKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-  signedInRule: ['count', 'view', 'export'],
+  managementAudience: 'usher-management',
+  managementClients: ['usher-ui'],
+  serviceAccountRole: 'usher-service-account',
   storeTimeoutMilliseconds: 5000,
 };
 
@@ -25,6 +29,9 @@ const QUIET = Object.freeze({
 
 // The release's migrations, none here: every trail below fails before the record is read.
 const MIGRATIONS = Object.freeze([]);
+
+// The source the start holds the settings in: none is read here, since every trail below fails first.
+const SOURCE = { hold: () => undefined };
 
 // A trail whose every transaction fails as given, before any statement.
 const failingTrail = (
@@ -40,6 +47,7 @@ suite("preparing the store at the controller's start", () => {
       SETTINGS,
       QUIET,
       MIGRATIONS,
+      SOURCE,
     ).catch((failure: unknown) => failure);
 
     assert.ok(refusal instanceof StartRefusal);
@@ -56,6 +64,7 @@ suite("preparing the store at the controller's start", () => {
       SETTINGS,
       QUIET,
       MIGRATIONS,
+      SOURCE,
     ).catch((failure: unknown) => failure);
 
     assert.ok(refusal instanceof StartRefusal);
@@ -75,6 +84,7 @@ suite("preparing the store at the controller's start", () => {
           SETTINGS,
           QUIET,
           MIGRATIONS,
+          SOURCE,
         ).catch((failure: unknown) => failure),
       ),
     );
@@ -97,7 +107,7 @@ suite("preparing the store at the controller's start", () => {
     });
 
     await assert.rejects(
-      prepareStore(failingTrail(reset), SETTINGS, QUIET, MIGRATIONS),
+      prepareStore(failingTrail(reset), SETTINGS, QUIET, MIGRATIONS, SOURCE),
       (thrown) => thrown === reset,
     );
   });

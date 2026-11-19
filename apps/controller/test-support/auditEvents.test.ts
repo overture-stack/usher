@@ -48,6 +48,7 @@ import {
   REFUSAL_WINDOW_COOLDOWN_MILLISECONDS,
   refusalTalliesIn,
   severityIn,
+  severityOfChanges,
   TOKEN_CAP_EVENT,
 } from './auditEvents.js';
 import { captureLog } from './controller.js';
@@ -109,6 +110,54 @@ suite("reading audit-events.md's Events table", () => {
         whenDenied: 'warning',
       },
     );
+  });
+
+  test('reads a severity by which names changed: one severity when any listed name is among the changes, another otherwise, and judges an event for both outcomes', () => {
+    const severity = severityIn(
+      '`critical` when `identityProviderIssuer`, `managementAudience`, `managementClients` or `serviceAccountRole` changed; `warning` otherwise',
+    );
+    if (severity.kind !== 'byChangedName') {
+      assert.fail('the cell is not a severity by which names changed');
+    }
+    assert.deepEqual(severity, {
+      kind: 'byChangedName',
+      names: [
+        'identityProviderIssuer',
+        'managementAudience',
+        'managementClients',
+        'serviceAccountRole',
+      ],
+      otherwise: 'warning',
+      severity: 'critical',
+    });
+    assert.equal(
+      severityOfChanges(severity, {
+        changes: [
+          { name: 'apiDocsClient', previousValue: '', value: 'a' },
+          { name: 'managementClients', previousValue: [], value: ['b'] },
+        ],
+      }),
+      'critical',
+    );
+    assert.equal(
+      severityOfChanges(severity, {
+        changes: [{ name: 'apiDocsClient', previousValue: '', value: 'a' }],
+      }),
+      'warning',
+    );
+  });
+
+  test('reads a severity by which names changed beside a refusal, the refusal before the changes', () => {
+    const severity = severityIn(
+      '`warning` when refused; `critical` when `grantAutoAccept` or `submitterCategory` changed; `warning` otherwise',
+    );
+    assert.deepEqual(severity, {
+      kind: 'byChangedName',
+      names: ['grantAutoAccept', 'submitterCategory'],
+      otherwise: 'warning',
+      severity: 'critical',
+      whenDenied: 'warning',
+    });
   });
 
   test('reads a severity per case from a clause naming several values, and from a refusal and every other case alone', () => {
@@ -739,20 +788,6 @@ suite("the controller's events, as the document registers them", () => {
     );
   });
 
-  test("reads the baseline change as the system's, carrying both rules, at info at the store's first start and at warning at any later one", () => {
-    const { actor, fields, severity } = registered(
-      AUDIT_EVENT_TYPES.baselineChange,
-    );
-
-    assert.deepEqual(actor, { kind: 'system' });
-    assert.deepEqual(fields.always, ['baseline', 'signedInRule']);
-    assert.deepEqual(severity, {
-      atFirstStart: 'info',
-      kind: 'byFirstStart',
-      otherwise: 'warning',
-    });
-  });
-
   test("reads each event's severity as its row names it: a lift of an identity's revocation at warning, a revocation of the whole platform or of a resource at critical", () => {
     const levels = (
       [
@@ -1087,8 +1122,13 @@ suite("the audit log's rows, read", () => {
 			"INSERT INTO usher.audit_log (id, occurred_at, type, source, spec_version, data_schema, severity, data) VALUES ('00000000-0000-4000-8000-000000000002', '2026-10-23T12:00:01.123456Z', 'bio.overture.grant.revocation', 'https://usher.example.org/controller', '1.0', NULL, 'info', '{\"grantId\": \"g-1\"}'), ('00000000-0000-4000-8000-000000000001', '2026-10-23T12:00:00Z', 'bio.overture.grant.creation', 'https://usher.example.org/controller', '1.0', NULL, 'info', '{\"grantId\": \"g-1\"}')",
     );
 
-    const rows = await auditRows(owner);
-    const texts = await auditRowTexts(owner);
+    // The template's own seeding event is held too; only the grants this test wrote are its rows.
+    const rows = (await auditRows(owner)).filter(({ type }) =>
+      type.startsWith('bio.overture.grant.'),
+    );
+    const texts = (await auditRowTexts(owner)).filter((text) =>
+      text.includes('"grantId"'),
+    );
 
     assert.deepEqual(
       rows.map(({ data, occurredAtKey, type }) => ({

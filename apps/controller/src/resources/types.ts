@@ -1,10 +1,10 @@
 import type pg from 'pg';
 
-import type { ControllerConfiguration } from '../configuration/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
 import type { NamedHolder } from '../grants/index.js';
 import type { StoreReader } from '../managementApi/index.js';
 import type { AccessLevel } from '../resourceStanding/index.js';
+import type { ControllerSettings } from '../settings/index.js';
 
 export type { AccessLevel };
 
@@ -85,8 +85,8 @@ export interface ResourceOperationsSettings {
    * is read from, the schema, and the trusted issuer people are found under.
    */
   settings: Pick<
-    ControllerConfiguration,
-    'autoAccept' | 'clock' | 'databaseSchema' | 'identityProviderIssuer'
+    ControllerSettings,
+    'clock' | 'databaseSchema' | 'grantAutoAccept' | 'identityProviderIssuer'
   >;
 
   /** Where a resource is read, on the control pool. */

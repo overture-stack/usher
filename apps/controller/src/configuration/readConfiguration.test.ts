@@ -8,6 +8,7 @@ import { after, suite, test } from 'node:test';
 import { StartRefusal } from '../failures/index.js';
 import {
   ENVIRONMENT_VARIABLES,
+  REPLACED_VARIABLES,
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,
 } from './environmentVariables.js';
 import { readConfiguration } from './readConfiguration.js';
@@ -36,16 +37,13 @@ const REQUIRED: Readonly<Record<string, string>> = {
   databasePassword: DATABASE_PASSWORD,
   databaseSchema: 'usher',
   databaseUrl: 'postgres://usher_controller@127.0.0.1:5432/usher',
-  eventSource: 'https://usher.example.org/controller',
   host: '127.0.0.1',
   identityProviderIssuer: 'https://auth.example.org/realms/usher',
   instanceName: 'usher-1',
-  issuer: 'https://usher.example.org',
   keyEncryptionKey: KEY_ENCRYPTION_KEY,
   managementAudience: 'usher-management',
   managementClients: 'usher-ui',
   port: '8443',
-  signInTokenMaximumLifetimeSeconds: '3600',
 } satisfies FieldValues;
 
 const BASE64URL =
@@ -100,35 +98,19 @@ suite('reading the configuration from an environment', () => {
     const configuration = readConfiguration(
       environmentWith({
         apiDocsClient: 'usher-ui',
-        autoAccept: 'true',
         backChannelLogoutAudiences: 'portal-test, submission-test',
-        baseline: 'view',
         databaseAllowUnverifiedConnection: 'true',
         databaseControlConnections: '3',
         databaseExchangeConnections: '12',
-        firstUserRole: 'ims-usher-first-user',
-        heartbeatMilliseconds: '500',
-        noticePageLimit: '20',
-        noticeRereadMilliseconds: '250',
-        retentionGraceSeconds: '0',
-        retentionMarginSeconds: '45',
         serviceAccountRole: 'ims-usher-service',
-        signedInRule: 'count,view',
         storeTimeoutMilliseconds: '250',
-        streamLimitPerAudience: '2',
-        streamMaximumLifetimeSeconds: '60',
-        streamQueueLimit: '10',
-        submitterCategory: 'global.controlled',
-        tokenLifetimeSeconds: '120',
         trustedProxies: '127.0.0.1,::1',
       }),
     );
 
     assert.deepEqual(fieldsOf(configuration), {
       apiDocsClient: 'usher-ui',
-      autoAccept: true,
       backChannelLogoutAudiences: ['portal-test', 'submission-test'],
-      baseline: ['view'],
       cursorKey: CURSOR_KEY,
       databaseAllowUnverifiedConnection: true,
       databaseControlConnections: 3,
@@ -136,30 +118,15 @@ suite('reading the configuration from an environment', () => {
       databasePassword: DATABASE_PASSWORD,
       databaseSchema: 'usher',
       databaseUrl: 'postgres://usher_controller@127.0.0.1:5432/usher',
-      eventSource: 'https://usher.example.org/controller',
-      firstUserRole: 'ims-usher-first-user',
-      heartbeatMilliseconds: 500,
       host: '127.0.0.1',
       identityProviderIssuer: 'https://auth.example.org/realms/usher',
       instanceName: 'usher-1',
-      issuer: 'https://usher.example.org',
       keyEncryptionKey: KEY_ENCRYPTION_KEY,
       managementAudience: 'usher-management',
       managementClients: ['usher-ui'],
-      noticePageLimit: 20,
-      noticeRereadMilliseconds: 250,
       port: 8443,
-      retentionGraceSeconds: 0,
-      retentionMarginSeconds: 45,
       serviceAccountRole: 'ims-usher-service',
-      signInTokenMaximumLifetimeSeconds: 3600,
-      signedInRule: ['count', 'view'],
       storeTimeoutMilliseconds: 250,
-      streamLimitPerAudience: 2,
-      streamMaximumLifetimeSeconds: 60,
-      streamQueueLimit: 10,
-      submitterCategory: 'global.controlled',
-      tokenLifetimeSeconds: 120,
       trustedProxies: ['127.0.0.1', '::1'],
     });
   });
@@ -170,50 +137,21 @@ suite('reading the configuration from an environment', () => {
     assert.deepEqual(
       {
         apiDocsClient: configuration.apiDocsClient,
-        autoAccept: configuration.autoAccept,
-        baseline: configuration.baseline,
         databaseAllowUnverifiedConnection:
           configuration.databaseAllowUnverifiedConnection,
         databaseControlConnections: configuration.databaseControlConnections,
         databaseExchangeConnections: configuration.databaseExchangeConnections,
-        firstUserRole: configuration.firstUserRole,
-        heartbeatMilliseconds: configuration.heartbeatMilliseconds,
-        noticePageLimit: configuration.noticePageLimit,
-        noticeRereadMilliseconds: configuration.noticeRereadMilliseconds,
-        retentionGraceSeconds: configuration.retentionGraceSeconds,
-        retentionMarginSeconds: configuration.retentionMarginSeconds,
         serviceAccountRole: configuration.serviceAccountRole,
-        signedInRule: configuration.signedInRule,
         storeTimeoutMilliseconds: configuration.storeTimeoutMilliseconds,
-        streamLimitPerAudience: configuration.streamLimitPerAudience,
-        streamMaximumLifetimeSeconds:
-          configuration.streamMaximumLifetimeSeconds,
-        streamQueueLimit: configuration.streamQueueLimit,
-        submitterCategory: configuration.submitterCategory,
-        tokenLifetimeSeconds: configuration.tokenLifetimeSeconds,
         trustedProxies: configuration.trustedProxies,
       },
       {
         apiDocsClient: '',
-        autoAccept: false,
-        baseline: ['count', 'view', 'export'],
         databaseAllowUnverifiedConnection: false,
         databaseControlConnections: 5,
         databaseExchangeConnections: 10,
-        firstUserRole: 'usher-first-user',
-        heartbeatMilliseconds: 10_000,
-        noticePageLimit: 500,
-        noticeRereadMilliseconds: 2000,
-        retentionGraceSeconds: 60,
-        retentionMarginSeconds: 30,
         serviceAccountRole: 'usher-service-account',
-        signedInRule: ['count', 'view', 'export'],
         storeTimeoutMilliseconds: 5000,
-        streamLimitPerAudience: 64,
-        streamMaximumLifetimeSeconds: 900,
-        streamQueueLimit: 1000,
-        submitterCategory: 'global.unmarked',
-        tokenLifetimeSeconds: 300,
         trustedProxies: [],
       },
     );
@@ -240,14 +178,31 @@ suite('reading the configuration from an environment', () => {
     );
   });
 
+  test('refuses each variable the seed file replaces, set empty or not, naming the seed file and never a value', () => {
+    Object.keys(REPLACED_VARIABLES).forEach((replaced) =>
+      ['', 'sekret-value'].forEach((value) => {
+        const refusal = refusalOf({
+          ...environmentWith({}),
+          [replaced]: value,
+        });
+
+        assert.deepEqual(refusal.variables, [replaced], replaced);
+        assert.match(refusal.message, /USHER_SEED_FILE/u);
+        assert.equal(refusal.message.includes('sekret-value'), false, replaced);
+      }),
+    );
+  });
+
   test('refuses a required variable set empty', () => {
-    const refusal = refusalOf(environmentWith({ host: '', issuer: '' }));
+    const refusal = refusalOf(
+      environmentWith({ host: '', managementAudience: '' }),
+    );
 
     assert.deepEqual(refusal.variables, [
       ENVIRONMENT_VARIABLES.host,
-      ENVIRONMENT_VARIABLES.issuer,
+      ENVIRONMENT_VARIABLES.managementAudience,
     ]);
-    assert.match(refusal.message, /USHER_ISSUER is empty/u);
+    assert.match(refusal.message, /USHER_MANAGEMENT_AUDIENCE is empty/u);
   });
 
   test('refuses a service-account role set empty, naming its variable', () => {
@@ -257,80 +212,6 @@ suite('reading the configuration from an environment', () => {
       ENVIRONMENT_VARIABLES.serviceAccountRole,
     ]);
     assert.match(refusal.message, /USHER_SERVICE_ACCOUNT_ROLE is empty/u);
-  });
-
-  test('refuses a service-account role naming the first-user role, naming its variable and the rule', () => {
-    const refusal = refusalOf(
-      environmentWith({
-        firstUserRole: 'ims-usher',
-        serviceAccountRole: 'ims-usher',
-      }),
-    );
-
-    assert.deepEqual(refusal.variables, [
-      ENVIRONMENT_VARIABLES.serviceAccountRole,
-    ]);
-    assert.match(
-      refusal.message,
-      /USHER_SERVICE_ACCOUNT_ROLE must name a role other than the one in USHER_FIRST_USER_ROLE/u,
-    );
-  });
-
-  test('refuses a first-user role naming the default service-account role while the service-account role is unset', () => {
-    const refusal = refusalOf(
-      environmentWith({ firstUserRole: 'usher-service-account' }),
-    );
-
-    assert.deepEqual(refusal.variables, [
-      ENVIRONMENT_VARIABLES.serviceAccountRole,
-    ]);
-    assert.match(
-      refusal.message,
-      /USHER_SERVICE_ACCOUNT_ROLE must name a role other than the one in USHER_FIRST_USER_ROLE/u,
-    );
-  });
-
-  test('reads a first-user role and a service-account role differing only in letter case as two roles', () => {
-    const configuration = readConfiguration(
-      environmentWith({
-        firstUserRole: 'Usher-Ops',
-        serviceAccountRole: 'usher-ops',
-      }),
-    );
-
-    assert.deepEqual(
-      {
-        firstUserRole: configuration.firstUserRole,
-        serviceAccountRole: configuration.serviceAccountRole,
-      },
-      { firstUserRole: 'Usher-Ops', serviceAccountRole: 'usher-ops' },
-    );
-  });
-
-  test('refuses a start with USHER_ADMINISTRATOR_ROLE set, empty or not, naming USHER_FIRST_USER_ROLE as its replacement and never its value', () => {
-    const refusals = ['usher-platform-admin', ''].map((value) =>
-      refusalOf({ ...environmentWith({}), USHER_ADMINISTRATOR_ROLE: value }),
-    );
-    const beside = refusalOf({
-      ...environmentWith({ host: '' }),
-      USHER_ADMINISTRATOR_ROLE: 'usher-platform-admin',
-    });
-
-    assert.deepEqual(
-      refusals.map((refusal) => refusal.variables),
-      [['USHER_ADMINISTRATOR_ROLE'], ['USHER_ADMINISTRATOR_ROLE']],
-    );
-    refusals.forEach((refusal) => {
-      assert.match(
-        refusal.message,
-        /USHER_ADMINISTRATOR_ROLE is replaced by USHER_FIRST_USER_ROLE/u,
-      );
-      assert.doesNotMatch(shownBy(refusal), /usher-platform-admin/u);
-    });
-    assert.deepEqual(beside.variables.toSorted(), [
-      'USHER_ADMINISTRATOR_ROLE',
-      ENVIRONMENT_VARIABLES.host,
-    ]);
   });
 });
 
@@ -404,61 +285,6 @@ suite("reading the API documentation page's client", () => {
     assert.deepEqual(refusal.variables, [
       ENVIRONMENT_VARIABLES.managementClients,
     ]);
-  });
-});
-
-suite('reading the grant settings', () => {
-  test('reads auto-accept as true or false, written in lower case', () => {
-    assert.deepEqual(
-      ['true', 'false'].map(
-        (value) =>
-          readConfiguration(environmentWith({ autoAccept: value })).autoAccept,
-      ),
-      [true, false],
-    );
-  });
-
-  test('refuses auto-accept written any other way, naming its variable and the rule', () => {
-    ['TRUE', 'False', 'yes', '1', '', ' true'].forEach((value) => {
-      const refusal = refusalOf(environmentWith({ autoAccept: value }));
-
-      assert.deepEqual(refusal.variables, [ENVIRONMENT_VARIABLES.autoAccept]);
-      assert.ok(
-        refusal.message.includes(
-          `${ENVIRONMENT_VARIABLES.autoAccept} is neither true nor false`,
-        ),
-      );
-    });
-  });
-
-  test('reads a submitter category scoped global, as a payload names it', () => {
-    const configuration = readConfiguration(
-      environmentWith({ submitterCategory: 'global.trial-cohort' }),
-    );
-
-    assert.equal(configuration.submitterCategory, 'global.trial-cohort');
-  });
-
-  test('refuses a submitter category that is not global, or not one name after its scope, naming its variable and the rule', () => {
-    [
-      'unmarked',
-      'resource.internal',
-      'global.',
-      'global.a.b',
-      'Global.unmarked',
-      '',
-    ].forEach((value) => {
-      const refusal = refusalOf(environmentWith({ submitterCategory: value }));
-
-      assert.deepEqual(refusal.variables, [
-        ENVIRONMENT_VARIABLES.submitterCategory,
-      ]);
-      assert.ok(
-        refusal.message.includes(
-          `${ENVIRONMENT_VARIABLES.submitterCategory} is not global. followed by the name of a category, which holds no dot`,
-        ),
-      );
-    });
   });
 });
 
@@ -734,58 +560,6 @@ suite('verifying the database connection', () => {
   });
 });
 
-suite('reading the rules conferring record actions on everyone', () => {
-  test('reads a rule within read as given, an empty one conferring nothing', () => {
-    const rules = ['view', 'count,view', 'export, count', ''];
-
-    const read = rules.map((rule) =>
-      readConfiguration(
-        environmentWith({ baseline: rule, signedInRule: rule }),
-      ),
-    );
-
-    assert.deepEqual(
-      read.map(({ baseline, signedInRule }) => [baseline, signedInRule]),
-      [
-        [['view'], ['view']],
-        [
-          ['count', 'view'],
-          ['count', 'view'],
-        ],
-        [
-          ['export', 'count'],
-          ['export', 'count'],
-        ],
-        [[], []],
-      ],
-    );
-  });
-
-  test('refuses a rule naming an action outside the record vocabulary, one twice, or one beyond read', () => {
-    const rules = [
-      { rule: 'veiw', said: /outside the record vocabulary/u },
-      { rule: 'record.read', said: /outside the record vocabulary/u },
-      { rule: 'read', said: /outside the record vocabulary/u },
-      { rule: 'view,view', said: /twice/u },
-      { rule: 'count,view,export,update', said: /more than read/u },
-      { rule: 'delete', said: /more than read/u },
-      { rule: 'create', said: /more than read/u },
-      { rule: 'view,,count', said: /empty entry/u },
-    ];
-
-    rules.forEach(({ rule, said }) => {
-      const baseline = refusalOf(environmentWith({ baseline: rule }));
-      const signedIn = refusalOf(environmentWith({ signedInRule: rule }));
-
-      assert.deepEqual(baseline.variables, [ENVIRONMENT_VARIABLES.baseline]);
-      assert.deepEqual(signedIn.variables, [
-        ENVIRONMENT_VARIABLES.signedInRule,
-      ]);
-      assert.match(baseline.message, said, rule);
-    });
-  });
-});
-
 suite('reading the identity provider', () => {
   test('reads an issuer over https, or over http to a loopback host', () => {
     const issuers = [
@@ -841,8 +615,9 @@ suite('reading numbers and lists', () => {
 
     values.forEach((value) =>
       assert.deepEqual(
-        refusalOf(environmentWith({ streamQueueLimit: value })).variables,
-        [ENVIRONMENT_VARIABLES.streamQueueLimit],
+        refusalOf(environmentWith({ storeTimeoutMilliseconds: value }))
+          .variables,
+        [ENVIRONMENT_VARIABLES.storeTimeoutMilliseconds],
         value,
       ),
     );
@@ -851,17 +626,15 @@ suite('reading numbers and lists', () => {
   test('refuses a number outside its bounds, naming them', () => {
     const cases = [
       { said: /from 0 to 65535/u, values: { port: '65536' } },
-      { said: /at least 1/u, values: { tokenLifetimeSeconds: '0' } },
-      { said: /at least 60/u, values: { streamMaximumLifetimeSeconds: '59' } },
       { said: /at least 1/u, values: { databaseControlConnections: '0' } },
       { said: /at least 1/u, values: { databaseExchangeConnections: '0' } },
       {
         said: /from 1 to 2147483647/u,
-        values: { heartbeatMilliseconds: '2147483648' },
+        values: { storeTimeoutMilliseconds: '2147483648' },
       },
       {
         said: /at least 1/u,
-        values: { noticePageLimit: '9007199254740993' },
+        values: { databaseControlConnections: '9007199254740993' },
       },
     ];
 
@@ -944,14 +717,14 @@ suite('a refusal of the configuration', () => {
   test('names each variable at fault and never the value it refused', () => {
     const marker = `refused-${randomUUID()}`;
     const fields: readonly FieldWithVariable[] = [
-      'baseline',
       'cursorKey',
+      'databaseControlConnections',
+      'databaseExchangeConnections',
       'databaseUrl',
-      'heartbeatMilliseconds',
       'identityProviderIssuer',
       'keyEncryptionKey',
       'port',
-      'signedInRule',
+      'storeTimeoutMilliseconds',
       'trustedProxies',
     ];
 
@@ -1001,69 +774,6 @@ const schemaMigrationRefusalOf = (
     'the configuration was read, where a refusal was expected',
   );
 };
-
-suite("the retention floor's durations", () => {
-  test('are read as the schema migration command reads them, so the floor it stores is the sum of what the controller reads', () => {
-    const cases: readonly FieldValues[] = [
-      {},
-      {
-        retentionGraceSeconds: '10',
-        retentionMarginSeconds: '0',
-        tokenLifetimeSeconds: '45',
-      },
-    ];
-
-    const floors = cases.map((values) => {
-      const controller = readConfiguration(environmentWith(values));
-      return {
-        controller:
-          controller.tokenLifetimeSeconds +
-          controller.retentionGraceSeconds +
-          controller.retentionMarginSeconds,
-        migration: readSchemaMigrationConfiguration({
-          ...SCHEMA_MIGRATION_REQUIRED,
-          ...environmentOf(values),
-        }).retentionFloorSeconds,
-      };
-    });
-
-    assert.deepEqual(floors, [
-      { controller: 390, migration: 390 },
-      { controller: 55, migration: 55 },
-    ]);
-  });
-
-  test('are refused by the schema migration command as the controller refuses them, by the same rule', () => {
-    const values: FieldValues = {
-      retentionGraceSeconds: '-1',
-      retentionMarginSeconds: '1.5',
-      tokenLifetimeSeconds: '0',
-    };
-    const variables = [
-      ENVIRONMENT_VARIABLES.retentionGraceSeconds,
-      ENVIRONMENT_VARIABLES.retentionMarginSeconds,
-      ENVIRONMENT_VARIABLES.tokenLifetimeSeconds,
-    ];
-
-    const controller = refusalOf(environmentWith(values));
-    const migration = schemaMigrationRefusalOf({
-      ...SCHEMA_MIGRATION_REQUIRED,
-      ...environmentOf(values),
-    });
-
-    assert.deepEqual(migration.variables, variables);
-    assert.deepEqual(
-      variables.map((variable) => ruleFor(migration, variable)),
-      variables.map((variable) => ruleFor(controller, variable)),
-    );
-    assert.equal(
-      variables.every(
-        (variable) => ruleFor(controller, variable) !== undefined,
-      ),
-      true,
-    );
-  });
-});
 
 // A refusal's problems, without what opens its message.
 const problemsOf = ({ message }: StartRefusal): string =>

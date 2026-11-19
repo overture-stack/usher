@@ -63,20 +63,25 @@ running:
 The script replaces an existing `.env` only when given `--force`. PostgreSQL keeps the passwords it
 was created with, so run `docker compose --profile image down --volumes` before replacing the file.
 
-**To run the Controller on this machine**, build it, apply the schema migrations, then start it on
-port 3000. `compose/host-settings` holds the settings, none of them secret:
+**To run the Controller on this machine**, copy the seed file, build the Controller, apply the schema migrations, then start it on
+port 3000. `compose/host-settings` holds the configuration, none of it secret:
 
+    cp seed.template.json seed.json
     pnpm build
     node --env-file=compose/host-settings --env-file=.env dist/migrate.js
     node --env-file=compose/host-settings --env-file=.env dist/main.js
+
+The commands read `seed.json` from this folder, which git ignores. A first run seeds the settings from it, and later runs only
+compare it, so edit it before the first run. A Controller run this way gets no sign-outs: Keycloak posts them to the image
+profile's Controller, at `http://127.0.0.1:3001/backchannel-logout`.
 
 Both commands load every secret in `.env`, the schema migration role's password included, since the
 account running them can read the file anyway. Under compose, the Controller never receives that
 password.
 
-**To run the Controller's image**, add the `image` profile. It builds the image from the
-repository's root, runs the schema migration command once, then starts the Controller on port 3001
-once the migrations have succeeded:
+**To run the Controller's image**, copy the seed file first, as above, then add the `image` profile. It builds the image from
+the repository's root, mounts `seed.json` read-only at `/app/seed.json`, runs the schema migration command once, then starts the
+Controller on port 3001 once the migrations have succeeded:
 
     docker compose --profile image up --build --detach --wait
     curl --fail http://127.0.0.1:3001/health/ready

@@ -1,8 +1,7 @@
-import type { RecordAction } from '@overture-stack/usher-types';
-
+import type { GrantRules } from '../settings/index.js';
 import { grantEntries } from './grantEntries.js';
 import { calculationOf } from './heldEntries.js';
-import { ruleEntries } from './ruleCalculation.js';
+import { grantRuleConferrals, ruleEntries } from './ruleCalculation.js';
 import type { Calculation, PrincipalPolicy } from './types.js';
 
 /**
@@ -10,10 +9,10 @@ import type { Calculation, PrincipalPolicy } from './types.js';
  * from one read of the store, through the rules and the recorded grants reaching them, unioned per
  * resource and category.
  *
- * Through the rules: the baseline's record actions on `global.unmarked` of every resource the audience
- * serves whose unmarked records are open, and the signed-in rule's on those of every resource whose
- * unmarked records are registered. Each rule conferring an entry is named once, the baseline first;
- * an empty rule confers nothing, and is not named.
+ * Through the rules: the `everyone` and `signedIn` entries of the grant rules, each conferring its record
+ * actions on `global.unmarked` of every resource the audience serves at the entry's access level. Where
+ * several entries reach one resource, their actions are unioned. Each recipient conferring an entry is
+ * named once, in the order the rules are stored; an entry conferring nothing is not named.
  *
  * Through the recorded grants: each grant kept, where the principal's latest decision on it accepts it
  * and it expires after the second the token is issued in, or never, confers under its record category
@@ -30,26 +29,17 @@ import type { Calculation, PrincipalPolicy } from './types.js';
  *
  * @param policy the audience's served resources, the global categories and the grants reaching the
  *   principal, as one read gave them.
- * @param conferring the record actions the baseline confers on everyone, those the signed-in rule
- *   confers on every signed-in principal, and the instant the token is issued, in whole seconds since
- *   the Unix epoch.
+ * @param conferring the grant rules the store holds, and the instant the token is issued, in whole
+ *   seconds since the Unix epoch.
  */
 export const signedInCalculation = (
   policy: PrincipalPolicy,
-  {
-    baseline,
-    issuedAt,
-    signedInRule,
-  }: {
-    baseline: readonly RecordAction[];
-    issuedAt: number;
-    signedInRule: readonly RecordAction[];
-  },
+  { grantRules, issuedAt }: { grantRules: GrantRules; issuedAt: number },
 ): Calculation => {
-  const ruled = ruleEntries(policy.served, [
-    { actions: baseline, rule: 'baseline', tier: 'open' },
-    { actions: signedInRule, rule: 'signedIn', tier: 'registered' },
-  ]);
+  const ruled = ruleEntries(
+    policy.served,
+    grantRuleConferrals(grantRules, ['everyone', 'signedIn']),
+  );
   const granted = grantEntries(policy.served, policy.grants, issuedAt);
   return calculationOf(policy, [...ruled.entries, ...granted.entries], {
     ...(granted.earliestExpiry === undefined

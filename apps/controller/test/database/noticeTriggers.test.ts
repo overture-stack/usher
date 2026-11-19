@@ -53,7 +53,6 @@ const {
   resourceCategories,
   resources,
   rolePermissions,
-  rulesDigest,
 } = POLICY_TABLES;
 
 const WITH_READERS_AND_A_SECOND_VIEWER: PolicyFixture = {
@@ -453,32 +452,6 @@ suite('the notices each change writes', () => {
       servedResourcesNotice(arranger),
       servedResourcesNotice(lyric),
     ]);
-  });
-
-  test('writes a baseline notice when the recorded rules digest changes, and none when it is rewritten unchanged', async (context) => {
-    const { database, owner } = await openSeededDatabase(context);
-    const recorded = randomBytes(32).toString('base64url');
-    const changed = randomBytes(32).toString('base64url');
-    await committedQuery(owner, `DELETE FROM ${qualified(rulesDigest)}`);
-    await committedInsert(owner, rulesDigest, {
-      [rulesDigest.columns.digest]: recorded,
-      [rulesDigest.columns.recordedAt]: new Date(),
-    });
-    const rewrite = (
-      digest: string,
-    ): ((client: pg.Client) => Promise<unknown>) =>
-      updating(
-        rulesDigest,
-        `${rulesDigest.columns.digest} = $1, ${rulesDigest.columns.recordedAt} = now()`,
-        'true',
-        [digest],
-      );
-
-    const rewrittenUnchanged = await observeChange(database, rewrite(recorded));
-    const rewrittenChanged = await observeChange(database, rewrite(changed));
-
-    assertWrittenWithChange(rewrittenUnchanged, []);
-    assertWrittenWithChange(rewrittenChanged, [BASELINE_NOTICE]);
   });
 
   test('writes a global notice, raises the policy generation and records the change when a global revocation is recorded, all in its transaction', async (context) => {

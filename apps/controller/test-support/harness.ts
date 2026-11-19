@@ -1,8 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import type { TestContext } from 'node:test';
+import { isDeepStrictEqual } from 'node:util';
 
 import { decodeJwt } from 'jose';
-import type pg from 'pg';
+import pg from 'pg';
+
+import type { Settings } from '../src/settings/index.js';
 
 import {
   type AdminCaller,
@@ -22,16 +25,23 @@ import type {
 import {
   type ControllerApplication,
   type ControllerConfiguration,
+  type MigrationOptions,
   type RunningController,
+  type SeededPolicySettings,
   startController,
+  storedSettingsOf,
+  writeSeededPolicy,
 } from './controller.js';
 import {
   createTestDatabase,
   type DatabaseRole,
   type DatabaseTemplate,
+  TEMPLATE_SETTINGS,
   type TestDatabase,
+  templateSeededWith,
   USHER_SCHEMA,
   USHER_TEMPLATE,
+  writeStoredSettings,
 } from './database.js';
 import {
   mintSignInToken,
@@ -53,7 +63,6 @@ import {
   type SeededPolicy,
   seedPolicy,
   setEpoch,
-  STARTED_STORE_TEMPLATE,
   type StoreSnapshot,
   takeStoreSnapshot,
 } from './policy.js';
@@ -482,6 +491,48 @@ export const configurationToRead = (
   });
 
 /**
+ * The clock the started store's template seeds the policy under: the system's, read at each recording.
+ */
+const STARTED_STORE_SETTINGS: Readonly<Pick<SeededPolicySettings, 'clock'>> =
+  Object.freeze({
+    clock: Object.freeze({ now: () => Date.now() }),
+  });
+
+/**
+ * The Controller's template with the policy a start seeds written by the Controller's own code
+ * (#207 Q11), under {@link STARTED_STORE_SETTINGS}: the capability vocabulary, `SEEDED_ROLES` with their
+ * capabilities, and the settings a start under {@link configurationToRead}'s defaults writes
+ * ({@link writeStartSettings}), so a start on it writes no setting. It is a store as a started Controller
+ * leaves it, but for the key-encryption key's fingerprint and the identity provider's record, which the first
+ * start under a configuration records: the record's six rows are left null, as the migration creates them, so
+ * a first start on the template fills them. For a test seeding a fixture that names the seeded roles while
+ * starting no Controller. Run again on a clone, it writes nothing the migrations and the Controller would not
+ * write again.
+ */
+export const STARTED_STORE_TEMPLATE: DatabaseTemplate = Object.freeze({
+  migrate: async (options: MigrationOptions) => {
+    await USHER_TEMPLATE.migrate(options);
+    const client = new pg.Client({ connectionString: options.databaseUrl });
+    await client.connect();
+    try {
+      await writeSeededPolicy(client, {
+        ...STARTED_STORE_SETTINGS,
+        databaseSchema: options.schema,
+      });
+      await writeStoredSettings(
+        client,
+        options.schema,
+        storedSettingsOf(configurationToRead()),
+      );
+    } finally {
+      await client.end();
+    }
+  },
+  name: 'usher_template_started',
+  schema: USHER_SCHEMA,
+});
+
+/**
  * The notice retention floor a configuration gives, which the deployment command sets (R3): the
  * token lifetime, the grace period and the margin, in seconds.
  *
@@ -773,6 +824,26 @@ interface Started {
   seeding: Promise<unknown>;
 }
 
+const UNDEFINED_TABLE = '42P01';
+
+// Writes what a start's configuration gives the store, before the Controller starts. A store with no settings
+// table is left to the start, which refuses it naming its schema, as a store the migrations never built is refused.
+const writeStartSettings = async (
+  client: pg.ClientBase,
+  schema: string,
+  settings: Partial<Settings>,
+): Promise<void> => {
+  await writeStoredSettings(client, schema, settings).catch(
+    (failure: unknown) => {
+      if (!(
+        failure instanceof pg.DatabaseError && failure.code === UNDEFINED_TABLE
+      )) {
+        throw failure;
+      }
+    },
+  );
+};
+
 const startedWith = async (
   database: TestDatabase,
   identityProvider: IdentityProvider,
@@ -839,6 +910,7 @@ const startedWith = async (
       ...state.configuration,
       ...startOverrides,
     });
+    await writeSettingsOnce();
     const { port } = state.configuration;
     const running = await startController({
       ...state.configuration,
@@ -852,6 +924,17 @@ const startedWith = async (
     database.connect('migration'),
     database.connect('runtime'),
   ]);
+  // The settings this harness last wrote, so a start writes only what changed since. A store the test has paused
+  // is then read by no harness step ahead of the Controller's own start, which refuses it.
+  let writtenSettings: Partial<Settings> | undefined;
+  const writeSettingsOnce = async (): Promise<void> => {
+    const settings = storedSettingsOf(state.configuration);
+    if (isDeepStrictEqual(settings, writtenSettings)) {
+      return;
+    }
+    await writeStartSettings(migration, database.schema, settings);
+    writtenSettings = settings;
+  };
   // A token makes no administrator, so whoever acts as one is seeded as one first, under the issuer
   // the Controller trusts as the token is asked for.
   const seedAdministratorOf = (subject: string): Promise<string> => {
@@ -884,6 +967,7 @@ const startedWith = async (
   const registered = (): readonly HarnessApplication[] =>
     state.applications ?? [];
   try {
+    await writeSettingsOnce();
     if (startsController) {
       await startNow();
     }
@@ -946,6 +1030,21 @@ const startedWith = async (
   }
 };
 
+// The settings a database is seeded with for a harness: the template's, with the fixed settings the harness's
+// configuration gives, so a test naming its own issuer, event source or first user is seeded with it.
+const seedOf = ({
+  eventSource,
+  firstUserRole,
+  issuer,
+}: Partial<ControllerConfiguration> = {}): Settings => ({
+  ...TEMPLATE_SETTINGS,
+  ...(eventSource === undefined ? {} : { eventSource }),
+  ...(firstUserRole === undefined
+    ? {}
+    : { firstUser: { realmRole: firstUserRole } }),
+  ...(issuer === undefined ? {} : { issuer }),
+});
+
 /**
  * Stands up everything a test file needs, in order: its own database, cloned through `database.ts`
  * with the retention floor its configuration gives, on the run's PostgreSQL or the test file's own;
@@ -967,7 +1066,7 @@ export const startHarness = async (
     options.template ??
       (options.startsController === false
         ? STARTED_STORE_TEMPLATE
-        : USHER_TEMPLATE),
+        : templateSeededWith(seedOf(options.configuration))),
     {
       retentionFloorSeconds: retentionFloorSeconds({
         ...RETENTION_DEFAULTS,
@@ -1090,6 +1189,11 @@ export const startInstance = async (
     instanceName: `${harness.configuration.instanceName}-beside-${randomBytes(3).toString('hex')}`,
     ...overrides,
   });
+  await writeStartSettings(
+    harness.clients.migration,
+    harness.database.schema,
+    storedSettingsOf(configuration),
+  );
   const running = await startController(configuration);
   const state = { stopped: false };
   const stop = async (): Promise<void> => {

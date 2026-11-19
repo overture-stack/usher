@@ -1,6 +1,5 @@
 import type pg from 'pg';
 
-import type { ControllerConfiguration } from '../configuration/index.js';
 import type { AuditTrail, EventLog } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import type {
@@ -9,10 +8,12 @@ import type {
   TokenVerification,
 } from '../identityProvider/index.js';
 import type { WindowedRefusals } from '../windowedRefusals/index.js';
+import type { ControllerSettings } from '../settings/index.js';
 
-/** What the back-channel logout route reads of the configuration. */
+/** What the back-channel logout route reads of the settings, at each request. */
 export type SignOutSettings = Pick<
-  ControllerConfiguration,
+  ControllerSettings,
+  | 'backChannelLogout'
   | 'backChannelLogoutAudiences'
   | 'clock'
   | 'databaseSchema'
@@ -22,7 +23,7 @@ export type SignOutSettings = Pick<
 
 /** What judging a logout token reads of the configuration. */
 export type LogoutTokenSettings = Pick<
-  ControllerConfiguration,
+  ControllerSettings,
   'backChannelLogoutAudiences' | 'signInTokenMaximumLifetimeSeconds'
 >;
 
@@ -45,6 +46,13 @@ export interface LogoutTokenVerifier {
  */
 export type UnverifiedLogoutReason =
   'invalidSignature' | 'otherIssuer' | 'unreadableToken';
+
+/**
+ * Why a logout token is refused without being read, while the `backChannelLogout` setting is off: the
+ * route relays no sign-out, so no token is read or verified. It is neither a verified token's refusal
+ * nor a failed verification, so it has a type of its own, and its `logoutToken.refusal` names no subject.
+ */
+export type SwitchedOffLogoutReason = 'backChannelLogoutOff';
 
 /** What the back-channel logout route is built from. */
 export interface SignOutRouteSettings {

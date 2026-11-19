@@ -1,6 +1,5 @@
 import type pg from 'pg';
 
-import type { ControllerConfiguration } from '../configuration/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import type { StoreReader } from '../managementApi/index.js';
@@ -8,6 +7,7 @@ import type {
   ResourceStanding,
   StandingLock,
 } from '../resourceStanding/index.js';
+import type { ControllerSettings } from '../settings/index.js';
 
 /** A grant's holder as a request names one: a person by subject, or by address. */
 export type NamedHolder =
@@ -284,10 +284,10 @@ export interface GrantOperationsSettings {
    * schema, the trusted issuer, and the instance's submitter category.
    */
   settings: Pick<
-    ControllerConfiguration,
-    | 'autoAccept'
+    ControllerSettings,
     | 'clock'
     | 'databaseSchema'
+    | 'grantAutoAccept'
     | 'identityProviderIssuer'
     | 'submitterCategory'
   >;

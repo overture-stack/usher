@@ -2,16 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import pg from 'pg';
 
-import {
-  type MigrationOptions,
-  type SeededPolicySettings,
-  writeSeededPolicy,
-} from './controller.js';
-import {
-  type DatabaseTemplate,
-  USHER_SCHEMA,
-  USHER_TEMPLATE,
-} from './database.js';
+import { USHER_SCHEMA } from './database.js';
 import { type Cleanup, eventually } from './waiting.js';
 
 /**
@@ -63,8 +54,9 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  *   alone: the retention floor the deployment command sets, which `trim_notices` reads (R3).
  * - `policy_generation`, one row: the generation the policy triggers raise in each change's
  *   transaction, which the payload cache's key carries (R6).
- * - `rules_digest`, one row: the digest of the baseline and the signed-in rule the Controller last
- *   started with, from which a start under changed rules writes one baseline notice (#210 Q2).
+ * - `settings`, one row per setting, and `settings_generation`, one row: the settings the Controller
+ *   reads from the store, and the generation each change of them raises; `identity_provider_configuration`
+ *   holds the identity provider's identifiers as the Controller last started with them.
  * - `grants.ended_at`: when a grant on the same terms replaced a grant once it had expired, after
  *   which the index allowing one live grant per holder, resource, category and role no longer
  *   counts it; `null` while it has not been replaced (ruled).
@@ -366,17 +358,26 @@ export const POLICY_TABLES = {
     },
     name: 'roles',
   },
-  rulesDigest: {
-    columns: {
-      digest: 'digest',
-      recordedAt: 'recorded_at',
-      singleton: 'singleton',
-    },
-    name: 'rules_digest',
+  identityProviderConfiguration: {
+    columns: { name: 'name', recordedAt: 'recorded_at', value: 'value' },
+    name: 'identity_provider_configuration',
   },
   schemaMigrations: {
     columns: { appliedAt: 'applied_at', checksum: 'checksum', name: 'name' },
     name: 'schema_migrations',
+  },
+  settings: {
+    columns: {
+      changedAt: 'changed_at',
+      changedBy: 'changed_by',
+      name: 'name',
+      value: 'value',
+    },
+    name: 'settings',
+  },
+  settingsGeneration: {
+    columns: { generation: 'generation', singleton: 'singleton' },
+    name: 'settings_generation',
   },
   sidSignOuts: {
     columns: {
@@ -1585,49 +1586,6 @@ export const seedPolicy = (
   fixture: PolicyFixture,
 ): Promise<SeededPolicy> =>
   inTransactionAs(client, SYSTEM_ACTOR, () => seedWithin(client, fixture));
-
-/**
- * What the template seeds the policy under: the rules a harness's Controller starts under unless a test
- * sets its own, count, view and export for each, so a Controller started on a store cloned from the
- * template under the harness's configuration finds them recorded; and the harness's event source and
- * instance, which the template's `baseline.change` event names. The clock is the system's.
- */
-export const STARTED_STORE_SETTINGS: Readonly<
-  Omit<SeededPolicySettings, 'databaseSchema'>
-> = Object.freeze({
-  baseline: Object.freeze(['count', 'view', 'export'] as const),
-  clock: Object.freeze({ now: () => Date.now() }),
-  eventSource: 'https://usher.example.org/controller',
-  instanceName: 'usher-test-1',
-  signedInRule: Object.freeze(['count', 'view', 'export'] as const),
-});
-
-/**
- * The Controller's template with the policy a start seeds written by the Controller's own code
- * (#207 Q11), under {@link STARTED_STORE_SETTINGS}: the capability vocabulary, {@link SEEDED_ROLES}
- * with their capabilities, and the digest of the rules with the first start's `baseline.change` row.
- * It is a store as a started Controller leaves it, but for the key-encryption key's fingerprint, which
- * the first start under a key records: for a test seeding a fixture that names the seeded roles while
- * starting no Controller. Run again on a clone, it sets the retention floor alone, as the migrations
- * do, since the Controller's writes leave a store holding them untouched.
- */
-export const STARTED_STORE_TEMPLATE: DatabaseTemplate = Object.freeze({
-  migrate: async (options: MigrationOptions) => {
-    await USHER_TEMPLATE.migrate(options);
-    const client = new pg.Client({ connectionString: options.databaseUrl });
-    await client.connect();
-    try {
-      await writeSeededPolicy(client, {
-        ...STARTED_STORE_SETTINGS,
-        databaseSchema: options.schema,
-      });
-    } finally {
-      await client.end();
-    }
-  },
-  name: 'usher_template_started',
-  schema: USHER_SCHEMA,
-});
 
 /**
  * Fixtures combined into one: each record merged by name, a later fixture's entry winning; each list

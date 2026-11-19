@@ -61,7 +61,8 @@ const {
   principalRevocations,
   resources,
   roles,
-  rulesDigest,
+	identityProviderConfiguration,
+	settings,
   schemaMigrations,
   sidSignOuts,
   subjectSignOuts,
@@ -126,11 +127,12 @@ const inRepeatedHour = (minute: number): string =>
 const secondsSinceEpoch = (minute: number): number =>
   Date.parse(`2026-11-01T05:${String(minute).padStart(2, '0')}:00Z`) / 1000;
 
-// The times the store writes itself, which no caller gives: a change record's and an applied
-// migration's.
+// The times the store writes itself, which no caller gives: a change record's, an applied migration's and the
+// seed row's, each stamped by the store's own clock when the store writes it.
 const WRITTEN_BY_THE_STORE: ReadonlySet<string> = new Set([
   `${changeRecords.name}.${changeRecords.columns.recordedAt}`,
   `${schemaMigrations.name}.${schemaMigrations.columns.appliedAt}`,
+  'settings_seed.seeded_at',
 ]);
 
 const TIME_TYPES = new Set([
@@ -322,7 +324,8 @@ suite("the schema's shape", () => {
         [resources.columns.retiredAt, 3],
         [resources.columns.updatedAt, 2],
       ],
-      rulesDigest: [[rulesDigest.columns.recordedAt, 45]],
+			identityProviderConfiguration: [[identityProviderConfiguration.columns.recordedAt, 45]],
+			settings: [[settings.columns.changedAt, 46]],
       sidSignOuts: [
         [sidSignOuts.columns.expiresAt, 58],
         [sidSignOuts.columns.signedOutAt, 40],
@@ -460,11 +463,17 @@ suite("the schema's shape", () => {
           [exchangedSids.columns.sid]: 'instant-probe-exchanged-sid',
           ...timed(times.exchangedSids),
         });
-        await toronto.query(`DELETE FROM ${qualified(rulesDigest)}`);
-        await insertRow(toronto, rulesDigest, {
-          [rulesDigest.columns.digest]: randomBytes(32).toString('base64url'),
-          ...timed(times.rulesDigest),
-        });
+			await toronto.query(
+				`UPDATE ${qualified(identityProviderConfiguration)} SET ${identityProviderConfiguration.columns.value} = '"probe"'::jsonb, ${identityProviderConfiguration.columns.recordedAt} = $1 WHERE ${identityProviderConfiguration.columns.name} = 'managementAudience'`,
+				[inRepeatedHour(45)],
+			);
+			await toronto.query('BEGIN');
+			await toronto.query("SELECT set_config('usher.actor_type', 'system', true)");
+			await toronto.query(
+				`UPDATE ${qualified(settings)} SET ${settings.columns.changedAt} = $1 WHERE ${settings.columns.name} = 'noticePageLimit'`,
+				[inRepeatedHour(46)],
+			);
+			await toronto.query('COMMIT');
         return [
           {
             columns: times.users,
@@ -563,10 +572,16 @@ suite("the schema's shape", () => {
             table: subjectSignOuts,
           },
           {
-            columns: times.rulesDigest,
-            key: rulesDigest.columns.singleton,
-            keyValue: true,
-            table: rulesDigest,
+					columns: times.identityProviderConfiguration,
+					key: identityProviderConfiguration.columns.name,
+					keyValue: 'managementAudience',
+					table: identityProviderConfiguration,
+				},
+				{
+					columns: times.settings,
+					key: settings.columns.name,
+					keyValue: 'noticePageLimit',
+					table: settings,
           },
           {
             columns: times.globalRevocations,

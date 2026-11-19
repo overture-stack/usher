@@ -96,9 +96,9 @@ export const createNoticeChannel = ({
 }: NoticeChannelSettings): NoticeChannel => {
   const tail = createNoticeTail({
     log: eventLog,
-    pageLimit: settings.noticePageLimit,
+		pageLimit: () => settings.noticePageLimit,
     reader,
-    rereadMilliseconds: settings.noticeRereadMilliseconds,
+		rereadMilliseconds: () => settings.noticeRereadMilliseconds,
   });
   const streams = createNoticeStreams({
     cursors,

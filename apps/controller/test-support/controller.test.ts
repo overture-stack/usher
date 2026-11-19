@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { suite, test } from 'node:test';
 
+import { DEFAULT_GRANT_RULES } from '../src/settings/readGrantRules.js';
+
 import {
   captureLog,
   changedVariables,
@@ -10,11 +12,14 @@ import {
   ENVIRONMENT_VARIABLES,
   environmentFor,
   type FieldWithVariable,
+  grantRulesOf,
   type PendingSettings,
   SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES,
   schemaMigrationEnvironmentFor,
   readRefusal,
   refusalText,
+  type StoredField,
+  storedSettingsOf,
 } from './controller.js';
 
 const discarding = (): Writable =>
@@ -86,9 +91,7 @@ const OTHER_VALUES: {
   [Field in FieldWithVariable]: ControllerConfiguration[Field];
 } = {
   apiDocsClient: 'usher-ui-test',
-  autoAccept: true,
   backChannelLogoutAudiences: ['portal-test', 'submission-test'],
-  baseline: [],
   cursorKey: syntheticKey(5),
   databaseAllowUnverifiedConnection: true,
   databaseControlConnections: 3,
@@ -96,31 +99,39 @@ const OTHER_VALUES: {
   databasePassword: freshSecret(),
   databaseSchema: 'usher_other',
   databaseUrl: 'postgres://usher_controller@127.0.0.1:5433/usher_test',
-  eventSource: 'https://usher-two.example.org/controller',
-  firstUserRole: 'ims-usher-first-user',
-  heartbeatMilliseconds: 500,
   host: '::1',
   identityProviderIssuer: 'https://auth.example.org/realms/usher',
   instanceName: 'usher-test-2',
-  issuer: 'https://usher-two.example.org',
   keyEncryptionKey: freshSecret(),
   managementAudience: 'usher-management-other',
   managementClients: ['usher-ui-test', 'usher-cli-test'],
+  port: 8443,
+  serviceAccountRole: 'ims-usher-service',
+  storeTimeoutMilliseconds: 250,
+  trustedProxies: ['127.0.0.1', '::1'],
+};
+
+// A value other than the configuration's for each setting the store holds, as the harness writes it there.
+const STORED_VALUES: {
+  [Field in StoredField]: ControllerConfiguration[Field];
+} = {
+  autoAccept: true,
+  baseline: [],
+  eventSource: 'https://usher-two.example.org/controller',
+  firstUserRole: 'ims-usher-first-user',
+  heartbeatMilliseconds: 500,
+  issuer: 'https://usher-two.example.org',
   noticePageLimit: 20,
   noticeRereadMilliseconds: 250,
-  port: 8443,
   retentionGraceSeconds: 90,
   retentionMarginSeconds: 45,
-  serviceAccountRole: 'ims-usher-service',
   signInTokenMaximumLifetimeSeconds: 900,
   signedInRule: ['view'],
-  storeTimeoutMilliseconds: 250,
   streamLimitPerAudience: 2,
   streamMaximumLifetimeSeconds: 60,
   streamQueueLimit: 10,
   submitterCategory: 'global.controlled',
   tokenLifetimeSeconds: 120,
-  trustedProxies: ['127.0.0.1', '::1'],
 };
 
 // A value other than the configuration's for each setting the Controller does not read yet.
@@ -158,7 +169,8 @@ suite('the environment a configuration is expressed as', () => {
       Object.keys(atEpoch).length,
       Object.keys(CONFIGURATION).length -
         2 -
-        Object.keys(PENDING_VALUES).length,
+        Object.keys(PENDING_VALUES).length -
+        Object.keys(STORED_VALUES).length,
     );
   });
 
@@ -168,10 +180,10 @@ suite('the environment a configuration is expressed as', () => {
       Object.keys(environmentFor(CONFIGURATION)).toSorted(),
     );
     assert.equal(
-      ENVIRONMENT_VARIABLES.streamQueueLimit,
+      ENVIRONMENT_VARIABLES.storeTimeoutMilliseconds,
       changedVariables(
         environmentFor(CONFIGURATION),
-        environmentFor({ ...CONFIGURATION, streamQueueLimit: 7 }),
+        environmentFor({ ...CONFIGURATION, storeTimeoutMilliseconds: 7 }),
       )[0],
     );
   });
@@ -224,6 +236,90 @@ suite('the environment a configuration is expressed as', () => {
 
     assert.ok(changedByField.every((changed) => changed.length === 0));
   });
+
+  test('gives the controller none of the settings the store holds, so the environment never sets a replaced variable', () => {
+    const base = environmentFor(CONFIGURATION);
+
+    const changedByField = Object.entries(STORED_VALUES).map(([field, value]) =>
+      changedVariables(
+        base,
+        environmentFor({ ...CONFIGURATION, [field]: value }),
+      ),
+    );
+
+    assert.ok(changedByField.every((changed) => changed.length === 0));
+  });
+});
+
+suite('the settings a configuration gives the store', () => {
+  test('gives the grant rules the product default when the baseline and the signed-in rule are the defaults', () => {
+    assert.deepEqual(
+      grantRulesOf({
+        baseline: CONFIGURATION.baseline,
+        signedInRule: CONFIGURATION.signedInRule,
+      }),
+      DEFAULT_GRANT_RULES,
+    );
+  });
+
+  test('gives the baseline to everyone and to signed-in principals on open resources, and the signed-in rule on registered ones', () => {
+    assert.deepEqual(
+      grantRulesOf({ baseline: ['view'], signedInRule: ['count'] }),
+      [
+        {
+          resources: [
+            {
+              accessLevel: 'open',
+              categories: [{ actions: ['view'], name: 'global.unmarked' }],
+            },
+          ],
+          to: 'everyone',
+        },
+        {
+          resources: [
+            {
+              accessLevel: 'open',
+              categories: [{ actions: ['view'], name: 'global.unmarked' }],
+            },
+            {
+              accessLevel: 'registered',
+              categories: [{ actions: ['count'], name: 'global.unmarked' }],
+            },
+          ],
+          to: 'signedIn',
+        },
+      ],
+    );
+  });
+
+  test('gives an empty baseline no category at all, so nothing is read on open resources', () => {
+    assert.deepEqual(grantRulesOf({ baseline: [], signedInRule: [] })[0], {
+      resources: [{ accessLevel: 'open', categories: [] }],
+      to: 'everyone',
+    });
+  });
+
+  test('gives each stored field its setting, the first user as its realm role', () => {
+    assert.deepEqual(storedSettingsOf(CONFIGURATION), {
+      eventSource: CONFIGURATION.eventSource,
+      firstUser: { realmRole: CONFIGURATION.firstUserRole },
+      grantAutoAccept: CONFIGURATION.autoAccept,
+      grantRules: DEFAULT_GRANT_RULES,
+      heartbeatMilliseconds: CONFIGURATION.heartbeatMilliseconds,
+      issuer: CONFIGURATION.issuer,
+      noticePageLimit: CONFIGURATION.noticePageLimit,
+      noticeRereadMilliseconds: CONFIGURATION.noticeRereadMilliseconds,
+      retentionGraceSeconds: CONFIGURATION.retentionGraceSeconds,
+      retentionMarginSeconds: CONFIGURATION.retentionMarginSeconds,
+      signInTokenMaximumLifetimeSeconds:
+        CONFIGURATION.signInTokenMaximumLifetimeSeconds,
+      streamLimitPerAudience: CONFIGURATION.streamLimitPerAudience,
+      streamMaximumLifetimeSeconds: CONFIGURATION.streamMaximumLifetimeSeconds,
+      streamQueueLimit: CONFIGURATION.streamQueueLimit,
+      submitterCategory: CONFIGURATION.submitterCategory,
+      tokenLifetimeSeconds: CONFIGURATION.tokenLifetimeSeconds,
+    });
+  });
 });
 
 suite('the helpers for a refusal test', () => {
@@ -231,11 +327,15 @@ suite('the helpers for a refusal test', () => {
     assert.deepEqual(
       changedVariables(
         environmentFor(CONFIGURATION),
-        environmentFor({ ...CONFIGURATION, port: 9, tokenLifetimeSeconds: 60 }),
+        environmentFor({
+          ...CONFIGURATION,
+          port: 9,
+          storeTimeoutMilliseconds: 60,
+        }),
       ),
       [
         ENVIRONMENT_VARIABLES.port,
-        ENVIRONMENT_VARIABLES.tokenLifetimeSeconds,
+        ENVIRONMENT_VARIABLES.storeTimeoutMilliseconds,
       ].toSorted(),
     );
   });
@@ -289,23 +389,22 @@ suite('the helpers for a refusal test', () => {
 });
 
 suite('the environment a migration run is expressed as', () => {
-  test("moves the URL's password to its own variable, names the runtime role as the user of the controller's URL, which carries no password, and gives the floor as a token lifetime with no grace period or margin", () => {
+  test("moves the URL's password to its own variable, names the runtime role as the user of the controller's URL, which carries no password, and names the seed file", () => {
     const password = randomBytes(12).toString('base64url');
 
     const environment = schemaMigrationEnvironmentFor({
+      seedFile: '/run/usher/seed.json',
       databaseUrl: `postgres://usher_migration:${password}@127.0.0.1:5432/usher_test`,
-      retentionFloorSeconds: 777,
       runtimeRole: 'usher_controller',
       schema: 'usher',
     });
 
     assert.deepEqual(environment, {
+      [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.seedFile]:
+        '/run/usher/seed.json',
       [ENVIRONMENT_VARIABLES.databaseSchema]: 'usher',
       [ENVIRONMENT_VARIABLES.databaseUrl]:
         'postgres://usher_controller@127.0.0.1:5432/usher_test',
-      [ENVIRONMENT_VARIABLES.retentionGraceSeconds]: '0',
-      [ENVIRONMENT_VARIABLES.retentionMarginSeconds]: '0',
-      [ENVIRONMENT_VARIABLES.tokenLifetimeSeconds]: '777',
       [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databasePassword]: password,
       [SCHEMA_MIGRATION_ENVIRONMENT_VARIABLES.databaseUrl]:
         'postgres://usher_migration@127.0.0.1:5432/usher_test',

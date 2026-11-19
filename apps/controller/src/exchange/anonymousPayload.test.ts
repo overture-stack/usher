@@ -22,7 +22,7 @@ const CALCULATION: Calculation = {
     },
   },
   resourceCategories: { 'étude « Nord » "A1"': ['resource.local-panel'] },
-  rules: ['baseline'],
+	rules: ['everyone'],
   servedResources: ['étude « Nord » "A1"', 'STUDY-C3'],
 };
 

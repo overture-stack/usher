@@ -48,15 +48,16 @@ const MIGRATED_ROLE: HeldPrivileges = {
   ],
   memberships: [],
   relations: [
-    ...[...RUNTIME_WRITES].map(([name, { deletes, updates }]) =>
+    ...[...RUNTIME_WRITES].map(([name, { deletes, inserts, updates }]) =>
       table(
         name,
-        ['INSERT', ...(deletes ? ['DELETE'] : [])],
+        [...(inserts ? ['INSERT'] : []), ...(deletes ? ['DELETE'] : [])],
         updates === 'every column' ? ROW_COLUMNS : updates,
       ),
     ),
     table('change_records'),
     table('notice_retention'),
+    table('settings_generation'),
     table('schema_migrations'),
     {
       ...table('notices_position_seq'),
@@ -103,12 +104,28 @@ const granting =
     }));
 
 suite("the privileges of the controller's database role", () => {
-  test('takes inserts alone into the nominations and the administrators, beside reading them', () => {
+  test('takes inserts into the nominations and the administrators, beside reading them', () => {
     assert.deepEqual(
       ['administrators', 'nominations'].map((name) => RUNTIME_WRITES.get(name)),
       [
-        { deletes: false, updates: [] },
-        { deletes: false, updates: [] },
+        { deletes: false, inserts: true, updates: [] },
+        { deletes: false, inserts: true, updates: [] },
+      ],
+    );
+  });
+
+  test('takes no insert and no delete into the settings or the identifiers of the identity provider, only updates', () => {
+    assert.deepEqual(
+      ['identity_provider_configuration', 'settings'].map((name) =>
+        RUNTIME_WRITES.get(name),
+      ),
+      [
+        { deletes: false, inserts: false, updates: ['recorded_at', 'value'] },
+        {
+          deletes: false,
+          inserts: false,
+          updates: ['changed_at', 'changed_by', 'value'],
+        },
       ],
     );
   });
@@ -144,6 +161,14 @@ suite("the privileges of the controller's database role", () => {
       {
         change: granting('nominations', 'DELETE'),
         found: 'DELETE on nominations',
+      },
+      {
+        change: granting('settings', 'DELETE'),
+        found: 'DELETE on settings',
+      },
+      {
+        change: granting('identity_provider_configuration', 'DELETE'),
+        found: 'DELETE on identity_provider_configuration',
       },
       {
         change: (held) =>
@@ -190,6 +215,10 @@ suite("the privileges of the controller's database role", () => {
       {
         change: granting('users', 'DELETE'),
         found: { object: 'users', privilege: 'DELETE' },
+      },
+      {
+        change: granting('settings', 'INSERT'),
+        found: { object: 'settings', privilege: 'INSERT' },
       },
       {
         change: granting('users', 'REFERENCES'),
@@ -336,8 +365,9 @@ suite('the problems refusing a start on a database role', () => {
 
     const [problem] = privilegeProblems(held);
 
-    assert.equal(problem?.variable, 'USHER_DATABASE_URL');
-    assert.match(problem?.rule ?? '', /may not insert into audit_log/u);
+    assert.ok(problem !== undefined && 'variable' in problem);
+    assert.equal(problem.variable, 'USHER_DATABASE_URL');
+    assert.match(problem.rule, /may not insert into audit_log/u);
   });
 
   test("names the schema's variable and the schema migration command when the schema holds no record of applied migrations, and names the schema's absence alone when there is no schema", () => {
@@ -397,7 +427,9 @@ suite('the problems refusing a start on a database role', () => {
     });
 
     assert.deepEqual(
-      [...absent, ...unusable].map(({ variable }) => variable),
+      [...absent, ...unusable].map((problem) =>
+        'variable' in problem ? problem.variable : problem.setting,
+      ),
       ['USHER_DATABASE_SCHEMA', 'USHER_DATABASE_SCHEMA'],
     );
     assert.notEqual(absent[0]?.rule, unusable[0]?.rule);

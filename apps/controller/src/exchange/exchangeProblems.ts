@@ -69,6 +69,12 @@ export const EXCHANGE_PROBLEMS = Object.freeze({
     'Signing key not confirmed yet',
     "The sign-in token's signing key is not confirmed yet, and no token was issued. Try again once the seconds in Retry-After have passed.",
   ),
+	storedSettingsInvalid: problem(
+		'storedSettingsInvalid',
+		503,
+		'Stored settings invalid',
+		'The policy store holds a setting this release cannot read as valid, so no token was issued. Try again once the setting is corrected.',
+	),
   storeUnavailable: problem(
     'storeUnavailable',
     503,

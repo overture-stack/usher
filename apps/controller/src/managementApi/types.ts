@@ -1,6 +1,5 @@
 import type pg from 'pg';
 
-import type { ControllerConfiguration } from '../configuration/index.js';
 import type {
   AuditEventType,
   AuditTrail,
@@ -11,6 +10,7 @@ import type {
 import type { PersonIdentity } from '../findOrRecordPerson.js';
 import type { Problem } from '../http/index.js';
 import type { TokenVerification } from '../identityProvider/index.js';
+import type { ControllerSettings, Settings } from '../settings/index.js';
 import type {
   CurrencyRefusal,
   Session,
@@ -27,11 +27,14 @@ export interface Principal {
    */
   administrator: boolean;
 
-  /** Whether the token carries the configured first-user realm role, compared by its exact name. */
+  /** Whether the token is the first user as the configuration names one: holding its realm role, or bearing its subject. */
   firstUser: boolean;
 
   /** The identity provider's subject, the token's `sub`. */
   subject: string;
+
+  /** The seconds between the token's issue and its expiry, `exp` less `iat`, which a change of the sign-in token maximum judges. */
+  tokenLifetimeSeconds: number;
 
   type: 'human' | 'serviceAccount';
 }
@@ -47,13 +50,11 @@ export interface AdministratorStatus {
 
 /** What the management API reads of the configuration to judge a management token. */
 export type ManagementTokenSettings = Pick<
-  ControllerConfiguration,
-  | 'firstUserRole'
-  | 'managementAudience'
-  | 'managementClients'
-  | 'serviceAccountRole'
-  | 'signInTokenMaximumLifetimeSeconds'
->;
+  ControllerSettings,
+  'managementAudience' | 'managementClients' | 'serviceAccountRole'
+> &
+  Pick<Settings, 'firstUser'> &
+  Pick<ControllerSettings, 'signInTokenMaximumFor'>;
 
 /**
  * Where the management API verifies a management token: its signature, under the trusted issuer's
@@ -220,7 +221,7 @@ export interface OperationEvent {
  * not the commit took effect and must be safe either way, as a step that only reads is; every step
  * added here is held to that.
  */
-export type AfterCommitStepName = 'keyReload';
+export type AfterCommitStepName = 'keyReload' | 'settingsReread';
 
 /** One Management API operation, as its route and its reading of a request define it. */
 export interface ManagementOperation<Input> {
@@ -252,7 +253,7 @@ export interface ManagementOperation<Input> {
    */
   firstUserOnly?: boolean;
 
-  method: 'DELETE' | 'GET' | 'POST' | 'PUT';
+  method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
   /**
    * Reads its input from the body's object, none when the request sent no body, and from the query's
@@ -297,7 +298,7 @@ export interface ManagementDependencies {
   runAfterCommit(steps: readonly AfterCommitStepName[]): Promise<void>;
 
   settings: ManagementTokenSettings &
-    Pick<ControllerConfiguration, 'clock' | 'identityProviderIssuer'>;
+    Pick<ControllerSettings, 'clock' | 'identityProviderIssuer'>;
 
   /** Reads whether the store refuses a principal, by a revocation of the person or the platform, or a sign-out. */
   storedRefusal(question: StandingQuestion): Promise<StoredRefusal | undefined>;

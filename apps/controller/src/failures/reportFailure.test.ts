@@ -146,12 +146,31 @@ suite("a process entry's failure line", () => {
     });
   });
 
+  test('writes a refusal naming a stored setting with the settings it names, and no variables it does not name', () => {
+    const refusal = new StartRefusal([
+      { rule: 'is missing from the store', setting: 'noticePageLimit' },
+    ]);
+
+    assert.deepEqual(recordOf('the controller failed to start', refusal), {
+      level: FATAL_LEVEL,
+      variables: [],
+      settings: ['noticePageLimit'],
+      message:
+        'the controller refuses to start: the setting noticePageLimit is missing from the store',
+    });
+  });
+
   test("writes each other error of the controller's own with its name and its message, after what failed", async () => {
     const thrownByARun = await rejectionOf(
       migrate({
         databaseUrl: 'postgres://usher_migration@127.0.0.1:5432/usher',
-        retentionFloorSeconds: 0,
-        runtimeRole: 'usher_controller',
+        seed: () =>
+          Promise.reject(
+            new Error('the seed file is not read by this test'),
+          ),
+        clock: { now: () => 0 },
+        eventLog: { error: () => undefined, writeEvent: () => undefined },
+        runtimeRole: '',
         schema: 'usher',
       }),
     );
@@ -195,7 +214,7 @@ suite("a process entry's failure line", () => {
         level: FATAL_LEVEL,
         error: 'ControllerError',
         message:
-          'the schema migration command failed: the schema migrations refuse to run: retentionFloorSeconds must be a whole number of seconds from 1 to 2147483647',
+          'the schema migration command failed: the schema migrations refuse to run: runtimeRole must name an identifier',
       },
     );
   });
@@ -230,7 +249,12 @@ suite("a process entry's failure line", () => {
     const stopped = await rejectionOf(
       migrate({
         databaseUrl: 'postgres://usher_migration@127.0.0.1:5432/usher',
-        retentionFloorSeconds: 390,
+        seed: () =>
+          Promise.reject(
+            new Error('the seed file is not read by this test'),
+          ),
+        clock: { now: () => 0 },
+        eventLog: { error: () => undefined, writeEvent: () => undefined },
         runtimeRole: 'usher_controller',
         schema: 'usher',
         signal: stopping.signal,

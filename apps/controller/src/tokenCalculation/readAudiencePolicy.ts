@@ -1,15 +1,21 @@
 import pg from 'pg';
 
 import { ControllerError } from '../failures/index.js';
+import { SETTING_DEFINITIONS } from '../settings/index.js';
 import type {
-  AudiencePolicy,
+  AudiencePolicyReading,
   PrincipalPolicy,
   ReachingGrant,
   ServedResource,
+  StoredGrantRules,
 } from './types.js';
 
 interface PolicyRow {
   globalCategories: readonly string[];
+
+  // The grant rules' stored value, which the store holds as JSON; null where no row is.
+  grantRules: unknown;
+
   served: readonly ServedResource[];
 }
 
@@ -22,7 +28,8 @@ const tablesIn =
   (name: string): string =>
     `${pg.escapeIdentifier(schema)}.${name}`;
 
-// The global categories, and every resource served by the audience bound as $1.
+// The global categories, every resource served by the audience bound as $1, and the grant rules' stored
+// value, so every part of a read comes from the one snapshot.
 const offeringColumns = (table: (name: string) => string): string => `
   ARRAY(
     SELECT category.name FROM ${table('categories')} category
@@ -44,7 +51,8 @@ const offeringColumns = (table: (name: string) => string): string => `
       FROM ${table('application_resources')} served
       JOIN ${table('resources')} resource ON resource.id = served.resource_id
      WHERE served.application_id = $1::uuid
-  ), '[]'::json) AS served`;
+  ), '[]'::json) AS served,
+  (SELECT setting.value FROM ${table('settings')} setting WHERE setting.name = 'grantRules') AS "grantRules"`;
 
 // A category a grant names, by scope and name, or null where it names none.
 const namedCategory = (alias: string): string =>
@@ -96,6 +104,15 @@ const grantsColumn = (table: (name: string) => string): string => `
       LEFT JOIN ${table('categories')} field_category ON field_category.id = held.field_category_id
   ), '[]'::json) AS grants`;
 
+// Reads the grant rules' stored value by their definition: the rules, or the rule the value breaks, a
+// missing row among them.
+const storedGrantRulesOf = (value: unknown): StoredGrantRules => {
+  const reading = SETTING_DEFINITIONS.grantRules.read(value);
+  return reading.kind === 'read'
+    ? { kind: 'read', rules: reading.value }
+    : { kind: 'refused', rule: reading.rule };
+};
+
 // One statement, so every part of the read comes from one snapshot: a resource retired or suppressed
 // meanwhile is read as it stood beside the categories read with it.
 const policyQuery = (schema: string): string =>
@@ -112,8 +129,9 @@ const principalPolicyQuery = (schema: string): string => {
  * Reads what the calculation needs of the store for one audience, in one statement so all of it comes
  * from one snapshot: the name of every global category, and every resource the audience serves, retired
  * ones included, each with its base tier, whether it is suppressed or retired, and its own categories'
- * names. It returns them as the store holds them and judges none: a retired or suppressed resource is
- * read as any other.
+ * names; and the grant rules as the store holds them. It returns them as the store holds them and judges
+ * none: a retired or suppressed resource is read as any other, and a stored grant rule that breaks its
+ * rule is returned as refused, for the exchange to answer.
  *
  * @param connection where the statement runs: the exchange's transaction.
  * @param schema the Controller's schema.
@@ -124,7 +142,7 @@ export const readAudiencePolicy = async (
   connection: pg.ClientBase,
   schema: string,
   audience: string,
-): Promise<AudiencePolicy> => {
+): Promise<AudiencePolicyReading> => {
   const { rows } = await connection.query<PolicyRow>(policyQuery(schema), [
     audience,
   ]);
@@ -134,7 +152,11 @@ export const readAudiencePolicy = async (
       "the read of an audience's policy answered no row",
     );
   }
-  return { globalCategories: row.globalCategories, served: row.served };
+  return {
+    globalCategories: row.globalCategories,
+    grantRules: storedGrantRulesOf(row.grantRules),
+    served: row.served,
+  };
 };
 
 /**
@@ -160,7 +182,7 @@ export const readPrincipalPolicy = async (
   schema: string,
   audience: string,
   person: string,
-): Promise<PrincipalPolicy> => {
+): Promise<PrincipalPolicy & { grantRules: StoredGrantRules }> => {
   const { rows } = await connection.query<PrincipalPolicyRow>(
     principalPolicyQuery(schema),
     [audience, person],
@@ -173,6 +195,7 @@ export const readPrincipalPolicy = async (
   }
   return {
     globalCategories: row.globalCategories,
+    grantRules: storedGrantRulesOf(row.grantRules),
     grants: row.grants,
     served: row.served,
   };

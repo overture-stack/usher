@@ -13,13 +13,13 @@ steps of [token-calculation.md](token-calculation.md), and adds the channel half
 
 ## What is stored where
 
-| Store                    | Holds                                                                                           | Why there                                                                              |
-| ------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| PostgreSQL               | the policy model, the applications and their keys, the notice stream, and the audit log         | the source of truth: transactional, and read by every Controller instance              |
-| Valkey                   | the payload cache behind the refresh fast path, and the pub/sub waking instances to new notices | shared between instances, and disposable: losing it costs recomputation, never truth   |
-| Controller configuration | the capability vocabulary's defaults, token lifetime, grace period, poll interval               | changes with a release or a deployment, never at runtime                               |
-| Controller secrets       | the key-encryption key, and the credentials for PostgreSQL and Valkey                           | read once at start; registering an application or changing its keys never touches them |
-| Instance configuration   | the baseline and the signed-in rule                                                             | settings of the instance rather than facts about any principal                         |
+| Store                  | Holds                                                                                                                            | Why there                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| PostgreSQL             | the policy model, the applications and their keys, the notice stream, and the audit log                                          | the source of truth: transactional, and read by every Controller instance              |
+| Valkey                 | the payload cache behind the refresh fast path, and the pub/sub waking instances to new notices                                  | shared between instances, and disposable: losing it costs recomputation, never truth   |
+| Instance settings      | the grant rules, token lifetimes, retention and the notice channel's limits, with their defaults                                 | in PostgreSQL: seeded once by the seed file, changed through the Controller            |
+| Controller environment | where the Controller listens, how it reaches PostgreSQL and Valkey, the instance's name, and the identity provider's identifiers | they come from outside Usher, or are needed before the store can be read               |
+| Controller secrets     | the key-encryption key, and the credentials for PostgreSQL and Valkey                                                            | read once at start; registering an application or changing its keys never touches them |
 
 Nothing a principal is granted lives outside PostgreSQL, so a Valkey loss never widens access: the
 fast path finds no cached payload and recomputes from the store. An application's key is stored only
@@ -382,9 +382,10 @@ a step for the deployment runbook.
       singleton          boolean      primary key  default true  check (singleton)
       floor_seconds      integer      not null  check (floor_seconds > 0)
 
-**The retention floor is set by the migration, never by the Controller.** Each migration run stores
-it, and the Controller's role may read it and not write it, so a defect in the Controller can never
-trim a notice a Bridge may still act on.
+**The retention floor is set by the migration and by the three durations it is made of, never by the Controller.**
+Each migration run stores it, and a change to `tokenLifetimeSeconds`, `retentionGraceSeconds` or
+`retentionMarginSeconds` sets it in that change's own transaction. The Controller's role may read it and not
+write it, so a defect in the Controller can never trim a notice a Bridge may still act on.
 
 **Decide E: category notices are filtered by audience, and principal notices are tagged per
 audience.** The Controller holds which applications serve which resources, since a token names only
@@ -446,6 +447,69 @@ table writes the operation, the row's key, its values before and after, and the 
 transaction declared, so a change made outside the Controller's code still leaves a record. The
 audit log says what a person did; the change record says what each row became. A secret column is
 never copied: an application key's record leaves out `encrypted_key`.
+
+### Instance settings
+
+    settings
+      name               text         primary key  check (a setting name)
+      value              jsonb        not null
+      changed_at         timestamptz  not null
+      changed_by         uuid         references users on delete restrict
+
+One row per setting, holding its value as JSON. The schema migration command seeds every row on its first
+run, with the value the seed file gives where it gives one and the default otherwise. The runtime role
+changes `value`, `changed_at` and `changed_by`, and never adds or removes a row. `changed_by` is empty on
+a row the migration seeded.
+
+**The fixed settings cannot change.** A trigger refuses every update and delete of the `eventSource`,
+`firstUser` and `issuer` rows, for every role, the schema's owner included. A `TRUNCATE` of the table is
+refused as a whole.
+
+**Every change to a setting is recorded by the database itself**, under the actor its transaction declared,
+as the policy tables' changes are. A change to `grantRules` also writes the baseline notice, from the same
+trigger, so a hand edit of the row sends it too.
+
+### The settings generation
+
+    settings_generation
+      singleton          boolean      primary key  default true  check (singleton)
+      generation         bigint       not null
+
+One row, advanced by each statement that changes `settings`, in the same transaction. Each Controller
+instance checks it on every notice reread, and when it has moved, re-reads every setting but the grant rules,
+so a change reaches every instance within one `noticeRereadMilliseconds`. The grant rules are read by each
+exchange's own policy read, so they need no generation of their own.
+
+### The identity provider configuration
+
+    identity_provider_configuration
+      name               text         primary key  check (one of the six identifier names)
+      value              jsonb
+      recorded_at        timestamptz
+      check ((value is null) = (recorded_at is null))
+
+One row per identifier the Controller reads from its environment: the identity provider's issuer, the
+management audience, the management clients, the client of the API documentation page, the realm role
+marking service accounts, and the audiences of logout tokens. A null `value` is an identifier not recorded
+yet, and the migration creates all six rows that way. Lists are stored sorted, as sets.
+
+A start that finds a difference writes the new value and `recorded_at`, and records an audit event naming
+what changed. The row holds no actor: the start is the system, and `recorded_at` says when. The runtime role
+updates `value` and `recorded_at` and cannot insert. The table has no change record, since the audit event
+carries each change.
+
+### The seed file record
+
+    settings_seed
+      singleton          boolean      primary key  default true  check (singleton)
+      content            jsonb        not null
+      digest             bytea        not null
+      seeded_at          timestamptz  not null
+
+The seed file's members as the first run read them, with a SHA-256 digest of their canonical JSON. One row,
+written by that run's seeding and never changed or removed: a trigger refuses every update, delete and
+truncate of it. A later run compares the file it reads with this row and changes nothing. The runtime role
+has no access to it.
 
 ---
 
@@ -525,8 +589,8 @@ tables are `audit_log`, `change_records`, `grant_decisions`, `notices` and
 into it could forge history. Any other grant the release does not use, `pg_read_all_data` among
 them, is tolerated and logged at `warning`, naming the privilege and the table. So an instance of one
 release keeps running after the next release's migration adds a grant. A role that may write
-anything must be able to insert into `audit_log`, and a role that may only read still starts, since
-it changes nothing and so has nothing to record.
+anything must be able to insert into `audit_log`, and a role that may only read still starts when the identity provider's record already matches, since
+it then changes nothing and so has nothing to record; it is refused, naming the database URL, when that record would need a write.
 
 ---
 

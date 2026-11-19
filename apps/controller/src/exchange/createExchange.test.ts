@@ -78,15 +78,38 @@ const IDENTITY_PROVIDER = 'https://keycloak.example.org/realms/overture';
 const SERVICE_ACCOUNT_ROLE = 'usher-service-account';
 
 const SETTINGS = Object.freeze({
-  baseline: ['count', 'view', 'export'] as const,
   clock: { now: () => NOW },
   databaseSchema: 'usher',
   identityProviderIssuer: IDENTITY_PROVIDER,
   issuer: 'https://usher.example.org',
   serviceAccountRole: SERVICE_ACCOUNT_ROLE,
-  signedInRule: ['view'] as const,
   tokenLifetimeSeconds: 300,
 });
+
+// The grant rules the store holds in the policy's one read: everyone's count, view and export on open
+// resources' unmarked records, and signed-in principals' view on registered ones.
+const GRANT_RULES = [
+  {
+    resources: [
+      {
+        accessLevel: 'open',
+        categories: [
+          { actions: ['count', 'view', 'export'], name: 'global.unmarked' },
+        ],
+      },
+    ],
+    to: 'everyone',
+  },
+  {
+    resources: [
+      {
+        accessLevel: 'registered',
+        categories: [{ actions: ['view'], name: 'global.unmarked' }],
+      },
+    ],
+    to: 'signedIn',
+  },
+];
 
 // Opaque text standing for assertions and credentials: the stand gives each its check or its
 // judgement, so nothing here is read as a token.
@@ -229,6 +252,7 @@ const SERVED: readonly ServedResource[] = [
 
 const POLICY_ROW = {
   globalCategories: ['community-governed', 'controlled', 'unmarked'],
+  grantRules: GRANT_RULES,
   grants: [],
   served: SERVED,
 };
@@ -250,6 +274,7 @@ const rowsAnswering = (
   text: string,
   refusal: StoredRefusal | undefined,
   grants: readonly ReachingGrant[] = [],
+  grantRules: unknown = POLICY_ROW.grantRules,
 ): readonly unknown[] => {
   if (text.includes('principal_revocations')) {
     return [standingRow(refusal)];
@@ -258,7 +283,7 @@ const rowsAnswering = (
     return [{ id: PERSON_ID }];
   }
   return text.includes('application_resources')
-    ? [{ ...POLICY_ROW, grants }]
+    ? [{ ...POLICY_ROW, grantRules, grants }]
     : [];
 };
 
@@ -405,6 +430,9 @@ interface StandOptions {
    */
   lateRequestThresholdMilliseconds?: number;
 
+  /** The grant rules the store holds for the audience: the baseline the policy row carries by default. */
+  grantRules?: unknown;
+
   /** The grants the store reads as reaching a signed-in principal: none by default. */
   grants?: readonly ReachingGrant[];
 
@@ -442,6 +470,7 @@ const standUp = (
     commitFailure,
     confirmationSettled = Promise.resolve(),
     deadlineMilliseconds = CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS,
+    grantRules,
     grants,
     judge,
     lateRequestThresholdMilliseconds = LATE_REQUEST_THRESHOLD_MILLISECONDS,
@@ -603,7 +632,7 @@ const standUp = (
           if (readFailure !== undefined) {
             throw readFailure;
           }
-          return { rows: rowsAnswering(text, standing, grants) };
+          return { rows: rowsAnswering(text, standing, grants, grantRules) };
         };
         const opened: AuditTransaction<pg.ClientBase> = {
           // A client that never connects, its query answered here.
@@ -1318,7 +1347,7 @@ suite('the token exchange', () => {
             generatedAt: new Date(SECONDS * 1000).toISOString(),
             grantCount: 0,
             result: 'succeeded',
-            rules: ['baseline'],
+            rules: ['everyone'],
             sourceIp: '127.0.0.1',
             tokenTtl: 300,
             userId: null,
@@ -1555,6 +1584,38 @@ suite('the token exchange', () => {
       ]);
     });
 
+    test('is answered 503 storedSettingsInvalid, issuing no token, when the grant rules the store holds break their rule, anonymous or signed in, the exchange recorded failed as storedSettingsInvalid', async (context) => {
+      const anonymous = standUp(context, {
+        grantRules: [{ resources: [], to: 'anyone' }],
+      });
+      const signedIn = standUp(context, {
+        grantRules: [{ resources: [], to: 'anyone' }],
+      });
+
+      const answers = [
+        await post(anonymous),
+        await post(signedIn, withCredential('credential-accepted')),
+      ];
+
+      assert.deepEqual(
+        answers.map(problemOf),
+        answers.map(() => ({ code: 'storedSettingsInvalid', status: 503 })),
+      );
+      const failure = {
+        actor: { type: 'anonymous' },
+        data: {
+          reason: 'storedSettingsInvalid',
+          result: 'failed',
+          sourceIp: '127.0.0.1',
+          userId: null,
+        },
+        severity: 'error',
+        type: 'token.exchange',
+      };
+      assert.deepEqual(recordedIn(anonymous), [failure]);
+      assert.deepEqual(recordedIn(signedIn), [failure]);
+    });
+
     test('is answered 503 signingKeyUnconfirmed with its seconds in Retry-After while its signing key is not confirmed yet, the exchange recorded as denied at warning naming the application', async (context) => {
       const stand = standUp(context);
 
@@ -1674,7 +1735,7 @@ suite('the token exchange', () => {
             generatedAt: new Date(SECONDS * 1000).toISOString(),
             grantCount: 0,
             result: 'succeeded',
-            rules: ['baseline', 'signedIn'],
+            rules: ['everyone', 'signedIn'],
             sourceIp: '127.0.0.1',
             tokenTtl: 300,
             userId: 'subject-ana',

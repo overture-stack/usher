@@ -39,6 +39,9 @@ const databaseError = (code: string): pg.DatabaseError =>
     code,
   });
 
+// The grant rules the store holds when they are valid: none, as a list.
+const VALID_GRANT_RULES: readonly unknown[] = [];
+
 const RECORDED = [
   { checksum: 'a1'.repeat(32), name: '0001_policy_store' },
   { checksum: 'b2'.repeat(32), name: '0002_notice_stream' },
@@ -67,17 +70,34 @@ suite("readiness's probe of the store", () => {
     const answers = await Promise.all(
       ['off', 'on', 'unexpected'].map((readOnly) =>
         readStoreProbe(
-          answering([{ readOnly, recorded: RECORDED }]).reader,
+          answering([
+            { grantRules: VALID_GRANT_RULES, readOnly, recorded: RECORDED },
+          ]).reader,
           'usher',
         ),
       ),
     );
 
     assert.deepEqual(answers, [
-      { readOnly: false, recorded: RECORDED },
-      { readOnly: true, recorded: RECORDED },
-      { readOnly: true, recorded: RECORDED },
+      { grantRulesValid: true, readOnly: false, recorded: RECORDED },
+      { grantRulesValid: true, readOnly: true, recorded: RECORDED },
+      { grantRulesValid: true, readOnly: true, recorded: RECORDED },
     ]);
+  });
+
+  test('reads the stored grant rules as invalid when the stored value breaks their rule, and as valid when it does not', async () => {
+    const [invalid, missing] = await Promise.all(
+      [[{ resources: [], to: 'anyone' }], null].map((grantRules) =>
+        readStoreProbe(
+          answering([{ grantRules, readOnly: 'off', recorded: RECORDED }])
+            .reader,
+          'usher',
+        ),
+      ),
+    );
+
+    assert.equal(invalid?.grantRulesValid, false);
+    assert.equal(missing?.grantRulesValid, false);
   });
 
   test('fails naming the record unreadable when the schema holds no record, the role may not read it, or the store gives no answer', async () => {

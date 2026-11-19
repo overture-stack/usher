@@ -3,8 +3,6 @@ import {
   ENVIRONMENT_VARIABLES,
   REPLACED_VARIABLES,
 } from './environmentVariables.js';
-import { readRecordRule } from './readRecordRule.js';
-import { readRetentionDurations } from './retention.js';
 import type {
   Clock,
   ConfigurationEnvironment,
@@ -16,7 +14,6 @@ import {
   read,
   readAddresses,
   readDatabaseUrl,
-  readGlobalCategory,
   readInteger,
   readKey,
   readList,
@@ -32,9 +29,6 @@ import {
 
 // The greatest delay a Node timer keeps; a longer one fires at once.
 const LONGEST_TIMER_MILLISECONDS = 2_147_483_647;
-
-// The least a stream's maximum lifetime may be, so a mistyped value cannot end every stream at once.
-const STREAM_MAXIMUM_LIFETIME_FLOOR_SECONDS = 60;
 
 const SYSTEM_CLOCK: Clock = Object.freeze({ now: () => Date.now() });
 
@@ -65,10 +59,6 @@ export const readConfiguration = (
     name: ENVIRONMENT_VARIABLES[field],
     value: environment[ENVIRONMENT_VARIABLES[field]],
   });
-  const retention = readRetentionDurations(variable);
-  const firstUserRole = readText(variable('firstUserRole'), {
-    fallback: 'usher-first-user',
-  });
   const managementClients = readList(variable('managementClients'));
   const databaseAllowUnverifiedConnection = readSwitch(
     variable('databaseAllowUnverifiedConnection'),
@@ -88,11 +78,9 @@ export const readConfiguration = (
             )
           : read(client),
     ),
-    autoAccept: readSwitch(variable('autoAccept'), false),
     backChannelLogoutAudiences: readList(
       variable('backChannelLogoutAudiences'),
     ),
-    baseline: readRecordRule(variable('baseline')),
     cursorKey: readKey(variable('cursorKey')),
     databaseAllowUnverifiedConnection,
     databaseControlConnections: readInteger(
@@ -119,90 +107,38 @@ export const readConfiguration = (
             databaseAllowUnverifiedConnection.value,
         ),
     ),
-    eventSource: readText(variable('eventSource')),
-    firstUserRole,
-    heartbeatMilliseconds: readInteger(variable('heartbeatMilliseconds'), {
-      fallback: 10_000,
-      maximum: LONGEST_TIMER_MILLISECONDS,
-      minimum: 1,
-    }),
     host: readText(variable('host')),
     identityProviderIssuer: readSecureUrl(variable('identityProviderIssuer')),
     instanceName: readText(variable('instanceName')),
-    issuer: readText(variable('issuer')),
     keyEncryptionKey: readKey(variable('keyEncryptionKey')),
     managementAudience: readText(variable('managementAudience')),
     managementClients,
-    noticePageLimit: readInteger(variable('noticePageLimit'), {
-      fallback: 500,
-      minimum: 1,
-    }),
-    noticeRereadMilliseconds: readInteger(
-      variable('noticeRereadMilliseconds'),
-      { fallback: 2000, maximum: LONGEST_TIMER_MILLISECONDS, minimum: 1 },
-    ),
     port: readInteger(variable('port'), { maximum: 65_535, minimum: 0 }),
-    retentionGraceSeconds: retention.retentionGraceSeconds,
-    retentionMarginSeconds: retention.retentionMarginSeconds,
-    // Equal names would mark the first user as a service account.
-    serviceAccountRole: then(
-      readText(variable('serviceAccountRole'), {
-        fallback: 'usher-service-account',
-      }),
-      (role): Reading<string> =>
-        firstUserRole.kind === 'read' && role === firstUserRole.value
-          ? refused(
-              variable('serviceAccountRole'),
-              `must name a role other than the one in ${ENVIRONMENT_VARIABLES.firstUserRole}`,
-            )
-          : read(role),
-    ),
-    signInTokenMaximumLifetimeSeconds: readInteger(
-      variable('signInTokenMaximumLifetimeSeconds'),
-      { minimum: 1 },
-    ),
-    signedInRule: readRecordRule(variable('signedInRule')),
+    serviceAccountRole: readText(variable('serviceAccountRole'), {
+      fallback: 'usher-service-account',
+    }),
     storeTimeoutMilliseconds: readInteger(
       variable('storeTimeoutMilliseconds'),
       { fallback: 5000, maximum: LONGEST_TIMER_MILLISECONDS, minimum: 1 },
     ),
-    streamLimitPerAudience: readInteger(variable('streamLimitPerAudience'), {
-      fallback: 64,
-      minimum: 1,
-    }),
-    streamMaximumLifetimeSeconds: readInteger(
-      variable('streamMaximumLifetimeSeconds'),
-      { fallback: 900, minimum: STREAM_MAXIMUM_LIFETIME_FLOOR_SECONDS },
-    ),
-    streamQueueLimit: readInteger(variable('streamQueueLimit'), {
-      fallback: 1000,
-      minimum: 1,
-    }),
-    submitterCategory: readGlobalCategory(
-      variable('submitterCategory'),
-      'global.unmarked',
-    ),
-    tokenLifetimeSeconds: retention.tokenLifetimeSeconds,
     trustedProxies: readAddresses(variable('trustedProxies')),
   } satisfies Record<FieldWithVariable, Reading<unknown>>;
   const replaced = Object.entries(REPLACED_VARIABLES).flatMap(
-    ([variable, replacement]) =>
-      environment[variable] === undefined
+    ([name, replacement]) =>
+      environment[name] === undefined
         ? []
-        : [{ rule: `is replaced by ${replacement}: unset it`, variable }],
+        : [{ rule: `is replaced by ${replacement}: unset it`, variable: name }],
   );
   const problems = [
+    ...replaced,
     ...Object.values(readings).flatMap((reading) =>
       reading.kind === 'refused' ? [reading.problem] : [],
     ),
-    ...replaced,
   ];
   if (problems.length === 0) {
     return {
       apiDocsClient: valueOf(readings.apiDocsClient),
-      autoAccept: valueOf(readings.autoAccept),
       backChannelLogoutAudiences: valueOf(readings.backChannelLogoutAudiences),
-      baseline: valueOf(readings.baseline),
       clock: SYSTEM_CLOCK,
       cursorKey: valueOf(readings.cursorKey),
       databaseAllowUnverifiedConnection: valueOf(
@@ -215,35 +151,16 @@ export const readConfiguration = (
       databasePassword: valueOf(readings.databasePassword),
       databaseSchema: valueOf(readings.databaseSchema),
       databaseUrl: valueOf(readings.databaseUrl),
-      eventSource: valueOf(readings.eventSource),
-      firstUserRole: valueOf(readings.firstUserRole),
-      heartbeatMilliseconds: valueOf(readings.heartbeatMilliseconds),
       host: valueOf(readings.host),
       identityProviderIssuer: valueOf(readings.identityProviderIssuer),
       instanceName: valueOf(readings.instanceName),
-      issuer: valueOf(readings.issuer),
       keyEncryptionKey: valueOf(readings.keyEncryptionKey),
       logStream: process.stdout,
       managementAudience: valueOf(readings.managementAudience),
       managementClients: valueOf(readings.managementClients),
-      noticePageLimit: valueOf(readings.noticePageLimit),
-      noticeRereadMilliseconds: valueOf(readings.noticeRereadMilliseconds),
       port: valueOf(readings.port),
-      retentionGraceSeconds: valueOf(readings.retentionGraceSeconds),
-      retentionMarginSeconds: valueOf(readings.retentionMarginSeconds),
       serviceAccountRole: valueOf(readings.serviceAccountRole),
-      signInTokenMaximumLifetimeSeconds: valueOf(
-        readings.signInTokenMaximumLifetimeSeconds,
-      ),
-      signedInRule: valueOf(readings.signedInRule),
       storeTimeoutMilliseconds: valueOf(readings.storeTimeoutMilliseconds),
-      streamLimitPerAudience: valueOf(readings.streamLimitPerAudience),
-      streamMaximumLifetimeSeconds: valueOf(
-        readings.streamMaximumLifetimeSeconds,
-      ),
-      streamQueueLimit: valueOf(readings.streamQueueLimit),
-      submitterCategory: valueOf(readings.submitterCategory),
-      tokenLifetimeSeconds: valueOf(readings.tokenLifetimeSeconds),
       trustedProxies: valueOf(readings.trustedProxies),
     };
   }

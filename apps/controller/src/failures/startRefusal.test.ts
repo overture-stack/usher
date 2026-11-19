@@ -33,4 +33,18 @@ suite('a refusal to start', () => {
       'USHER_SCHEMA_MIGRATION_DATABASE_URL',
     ]);
   });
+
+  test('names a stored setting as a setting, with the rule it broke, and lists it apart from the variables', () => {
+    const refusal = new StartRefusal([
+      { rule: 'is missing from the store', setting: 'noticePageLimit' },
+      { rule: 'is missing', variable: 'USHER_ISSUER' },
+    ]);
+
+    assert.equal(
+      refusal.message,
+      'the controller refuses to start: the setting noticePageLimit is missing from the store; USHER_ISSUER is missing',
+    );
+    assert.deepEqual(refusal.variables, ['USHER_ISSUER']);
+    assert.deepEqual(refusal.settings, ['noticePageLimit']);
+  });
 });

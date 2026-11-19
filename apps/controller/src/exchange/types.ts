@@ -9,7 +9,6 @@ import type {
   ChannelAssertionCheck,
   UnverifiedRejectionReason,
 } from '../channelAssertion/index.js';
-import type { ControllerConfiguration } from '../configuration/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
 import type { Deadline } from '../storeTimeout/index.js';
 import type { WindowedRefusals } from '../windowedRefusals/index.js';
@@ -17,6 +16,7 @@ import type {
   SignInJudgement,
   SignInJudgementContext,
 } from '../signInTokens/index.js';
+import type { ControllerSettings } from '../settings/index.js';
 
 /** An application's live key as the exchange answers with it: its application, its id, and its token subkey. */
 export interface ExchangeKey {
@@ -107,7 +107,7 @@ export interface KeyConfirmationSettings {
   eventLog: Pick<ExchangeLog, 'error'>;
 
   /** The clock a confirmation's time is read from, and the schema. */
-  settings: Pick<ControllerConfiguration, 'clock' | 'databaseSchema'>;
+  settings: Pick<ControllerSettings, 'clock' | 'databaseSchema'>;
 
   /** Where each confirmation and its `applicationKey.confirmation` are written, in a transaction of their own. */
   trail: Pick<AuditTrail<pg.ClientBase>, 'inTransaction'>;
@@ -169,18 +169,16 @@ export interface ExchangeSettings {
   refusals: Pick<WindowedRefusals, 'refuse'>;
 
   /**
-   * The baseline and the signed-in rule, the clock, the schema, the identity provider's issuer, the
-   * Controller's own issuer, the service-account realm role, and the token lifetime.
+   * The clock, the schema, the identity provider's issuer, the Controller's own issuer, the service-account
+   * realm role, and the token lifetime. The grant rules are read with the policy, not held here.
    */
   settings: Pick<
-    ControllerConfiguration,
-    | 'baseline'
+    ControllerSettings,
     | 'clock'
     | 'databaseSchema'
     | 'identityProviderIssuer'
     | 'issuer'
     | 'serviceAccountRole'
-    | 'signedInRule'
     | 'tokenLifetimeSeconds'
   >;
 
