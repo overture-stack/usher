@@ -138,7 +138,7 @@ export interface HarnessOptions {
   seedsAdministrator?: boolean;
 
   /**
-   * Whether the harness starts a controller: true by default. A test starting its own instances
+   * Whether the harness starts a Controller: true by default. A test starting its own instances
    * passes false and starts them from the harness's configuration, or calls
    * {@link Harness.restart}; the fixture is then seeded whole before anything starts, its
    * applications under the fixture's ids, and each is issued its first key once the harness's own
@@ -395,7 +395,7 @@ export const passwordsApart = (
 };
 
 /**
- * The configuration of a harness's controller: the Controller's issuer `https://usher.example.org`, a
+ * The configuration of a harness's Controller: the Controller's issuer `https://usher.example.org`, a
  * fresh cursor key and key-encryption key, each store's password apart from its URL
  * ({@link passwordsApart}), a fresh one standing in where the URL carries none, the management API
  * `usher-management-test` with the client `usher-ui-test`, {@link HARNESS_LOGOUT_CLIENT} as the

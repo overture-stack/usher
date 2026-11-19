@@ -186,7 +186,7 @@ refuses or drops startup parameters it does not track, in any mode.
 ### Bridge (`@overture-stack/usher-express-bridge`)
 
 **Role:** Shared authorization library embedded in applications. Connects the application to the
-controller: token exchange, Usher token caching, decryption, and revocation channel maintenance.
+Controller: token exchange, Usher token caching, decryption, and revocation channel maintenance.
 Think of it as a drawbridge: when the connection to the Controller is healthy, the Bridge is open
 and requests flow. When the Controller is unreachable past the grace period, the Bridge raises and
 blocks every request needing a granted permission (fail-secure, 503), while the open tier keeps
@@ -312,7 +312,7 @@ applications enforce decisions derived from it, without managing that state them
 1.  **Shared computed-payload cache.** The fast-path refresh (see
     [security-workflow.md](security-workflow.md#session-and-caching)) holds one entry per principal
     and audience, carrying the computed payload and the earliest grant expiry that bounds any
-    reissue. Valkey gives every controller instance the same view of it, so a refresh served by one
+    reissue. Valkey gives every Controller instance the same view of it, so a refresh served by one
     instance does not recompute what another already has.
 
 **Invalidation is by deletion.** Anything changing what a principal holds deletes their entry, and

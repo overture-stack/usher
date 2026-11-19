@@ -82,7 +82,7 @@ export type UsherPrincipal =
   | UnconfirmedPrincipal;
 
 /**
- * A request's access, the same from every bridge: plain, JSON-shaped data carrying decisions,
+ * A request's access, the same from every Bridge: plain, JSON-shaped data carrying decisions,
  * never the token, the payload or the grants behind them.
  */
 export interface UsherRequestAccess {

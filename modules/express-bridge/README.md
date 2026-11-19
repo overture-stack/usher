@@ -6,7 +6,7 @@ request, it turns the credential presented into that person's access and attache
 `res.locals`, where the application's adapter reads it and applies it at the application's own
 query layer.
 
-Behind the middleware, the bridge:
+Behind the middleware, the Bridge:
 
 - exchanges each credential with Usher's Controller for an Usher token, then decrypts and caches
   the token, so a request within the token's lifetime needs no call to the Controller;
@@ -88,7 +88,7 @@ describes:
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `audience`      | the application's `id`, in the answer registering it                                                                               |
 | `key`           | the `key.value` in that same answer, the only answer that shows it                                                                 |
-| `controllerUrl` | where the application reaches the controller: https, or plain http only to `127.0.0.1`, `localhost` or `[::1]`                     |
+| `controllerUrl` | where the application reaches the Controller: https, or plain http only to `127.0.0.1`, `localhost` or `[::1]`                     |
 | `issuer`        | the Controller's `issuer` setting, the `iss` of every Usher token                                                                  |
 | `eventSource`   | the application's own: a URI reference naming this deployment rather than one replica, the `source` of every event the Bridge logs |
 
@@ -98,7 +98,7 @@ once every exchange in flight has ended.
 
 ## The exchange timeout
 
-Three terms name the timing of an exchange with the controller:
+Three terms name the timing of an exchange with the Controller:
 
 - the **deadline**: when the Controller must have answered an exchange, measured from the
   request's arrival, `CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS` (4 s);

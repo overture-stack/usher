@@ -57,7 +57,7 @@ import {
 } from '../../test-support/waiting.js';
 
 /**
- * The exchange pool these tests give the controller: two connections, so a few exchanges fill it. A
+ * The exchange pool these tests give the Controller: two connections, so a few exchanges fill it. A
  * constant of its own here, as the test reaches the Controller through the seam.
  */
 const EXCHANGE_CONNECTIONS = 2;

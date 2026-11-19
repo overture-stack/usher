@@ -1047,7 +1047,7 @@ export const NO_CREDENTIAL: UsherPrincipal = Object.freeze({
   suspended: false,
 });
 
-/** The principal of a credential not vouched for by the controller: the open tier, suspended. */
+/** The principal of a credential not vouched for by the Controller: the open tier, suspended. */
 export const UNCONFIRMED: UsherPrincipal = Object.freeze({
   credential: 'unconfirmed',
   openTierOnly: true,

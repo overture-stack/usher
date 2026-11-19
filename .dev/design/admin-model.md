@@ -95,7 +95,7 @@ EGO-based instances (primarily iMS):
 
    - **Services calling EGO endpoints directly.** Portals and gateway APIs that validate EGO
      tokens or resolve EGO group memberships before serving requests. These are updated to use
-     Usher's bridge and token exchange. For services that verify tokens by public key (RS256),
+     Usher's Bridge and token exchange. For services that verify tokens by public key (RS256),
      **key rotation is a required step of the replacement, distinct from code changes**: Keycloak uses its
      own signing key pair, so the configured public key at each dependent service must be updated
      to the Keycloak signing key before the first Keycloak-issued token is accepted. A service
@@ -156,10 +156,11 @@ access.
 
 ## Bootstrap: how the first admin is established
 
-The identity provider names a first user, and the first user nominates the first admin. Usher has
-no admin until one accepts:
+The seed file names a first user, by a realm role or by the person's subject at the identity
+provider, and the first user nominates the first admin. Usher has no admin until one accepts:
 
-1. A Keycloak administrator gives Kim the first-user role, `usher-first-user` by default.
+1. A Keycloak administrator gives Kim the first-user role the seed file names, `usher-first-user` by
+   default. Where the seed file names Kim's subject instead, nothing is configured in Keycloak.
 2. Kim signs in. Usher records Kim as a base user, so the audit log can name who nominated the first
    admin.
 3. Kim nominates the first admin: themself, or a user who has signed in at least once.

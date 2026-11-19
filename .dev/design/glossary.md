@@ -269,6 +269,27 @@ the grant without answering it. Off by default; the default flow requires an exp
 recipient. Enable for instances where explicit acceptance is not operationally appropriate
 (machine-to-machine sharing, internal pipelines). See [permissions-model.md](permissions-model.md).
 
+**Base tier**
+A resource's property naming who reaches its unmarked records: everyone (open), anyone signed in
+(registered), or only the holders of a grant on it (by grant).
+
+Every resource has one, named when it is registered. The instance holds no default to fall back on.
+
+What the open and registered tiers grant is set by the instance's grant rules. A resource's
+categories add restrictions on top of its base tier.
+
+The same thing is spelled differently in each layer. These spellings all mean the base tier:
+
+| Layer                          | Spelling                    |
+| ------------------------------ | --------------------------- |
+| Management API and grant rules | `accessLevel`               |
+| Database column                | `base_tier`, on `resources` |
+| TypeScript                     | `baseTier`                  |
+| A token's entries              | `tier`                      |
+
+In the Management API, `accessLevel` takes the values `open`, `registered` and `grant`. In prose,
+write "base tier" for the concept, and "open tier", "registered tier" or "by grant" for its values.
+
 **Bucket**
 One of a facet's values, as the facet lists it: `sex` is the facet, and `male` and `female` are its
 buckets.
@@ -740,6 +761,11 @@ application is registered and shows it once, for the application's own secrets. 
 encrypted under its **key-encryption key**, the one key the Controller reads from its environment,
 so the database holds no application key in readable form. See [schema.md](schema.md) § Applications.
 
+The store keeps the key-encryption key's **fingerprint**: a value derived from the key one way,
+which identifies it without revealing it, and against which every start checks the key it was
+given. A fingerprint is not a digest, which is a hash of a value, such as a token's in a refusal
+window.
+
 **Complement**
 The resources not held by a principal, from among those configured for this instance. An adapter
 computes it at startup, from its own configuration minus the resources named in the token, and tests
@@ -861,7 +887,7 @@ person for a grant's expiry or revocation. Telling a person which of their own g
 is the [profile view](profile-view.md)'s job.
 
 **Revocation channel**
-The notice stream from the Controller to each bridge: one sequence of positions carrying every kind
+The notice stream from the Controller to each Bridge: one sequence of positions carrying every kind
 of notice, a principal's revocation, a category change, the baseline change, a global revocation and
 a sign-out. Two ways to read it: push (SSE or WebSocket, positions as event ids), for speed, and a
 poll for the notices after a position, which recovers what push missed and is the only liveness

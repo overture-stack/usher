@@ -160,7 +160,7 @@ port to refuse.
   `mintServiceAccountToken` mints `SERVICE_ACCOUNT`'s client-credentials token, signed as every token
   is.
 - `bridgeWire.ts`: the Bridge's side of the wire, reproduced from its source because those functions
-  are internal to the bridge: subkeys and the subject tag, the channel assertion signer, the token
+  are internal to the Bridge: subkeys and the subject tag, the channel assertion signer, the token
   reader, the channel reader and the push's stream reading. Each export names the Bridge file and
   function it follows; when the Bridge changes one, change the copy to match. It also gives a
   subkey's bytes, the assertion's `typ` and lifetime, and a JWE's plaintext as the channel reader

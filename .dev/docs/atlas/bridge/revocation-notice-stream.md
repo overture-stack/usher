@@ -867,7 +867,7 @@ The derivation keeps the application key from ever being used directly as a key.
 HKDF's extract step passes the application key to HMAC as its message, not its key (reasoned from
 RFC 5869).
 
-The controller:
+The Controller:
 
 - derives the same key from `iss`, pins `alg`, `typ` and `aud`, and checks `exp` with its clock
   tolerance, which jose takes in seconds: a `clockTolerance` of 30000 accepted an assertion an hour

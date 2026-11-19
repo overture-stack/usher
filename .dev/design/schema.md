@@ -50,6 +50,9 @@ encrypted under the key-encryption key, so a read of the database or of a backup
 ## The tables
 
 Read in the order of the token calculation's steps, which is the order each table is needed.
+Diagrams of every table, by area, are in [schema-diagrams.md](schema-diagrams.md), generated from the
+migrations by `apps/controller/scripts/generate-erd.ts`: regenerate them with any migration that
+changes the schema.
 
 ### Principals
 
@@ -185,9 +188,9 @@ cost a deferred trigger for a rule the registration path already holds.
       revoked_by         uuid                   references users
       revoked_at         timestamptz
 
-    key_encryption_key_check
-      only_row           boolean      primary key  default true  check (only_row)
-      check_value        bytea        not null
+    key_fingerprints
+      key_name           text         primary key  check (key_name in ('keyEncryptionKey'))
+      fingerprint        bytea        not null
       recorded_at        timestamptz  not null
 
     application_resources
@@ -215,8 +218,8 @@ key protecting it. Neither table raises the policy generation, since no key chan
 principal may reach.
 
 **A wrong key-encryption key refuses startup, and a damaged row refuses one application.** The first
-start records a check value derived from the key-encryption key through a subkey of its own, which
-reveals nothing about it, and every start compares it. A mismatch refuses startup, naming the
+start records the key-encryption key's fingerprint in `key_fingerprints`, derived through a subkey
+of its own, which reveals nothing about the key, and every start compares it. A mismatch refuses startup, naming the
 variable, however many applications are registered, none included. The table holds one row, so of
 two instances first started with different keys, the second refuses. With the check passed, a stored
 key that fails to decrypt was altered: the Controller starts, logs the key's identifier, and refuses
@@ -412,15 +415,17 @@ The tag, the notice encryption and the Bridge's side of the stream are set out i
 
     audit_log
       id                 uuid         primary key
-      specversion        text         not null
+      spec_version       text         not null
       source             text         not null
       type               text         not null
       occurred_at        timestamptz  not null
-      dataschema         text
+      data_schema        text
       data               jsonb        not null
+      severity           text         not null  critical, error, warning or info
 
-The envelope is CloudEvents', as [audit-events.md](audit-events.md) sets out, with `occurred_at`
-holding its `time` attribute, since `time` is a type name in SQL. `data` holds each type's payload. A grant conferred by a rule has no row, so the exchange records which rules applied
+The envelope is CloudEvents', as [audit-events.md](audit-events.md) sets out, each attribute in a
+column named as PostgreSQL names things: `spec_version` holds `specversion`, `data_schema` holds
+`dataschema`, and `occurred_at` holds `time`, since `time` is a type name in SQL. `data` holds each type's payload. A grant conferred by a rule has no row, so the exchange records which rules applied
 as an audit event, or the trail could not say who could reach what, and when. How long entries are
 kept against a person's request for erasure is open in [to-discuss.md](to-discuss.md), and is not
 decided here.
@@ -584,8 +589,8 @@ writes every table or reaches the server itself: `pg_write_all_data`, `pg_execut
 `pg_read_server_files` and `pg_write_server_files`. It also refuses ownership of anything in the
 schema, `CREATE` on the schema or the database, any grant option, `TRUNCATE`, `TRIGGER`, and any
 write on an append-only table beyond what the migrations grant, `INSERT` included. The append-only
-tables are `audit_log`, `change_records`, `grant_decisions`, `notices` and
-`key_encryption_key_check`. `change_records` is written only by its trigger, so a role able to insert
+tables are `audit_log`, `change_records`, `grant_decisions`, `key_fingerprints`, `nominations`
+and `notices`. `change_records` is written only by its trigger, so a role able to insert
 into it could forge history. Any other grant the release does not use, `pg_read_all_data` among
 them, is tolerated and logged at `warning`, naming the privilege and the table. So an instance of one
 release keeps running after the next release's migration adds a grant. A role that may write

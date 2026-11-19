@@ -781,7 +781,7 @@ adapter that imports usher-types alone still sees `any`.
 | failure   | digest   | whether the token was rejected or the exchange failed, and an expiry                                                                                                             | after the fixed interval; on eviction                                                                                                            |
 | anonymous | one slot | the set of grants named in the anonymous payload, the resource names, its frozen access value and the same value marked suspended, both holding the interned results, its expiry | by a notice, for good; replaced on refresh                                                                                                       |
 
-A hit in the failure store answers without asking the controller: 503 for a rejected token, and the
+A hit in the failure store answers without asking the Controller: 503 for a rejected token, and the
 per-principal degraded path for a failed exchange. A broken Controller is then not asked on every
 request, and the Bridge still recovers within one interval.
 

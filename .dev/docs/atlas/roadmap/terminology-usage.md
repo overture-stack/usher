@@ -297,6 +297,12 @@ in place by the first rule, and plainness has no business touching it.
 | PostgreSQL tables and columns: `grant_decisions`, `revoked_at`                                                        | snake_case              | correctness, not taste. Postgres folds unquoted identifiers to lowercase, so `resourceUsers` becomes `resourceusers` unless every reference is double-quoted forever |
 | CloudEvents context attributes: `specversion`, `dataschema`                                                           | lowercase, no separator | the spec restricts them to lowercase alphanumerics                                                                                                                   |
 
+**Each side of a pair keeps its own convention, consistently.** A CloudEvents attribute keeps the
+standard's spelling wherever an event travels, and the `audit_log` column holding it follows
+PostgreSQL's: `specversion` is stored in `spec_version`, `dataschema` in `data_schema`, and `time`
+in `occurred_at`, since `time` is a type name in SQL. The code maps one to the other where a row is
+written or read, so neither side borrows the other's form.
+
 **Values are open**, and they are not obviously a database question: a category name travels as a JSON
 key inside an Usher token, so `indigenous_data` sits on the wire beside `generatedAt`, while a state
 like `pending` is only ever stored. Deployment-chosen category names may not be ours to
@@ -435,6 +441,9 @@ plural: the Controller, a Controller instance, each application's Bridge, the Br
 instance serves. The capital is what separates a component from the ordinary word, so a lowercase
 controller or bridge, or the verb to bridge, never refers to Usher. Identifiers, paths and package
 names keep their own spelling: `apps/controller`, `usher-express-bridge`, a `bridge` parameter.
+**The adapter stays lowercase, because it names a pattern rather than a reusable piece**: the shape
+each ushered application follows to become compatible with Usher. So there is an Arranger adapter
+and a Lyric adapter, each its own application's, and no one adapter that every application shares.
 
 **The control plane is a third scope, and wider than Usher**, holding Keycloak as well: an identity
 provider governs identity rather than serving records, and the data plane is the only other side to

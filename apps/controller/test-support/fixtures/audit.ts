@@ -172,7 +172,7 @@ const FIXTURE_PEOPLE = Object.freeze([
 
 /**
  * The applications alone, serving nothing, for a test seeding nothing else before it starts its own
- * controller: seeded by SQL under the fixture's ids, each is issued its first key once the harness's
+ * Controller: seeded by SQL under the fixture's ids, each is issued its first key once the harness's
  * own Controller first listens, and holds none until then.
  */
 export const APPLICATIONS_ONLY: PolicyFixture = Object.freeze({
@@ -277,7 +277,7 @@ export interface AuditHarnessOptions {
   /** A stand-in the test started itself, so the identity provider can fail before the start. */
   identityProvider?: IdentityProvider;
 
-  /** Whether the harness starts a controller: true by default. */
+  /** Whether the harness starts a Controller: true by default. */
   startsController?: boolean;
 }
 

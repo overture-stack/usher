@@ -576,7 +576,7 @@ After the first five attempts, the value read back was the original.
 - **Two copies of `usher-types` interoperate, and the peer keeps one.** `readAccess` checks the
   member's shape and the value, never which copy attached it, so a value attached through one copy
   reads through another (reasoned, not run). Two copies could still disagree about which access
-  versions they accept. That is why `usher-types` is a peer dependency of the bridge: a peer
+  versions they accept. That is why `usher-types` is a peer dependency of the Bridge: a peer
   resolves to the copy installed by the host, so the host holds one copy of the contract and of
   `SqonSchema`. Under pnpm's isolated layout a peer of the Bridge resolves from the host's own
   dependencies, and the adapter's dependency is out of its sight (reasoned, not run), so the host's

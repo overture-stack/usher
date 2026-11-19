@@ -312,14 +312,14 @@ Controller invariants, since a disagreement there only moves a legitimate token 
    this.
 10. The Controller's signature check is no more lenient than a compact JWS check under RFC 7515 and
     RFC 7518: ECDSA signatures as the raw concatenation of the two integers, RSA signatures at full
-    length. One verifier shared by the controller and the bridge, with the same algorithm set, the
+    length. One verifier shared by the Controller and the Bridge, with the same algorithm set, the
     same key selection by issuer and the signature only, keeps the encoding and algorithm rows of the
     disagreement table from drifting. With separate implementations, each row of that table becomes
     a test run against both. Which of the two a check would use is open (see "Open questions").
 11. Each provider binds a key identifier to its key material. Keycloak's generated and imported RSA
     providers do: the identifier is the base64url SHA-256 of the encoded public key unless an
     administrator sets one (read from source, not run). Its java-keystore provider does not, as the
-    disagreement table shows. So that provider is either declared unsupported where a bridge checks
+    disagreement table shows. So that provider is either declared unsupported where a Bridge checks
     signatures, or every key change gets a new key component, and so a new key identifier; which of
     the two is open, like the choice between one shared verifier and separate implementations. Entra's identifiers are SHA-1 certificate
     thumbprints: for all seven keys in the v2 set, the identifier equals `x5t` and the SHA-1 of the
@@ -345,8 +345,8 @@ type AdmissionLane = 'held-key' | 'unverified';
 
 14. A local refusal is one structured event with no token, no digest, no claim, no subject and no
     key identifier. No trusted subject exists before the exchange. No event may carry any part of the
-    sign-in token, and the key identifier is part of it, written by its sender. A bridge behind on a
-    rotation is diagnosed from the controller's side. As a `credential.refusal`, the event would need
+    sign-in token, and the key identifier is part of it, written by its sender. A Bridge behind on a
+    rotation is diagnosed from the Controller's side. As a `credential.refusal`, the event would need
     an `origin` value not registered in [audit-events.md](../../../design/audit-events.md).
 
 **Measured verdicts of the middle option**, against a local key set:

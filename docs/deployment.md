@@ -1,6 +1,6 @@
 # Deploying the Controller
 
-> This page is for an operator deploying the Usher controller: the service holding a platform's access policy, called by the Bridge inside each ushered application and by the management UI. For what Usher does and why, read [Data access control](intro.md) first. To run the Controller and its services on one machine for development, see the Controller's [development notes](https://github.com/overture-stack/usher/blob/main/apps/controller/DEVELOPMENT.md).
+> This page is for an operator deploying the Usher Controller: the service holding a platform's access policy, called by the Bridge inside each ushered application and by the management UI. For what Usher does and why, read [Data access control](intro.md) first. To run the Controller and its services on one machine for development, see the Controller's [development notes](https://github.com/overture-stack/usher/blob/main/apps/controller/DEVELOPMENT.md).
 
 ---
 
@@ -67,6 +67,9 @@ A whole number is written in digits alone, with no sign, decimal point or unit. 
 **A replaced variable is refused.** Both commands refuse a start with a variable that a setting now holds, set, empty or not, naming `USHER_SEED_FILE` as its replacement. The settings are under [Settings](#settings).
 
 ### Listening
+
+The Controller serves plain HTTP. Terminate TLS in front of it, and limit request rates at that same
+proxy.
 
 | Variable                | Kind           | What it is, and its rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ----------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -290,7 +293,7 @@ Each refusal names the variable and the rule broken, never the URL.
 | Schema migration role | Ownership of the database, the Controller's schema and everything in it | The schema migration command alone | `USHER_SCHEMA_MIGRATION_DATABASE_PASSWORD`, given to that command alone |
 | Runtime role          | What the migrations and the schema migration command grant it           | Every Controller instance          | `USHER_DATABASE_PASSWORD`                                               |
 
-**The runtime role is a separate login role: neither the schema migration role, nor a member of it, nor a superuser.** The schema migration command refuses a runtime role breaking that rule, or one not yet created, before writing anything. The split is what protects the store from a compromised controller: it can read and write policy, which it must, but it cannot widen its own privileges or drop the audit log.
+**The runtime role is a separate login role: neither the schema migration role, nor a member of it, nor a superuser.** The schema migration command refuses a runtime role breaking that rule, or one not yet created, before writing anything. The split is what protects the store from a compromised Controller: it can read and write policy, which it must, but it cannot widen its own privileges or drop the audit log.
 
 Create both roles and the database once, before the first run, as a role allowed to create roles and databases. The names here are examples:
 

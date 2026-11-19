@@ -58,11 +58,11 @@ Settled plan. Each piece is tested and built before the piece it depends on, aga
 everything behind it, so the consumer side comes first and the Controller last.
 
     1. The Arranger adapter, in the Arranger repository: tests for the requests it will
-       actually receive, with the bridge and the controller mocked, then the adapter itself.
+       actually receive, with the Bridge and the Controller mocked, then the adapter itself.
     2. The Bridge, in this repository: tests with the Controller mocked, then the Bridge,
-       then the adapter and the bridge tested together.
-    3. The controller: tests for whatever the Bridge's tests do not already cover, then the
-       controller itself.
+       then the adapter and the Bridge tested together.
+    3. The Controller: tests for whatever the Bridge's tests do not already cover, then the
+       Controller itself.
     4. Integration tests across the Bridge and the Controller, without Arranger's adapter.
     5. The profile surface, the management UI, and the submission Bridge and adapter.
 
@@ -303,7 +303,7 @@ reason, since the difference between the two is where the safety-relevant change
   before a filter is handed to any SQON builder or serializer. A zero-grant principal must
   short-circuit to a denial, never to a filter that happens to be empty. This is a stronger
   requirement than the previous entry implied, because it now has to be built rather than
-  inherited. It also strengthens the case for locating shared SQON handling in the bridge: the
+  inherited. It also strengthens the case for locating shared SQON handling in the Bridge: the
   guard gets written once for every application rather than once per adapter.
 
   **Consequence for the conformance corpus:** the zero-grant section cannot merely assert

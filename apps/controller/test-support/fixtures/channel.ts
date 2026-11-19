@@ -358,7 +358,7 @@ export interface ChannelHarnessOptions {
   postgresql?: DedicatedContainer;
 
   /**
-   * Whether the harness starts a controller: true by default; false for a test running its own
+   * Whether the harness starts a Controller: true by default; false for a test running its own
    * instances, which has the harness issue its applications their first keys ({@link issueFirstKeys})
    * before starting them.
    */
