@@ -342,7 +342,10 @@ const isCommit = (message: Buffer): boolean =>
 /**
  * Starts a proxy relaying every connection to the store a database URL names, and defers its end to
  * the cleanup given. One that drops the limits leaves them out of each connection's startup message,
- * as a connection pooler dropping startup parameters does.
+ * as a connection pooler dropping startup parameters does. Each message is passed on once it is
+ * whole, with Nagle's algorithm off: the messages of one statement, written one at a time, would
+ * otherwise each wait for the store's acknowledgement of the one before, which a receiver such as
+ * Linux's may hold back 40 ms.
  */
 const startStoreProxy = async (
   scope: Cleanup,
@@ -354,6 +357,7 @@ const startStoreProxy = async (
   const relay = (client: Socket): void => {
     const upstream = connect({
       host: target.hostname,
+      noDelay: true,
       port: Number(target.port),
     });
     const connection = { buffer: Buffer.alloc(0), held: false, started: false };
@@ -391,7 +395,7 @@ const startStoreProxy = async (
       }
     });
   };
-  const server = createServer(relay);
+  const server = createServer({ noDelay: true }, relay);
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
   });

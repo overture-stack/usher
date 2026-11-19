@@ -65,3 +65,22 @@ fix: widen `HOST_PORTS` again to 10000 to 32767, and the range where the module'
 and the test-support README name it.
 standalone: no
 context: waits on the CI Docker host admitting 10000 to 32767.
+
+Prettier 3.9.10's experimental CLI, chosen by `--experimental-cli` or by setting
+`PRETTIER_EXPERIMENTAL_CLI`, formats with Prettier's defaults when the configuration fails to load,
+and reports nothing: its configuration loading ends in `.catch(noop3)`. The legacy CLI fails on a
+configuration it cannot load, so `format`, `format:check` and CI's Format stage must keep to it.
+fix: move them to the experimental CLI only once a Prettier release fails on a configuration it
+cannot load, as the legacy CLI does.
+standalone: no
+context: waits on that Prettier release.
+
+In `apps/controller/test/database/storeTimeout.test.ts`, the suite on the Controller's start failed
+twice in one PostgreSQL 18 run while a shared Docker daemon was under load: "refuses a start on a
+connection that drops the controller's statement limits, as a pooler dropping startup parameters
+does, naming the database URL" and "refuses a start the store will not sign in, naming the password
+for a refused password and the database URL for a database the store lacks". Each passed on every
+run alone, and the same suite failed on CI's two-CPU pod. Each must pass under load as it does
+alone.
+fix: establish why each fails under load, and make it pass under load as it does alone.
+standalone: yes

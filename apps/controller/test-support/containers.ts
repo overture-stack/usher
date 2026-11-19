@@ -1022,7 +1022,10 @@ const forwarded = (
 const tcpRelay = async (state: RelayState): Promise<Relay> => {
   const pairs = new Set<readonly [Socket, Socket]>();
   const mode = (): RelayMode => state.modes.get('') ?? PASS;
-  const server = createServer((incoming) => {
+  // Nagle's algorithm is off on both sides, so each chunk is passed on as it arrives: with it on, a
+  // chunk sent while the one before it is unacknowledged waits for that acknowledgement, which a
+  // receiver with nothing to answer yet may hold back 40 ms, as Linux does.
+  const server = createServer({ noDelay: true }, (incoming) => {
     const current = mode();
     if (current.kind === 'reset') {
       incoming.resetAndDestroy();
@@ -1030,6 +1033,7 @@ const tcpRelay = async (state: RelayState): Promise<Relay> => {
     }
     const outgoing = connect({
       host: state.target.hostname,
+      noDelay: true,
       port: Number(state.target.port),
     });
     const pair = [incoming, outgoing] as const;

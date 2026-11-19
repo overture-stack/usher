@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { connect, createServer, type Socket } from 'node:net';
+import { randomBytes } from 'node:crypto';
+import { once } from 'node:events';
+import { type AddressInfo, connect, createServer, type Socket } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { suite, type TestContext, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { decodeJwt } from 'jose';
 import pg from 'pg';
 
@@ -385,6 +388,20 @@ const timed = async <Result>(
   return { elapsedMs: performance.now() - startedAt, result };
 };
 
+// The two parts of each request the relay's forwarding is timed on.
+const FIRST_PART = 'a';
+
+const SECOND_PART = 'b';
+
+// One byte, so each answer arrives whole.
+const ANSWER = 'c';
+
+const SPLIT_REQUEST_ROUNDS = 15;
+
+// Well under the 40 ms a receiver such as Linux's may hold back its acknowledgement of a segment it
+// has no answer to yet.
+const SECOND_PART_ANSWERED_WITHIN_MS = 20;
+
 suite('a loopback relay', () => {
   test('passes, freezes, delays, resets and refuses the TCP connections through it, open ones included', async (context) => {
     const relay = await relayTo(context, runningContainers().valkey.url);
@@ -468,6 +485,75 @@ suite('a loopback relay', () => {
     assert.equal(
       new URL(relay.url).password,
       new URL(runningContainers().valkey.url).password,
+    );
+  });
+
+  test('passes each chunk on as it arrives, holding none back for the acknowledgement of the one before it', async (context) => {
+    const scope = cleanupFor(context);
+    // Answers each request once both its parts have arrived, as PostgreSQL answers a statement once
+    // its last message has: until then it has nothing to send, and a receiver such as Linux's may
+    // hold back its acknowledgement of the first part.
+    const firstPartsAwaited: (() => void)[] = [];
+    const upstream = createServer({ noDelay: true }, (socket) => {
+      socket.on('data', (chunk: Buffer) => {
+        [...chunk.toString('latin1')].forEach((part) => {
+          if (part === FIRST_PART) {
+            firstPartsAwaited.shift()?.();
+          } else {
+            socket.write(ANSWER);
+          }
+        });
+      });
+    });
+    await new Promise<void>((resolve) => {
+      upstream.listen(0, '127.0.0.1', resolve);
+    });
+    scope.defer(
+      () =>
+        new Promise<void>((resolve) => {
+          upstream.close(() => resolve());
+        }),
+    );
+    const { port } = upstream.address() as AddressInfo;
+    const relay = await relayTo(context, `tcp://127.0.0.1:${port}`);
+    const url = new URL(relay.url);
+    const client = connect({
+      host: url.hostname,
+      noDelay: true,
+      port: Number(url.port),
+    });
+    scope.defer(async () => {
+      client.destroy();
+    });
+    await once(client, 'connect');
+    // From the second part's sending to the answer, the first part having reached the server alone.
+    const round = async (): Promise<number> => {
+      const firstPartArrived = new Promise<void>((resolve) => {
+        firstPartsAwaited.push(resolve);
+      });
+      client.write(FIRST_PART);
+      await firstPartArrived;
+      const answered = once(client, 'data');
+      const sentAt = performance.now();
+      client.write(SECOND_PART);
+      await answered;
+      return performance.now() - sentAt;
+    };
+
+    const rounds = await Array.from({ length: SPLIT_REQUEST_ROUNDS }).reduce<
+      Promise<readonly number[]>
+    >(
+      async (earlier) => [...(await earlier), await round()],
+      Promise.resolve([]),
+    );
+    const middle =
+      rounds.toSorted((first, second) => first - second)[
+        Math.floor(rounds.length / 2)
+      ] ?? Number.POSITIVE_INFINITY;
+
+    assert.ok(
+      middle < SECOND_PART_ANSWERED_WITHIN_MS,
+      `the middle round took ${Math.round(middle)} ms`,
     );
   });
 
@@ -1148,17 +1234,35 @@ suite("a PostgreSQL reached on this machine's loopback", () => {
     );
   });
 
+  // Wherever the daemon publishes off this machine's loopback, the run's own PostgreSQL URL already
+  // names a relay on 127.0.0.1, so the test starts a PostgreSQL of its own, whose URL names the host
+  // publishing it.
   test('reaches one published at another host through a relay on 127.0.0.1, its credentials and database kept', async (context) => {
-    const address = otherAddress();
-    if (address === undefined) {
+    const scope = cleanupFor(context);
+    const started = await new PostgreSqlContainer(
+      runningContainers().postgresql.image,
+    )
+      .withDatabase('relayed')
+      .withUsername('relayed_superuser')
+      .withPassword(randomBytes(18).toString('base64url'))
+      .start();
+    scope.defer(async () => {
+      await started.stop();
+    });
+    const published = new URL(started.getConnectionUri());
+    const host = ['127.0.0.1', '[::1]', 'localhost'].includes(
+      published.hostname,
+    )
+      ? otherAddress()
+      : published.hostname;
+    if (host === undefined) {
       context.skip('this machine has no address but loopback');
       return;
     }
-    const published = new URL(runningContainers().postgresql.url);
-    published.hostname = address;
+    published.hostname = host;
 
     const reached = await reachOnLoopback(published.href);
-    context.after(() => reached.stop());
+    scope.defer(() => reached.stop());
     const relayed = new URL(reached.url);
     const client = new pg.Client({ connectionString: reached.url });
     await client.connect();
