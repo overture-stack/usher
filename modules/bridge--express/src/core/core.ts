@@ -236,6 +236,8 @@ export interface BridgeCore {
 	 * - Any other 503 carrying a valid `Retry-After` holds that credential alone for it, capped at
 	 *   60 s, plus the same jitter, and it is exchanged once the hold ends.
 	 * - Any other failed exchange holds the credential for `stores.failureHoldMs`.
+	 * - A token read as `expired` right after its exchange is exchanged once more, at once, and only
+	 *   once per resolution; a second `expired` reading holds the credential as any rejection does.
 	 *
 	 * It rejects when the Controller client or the token reader throws, or when tagging the payload's
 	 * subject fails.
@@ -757,7 +759,7 @@ const createRuntime = ({
 		}
 		const start = flightStart();
 		return anonymousFlight.run(`anonymous:${start.generation}`, (signal) =>
-			fetchAnonymous(signal, start, false).catch(() => {
+			fetchAnonymous(signal, start, false, false).catch(() => {
 				internalError();
 				return failedRefresh();
 			}),
@@ -839,6 +841,7 @@ const createRuntime = ({
 		signal: AbortSignal,
 		start: FlightStart,
 		overtaken: boolean,
+		expiryRetried: boolean,
 	): Promise<AnonymousFetch> => {
 		const since = notices.epoch();
 		const answer = await answeredBy(signal, client.exchange({ credential: null, signal }));
@@ -848,6 +851,11 @@ const createRuntime = ({
 		}
 		const reading = await reader.read(answer.token);
 		if (reading.kind === 'rejected') {
+			// As for a signed-in exchange: one more fetch, at once, when the token just fetched reads expired.
+			if (reading.reason === 'expired' && !expiryRetried && !lifecycle.stopped && !anonymousWaits()) {
+				events.emit('token.rejection', { reason: 'expired' });
+				return fetchAnonymous(signal, start, overtaken, true);
+			}
 			events.emit('token.rejection', { reason: reading.reason });
 			if (reading.reason === 'decryptionFailed') {
 				selfTestFailed();
@@ -873,7 +881,7 @@ const createRuntime = ({
 			if (lastDiscard) {
 				return failedRefresh();
 			}
-			return fetchAnonymous(signal, start, true);
+			return fetchAnonymous(signal, start, true, expiryRetried);
 		}
 		if (start.afterCheck) {
 			install(reading.payload);
@@ -926,6 +934,7 @@ const createRuntime = ({
 		claims: SignedTokenClaims | undefined,
 		signal: AbortSignal,
 		overtaken: boolean,
+		expiryRetried: boolean,
 	): Promise<FlightOutcome> => {
 		const since = notices.epoch();
 		const start = flightStart();
@@ -936,6 +945,12 @@ const createRuntime = ({
 		}
 		const reading = await reader.read(answer.token);
 		if (reading.kind === 'rejected') {
+			// A token the Controller minted in the last second of a grant's life can read expired by the
+			// time it is read: one exchange more is made, and the first reading is still logged.
+			if (reading.reason === 'expired' && !expiryRetried && !lifecycle.stopped && !backingOff()) {
+				events.emit('token.rejection', { reason: 'expired' });
+				return exchange(credential, digest, claims, signal, overtaken, true);
+			}
 			return rejected(digest, reading.reason);
 		}
 		const { payload } = reading;
@@ -949,7 +964,9 @@ const createRuntime = ({
 			events.emit('token.overtaken', {
 				outcome: lastDiscard ? lastDiscardOutcome() : 'exchangedAgain',
 			});
-			return lastDiscard ? { kind: 'degraded', subject } : exchange(credential, digest, claims, signal, true);
+			return lastDiscard
+				? { kind: 'degraded', subject }
+				: exchange(credential, digest, claims, signal, true, expiryRetried);
 		}
 		const results = resultsFor(payload);
 		const access = accessOf(
@@ -1046,7 +1063,9 @@ const createRuntime = ({
 		}
 		return outcomeOf(
 			await flights.run(digest, (signal) =>
-				backingOff() ? Promise.resolve(BACKED_OFF_FLIGHT) : exchange(credential, digest, claims, signal, false),
+				backingOff()
+					? Promise.resolve(BACKED_OFF_FLIGHT)
+					: exchange(credential, digest, claims, signal, false, false),
 			),
 		);
 	};
