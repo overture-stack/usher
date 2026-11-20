@@ -4,11 +4,11 @@ This document explains the security and authorization concepts used throughout U
 Security concepts are framed around the threat they address. Model concepts are framed around the
 problem they solve.
 
-**Usher is in design and not yet built.** Everything here describes intended behaviour. Where a
-capability is planned rather than settled, the text says so. Two things are worth knowing before you
-read on: the first release gives every record exactly one resource, and a grant reaches the records
-of one category within it, so a resource holding a mix is served in part rather than whole.
-Narrowing further, down to individual fields, comes later.
+The Controller, the Bridge and the contract between them are built. Passport integration, user
+groups, the Custodian role and field-level narrowing have no implementation, and the text says so
+where each arises. Two things are worth knowing before you read on: every record belongs to exactly
+one resource, and a grant reaches the records of one category within it, so a resource holding a mix
+is served in part rather than whole. No grant narrows further, down to individual fields.
 
 ---
 
@@ -120,9 +120,10 @@ access what.
 Analogy: the box office and event management system. This is where seat allocations are configured,
 VIP lists are maintained, and access tiers are defined.
 
-In Usher: the management UI (planned). Administrators write and revoke grants, each naming a
-resource, a category and its holder's role, and decide which categories a resource lists.
-None of that requires access to Keycloak or any IdP admin panel.
+In Usher: the Controller's Management API, which the management UI calls. Owners and administrators
+grant and revoke access, each grant naming a resource, a category and its holder's role, and
+administrators register the resources and the platform's global categories. None of that requires
+access to Keycloak or any IdP admin panel.
 
 The platform-wide authorization administrator role is **Admin** (architecture shorthand: **PAP
 admin**). See [Privileged roles](#privileged-roles) below for the description, and
@@ -263,11 +264,10 @@ to see none of that record.
 
 **A note on granularity, because it changes what you can express.** A category selects records
 within a resource, so a resource holding a mix of sensitivities does not have to be split: a viewer
-granted one of its categories reaches those records and not the rest. What the first release cannot
-yet express is the line above, a single record carrying two categories and needing a grant for
-both, which asks the query layer for a test it does not offer.
+granted one of its categories reaches those records and not the rest. A single record carrying two
+categories needs a grant for both.
 
-Narrowing below the record, to individual fields, comes later as well.
+No grant narrows below the record, to individual fields.
 
 Categories and category grants are how the Controlled access tier (see Data access tiers below) is
 implemented in practice.
@@ -327,10 +327,11 @@ holds authority over data, not only who may read it, so this role is at most a m
 honouring them and never evidence of having done so. Usher has not been studied against any of
 them, and that study belongs with the communities concerned rather than in a design document.
 
-**Admin** holds platform-wide authorization management rights: creating resources, assigning
-roles, managing any grant, and performing emergency revocations. An Admin does not have implicit
-data access. To read a resource, an Admin must explicitly self-grant access, with a mandatory time
-limit and a logged audit event. The full Admin model, covering bootstrap, self-grant flow, and
+**Admin** holds platform-wide authorization management rights: registering resources, granting the
+`submitter` and `owner` roles, revoking any grant, and performing emergency revocations. An Admin does not
+have implicit data access. To read a resource, an Admin must ask for a self-grant, with a mandatory
+time limit. An owner of the resource or another Admin decides the request, never the Admin who
+asked, and the request and the decision are logged. The full Admin model, covering bootstrap, self-grant flow, and
 audit integrity design, is in
 [admin-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/admin-model.md).
 
@@ -358,7 +359,7 @@ In Usher terms: the user authenticates and Usher issues an Usher token. The open
 enough for a resource whose only category is its unrestricted portion.
 
 **Controlled:** access requires an explicit, per-dataset grant. In simpler instances, an
-Admin or Custodian grants access directly through the management UI. In larger or federated
+owner of the resource grants access directly through the management UI. In larger or federated
 instances, a data access committee reviews researcher applications. It approves or denies
 access based on research purpose and institution. Approved grants can be mapped automatically via
 GA4GH Passports, if configured.
@@ -385,7 +386,8 @@ The Controller computes grants across all three tiers in a single additive pipel
 
 ## GA4GH Passports and federated identity
 
-This section covers an optional integration path. Some instances manage all grants internally,
+Usher has no Passport integration: nothing in the Controller reads a Visa or a Passport claim. This
+section covers an optional integration path. Some instances manage all grants internally,
 through the management UI or a local approval workflow. They do not need Passport support. Passport
 integration is relevant when researchers hold access approvals issued by institutions outside the
 instance. Those approvals then need to be honoured automatically.
@@ -716,7 +718,7 @@ controlled ones without changing them. In `LUNG_COHORT` they may view the open r
 nothing else. Every other resource on the platform is absent, and absence means no access rather
 than a denial recorded somewhere.
 
-`payloadVersion` is the one member not about this user at all. It names the schema followed by the
+`payloadVersion` is the one member shown that is not about this user at all. It names the schema followed by the
 rest of the token, agreed between Usher and the adapter when the token was issued, so that when a
 future version adds a member, an older adapter is told about it rather than allowed to skip it.
 
@@ -736,8 +738,13 @@ permissions first, so an adapter tests permissions and never has to learn what a
 "viewer". Ownership is a power over how access is managed, exercised against Usher itself, so
 anything enforcing a query has its answer already.
 
+A real token also carries three members left out above: `servedResources`, `globalCategories` and
+`resourceCategories`. They list every resource served by the application and every category defined,
+whether or not this user holds it. They let the Bridge withhold a record naming a served resource
+in which the user holds nothing, and work out which records are unmarked.
+
 There is also no empty list. Holding no grant on a resource means the same as the resource being
-absent, so the token has one state to enforce rather than two that had to be told apart. For the
+absent from `permissions`, so that member has one state to enforce rather than two that had to be told apart. For the
 authoritative schema, written as the `PermissionsPayload` type received by the adapter, see
 [security-workflow.md: The payload as a
 type](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md#the-payload-as-a-type).
@@ -752,8 +759,8 @@ know why a user is excluded from certain data. It only needs to apply the filter
 its app's native query format.
 
 Each Usher token is scoped to a specific **audience**: the application service that requested it.
-Usher includes only the resources managed by that service, and of those only the ones where this
-person holds a grant. That keeps the payload focused
+Usher includes only the resources managed by that service, and of those `permissions` lists only the
+ones where this person holds a grant. That keeps the payload focused
 and prevents one service from reading another service's grants. A platform running multiple data
 applications issues a separate token for each. The user's effective access is the same across them,
 but each service sees only its own slice. An application must verify that a presented token names it

@@ -162,7 +162,7 @@ in the Usher design and are worth knowing before reading the design documents:
   ensures the user only receives what they are permitted to see. In Usher, each application's
   adapter is the PEP.
 - **[PAP](concepts.md#pap-policy-administration-point) (Policy Administration Point):** the interface through which administrators define and
-  manage policy: who has access to what. Usher's management UI (planned) is the PAP.
+  manage policy: who has access to what. Usher's Management API, which its management UI calls, is the PAP.
 
 These roles are always present in an access control system; the question is which software plays
 each one. In a system without a dedicated access control service, the application plays all three

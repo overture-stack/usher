@@ -12,7 +12,7 @@ import {
 	personCaller,
 	PROBLEMS,
 } from '../../testing/harness/admin.js';
-import { auditRows, dataOf, emittedType, RULED_GRANT_EVENT_TYPES } from '../../testing/harness/auditEvents.js';
+import { AUDIT_EVENT_TYPES, auditRows, dataOf, emittedType } from '../../testing/harness/auditEvents.js';
 import { adjustableClock } from '../../testing/peripherals/clocks.js';
 import {
 	answeredInFixture,
@@ -116,7 +116,7 @@ suite('grant requests through the store', () => {
 				[],
 			);
 			assert.equal(
-				(await eventsNaming(harness, RULED_GRANT_EVENT_TYPES.grantRequest, 'requestId', requestId)).length,
+				(await eventsNaming(harness, AUDIT_EVENT_TYPES.grantRequest, 'requestId', requestId)).length,
 				1,
 			);
 		});
@@ -163,7 +163,7 @@ suite('grant requests through the store', () => {
 				['granted', CAST.ownerOfA1.subject, grantId],
 			);
 			assert.deepEqual(
-				(await eventsNaming(harness, RULED_GRANT_EVENT_TYPES.grantRequestDecision, 'grantId', grantId)).map(
+				(await eventsNaming(harness, AUDIT_EVENT_TYPES.grantRequestDecision, 'grantId', grantId)).map(
 					({ decision, requestedById }) => [decision, requestedById],
 				),
 				[['granted', CAST.administrator.subject]],

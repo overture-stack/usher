@@ -13,7 +13,7 @@ import {
 	personCaller,
 	PROBLEMS,
 } from '../../testing/harness/admin.js';
-import { auditRows, dataOf, emittedType, RULED_GRANT_EVENT_TYPES } from '../../testing/harness/auditEvents.js';
+import { AUDIT_EVENT_TYPES, auditRows, dataOf, emittedType } from '../../testing/harness/auditEvents.js';
 import {
 	CAST,
 	CONTROLLED,
@@ -96,7 +96,7 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 				(previous, requestId) =>
 					previous.then(async (done) => [
 						...done,
-						await eventsNaming(harness, RULED_GRANT_EVENT_TYPES.grantRequest, 'requestId', requestId),
+						await eventsNaming(harness, AUDIT_EVENT_TYPES.grantRequest, 'requestId', requestId),
 					]),
 				Promise.resolve([]),
 			);
@@ -210,12 +210,7 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 
 			const grant = await storedGrant(harness, grantId);
 			const request = await storedGrantRequest(harness, requestId);
-			const decisions = await eventsNaming(
-				harness,
-				RULED_GRANT_EVENT_TYPES.grantRequestDecision,
-				'grantId',
-				grantId,
-			);
+			const decisions = await eventsNaming(harness, AUDIT_EVENT_TYPES.grantRequestDecision, 'grantId', grantId);
 			assert.deepEqual(
 				{
 					expiresAt: grant.expiresAt?.getTime(),

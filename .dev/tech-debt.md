@@ -123,3 +123,24 @@ comparing names only within itself, does not notice.
 fix: on each run, find any setting that no `settings.seeding` event names and record one for it,
 marked as recovered.
 standalone: yes
+
+The Bridge reads an Usher token's expiry against its own wall clock, with no tolerance and no
+correction for skew from the Controller (`tokenReader.ts`, `clockTolerance: 0`). A Bridge whose clock
+runs ahead reads a fresh token as expired whenever the token has less life left than the skew, and
+the Controller floors a token's expiry to the earliest grant expiry it carries. So within the skew
+before each grant's expiry, both the exchange and its single retry read expired, and the
+person's requests are answered 503 for the failure hold.
+fix: the Bridge measures its offset from the Controller on each exchange, from the token's issuedAt
+against its own clock at receipt, and reads expiry against the clock so corrected, never with a
+tolerance that stretches a token's life.
+standalone: yes
+
+A platform administrator's `GET /admin/resources` carries every unrevoked grant of each resource on
+the page (`grantsOnResources` in `apps/controller/src/grants/grantListingOperations.ts`), with no
+bound on how many, and reads each holder from the directory, eight at a time. The page's `limit`
+bounds the resources alone, so one resource holding thousands of grants makes one answer that large
+and that many directory lookups.
+fix: cap the number of grants carried by each entry, and have an entry over the cap name how many
+it left out, pointing at `GET /admin/resources/{externalId}/grants`, which pages them.
+standalone: no
+context: changes the listing's contract, so it lands before a stable release.

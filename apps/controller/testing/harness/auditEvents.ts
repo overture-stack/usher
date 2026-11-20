@@ -38,6 +38,8 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 	grantExtension: 'grant.extension',
 	grantRateExceeded: 'grant.rateExceeded',
 	grantReduction: 'grant.reduction',
+	grantRequest: 'grant.request',
+	grantRequestDecision: 'grant.requestDecision',
 	grantRevocation: 'grant.revocation',
 	grantRulesChange: 'grantRules.change',
 	grantSelfCreation: 'grant.selfCreation',
@@ -73,13 +75,10 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT_TYPES];
 
 /**
- * The events of grant requests and of a grant's role change (ruled), without the prefix: a request
- * recorded, a request granted or refused, and a grant's role changed. The Events table has no rows
- * for them, so they are kept apart from {@link AUDIT_EVENT_TYPES}, which holds its rows.
+ * The event of a grant's role change (ruled), without the prefix. The Events table has no row for it,
+ * so it is kept apart from {@link AUDIT_EVENT_TYPES}, which holds its rows.
  */
 export const RULED_GRANT_EVENT_TYPES = Object.freeze({
-	grantRequest: 'grant.request',
-	grantRequestDecision: 'grant.requestDecision',
 	grantRoleChange: 'grant.roleChange',
 } as const);
 

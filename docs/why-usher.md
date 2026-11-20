@@ -166,10 +166,7 @@ platform scale.
 
 ## What Usher specifically adds
 
-Usher is in design and not yet built, so the list below describes intended behaviour rather than
-shipped features.
-
-One capability is deliberately absent from it. Several policy engines already produce a filter
+One capability is deliberately absent from the list below. Several policy engines already produce a filter
 describing what a principal may reach, rather than a yes or no for one request: Cerbos returns
 exactly that from its query planner, and the Zanzibar-derived systems answer it as a resource
 lookup. Usher's evaluation step is a candidate for one of those engines rather than a reason to
