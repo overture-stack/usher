@@ -11,7 +11,8 @@ Open design questions are tracked in `.dev/design/` and the OWASP gap analysis i
 The packaging checks the Bridge's packaging note requires run by hand only: that the packed
 declarations name neither `jose` nor `CryptoKey` and import only names they use, that the
 packed JavaScript imports `jose` and `@overture-stack/usher-types` rather than inlining them, and
-that the tarballs load through both `require()` and `import()`.
+that the tarballs load through both `require()` and `import()`, the root and the `./testing`
+subpath beside it.
 fix: add them to `scripts/check-pack.ts`, which the Jenkins job runs as its `check:pack` stage.
 standalone: yes
 

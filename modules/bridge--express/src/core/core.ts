@@ -14,6 +14,14 @@ import {
 	type ValidationProblem,
 } from '@overture-stack/usher-types';
 
+import {
+	accessOf,
+	anonymousPrincipal,
+	attributionOnlyPrincipal,
+	confirmedPrincipal,
+	deepFreeze,
+	unconfirmedSuspendedPrincipal,
+} from './access.js';
 import { type BoundedMap, createBoundedMap, type Expiry, hasExpired } from './boundedMap.js';
 import type { Channel, ChannelCore } from './channel.js';
 import type { Clock } from './clocks.js';
@@ -409,19 +417,6 @@ const NOTICE_LOG_MAX = 1_024;
  */
 const audiencesInUse = new Set<string>();
 
-const deepFreeze = <Value>(value: Value): Value => {
-	if (typeof value === 'object' && value !== null) {
-		Object.values(value).forEach(deepFreeze);
-		Object.freeze(value);
-	}
-	return value;
-};
-
-const accessOf = (
-	principal: UsherPrincipal,
-	results: Readonly<Record<string, Enforcement>>,
-): Readonly<UsherRequestAccess> => deepFreeze({ principal: { ...principal }, results, version: 1 as const });
-
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 
 const affectsPayload = (notice: Notice, payload: PermissionsPayload, tag: string | undefined): boolean => {
@@ -796,11 +791,11 @@ const createRuntime = ({
 		const results = resultsFor(payload);
 		const receivedAt = clocks.wall.now();
 		anonymous.entry = {
-			access: accessOf({ credential: 'none', openTierOnly: true, suspended: false }, results),
+			access: accessOf(anonymousPrincipal(), results),
 			expiry: { monotonicMs: ttlFromNow(), wallMs: payload.exp * 1000 },
 			grants: grantSet(payload.permissions),
 			resources: new Set(Object.keys(payload.permissions)),
-			suspended: accessOf({ credential: 'unconfirmed', openTierOnly: true, suspended: true }, results),
+			suspended: accessOf(unconfirmedSuspendedPrincipal(), results),
 		};
 		anonymous.installedOnce = true;
 		anonymous.retries = 0;
@@ -969,15 +964,7 @@ const createRuntime = ({
 				: exchange(credential, digest, claims, signal, true, expiryRetried);
 		}
 		const results = resultsFor(payload);
-		const access = accessOf(
-			{
-				credential: 'confirmed',
-				openTierOnly: holdsOnlyOpenTier(payload, anonymousGrants),
-				subject,
-				suspended: false,
-			},
-			results,
-		);
+		const access = accessOf(confirmedPrincipal(subject, holdsOnlyOpenTier(payload, anonymousGrants)), results);
 		if (start.afterCheck) {
 			positive.set(
 				digest,
@@ -1002,15 +989,7 @@ const createRuntime = ({
 	const suspendedFor = (mode: BridgeMode, subject: string | null): ResolveOutcome =>
 		servedFrom(mode, (entry) =>
 			isNonEmptyString(subject)
-				? accessOf(
-						{
-							attributionOnlySubject: subject,
-							credential: 'confirmed',
-							openTierOnly: true,
-							suspended: true,
-						},
-						entry.access.results,
-					)
+				? accessOf(attributionOnlyPrincipal(subject), entry.access.results)
 				: entry.suspended,
 		);
 
