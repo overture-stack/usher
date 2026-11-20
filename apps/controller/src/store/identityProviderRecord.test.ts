@@ -4,6 +4,7 @@ import { suite, test } from 'node:test';
 import type pg from 'pg';
 
 import type { AuditTransaction } from '../eventLog/index.js';
+import { OVERLAPPING_QUERY_REFUSAL } from '../../testing/harness/serialQueries.js';
 import { IDENTIFIER_NAMES, recordIdentityProvider } from './identityProviderRecord.js';
 
 type Settings = Parameters<typeof recordIdentityProvider>[1];
@@ -36,7 +37,7 @@ const serialConnection = (): { asked: Asked[]; connection: pg.ClientBase } => {
 		query: async (text: string, values?: readonly unknown[]) => {
 			asked.push({ text, values });
 			if (inFlight > 0) {
-				throw new Error('client.query() issued while the client is already executing a query');
+				throw new Error(OVERLAPPING_QUERY_REFUSAL);
 			}
 			inFlight += 1;
 			await new Promise<void>((resolve) => setImmediate(resolve));

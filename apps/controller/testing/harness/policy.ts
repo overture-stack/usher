@@ -2688,40 +2688,45 @@ export interface PolicySnapshot {
  * @param client a connection under the migration role.
  */
 export const policySnapshot = async (client: pg.ClientBase): Promise<PolicySnapshot> => {
-	const [servedRows, categoryRows, fieldValueRows, fieldRows, grantRows, resourceRows] = await Promise.all([
-		rowsOf(
-			client,
+	// One connection runs one query at a time, so the reads run in turn, each after the one before, and each
+	// lands under its own name.
+	const reads: readonly (readonly [keyof PolicySnapshot, string])[] = [
+		[
+			'applicationResources',
 			`SELECT ${quotedColumn(applicationResources.columns.applicationId)}::text AS application, ${quotedColumn(applicationResources.columns.resourceId)}::text AS resource FROM ${qualified(applicationResources)} ORDER BY 1, 2`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'categories',
 			`SELECT ${quotedColumn(categories.columns.scope)}::text AS scope, ${quotedColumn(categories.columns.name)} AS name, ${quotedColumn(categories.columns.description)} AS description, ${quotedColumn(categories.columns.resourceId)}::text AS resource FROM ${qualified(categories)} ORDER BY 1, 2, 4`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'fieldValues',
 			`SELECT ${quotedColumn(resourceFieldValues.columns.resourceId)}::text AS resource, ${quotedColumn(resourceFieldValues.columns.fieldId)}::text AS field, ${quotedColumn(resourceFieldValues.columns.value)} AS value FROM ${qualified(resourceFieldValues)} ORDER BY 1, 2`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'fields',
 			`SELECT ${quotedColumn(resourceFields.columns.name)} AS name, ${quotedColumn(resourceFields.columns.description)} AS description FROM ${qualified(resourceFields)} ORDER BY 1`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'grants',
 			`SELECT ${quotedColumn(grants.columns.id)}::text AS id, ${quotedColumn(grants.columns.revokedAt)}::text AS revoked FROM ${qualified(grants)} ORDER BY 1`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'resources',
 			`SELECT ${quotedColumn(resources.columns.externalId)} AS external_id, ${quotedColumn(resources.columns.name)} AS name, ${quotedColumn(resources.columns.description)} AS description, ${quotedColumn(resources.columns.baseTier)}::text AS tier, ${quotedColumn(resources.columns.suppressed)} AS suppressed, ${quotedColumn(resources.columns.retiredAt)}::text AS retired, ${quotedColumn(resources.columns.updatedAt)}::text AS updated FROM ${qualified(resources)} ORDER BY 1`,
-		),
-	]);
-	return {
-		applicationResources: servedRows,
-		categories: categoryRows,
-		fieldValues: fieldValueRows,
-		fields: fieldRows,
-		grants: grantRows,
-		resources: resourceRows,
-	};
+		],
+	];
+	return reads.reduce<Promise<PolicySnapshot>>(
+		(previous, [name, text]) => previous.then(async (done) => ({ ...done, [name]: await rowsOf(client, text) })),
+		Promise.resolve({
+			applicationResources: [],
+			categories: [],
+			fieldValues: [],
+			fields: [],
+			grants: [],
+			resources: [],
+		}),
+	);
 };
 
 /**

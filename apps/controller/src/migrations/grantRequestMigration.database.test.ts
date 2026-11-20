@@ -55,13 +55,16 @@ suite('the grant requests migration on a store the release at f7913299 left', ()
 		await owner.query(
 			`SELECT set_config('usher.actor_type', 'system', true), set_config('usher.actor_id', '', true)`,
 		);
-		await Promise.all(
-			Object.entries(PRE_RELEASE_SETTINGS).map(([name, value]) =>
-				owner.query(`INSERT INTO ${schema}.settings (name, value, changed_at) VALUES ($1, $2::jsonb, now())`, [
-					name,
-					JSON.stringify(value),
-				]),
-			),
+		// One connection runs one query at a time, so the inserts run in turn, each after the one before.
+		await Object.entries(PRE_RELEASE_SETTINGS).reduce<Promise<unknown>>(
+			(previous, [name, value]) =>
+				previous.then(() =>
+					owner.query(
+						`INSERT INTO ${schema}.settings (name, value, changed_at) VALUES ($1, $2::jsonb, now())`,
+						[name, JSON.stringify(value)],
+					),
+				),
+			Promise.resolve(),
 		);
 		await owner.query(
 			`INSERT INTO ${schema}.settings_seed (singleton, content, digest, seeded_at) VALUES (true, $1::jsonb, $2, now())`,

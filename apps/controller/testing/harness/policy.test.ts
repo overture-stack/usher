@@ -1333,10 +1333,11 @@ suite('retiring a resource, and adding an owner, by SQL', () => {
 			client,
 			`SELECT retired_at::text AS at, retired_by::text AS by FROM ${qualified(resources)} WHERE external_id = 'STUDY-R1'`,
 		);
-		const untouched = await Promise.all(
-			['anaOwnsOther', 'anaViewed', 'stewardsOwned'].map(
-				async (name) => (await revocationOf(client, grant(name))).revoked,
-			),
+		// One connection runs one query at a time, so the reads run in turn, each after the one before.
+		const untouched = await ['anaOwnsOther', 'anaViewed', 'stewardsOwned'].reduce<Promise<(string | null)[]>>(
+			(previous, name) =>
+				previous.then(async (done) => [...done, (await revocationOf(client, grant(name))).revoked]),
+			Promise.resolve([]),
 		);
 
 		assert.deepEqual(ended, [grant('anaOwns')]);

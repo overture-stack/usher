@@ -284,13 +284,16 @@ const recordingSchemaOnly = (migrations: MigrationOptions[]): DatabaseTemplate =
 				`CREATE TABLE IF NOT EXISTS ${pg.escapeIdentifier(options.schema)}.settings (name text PRIMARY KEY, value jsonb NOT NULL, changed_at timestamptz NOT NULL DEFAULT now())`,
 			);
 			// Every setting the template seeds, so a start on this stand-in reads each of them from its store.
-			await Promise.all(
-				Object.entries(TEMPLATE_SETTINGS).map(([name, value]) =>
-					postgres.query(
-						`INSERT INTO ${pg.escapeIdentifier(options.schema)}.settings (name, value) VALUES ($1, $2::jsonb) ON CONFLICT DO NOTHING`,
-						[name, JSON.stringify(value)],
+			// One connection runs one query at a time, so the inserts run in turn, each after the one before.
+			await Object.entries(TEMPLATE_SETTINGS).reduce<Promise<unknown>>(
+				(previous, [name, value]) =>
+					previous.then(() =>
+						postgres.query(
+							`INSERT INTO ${pg.escapeIdentifier(options.schema)}.settings (name, value) VALUES ($1, $2::jsonb) ON CONFLICT DO NOTHING`,
+							[name, JSON.stringify(value)],
+						),
 					),
-				),
+				Promise.resolve(),
 			);
 		} finally {
 			await postgres.end();

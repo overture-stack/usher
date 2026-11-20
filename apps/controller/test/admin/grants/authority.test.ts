@@ -33,6 +33,7 @@ import {
 	rowCounts,
 	selfGrantUntil,
 	storedGrant,
+	type StoredGrant,
 	STUDY_A1,
 	STUDY_B2,
 	uncategorizedGrantFor,
@@ -481,7 +482,11 @@ suite('who may create and revoke a grant', () => {
 
 				assertSucceeded(ofSelfGrant, "revoking a peer's self-grant");
 				assertSucceeded(ofOwnersGrant, "revoking an owner's grant");
-				const stored = await Promise.all([selfGrantId, ownersGrantId].map((id) => storedGrant(harness, id)));
+				// One connection runs one query at a time, so the grants are read in turn.
+				const stored = await [selfGrantId, ownersGrantId].reduce<Promise<readonly StoredGrant[]>>(
+					async (earlier, id) => [...(await earlier), await storedGrant(harness, id)],
+					Promise.resolve([]),
+				);
 				stored.forEach(({ revokedAt, revokerSubject }) => {
 					assert.notEqual(revokedAt, null);
 					assert.equal(revokerSubject, CAST.secondAdministrator.subject);

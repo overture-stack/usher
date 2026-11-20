@@ -8,6 +8,11 @@ import type { Settings } from '../../src/settings/index.js';
 import { runningContainers } from './containerEnvironment.js';
 import { type DedicatedContainer, startDedicatedPostgresql } from './containers.js';
 import { migrate, type MigrationOptions } from './controller.js';
+import { refuseOverlappingQueries } from './serialQueries.js';
+
+// Every database suite and every held suite loads this module, through its harness or its clients, and the
+// Controller's pools are pg clients too, so the refusal is installed for the whole process here.
+refuseOverlappingQueries();
 
 /** The two roles a deployment creates: the migration role owning the schema, and the Controller's runtime role. */
 export type DatabaseRole = 'migration' | 'runtime';
@@ -214,15 +219,18 @@ const ensureRoles = async (superuser: pg.Client, superuserUrl: URL): Promise<voi
 	);
 	const existing = new Set(rows.map(({ rolname }) => rolname));
 	const roles: readonly DatabaseRole[] = ['migration', 'runtime'];
-	await Promise.all(
-		roles
-			.filter((role) => !existing.has(DATABASE_ROLES[role]))
-			.map((role) =>
-				superuser.query(
-					`CREATE ROLE ${quoted(DATABASE_ROLES[role])} LOGIN PASSWORD ${pg.escapeLiteral(rolePassword(superuserUrl, role))}`,
+	// One role at a time: a second query issued on the superuser connection while one is in flight is refused.
+	await roles
+		.filter((role) => !existing.has(DATABASE_ROLES[role]))
+		.reduce<Promise<unknown>>(
+			(previous, role) =>
+				previous.then(() =>
+					superuser.query(
+						`CREATE ROLE ${quoted(DATABASE_ROLES[role])} LOGIN PASSWORD ${pg.escapeLiteral(rolePassword(superuserUrl, role))}`,
+					),
 				),
-			),
-	);
+			Promise.resolve(),
+		);
 };
 
 const buildTemplate = async (superuser: pg.Client, superuserUrl: URL, template: DatabaseTemplate): Promise<void> => {

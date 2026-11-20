@@ -30,6 +30,7 @@ import {
 	storedDecisions,
 	storedGrant,
 	storedGrantRequest,
+	type StoredGrantRequest,
 	storedGrants,
 	UNMARKED,
 } from '../../testing/fixtures/grants.js';
@@ -85,11 +86,19 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 				await createGrant(administrator, viewerOn(OPEN_STUDY)),
 			];
 			const requestIds = answers.map(requestIdOf);
-			const stored = await Promise.all(requestIds.map((requestId) => storedGrantRequest(harness, requestId)));
-			const asked = await Promise.all(
-				requestIds.map((requestId) =>
-					eventsNaming(harness, RULED_GRANT_EVENT_TYPES.grantRequest, 'requestId', requestId),
-				),
+			// One connection runs one query at a time, so the reads run in turn, each after the one before.
+			const stored = await requestIds.reduce<Promise<readonly StoredGrantRequest[]>>(
+				(previous, requestId) =>
+					previous.then(async (done) => [...done, await storedGrantRequest(harness, requestId)]),
+				Promise.resolve([]),
+			);
+			const asked = await requestIds.reduce<Promise<(readonly Readonly<Record<string, unknown>>[])[]>>(
+				(previous, requestId) =>
+					previous.then(async (done) => [
+						...done,
+						await eventsNaming(harness, RULED_GRANT_EVENT_TYPES.grantRequest, 'requestId', requestId),
+					]),
+				Promise.resolve([]),
 			);
 
 			assert.deepEqual(
@@ -121,8 +130,13 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 					role: 'viewer',
 				})),
 			);
+			// One connection runs one query at a time, so the reads run in turn, each after the one before.
 			assert.deepEqual(
-				await Promise.all(requestIds.map((requestId) => requestNotificationsOf(harness, requestId))),
+				await requestIds.reduce<Promise<unknown[]>>(
+					(previous, requestId) =>
+						previous.then(async (done) => [...done, await requestNotificationsOf(harness, requestId)]),
+					Promise.resolve([]),
+				),
 				[[], []],
 			);
 			assert.deepEqual(

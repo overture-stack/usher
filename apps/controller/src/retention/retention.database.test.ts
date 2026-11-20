@@ -135,8 +135,12 @@ const sweptRowsOf = (harness: Harness, client: pg.ClientBase): readonly OwnRows[
 	grantOperationsOf(harness, client),
 ];
 
+// One connection runs one query at a time, so the counts are read in turn, each after the one before.
 const heldIn = (tables: readonly OwnRows[]): Promise<readonly number[]> =>
-	Promise.all(tables.map((rows) => rows.held()));
+	tables.reduce<Promise<readonly number[]>>(
+		(previous, rows) => previous.then(async (done) => [...done, await rows.held()]),
+		Promise.resolve([]),
+	);
 
 suite('the retention sweep against the store', () => {
 	const shared = suiteHarness({ applications: [] });
@@ -161,7 +165,10 @@ suite('the retention sweep against the store', () => {
 		const tables = sweptRowsOf(harness, harness.clients.migration);
 		const backlog = RETENTION_SWEEP.rowsPerRun + 500;
 		const hold = await holdRetentionSweep(holder);
-		await Promise.all(tables.map((rows) => rows.record(backlog, new Date(Date.now() - HOUR_MILLISECONDS))));
+		await tables.reduce<Promise<unknown>>(
+			(previous, rows) => previous.then(() => rows.record(backlog, new Date(Date.now() - HOUR_MILLISECONDS))),
+			Promise.resolve(),
+		);
 
 		await hold.release();
 		const firstRunEnded = await eventually(
@@ -190,7 +197,10 @@ suite('the retention sweep against the store', () => {
 		cleanupFor(context).defer(() => holder.end());
 		const tables = sweptRowsOf(harness, harness.clients.migration);
 		const hold = await holdRetentionSweep(holder);
-		await Promise.all(tables.map((rows) => rows.record(5, new Date(Date.now() - HOUR_MILLISECONDS))));
+		await tables.reduce<Promise<unknown>>(
+			(previous, rows) => previous.then(() => rows.record(5, new Date(Date.now() - HOUR_MILLISECONDS))),
+			Promise.resolve(),
+		);
 
 		await delay(RUNS_WITHIN_MILLISECONDS);
 		const whileHeld = await heldIn(tables);
@@ -249,13 +259,13 @@ suite("the retention sweep on the controller's configured clock", () => {
 					pastTolerance: signOutsOf(harness, client, table),
 					withinTolerance: signOutsOf(harness, client, table),
 				}));
-				await Promise.all(
-					tables.flatMap(({ atTolerance, pastTolerance, withinTolerance }) => [
-						atTolerance.record(1, new Date(cutoff)),
-						pastTolerance.record(1, new Date(cutoff - 1)),
-						withinTolerance.record(1, new Date(cutoff + 1)),
-					]),
-				);
+				await tables
+					.flatMap(({ atTolerance, pastTolerance, withinTolerance }) => [
+						() => atTolerance.record(1, new Date(cutoff)),
+						() => pastTolerance.record(1, new Date(cutoff - 1)),
+						() => withinTolerance.record(1, new Date(cutoff + 1)),
+					])
+					.reduce<Promise<unknown>>((previous, record) => previous.then(record), Promise.resolve());
 
 				const gone = await eventually(
 					async () =>
