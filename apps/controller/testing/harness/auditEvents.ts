@@ -122,6 +122,12 @@ export const POST_MVP_EVENT_TYPES: readonly string[] = Object.freeze([
 	'grant.unguarded',
 ]);
 
+/**
+ * The Controller's rows written by the schema migration command rather than by a request, so no operation of the
+ * Controller's emits them: the migration command records them in the store before the Controller starts.
+ */
+export const MIGRATION_EVENT_TYPES: readonly string[] = Object.freeze(['settings.seeding']);
+
 /** A severity, as the table and the Bridge name them. */
 export type Severity = 'critical' | 'error' | 'info' | 'warning';
 
