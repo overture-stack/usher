@@ -46,6 +46,21 @@ COPY apps/controller/ apps/controller/
 RUN pnpm --filter @overture-stack/usher-controller build \
  && pnpm --filter @overture-stack/usher-controller deploy --prod --frozen-lockfile /deploy
 
+# Dependencies ship source maps, type declarations and documentation that nothing reads at runtime.
+# Licence and notice files stay, since distributing the code obliges shipping them.
+RUN find /deploy/node_modules -type f \( -name '*.map' -o -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' \
+      -o \( -iname '*.md' ! -iname 'licen*' ! -iname 'notice*' \) \) -delete
+
+# The runtime image has no shell, so what the build leaves in dist is checked here: the controller
+# runs only its JavaScript and the migrations' SQL, and anything else, such as a source map a build
+# setting starts emitting, fails the build.
+RUN set -eu; \
+    unexpected="$(find /deploy/dist -type f ! -name '*.js' ! -path '/deploy/dist/sql/*.sql')"; \
+    if [ -n "${unexpected}" ]; then \
+      printf 'dist holds files the controller never reads:\n%s\n' "${unexpected}" >&2; \
+      exit 1; \
+    fi
+
 # gcr.io/distroless/nodejs26-debian13:nonroot, the multi-platform index (linux/amd64 and linux/arm64
 # among its platforms).
 FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:767ffb7e2ffa9f4280f1af7b99f7f0a1cafb79d0dcc0e0d3aba43843748008a5 AS runtime
