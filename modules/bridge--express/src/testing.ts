@@ -19,6 +19,10 @@ import type { ResolveOutcome } from './core/core.js';
 
 type Results = Readonly<Record<string, Enforcement>>;
 
+// The outcome every function here answers: always one carrying access, so a caller reads its access with no
+// narrowing, and it still stands wherever a core's resolve answers a `ResolveOutcome`.
+type AccessOutcome = Extract<ResolveOutcome, { kind: 'access' }>;
+
 // The access an outcome carries is frozen as the core freezes it, so it is built from a copy of the caller's
 // results, leaving the caller's own objects as they were.
 const copyOf = (results: Results): Results => structuredClone(results);
@@ -29,7 +33,7 @@ const copyOf = (results: Results): Results => structuredClone(results);
  *
  * @param openTierResults each catalogue's result for the open tier, keyed by catalogue.
  */
-export const anonymousAccess = (openTierResults: Results): ResolveOutcome => ({
+export const anonymousAccess = (openTierResults: Results): AccessOutcome => ({
 	access: accessOf(anonymousPrincipal(), copyOf(openTierResults)),
 	kind: 'access',
 });
@@ -45,7 +49,7 @@ export const signedInAccess = (
 	subject: string,
 	results: Results,
 	options: Readonly<{ openTierOnly?: boolean }> = {},
-): ResolveOutcome => ({
+): AccessOutcome => ({
 	access: accessOf(confirmedPrincipal(subject, options.openTierOnly ?? false), copyOf(results)),
 	kind: 'access',
 });
@@ -64,7 +68,7 @@ export const openTierAccess = (
 	credential: string | null,
 	openTierResults: Results,
 	options: Readonly<{ attributionOnlySubject?: string }> = {},
-): ResolveOutcome => {
+): AccessOutcome => {
 	if (credential === null) {
 		return anonymousAccess(openTierResults);
 	}

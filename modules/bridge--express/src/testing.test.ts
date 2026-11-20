@@ -233,6 +233,27 @@ suite('the testing surface', () => {
 		});
 	});
 
+	test("types each outcome as one carrying access, read with no narrowing, and standing wherever a core's outcome does", () => {
+		const results: Readonly<Record<string, Enforcement>> = {
+			records: { kind: 'deny', reason: 'no-grants' },
+		};
+		const outcomes = [
+			anonymousAccess(results),
+			signedInAccess('subject-ana', results),
+			openTierAccess('credential', results),
+		];
+		// Each line compiles only if the function's result carries `access` without narrowing, and stands as a
+		// `ResolveOutcome`: the typecheck is the test, the values only confirm it at run time.
+		const principals = outcomes.map((outcome) => outcome.access.principal);
+		const asCoreOutcomes: readonly ResolveOutcome[] = outcomes;
+
+		assert.equal(principals.length, 3);
+		assert.equal(
+			asCoreOutcomes.every(({ kind }) => kind === 'access'),
+			true,
+		);
+	});
+
 	test('imports nothing but the core access builders and types, so it touches no running core', async () => {
 		const valueImports = valueImportSources(await readFile(new URL('./testing.ts', import.meta.url), 'utf8'));
 
