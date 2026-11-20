@@ -76,6 +76,7 @@ export const readSeedFile = (text: string): SeedReading => {
 		noticeRereadMilliseconds: readSetting(members, 'noticeRereadMilliseconds'),
 		retentionGraceSeconds: readSetting(members, 'retentionGraceSeconds'),
 		retentionMarginSeconds: readSetting(members, 'retentionMarginSeconds'),
+		selfGrantMaximumLifetimeSeconds: readSetting(members, 'selfGrantMaximumLifetimeSeconds'),
 		signInTokenMaximumLifetimeSeconds: readSetting(members, 'signInTokenMaximumLifetimeSeconds'),
 		streamLimitPerAudience: readSetting(members, 'streamLimitPerAudience'),
 		streamMaximumLifetimeSeconds: readSetting(members, 'streamMaximumLifetimeSeconds'),

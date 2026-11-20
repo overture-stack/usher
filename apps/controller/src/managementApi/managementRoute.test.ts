@@ -975,6 +975,35 @@ suite("a management operation's refusals, as its own event records them", () => 
 		);
 	});
 
+	test('records a refusal under the event type the operation reads from what the request names', async (context) => {
+		const stand = await standUp(context, {
+			departures: {
+				event: {
+					named: async () => ({}),
+					type: ({ body }) =>
+						body?.['title'] === 'Ulysses'
+							? 'application.registration'
+							: 'application.servedResourcesChange',
+				},
+			},
+			outcome: async () => ({ kind: 'refused', problem: SHELF_LIMIT }),
+			verifications: ADMIN,
+		});
+
+		await post(stand, { body: '{"title":"Ulysses"}' });
+		await post(stand);
+		await post(stand, { body: '{"title":"\\u0000"}' });
+
+		assert.deepEqual(
+			stand.recorded.map(({ event }) => [event.type, event.data['reason']]),
+			[
+				['application.registration', 'shelfFull'],
+				['application.servedResourcesChange', 'shelfFull'],
+				['application.servedResourcesChange', 'unrepresentableText'],
+			],
+		);
+	});
+
 	test('records the reason an operation gives for its refusal in place of the code answered, the answer unchanged', async (context) => {
 		const hidden = problem('shelfNotFound', 404, 'Shelf not found', 'No shelf you may see has the id named.');
 		const stand = await standUp(context, {
@@ -1474,6 +1503,39 @@ suite('a management operation taking a query, or answering with no content', () 
 			['shelfFull'],
 		);
 		assert.deepEqual(stand.ran, []);
+	});
+
+	test('serves an operation at PATCH, reading its body as a JSON Merge Patch alone, and refusing any other media type 415, recorded denied', async (context) => {
+		const stand = await standUp(context, {
+			departures: { method: 'PATCH' },
+			verifications: ADMIN,
+		});
+		const patch = (contentType: string) =>
+			stand.server.inject({
+				headers: {
+					authorization: 'Bearer admin',
+					'content-type': contentType,
+				},
+				method: 'PATCH',
+				payload: BODY,
+				url: '/admin/shelves/shelf-1/books',
+			});
+
+		const answers = [await patch('application/merge-patch+json'), await patch('application/json')];
+
+		assert.deepEqual(
+			answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+			[
+				[201, undefined],
+				[415, 'unsupportedMediaType'],
+			],
+		);
+		assert.match(String(JSON.parse(answers[1]?.body ?? '{}').detail), /application\/merge-patch\+json/u);
+		assert.deepEqual(stand.ran, [{ input: { title: 'Dubliners' }, params: { id: 'shelf-1' } }]);
+		assert.deepEqual(
+			stand.recorded.map(({ event }) => event.data['reason']),
+			['unsupportedMediaType'],
+		);
 	});
 
 	test('serves an operation at PUT, and answers a success carrying no content with no body and no media type', async (context) => {

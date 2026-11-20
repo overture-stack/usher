@@ -1,7 +1,12 @@
 import type { Problem } from '../http/index.js';
 import { maySee } from '../resourceStanding/index.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
-import type { GrantAuthority, GrantAuthorityQuestion } from './types.js';
+import type {
+	GrantAuthority,
+	GrantAuthorityQuestion,
+	SelfGrantAuthority,
+	SelfGrantAuthorityQuestion,
+} from './types.js';
 
 // The roles a platform administrator grants on any resource.
 const ADMINISTRATOR_GRANTED_ROLES: ReadonlySet<string> = new Set(['owner', 'submitter']);
@@ -47,4 +52,31 @@ export const grantAuthority = ({
 		return refuse(GRANT_PROBLEMS.resourceNotFound, GRANT_PROBLEMS.noAuthorityOnResource.code);
 	}
 	return administrator || standing.countedOwner ? { kind: 'issue' } : refuse(GRANT_PROBLEMS.noAuthorityOnResource);
+};
+
+/**
+ * Decides how a caller's self-grant is answered, judging in turn: a resource that does not exist,
+ * or is retired, is refused 404 `resourceNotFound`, and so is one the caller may not see, its event
+ * recording `noAuthorityOnResource`. A counted owner of the resource, a platform administrator
+ * among them, is issued the grant at once; any other platform administrator asks for it, as a
+ * request someone else decides; anyone else is refused 403 `noAuthorityOnResource`.
+ *
+ * @param question whether the caller is a platform administrator, and where they stand on the
+ *   resource.
+ */
+export const selfGrantAuthority = ({ administrator, standing }: SelfGrantAuthorityQuestion): SelfGrantAuthority => {
+	if (standing === undefined || standing.retired) {
+		return { kind: 'refuse', problem: GRANT_PROBLEMS.resourceNotFound };
+	}
+	if (!maySee(standing, { administrator, asksForRetired: false })) {
+		return {
+			kind: 'refuse',
+			problem: GRANT_PROBLEMS.resourceNotFound,
+			recordedReason: GRANT_PROBLEMS.noAuthorityOnResource.code,
+		};
+	}
+	if (standing.countedOwner) {
+		return { kind: 'issue' };
+	}
+	return administrator ? { kind: 'request' } : { kind: 'refuse', problem: GRANT_PROBLEMS.noAuthorityOnResource };
 };

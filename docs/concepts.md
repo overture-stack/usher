@@ -311,7 +311,7 @@ Beyond the resource-level roles (`owner`, `viewer`), Usher defines two roles wit
 Actions taken in these roles are always logged as auditable events.
 
 **Custodian** holds grant-management rights over one or more categories, across all resources
-in the platform. A Custodian can approve or revoke category grants for the categories they govern
+in the platform. A Custodian can grant or revoke category grants for the categories they govern
 without holding full Admin rights. This is the governance role for instances where a specific
 community needs direct control over who accesses their data. A community representative is
 designated as Custodian for their category. They then govern grants for it independently of

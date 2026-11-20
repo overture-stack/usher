@@ -73,7 +73,7 @@ const CONFIGURATION: ControllerConfiguration = {
 	port: 0,
 	retentionGraceSeconds: 60,
 	retentionMarginSeconds: 30,
-	selfGrantMaximumSeconds: 86_400,
+	selfGrantMaximumLifetimeSeconds: 86_400,
 	serviceAccountRole: 'usher-service-account',
 	signInTokenMaximumLifetimeSeconds: 3600,
 	signedInRule: ['count', 'view', 'export'],
@@ -124,6 +124,7 @@ const STORED_VALUES: {
 	noticeRereadMilliseconds: 250,
 	retentionGraceSeconds: 90,
 	retentionMarginSeconds: 45,
+	selfGrantMaximumLifetimeSeconds: 14_400,
 	signInTokenMaximumLifetimeSeconds: 900,
 	signedInRule: ['view'],
 	streamLimitPerAudience: 2,
@@ -148,7 +149,6 @@ const PENDING_VALUES: {
 	egoImportBaseTier: 'grant',
 	egoImportPrefixes: [''],
 	grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
-	selfGrantMaximumSeconds: 14_400,
 };
 
 suite('the environment a configuration is expressed as', () => {
@@ -288,6 +288,7 @@ suite('the settings a configuration gives the store', () => {
 			noticeRereadMilliseconds: CONFIGURATION.noticeRereadMilliseconds,
 			retentionGraceSeconds: CONFIGURATION.retentionGraceSeconds,
 			retentionMarginSeconds: CONFIGURATION.retentionMarginSeconds,
+			selfGrantMaximumLifetimeSeconds: CONFIGURATION.selfGrantMaximumLifetimeSeconds,
 			signInTokenMaximumLifetimeSeconds: CONFIGURATION.signInTokenMaximumLifetimeSeconds,
 			streamLimitPerAudience: CONFIGURATION.streamLimitPerAudience,
 			streamMaximumLifetimeSeconds: CONFIGURATION.streamMaximumLifetimeSeconds,

@@ -69,6 +69,9 @@ export const liveSettingsOf = (
 	get retentionMarginSeconds() {
 		return source.current().retentionMarginSeconds;
 	},
+	get selfGrantMaximumLifetimeSeconds() {
+		return source.current().selfGrantMaximumLifetimeSeconds;
+	},
 	get signInTokenMaximumLifetimeSeconds() {
 		return source.current().signInTokenMaximumLifetimeSeconds;
 	},

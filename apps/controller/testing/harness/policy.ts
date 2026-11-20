@@ -88,6 +88,18 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  *   `notices`, both sign-out tables and `change_records`. `notices.idp_subject_id` holds the subject
  *   alone; see {@link noticeSubject}.
  * - `audit_log.severity`: the event's severity as its line carries it (#214 Q2).
+ * - `grant_requests` (ruled): a person's request for a grant someone else decides, by its `kind`,
+ *   `selfGrant` alone, asked for by its holder, the principal in `requested_by`; the grant's terms
+ *   as `grants` names them, the requested end in `expires_at`, and what the principal asking was
+ *   shown in `capabilities`; its decision, `granted` or `refused`, with who decided and when, all
+ *   three empty while undecided, the decider being neither the principal who asked nor its holder;
+ *   and the grant written by granting it, in `grant_id`, set exactly when granted. A decision is
+ *   kept once written, and a request is never deleted.
+ * - `grants.requested_by` (ruled): the principal who asked for a grant written by granting a
+ *   request, while `granted_by` names who granted it; `null` for any other grant, and never the
+ *   granter.
+ * - `notification_outbox.request_id` (ruled): the request a `grantRequest` row tells of, beside
+ *   `grant_id`, the grant a `selfGrant` row tells of; each row names the one its kind tells of.
  */
 export const POLICY_TABLES = {
 	administrators: {
@@ -202,6 +214,25 @@ export const POLICY_TABLES = {
 		},
 		name: 'grant_decisions',
 	},
+	grantRequests: {
+		columns: {
+			capabilities: 'capabilities',
+			decidedAt: 'decided_at',
+			decidedBy: 'decided_by',
+			decision: 'decision',
+			expiresAt: 'expires_at',
+			grantId: 'grant_id',
+			holderUserId: 'holder_user_id',
+			id: 'id',
+			kind: 'kind',
+			recordCategoryId: 'record_category_id',
+			requestedAt: 'requested_at',
+			requestedBy: 'requested_by',
+			resourceId: 'resource_id',
+			roleId: 'role_id',
+		},
+		name: 'grant_requests',
+	},
 	grants: {
 		columns: {
 			endedAt: 'ended_at',
@@ -213,6 +244,7 @@ export const POLICY_TABLES = {
 			holderUserId: 'holder_user_id',
 			id: 'id',
 			recordCategoryId: 'record_category_id',
+			requestedBy: 'requested_by',
 			resourceId: 'resource_id',
 			revokedAt: 'revoked_at',
 			revokedBy: 'revoked_by',
@@ -298,6 +330,7 @@ export const POLICY_TABLES = {
 			id: 'id',
 			kind: 'kind',
 			recipientUserId: 'recipient_user_id',
+			requestId: 'request_id',
 		},
 		name: 'notification_outbox',
 	},
@@ -425,19 +458,51 @@ export const POLICY_TABLES = {
  * resource, category and role that is neither revoked nor ended (#212 Q17); the check that a grant
  * ends only once it has expired (`grantEndedAfterExpiry`); and the rule keeping an ended grant's
  * end, expiry and role as written (`grantEndKept`). The two keys carry PostgreSQL's default names.
+ *
+ * A grant request's rules (ruled; the names assumed): its kind one the store knows
+ * (`grantRequestKind`), a self-grant asked for by its holder (`grantRequestSelfHeld`), its
+ * decision recorded whole or not at all (`grantRequestDecisionWhole`) and only as `granted` or
+ * `refused` (`grantRequestDecision`), its grant named exactly when granted
+ * (`grantRequestGrantWhenGranted`), its decider neither the principal who asked nor its holder
+ * (`grantRequestDecidedByAnother`), its decision kept once written (`grantRequestDecisionKept`) and
+ * the request never deleted (`grantRequestKept`); the principal asking for a grant never its
+ * granter (`grantRequestedByAnother`); and an outbox row naming the one reference its kind tells of
+ * (`notificationReference`), of a kind the outbox knows (`notificationKind`).
  */
 export const POLICY_CONSTRAINTS: Readonly<{
 	decisionOrder: string;
 	grantEndKept: string;
 	grantEndedAfterExpiry: string;
+	grantRequestDecidedByAnother: string;
+	grantRequestDecision: string;
+	grantRequestDecisionKept: string;
+	grantRequestDecisionWhole: string;
+	grantRequestGrantWhenGranted: string;
+	grantRequestKept: string;
+	grantRequestKind: string;
+	grantRequestSelfHeld: string;
+	grantRequestedByAnother: string;
 	identity: string;
 	liveGrant: string;
+	notificationKind: string;
+	notificationReference: string;
 }> = Object.freeze({
 	decisionOrder: 'grant_decisions_user_id_grant_id_decided_at_key',
 	grantEndKept: 'grants_end_kept',
 	grantEndedAfterExpiry: 'grants_ended_after_expiry',
+	grantRequestDecidedByAnother: 'grant_requests_decided_by_another',
+	grantRequestDecision: 'grant_requests_decision_known',
+	grantRequestDecisionKept: 'grant_requests_decision_kept',
+	grantRequestDecisionWhole: 'grant_requests_decision_recorded',
+	grantRequestGrantWhenGranted: 'grant_requests_grant_when_granted',
+	grantRequestKept: 'grant_requests_kept',
+	grantRequestKind: 'grant_requests_kind_known',
+	grantRequestSelfHeld: 'grant_requests_self_grant_requested_by_holder',
+	grantRequestedByAnother: 'grants_requested_by_another',
 	identity: 'user_identities_idp_issuer_idp_subject_id_key',
 	liveGrant: 'grants_live_unique',
+	notificationKind: 'notification_outbox_kind_check',
+	notificationReference: 'notification_outbox_reference_matches_kind',
 });
 
 /**
@@ -498,6 +563,14 @@ export const NOTICE_KINDS = Object.freeze(['baseline', 'category', 'global', 'pr
 
 /** The kind of the outbox row that tells a resource's owners of a self-grant on it (#212 Q13). */
 export const SELF_GRANT_NOTIFICATION = 'selfGrant';
+
+/** The kind of the outbox row that tells a resource's owners of a grant request on it (ruled). */
+export const GRANT_REQUEST_NOTIFICATION = 'grantRequest';
+
+/**
+ * The one kind of grant request the store holds (ruled): a grant to the principal asking for it.
+ */
+export const SELF_GRANT_REQUEST = 'selfGrant';
 
 /**
  * The seeded role whose holders own a resource (permissions-model.md). An owner grant is a person's

@@ -265,6 +265,8 @@ const PATHS = {
 	globalRevocation: 'admin/revocations/global',
 	grant: (id: string): string => `admin/grants/${segment(id)}`,
 	grantDecisions: (id: string): string => `admin/grants/${segment(id)}/decisions`,
+	grantRequestDecisions: (id: string): string => `admin/grant-requests/${segment(id)}/decisions`,
+	grantRequests: 'admin/grant-requests',
 	grants: 'admin/grants',
 	liveness: 'health/live',
 	nominationAcceptance: (id: string): string => `admin/nominations/${segment(id)}/acceptance`,
@@ -311,6 +313,8 @@ export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
 	...routes('/admin/audit', ['GET']),
 	...routes('/admin/categories', ['GET', 'POST']),
 	...routes('/admin/categories/{scopedName}', ['PATCH']),
+	...routes('/admin/grant-requests', ['GET']),
+	...routes('/admin/grant-requests/{id}/decisions', ['POST']),
 	...routes('/admin/grants', ['POST']),
 	...routes('/admin/grants/self', ['POST']),
 	...routes('/admin/grants/{id}', ['DELETE', 'PATCH']),
@@ -905,6 +909,44 @@ export const createSelfGrant = async (
 	overrides?: AdminOverrides,
 ): Promise<GrantCreated> =>
 	withGrantId(await send(caller, { json: { ...creation }, method: 'POST', path: PATHS.selfGrants }, overrides));
+
+/**
+ * Decides a grant request, granting or refusing it (ruled): `POST
+ * /admin/grant-requests/{id}/decisions`, its body `{ decision }`. A request granted answers with
+ * the grant written, whose id is read from its body's `id` as `grantId`.
+ *
+ * @param caller the controller and the decider's token.
+ * @param requestId the request's id.
+ * @param decision `granted` or `refused`.
+ * @param overrides departures from the request.
+ */
+export const decideGrantRequest = async (
+	caller: AdminCaller,
+	requestId: string,
+	decision: 'granted' | 'refused',
+	overrides?: AdminOverrides,
+): Promise<GrantCreated> =>
+	withGrantId(
+		await send(
+			caller,
+			{
+				json: { decision },
+				method: 'POST',
+				path: PATHS.grantRequestDecisions(requestId),
+			},
+			overrides,
+		),
+	);
+
+/**
+ * Lists the grant requests the caller may decide, pending and unlapsed, and the caller's own in any
+ * state (ruled): `GET /admin/grant-requests`.
+ *
+ * @param caller the controller and the caller's token.
+ * @param overrides departures from the request, its paging parameters included.
+ */
+export const listGrantRequests = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.grantRequests }, overrides);
 
 /**
  * Revokes a grant: `DELETE /admin/grants/{id}`, carrying a body only when a reason is given.
@@ -1535,6 +1577,7 @@ export const PROBLEMS = Object.freeze({
 	administratorSelfOwnership: problem('administratorSelfOwnership', 403),
 	alreadyExists: problem('alreadyExists', 409),
 	alreadyHolds: problem('alreadyHolds', 409),
+	alreadyRequested: problem('alreadyRequested', 409),
 	applicationKeyLimit: problem('applicationKeyLimit', 409),
 	applicationKeyNotFound: problem('applicationKeyNotFound', 404),
 	applicationNotFound: problem('applicationNotFound', 404),
@@ -1543,6 +1586,7 @@ export const PROBLEMS = Object.freeze({
 	doesNotHold: problem('doesNotHold', 409),
 	firstAdministratorAccepted: problem('firstAdministratorAccepted', 409),
 	grantNotFound: problem('grantNotFound', 404),
+	grantReplaced: problem('grantReplaced', 409),
 	grantsOrInvitationsRemain: problem('grantsOrInvitationsRemain', 409),
 	holderNotFound: problem('holderNotFound', 404),
 	importInProgress: problem('importInProgress', 409),
@@ -1554,11 +1598,18 @@ export const PROBLEMS = Object.freeze({
 	nominationSuperseded: problem('nominationSuperseded', 409),
 	nomineeNotFound: problem('nomineeNotFound', 404),
 	notFirstUser: problem('notFirstUser', 403),
+	ownRequest: problem('ownRequest', 403),
 	ownerGrantsDoNotExpire: problem('ownerGrantsDoNotExpire', 422),
 	ownersAndAdministratorsOnly: problem('ownersAndAdministratorsOnly', 403),
 	registrationHasHistory: problem('registrationHasHistory', 422),
+	requestDecided: problem('requestDecided', 409),
+	requestLapsed: problem('requestLapsed', 409),
+	requestNotFound: problem('requestNotFound', 404),
 	resourceNeedsAnOwner: problem('resourceNeedsAnOwner', 409),
 	resourceNotFound: problem('resourceNotFound', 404),
+	selfGrantExpiryRequired: problem('selfGrantExpiryRequired', 422),
+	selfGrantTooLong: problem('selfGrantTooLong', 422),
+	selfWideningNotPermitted: problem('selfWideningNotPermitted', 403),
 	serviceAccountNotPermitted: problem('serviceAccountNotPermitted', 403),
 	storeUnavailable: problem('storeUnavailable', 503),
 	unknownApplication: problem('unknownApplication', 422),

@@ -59,6 +59,7 @@ export const readHeldSettings = (rows: readonly StoredSetting[]): HeldSettingsRe
 		noticeRereadMilliseconds: readStored(rows, 'noticeRereadMilliseconds'),
 		retentionGraceSeconds: readStored(rows, 'retentionGraceSeconds'),
 		retentionMarginSeconds: readStored(rows, 'retentionMarginSeconds'),
+		selfGrantMaximumLifetimeSeconds: readStored(rows, 'selfGrantMaximumLifetimeSeconds'),
 		signInTokenMaximumLifetimeSeconds: readStored(rows, 'signInTokenMaximumLifetimeSeconds'),
 		streamLimitPerAudience: readStored(rows, 'streamLimitPerAudience'),
 		streamMaximumLifetimeSeconds: readStored(rows, 'streamMaximumLifetimeSeconds'),

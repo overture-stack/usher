@@ -19,6 +19,7 @@ const defaultsWith = (overrides: Readonly<Record<string, unknown>>): Record<stri
 	noticeRereadMilliseconds: 2000,
 	retentionGraceSeconds: 60,
 	retentionMarginSeconds: 30,
+	selfGrantMaximumLifetimeSeconds: 86400,
 	signInTokenMaximumLifetimeSeconds: 300,
 	streamLimitPerAudience: 64,
 	streamMaximumLifetimeSeconds: 900,

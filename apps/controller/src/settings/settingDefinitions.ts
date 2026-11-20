@@ -82,6 +82,7 @@ export const SETTING_DEFINITIONS: { readonly [Name in SettingName]: SettingDefin
 	noticeRereadMilliseconds: { changeable: true, fallback: 2000, read: TIMER_MILLISECONDS, severity: 'warning' },
 	retentionGraceSeconds: { changeable: true, fallback: 60, read: wholeNumber(0), severity: 'critical' },
 	retentionMarginSeconds: { changeable: true, fallback: 30, read: wholeNumber(0), severity: 'critical' },
+	selfGrantMaximumLifetimeSeconds: { changeable: true, fallback: 86_400, read: wholeNumber(1), severity: 'critical' },
 	signInTokenMaximumLifetimeSeconds: {
 		changeable: true,
 		fallback: 300,

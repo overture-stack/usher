@@ -420,6 +420,7 @@ const {
 	capabilities,
 	categories,
 	grantDecisions,
+	grantRequests,
 	grants,
 	invitations,
 	notificationOutbox,
@@ -576,6 +577,124 @@ export const notificationsOf = async (harness: Harness, grantId: string): Promis
       WHERE ${at('outbox', notificationOutbox.columns.grantId)}::text = $1
       ORDER BY 3`,
 		[grantId],
+	);
+	return rows;
+};
+
+/** A grant request as the store holds it (ruled), people by subject. */
+export interface StoredGrantRequest {
+	/** What the principal asking was shown, as `entity.action` names, sorted. */
+	capabilities: readonly string[];
+
+	/** `global.controlled` or `resource.internal`; `null` for the whole resource. */
+	category: string | null;
+
+	decidedAt: Date | null;
+	deciderSubject: string | null;
+	decision: string | null;
+	expiresAt: Date;
+	grantId: string | null;
+	holderSubject: string;
+	kind: string;
+	requestedAt: Date;
+	requestedBySubject: string;
+
+	/** By externalId. */
+	resource: string;
+
+	role: string;
+}
+
+/**
+ * One grant request as the store holds it.
+ *
+ * @param harness the harness, read under the migration role.
+ * @param requestId the request's id.
+ * @throws when the store holds no request by that id.
+ */
+export const storedGrantRequest = async (harness: Harness, requestId: string): Promise<StoredGrantRequest> => {
+	const subjectOf = (column: string): string =>
+		`(SELECT ${at('identity', userIdentities.columns.idpSubjectId)}
+      FROM ${qualified(userIdentities)} identity
+       WHERE ${at('identity', userIdentities.columns.userId)} = ${column} LIMIT 1)`;
+	const { rows } = await harness.clients.migration.query<StoredGrantRequest>(
+		`SELECT ARRAY(SELECT unnest(${at('asked', grantRequests.columns.capabilities)})
+              ORDER BY 1) AS capabilities,
+            ${at('record_category', categories.columns.scope)} || '.'
+              || ${at('record_category', categories.columns.name)} AS category,
+            ${at('asked', grantRequests.columns.decidedAt)} AS "decidedAt",
+            ${subjectOf(at('asked', grantRequests.columns.decidedBy))} AS "deciderSubject",
+            ${at('asked', grantRequests.columns.decision)} AS decision,
+            ${at('asked', grantRequests.columns.expiresAt)} AS "expiresAt",
+            ${at('asked', grantRequests.columns.grantId)}::text AS "grantId",
+            ${subjectOf(at('asked', grantRequests.columns.holderUserId))} AS "holderSubject",
+            ${at('asked', grantRequests.columns.kind)} AS kind,
+            ${at('asked', grantRequests.columns.requestedAt)} AS "requestedAt",
+            ${subjectOf(at('asked', grantRequests.columns.requestedBy))} AS "requestedBySubject",
+            ${at('resource_row', resources.columns.externalId)} AS resource,
+            ${at('role_row', roles.columns.name)} AS role
+       FROM ${qualified(grantRequests)} asked
+       JOIN ${qualified(resources)} resource_row
+         ON ${at('resource_row', resources.columns.id)}
+          = ${at('asked', grantRequests.columns.resourceId)}
+       JOIN ${qualified(roles)} role_row
+         ON ${at('role_row', roles.columns.id)} = ${at('asked', grantRequests.columns.roleId)}
+       LEFT JOIN ${qualified(categories)} record_category
+         ON ${at('record_category', categories.columns.id)}
+          = ${at('asked', grantRequests.columns.recordCategoryId)}
+      WHERE ${at('asked', grantRequests.columns.id)}::text = $1`,
+		[requestId],
+	);
+	const [found] = rows;
+	if (found !== undefined) {
+		return found;
+	}
+	throw new Error('the store holds no grant request by that id');
+};
+
+/**
+ * The subject of the person a grant names as having asked for it (ruled), or `null` for a grant no
+ * request asked for.
+ *
+ * @param harness the harness, read under the migration role.
+ * @param grantId the grant's id.
+ */
+export const grantRequestedBy = async (harness: Harness, grantId: string): Promise<string | null> => {
+	const { rows } = await harness.clients.migration.query<{
+		subject: string | null;
+	}>(
+		`SELECT ${at('identity', userIdentities.columns.idpSubjectId)} AS subject
+       FROM ${qualified(grants)} held
+       LEFT JOIN ${qualified(userIdentities)} identity
+         ON ${at('identity', userIdentities.columns.userId)}
+          = ${at('held', grants.columns.requestedBy)}
+      WHERE ${at('held', grants.columns.id)}::text = $1`,
+		[grantId],
+	);
+	return rows[0]?.subject ?? null;
+};
+
+/**
+ * The outbox rows naming a grant request (ruled), by recipient.
+ *
+ * @param harness the harness.
+ * @param requestId the request's id.
+ */
+export const requestNotificationsOf = async (
+	harness: Harness,
+	requestId: string,
+): Promise<readonly StoredNotification[]> => {
+	const { rows } = await harness.clients.migration.query<StoredNotification>(
+		`SELECT ${at('outbox', notificationOutbox.columns.deliveredAt)} AS "deliveredAt",
+            ${at('outbox', notificationOutbox.columns.kind)} AS kind,
+            ${at('recipient', userIdentities.columns.idpSubjectId)} AS "recipientSubject"
+       FROM ${qualified(notificationOutbox)} outbox
+       JOIN ${qualified(userIdentities)} recipient
+         ON ${at('recipient', userIdentities.columns.userId)}
+          = ${at('outbox', notificationOutbox.columns.recipientUserId)}
+      WHERE ${at('outbox', notificationOutbox.columns.requestId)}::text = $1
+      ORDER BY 3`,
+		[requestId],
 	);
 	return rows;
 };

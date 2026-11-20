@@ -19,6 +19,7 @@ const HELD: HeldSettings = {
 	noticeRereadMilliseconds: 1000,
 	retentionGraceSeconds: 60,
 	retentionMarginSeconds: 60,
+	selfGrantMaximumLifetimeSeconds: 86400,
 	signInTokenMaximumLifetimeSeconds: 300,
 	streamLimitPerAudience: 64,
 	streamMaximumLifetimeSeconds: 3600,

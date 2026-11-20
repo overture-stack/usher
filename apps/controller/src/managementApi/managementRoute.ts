@@ -168,13 +168,15 @@ export const managementRoute = <Input>(
 		},
 	): Promise<void> => {
 		if (operation.event !== undefined) {
+			const { type } = operation.event;
+			const asked = { body, params: paramsOf(request) };
 			const named: EventMembers = holdsStorablePath(request)
-				? await operation.event.named({ body, params: paramsOf(request) }).catch(() => ({}))
+				? await operation.event.named(asked).catch(() => ({}))
 				: {};
 			await trail.recordEvent(actorOf(principal), {
 				data: { ...named, reason, result, sourceIp: request.ip },
 				severity,
-				type: operation.event.type,
+				type: typeof type === 'function' ? type(asked) : type,
 			});
 		}
 	};

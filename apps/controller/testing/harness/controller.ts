@@ -180,6 +180,14 @@ export interface ControllerSettings {
 	/** The margin, in seconds, that the notice retention floor adds beyond the token lifetime and the grace period. */
 	retentionMarginSeconds: number;
 
+	/**
+	 * The longest a self-grant may last, in seconds, from the instant it is asked for: 86,400 by
+	 * default (#212). An owner's self-grant and a platform administrator's request are held to it,
+	 * and so is a change to a self-grant's end. A setting the store holds, written to it by
+	 * {@link storedSettingsOf}.
+	 */
+	selfGrantMaximumLifetimeSeconds: number;
+
 	/** The identity provider realm role marking its holder's token as a service account's; a role other than the administrator role, `usher-service-account` by default. */
 	serviceAccountRole: string;
 
@@ -291,9 +299,6 @@ export interface PendingSettings {
 	 * `windowSeconds` (#214 Q19), as `audit-events.md` names the setting.
 	 */
 	grantRateThreshold: { operationCount: number; windowSeconds: number };
-
-	/** The longest an administrator's self-grant may last, in seconds: 86,400 by default (#212). */
-	selfGrantMaximumSeconds: number;
 }
 
 /** The Controller's configuration as the harness holds it: the settings the Controller reads, and those it does not read yet. */
@@ -541,6 +546,7 @@ export type StoredField =
 	| 'noticeRereadMilliseconds'
 	| 'retentionGraceSeconds'
 	| 'retentionMarginSeconds'
+	| 'selfGrantMaximumLifetimeSeconds'
 	| 'signInTokenMaximumLifetimeSeconds'
 	| 'signedInRule'
 	| 'streamLimitPerAudience'
@@ -618,6 +624,7 @@ export const storedSettingsOf = ({
 	noticeRereadMilliseconds,
 	retentionGraceSeconds,
 	retentionMarginSeconds,
+	selfGrantMaximumLifetimeSeconds,
 	signInTokenMaximumLifetimeSeconds,
 	signedInRule,
 	streamLimitPerAudience,
@@ -636,6 +643,7 @@ export const storedSettingsOf = ({
 	noticeRereadMilliseconds,
 	retentionGraceSeconds,
 	retentionMarginSeconds,
+	selfGrantMaximumLifetimeSeconds,
 	signInTokenMaximumLifetimeSeconds,
 	streamLimitPerAudience,
 	streamMaximumLifetimeSeconds,

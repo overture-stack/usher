@@ -73,6 +73,23 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT_TYPES];
 
 /**
+ * The events of grant requests and of a grant's role change (ruled), without the prefix: a request
+ * recorded, a request granted or refused, and a grant's role changed. The Events table has no rows
+ * for them, so they are kept apart from {@link AUDIT_EVENT_TYPES}, which holds its rows.
+ */
+export const RULED_GRANT_EVENT_TYPES = Object.freeze({
+	grantRequest: 'grant.request',
+	grantRequestDecision: 'grant.requestDecision',
+	grantRoleChange: 'grant.roleChange',
+} as const);
+
+/** A ruled grant event's type, without the prefix. */
+export type RuledGrantEventType = (typeof RULED_GRANT_EVENT_TYPES)[keyof typeof RULED_GRANT_EVENT_TYPES];
+
+/** An event's type a test reads, without the prefix: a row of the Events table, or a ruled one. */
+export type RecordedEventType = AuditEventType | RuledGrantEventType;
+
+/**
  * The Bridge's events, the keys of its catalogue. The Bridge keeps the catalogue internal, so its
  * names are copied here; when the Bridge adds one, add it. Follows `events.ts` `EVENT_CATALOGUE`.
  */
@@ -699,6 +716,18 @@ export const DRY_RUN_LOG_LINE = Object.freeze({
 } as const);
 
 /**
+ * The operational line a start writes, at warning, for each grant its database role holds beyond
+ * the writes the release's migrations grant it (the name assumed): its `message` naming it, the
+ * grant's `object` and `privilege`, and its `column` for a grant on one column.
+ */
+export const GRANT_BEYOND_USE_LOG_LINE = Object.freeze({
+	message: Object.freeze({
+		member: 'message',
+		value: 'store.grantBeyondUse',
+	} as const),
+} as const);
+
+/**
  * How the exchange's event names a token past the Bridge's response cap (ruled, "#215's role route
  * and the held-grant scale" 2: the limit, the principal's held count and the token's size, never an
  * id; the names assumed until Usher's docs pass): the `token.exchange` event, its `reason` this limit's
@@ -1142,7 +1171,7 @@ export const eventsIn = (log: LogCapture, since: number = 0): readonly CloudEven
  * @param events the events.
  * @param type the event type, without the prefix.
  */
-export const ofType = (events: readonly CloudEvent[], type: AuditEventType): readonly CloudEvent[] =>
+export const ofType = (events: readonly CloudEvent[], type: RecordedEventType): readonly CloudEvent[] =>
 	events.filter((event) => event.type === emittedType(type));
 
 /**
@@ -1155,7 +1184,7 @@ export const ofType = (events: readonly CloudEvent[], type: AuditEventType): rea
  */
 export const eventDataOf = (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	since: number = 0,
 ): readonly Readonly<Record<string, unknown>>[] => ofType(eventsIn(log, since), type).map(dataOf);
 
@@ -1196,7 +1225,7 @@ export const awaitEvents = async (
  */
 export const awaitEventsOfType = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	{ count = 1, ...options }: AwaitOptions & { count?: number } = {},
 ): Promise<readonly CloudEvent[]> =>
 	ofType(await awaitEvents(log, (events) => ofType(events, type).length >= count, options), type);
@@ -1211,7 +1240,7 @@ export const awaitEventsOfType = async (
  */
 export const awaitEventData = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	options: AwaitOptions & { count?: number } = {},
 ): Promise<readonly Readonly<Record<string, unknown>>[]> => (await awaitEventsOfType(log, type, options)).map(dataOf);
 

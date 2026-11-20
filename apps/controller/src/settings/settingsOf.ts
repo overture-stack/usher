@@ -19,6 +19,7 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 		noticeRereadMilliseconds,
 		retentionGraceSeconds,
 		retentionMarginSeconds,
+		selfGrantMaximumLifetimeSeconds,
 		signInTokenMaximumLifetimeSeconds,
 		streamLimitPerAudience,
 		streamMaximumLifetimeSeconds,
@@ -36,6 +37,7 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 		noticeRereadMilliseconds.kind === 'read' &&
 		retentionGraceSeconds.kind === 'read' &&
 		retentionMarginSeconds.kind === 'read' &&
+		selfGrantMaximumLifetimeSeconds.kind === 'read' &&
 		signInTokenMaximumLifetimeSeconds.kind === 'read' &&
 		streamLimitPerAudience.kind === 'read' &&
 		streamMaximumLifetimeSeconds.kind === 'read' &&
@@ -53,6 +55,7 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 				noticeRereadMilliseconds: noticeRereadMilliseconds.value,
 				retentionGraceSeconds: retentionGraceSeconds.value,
 				retentionMarginSeconds: retentionMarginSeconds.value,
+				selfGrantMaximumLifetimeSeconds: selfGrantMaximumLifetimeSeconds.value,
 				signInTokenMaximumLifetimeSeconds: signInTokenMaximumLifetimeSeconds.value,
 				streamLimitPerAudience: streamLimitPerAudience.value,
 				streamMaximumLifetimeSeconds: streamMaximumLifetimeSeconds.value,

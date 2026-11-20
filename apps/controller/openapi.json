@@ -66,6 +66,15 @@
 					"type": "string"
 				}
 			},
+			"GrantRequestId": {
+				"description": "The grant request's id.",
+				"in": "path",
+				"name": "id",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
 			"IncludeRetired": {
 				"description": "`true` lists retired resources too, and `false`, like leaving it out, lists none. Any other value is refused with `400`. A principal other than a platform administrator sending `true` is refused with `403` `administratorOnly`.",
 				"in": "query",
@@ -968,6 +977,11 @@
 						"format": "uuid",
 						"type": "string"
 					},
+					"kind": {
+						"const": "grant",
+						"description": "Marks the answer as a grant, beside `grantRequest` on a `GrantRequest`.",
+						"type": "string"
+					},
 					"resource": {
 						"$ref": "#/components/schemas/ExternalId"
 					},
@@ -995,7 +1009,7 @@
 						"type": "string"
 					},
 					"selfGrant": {
-						"description": "`true` for a principal's grant to themself.",
+						"description": "`true` for a principal's grant to themself: one they granted themself, or one they asked for in a request someone else granted.",
 						"type": "boolean"
 					},
 					"state": {
@@ -1009,6 +1023,7 @@
 					"grantedBy",
 					"holder",
 					"id",
+					"kind",
 					"resource",
 					"revokedAt",
 					"role",
@@ -1089,6 +1104,113 @@
 				},
 				"required": ["grants"],
 				"type": "object"
+			},
+			"GrantRequest": {
+				"additionalProperties": false,
+				"description": "A principal's request for a grant, decided by someone other than the principal who asked for it and its holder. A request lapses at its expiry while undecided.",
+				"properties": {
+					"category": {
+						"description": "The scoped record category the grant would apply to.",
+						"type": "string"
+					},
+					"decidedAt": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/Instant"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "When it was granted or refused; `null` while undecided."
+					},
+					"expiresAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the grant would end, and when the request lapses while undecided."
+					},
+					"grantId": {
+						"description": "The grant written by granting it; `null` unless it was granted.",
+						"format": "uuid",
+						"type": ["string", "null"]
+					},
+					"id": {
+						"description": "The request's opaque id.",
+						"format": "uuid",
+						"type": "string"
+					},
+					"kind": {
+						"const": "grantRequest",
+						"description": "Marks the answer as a grant request, beside `grant` on a `Grant`.",
+						"type": "string"
+					},
+					"requestKind": {
+						"description": "What is requested: `selfGrant`, a grant to the principal asking for it. Other kinds may be added, so a reader takes an unknown one as a request it cannot act on.",
+						"type": "string"
+					},
+					"requestedAt": {
+						"$ref": "#/components/schemas/Instant"
+					},
+					"requestedBy": {
+						"$ref": "#/components/schemas/PrincipalBySubject"
+					},
+					"resource": {
+						"$ref": "#/components/schemas/ExternalId"
+					},
+					"role": {
+						"type": "string"
+					},
+					"state": {
+						"$ref": "#/components/schemas/GrantRequestState"
+					}
+				},
+				"required": [
+					"category",
+					"decidedAt",
+					"expiresAt",
+					"grantId",
+					"id",
+					"kind",
+					"requestKind",
+					"requestedAt",
+					"requestedBy",
+					"resource",
+					"role",
+					"state"
+				],
+				"type": "object"
+			},
+			"GrantRequestDecision": {
+				"description": "A decision on a grant request. Members not listed here are refused with `400`.",
+				"properties": {
+					"decision": {
+						"description": "`granted` or `refused`; any other string is refused with `422`.",
+						"type": "string"
+					}
+				},
+				"required": ["decision"],
+				"type": "object"
+			},
+			"GrantRequestPage": {
+				"additionalProperties": false,
+				"properties": {
+					"next": {
+						"description": "The cursor of the next page; `null` or left out on the last.",
+						"type": ["string", "null"]
+					},
+					"requests": {
+						"items": {
+							"$ref": "#/components/schemas/GrantRequest"
+						},
+						"type": "array"
+					}
+				},
+				"required": ["requests"],
+				"type": "object"
+			},
+			"GrantRequestState": {
+				"description": "A grant request's state: `pending` while undecided and before its expiry, `lapsed` once its expiry passes undecided, and `granted` or `refused` once decided.",
+				"enum": ["granted", "lapsed", "pending", "refused"],
+				"type": "string"
 			},
 			"GrantRevocation": {
 				"properties": {
@@ -1964,18 +2086,18 @@
 			"SelfGrantCreation": {
 				"properties": {
 					"category": {
-						"description": "A scoped record category.",
+						"description": "A scoped record category the resource offers. A `submitter` self-grant naming none takes the instance's submitter category; any other data-plane role names one.",
 						"type": "string"
 					},
 					"expiresAt": {
-						"description": "When the self-grant ends: an RFC 3339 instant with an offset, in the future and within the instance's longest self-grant life. Any other string is refused with `422`.",
+						"description": "When the self-grant ends: an RFC 3339 instant with an offset, in the future and within the instance's longest self-grant life of the request. Any other string is refused with `422`, and an absent or `null` expiry with `400`.",
 						"type": "string"
 					},
 					"resource": {
 						"$ref": "#/components/schemas/ExternalId"
 					},
 					"role": {
-						"description": "A data-plane role defined by the instance; any other is refused with `422`.",
+						"description": "A data-plane role defined by the instance; any other is refused with `422`, but `owner` named by a platform administrator, refused with `403`.",
 						"type": "string"
 					}
 				},
@@ -2056,6 +2178,11 @@
 						"minimum": 0,
 						"type": "integer"
 					},
+					"selfGrantMaximumLifetimeSeconds": {
+						"description": "The longest a self-grant lives, in seconds, from the instant it is asked for; it bounds an owner extending or widening a grant they hold too, measured from the change.",
+						"minimum": 1,
+						"type": "integer"
+					},
 					"signInTokenMaximumLifetimeSeconds": {
 						"description": "The longest a sign-in token may live, in seconds.",
 						"minimum": 1,
@@ -2101,6 +2228,7 @@
 					"noticeRereadMilliseconds",
 					"retentionGraceSeconds",
 					"retentionMarginSeconds",
+					"selfGrantMaximumLifetimeSeconds",
 					"signInTokenMaximumLifetimeSeconds",
 					"streamLimitPerAudience",
 					"streamMaximumLifetimeSeconds",
@@ -2145,6 +2273,11 @@
 					"retentionMarginSeconds": {
 						"description": "The margin a notice is kept beyond the grace period, in seconds.",
 						"minimum": 0,
+						"type": "integer"
+					},
+					"selfGrantMaximumLifetimeSeconds": {
+						"description": "The longest a self-grant lives, in seconds, from the instant it is asked for; it bounds an owner extending or widening a grant they hold too, measured from the change.",
+						"minimum": 1,
 						"type": "integer"
 					},
 					"signInTokenMaximumLifetimeSeconds": {
@@ -3092,6 +3225,219 @@
 				"tags": ["Categories"]
 			}
 		},
+		"/admin/grant-requests": {
+			"get": {
+				"description": "Lists grant requests, a page at a time, in a stable order: those the principal may decide that are pending and have not lapsed, and the principal's own, in any state. An owner of a resource decides the requests on it, and a platform administrator any request but their own.\n\nA request on a retired resource is listed to nobody.",
+				"operationId": "listGrantRequests",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/ListingLimit"
+					}
+				],
+				"responses": {
+					"400": {
+						"$ref": "#/components/responses/Unreadable"
+					},
+					"401": {
+						"$ref": "#/components/responses/CredentialRefused"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["serviceAccountNotPermitted"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`serviceAccountNotPermitted`: a service account calls."
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetails"
+								}
+							}
+						},
+						"description": "The page size is zero or below it."
+					},
+					"503": {
+						"$ref": "#/components/responses/ReadUnavailable"
+					},
+					"2XX": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/GrantRequestPage"
+								}
+							}
+						},
+						"description": "A page of grant requests."
+					}
+				},
+				"security": [
+					{
+						"managementToken": []
+					}
+				],
+				"summary": "Lists grant requests",
+				"tags": ["Grants"]
+			}
+		},
+		"/admin/grant-requests/{id}/decisions": {
+			"post": {
+				"description": "Grants or refuses a grant request. A request is decided once, by an owner of its resource, as `createGrant` defines one, or by any platform administrator, and never by the principal who asked for it or its holder. To anyone else a request is answered as one that does not exist, as is a request on a retired resource.\n\nGranting a request writes the grant it names, its holder the principal who asked for it, `grantedAt` the instant it is granted and `expiresAt` the request's, with the holder's acceptance showing the capabilities they were shown when they asked, and answers `200` with the `Grant`, `kind` `grant`. A refusal records the decision alone and answers `200` with the decided `GrantRequest`, `kind` `grantRequest`.\n\nA request decided already is refused with `requestDecided`, and one at or past its expiry with `requestLapsed`. Granting a request for a holder holding the grant live already is refused with `alreadyHolds`.",
+				"operationId": "decideGrantRequest",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/GrantRequestId"
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/GrantRequestDecision"
+							}
+						}
+					},
+					"description": "The decision.",
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/Grant"
+										},
+										{
+											"$ref": "#/components/schemas/GrantRequest"
+										}
+									]
+								}
+							}
+						},
+						"description": "The request is decided: granted, answered with the grant written, `kind` `grant`; or refused, answered with the request, `kind` `grantRequest`."
+					},
+					"400": {
+						"$ref": "#/components/responses/Unreadable"
+					},
+					"401": {
+						"$ref": "#/components/responses/CredentialRefused"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["ownRequest", "serviceAccountNotPermitted"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`ownRequest`: the principal asked for the request or is its holder. `serviceAccountNotPermitted`: a service account calls, before any lookup."
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["requestNotFound"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "The id is unknown or malformed, names a request on a resource where the principal holds no authority to decide it, or names a request on a retired resource; `requestNotFound` for each."
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["alreadyHolds", "requestDecided", "requestLapsed"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`requestDecided`: the request is granted or refused already, and keeps its decision. `requestLapsed`: its expiry has passed undecided. `alreadyHolds`: granting a request for a holder who holds the grant live already."
+					},
+					"413": {
+						"$ref": "#/components/responses/BodyTooLarge"
+					},
+					"415": {
+						"$ref": "#/components/responses/JsonOnly"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetails"
+								}
+							}
+						},
+						"description": "The decision is neither `granted` nor `refused`."
+					},
+					"503": {
+						"$ref": "#/components/responses/ChangeUnavailable"
+					}
+				},
+				"security": [
+					{
+						"managementToken": []
+					}
+				],
+				"summary": "Decides a grant request",
+				"tags": ["Grants"]
+			}
+		},
 		"/admin/grants": {
 			"post": {
 				"description": "Creates a grant: a role on a resource for a holder, named by subject or by address. A holder named by address is found through the identity provider's directory, by exact address in any letter case, and the address is never stored. An owner naming the holder by address receives the same answer whether or not an account holds the address. A holder named by a subject the controller has never met is recorded with the grant, and answers it once signed in.\n\nA data-plane role names a record category offered by the resource: any global category, as `global.` and its name, or one of the resource's own, as `resource.` and its name. A control-plane role, such as `owner`, names none and takes the whole resource, and an owner grant takes no expiry. A `submitter` grant naming no category takes the instance's submitter category. A grant names its record category alone: the member naming a field category, `fieldCategory`, is refused with `422`, whatever it holds, and so is `grantedBy`, since the caller is the granter. A `holder.email` that is no string, such as a list of addresses, is refused with `400`.\n\nWho may see a resource: a platform administrator; a person holding a grant on it, an owner grant included, that is neither revoked nor expired and that they have not declined, pending or accepted; and, for a resource at the `open` or `registered` access level that is not suppressed, every signed-in principal. A retired resource is seen only by a platform administrator asking for it, and every grant operation answers it as one that does not exist. A principal who may not see a resource is answered exactly as for one that does not exist; one who may see it and holds no authority for what they ask is refused with `403` `noAuthorityOnResource`.\n\nA resource's owners grant any role on it, `owner` included. An owner is a person holding an owner grant on it that is neither revoked nor expired and that they have accepted. A platform administrator grants the `submitter` and `owner` roles on any resource and makes anyone but themself an owner. No one grants the administrator role, `admin`.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; whether the instance defines the role, and whether the role names a category, `422`; a platform administrator naming themself an owner, `403` `administratorSelfOwnership`; a principal naming themself, `422`, the text naming `/admin/grants/self`; a platform administrator granting any role but `submitter` and `owner`, `403` `administratorGrantsNoConsumerAccess`, answered alike whether or not the resource exists; whether the principal may see the resource, `404`, and holds authority on it, `403`; and the category, `422`. A holder named by address is looked up only once all of these pass, and a grant held already is judged last, `409`.\n\nThe holder answers the grant through its decisions. When the instance accepts grants at creation, the controller records the holder's acceptance with the grant, showing the capabilities the grant's role confers then. A grant on the same terms that has expired does not stop the holder from being granted those terms again.",
@@ -3257,7 +3603,7 @@
 		},
 		"/admin/grants/self": {
 			"post": {
-				"description": "Creates the principal's own grant, which is also its acceptance: a data-plane role on a resource where they hold grant authority, a platform administrator on any resource. The expiry is required, in the future, and within the instance's longest self-grant life.\n\nEach owner of the resource is told of the self-grant.",
+				"description": "Asks for the principal's own grant of a data-plane role on a resource, ending at an expiry in the future and within the instance's longest self-grant life of the request. The holder is always the principal, so a `holder` member is refused with `422`.\n\nAn owner of the resource, as `createGrant` defines one, is granted at once, with their acceptance showing what the role confers then, and is answered `201` with the `Grant`, `kind` `grant`. Each other owner of the resource is told of the self-grant.\n\nA platform administrator who is not an owner of the resource asks instead, and is answered `202` with a `GrantRequest`, `kind` `grantRequest`, pending. Each owner of the resource is told of the request, and no other platform administrator is. An owner of the resource or another platform administrator decides it through `POST /admin/grant-requests/{id}/decisions`, never the platform administrator who asked; one left undecided lapses at its expiry. A request on a resource without an owner is told to nobody, and only another platform administrator can grant it.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; a platform administrator naming the `owner` role, `403` `administratorSelfOwnership`; whether the instance defines the role, and whether it is a data-plane role, `422`; whether the principal may see the resource, `404`, and holds authority on it, `403`, as for `createGrant`: a platform administrator on any resource, an owner on their own; the category, `422`; a grant held live on the same terms, `409` `alreadyHolds`; and, for a request, one by the principal on the same terms that is pending and has not lapsed, `409` `alreadyRequested`.",
 				"operationId": "createSelfGrant",
 				"requestBody": {
 					"content": {
@@ -3271,6 +3617,26 @@
 					"required": true
 				},
 				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Grant"
+								}
+							}
+						},
+						"description": "An owner's self-grant is created, with its acceptance. `id` is its opaque id, and `kind` is `grant`."
+					},
+					"202": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/GrantRequest"
+								}
+							}
+						},
+						"description": "A platform administrator's request is recorded, pending until another decides it. `kind` is `grantRequest`."
+					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
 					},
@@ -3337,7 +3703,7 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["alreadyHolds"]
+													"enum": ["alreadyHolds", "alreadyRequested"]
 												}
 											},
 											"type": "object"
@@ -3346,7 +3712,7 @@
 								}
 							}
 						},
-						"description": "The principal already holds this grant live; `alreadyHolds`."
+						"description": "`alreadyHolds`: the principal already holds this grant live. `alreadyRequested`: the principal has asked for this grant already, and the request is pending and has not lapsed."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3362,20 +3728,10 @@
 								}
 							}
 						},
-						"description": "A rule is broken: an expiry in the past or past the longest self-grant life, a control-plane role, or a member naming a holder."
+						"description": "A rule is broken. `holderNotTaken`: the body names a `holder`. `controlPlaneSelfGrant`: the role is a control-plane role. `selfGrantTooLong`: the expiry is past the instance's longest self-grant life of the request. The rest carry the codes `createGrant` gives them: the administrator role, `admin`; a role not defined by the instance, in its exact letter case; a category not offered by the resource; a data-plane role naming no category, but `submitter`; and an expiry that is no RFC 3339 instant with an offset, or one not in the future."
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
-					},
-					"2XX": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/Grant"
-								}
-							}
-						},
-						"description": "The self-grant is created, with its acceptance."
 					}
 				},
 				"security": [
@@ -3383,7 +3739,7 @@
 						"managementToken": []
 					}
 				],
-				"summary": "Creates a self-grant",
+				"summary": "Creates a self-grant, or asks for one",
 				"tags": ["Grants"]
 			}
 		},
@@ -3519,7 +3875,7 @@
 				"tags": ["Grants"]
 			},
 			"patch": {
-				"description": "Changes a grant's expiry, or removes it with `null`, or changes its role, as a JSON Merge Patch. A principal notice names the holder.",
+				"description": "Changes a grant's expiry, removes it with `null`, or changes its role, as a JSON Merge Patch. A principal notice names the holder.\n\nAn owner of the grant's resource, as `createGrant` defines one, changes any grant on it. When they extend a grant they hold, moving its end later or removing it, or widen it, giving it a role that confers anything its current role does not, the grant must end within the instance's longest self-grant life from the change, so it gives them no more than a self-grant could; ending it earlier or narrowing its role has no such limit. A platform administrator who is not an owner of the resource may reduce any grant, ending it earlier while still in the future or giving it a narrower role, one whose capabilities are among the current role's. They may neither extend nor widen a grant they hold, whatever its role, and are refused with `403` `selfWideningNotPermitted`; of anyone else's grants they may extend only `submitter` and `owner` grants and widen a grant only within those two roles, and any other change of theirs is refused with `403` `administratorGrantsNoConsumerAccess`. To anyone else a grant is answered as one that does not exist, as is a grant on a retired resource.\n\nA role changes within its plane: a data-plane grant to another data-plane role, keeping its category, and a control-plane grant, such as an owner grant, to another control-plane role, keeping the whole resource. No one is given the administrator role, `admin`, and an owner grant takes no expiry. A self-grant, one its holder granted themself or asked for, keeps an expiry within the instance's longest self-grant life of its request.\n\nA revoked grant is refused with `doesNotHold`. A grant replaced by a newer grant on its terms, once it had expired, is refused with `grantReplaced`, and the newer grant is the one to change. An expired grant that nothing replaced is live again once extended.\n\nWidening a role confers nothing new until the holder accepts the grant again: their answers are left as they are, and a grant confers only capabilities its holder accepted.",
 				"operationId": "changeGrant",
 				"parameters": [
 					{
@@ -3538,6 +3894,16 @@
 					"required": true
 				},
 				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Grant"
+								}
+							}
+						},
+						"description": "The grant is changed, and answered as it now stands."
+					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
 					},
@@ -3555,7 +3921,12 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["noAdministratorYet", "serviceAccountNotPermitted"]
+													"enum": [
+														"administratorGrantsNoConsumerAccess",
+														"noAdministratorYet",
+														"selfWideningNotPermitted",
+														"serviceAccountNotPermitted"
+													]
 												}
 											},
 											"type": "object"
@@ -3564,7 +3935,7 @@
 								}
 							}
 						},
-						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`administratorGrantsNoConsumerAccess`: a platform administrator who is not an owner of the grant's resource extends a grant someone else holds other than a `submitter` or an `owner` grant, or widens one beyond those two roles. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts. `selfWideningNotPermitted`: a platform administrator who is not an owner of the grant's resource extends or widens a grant they hold, whatever its role, the text saying to end it earlier, narrow its role, or ask for a self-grant instead. `serviceAccountNotPermitted`: a service account calls, before any lookup."
 					},
 					"404": {
 						"content": {
@@ -3586,7 +3957,7 @@
 								}
 							}
 						},
-						"description": "The id is unknown or malformed, or names a grant on a resource where the principal holds no authority for the operation; `grantNotFound` for each."
+						"description": "The id is unknown or malformed, names a grant on a resource where the principal holds no authority for the operation, or names a grant on a retired resource; `grantNotFound` for each."
 					},
 					"409": {
 						"content": {
@@ -3599,7 +3970,12 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["doesNotHold"]
+													"enum": [
+														"alreadyHolds",
+														"doesNotHold",
+														"grantReplaced",
+														"resourceNeedsAnOwner"
+													]
 												}
 											},
 											"type": "object"
@@ -3608,7 +3984,7 @@
 								}
 							}
 						},
-						"description": "The grant is revoked; `doesNotHold`."
+						"description": "`doesNotHold`: the grant is revoked. `grantReplaced`: a newer grant on its terms replaced it once it had expired, the text saying to change that grant instead. `alreadyHolds`: the holder already holds a grant of the new role on this resource and category that is neither revoked nor expired. `resourceNeedsAnOwner`: the change takes the role of its resource's last accepted owner grant away, the text saying to add another owner first."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3624,13 +4000,10 @@
 								}
 							}
 						},
-						"description": "A rule is broken. `ownerGrantsDoNotExpire` names an expiry on an owner grant. An expiry that is no RFC 3339 instant with an offset, or one in the past, and a role not defined by the instance carry unnamed codes."
+						"description": "A rule is broken. `ownerGrantsDoNotExpire`: an expiry on an owner grant. `roleInOtherPlane`: a role of the other plane, such as `owner` for a data-plane grant. `selfGrantTooLong`: a self-grant's end past the instance's longest self-grant life of its request, or the end of a grant an owner of its resource holds and extends or widens past that life from the change. `selfGrantExpiryRequired`: a self-grant's expiry removed, or a grant an owner of its resource holds and extends or widens left without one. The rest carry the codes `createGrant` gives them: an expiry that is no RFC 3339 instant with an offset, or one not in the future; a role not defined by the instance, in its exact letter case; and the administrator role, `admin`."
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
-					},
-					"2XX": {
-						"description": "The grant is changed."
 					}
 				},
 				"security": [
@@ -7344,7 +7717,7 @@
 			"name": "Resource fields"
 		},
 		{
-			"description": "Grants, self-grants, revocations and decisions.",
+			"description": "Grants, self-grants and the requests for them, revocations and decisions.",
 			"name": "Grants"
 		},
 		{

@@ -30,7 +30,8 @@ export const grantStateOf = (
 };
 
 /**
- * A grant as an answer shows it, in the answer to a principal's own act: people by subject, the
+ * A grant as an answer shows it, in the answer to a principal's own act: `kind` `grant`, beside a
+ * grant request's `grantRequest`; people by subject, the
  * holder as one with an account, and no address, since none is read; the resource by externalId;
  * each instant in UTC with `Z`; and its state on the configured clock. Whether a grant on its terms
  * replaced it is never shown apart from its expiry.
@@ -68,6 +69,7 @@ export const grantView = (grant: ViewedGrant, now: number): JsonValue => {
 		grantedBy: { subject: granterSubject },
 		holder: { hasAccount: true, subject: holderSubject },
 		id,
+		kind: 'grant',
 		resource,
 		revokedAt: instantOrNull(revokedAt),
 		revokedBy: revokerSubject === null ? null : { subject: revokerSubject },

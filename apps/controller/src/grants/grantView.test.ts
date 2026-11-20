@@ -31,7 +31,7 @@ const ACCEPTED = {
 } as const;
 
 suite('a grant as an answer shows it', () => {
-	test('shows every member, people by subject, the holder with an account and no address, each instant in UTC with Z', () => {
+	test('shows every member as a grant, people by subject, the holder with an account and no address, each instant in UTC with Z', () => {
 		assert.deepEqual(grantView({ ...PENDING, decision: ACCEPTED, expiresAt: at(3_600_000) }, NOW), {
 			category: 'global.controlled',
 			decision: {
@@ -44,6 +44,7 @@ suite('a grant as an answer shows it', () => {
 			grantedBy: { subject: 'subject-ana' },
 			holder: { hasAccount: true, subject: 'subject-cy' },
 			id: '6b1f3c2e-8a4d-4f7b-9c1e-2d3a4b5c6d7e',
+			kind: 'grant',
 			resource: 'STUDY-A1',
 			revokedAt: null,
 			revokedBy: null,

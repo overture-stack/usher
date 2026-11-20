@@ -1,9 +1,6 @@
 import type { RouteOptions } from 'fastify';
 import pg from 'pg';
 
-import type { Actor, JsonValue } from '../eventLog/index.js';
-import { ControllerError } from '../failures/index.js';
-import type { Problem } from '../http/index.js';
 import {
 	type EventMembers,
 	type ManagementDependencies,
@@ -11,15 +8,27 @@ import {
 	managementRoute,
 	type NamedByRequest,
 	type OperationOutcome,
-	type Principal,
 } from '../managementApi/index.js';
 import { isLive } from '../resourceStanding/index.js';
 import { grantAuthority } from './grantAuthority.js';
+import { categoryNamingOf, offeredCategory } from './grantCategory.js';
+import { grantChangeOperation } from './grantChangeOperation.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
+import { grantRequestDecisionOperation, grantRequestListingOperation } from './grantRequestOperations.js';
 import { grantView } from './grantView.js';
+import {
+	actorOf,
+	answered,
+	changeOutcome,
+	refused,
+	refuseWithin,
+	roleMissing,
+	STORED_ID_FORM,
+} from './operationOutcome.js';
 import { readGrantAnswer } from './readGrantAnswer.js';
 import { readGrantCreation } from './readGrantCreation.js';
 import { readGrantRevocation } from './readGrantRevocation.js';
+import { selfGrantOperation } from './selfGrantOperation.js';
 import type {
 	GrantAnswer,
 	GrantCreation,
@@ -29,74 +38,6 @@ import type {
 	StoredRole,
 } from './types.js';
 import { writeGrant } from './writeGrant.js';
-
-// An id in the form the store gives a grant's; any other text names no grant, and is never sent to
-// the store as one.
-const GRANT_ID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-
-// A refusal reached inside a change's transaction, thrown so the transaction rolls back and nothing
-// of the change is written, a person first met in it included.
-class RefusedWithin extends Error {
-	readonly problem: Problem;
-	readonly recordedReason: string | undefined;
-
-	constructor(problem: Problem, recordedReason?: string) {
-		super(problem.code);
-		this.problem = problem;
-		this.recordedReason = recordedReason;
-	}
-}
-
-const refuseWithin = (problem: Problem, recordedReason?: string): never => {
-	throw new RefusedWithin(problem, recordedReason);
-};
-
-const refused = (problem: Problem, recordedReason?: string): OperationOutcome => ({
-	kind: 'refused',
-	problem,
-	...(recordedReason === undefined ? {} : { recordedReason }),
-});
-
-const answered = (status: number, body: JsonValue | undefined): OperationOutcome => ({
-	body,
-	forbidsStoring: false,
-	kind: 'answered',
-	status,
-});
-
-const constraintOf = (failure: unknown): string | undefined => {
-	const constraint: unknown =
-		typeof failure === 'object' && failure !== null && 'constraint' in failure ? failure.constraint : undefined;
-	return typeof constraint === 'string' ? constraint : undefined;
-};
-
-// A change's outcome: what it answered once committed, the refusal it reached, or the refusal a
-// rule the store checks at commit answers, nothing of it written. Any other failure is thrown on,
-// as the store's.
-const changeOutcome = (
-	change: Promise<OperationOutcome>,
-	refusedAtCommit: Readonly<Record<string, Problem>> = {},
-): Promise<OperationOutcome> =>
-	change.catch((failure: unknown) => {
-		if (failure instanceof RefusedWithin) {
-			return refused(failure.problem, failure.recordedReason);
-		}
-		const constraint = constraintOf(failure);
-		const problem = constraint === undefined ? undefined : refusedAtCommit[constraint];
-		if (problem !== undefined) {
-			return refused(problem);
-		}
-		throw failure;
-	});
-
-const roleMissing = (): never => {
-	throw new ControllerError("the store holds no role by a grant's role name");
-};
-
-const actorOf = ({ subject, type }: Principal): Actor => ({
-	id: subject,
-	type,
-});
 
 // Whether a grant makes its holder a counted owner of its resource now: an owner grant, live, whose
 // holder's latest answer accepted it.
@@ -111,12 +52,14 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
 
 /**
  * Creates the routes of the Management API's grant operations: creating a grant, a holder answering
- * one, and revoking one. Each change commits in one transaction with its event and its notices, or
- * writes nothing; a refusal inside the transaction rolls it back whole, and a service account is
- * refused 403 `serviceAccountNotPermitted` before anything is read. Every instant is read from the
- * configured clock, and a grant is live while it is neither revoked, nor replaced once expired, nor
- * expired on that clock. A retired resource, and every grant on one, is answered as one that does
- * not exist, to everyone. Each change locks the resource's row before any grant's.
+ * one, revoking one, and the operations {@link selfGrantOperation}, {@link grantChangeOperation},
+ * {@link grantRequestDecisionOperation} and {@link grantRequestListingOperation} build, over the
+ * same store, settings and trail. Each change commits in one transaction with its event and its
+ * notices, or writes nothing; a refusal inside the transaction rolls it back whole, and a service
+ * account is refused 403 `serviceAccountNotPermitted` before anything is read. Every instant is
+ * read from the configured clock, and a grant is live while it is neither revoked, nor replaced
+ * once expired, nor expired on that clock. A retired resource, and every grant on one, is answered
+ * as one that does not exist, to everyone. Each change locks the resource's row before any grant's.
  *
  * Creating a grant, `POST /admin/grants`, reads its body with {@link readGrantCreation}, then
  * judges in turn: a role the instance does not define, in its exact letter case, 422 `unknownRole`;
@@ -159,13 +102,14 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
  * @param dependencies what every Management API operation's route is built on.
  */
 export const createGrantRoutes = (
-	{ grantStoreOf, settings, store, trail }: GrantOperationsSettings,
+	operations: GrantOperationsSettings,
 	dependencies: ManagementDependencies,
 ): readonly RouteOptions[] => {
+	const { grantStoreOf, settings, store, trail } = operations;
 	const { clock, databaseSchema } = settings;
 	const namedGrant = async ({ params }: NamedByRequest): Promise<EventMembers> => {
 		const grantId = params['id'] ?? '';
-		if (!GRANT_ID_FORM.test(grantId)) {
+		if (!STORED_ID_FORM.test(grantId)) {
 			return {};
 		}
 		const { rows } = await store.query<{ exists: boolean }>(
@@ -202,15 +146,7 @@ export const createGrantRoutes = (
 				trail.inTransaction(actorOf(principal), async ({ connection, record }): Promise<OperationOutcome> => {
 					const grants = grantStoreOf(connection);
 					const role = (await grants.findRole(input.role)) ?? refuseWithin(GRANT_PROBLEMS.unknownRole);
-					if (role.plane === 'control' && input.category !== undefined) {
-						refuseWithin(GRANT_PROBLEMS.wholeResourceRole);
-					}
-					const takesSubmitterCategory =
-						role.plane === 'data' && input.category === undefined && role.name === 'submitter';
-					if (role.plane === 'data' && input.category === undefined && !takesSubmitterCategory) {
-						refuseWithin(GRANT_PROBLEMS.categoryRequired);
-					}
-					const scopedName = takesSubmitterCategory ? settings.submitterCategory : input.category;
+					const naming = categoryNamingOf(role, input.category, settings.submitterCategory);
 					const standing = await grants.readStanding({
 						externalId: input.resource,
 						lock: 'share',
@@ -227,19 +163,7 @@ export const createGrantRoutes = (
 						refuseWithin(authority.problem, authority.recordedReason);
 					}
 					const resource = standing ?? refuseWithin(GRANT_PROBLEMS.resourceNotFound);
-					const category =
-						scopedName === undefined
-							? null
-							: {
-									id:
-										(await grants.findOfferedCategory(scopedName, resource.id)) ??
-										refuseWithin(
-											takesSubmitterCategory
-												? GRANT_PROBLEMS.submitterCategoryNotOffered
-												: GRANT_PROBLEMS.categoryNotOffered,
-										),
-									scopedName,
-								};
+					const category = await offeredCategory(grants, naming, resource.id);
 					const holderSubject =
 						input.holder.kind === 'subject'
 							? input.holder.subject
@@ -278,7 +202,7 @@ export const createGrantRoutes = (
 		route: '/admin/grants/{id}/decisions',
 		run: async ({ input, params, principal, sourceIp }) => {
 			const grantId = params['id'] ?? '';
-			if (!GRANT_ID_FORM.test(grantId)) {
+			if (!STORED_ID_FORM.test(grantId)) {
 				return refused(GRANT_PROBLEMS.grantNotFound);
 			}
 			const now = new Date(clock.now());
@@ -348,7 +272,7 @@ export const createGrantRoutes = (
 		route: '/admin/grants/{id}',
 		run: async ({ input, params, principal, sourceIp }) => {
 			const grantId = params['id'] ?? '';
-			if (!GRANT_ID_FORM.test(grantId)) {
+			if (!STORED_ID_FORM.test(grantId)) {
 				return refused(GRANT_PROBLEMS.grantNotFound);
 			}
 			const now = new Date(clock.now());
@@ -413,7 +337,11 @@ export const createGrantRoutes = (
 
 	return [
 		managementRoute(creation, dependencies),
+		managementRoute(selfGrantOperation(operations), dependencies),
 		managementRoute(answering, dependencies),
 		managementRoute(revocation, dependencies),
+		managementRoute(grantChangeOperation(operations, namedGrant), dependencies),
+		managementRoute(grantRequestDecisionOperation(operations), dependencies),
+		managementRoute(grantRequestListingOperation(operations), dependencies),
 	];
 };

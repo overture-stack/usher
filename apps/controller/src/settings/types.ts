@@ -11,6 +11,7 @@ export type SettingName =
 	| 'noticeRereadMilliseconds'
 	| 'retentionGraceSeconds'
 	| 'retentionMarginSeconds'
+	| 'selfGrantMaximumLifetimeSeconds'
 	| 'signInTokenMaximumLifetimeSeconds'
 	| 'streamLimitPerAudience'
 	| 'streamMaximumLifetimeSeconds'
@@ -100,6 +101,12 @@ export interface Settings {
 
 	/** The margin a notice is kept beyond the grace period, in seconds. */
 	retentionMarginSeconds: number;
+
+	/**
+	 * The longest a self-grant lives, in seconds, from the instant it is asked for; it bounds an owner extending or
+	 * widening a grant they hold too, measured from the change.
+	 */
+	selfGrantMaximumLifetimeSeconds: number;
 
 	/** The longest a sign-in token may live, in seconds. */
 	signInTokenMaximumLifetimeSeconds: number;

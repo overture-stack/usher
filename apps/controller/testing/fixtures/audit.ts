@@ -16,6 +16,7 @@ import {
 import {
 	AUDIT_EVENT_TYPES,
 	type AuditEventType,
+	type RecordedEventType,
 	type CloudEvent,
 	cloudEventsIn,
 	emittedType,
@@ -469,7 +470,7 @@ export const eventsIn = (log: LogCapture, since: number = 0): readonly CloudEven
  * @param events the events.
  * @param type the event type, without the prefix.
  */
-export const ofType = (events: readonly CloudEvent[], type: AuditEventType): readonly CloudEvent[] =>
+export const ofType = (events: readonly CloudEvent[], type: RecordedEventType): readonly CloudEvent[] =>
 	events.filter((event) => event.type === emittedType(type));
 
 /** Where a wait reads from, and for how long. */
@@ -508,7 +509,7 @@ export const awaitEvents = async (
  */
 export const awaitEventsOfType = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	{ count = 1, ...options }: AwaitOptions & { count?: number } = {},
 ): Promise<readonly CloudEvent[]> =>
 	ofType(await awaitEvents(log, (events) => ofType(events, type).length >= count, options), type);
@@ -523,7 +524,7 @@ export const awaitEventsOfType = async (
  */
 export const awaitOneEvent = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	options: AwaitOptions = {},
 ): Promise<CloudEvent> => {
 	const [event, ...more] = await awaitEventsOfType(log, type, options);
@@ -542,7 +543,7 @@ export const awaitOneEvent = async (
  */
 export const awaitEventWhere = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	matches: (data: Readonly<Record<string, unknown>>) => boolean,
 	options: AwaitOptions = {},
 ): Promise<CloudEvent> => {
@@ -639,7 +640,7 @@ export const rowDataOf = (row: AuditRow): Readonly<Record<string, unknown>> =>
  * @param client a connection under the migration role.
  * @param type the event type, without the prefix.
  */
-export const auditRowsOfType = async (client: pg.ClientBase, type: AuditEventType): Promise<readonly AuditRow[]> =>
+export const auditRowsOfType = async (client: pg.ClientBase, type: RecordedEventType): Promise<readonly AuditRow[]> =>
 	(await auditRows(client)).filter((row) => row.type === emittedType(type));
 
 /**

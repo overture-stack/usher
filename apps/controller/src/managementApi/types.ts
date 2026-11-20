@@ -189,7 +189,11 @@ export interface OperationEvent {
 	 */
 	named(request: NamedByRequest): Promise<EventMembers>;
 
-	type: AuditEventType;
+	/**
+	 * The event's type, or how it is read from what the request names, for an operation whose
+	 * request says which of its events it would record.
+	 */
+	type: AuditEventType | ((request: NamedByRequest) => AuditEventType);
 }
 
 /**
@@ -231,6 +235,7 @@ export interface ManagementOperation<Input> {
 	 */
 	firstUserOnly?: boolean;
 
+	/** Its method: a `PATCH` takes its body as a JSON Merge Patch, any other as JSON. */
 	method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
 	/**

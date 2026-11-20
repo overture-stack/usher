@@ -114,3 +114,12 @@ need, and share it; profile the migrations suite for work its tests repeat witho
 cut that, keeping every migration run a test watches.
 standalone: no
 context: after the grant operations, whose suites add to both.
+
+Every setting's first value must have a `settings.seeding` event. When a run's migrations add a
+setting to a seeded store, the schema migration command records that event after the migration
+commits, in a transaction of its own (`apps/controller/src/migrations/migrate.ts`), so a run stopped
+between the two leaves the setting with its change record but no seeding event, and a later run,
+comparing names only within itself, does not notice.
+fix: on each run, find any setting that no `settings.seeding` event names and record one for it,
+marked as recovered.
+standalone: yes

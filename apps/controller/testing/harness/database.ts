@@ -86,6 +86,7 @@ export const TEMPLATE_SETTINGS: Settings = {
 	noticeRereadMilliseconds: 2000,
 	retentionGraceSeconds: 60,
 	retentionMarginSeconds: 30,
+	selfGrantMaximumLifetimeSeconds: 86400,
 	signInTokenMaximumLifetimeSeconds: 3600,
 	streamLimitPerAudience: 64,
 	streamMaximumLifetimeSeconds: 900,

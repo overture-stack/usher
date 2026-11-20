@@ -137,7 +137,7 @@ suite('the contract the API documentation page serves', () => {
 			before.map(({ label }) => label),
 		);
 		const managed = before.filter(({ operation }) => (operation.security ?? []).some(namesManagementToken));
-		assert.equal(managed.length, 42);
+		assert.equal(managed.length, 44);
 		after.forEach(({ label, operation }, index) => {
 			const committedSecurity = before[index]?.operation.security;
 			assert.deepEqual(
@@ -158,7 +158,7 @@ suite('the contract the API documentation page serves', () => {
 		assert.deepEqual(withoutSignIn(served), committed);
 		assert.deepEqual(Object.keys(served), Object.keys(committed));
 		assert.equal(Object.hasOwn(served, 'servers'), false);
-		assert.equal(JSON.stringify(served).split('"identityProviderSignIn"').length - 1, 43);
+		assert.equal(JSON.stringify(served).split('"identityProviderSignIn"').length - 1, 45);
 	});
 
 	test('leaves the committed contract it is built from as it was', async () => {
