@@ -262,6 +262,12 @@ export interface AuditHarnessOptions {
 	/** The whole fixture: {@link auditPolicy}'s by default. */
 	fixture?: PolicyFixture;
 
+	/**
+	 * Whether the harness writes its applications into the store before its Controller starts, rather
+	 * than registering them through the API: false by default ({@link HarnessOptions.applicationsThroughStore}).
+	 */
+	applicationsThroughStore?: boolean;
+
 	/** A stand-in the test started itself, so the identity provider can fail before the start. */
 	identityProvider?: IdentityProvider;
 
@@ -279,6 +285,7 @@ const harnessOptions = (
 	log: LogCapture,
 	{
 		administratorToken,
+		applicationsThroughStore = false,
 		configuration = {},
 		fixture = auditPolicy(),
 		identityProvider,
@@ -287,6 +294,7 @@ const harnessOptions = (
 ): HarnessOptions => ({
 	...(administratorToken === undefined ? {} : { administratorToken }),
 	applications: [SEARCH_PORTAL, SUBMISSION_PORTAL],
+	applicationsThroughStore,
 	configuration: { logStream: log.stream, ...configuration },
 	fixture,
 	startsController,

@@ -14,7 +14,7 @@ import type { GrantRuleAction, GrantRateThreshold, GrantRules, Settings } from '
 
 import type { AuditEventType, Severity } from './auditEvents.js';
 import { type BuiltEntry, builtEntry } from './build.js';
-import type { Actor } from './policy.js';
+import { type Actor, inTurn } from './policy.js';
 
 /** A source of the current time, in milliseconds since the Unix epoch. */
 export interface Clock {
@@ -529,11 +529,14 @@ interface ControllerExport extends ControllerModule {
 
 const CONTROLLER_MODULES = {
 	app: { exportName: 'createController', path: 'src/app/index.ts' },
+	applicationKeyCipher: { exportName: 'createApplicationKeyCipher', path: 'src/applications/index.ts' },
 	auditTrail: { exportName: 'createAuditTrail', path: 'src/eventLog/index.ts' },
 	configuration: {
 		exportName: 'readConfiguration',
 		path: 'src/configuration/index.ts',
 	},
+	insertApplication: { exportName: 'insertApplication', path: 'src/applications/index.ts' },
+	insertKey: { exportName: 'insertKey', path: 'src/applications/index.ts' },
 	main: { path: 'src/main.ts' },
 	migrations: { exportName: 'migrate', path: 'src/migrations/index.ts' },
 	seededPolicy: { exportName: 'writeSeededPolicy', path: 'src/store/index.ts' },
@@ -906,27 +909,119 @@ export const writeSeededPolicy = async (
 	settings: SeededPolicySettings,
 ): Promise<void> => {
 	const [trail, write] = await Promise.all([
-		createAuditTrail({
-			eventLog: { error: () => undefined, writeEvent: () => undefined },
-			// The seeded policy records no event, so the names the trail gives its events are never written.
-			settings: {
-				...settings,
-				eventSource: SEAM_EVENT_SOURCE,
-				instanceName: SEAM_INSTANCE_NAME,
-				storeTimeoutMilliseconds: HARNESS_STORE_TIMEOUT_MILLISECONDS,
-			},
-			store: {
-				connect: async () => ({
-					query: (text: string, values?: readonly unknown[]) =>
-						connection.query(text, values === undefined ? undefined : [...values]),
-					release: () => undefined,
-				}),
-			},
-		}),
+		seamTrail(connection, settings),
 		loadExport<WriteSeededPolicy>(CONTROLLER_MODULES.seededPolicy),
 	]);
 	await trail.inTransaction({ type: 'system' }, (transaction) => write(transaction, settings));
 };
+
+/**
+ * The application a start writes: its display name and description, and the id the fixture seeded it
+ * under, which it keeps, when the fixture seeded it before the start.
+ */
+export interface ApplicationToWrite {
+	description: string | null;
+	displayName: string;
+
+	/** The id the fixture seeded the application under; `undefined` for one the start writes new. */
+	seededId: string | undefined;
+}
+
+/** An application a start wrote, with the first key it was issued: its id, and the key's id and value. */
+export interface WrittenApplication {
+	displayName: string;
+	id: string;
+	key: string;
+	keyId: string;
+}
+
+/** The settings an application is written under: the seeded policy's, and the key-encryption key sealing its key. */
+export interface ApplicationWriteSettings extends SeededPolicySettings {
+	keyEncryptionKey: string;
+}
+
+// The store module's exports the application writes use, as the seam calls them.
+type InsertApplication = (
+	connection: SeedingConnection,
+	schema: string,
+	application: { description: string | null; displayName: string; registeredAt: Date; registeredBy: string },
+) => Promise<string>;
+
+type InsertKey = (
+	connection: SeedingConnection,
+	schema: string,
+	cipher: unknown,
+	key: { applicationId: string; issuedAt: Date; issuedBy: string },
+) => Promise<{ id: string; value: string }>;
+
+type CreateApplicationKeyCipher = (keyEncryptionKey: string) => unknown;
+
+/**
+ * Writes the harness's applications and the first key of each, through the Controller's own code, on
+ * the connection given: in one transaction its audit trail holds as the system, each application
+ * inserted by the store, or kept under the id the fixture seeded it with, and its key sealed under the
+ * key-encryption key. The seam records no event, as the seeded policy records none. Nothing is checked
+ * of the registrant beyond its id, which the caller gives.
+ *
+ * @param connection the connection, holding no transaction; it is left open.
+ * @param settings the schema, the clock and the key-encryption key.
+ * @param applications the applications, in the order they are written.
+ * @param registrant the `users.id` of the person registering and issuing them.
+ * @throws until the modules exist, the seam's message that one is missing.
+ */
+export const writeApplicationsThroughStore = async (
+	connection: SeedingConnection,
+	settings: ApplicationWriteSettings,
+	applications: readonly ApplicationToWrite[],
+	registrant: string,
+): Promise<readonly WrittenApplication[]> => {
+	const [trail, insertApplication, insertKey, createCipher] = await Promise.all([
+		seamTrail(connection, settings),
+		loadExport<InsertApplication>(CONTROLLER_MODULES.insertApplication),
+		loadExport<InsertKey>(CONTROLLER_MODULES.insertKey),
+		loadExport<CreateApplicationKeyCipher>(CONTROLLER_MODULES.applicationKeyCipher),
+	]);
+	const cipher = createCipher(settings.keyEncryptionKey);
+	const now = new Date(settings.clock.now());
+	return trail.inTransaction({ type: 'system' }, ({ connection: transaction }) =>
+		inTurn(applications, async ({ description, displayName, seededId }) => {
+			const id =
+				seededId ??
+				(await insertApplication(transaction, settings.databaseSchema, {
+					description,
+					displayName,
+					registeredAt: now,
+					registeredBy: registrant,
+				}));
+			const key = await insertKey(transaction, settings.databaseSchema, cipher, {
+				applicationId: id,
+				issuedAt: now,
+				issuedBy: registrant,
+			});
+			return { displayName, id, key: key.value, keyId: key.id };
+		}),
+	);
+};
+
+// The audit trail a seam write runs its transaction on, over the connection given. It records no event:
+// the names the trail gives events are never written, and the seam's event sink drops any line.
+const seamTrail = (connection: SeedingConnection, settings: SeededPolicySettings) =>
+	createAuditTrail({
+		eventLog: { error: () => undefined, writeEvent: () => undefined },
+		settings: {
+			...settings,
+			eventSource: SEAM_EVENT_SOURCE,
+			instanceName: SEAM_INSTANCE_NAME,
+			storeTimeoutMilliseconds: HARNESS_STORE_TIMEOUT_MILLISECONDS,
+		},
+		store: {
+			connect: async () => ({
+				query: (text: string, values?: readonly unknown[]) =>
+					connection.query(text, values === undefined ? undefined : [...values]),
+				release: () => undefined,
+			}),
+		},
+	});
 
 const isPort = (value: number): boolean => Number.isInteger(value) && value > 0 && value < 65_536;
 

@@ -23,18 +23,21 @@ import {
 	USHER_SCHEMA,
 } from './database.js';
 import { ENVIRONMENT_VARIABLES, HARNESS_STORE_TIMEOUT_MILLISECONDS } from './controller.js';
-import { PEOPLE } from './exchange.js';
+import { exchange, PEOPLE } from './exchange.js';
 import {
 	APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS,
 	COMPRESSED_CONTROLLER_TIMING,
 	configurationToRead,
 	HARNESS_EVENT_SOURCE,
+	type Harness,
 	startInstance,
 	HARNESS_LOGOUT_CLIENT,
 	harnessApplicationNames,
 	harnessConfiguration,
 	passwordsApart,
 	realmAdministrator,
+	realmRegistrar,
+	REALM_REGISTRANT_REFUSAL,
 	RETENTION_DEFAULTS,
 	restoreSnapshot,
 	retentionFloorSeconds,
@@ -610,6 +613,144 @@ suite("a harness's applications", () => {
 		assert.equal(
 			withRegisteredIds(withoutApplications, [{ displayName: 'arranger-test', id: registeredId }]),
 			withoutApplications,
+		);
+	});
+});
+
+suite("a harness's applications written through the store", () => {
+	const tables = POLICY_TABLES;
+	// The issuer of the stand-in a harness starts, named where the rows of two harnesses are compared.
+	const STAND_IN_ISSUER = 'the stand-in';
+
+	// The application and key rows a harness's store holds, the identity of each registrant and issuer
+	// by subject and issuer, and no id, instant or sealed key.
+	const storedRowsOf = async (
+		harness: Harness,
+	): Promise<{
+		applications: readonly {
+			description: string | null;
+			displayName: string;
+			registeredBy: string;
+			registeredByIssuer: string;
+		}[];
+		keys: readonly {
+			applicationName: string;
+			confirmed: boolean;
+			issuedBy: string;
+			issuedByIssuer: string;
+			live: boolean;
+		}[];
+	}> => {
+		const { rows: applications } = await harness.clients.migration.query<{
+			description: string | null;
+			displayName: string;
+			registeredBy: string;
+			registeredByIssuer: string;
+		}>(
+			`SELECT application.${tables.applications.columns.description} AS description,
+                  application.${tables.applications.columns.displayName} AS "displayName",
+                  identity.${tables.userIdentities.columns.idpSubjectId} AS "registeredBy",
+                  identity.${tables.userIdentities.columns.idpIssuer} AS "registeredByIssuer"
+             FROM ${qualified(tables.applications)} application
+             JOIN ${qualified(tables.userIdentities)} identity
+               ON identity.${tables.userIdentities.columns.userId} = application.${tables.applications.columns.registeredBy}
+            ORDER BY application.${tables.applications.columns.displayName}`,
+		);
+		const { rows: keys } = await harness.clients.migration.query<{
+			applicationName: string;
+			confirmed: boolean;
+			issuedBy: string;
+			issuedByIssuer: string;
+			live: boolean;
+		}>(
+			`SELECT application.${tables.applications.columns.displayName} AS "applicationName",
+                  held.${tables.applicationKeys.columns.confirmedAt} IS NOT NULL AS confirmed,
+                  identity.${tables.userIdentities.columns.idpSubjectId} AS "issuedBy",
+                  identity.${tables.userIdentities.columns.idpIssuer} AS "issuedByIssuer",
+                  held.${tables.applicationKeys.columns.revokedAt} IS NULL AS live
+             FROM ${qualified(tables.applicationKeys)} held
+             JOIN ${qualified(tables.applications)} application
+               ON application.${tables.applications.columns.id} = held.${tables.applicationKeys.columns.applicationId}
+             JOIN ${qualified(tables.userIdentities)} identity
+               ON identity.${tables.userIdentities.columns.userId} = held.${tables.applicationKeys.columns.issuedBy}
+            ORDER BY application.${tables.applications.columns.displayName}, held.${tables.applicationKeys.columns.issuedAt}`,
+		);
+		const issuerNamed = (issuer: string): string =>
+			issuer === harness.configuration.identityProviderIssuer ? STAND_IN_ISSUER : issuer;
+		return {
+			applications: applications.map((row) => ({
+				...row,
+				registeredByIssuer: issuerNamed(row.registeredByIssuer),
+			})),
+			keys: keys.map((row) => ({ ...row, issuedByIssuer: issuerNamed(row.issuedByIssuer) })),
+		};
+	};
+
+	test('starts its controller with the identity provider never asked, and serves an anonymous exchange through one of its applications', async () => {
+		await withHarness({ applicationsThroughStore: true }, async (harness) => {
+			assert.deepEqual(harness.identityProvider.requests, []);
+
+			const answer = await exchange(harness.url, { application: harness.application('arranger-test') });
+
+			assert.equal(answer.status, 200);
+		});
+	});
+
+	test('starts, and binds its applications, with the identity provider refusing connections from before the start', async (context) => {
+		const provider = await startIdentityProvider();
+		cleanupFor(context).defer(() => provider.stop());
+		await provider.refuseConnections();
+
+		await withHarness({ applicationsThroughStore: true, identityProvider: provider }, async (harness) => {
+			assert.deepEqual(
+				harness.applications.map(({ displayName }) => displayName),
+				['arranger-test', 'lyric-test'],
+			);
+			assert.ok(harness.application('lyric-test').key.length > 0);
+		});
+	});
+
+	test('writes the application and key rows that registering through the API writes, the platform administrator registering and issuing in both', async () => {
+		const names = ['arranger-test', 'lyric-test'];
+
+		const throughStore = await withHarness(
+			{ applications: names, applicationsThroughStore: true },
+			async (harness) => ({
+				requests: harness.identityProvider.requests.length,
+				rows: await storedRowsOf(harness),
+			}),
+		);
+		const throughApi = await withHarness({ applications: names }, async (harness) => ({
+			rows: await storedRowsOf(harness),
+		}));
+
+		assert.equal(throughStore.requests, 0);
+		assert.deepEqual(throughStore.rows, throughApi.rows);
+		assert.equal(throughStore.rows.applications.length, names.length);
+		assert.equal(throughStore.rows.keys.length, names.length);
+		assert.ok(
+			throughStore.rows.applications.every(
+				({ registeredBy, registeredByIssuer }) =>
+					registeredBy === PEOPLE.administrator.subject && registeredByIssuer === STAND_IN_ISSUER,
+			),
+			'each application is registered by the administrator',
+		);
+		assert.ok(
+			throughStore.rows.keys.every(
+				({ issuedBy, issuedByIssuer }) =>
+					issuedBy === PEOPLE.administrator.subject && issuedByIssuer === STAND_IN_ISSUER,
+			),
+			'each key is issued by the administrator',
+		);
+	});
+
+	test("refuses a start that also gives a Keycloak realm's administrator token, before anything starts, since the registrant would not be the realm's administrator", async () => {
+		await assert.rejects(
+			startHarness({
+				administratorToken: realmRegistrar().administratorToken,
+				applicationsThroughStore: true,
+			}),
+			{ message: REALM_REGISTRANT_REFUSAL },
 		);
 	});
 });

@@ -281,7 +281,13 @@ both folders hold, `channel.ts` and `database.ts`, mean the harness's; the fixtu
   `PEOPLE.administrator` once its own Controller first listens, before it registers anything, the
   person each `administratorToken` names before it is used, and the person each
   `tokens.administrator` is asked for. `seedsAdministrator: false` leaves the store holding none, as
-  before the first user's nomination is accepted. `tokens.firstUser` gives the first user's token,
+  before the first user's nomination is accepted. `applicationsThroughStore: true` writes the
+  applications and their first keys into the store before the Controller starts, instead of
+  registering them through the API: each is inserted and its key sealed by the Controller's own
+  functions, as the platform administrator (`PEOPLE.administrator`, seeded as one first), and no start
+  then makes a Management API call, so the identity provider's keys are fetched by none. Its
+  applications are written when the Controller first starts, which with `startsController: false` is
+  the test's own start. `tokens.firstUser` gives the first user's token,
   carrying the configured first-user role. A harness started before its realm takes `realmRegistrar`'s source and
   gives it the realm with `started` once the realm is up, before the harness first listens. The
   database's retention floor is the configuration's;

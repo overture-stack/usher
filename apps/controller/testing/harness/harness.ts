@@ -27,6 +27,7 @@ import {
 	type SeededPolicySettings,
 	startController,
 	storedSettingsOf,
+	writeApplicationsThroughStore,
 	writeSeededPolicy,
 } from './controller.js';
 import {
@@ -85,6 +86,23 @@ export interface HarnessOptions {
 	 * {@link Harness.application}.
 	 */
 	applications?: readonly string[];
+
+	/**
+	 * For a start that makes no Management API call, so the Controller holds no key of the identity
+	 * provider until a test's own exchange needs one: false by default. The harness writes its
+	 * applications and their first keys into the store before its Controller starts, instead of
+	 * registering them through the Management API once it listens, and the Controller loads the keys
+	 * at its start. Each application is inserted, and its key issued and sealed under the
+	 * key-encryption key, by the Controller's own insert functions, in one transaction its audit trail
+	 * holds as the system, recording no event, as for the seeded policy. An application the fixture
+	 * seeded keeps its id and is issued its first key the same way. The registrant and issuer of each
+	 * are the person {@link PEOPLE} names as the platform administrator, seeded as one first. A start
+	 * giving {@link HarnessOptions.administratorToken} as well, as a Keycloak realm's fixture does, is
+	 * refused before anything starts, since the registrant would be that stand-in person and not the
+	 * realm's administrator. With `startsController: false` the writes wait for the first start of the
+	 * Controller, which the test makes.
+	 */
+	applicationsThroughStore?: boolean;
 
 	/** Fields set over the harness's configuration, last, so a test can set any of them. */
 	configuration?: Partial<ControllerConfiguration>;
@@ -756,6 +774,13 @@ interface Started {
 
 const UNDEFINED_TABLE = '42P01';
 
+/**
+ * Why a start giving both `applicationsThroughStore` and an `administratorToken`, as a Keycloak realm's
+ * fixture does, is refused.
+ */
+export const REALM_REGISTRANT_REFUSAL =
+	"applicationsThroughStore cannot start with a Keycloak realm's administratorToken: the applications' registrant would be the harness's stand-in administrator, not the realm's administrator";
+
 // Writes what a start's configuration gives the store, before the Controller starts. A store with no settings
 // table is left to the start, which refuses it naming its schema, as a store the migrations never built is refused.
 const writeStartSettings = async (
@@ -777,6 +802,7 @@ const startedWith = async (
 	{
 		administratorToken = standInAdministrator(identityProvider),
 		applications: givenNames = DEFAULT_APPLICATIONS,
+		applicationsThroughStore = false,
 		configuration: overrides = {},
 		fixture,
 		seedsAdministrator = true,
@@ -833,6 +859,7 @@ const startedWith = async (
 			...startOverrides,
 		});
 		await writeSettingsOnce();
+		await writeApplicationsOnce();
 		const { port } = state.configuration;
 		const running = await startController({
 			...state.configuration,
@@ -876,6 +903,29 @@ const startedWith = async (
 		}
 		await seedAdministratorOf(sub);
 		return token;
+	};
+	// Under applicationsThroughStore, the applications and their first keys are written once, before the
+	// Controller first starts, so registerOnce finds them bound already. The fixture's seeded ids, known by
+	// then with startsController false, keep theirs.
+	const writeApplicationsOnce = async (): Promise<void> => {
+		if (!applicationsThroughStore || state.applications !== undefined) {
+			return;
+		}
+		const registrant = await seedAdministratorOf(PEOPLE.administrator.subject);
+		state.applications = await writeApplicationsThroughStore(
+			migration,
+			{
+				clock: state.configuration.clock,
+				databaseSchema: database.schema,
+				keyEncryptionKey: state.configuration.keyEncryptionKey,
+			},
+			displayNames.map((displayName) => ({
+				description: fixture?.applications?.[displayName]?.description ?? null,
+				displayName,
+				seededId: state.seededIds.get(displayName),
+			})),
+			registrant,
+		);
 	};
 	const seeding: PolicyFixture | undefined =
 		fixture === undefined ? undefined : { issuer: identityProvider.issuer, ...fixture };
@@ -960,6 +1010,9 @@ const seedOf = ({ eventSource, firstUserRole, issuer }: Partial<ControllerConfig
  *   of the test file's own, whether to start a Controller, and the template.
  */
 export const startHarness = async (options: HarnessOptions = {}): Promise<Harness> => {
+	if (options.applicationsThroughStore === true && options.administratorToken !== undefined) {
+		throw new Error(REALM_REGISTRANT_REFUSAL);
+	}
 	const database = await createTestDatabase(
 		options.template ??
 			(options.startsController === false
