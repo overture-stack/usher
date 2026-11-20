@@ -288,7 +288,7 @@ export const createController = (configuration: ControllerConfiguration): Contro
 		reader: createNoticeReader(reader, configuration.databaseSchema),
 		rejections,
 		settings,
-		usedAssertions: createUsedAssertions(configuration.clock),
+		usedAssertions: createUsedAssertions(reader, configuration.databaseSchema),
 		verifier: assertionVerifier,
 	});
 	const noticeWake = { name: 'noticeWake', run: () => channel.wake() };

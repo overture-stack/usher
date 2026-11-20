@@ -1,29 +1,26 @@
-import type { Clock } from '../configuration/index.js';
+import pg from 'pg';
+
+import type { StoreReader } from '../storeTimeout/index.js';
 import type { UsedAssertions } from './types.js';
 
 /**
- * Creates this instance's record of the channel assertions presented to the stream, each kept until
- * it stops being accepted and forgotten after, so the record holds no more than the assertions of the
- * last minute and a half. An assertion is known by its application and its `jti` together.
+ * Creates the record of the channel assertions presented to the notice stream. The store holds it, so
+ * an assertion opens at most one stream across every Controller instance sharing that store. Each
+ * record is one insert, ignoring a conflict, run within the store timeout; it answers whether the insert
+ * wrote the row, and rejects when the store does not answer. A row is deleted by the retention sweep
+ * once its assertion has stopped being accepted for longer than the clock tolerance.
  *
- * @param clock the wall clock assertions' acceptance is judged on.
+ * @param store the reader every statement runs through, within the store timeout.
+ * @param schema the Controller's schema.
  */
-export const createUsedAssertions = (clock: Clock): UsedAssertions => {
-	const recorded = new Map<string, number>();
+export const createUsedAssertions = (store: StoreReader, schema: string): UsedAssertions => {
+	const insert = `INSERT INTO ${pg.escapeIdentifier(schema)}.used_channel_assertions (application_id, assertion_id, accepted_until)
+    VALUES ($1, $2, $3)
+    ON CONFLICT DO NOTHING`;
 	return {
-		record: (applicationId, id, acceptedUntil) => {
-			const now = clock.now();
-			[...recorded]
-				.filter(([, until]) => until < now)
-				.forEach(([expired]) => {
-					recorded.delete(expired);
-				});
-			const known = `${applicationId}\n${id}`;
-			if (recorded.has(known)) {
-				return false;
-			}
-			recorded.set(known, acceptedUntil);
-			return true;
+		record: async (applicationId, id, acceptedUntil) => {
+			const { rowCount } = await store.query(insert, [applicationId, id, new Date(acceptedUntil)]);
+			return rowCount === 1;
 		},
 	};
 };

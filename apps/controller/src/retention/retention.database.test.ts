@@ -17,7 +17,7 @@ import {
 } from '../../testing/harness/policy.js';
 import { cleanupFor, eventually } from '../../testing/harness/waiting.js';
 
-const { exchangedSids, sidSignOuts, subjectSignOuts } = POLICY_TABLES;
+const { exchangedSids, sidSignOuts, subjectSignOuts, usedChannelAssertions } = POLICY_TABLES;
 
 const HOUR_MILLISECONDS = 3_600_000;
 
@@ -279,6 +279,52 @@ suite("the retention sweep on the controller's configured clock", () => {
 					await heldIn(tables.flatMap(({ atTolerance, withinTolerance }) => [atTolerance, withinTolerance])),
 					[1, 1, 1, 1],
 				);
+			},
+			context,
+		);
+	});
+
+	test("keeps a used channel assertion until its accepted_until is more than the clock tolerance before the configured clock's now", async (context) => {
+		// The clock starts now, so the harness's application registration is answered with a current token.
+		const now = Date.now();
+		const cutoff = now - RETENTION_SWEEP.clockToleranceMilliseconds;
+		await withHarness(
+			{ applications: ['Assertion retention'], configuration: { clock: fixedClock(now) } },
+			async (harness) => {
+				const client = harness.clients.migration;
+				const applicationId = harness.application('Assertion retention').id;
+				// Each test's own rows, told apart from every other test's by the prefix of their jti.
+				const prefix = `${randomUUID()}:`;
+				const recordAt = async (jti: string, acceptedUntil: number): Promise<void> => {
+					await client.query(
+						`INSERT INTO ${qualified(usedChannelAssertions)} (application_id, assertion_id, accepted_until)
+         VALUES ($1, $2, $3)`,
+						[applicationId, `${prefix}${jti}`, new Date(acceptedUntil)],
+					);
+				};
+				const heldOf = (jti: string): Promise<number> =>
+					heldWithPrefix(
+						client,
+						usedChannelAssertions,
+						usedChannelAssertions.columns.assertionId,
+						`${prefix}${jti}`,
+					);
+				await recordAt('past-tolerance', cutoff - 1);
+				await recordAt('at-tolerance', cutoff);
+				await recordAt('within-tolerance', cutoff + 1);
+
+				const gone = await eventually(
+					async () => (await heldOf('past-tolerance')) === 0,
+					RUNS_WITHIN_MILLISECONDS,
+					20,
+				);
+
+				assert.equal(
+					gone,
+					true,
+					'a used assertion more than the clock tolerance past its accepted_until outlived the sweep',
+				);
+				assert.deepEqual([await heldOf('at-tolerance'), await heldOf('within-tolerance')], [1, 1]);
 			},
 			context,
 		);

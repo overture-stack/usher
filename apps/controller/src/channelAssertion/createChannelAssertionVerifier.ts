@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { compactVerify, decodeJwt, decodeProtectedHeader } from 'jose';
 
 import { type Clock, CLOCK_TOLERANCE_MILLISECONDS } from '../configuration/index.js';
+import { isStorableText } from '../store/index.js';
 import type {
 	AssertionKey,
 	ChannelAssertionCheck,
@@ -121,7 +122,8 @@ const signingInputDigestOf = (assertion: string): SigningInputDigest =>
  * - the assertion must verify under one of the live keys, HS256 alone, else `invalidSignature`.
  *
  * The key it verifies under answers it. Its verified claims are judged last, each refusal `refused`:
- * an `aud` other than `usher:controller` is `otherAudience`; an `exp` more than 60 s after `iat` is
+ * a `jti` holding a NUL character or an unpaired surrogate is `unrepresentableJti`, judged first, as a
+ * token's subject and session are; an `aud` other than `usher:controller` is `otherAudience`; an `exp` more than 60 s after `iat` is
  * `excessiveLifetime`; an `exp` passed by the clock tolerance or more is `expiredAssertion`; and an
  * `iat` ahead by the tolerance or more is `notYetValid`. Every refusal past the application's lookup
  * names the application. An assertion that verifies, refused or accepted, carries the SHA-256 of its
@@ -172,6 +174,9 @@ export const createChannelAssertionVerifier = <Key extends AssertionKey>({
 			reason,
 			signingInputDigest,
 		});
+		if (!isStorableText(jti)) {
+			return refusedFor('unrepresentableJti');
+		}
 		if (aud !== CHANNEL_ASSERTION_AUDIENCE) {
 			return refusedFor('otherAudience');
 		}

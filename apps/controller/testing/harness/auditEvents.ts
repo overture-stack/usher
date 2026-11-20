@@ -969,7 +969,8 @@ export const credentialRefusalsElsewhere = (events: readonly CloudEvent[]): read
  * - `expiredAssertion`: an assertion past its `exp`, though signed under a live key;
  * - `notYetValid`: an assertion whose `iat` is ahead of the Controller's clock, though signed under a
  *   live key;
- * - `reusedAssertion`: an assertion presented a second time, which only a copy of it can be.
+ * - `reusedAssertion`: an assertion presented a second time, which only a copy of it can be;
+ * - `unrepresentableJti`: an assertion whose `jti` holds a NUL character or an unpaired surrogate.
  *
  * Every such refusal is answered with one identical 401, so the code is in the Controller's log
  * alone. {@link CHANNEL_ASSERTION_TALLY_REASONS} are always counted, and
@@ -988,6 +989,7 @@ export const CHANNEL_ASSERTION_REJECTION_REASONS = Object.freeze({
 	reusedAssertion: 'reusedAssertion',
 	unknownApplication: 'unknownApplication',
 	unreadableAssertion: 'unreadableAssertion',
+	unrepresentableJti: 'unrepresentableJti',
 } as const);
 
 /**
@@ -1002,6 +1004,7 @@ export const CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS: readonly string[] = O
 	CHANNEL_ASSERTION_REJECTION_REASONS.otherAudience,
 	CHANNEL_ASSERTION_REJECTION_REASONS.excessiveLifetime,
 	CHANNEL_ASSERTION_REJECTION_REASONS.reusedAssertion,
+	CHANNEL_ASSERTION_REJECTION_REASONS.unrepresentableJti,
 ]);
 
 /**

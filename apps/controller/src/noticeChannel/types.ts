@@ -181,14 +181,17 @@ export interface PollRequest {
 /** The channel assertions presented to the stream, each refused a second time while it is accepted. */
 export interface UsedAssertions {
 	/**
-	 * Records an assertion as presented to the stream, whatever the stream then answers.
+	 * Records an assertion as presented to the stream, once across every instance sharing the store,
+	 * whatever the stream then answers.
 	 *
 	 * @param applicationId the application it names.
 	 * @param id its `jti`.
 	 * @param acceptedUntil the last instant it is accepted at, in milliseconds since the Unix epoch.
 	 * @returns whether it was recorded now: false for one already recorded.
+	 * @throws {StoreTimeout} when the store does not answer within the store timeout; otherwise
+	 *   whatever the store throws.
 	 */
-	record(applicationId: string, id: string, acceptedUntil: number): boolean;
+	record(applicationId: string, id: string, acceptedUntil: number): Promise<boolean>;
 }
 
 /** A stream as the instance's tail of the notice stream hands it notices. */

@@ -432,6 +432,14 @@ export const POLICY_TABLES = {
 		},
 		name: 'subject_sign_outs',
 	},
+	usedChannelAssertions: {
+		columns: {
+			acceptedUntil: 'accepted_until',
+			applicationId: 'application_id',
+			assertionId: 'assertion_id',
+		},
+		name: 'used_channel_assertions',
+	},
 	userIdentities: {
 		columns: {
 			addedAt: 'added_at',
@@ -535,8 +543,9 @@ export const BOUNDED_TRIM_REFUSAL = '22023';
  * `lock` and ending at once, deleting nothing, while another session holds it. In the same
  * transaction, a run deletes at most `rowsPerRun` rows from each table, in this order: those of
  * `exchanged_sids` whose `expires_at` is before the configured clock's now, then those of
- * `sid_sign_outs`, of `subject_sign_outs` and then of {@link GRANT_OPERATIONS} whose `expires_at`
- * is more than `clockToleranceMilliseconds`, the Controller's clock tolerance, before that now. It then calls the
+ * `sid_sign_outs`, of `subject_sign_outs`, then of {@link GRANT_OPERATIONS} whose `expires_at`
+ * is more than `clockToleranceMilliseconds`, the Controller's clock tolerance, before that now, and then of
+ * `used_channel_assertions` whose `accepted_until` is more than that tolerance before that now. It then calls the
  * bounded trim with `rowsPerRun`. It records no event, and writes the operational line `failedLine`
  * at error once as runs start failing.
  */

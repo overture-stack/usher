@@ -96,6 +96,7 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
 			inserts: true,
 			updates: 'every column',
 		},
+		used_channel_assertions: { deletes: true, inserts: true, updates: [] },
 		user_identities: { deletes: false, inserts: true, updates: [] },
 		users: { deletes: false, inserts: true, updates: [] },
 	} satisfies Record<string, PermittedWrites>),

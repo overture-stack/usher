@@ -12,13 +12,18 @@ export type UnverifiedRejectionReason =
 
 /**
  * Why an assertion that verifies under its application's key was refused anyway: `reusedAssertion` for
- * one presented to the stream a second time, which only a copy of it can be, and each other for its
- * claims. Each instance records the first refusal of each such assertion within its bounds as a
+ * one presented to the stream a second time, which only a copy of it can be; `unrepresentableJti` for a
+ * `jti` holding a NUL character or an unpaired surrogate; and each other for its claims. Each instance records the first refusal of each such assertion within its bounds as a
  * `channelAssertion.rejection`, and counts every later one, and any refusal past those bounds, in
  * `channelAssertion.rejectionTally`.
  */
 export type VerifiedRejectionReason =
-	'excessiveLifetime' | 'expiredAssertion' | 'notYetValid' | 'otherAudience' | 'reusedAssertion';
+	| 'excessiveLifetime'
+	| 'expiredAssertion'
+	| 'notYetValid'
+	| 'otherAudience'
+	| 'reusedAssertion'
+	| 'unrepresentableJti';
 
 /** Why a channel assertion was refused, whether or not it verified. */
 export type RejectionReason = UnverifiedRejectionReason | VerifiedRejectionReason;

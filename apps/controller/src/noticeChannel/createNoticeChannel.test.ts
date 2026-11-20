@@ -19,8 +19,7 @@ import { createServer } from '../http/index.js';
 import { createCursorCipher } from '../noticeStream/index.js';
 import { StoreTimeout } from '../storeTimeout/index.js';
 import { CHANNEL_PATHS, CHANNEL_STORE_FAILED, createNoticeChannel } from './createNoticeChannel.js';
-import { createUsedAssertions } from './createUsedAssertions.js';
-import type { NoticePage, NoticeReader, StreamPlace } from './types.js';
+import type { NoticePage, NoticeReader, StreamPlace, UsedAssertions } from './types.js';
 
 type Check = ChannelAssertionCheck<LiveApplicationKey>;
 
@@ -92,9 +91,11 @@ const standUp = (
 		},
 		recordingWritten = Promise.resolve(),
 		streamLimitPerAudience = 64,
+		usedAssertions = rememberingAssertions(),
 	}: {
 		check?: Check | (() => Check);
 		reader?: NoticeReader;
+		usedAssertions?: UsedAssertions;
 
 		/** Settles when a refused assertion's recording is written: at once by default. */
 		recordingWritten?: Promise<void>;
@@ -150,7 +151,7 @@ const standUp = (
 			streamMaximumLifetimeSeconds: 900,
 			streamQueueLimit: 1_000,
 		},
-		usedAssertions: createUsedAssertions({ now: () => Date.now() }),
+		usedAssertions,
 		verifier: {
 			verify: async () => (typeof check === 'function' ? check() : check),
 		},
@@ -201,6 +202,21 @@ const answerOf = async (body: string): Promise<Readonly<Record<string, unknown>>
 	JSON.parse(new TextDecoder().decode((await compactDecrypt(body, KEY.pollAnswer)).plaintext)) as Readonly<
 		Record<string, unknown>
 	>;
+
+// The record of assertions presented to the stream, held in memory: the store's own record is tested apart.
+const rememberingAssertions = (): UsedAssertions => {
+	const held = new Set<string>();
+	return {
+		record: async (applicationId, id) => {
+			const key = `${applicationId}\n${id}`;
+			if (held.has(key)) {
+				return false;
+			}
+			held.add(key);
+			return true;
+		},
+	};
+};
 
 const codeOf = (body: string): unknown => (JSON.parse(body) as Readonly<Record<string, unknown>>)['code'];
 
@@ -577,6 +593,36 @@ suite('the push', () => {
 			[first.headers['cache-control'], first.headers['content-type'], first.headers['x-accel-buffering']],
 			['no-store', 'text/event-stream', 'no'],
 		);
+	});
+
+	test('answers 503 storeUnavailable, opening no stream and reading no notice, when the assertion cannot be recorded', async (context) => {
+		const reads: bigint[] = [];
+		const stand = standUp(context, {
+			check: verifiedAs('unrecordable'),
+			reader: {
+				after: async (after) => {
+					reads.push(after);
+					return pageAfter(after, []);
+				},
+				head: async () => placeAt(9n),
+			},
+			usedAssertions: {
+				record: () => Promise.reject(new StoreTimeout()),
+			},
+		});
+		const cursor = stand.cursors.seal(placeAt(5n));
+
+		const answer = await stand.server.inject({
+			headers: { authorization: 'Bearer assertion', ...VERSIONS, 'last-event-id': cursor },
+			method: 'GET',
+			url: CHANNEL_PATHS.stream,
+		});
+		await stand.stop();
+
+		assert.equal(answer.statusCode, 503);
+		assert.equal(codeOf(answer.body), 'storeUnavailable');
+		assert.deepEqual(reads, []);
+		assert.ok(stand.lines.some(({ message }) => message === CHANNEL_STORE_FAILED));
 	});
 
 	test('refuses an assertion presented to the stream a second time with the one 401, from memory, whatever else its request carries, recording the first such refusal as reusedAssertion and counting its repeats', async (context) => {

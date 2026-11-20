@@ -867,6 +867,7 @@ suite("the controller's events, as the document registers them", () => {
 			'reusedAssertion',
 			'unknownApplication',
 			'unreadableAssertion',
+			'unrepresentableJti',
 		]);
 	});
 });

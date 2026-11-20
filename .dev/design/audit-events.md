@@ -333,9 +333,10 @@ them, and it is the last point at which the address is in the record before bein
 **A refused channel assertion is recorded the first time an instance refuses it, counted after that,
 and names an application only when one is registered.** One that verifies under its application's
 key and is refused anyway is a `channelAssertion.rejection` the first time each instance refuses it,
-its `reason` `expiredAssertion`, `notYetValid`, `otherAudience`, `excessiveLifetime` or
-`reusedAssertion`, the last an assertion presented to the stream a second time, which only a copy of
-it can be. Two refusals are of one assertion when both carry the same signing input, the header and
+its `reason` `expiredAssertion`, `notYetValid`, `otherAudience`, `excessiveLifetime`,
+`unrepresentableJti` or `reusedAssertion`, the last an assertion presented to the stream a second time,
+which only a copy of it can be, and the one before it an assertion whose `jti` holds a NUL character or
+an unpaired surrogate, which the store cannot hold. Two refusals are of one assertion when both carry the same signing input, the header and
 payload segments as presented, the bytes the signature covers. Every later refusal of that assertion
 on the instance is counted, under its own reason. One that cannot be verified costs nothing to send,
 so it is always counted: `missingAssertion`, `unreadableAssertion`, `unknownApplication`,

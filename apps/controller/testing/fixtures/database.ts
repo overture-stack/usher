@@ -1836,6 +1836,11 @@ export const DESIGNED_COLUMNS: {
 		generation: required(BIGINT),
 		singleton: required(BOOLEAN),
 	},
+	usedChannelAssertions: {
+		acceptedUntil: required(INSTANT),
+		applicationId: required(UUID),
+		assertionId: required(TEXT),
+	},
 	userIdentities: {
 		addedAt: required(INSTANT),
 		addedBy: optional(UUID),

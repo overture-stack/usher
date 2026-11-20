@@ -69,6 +69,7 @@ const {
 	schemaMigrations,
 	sidSignOuts,
 	subjectSignOuts,
+	usedChannelAssertions,
 	userIdentities,
 	users,
 } = POLICY_TABLES;
@@ -352,6 +353,7 @@ suite("the schema's shape", () => {
 				[subjectSignOuts.columns.expiresAt, 59],
 				[subjectSignOuts.columns.signedOutAt, 41],
 			],
+			usedChannelAssertions: [[usedChannelAssertions.columns.acceptedUntil, 47]],
 			userIdentities: [[userIdentities.columns.addedAt, 6]],
 			users: [[users.columns.createdAt, 0]],
 		} as const;
@@ -477,6 +479,11 @@ suite("the schema's shape", () => {
 				[subjectSignOuts.columns.idpIssuer]: SECOND_ISSUER,
 				[subjectSignOuts.columns.idpSubjectId]: 'instant-probe-subject',
 				...timed(times.subjectSignOuts),
+			});
+			await insertRow(toronto, usedChannelAssertions, {
+				[usedChannelAssertions.columns.applicationId]: application[applications.columns.id] ?? null,
+				[usedChannelAssertions.columns.assertionId]: 'instant-probe-assertion',
+				...timed(times.usedChannelAssertions),
 			});
 			const globalRevocation = await insertRow(toronto, globalRevocations, {
 				[globalRevocations.columns.reasonCode]: 'securityIncident',
@@ -607,6 +614,12 @@ suite("the schema's shape", () => {
 					key: subjectSignOuts.columns.idpSubjectId,
 					keyValue: 'instant-probe-subject',
 					table: subjectSignOuts,
+				},
+				{
+					columns: times.usedChannelAssertions,
+					key: usedChannelAssertions.columns.assertionId,
+					keyValue: 'instant-probe-assertion',
+					table: usedChannelAssertions,
 				},
 				{
 					columns: times.identityProviderConfiguration,
