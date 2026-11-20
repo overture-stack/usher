@@ -543,8 +543,11 @@ suite('migrations', () => {
 		const [earliest] = (await appliedMigrations(owner)).map(({ name }) => name);
 		const before = await storeState(owner);
 
-		await succeeded(migrateDatabaseInProcess(database, earliest === undefined ? {} : { target: earliest }));
+		const ran = await succeeded(
+			migrateDatabaseInProcess(database, earliest === undefined ? {} : { target: earliest }),
+		);
 
+		assert.equal(ran, true);
 		assert.notEqual(earliest, undefined);
 		assert.deepEqual(await storeState(owner), before);
 	});
