@@ -4,12 +4,12 @@ import { suite, test, type TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 
-import type { AddressResolution } from '../directory/index.js';
+import type { AccountReading, AddressResolution } from '../directory/index.js';
 import type { AuditEvent } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import type { ResourceStanding } from '../resourceStanding/index.js';
 import { createGrantRoutes } from './createGrantRoutes.js';
-import { cursorAfterRequest } from './readGrantRequestListing.js';
+import { cursorAfterId } from './idCursor.js';
 import type {
 	GrantStore,
 	NewDecision,
@@ -323,8 +323,11 @@ const fakeStore = (world: World, calls: Call[]): GrantStore => {
 	};
 };
 
-// A directory answering from the world given, keeping each address it is asked to resolve.
+// A directory answering from the world given, keeping each address it is asked to resolve, and
+// holding no account by subject.
 const fakeDirectory = (world: World, lookups: string[]) => ({
+	accountOf: async (): Promise<AccountReading> =>
+		world.directory === 'answering' ? { kind: 'absent' } : { kind: world.directory },
 	resolveAddress: async (address: string): Promise<AddressResolution> => {
 		lookups.push(address);
 		if (world.directory !== 'answering') {
@@ -2078,7 +2081,7 @@ suite('listing grant requests', () => {
 
 		assert.equal(listed.statusCode, 200);
 		assert.deepEqual(parsed(listed), {
-			next: cursorAfterRequest(REQUEST_ID),
+			next: cursorAfterId(REQUEST_ID),
 			requests: [
 				{
 					category: 'global.controlled',
@@ -2102,7 +2105,7 @@ suite('listing grant requests', () => {
 	test('names no next page once the store gives no more than the page holds', async (context) => {
 		const stand = standUp(context, { requestRows: [row(REQUEST_ID)] });
 
-		const listed = await listRequests(stand, 'administrator', `?cursor=${cursorAfterRequest(UNKNOWN_GRANT_ID)}`);
+		const listed = await listRequests(stand, 'administrator', `?cursor=${cursorAfterId(UNKNOWN_GRANT_ID)}`);
 
 		assert.equal(parsed(listed)['next'], null);
 		assert.deepEqual(stand.reads.at(-1)?.values, [

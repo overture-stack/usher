@@ -3,12 +3,13 @@ import type { Reader, StoredResource } from './types.js';
 
 /**
  * A resource as an answer shows it: a registration's, a read's, and each entry of a listing alike.
- * A platform administrator's answer and a counted owner's carry `grantSummary`, holding no count,
- * and `registeredBy`, the registering administrator's subject or `null` where none is recorded;
- * anyone else's carries neither.
+ * A platform administrator's answer and a counted owner's carry `grantSummary`, and `registeredBy`,
+ * the registering administrator's subject or `null` where none is recorded; anyone else's carries
+ * neither. An entry of a platform administrator's listing carries `grants` too.
  *
  * @param resource the resource as the store holds it.
  * @param reader who it is answered to.
+ * @param grants its grants as a listing entry shows them; none for any other answer.
  */
 export const resourceView = (
 	{
@@ -19,6 +20,7 @@ export const resourceView = (
 		displayName,
 		externalId,
 		fields,
+		grantSummary,
 		registeredAt,
 		registeredBy,
 		retired,
@@ -26,6 +28,7 @@ export const resourceView = (
 		updatedAt,
 	}: StoredResource,
 	reader: Reader,
+	grants?: readonly JsonValue[],
 ): JsonValue => ({
 	accessLevel,
 	applications,
@@ -34,7 +37,8 @@ export const resourceView = (
 	displayName,
 	externalId,
 	fields,
-	...(reader === 'signedIn' ? {} : { grantSummary: {} }),
+	...(grants === undefined ? {} : { grants }),
+	...(reader === 'signedIn' ? {} : { grantSummary }),
 	registeredAt: eventInstant(registeredAt.getTime()),
 	...(reader === 'signedIn'
 		? {}

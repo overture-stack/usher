@@ -1,9 +1,9 @@
 import type pg from 'pg';
 
 import type { Directory } from '../directory/index.js';
-import type { AuditTrail } from '../eventLog/index.js';
+import type { AuditTrail, JsonValue } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
-import type { StoreReader } from '../managementApi/index.js';
+import type { OperationOutcome, StoreReader } from '../managementApi/index.js';
 import type { ResourceStanding, StandingLock } from '../resourceStanding/index.js';
 import type { ControllerSettings } from '../settings/index.js';
 
@@ -129,6 +129,38 @@ export interface GrantRequestListing {
 	limit: number;
 }
 
+/** A grant listing's page, as read from its query. */
+export interface GrantListing {
+	/** The id of the grant the page begins after; none for the first page. */
+	after: string | undefined;
+
+	/** Whether revoked grants are listed, which a platform administrator alone asks for. */
+	includeRevoked: boolean;
+
+	/** The most grants on the page. */
+	limit: number;
+}
+
+/** A listing of a person's grants, as read from its body and its query. */
+export interface PersonGrantListing extends AddressLookup, GrantListing {}
+
+/**
+ * The grants on a page of resources, as an administrator's resource listing shows them: each
+ * resource's, by its id; or the answer of a directory that cannot answer for a holder.
+ */
+export type GrantsOnResources =
+	| {
+			/**
+			 * The grants on one resource of the page, none for a resource holding none.
+			 *
+			 * @param resourceId the resource's id.
+			 */
+			grantsOf(resourceId: string): readonly JsonValue[];
+
+			kind: 'listed';
+	  }
+	| { kind: 'unavailable'; outcome: OperationOutcome };
+
 /** A holder's answer to a grant, as read from its body. */
 export interface GrantAnswer {
 	/** The capabilities shown to the holder, as sent. */
@@ -188,6 +220,17 @@ export interface StoredDecision {
 
 	decidedAt: Date;
 	decision: 'accepted' | 'rejected';
+}
+
+/** A capability as the principal's own listing shows what a grant would let them use. */
+export interface ListedCapability {
+	/** `null` where the store holds none. */
+	description: string | null;
+
+	displayName: string;
+
+	/** As `entity.action`. */
+	name: string;
 }
 
 /** A grant as an answer shows it, each person by subject and its resource by externalId. */
@@ -559,8 +602,11 @@ export interface JudgedCreation {
 
 /** What the grant operations are created from. */
 export interface GrantOperationsSettings {
-	/** Where an address naming a holder is resolved to the subject of the account holding it. */
-	directory: Pick<Directory, 'resolveAddress'>;
+	/**
+	 * Where an address naming a holder is resolved to the subject of the account holding it, and
+	 * where a listing reads each person it names.
+	 */
+	directory: Pick<Directory, 'accountOf' | 'resolveAddress'>;
 
 	/**
 	 * The grant store over one transaction's connection.
@@ -585,8 +631,8 @@ export interface GrantOperationsSettings {
 	>;
 
 	/**
-	 * Where a refused request's event reads what it names, outside any transaction, on the control
-	 * pool.
+	 * Where the listings read their pages, and a refused request's event reads what it names, each
+	 * outside any transaction, on the control pool.
 	 */
 	store: StoreReader;
 

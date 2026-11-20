@@ -932,7 +932,7 @@
 				"additionalProperties": false,
 				"properties": {
 					"capabilities": {
-						"description": "What the grant would let its holder use; in a principal's listing of their own grants.",
+						"description": "What the grant's role lets its holder use now, ordered by name; in a principal's listing of their own grants.",
 						"items": {
 							"$ref": "#/components/schemas/Capability"
 						},
@@ -950,7 +950,8 @@
 							{
 								"type": "null"
 							}
-						]
+						],
+						"description": "The holder's latest answer, as recorded when given; `null` while they have given none."
 					},
 					"expiresAt": {
 						"anyOf": [
@@ -1326,10 +1327,11 @@
 				"additionalProperties": false,
 				"properties": {
 					"email": {
-						"description": "The address held by the directory, read when the answer is written and never stored; left out for an account no longer known to the directory.",
+						"description": "The address the directory holds, read when the answer is written and never stored; left out for an account the directory no longer holds or one holding none, and while no directory is configured.",
 						"type": "string"
 					},
 					"hasAccount": {
+						"description": "`false` for a holder the directory no longer holds; `true` for every holder while no directory is configured.",
 						"type": "boolean"
 					},
 					"subject": {
@@ -1497,7 +1499,7 @@
 				"type": "object"
 			},
 			"NamedPrincipal": {
-				"description": "How an answer names a principal: by subject to a platform administrator, and in the answer to the principal's own act; by name in a listing to anyone else.",
+				"description": "How an answer names a principal: by subject to a platform administrator, and in the answer to the principal's own act; by name in a principal's listing of their own grants, a platform administrator's included, and in any other listing to anyone but a platform administrator. A name is the given and family names the directory holds, or `a data steward` for a person holding neither, one the directory no longer holds, and anyone while no directory is configured.",
 				"oneOf": [
 					{
 						"$ref": "#/components/schemas/PrincipalBySubject"
@@ -1855,11 +1857,11 @@
 							"minimum": 0,
 							"type": "integer"
 						},
-						"description": "How many principals hold each role, counting accepted, unexpired, unrevoked grants alone. Given to platform administrators and the resource's owners.",
+						"description": "How many principals hold each role, counting accepted, unexpired, unrevoked grants alone, each principal once per role, and leaving out a role nobody holds. Given to platform administrators and the resource's owners.",
 						"type": "object"
 					},
 					"grants": {
-						"description": "Its grants, holders included, in a listing entry.",
+						"description": "Its grants, revoked ones left out, holders included, in an entry of a platform administrator's listing.",
 						"items": {
 							"$ref": "#/components/schemas/Grant"
 						},
@@ -3301,7 +3303,7 @@
 								}
 							}
 						},
-						"description": "The page size is zero or below it."
+						"description": "`pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"$ref": "#/components/responses/ReadUnavailable"
@@ -3481,6 +3483,26 @@
 					"required": true
 				},
 				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Grant"
+								}
+							}
+						},
+						"description": "The grant is created, for a holder named by subject, or named by address by a platform administrator. `id` is its opaque id, and `kind` is `grant`. Its holder is named by subject, with `hasAccount` true and no `email`, since no directory is read for the answer."
+					},
+					"202": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/GrantByAddress"
+								}
+							}
+						},
+						"description": "A counted owner named the holder by address: answered alike whether or not an account holds the address. `kind` is `grantByAddress`."
+					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
 					},
@@ -3608,26 +3630,6 @@
 								"$ref": "#/components/headers/RetryAfter"
 							}
 						}
-					},
-					"201": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/Grant"
-								}
-							}
-						},
-						"description": "The grant is created, for a holder named by subject, or named by address by a platform administrator. `id` is its opaque id, and `kind` is `grant`. Its holder is named by subject, with `hasAccount` true and no `email`, since no directory is read for the answer."
-					},
-					"202": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/GrantByAddress"
-								}
-							}
-						},
-						"description": "A counted owner named the holder by address: answered alike whether or not an account holds the address. `kind` is `grantByAddress`."
 					}
 				},
 				"security": [
@@ -4180,7 +4182,7 @@
 		},
 		"/admin/me/grants": {
 			"get": {
-				"description": "Lists the principal's own grants, a page at a time, pending ones included and revoked ones left out. Each carries the capabilities it would let them use, and names its granter by name. Any signed-in principal lists their own; one holding nothing receives an empty list.",
+				"description": "Lists the principal's own grants, a page at a time, in the order of their ids: pending, declined and expired ones included, revoked ones left out, and an expired grant on a retired resource left out too. Each carries the capabilities its role confers now, each with its display name and description, and names its granter, and any revoker, by name alone. Any signed-in principal lists their own; one holding nothing receives an empty page.",
 				"operationId": "listOwnGrants",
 				"parameters": [
 					{
@@ -4234,7 +4236,7 @@
 								}
 							}
 						},
-						"description": "The page size is zero or below it."
+						"description": "`pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"content": {
@@ -4248,7 +4250,6 @@
 											"properties": {
 												"code": {
 													"enum": [
-														"directoryNotConfigured",
 														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"signingKeyUnconfirmed",
@@ -4262,7 +4263,7 @@
 								}
 							}
 						},
-						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: the directory cannot answer, for a listing naming a granter. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`directoryUnavailable`: a configured directory that cannot answer, for a page that would name a granter or show an address. With no directory configured, the listing still answers, naming each granter `a data steward` and showing no address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -4744,7 +4745,7 @@
 		},
 		"/admin/people/grants": {
 			"post": {
-				"description": "Lists, a page at a time, the grants of the principal holding an address. The principal is found by exact address in any letter case, the address in the body.\n\nA platform administrator receives every grant across resources, and a resource's owner the grants on resources they own. Revoked grants are listed only to an administrator asking with `includeRevoked=true`.\n\nTo a platform administrator, an address held by no single account is refused with `holderNotFound`. To an owner, it is answered as an account holding nothing on their resources.",
+				"description": "Lists, a page at a time, the grants of the principal holding an address. The principal is found by exact address in any letter case, the address in the body.\n\nA platform administrator receives every grant across resources, and a resource's owner the grants on resources they own, each granter by subject to an administrator and by name to an owner. Anyone else, owning no resource, receives an empty page whatever the address, and nothing is looked up. Revoked grants are listed only to an administrator asking with `includeRevoked=true`, and a grant on a retired resource only once revoked.\n\nTo a platform administrator, an address held by no single account is refused with `holderNotFound`. To an owner, it is answered as an account holding nothing on their resources.",
 				"operationId": "listPersonGrants",
 				"parameters": [
 					{
@@ -4821,7 +4822,7 @@
 								}
 							}
 						},
-						"description": "To a platform administrator, no single account holds the address; `holderNotFound`."
+						"description": "To a platform administrator, no single account holds the address verified, a partial address or one holding a wildcard among them; `holderNotFound`."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -4837,7 +4838,7 @@
 								}
 							}
 						},
-						"description": "The address is not in the form of an address, or the page size is zero or below it."
+						"description": "`addressForm`: the address is not in the form of an address. `pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"content": {
@@ -4865,7 +4866,7 @@
 								}
 							}
 						},
-						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: the directory cannot answer. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: the directory cannot answer, for an address that cannot be resolved, or for a page that would show a name or an address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -5168,7 +5169,7 @@
 		},
 		"/admin/resources": {
 			"get": {
-				"description": "Lists the resources the principal may see, a page at a time, in a stable order: every resource to a platform administrator, and the resources they own to anyone else.\n\nA retired resource is listed, marked `retired`, only to an administrator asking with `includeRetired=true`.",
+				"description": "Lists the resources the principal may see, a page at a time, in a stable order: every resource to a platform administrator, and to anyone else the resources they own, by an owner grant that is live and that they accepted. A principal owning none receives an empty page. An administrator's entries carry each resource's grants, revoked ones left out, each holder with the address the directory holds; an owner's entries carry the grant summary and no grants.\n\nA retired resource is listed, marked `retired`, only to an administrator asking with `includeRetired=true`.",
 				"operationId": "listResources",
 				"parameters": [
 					{
@@ -5222,7 +5223,7 @@
 								}
 							}
 						},
-						"description": "The page size is zero or below it."
+						"description": "`pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"content": {
@@ -5236,7 +5237,6 @@
 											"properties": {
 												"code": {
 													"enum": [
-														"directoryNotConfigured",
 														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"signingKeyUnconfirmed",
@@ -5250,7 +5250,7 @@
 								}
 							}
 						},
-						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: the directory cannot answer, for a listing naming a holder by address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`directoryUnavailable`: a configured directory that cannot answer, for an administrator's page whose resources hold a grant; an owner's listing names nobody and never asks it. With no directory configured, the listing still answers, showing no address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -5323,6 +5323,28 @@
 							}
 						},
 						"description": "`administratorOnly`: the principal is no platform administrator. `administratorSelfOwnership`: the administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["holderNotFound"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`holderNotFound`: no single account holds an owner's address verified, whether no account holds it, the account holding it has not verified it, or several accounts hold it; nothing is written."
 					},
 					"409": {
 						"content": {
@@ -5405,28 +5427,6 @@
 							}
 						},
 						"description": "The resource is registered."
-					},
-					"404": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"allOf": [
-										{
-											"$ref": "#/components/schemas/ProblemDetails"
-										},
-										{
-											"properties": {
-												"code": {
-													"enum": ["holderNotFound"]
-												}
-											},
-											"type": "object"
-										}
-									]
-								}
-							}
-						},
-						"description": "`holderNotFound`: no single account holds an owner's address verified, whether no account holds it, the account holding it has not verified it, or several accounts hold it; nothing is written."
 					}
 				},
 				"security": [
@@ -5610,8 +5610,6 @@
 											"properties": {
 												"code": {
 													"enum": [
-														"directoryNotConfigured",
-														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"signingKeyUnconfirmed",
 														"storeUnavailable"
@@ -5624,7 +5622,7 @@
 								}
 							}
 						},
-						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: the directory cannot answer, for a resource whose answer names a holder by address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -5922,7 +5920,7 @@
 		},
 		"/admin/resources/{externalId}/grants": {
 			"get": {
-				"description": "Lists every grant on a resource, a page at a time, with its holder, category, role, expiry and state, to platform administrators and the resource's owners. A platform administrator receives each granter by subject, and an owner by name.\n\nRevoked grants are listed only to an administrator asking with `includeRevoked=true`.",
+				"description": "Lists every grant on a resource, a page at a time, with its holder, category, role, expiry and state, to platform administrators and the resource's owners. A platform administrator receives each granter by subject, and an owner by name.\n\nThe externalId is matched exactly, and a retired resource is seen by platform administrators alone. Expired, pending and declined grants are listed; a grant's `state` comes from its revocation, then its expiry, then its holder's latest decision, which `decision` shows as recorded, `null` while there is none. A grant its holder granted themself, or asked for, is marked `selfGrant`. Each holder carries the address the directory holds. Invitations are not grants, and are not listed. Revoked grants are listed only to an administrator asking with `includeRevoked=true`.",
 				"operationId": "listResourceGrants",
 				"parameters": [
 					{
@@ -6002,7 +6000,7 @@
 								}
 							}
 						},
-						"description": "The page size is zero or below it."
+						"description": "`pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"content": {
@@ -6016,7 +6014,6 @@
 											"properties": {
 												"code": {
 													"enum": [
-														"directoryNotConfigured",
 														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"signingKeyUnconfirmed",
@@ -6030,7 +6027,7 @@
 								}
 							}
 						},
-						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: the directory cannot answer, for a listing naming a holder by address or a granter by name. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`directoryUnavailable`: a configured directory that cannot answer, for a page that would show a name or an address. With no directory configured, the listing still answers, showing no address and naming each granter `a data steward` to an owner. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -6394,6 +6391,9 @@
 					"required": true
 				},
 				"responses": {
+					"204": {
+						"description": "The submitter is removed. The answer carries no body."
+					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
 					},
@@ -6519,9 +6519,6 @@
 								"$ref": "#/components/headers/RetryAfter"
 							}
 						}
-					},
-					"204": {
-						"description": "The submitter is removed. The answer carries no body."
 					}
 				},
 				"security": [

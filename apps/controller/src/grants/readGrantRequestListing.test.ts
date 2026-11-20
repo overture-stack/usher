@@ -2,13 +2,8 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
 import type { Principal, QueryParameters } from '../managementApi/index.js';
-import {
-	cursorAfterRequest,
-	readGrantRequestListing,
-	REQUEST_PAGE_DEFAULT,
-	REQUEST_PAGE_MAXIMUM,
-	requestIdOfCursor,
-} from './readGrantRequestListing.js';
+import { cursorAfterId } from './idCursor.js';
+import { readGrantRequestListing, REQUEST_PAGE_DEFAULT, REQUEST_PAGE_MAXIMUM } from './readGrantRequestListing.js';
 
 const PERSON: Principal = Object.freeze({
 	administrator: false,
@@ -25,35 +20,13 @@ const read = (query: QueryParameters) => readGrantRequestListing({ principal: PE
 const outcomeOf = (reading: ReturnType<typeof read>): unknown =>
 	reading.kind === 'refused' ? [reading.problem.status, reading.problem.code] : reading.input;
 
-suite("a grant request listing's cursor", () => {
-	test('names again the request it was written after', () => {
-		assert.equal(requestIdOfCursor(cursorAfterRequest(REQUEST_ID)), REQUEST_ID);
-	});
-
-	test('names nothing for text no listing wrote, a request id written plainly among it', () => {
-		const cursors = [
-			'',
-			'not a cursor',
-			REQUEST_ID,
-			cursorAfterRequest('STUDY-A1'),
-			`${cursorAfterRequest(REQUEST_ID)}=`,
-			cursorAfterRequest(REQUEST_ID.toUpperCase()),
-		];
-
-		assert.deepEqual(
-			cursors.map(requestIdOfCursor),
-			cursors.map(() => undefined),
-		);
-	});
-});
-
 suite("reading the grant request listing's query", () => {
 	test('reads no query as the first page of the default size, and a cursor and a size as sent', () => {
 		assert.deepEqual(
 			[
 				read([]),
 				read([
-					['cursor', cursorAfterRequest(REQUEST_ID)],
+					['cursor', cursorAfterId(REQUEST_ID)],
 					['limit', '2'],
 				]),
 			].map(outcomeOf),

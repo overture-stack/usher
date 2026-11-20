@@ -8,6 +8,7 @@ suite('the grants module', () => {
 		assert.deepEqual(Object.keys(grants).toSorted(), [
 			'GRANT_PROBLEMS',
 			'createGrantRoutes',
+			'grantsOnResources',
 			'readHolder',
 			'sqlGrantStore',
 			'unresolvedByDirectory',

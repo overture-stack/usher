@@ -1,6 +1,7 @@
 import { eventInstant, type JsonValue } from '../eventLog/index.js';
 import { isLive } from '../resourceStanding/index.js';
-import type { ViewedGrant } from './types.js';
+import type { PeopleNaming } from './listedPeople.js';
+import type { ListedCapability, ViewedGrant } from './types.js';
 
 /** A grant's state, as an answer names it. */
 export type GrantState = 'accepted' | 'expired' | 'pending' | 'rejected' | 'revoked';
@@ -29,17 +30,31 @@ export const grantStateOf = (
 	return decision?.decision ?? 'pending';
 };
 
+// People as the answer to a principal's own act shows them: by subject, the holder as one with an
+// account and no address, since none is read.
+const BY_SUBJECT: PeopleNaming = Object.freeze({
+	holder: (subject: string) => ({ hasAccount: true, subject }),
+	principal: (subject: string) => ({ subject }),
+});
+
 /**
- * A grant as an answer shows it, in the answer to a principal's own act: `kind` `grant`, beside a
- * grant request's `grantRequest`; people by subject, the
- * holder as one with an account, and no address, since none is read; the resource by externalId;
- * each instant in UTC with `Z`; and its state on the configured clock. Whether a grant on its terms
- * replaced it is never shown apart from its expiry.
+ * A grant as an answer shows it: `kind` `grant`, beside a grant request's `grantRequest`; the
+ * resource by externalId; each instant in UTC with `Z`; and its state on the configured clock.
+ * Whether a grant on its terms replaced it is never shown apart from its expiry. In the answer to a
+ * principal's own act, people are shown by subject, the holder as one with an account and no
+ * address; a listing shows them as its naming does, and its first member is `capabilities` where
+ * the listing gives them.
  *
  * @param grant the grant.
  * @param now the configured clock's instant, in milliseconds since the Unix epoch.
+ * @param listing the capabilities the grant's role confers now, for a listing showing them, and how
+ *   the listing shows people.
  */
-export const grantView = (grant: ViewedGrant, now: number): JsonValue => {
+export const grantView = (
+	grant: ViewedGrant,
+	now: number,
+	{ capabilities, naming = BY_SUBJECT }: { capabilities?: readonly ListedCapability[]; naming?: PeopleNaming } = {},
+): JsonValue => {
 	const {
 		category,
 		decision,
@@ -55,6 +70,15 @@ export const grantView = (grant: ViewedGrant, now: number): JsonValue => {
 		selfGrant,
 	} = grant;
 	return {
+		...(capabilities === undefined
+			? {}
+			: {
+					capabilities: capabilities.map(({ description, displayName, name }) => ({
+						description,
+						displayName,
+						name,
+					})),
+				}),
 		category,
 		decision:
 			decision === null
@@ -66,13 +90,13 @@ export const grantView = (grant: ViewedGrant, now: number): JsonValue => {
 					},
 		expiresAt: instantOrNull(expiresAt),
 		grantedAt: eventInstant(grantedAt.getTime()),
-		grantedBy: { subject: granterSubject },
-		holder: { hasAccount: true, subject: holderSubject },
+		grantedBy: naming.principal(granterSubject),
+		holder: naming.holder(holderSubject),
 		id,
 		kind: 'grant',
 		resource,
 		revokedAt: instantOrNull(revokedAt),
-		revokedBy: revokerSubject === null ? null : { subject: revokerSubject },
+		revokedBy: revokerSubject === null ? null : naming.principal(revokerSubject),
 		role,
 		selfGrant,
 		state: grantStateOf(grant, now),

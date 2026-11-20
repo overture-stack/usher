@@ -3,7 +3,7 @@ import { suite, test, type TestContext } from 'node:test';
 
 import type { FastifyInstance } from 'fastify';
 
-import type { AddressResolution } from '../directory/index.js';
+import type { AccountReading, AddressResolution } from '../directory/index.js';
 import type { AuditEvent } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import { createResourceRoutes } from './createResourceRoutes.js';
@@ -30,7 +30,10 @@ interface Stand {
 	transactions: { count: number };
 }
 
-/** The fake directory: the subjects it holds by lower-case address, or how it fails. */
+/**
+ * The fake directory: the subjects it holds by lower-case address, holding no account by subject,
+ * or how it fails.
+ */
 type DirectoryWorld = Readonly<Record<string, string>> | 'unavailable' | 'unconfigured';
 
 // The subject of the one account holding each address verified, by the address in lower case.
@@ -58,6 +61,8 @@ const standUp = (context: TestContext, directory: DirectoryWorld = ACCOUNTS): St
 	createResourceRoutes(
 		{
 			directory: {
+				accountOf: async (): Promise<AccountReading> =>
+					typeof directory === 'string' ? { kind: directory } : { kind: 'absent' },
 				resolveAddress: async (address): Promise<AddressResolution> => {
 					stand.lookups.push(address);
 					if (typeof directory === 'string') {

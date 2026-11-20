@@ -5,24 +5,36 @@ import type { OperationOutcome } from '../managementApi/index.js';
 
 /**
  * What an operation naming a person by address offers its caller in place of the address: naming a
- * grant's holder by subject, naming a registration's owner by subject, or revoking a submitter's
- * grant by its id.
+ * grant's holder by subject, naming a registration's owner by subject, revoking a submitter's grant
+ * by its id, or listing a resource's grants, whose holders are named by subject.
  */
-export type DirectoryAlternative = 'grantById' | 'holderBySubject' | 'ownerBySubject';
+export type DirectoryAlternative = 'grantById' | 'grantsByResource' | 'holderBySubject' | 'ownerBySubject';
 
-// Each alternative as a refusal's detail words it, beside who the operation names by address.
-const ALTERNATIVES: Readonly<Record<DirectoryAlternative, { alternative: string; person: string }>> = Object.freeze({
+// Each alternative as a refusal's detail words it, beside who the operation names by address, and
+// whether it serves while a configured directory cannot answer.
+const ALTERNATIVES: Readonly<
+	Record<DirectoryAlternative, { alternative: string; person: string; servesDuringOutage: boolean }>
+> = Object.freeze({
 	grantById: {
 		alternative: "revoke the submitter's grant by its id, through DELETE /admin/grants/{id}",
 		person: 'A submitter',
+		servesDuringOutage: true,
+	},
+	grantsByResource: {
+		alternative:
+			"list a resource's grants, whose holders are named by subject, through GET /admin/resources/{externalId}/grants",
+		person: 'A person',
+		servesDuringOutage: false,
 	},
 	holderBySubject: {
 		alternative: 'name the holder by subject',
 		person: 'A holder',
+		servesDuringOutage: true,
 	},
 	ownerBySubject: {
 		alternative: 'name the owner by subject',
 		person: 'An owner',
+		servesDuringOutage: true,
 	},
 });
 
@@ -51,8 +63,9 @@ const capitalized = (text: string): string => `${text.charAt(0).toUpperCase()}${
  * since no retry on this instance changes it; its detail names the rule that addresses need a
  * configured directory and the alternative, and its event records `failed` at warning, a fault in
  * the configuration rather than in anything broken. With a directory that cannot answer, it is
- * answered 503 `directoryUnavailable` as unavailable, its detail naming the alternative or trying
- * again, and its event records `failed` at error.
+ * answered 503 `directoryUnavailable` as unavailable, its detail naming the alternative beside trying
+ * again where the alternative serves without the directory, and trying again alone where it does not,
+ * and its event records `failed` at error.
  *
  * @param resolution what the directory gave in place of an account.
  * @param offered what the operation offers in place of the address.
@@ -61,7 +74,7 @@ export const unresolvedByDirectory = (
 	{ kind }: Extract<AddressResolution, { kind: 'unavailable' | 'unconfigured' }>,
 	offered: DirectoryAlternative,
 ): OperationOutcome => {
-	const { alternative, person } = ALTERNATIVES[offered];
+	const { alternative, person, servesDuringOutage } = ALTERNATIVES[offered];
 	return kind === 'unconfigured'
 		? {
 				kind: 'unavailable',
@@ -74,8 +87,23 @@ export const unresolvedByDirectory = (
 					CODE,
 					503,
 					TITLE,
-					`${person} named by address is found through the identity provider's directory, which cannot answer now. ${capitalized(alternative)}, or try again later.`,
+					`${person} named by address is found through the identity provider's directory, which cannot answer now. ${servesDuringOutage ? `${capitalized(alternative)}, or try again later.` : 'Try again later.'}`,
 				),
 				severity: 'error',
 			};
 };
+
+/**
+ * How a listing is answered when a configured directory cannot answer for a person it would name by
+ * name or by address: 503 `directoryUnavailable` as unavailable, its detail telling the caller to
+ * try again, so its event, for an operation recording one, records `failed` at error.
+ */
+export const unnamedByDirectory = (): OperationOutcome => ({
+	kind: 'unavailable',
+	problem: problem(
+		CODE,
+		503,
+		TITLE,
+		"This listing shows people as the identity provider's directory holds them, and the directory cannot answer now. Try again later.",
+	),
+});

@@ -21,7 +21,8 @@ import {
 	roleMissing,
 	STORED_ID_FORM,
 } from './operationOutcome.js';
-import { cursorAfterRequest, readGrantRequestListing } from './readGrantRequestListing.js';
+import { cursorAfterId } from './idCursor.js';
+import { readGrantRequestListing } from './readGrantRequestListing.js';
 import { readGrantRequestDecision } from './readGrantRequestDecision.js';
 import type {
 	GrantOperationsSettings,
@@ -286,7 +287,7 @@ export const grantRequestListingOperation = ({
 		const page = read.slice(0, input.limit);
 		const last = page.at(-1);
 		return answered(200, {
-			next: read.length > page.length && last !== undefined ? cursorAfterRequest(last.id) : null,
+			next: read.length > page.length && last !== undefined ? cursorAfterId(last.id) : null,
 			requests: page.map((request) => grantRequestView(request, now)),
 		});
 	},

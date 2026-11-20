@@ -78,6 +78,65 @@ suite('a grant as an answer shows it', () => {
 	});
 });
 
+suite('a grant as a listing shows it', () => {
+	test("shows each person as the listing's naming shows them, and the capabilities given as its first member", () => {
+		const view = grantView(
+			{
+				...PENDING,
+				revokedAt: at(-1000),
+				revokerSubject: 'subject-administrator',
+			},
+			NOW,
+			{
+				capabilities: [
+					{
+						description: null,
+						displayName: 'View records',
+						name: 'record.view',
+					},
+				],
+				naming: {
+					holder: (subject) => ({
+						email: 'cy@example.org',
+						hasAccount: true,
+						subject,
+					}),
+					principal: (subject) => ({ name: `named ${subject}` }),
+				},
+			},
+		);
+
+		const member = (name: string): unknown =>
+			typeof view === 'object' && view !== null ? Reflect.get(view, name) : undefined;
+		assert.deepEqual(
+			{
+				capabilities: member('capabilities'),
+				first: Object.keys(view ?? {})[0],
+				grantedBy: member('grantedBy'),
+				holder: member('holder'),
+				revokedBy: member('revokedBy'),
+			},
+			{
+				capabilities: [
+					{
+						description: null,
+						displayName: 'View records',
+						name: 'record.view',
+					},
+				],
+				first: 'capabilities',
+				grantedBy: { name: 'named subject-ana' },
+				holder: {
+					email: 'cy@example.org',
+					hasAccount: true,
+					subject: 'subject-cy',
+				},
+				revokedBy: { name: 'named subject-administrator' },
+			},
+		);
+	});
+});
+
 suite("a grant's state", () => {
 	test('is revoked once revoked, whatever its expiry and its latest decision', () => {
 		assert.equal(

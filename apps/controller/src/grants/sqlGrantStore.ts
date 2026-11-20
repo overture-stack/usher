@@ -3,8 +3,9 @@ import pg from 'pg';
 import { ControllerError } from '../failures/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
 import { countedOwnerCondition, liveGrantCondition, readResourceStanding } from '../resourceStanding/index.js';
+import { viewedGrantColumns, viewedGrantOf, type ViewedGrantRow } from './grantColumns.js';
 import { requestColumns } from './grantRequestPage.js';
-import type { GrantStore, StoredDecision, StoredGrant, StoredGrantRequest, StoredRole } from './types.js';
+import type { GrantStore, StoredGrant, StoredGrantRequest, StoredRole } from './types.js';
 
 const requestUnwritten = (): never => {
 	throw new ControllerError('the store wrote no grant request, and named none');
@@ -18,9 +19,7 @@ interface IdRow {
 }
 
 // A grant's row as read, its latest answer as JSON, whose instant arrives as text.
-interface GrantRow extends Omit<StoredGrant, 'decision'> {
-	decision: (Omit<StoredDecision, 'decidedAt'> & { decidedAt: string }) | null;
-}
+type GrantRow = Omit<StoredGrant, 'decision'> & ViewedGrantRow;
 
 /**
  * The grant store over one transaction's connection, every statement binding its values and naming
@@ -239,29 +238,10 @@ export const sqlGrantStore = (
 		},
 		readGrant: async (grantId) => {
 			const { rows } = await connection.query<GrantRow>(
-				`SELECT CASE WHEN record.id IS NULL THEN NULL ELSE record.scope || '.' || record.name END
-                  AS category,
-                (SELECT json_build_object('capabilities', answer.capabilities,
-                                          'decidedAt', answer.decided_at,
-                                          'decision', answer.decision)
-                   FROM ${table('grant_decisions')} answer
-                  WHERE answer.grant_id = held.id AND answer.user_id = held.holder_user_id
-                  ORDER BY answer.decided_at DESC LIMIT 1) AS decision,
-                held.ended_at AS "endedAt",
-                held.expires_at AS "expiresAt",
-                held.granted_at AS "grantedAt",
-                ${subjectOf('held.granted_by')} AS "granterSubject",
-                ${subjectOf('held.holder_user_id')} AS "holderSubject",
+				`SELECT ${viewedGrantColumns(schema, '$1')},
                 held.holder_user_id::text AS "holderUserId",
-                held.id::text AS id,
-                resource.external_id AS resource,
                 resource.id::text AS "resourceId",
                 resource.retired_at IS NOT NULL AS "resourceRetired",
-                held.revoked_at AS "revokedAt",
-                ${subjectOf('held.revoked_by')} AS "revokerSubject",
-                role.name AS role,
-                (held.granted_by = held.holder_user_id
-                 OR held.requested_by IS NOT DISTINCT FROM held.holder_user_id) AS "selfGrant",
                 CASE WHEN held.requested_by = held.holder_user_id
                      THEN coalesce((SELECT asked.requested_at FROM ${table('grant_requests')} asked
                                      WHERE asked.grant_id = held.id),
@@ -277,18 +257,7 @@ export const sqlGrantStore = (
 				[issuer, grantId],
 			);
 			const [row] = rows;
-			return row === undefined
-				? undefined
-				: {
-						...row,
-						decision:
-							row.decision === null
-								? null
-								: {
-										...row.decision,
-										decidedAt: new Date(row.decision.decidedAt),
-									},
-					};
+			return row === undefined ? undefined : viewedGrantOf(row);
 		},
 		readGrantRequest: async (requestId) =>
 			(

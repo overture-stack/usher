@@ -10,6 +10,7 @@ import {
 	assertRuleBroken,
 	assertSucceeded,
 	PROBLEMS,
+	readResource,
 	registerResource,
 	resourceViewOf,
 	serveResource,
@@ -427,6 +428,38 @@ suite("a registration's owners in the store", () => {
 			},
 			context,
 		);
+	});
+
+	test("answers a registration's grant summary as a read of the resource does: its owners counted once accepted with it, and none while they await an answer", async (context) => {
+		const owners = ['subject-first-owner', 'subject-second-owner'];
+		const summaries = await inTurn([true, false], (autoAccept) =>
+			withHarness(
+				{ configuration: { autoAccept }, fixture: FIXTURE },
+				async (harness) => {
+					const administrator = await administratorCaller(harness);
+					const answer = await registerResource(
+						administrator,
+						registration('STUDY-N1', {
+							accessLevel: 'grant',
+							owners: owners.map((subject) => ({ subject })),
+						}),
+					);
+					const read = await readResource(administrator, 'STUDY-N1');
+					assertSucceeded(answer, 'the registration');
+					assertSucceeded(read, 'the read');
+					return [
+						resourceViewOf(answer, 'the registration').grantSummary,
+						resourceViewOf(read, 'the read').grantSummary,
+					];
+				},
+				context,
+			),
+		);
+
+		assert.deepEqual(summaries, [
+			[{ owner: 2 }, { owner: 2 }],
+			[{}, {}],
+		]);
 	});
 });
 

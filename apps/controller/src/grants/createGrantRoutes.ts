@@ -16,6 +16,11 @@ import { unresolvedByDirectory } from './directoryOutcome.js';
 import { grantAuthority } from './grantAuthority.js';
 import { categoryNamingOf, offeredCategory } from './grantCategory.js';
 import { grantChangeOperation } from './grantChangeOperation.js';
+import {
+	ownGrantListingOperation,
+	personGrantListingOperation,
+	resourceGrantListingOperation,
+} from './grantListingOperations.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import { grantRequestDecisionOperation, grantRequestListingOperation } from './grantRequestOperations.js';
 import { grantView } from './grantView.js';
@@ -60,14 +65,16 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
 /**
  * Creates the routes of the Management API's grant operations: creating a grant, a holder answering
  * one, revoking one, and the operations {@link selfGrantOperation}, {@link grantChangeOperation},
- * {@link grantRequestDecisionOperation}, {@link grantRequestListingOperation} and {@link
- * submitterRemovalOperation} build, over the same store, directory, settings and trail. Each change
- * commits in one transaction with its event and its notices, or writes nothing; a refusal inside
- * the transaction rolls it back whole, and a service account is refused 403
- * `serviceAccountNotPermitted` before anything is read. Every instant is read from the configured
- * clock, and a grant is live while it is neither revoked, nor replaced once expired, nor expired on
- * that clock. A retired resource, and every grant on one, is answered as one that does not exist,
- * to everyone. Each change locks the resource's row before any grant's.
+ * {@link grantRequestDecisionOperation}, {@link grantRequestListingOperation}, {@link
+ * submitterRemovalOperation}, {@link ownGrantListingOperation}, {@link
+ * resourceGrantListingOperation} and {@link personGrantListingOperation} build, over the same
+ * store, directory, settings and trail. Each change commits in one transaction with its event and
+ * its notices, or writes nothing; a refusal inside the transaction rolls it back whole, and a
+ * service account is refused 403 `serviceAccountNotPermitted` before anything is read. Every
+ * instant is read from the configured clock, and a grant is live while it is neither revoked, nor
+ * replaced once expired, nor expired on that clock. Each change answers a retired resource, and
+ * every grant on one, as one that does not exist, to everyone, and locks the resource's row before
+ * any grant's; each listing says what of a retired resource it shows.
  *
  * Creating a grant, `POST /admin/grants`, reads its body with {@link readGrantCreation}, then
  * judges in turn: a role the instance does not define, in its exact letter case, 422 `unknownRole`;
@@ -438,6 +445,9 @@ export const createGrantRoutes = (
 		managementRoute(grantChangeOperation(operations, namedGrant), dependencies),
 		managementRoute(grantRequestDecisionOperation(operations), dependencies),
 		managementRoute(grantRequestListingOperation(operations), dependencies),
+		managementRoute(ownGrantListingOperation(operations), dependencies),
+		managementRoute(resourceGrantListingOperation(operations), dependencies),
+		managementRoute(personGrantListingOperation(operations), dependencies),
 		managementRoute(submitterRemovalOperation(operations), dependencies),
 	];
 };

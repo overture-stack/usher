@@ -121,6 +121,12 @@ export const GRANT_PROBLEMS = Object.freeze({
 		"A self-grant's holder is the caller: leave holder out.",
 	),
 	noAuthorityOnResource: STANDING_PROBLEMS.noAuthorityOnResource,
+	noHolderOfAddress: problem(
+		'holderNotFound',
+		404,
+		'Holder not found',
+		'No single account holds the address verified: check the address.',
+	),
 	notASubmitter: problem(
 		'doesNotHold',
 		409,
@@ -139,7 +145,6 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'Owner grants do not expire',
 		'An owner grant lasts until it is revoked: leave expiresAt out.',
 	),
-	pageSizeTooSmall: problem('pageSizeTooSmall', 422, 'Page size too small', 'limit is a whole number of at least 1.'),
 	requestDecided: problem(
 		'requestDecided',
 		409,
@@ -170,6 +175,12 @@ export const GRANT_PROBLEMS = Object.freeze({
 		409,
 		'Grant revoked',
 		'The grant is revoked, and takes no change: create a grant on its terms instead.',
+	),
+	revokedListedToAdministrators: problem(
+		'administratorOnly',
+		403,
+		'For platform administrators alone',
+		'Revoked grants are listed to platform administrators alone: leave includeRevoked out, or send it false.',
 	),
 	roleInOtherPlane: problem(
 		'roleInOtherPlane',
