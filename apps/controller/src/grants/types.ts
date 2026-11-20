@@ -2,6 +2,7 @@ import type pg from 'pg';
 
 import type { Directory } from '../directory/index.js';
 import type { AuditTrail, JsonValue } from '../eventLog/index.js';
+import type { GrantRate } from '../grantRate/index.js';
 import type { Problem } from '../http/index.js';
 import type { OperationOutcome, StoreReader } from '../managementApi/index.js';
 import type { ResourceStanding, StandingLock } from '../resourceStanding/index.js';
@@ -607,6 +608,13 @@ export interface GrantOperationsSettings {
 	 * where a listing reads each person it names.
 	 */
 	directory: Pick<Directory, 'accountOf' | 'resolveAddress'>;
+
+	/**
+	 * Where each grant write is counted, by its caller: in the transaction committing its change, as
+	 * that transaction's last step to take a lock, or with the event recording its refusal or
+	 * failure.
+	 */
+	grantRate: GrantRate;
 
 	/**
 	 * The grant store over one transaction's connection.

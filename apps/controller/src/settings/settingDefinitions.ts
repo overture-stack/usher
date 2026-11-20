@@ -1,4 +1,5 @@
 import { readFirstUser } from './readFirstUser.js';
+import { readGrantRateThreshold } from './readGrantRateThreshold.js';
 import { DEFAULT_GRANT_RULES, readGrantRules } from './readGrantRules.js';
 import type { SettingName, SettingReading, Settings } from './types.js';
 
@@ -75,6 +76,12 @@ export const SETTING_DEFINITIONS: { readonly [Name in SettingName]: SettingDefin
 	eventSource: { changeable: false, read: text(true) },
 	firstUser: { changeable: false, fallback: { realmRole: 'usher-first-user' }, read: readFirstUser },
 	grantAutoAccept: { changeable: true, fallback: false, read: switchValue, severity: 'critical' },
+	grantRateThreshold: {
+		changeable: true,
+		fallback: { operationCount: 10, windowSeconds: 60 },
+		read: readGrantRateThreshold,
+		severity: 'warning',
+	},
 	grantRules: { changeable: true, fallback: DEFAULT_GRANT_RULES, read: readGrantRules, severity: 'critical' },
 	heartbeatMilliseconds: { changeable: true, fallback: 10000, read: TIMER_MILLISECONDS, severity: 'warning' },
 	issuer: { changeable: false, read: text(true) },

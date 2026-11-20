@@ -1,5 +1,6 @@
 import { type AuditEvent, eventInstant } from '../eventLog/index.js';
 import type { EventMembers, ManagementOperation, NamedByRequest, OperationOutcome } from '../managementApi/index.js';
+import { countedWithRefusal } from './countedWithRefusal.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import { grantView } from './grantView.js';
 import { judgeGrantChange } from './judgeGrantChange.js';
@@ -75,31 +76,36 @@ const changeEvents = (
  * the caller holding the grant when the person holding their identity under the trusted issuer is
  * its holder.
  *
- * A change keeping the grant's end and its role writes and records nothing. Any other writes the
- * grant's new end and role, its holder's answers left as they were, so a widened role confers
- * nothing more until they accept again, and its store writes a principal notice naming the holder.
- * It records `grant.extension` at info for an end moved later or removed, and `grant.reduction` at
- * warning for one moved earlier, each naming the grant as `grantId`, the holder as `granteeId`, the
- * resource, the category and both ends; and `grant.roleChange` for a role changed, naming the
- * grant, at warning when it widens and at info otherwise. A new role whose grant the holder holds
- * on the same terms already is refused 409 `alreadyHolds`, and a change leaving a resource without
- * its last owner 409 `resourceNeedsAnOwner`. It answers 200 with the grant as changed.
+ * A change keeping the grant's end and its role changes nothing of the grant and records no event
+ * of its own. Any other writes the grant's new end and role, its holder's answers left as they
+ * were, so a widened role confers nothing more until they accept again, and its store writes a
+ * principal notice naming the holder. It records `grant.extension` at info for an end moved later
+ * or removed, and `grant.reduction` at warning for one moved earlier, each naming the grant as
+ * `grantId`, the holder as `granteeId`, the resource, the category and both ends; and
+ * `grant.roleChange` for a role changed, naming the grant, at warning when it widens and at info
+ * otherwise. A new role whose grant the holder holds on the same terms already is refused 409
+ * `alreadyHolds`, and a change leaving a resource without its last owner 409
+ * `resourceNeedsAnOwner`. It answers 200 with the grant as changed.
  *
  * A refusal records `grant.roleChange` for a body naming a role, and `grant.extension` for any
- * other, each naming the grant when one held by a person has the id.
+ * other, each naming the grant when one held by a person has the id. Each request, one keeping the
+ * grant as it was included, is counted against the grant rate by its caller, as the last step of
+ * the transaction committing it, or in the transaction recording its refusal or failure.
  *
- * @param operations the grant store over a transaction's connection, the settings and the trail.
+ * @param operations the grant rate, the grant store over a transaction's connection, the settings
+ *   and the trail.
  * @param named what a refused request's event names: the grant, where one held by a person has the
  *   id.
  */
 export const grantChangeOperation = (
-	{ grantStoreOf, settings, trail }: GrantOperationsSettings,
+	{ grantRate, grantStoreOf, settings, trail }: GrantOperationsSettings,
 	named: (request: NamedByRequest) => Promise<EventMembers>,
 ): ManagementOperation<GrantChange> => ({
 	administratorOnly: false,
 	body: 'required',
 	event: {
 		named,
+		recordedWith: countedWithRefusal({ grantRate }),
 		type: ({ body }) =>
 			body !== undefined && Object.hasOwn(body, 'role') ? 'grant.roleChange' : 'grant.extension',
 	},
@@ -151,6 +157,7 @@ export const grantChangeOperation = (
 					role: judgement.role.name,
 				};
 				if (judgement.endMoved === 'kept' && judgement.roleMoved === 'kept') {
+					await grantRate.count({ connection, record }, principal.subject);
 					return answered(200, grantView(changed, now.getTime()));
 				}
 				await grants.changeGrant({
@@ -162,6 +169,7 @@ export const grantChangeOperation = (
 					await earlier;
 					return record(event);
 				}, Promise.resolve());
+				await grantRate.count({ connection, record }, principal.subject);
 				return answered(200, grantView(changed, now.getTime()));
 			}),
 			{

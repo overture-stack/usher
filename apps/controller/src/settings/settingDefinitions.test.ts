@@ -9,6 +9,7 @@ const ALL_NAMES: readonly SettingName[] = [
 	'eventSource',
 	'firstUser',
 	'grantAutoAccept',
+	'grantRateThreshold',
 	'grantRules',
 	'heartbeatMilliseconds',
 	'issuer',
@@ -40,6 +41,7 @@ const CRITICAL: readonly SettingName[] = [
 ];
 
 const WARNING: readonly SettingName[] = [
+	'grantRateThreshold',
 	'heartbeatMilliseconds',
 	'noticePageLimit',
 	'noticeRereadMilliseconds',

@@ -50,6 +50,11 @@ const SWEPT_TABLES: readonly SweptTable[] = [
 		marginMilliseconds: CLOCK_TOLERANCE_MILLISECONDS,
 		name: 'subject_sign_outs',
 	},
+	{
+		expiryColumn: 'expires_at',
+		marginMilliseconds: CLOCK_TOLERANCE_MILLISECONDS,
+		name: 'grant_operations',
+	},
 ];
 
 /**
@@ -58,8 +63,8 @@ const SWEPT_TABLES: readonly SweptTable[] = [
  * deleting nothing, while another session holds it. Holding it, the run reads the configured
  * clock once and deletes at most {@link RETENTION_SWEEP_ROWS_PER_TABLE} rows from each table,
  * in this order: those of `exchanged_sids` whose `expires_at` is before that reading, then
- * those of `sid_sign_outs` and then of `subject_sign_outs` whose `expires_at` is more than
- * {@link CLOCK_TOLERANCE_MILLISECONDS} before it. It then calls `trim_notices` with that same
+ * those of `sid_sign_outs`, of `subject_sign_outs` and then of `grant_operations` whose
+ * `expires_at` is more than {@link CLOCK_TOLERANCE_MILLISECONDS} before it. It then calls `trim_notices` with that same
  * bound, which must delete at most that many notices older than the retention floor. The first
  * run begins {@link RETENTION_SWEEP_INTERVAL_MILLISECONDS} after the start, and each later one
  * that long after the one before it has ended, so no two overlap. A run that fails is written

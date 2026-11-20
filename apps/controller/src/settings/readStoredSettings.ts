@@ -53,6 +53,7 @@ export const readHeldSettings = (rows: readonly StoredSetting[]): HeldSettingsRe
 		eventSource: readStored(rows, 'eventSource'),
 		firstUser: readStored(rows, 'firstUser'),
 		grantAutoAccept: readStored(rows, 'grantAutoAccept'),
+		grantRateThreshold: readStored(rows, 'grantRateThreshold'),
 		heartbeatMilliseconds: readStored(rows, 'heartbeatMilliseconds'),
 		issuer: readStored(rows, 'issuer'),
 		noticePageLimit: readStored(rows, 'noticePageLimit'),

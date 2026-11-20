@@ -530,8 +530,8 @@ export const BOUNDED_TRIM_REFUSAL = '22023';
  * `lock` and ending at once, deleting nothing, while another session holds it. In the same
  * transaction, a run deletes at most `rowsPerRun` rows from each table, in this order: those of
  * `exchanged_sids` whose `expires_at` is before the configured clock's now, then those of
- * `sid_sign_outs` and then of `subject_sign_outs` whose `expires_at` is more than
- * `clockToleranceMilliseconds`, the Controller's clock tolerance, before that now. It then calls the
+ * `sid_sign_outs`, of `subject_sign_outs` and then of {@link GRANT_OPERATIONS} whose `expires_at`
+ * is more than `clockToleranceMilliseconds`, the Controller's clock tolerance, before that now. It then calls the
  * bounded trim with `rowsPerRun`. It records no event, and writes the operational line `failedLine`
  * at error once as runs start failing.
  */
@@ -547,6 +547,25 @@ export const RETENTION_SWEEP: Readonly<{
 	intervalMilliseconds: 1000,
 	lock: 8_617_207_004,
 	rowsPerRun: 1000,
+});
+
+/**
+ * Where the grant rate's count is kept (assumed): one row for each grant operation counted, naming
+ * the identity acting by its issuer and subject, `occurred_at` the configured clock's instant it
+ * was counted at, and `expires_at` that instant plus the window the counting instance read, which
+ * nothing reads: the retention sweep deletes a row by `occurred_at` once the live window and the
+ * clock tolerance have passed. Kept apart from {@link POLICY_TABLES}, whose columns are those
+ * `schema.md` names, until the schema names it.
+ */
+export const GRANT_OPERATIONS = Object.freeze({
+	columns: Object.freeze({
+		expiresAt: 'expires_at',
+		id: 'id',
+		idpIssuer: 'idp_issuer',
+		idpSubjectId: 'idp_subject_id',
+		occurredAt: 'occurred_at',
+	}),
+	name: 'grant_operations',
 });
 
 /**

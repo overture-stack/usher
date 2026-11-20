@@ -2,6 +2,7 @@ import { type AuditEvent, eventInstant } from '../eventLog/index.js';
 import type { EventMembers, ManagementOperation, NamedByRequest, OperationOutcome } from '../managementApi/index.js';
 import type { ResourceStanding } from '../resourceStanding/index.js';
 import { selfGrantAuthority } from './grantAuthority.js';
+import { countedWithRefusal } from './countedWithRefusal.js';
 import { categoryNamingOf, offeredCategory } from './grantCategory.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import { grantRequestView } from './grantRequestView.js';
@@ -214,18 +215,26 @@ const request = async (
  * resource without an owner; it answers 202 with the request, `kind` `grantRequest`.
  *
  * Every instant is the configured clock's. A refusal records `grant.selfCreation`, denied, naming
- * the resource the body names.
+ * the resource the body names. Each request is counted against the grant rate by its caller, as
+ * the last step of the transaction committing it, or in the transaction recording its refusal or
+ * failure.
  *
- * @param operations the grant store over a transaction's connection, the settings and the trail.
+ * @param operations the grant rate, the grant store over a transaction's connection, the settings
+ *   and the trail.
  */
 export const selfGrantOperation = ({
+	grantRate,
 	grantStoreOf,
 	settings,
 	trail,
 }: GrantOperationsSettings): ManagementOperation<SelfGrantCreation> => ({
 	administratorOnly: false,
 	body: 'required',
-	event: { named: namedResource, type: 'grant.selfCreation' },
+	event: {
+		named: namedResource,
+		recordedWith: countedWithRefusal({ grantRate }),
+		type: 'grant.selfCreation',
+	},
 	method: 'POST',
 	readInput: (body, { principal }) =>
 		readSelfGrantCreation(body ?? {}, {
@@ -276,7 +285,10 @@ export const selfGrantOperation = ({
 						roleId: role.id,
 					},
 				};
-				return authority.kind === 'issue' ? issue(grants, judged) : request(grants, judged);
+				const outcome =
+					authority.kind === 'issue' ? await issue(grants, judged) : await request(grants, judged);
+				await grantRate.count({ connection, record }, principal.subject);
+				return outcome;
 			}),
 			{
 				resources_retired_without_live_grants: GRANT_PROBLEMS.resourceNotFound,

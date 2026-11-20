@@ -9,6 +9,7 @@ import type {
 	Principal,
 } from '../managementApi/index.js';
 import type { ResourceStanding, StandingLock } from '../resourceStanding/index.js';
+import { countedWithRefusal } from './countedWithRefusal.js';
 import { unresolvedByDirectory } from './directoryOutcome.js';
 import { grantAuthority } from './grantAuthority.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
@@ -51,13 +52,16 @@ export const unheldSubmitterOutcome = ({ administrator }: Pick<Principal, 'admin
  * before the grants', the caller their revoker, recorded on first meeting them, each recorded as
  * `grant.revocation` with reason `unspecified`; another role's grant is left as it is. An account
  * holding none is refused 409 `doesNotHold`. The removal is answered 204, naming nothing. Its
- * event, refused or failed, names the study when a resource holds the externalId.
+ * event, refused or failed, names the study when a resource holds the externalId. Each request is
+ * counted against the grant rate by its caller, as the last step of the transaction revoking its
+ * grants, or in the transaction recording its refusal or failure.
  *
- * @param operations the grant store over a transaction's connection, the directory, the clock, the
- *   schema, the store reader and the trail.
+ * @param operations the grant rate, the grant store over a transaction's connection, the directory,
+ *   the clock, the schema, the store reader and the trail.
  */
 export const submitterRemovalOperation = ({
 	directory,
+	grantRate,
 	grantStoreOf,
 	settings: { clock, databaseSchema },
 	store,
@@ -109,7 +113,11 @@ export const submitterRemovalOperation = ({
 	return {
 		administratorOnly: false,
 		body: 'required',
-		event: { named: namedStudy, type: 'grant.revocation' },
+		event: {
+			named: namedStudy,
+			recordedWith: countedWithRefusal({ grantRate }),
+			type: 'grant.revocation',
+		},
 		method: 'POST',
 		readInput: (body) => readAddressLookup(body),
 		route: '/admin/resources/{externalId}/submitters/removal',
@@ -183,6 +191,7 @@ export const submitterRemovalOperation = ({
 							}),
 						Promise.resolve(),
 					);
+					await grantRate.count({ connection, record }, principal.subject);
 					return answered(204, undefined);
 				}),
 			);

@@ -69,6 +69,7 @@ export const readSeedFile = (text: string): SeedReading => {
 		eventSource: readSetting(members, 'eventSource'),
 		firstUser: readSetting(members, 'firstUser'),
 		grantAutoAccept: readSetting(members, 'grantAutoAccept'),
+		grantRateThreshold: readSetting(members, 'grantRateThreshold'),
 		grantRules: readSetting(members, 'grantRules'),
 		heartbeatMilliseconds: readSetting(members, 'heartbeatMilliseconds'),
 		issuer: readSetting(members, 'issuer'),

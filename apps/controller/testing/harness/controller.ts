@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { MigrationOptions as CommandMigrationOptions, SeedFile } from '../../src/migrations/index.js';
 import type { RecordAction } from '@overture-stack/usher-types';
-import type { GrantRuleAction, GrantRules, Settings } from '../../src/settings/index.js';
+import type { GrantRuleAction, GrantRateThreshold, GrantRules, Settings } from '../../src/settings/index.js';
 
 import type { AuditEventType, Severity } from './auditEvents.js';
 import { type BuiltEntry, builtEntry } from './build.js';
@@ -147,6 +147,12 @@ export interface ControllerSettings {
 	 * `USHER_ADMINISTRATOR_ROLE` set is refused, naming this setting's variable as its replacement.
 	 */
 	firstUserRole: string;
+
+	/**
+	 * When `grant.rateExceeded` fires: more grant operations by one actor than `operationCount` within
+	 * `windowSeconds` (#214 Q19). A setting the store holds, written to it by {@link storedSettingsOf}.
+	 */
+	grantRateThreshold: GrantRateThreshold;
 
 	/**
 	 * How long an open notice stream may stay silent before the Controller writes a heartbeat comment,
@@ -305,12 +311,6 @@ export interface PendingSettings {
 	 * variable (ruled, "#216's reasons, export size and prefixes" 3).
 	 */
 	egoImportPrefixes: readonly string[];
-
-	/**
-	 * When `grant.rateExceeded` fires: more grant operations by one actor than `operationCount` within
-	 * `windowSeconds` (#214 Q19), as `audit-events.md` names the setting.
-	 */
-	grantRateThreshold: { operationCount: number; windowSeconds: number };
 }
 
 /** The Controller's configuration as the harness holds it: the settings the Controller reads, and those it does not read yet. */
@@ -552,6 +552,7 @@ export type StoredField =
 	| 'baseline'
 	| 'eventSource'
 	| 'firstUserRole'
+	| 'grantRateThreshold'
 	| 'heartbeatMilliseconds'
 	| 'issuer'
 	| 'noticePageLimit'
@@ -630,6 +631,7 @@ export const storedSettingsOf = ({
 	baseline,
 	eventSource,
 	firstUserRole,
+	grantRateThreshold,
 	heartbeatMilliseconds,
 	issuer,
 	noticePageLimit,
@@ -648,6 +650,7 @@ export const storedSettingsOf = ({
 	eventSource,
 	firstUser: { realmRole: firstUserRole },
 	grantAutoAccept: autoAccept,
+	grantRateThreshold,
 	grantRules: grantRulesOf({ baseline, signedInRule }),
 	heartbeatMilliseconds,
 	issuer,

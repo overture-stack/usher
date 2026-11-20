@@ -33,6 +33,7 @@ import {
 	TOKEN_LIMIT_BYTES,
 } from '../exchange/index.js';
 import { ControllerError } from '../failures/index.js';
+import { createGrantRate } from '../grantRate/index.js';
 import { createGrantRoutes, sqlGrantStore } from '../grants/index.js';
 import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
@@ -122,7 +123,8 @@ const READINESS_CONNECTIONS = 1;
  * configured clock passes the reload interval, and a stored key that does not open is recorded as
  * `applicationKey.unreadable`. A start finding that its database role writes then runs the
  * retention sweep until the stop, giving it the configured clock; a run of it that fails changes no
- * answer of any route, readiness's included. The Management API, the exchange and the back-channel
+ * answer of any route, readiness's included. Each grant write is counted against the grant rate in the
+ * store, so every instance sharing it counts alike. The Management API, the exchange and the back-channel
  * logout verify the identity provider's tokens through one verifier, and the revocation channel and
  * the exchange check channel assertions through one verifier, counting those they cannot verify in
  * one tally. The credentials refused by those three routes are counted in one set of windows for the
@@ -391,6 +393,7 @@ export const createController = (configuration: ControllerConfiguration): Contro
 		...createGrantRoutes(
 			{
 				directory,
+				grantRate: createGrantRate(settings),
 				grantStoreOf: (connection) =>
 					sqlGrantStore(connection, {
 						issuer: configuration.identityProviderIssuer,

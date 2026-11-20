@@ -80,6 +80,7 @@ export const TEMPLATE_SETTINGS: Settings = {
 			to: 'signedIn',
 		},
 	],
+	grantRateThreshold: { operationCount: 100, windowSeconds: 60 },
 	heartbeatMilliseconds: 10000,
 	issuer: 'https://usher.example.org',
 	noticePageLimit: 500,

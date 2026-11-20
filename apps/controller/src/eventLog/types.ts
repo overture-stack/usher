@@ -268,18 +268,24 @@ export interface AuditTrail<Connection> {
 
 	/**
 	 * Records an event that accompanies no change, such as a refusal, in a transaction of its own
-	 * declaring the actor given, within the store timeout. Nothing it meets is thrown: when the row
-	 * cannot be written, as with the store down or not answering in time, it writes an operational
-	 * line at error naming the event's type and the failure's code, never the event's data, and
-	 * resolves to `undefined`. When its `COMMIT` goes unconfirmed, the row may have committed: it is
-	 * never written again, and the one line naming it is the transaction's, so it resolves to
-	 * `undefined` writing nothing more.
+	 * declaring the actor given, within the store timeout, running any work given in that transaction
+	 * once the event's row is written, so what the work writes and records commits with the event or
+	 * not at all. Nothing it meets is thrown: when the row cannot be written or the work fails, as
+	 * with the store down or not answering in time, it writes an operational line at error naming the
+	 * event's type and the failure's code, never the event's data, and resolves to `undefined`. When
+	 * its `COMMIT` goes unconfirmed, the row may have committed: it is never written again, and the
+	 * one line naming it is the transaction's, so it resolves to `undefined` writing nothing more.
 	 *
 	 * @param actor who acts.
 	 * @param event the event.
+	 * @param work what else the event's transaction runs, after its row; none by default.
 	 * @returns the event's id once its row has committed.
 	 */
-	recordEvent(actor: Actor, event: AuditEvent): Promise<string | undefined>;
+	recordEvent(
+		actor: Actor,
+		event: AuditEvent,
+		work?: (transaction: AuditTransaction<Connection>) => Promise<void>,
+	): Promise<string | undefined>;
 }
 
 /** What the audit trail is created from. */

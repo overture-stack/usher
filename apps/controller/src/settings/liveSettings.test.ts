@@ -13,6 +13,7 @@ const HELD: HeldSettings = {
 	eventSource: 'https://usher.example.org/controller',
 	firstUser: { realmRole: 'usher-first-user' },
 	grantAutoAccept: false,
+	grantRateThreshold: { operationCount: 10, windowSeconds: 60 },
 	heartbeatMilliseconds: 10_000,
 	issuer: 'https://usher.example.org',
 	noticePageLimit: 100,

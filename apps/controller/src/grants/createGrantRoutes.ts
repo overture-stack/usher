@@ -12,6 +12,7 @@ import {
 } from '../managementApi/index.js';
 import { isLive, type StandingLock } from '../resourceStanding/index.js';
 import { addressedAnswer, type AddressedTerms, unansweredRefusal } from './addressedCreation.js';
+import { countedWithRefusal } from './countedWithRefusal.js';
 import { unresolvedByDirectory } from './directoryOutcome.js';
 import { grantAuthority } from './grantAuthority.js';
 import { categoryNamingOf, offeredCategory } from './grantCategory.js';
@@ -117,16 +118,24 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
  * reason; an event of an answer or a revocation refused names the grant when one held by a person
  * has the id.
  *
- * @param operations the grant store over a transaction's connection, the directory, the settings,
- *   the store reader and the trail, each on the control pool.
+ * Each request of a grant write, a creation, an answer, a revocation, a self-grant, a change, a
+ * request's decision or a submitter's removal, is counted against the grant rate once, by its
+ * caller: as the last step of the transaction committing it, a change keeping a grant as it was
+ * included, or else in the transaction recording its refusal or failure, as for an owner's creation
+ * naming an address no single account holds. A listing is never counted, and the count refuses no
+ * write.
+ *
+ * @param operations the grant store over a transaction's connection, the directory, the grant rate,
+ *   the settings, the store reader and the trail, each on the control pool.
  * @param dependencies what every Management API operation's route is built on.
  */
 export const createGrantRoutes = (
 	operations: GrantOperationsSettings,
 	dependencies: ManagementDependencies,
 ): readonly RouteOptions[] => {
-	const { directory, grantStoreOf, settings, store, trail } = operations;
+	const { directory, grantRate, grantStoreOf, settings, store, trail } = operations;
 	const { clock, databaseSchema } = settings;
+	const recordedWith = countedWithRefusal(operations);
 	const namedGrant = async ({ params }: NamedByRequest): Promise<EventMembers> => {
 		const grantId = params['id'] ?? '';
 		if (!STORED_ID_FORM.test(grantId)) {
@@ -226,6 +235,7 @@ export const createGrantRoutes = (
 						role,
 						sourceIp,
 					})) ?? refuseWithin(GRANT_PROBLEMS.alreadyHolds);
+				await grantRate.count({ connection, record }, principal.subject);
 				return answerOf(written);
 			}),
 			{
@@ -271,9 +281,10 @@ export const createGrantRoutes = (
 		}
 		const { outcome, recordedRefusal } = addressedAnswer(principal, terms, undefined, now.getTime());
 		if (recordedRefusal !== undefined) {
-			await trail.inTransaction(actorOf(principal), ({ record }) =>
-				record(unansweredRefusal(terms.resource, recordedRefusal, sourceIp)),
-			);
+			await trail.inTransaction(actorOf(principal), async (transaction) => {
+				await transaction.record(unansweredRefusal(terms.resource, recordedRefusal, sourceIp));
+				await grantRate.count(transaction, principal.subject);
+			});
 		}
 		return outcome;
 	};
@@ -281,7 +292,7 @@ export const createGrantRoutes = (
 	const creation: ManagementOperation<GrantCreation> = {
 		administratorOnly: false,
 		body: 'required',
-		event: { named: namedResource, type: 'grant.creation' },
+		event: { named: namedResource, recordedWith, type: 'grant.creation' },
 		method: 'POST',
 		readInput: (body) => readGrantCreation(body ?? {}, clock.now()),
 		route: '/admin/grants',
@@ -298,7 +309,7 @@ export const createGrantRoutes = (
 	const answering: ManagementOperation<GrantAnswer> = {
 		administratorOnly: false,
 		body: 'required',
-		event: { named: namedGrant, type: 'grant.decision' },
+		event: { named: namedGrant, recordedWith, type: 'grant.decision' },
 		method: 'POST',
 		readInput: (body) => readGrantAnswer(body ?? {}),
 		route: '/admin/grants/{id}/decisions',
@@ -358,6 +369,7 @@ export const createGrantRoutes = (
 						severity: 'info',
 						type: 'grant.decision',
 					});
+					await grantRate.count({ connection, record }, principal.subject);
 					return answered(204, undefined);
 				}),
 				{ resources_keep_an_owner: GRANT_PROBLEMS.resourceNeedsAnOwner },
@@ -368,7 +380,7 @@ export const createGrantRoutes = (
 	const revocation: ManagementOperation<GrantRevocation> = {
 		administratorOnly: false,
 		body: 'optional',
-		event: { named: namedGrant, type: 'grant.revocation' },
+		event: { named: namedGrant, recordedWith, type: 'grant.revocation' },
 		method: 'DELETE',
 		readInput: readGrantRevocation,
 		route: '/admin/grants/{id}',
@@ -427,6 +439,7 @@ export const createGrantRoutes = (
 						severity: 'info',
 						type: 'grant.revocation',
 					});
+					await grantRate.count({ connection, record }, principal.subject);
 					return answered(
 						200,
 						grantView({ ...grant, revokedAt: now, revokerSubject: principal.subject }, now.getTime()),

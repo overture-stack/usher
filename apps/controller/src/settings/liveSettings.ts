@@ -51,6 +51,9 @@ export const liveSettingsOf = (
 	get grantAutoAccept() {
 		return source.current().grantAutoAccept;
 	},
+	get grantRateThreshold() {
+		return source.current().grantRateThreshold;
+	},
 	get heartbeatMilliseconds() {
 		return source.current().heartbeatMilliseconds;
 	},

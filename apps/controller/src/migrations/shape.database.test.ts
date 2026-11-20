@@ -29,6 +29,7 @@ import {
 } from '../../testing/fixtures/database.js';
 import {
 	DEFAULT_FIXTURE_ISSUER,
+	GRANT_OPERATIONS,
 	inTransactionAs,
 	inTurn,
 	NOTICE_KINDS,
@@ -83,6 +84,7 @@ const UUID_KEYED_TABLES = [
 	changeRecords,
 	globalRevocations,
 	grantDecisions,
+	GRANT_OPERATIONS,
 	grantRequests,
 	grants,
 	groups,
@@ -243,6 +245,14 @@ suite("the schema's shape", () => {
 					[notificationOutbox.columns.recipientUserId]: seededId(seeded.users, name),
 				}),
 			);
+			await inTurn(['subject-ana', 'subject-bo'], (subject) =>
+				insertRow(owner, GRANT_OPERATIONS, {
+					[GRANT_OPERATIONS.columns.expiresAt]: new Date(Date.now() + 60_000),
+					[GRANT_OPERATIONS.columns.idpIssuer]: DEFAULT_FIXTURE_ISSUER,
+					[GRANT_OPERATIONS.columns.idpSubjectId]: subject,
+					[GRANT_OPERATIONS.columns.occurredAt]: new Date(),
+				}),
+			);
 		});
 
 		const keyedByUuid = (await readColumns(owner))
@@ -296,6 +306,10 @@ suite("the schema's shape", () => {
 			exchangedSids: [[exchangedSids.columns.expiresAt, 57]],
 			globalRevocations: [[globalRevocations.columns.revokedAt, 35]],
 			grantDecisions: [[grantDecisions.columns.decidedAt, 15]],
+			grantOperations: [
+				[GRANT_OPERATIONS.columns.expiresAt, 39],
+				[GRANT_OPERATIONS.columns.occurredAt, 38],
+			],
 			grantRequests: [
 				[grantRequests.columns.decidedAt, 36],
 				[grantRequests.columns.expiresAt, 37],
@@ -486,6 +500,11 @@ suite("the schema's shape", () => {
 				[inRepeatedHour(46)],
 			);
 			await toronto.query('COMMIT');
+			const grantOperation = await insertRow(toronto, GRANT_OPERATIONS, {
+				[GRANT_OPERATIONS.columns.idpIssuer]: DEFAULT_FIXTURE_ISSUER,
+				[GRANT_OPERATIONS.columns.idpSubjectId]: 'instant-probe-subject',
+				...timed(times.grantOperations),
+			});
 			return [
 				{
 					columns: times.users,
@@ -624,6 +643,12 @@ suite("the schema's shape", () => {
 					key: administrators.columns.userId,
 					keyValue: userId,
 					table: administrators,
+				},
+				{
+					columns: times.grantOperations,
+					key: GRANT_OPERATIONS.columns.id,
+					keyValue: grantOperation[GRANT_OPERATIONS.columns.id],
+					table: GRANT_OPERATIONS,
 				},
 			];
 		});

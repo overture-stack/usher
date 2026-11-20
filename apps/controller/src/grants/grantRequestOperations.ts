@@ -8,6 +8,7 @@ import type {
 	OperationOutcome,
 	Principal,
 } from '../managementApi/index.js';
+import { countedWithRefusal } from './countedWithRefusal.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import { readGrantRequestPage } from './grantRequestPage.js';
 import { grantRequestView } from './grantRequestView.js';
@@ -156,12 +157,15 @@ const refuse = async (
  * Each event names the decision, and the principal who asked as `requestedById`.
  *
  * A refusal of the operation records `grant.requestDecision`, naming the request when one has the
- * id, and the decision when the body is read as one.
+ * id, and the decision when the body is read as one. Each decision is counted against the grant
+ * rate as the last step of the transaction committing it, or in the transaction recording its
+ * refusal or failure.
  *
- * @param operations the grant store over a transaction's connection, the settings, the store reader
- *   and the trail.
+ * @param operations the grant rate, the grant store over a transaction's connection, the settings,
+ *   the store reader and the trail.
  */
 export const grantRequestDecisionOperation = ({
+	grantRate,
 	grantStoreOf,
 	settings: { clock, databaseSchema },
 	store,
@@ -185,7 +189,7 @@ export const grantRequestDecisionOperation = ({
 	return {
 		administratorOnly: false,
 		body: 'required',
-		event: { named: namedRequest, type: 'grant.requestDecision' },
+		event: { named: namedRequest, recordedWith: countedWithRefusal({ grantRate }), type: 'grant.requestDecision' },
 		method: 'POST',
 		readInput: (body) => readGrantRequestDecision(body ?? {}),
 		route: '/admin/grant-requests/{id}/decisions',
@@ -229,7 +233,10 @@ export const grantRequestDecisionOperation = ({
 						request,
 						sourceIp,
 					};
-					return input.decision === 'granted' ? grant(grants, deciding) : refuse(grants, deciding);
+					const outcome =
+						input.decision === 'granted' ? await grant(grants, deciding) : await refuse(grants, deciding);
+					await grantRate.count({ connection, record }, principal.subject);
+					return outcome;
 				}),
 				{
 					resources_retired_without_live_grants: GRANT_PROBLEMS.requestNotFound,

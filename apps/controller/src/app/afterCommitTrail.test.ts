@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { suite, test, type TestContext } from 'node:test';
 
+import pg from 'pg';
+
 import type { Actor, AuditEvent, AuditTrail, AuditTransaction, TransactionOptions } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import { managementRoute } from '../managementApi/index.js';
@@ -22,7 +24,7 @@ const fakeTrail = (
 ): {
 	given: (TransactionOptions | undefined)[];
 	happened: string[];
-	trail: AuditTrail<string>;
+	trail: AuditTrail<pg.ClientBase>;
 } => {
 	const given: (TransactionOptions | undefined)[] = [];
 	const happened: string[] = [];
@@ -32,12 +34,13 @@ const fakeTrail = (
 		trail: {
 			inTransaction: async <Result>(
 				_actor: Actor,
-				work: (transaction: AuditTransaction<string>) => Promise<Result>,
+				work: (transaction: AuditTransaction<pg.ClientBase>) => Promise<Result>,
 				options?: TransactionOptions,
 			): Promise<Result> => {
 				given.push(options);
 				const result = await work({
-					connection: 'connection',
+					// A client that never connects: no work given here queries.
+					connection: new pg.Client(),
 					record: async () => 'event-id',
 				});
 				if (outcome instanceof Error) {
@@ -253,7 +256,7 @@ const ISSUER = 'https://auth.example.org/realms/usher';
 // the token verifier is a stand-in accepting the one token it is shown, and the key reload rejects.
 const routeThrough = (
 	context: TestContext,
-	trail: AuditTrail<string>,
+	trail: AuditTrail<pg.ClientBase>,
 	log: AfterCommitLog,
 ): ReturnType<typeof createServer> => {
 	const server = createServer({

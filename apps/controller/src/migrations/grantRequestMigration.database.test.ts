@@ -17,10 +17,13 @@ const SELF_GRANT_SETTING = 'selfGrantMaximumLifetimeSeconds';
 
 const SELF_GRANT_DEFAULT_SECONDS = 86_400;
 
-// What the release at f7913299 seeded: every setting but the self-grant lifetime, the values the harness
-// gives its fixed settings and the defaults for the rest.
+// The setting the grant operations migration adds, which the release at f7913299 did not hold.
+const LATER_SETTING = 'grantRateThreshold';
+
+// What the release at f7913299 seeded: every setting but the self-grant lifetime and the grant rate's threshold,
+// the values the harness gives its fixed settings and the defaults for the rest.
 const PRE_RELEASE_SETTINGS: Readonly<Partial<Settings>> = Object.fromEntries(
-	Object.entries(TEMPLATE_SETTINGS).filter(([name]) => name !== SELF_GRANT_SETTING),
+	Object.entries(TEMPLATE_SETTINGS).filter(([name]) => name !== SELF_GRANT_SETTING && name !== LATER_SETTING),
 );
 
 const settingsHeld = (owner: pg.ClientBase, schema: string) =>
@@ -71,7 +74,7 @@ suite('the grant requests migration on a store the release at f7913299 left', ()
 		const before = await settingsHeld(owner, database.schema);
 		const seedBefore = await seedRowHeld(owner, database.schema);
 
-		await migrateDatabaseInProcess(database);
+		await migrateDatabaseInProcess(database, { target: '0009_grant_requests' });
 		const applied = (await appliedMigrations(owner)).map(({ name }) => name);
 		const after = await settingsHeld(owner, database.schema);
 		const seedAfter = await seedRowHeld(owner, database.schema);

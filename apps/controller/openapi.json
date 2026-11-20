@@ -2151,6 +2151,25 @@
 						"description": "Whether a grant request is accepted without review.",
 						"type": "boolean"
 					},
+					"grantRateThreshold": {
+						"additionalProperties": false,
+						"description": "When grant.rateExceeded fires: more grant operations by one actor than operationCount within windowSeconds.",
+						"properties": {
+							"operationCount": {
+								"description": "The most grant operations one actor performs within the window without being reported.",
+								"minimum": 1,
+								"type": "integer"
+							},
+							"windowSeconds": {
+								"description": "The window's length, in seconds, measured back from each operation.",
+								"maximum": 2147483647,
+								"minimum": 1,
+								"type": "integer"
+							}
+						},
+						"required": ["operationCount", "windowSeconds"],
+						"type": "object"
+					},
 					"heartbeatMilliseconds": {
 						"description": "The interval between heartbeats on a notice stream, in milliseconds.",
 						"minimum": 1,
@@ -2224,6 +2243,7 @@
 					"eventSource",
 					"firstUser",
 					"grantAutoAccept",
+					"grantRateThreshold",
 					"heartbeatMilliseconds",
 					"issuer",
 					"noticePageLimit",
@@ -2251,6 +2271,25 @@
 					"grantAutoAccept": {
 						"description": "Whether a grant request is accepted without review.",
 						"type": "boolean"
+					},
+					"grantRateThreshold": {
+						"additionalProperties": false,
+						"description": "When grant.rateExceeded fires: more grant operations by one actor than operationCount within windowSeconds.",
+						"properties": {
+							"operationCount": {
+								"description": "The most grant operations one actor performs within the window without being reported.",
+								"minimum": 1,
+								"type": "integer"
+							},
+							"windowSeconds": {
+								"description": "The window's length, in seconds, measured back from each operation.",
+								"maximum": 2147483647,
+								"minimum": 1,
+								"type": "integer"
+							}
+						},
+						"required": ["operationCount", "windowSeconds"],
+						"type": "object"
 					},
 					"heartbeatMilliseconds": {
 						"description": "The interval between heartbeats on a notice stream, in milliseconds.",

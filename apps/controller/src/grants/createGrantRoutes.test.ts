@@ -173,6 +173,9 @@ interface Read {
 interface Stand {
 	calls: Call[];
 
+	/** The subject of each grant write counted against the grant rate, once it committed. */
+	counted: string[];
+
 	/** Each address the directory was asked to resolve, as asked. */
 	lookups: string[];
 
@@ -371,6 +374,7 @@ const standUp = (context: TestContext, world: Partial<World> = {}, autoAccept = 
 	const known: World = { ...WORLD, ...world };
 	const stand = {
 		calls: [] as Call[],
+		counted: [] as string[],
 		lookups: [] as string[],
 		reads: [] as Read[],
 		recorded: [] as AuditEvent[],
@@ -381,9 +385,31 @@ const standUp = (context: TestContext, world: Partial<World> = {}, autoAccept = 
 		isReady: async () => true,
 		trustedProxies: [],
 	});
+	// The counts made in each transaction, by the transaction's own recorder, kept until it commits.
+	const countsIn = new WeakMap<(event: AuditEvent) => Promise<string>, string[]>();
+	// A transaction's recorder, whose counts are kept apart until the transaction commits.
+	const counting = (
+		recorded: AuditEvent[],
+	): {
+		counts: string[];
+		record: (event: AuditEvent) => Promise<string>;
+	} => {
+		const counts: string[] = [];
+		const record = async (event: AuditEvent): Promise<string> => {
+			recorded.push(event);
+			return 'event-id';
+		};
+		countsIn.set(record, counts);
+		return { counts, record };
+	};
 	createGrantRoutes(
 		{
 			directory: fakeDirectory(known, stand.lookups),
+			grantRate: {
+				count: async ({ record }, subject) => {
+					countsIn.get(record)?.push(subject);
+				},
+			},
 			grantStoreOf: () => fakeStore(known, stand.calls),
 			settings: {
 				clock: { now: () => NOW },
@@ -418,19 +444,18 @@ const standUp = (context: TestContext, world: Partial<World> = {}, autoAccept = 
 				inTransaction: async (_actor, work) => {
 					stand.transactions.count += 1;
 					const recorded: AuditEvent[] = [];
+					const { counts, record } = counting(recorded);
 					const result = await work({
 						connection: Object.assign(new pg.Client(), {
 							release: () => undefined,
 						}),
-						record: async (event) => {
-							recorded.push(event);
-							return 'event-id';
-						},
+						record,
 					});
 					if (known.commitFailure !== undefined) {
 						throw known.commitFailure;
 					}
 					stand.recorded.push(...recorded);
+					stand.counted.push(...counts);
 					return result;
 				},
 			},
@@ -457,8 +482,11 @@ const standUp = (context: TestContext, world: Partial<World> = {}, autoAccept = 
 				verify: async (token) => TOKENS[token] ?? { kind: 'unverified', reason: 'invalidSignature' },
 			},
 			trail: {
-				recordEvent: async (_actor, event) => {
-					stand.recorded.push(event);
+				recordEvent: async (_actor, event, work) => {
+					const { counts, record } = counting(stand.recorded);
+					await record(event);
+					await work?.({ connection: new pg.Client(), record });
+					stand.counted.push(...counts);
 					return 'event-id';
 				},
 			},
@@ -2235,7 +2263,7 @@ suite('changing a grant', () => {
 		});
 	});
 
-	test('writes nothing and records nothing for a change keeping the end and the role', async (context) => {
+	test('changes nothing of the grant and records no event of its own for a change keeping the end and the role', async (context) => {
 		const stand = standUp(context, { grant: ENDING });
 
 		const kept = await change(stand, 'ana', { role: 'viewer' });
@@ -2420,5 +2448,91 @@ suite('changing a grant', () => {
 			[422, 'selfGrantExpiryRequired'],
 			[200, undefined],
 		]);
+	});
+});
+
+suite('counting grant writes against the grant rate', () => {
+	test('counts each grant write once, by its caller, in the transaction committing it, and no listing', async (context) => {
+		const stand = standUp(context);
+		const ending = standUp(context, { grant: ENDING });
+		const submitting = standUp(context, { submitterGrants: BO_SUBMITS });
+
+		const answers = [
+			await create(stand, 'ana'),
+			await create(stand, 'administrator', submitterAt('sub.bo@example.org')),
+			await create(stand, 'ana', {
+				...VIEWER_CREATION,
+				holder: { email: 'nobody@example.org' },
+			}),
+			await answer(stand, 'cy', ACCEPTING),
+			await revoke(stand, 'ana'),
+			await selfGrant(stand, 'ana'),
+			await selfGrant(stand, 'administrator'),
+			await decide(stand, 'ana', { decision: 'granted' }),
+			await change(stand, 'ana', { role: 'viewer' }),
+			await listRequests(stand, 'ana'),
+			await change(ending, 'ana', {
+				expiresAt: new Date(NOW + 48 * HOUR_MS).toISOString(),
+			}),
+			await removeAt(submitting, 'administrator', 'sub.bo@example.org'),
+		];
+
+		assert.deepEqual(
+			answers.map(({ statusCode }) => statusCode),
+			[201, 201, 202, 204, 200, 201, 202, 200, 200, 200, 200, 204],
+		);
+		assert.deepEqual(stand.counted, [
+			'subject-ana',
+			'subject-administrator',
+			'subject-ana',
+			'subject-cy',
+			'subject-ana',
+			'subject-ana',
+			'subject-administrator',
+			'subject-ana',
+			'subject-ana',
+		]);
+		assert.deepEqual(ending.counted, ['subject-ana']);
+		assert.deepEqual(submitting.counted, ['subject-administrator']);
+	});
+
+	test('counts each refused or failed grant write once, by its caller, with the event recording it, whether refused before, inside or at the commit of its transaction', async (context) => {
+		const stand = standUp(context);
+		const retiredFirst = standUp(context, {
+			commitFailure: Object.assign(new Error('a retired resource'), {
+				code: '23514',
+				constraint: 'resources_retired_without_live_grants',
+			}),
+		});
+		const unanswering = standUp(context, { directory: 'unavailable' });
+
+		const answers = [
+			await create(stand, 'ana', { ...VIEWER_CREATION, role: 'Viewer' }),
+			await create(stand, 'serviceAccount'),
+			await create(stand, 'ana', { ...VIEWER_CREATION, resource: 7 }),
+			await revoke(stand, 'ana', 'not-a-grant'),
+			await answer(stand, 'bo', ACCEPTING),
+			await selfGrant(stand, 'ana', { ...SELF_VIEWER, role: 'owner' }),
+			await decide(stand, 'administrator', { decision: 'granted' }),
+			await change(stand, 'bo', { role: 'viewer' }),
+			await create(retiredFirst, 'ana'),
+			await create(unanswering, 'administrator', submitterAt('sub.bo@example.org')),
+		];
+
+		answers.forEach((refused) => {
+			assert.ok(refused.statusCode >= 400, String(refused.statusCode));
+		});
+		assert.deepEqual(stand.counted, [
+			'subject-ana',
+			'subject-service',
+			'subject-ana',
+			'subject-ana',
+			'subject-bo',
+			'subject-ana',
+			'subject-administrator',
+			'subject-bo',
+		]);
+		assert.deepEqual(retiredFirst.counted, ['subject-ana']);
+		assert.deepEqual(unanswering.counted, ['subject-administrator']);
 	});
 });

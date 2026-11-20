@@ -8,7 +8,13 @@ import pg from 'pg';
 import { fixedClock } from '../../testing/peripherals/clocks.js';
 import { captureLog, type LogCapture } from '../../testing/harness/controller.js';
 import { type Harness, startReadOnlyInstance, suiteHarness, withHarness } from '../../testing/harness/harness.js';
-import { holdRetentionSweep, POLICY_TABLES, qualified, RETENTION_SWEEP } from '../../testing/harness/policy.js';
+import {
+	GRANT_OPERATIONS,
+	holdRetentionSweep,
+	POLICY_TABLES,
+	qualified,
+	RETENTION_SWEEP,
+} from '../../testing/harness/policy.js';
 import { cleanupFor, eventually } from '../../testing/harness/waiting.js';
 
 const { exchangedSids, sidSignOuts, subjectSignOuts } = POLICY_TABLES;
@@ -98,10 +104,35 @@ const signOutsOf = (harness: Harness, client: pg.ClientBase, { key, table }: Sig
 	};
 };
 
+// Grant operations counted for subjects of one test's own, each counted an hour before its expiry.
+const grantOperationsOf = (harness: Harness, client: pg.ClientBase): OwnRows => {
+	const prefix = `${randomUUID()}:`;
+	const { columns } = GRANT_OPERATIONS;
+	return {
+		held: () => heldWithPrefix(client, GRANT_OPERATIONS, columns.idpSubjectId, prefix),
+		record: async (count, expiresAt) => {
+			await client.query(
+				`INSERT INTO ${qualified(GRANT_OPERATIONS)}
+           (${quoted(columns.idpIssuer)}, ${quoted(columns.idpSubjectId)},
+            ${quoted(columns.occurredAt)}, ${quoted(columns.expiresAt)})
+         SELECT $1, $2 || gen_random_uuid(), $3, $4 FROM generate_series(1, $5)`,
+				[
+					harness.configuration.identityProviderIssuer,
+					prefix,
+					new Date(expiresAt.getTime() - HOUR_MILLISECONDS),
+					expiresAt,
+					count,
+				],
+			);
+		},
+	};
+};
+
 // One test's own rows in every table the sweep deletes from, in the order it deletes from them.
 const sweptRowsOf = (harness: Harness, client: pg.ClientBase): readonly OwnRows[] => [
 	sessionsOf(harness, client),
 	...SIGN_OUT_TABLES.map((table) => signOutsOf(harness, client, table)),
+	grantOperationsOf(harness, client),
 ];
 
 const heldIn = (tables: readonly OwnRows[]): Promise<readonly number[]> =>
@@ -238,6 +269,39 @@ suite("the retention sweep on the controller's configured clock", () => {
 					await heldIn(tables.flatMap(({ atTolerance, withinTolerance }) => [atTolerance, withinTolerance])),
 					[1, 1, 1, 1],
 				);
+			},
+			context,
+		);
+	});
+});
+
+suite("the retention sweep of the grant rate's count", () => {
+	test("keeps a grant operation until its expiry is more than the clock tolerance before the configured clock's now", async (context) => {
+		const now = Date.now() + 2 * HOUR_MILLISECONDS;
+		const cutoff = now - RETENTION_SWEEP.clockToleranceMilliseconds;
+		await withHarness(
+			{ applications: [], configuration: { clock: fixedClock(now) } },
+			async (harness) => {
+				const client = harness.clients.migration;
+				const atTolerance = grantOperationsOf(harness, client);
+				const pastTolerance = grantOperationsOf(harness, client);
+				const withinTolerance = grantOperationsOf(harness, client);
+				await atTolerance.record(1, new Date(cutoff));
+				await pastTolerance.record(2, new Date(cutoff - 1));
+				await withinTolerance.record(1, new Date(cutoff + 1));
+
+				const gone = await eventually(
+					async () => (await pastTolerance.held()) === 0,
+					RUNS_WITHIN_MILLISECONDS,
+					20,
+				);
+
+				assert.equal(
+					gone,
+					true,
+					'a grant operation more than the clock tolerance past its expiry outlived the sweep',
+				);
+				assert.deepEqual(await heldIn([atTolerance, withinTolerance]), [1, 1]);
 			},
 			context,
 		);

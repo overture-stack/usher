@@ -122,6 +122,7 @@ const STORED_VALUES: {
 	baseline: [],
 	eventSource: 'https://usher-two.example.org/controller',
 	firstUserRole: 'ims-usher-first-user',
+	grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
 	heartbeatMilliseconds: 500,
 	issuer: 'https://usher-two.example.org',
 	noticePageLimit: 20,
@@ -148,7 +149,6 @@ const PENDING_VALUES: {
 	egoImportAllStudyPolicies: ['ENVIRONMENTAL', 'ALL, STUDIES'],
 	egoImportBaseTier: 'grant',
 	egoImportPrefixes: [''],
-	grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
 };
 
 suite('the environment a configuration is expressed as', () => {
@@ -289,6 +289,7 @@ suite('the settings a configuration gives the store', () => {
 			eventSource: CONFIGURATION.eventSource,
 			firstUser: { realmRole: CONFIGURATION.firstUserRole },
 			grantAutoAccept: CONFIGURATION.autoAccept,
+			grantRateThreshold: CONFIGURATION.grantRateThreshold,
 			grantRules: DEFAULT_GRANT_RULES,
 			heartbeatMilliseconds: CONFIGURATION.heartbeatMilliseconds,
 			issuer: CONFIGURATION.issuer,

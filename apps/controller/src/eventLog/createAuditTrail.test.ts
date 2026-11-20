@@ -1342,6 +1342,61 @@ suite('an event recorded alone', () => {
 		assert.equal(dataOf(lines()[0])['reason'], 'administratorOnly');
 	});
 
+	test("runs the work given in the event's transaction once its row is written, the events the work records committing with it and their lines written after the event's", async () => {
+		const { lines, store, trail } = trailOver();
+		const crossing: AuditEvent = {
+			data: { operationCount: 4, windowSeconds: 30 },
+			severity: 'warning',
+			type: 'grant.rateExceeded',
+		};
+
+		const id = await trail.recordEvent(ANA, REFUSAL, async ({ connection, record }) => {
+			await connection.query('SELECT 1');
+			await record(crossing);
+		});
+
+		assert.deepEqual(
+			store.statements.map(({ text }) => text.split(' ')[0]),
+			['BEGIN', 'SELECT', 'INSERT', 'SELECT', 'INSERT', 'COMMIT'],
+		);
+		assert.equal(store.statements[3]?.text, 'SELECT 1');
+		assert.deepEqual(
+			lines().map((line) => [line['id'] === id, line['type']]),
+			[
+				[true, 'bio.overture.application.registration'],
+				[false, 'bio.overture.grant.rateExceeded'],
+			],
+		);
+	});
+
+	test("commits nothing when the work given fails, writing the line naming the event's type, and throws nothing", async () => {
+		const { lines, store, trail } = trailOver();
+
+		const id = await trail.recordEvent(ANA, REFUSAL, async () => {
+			throw Object.assign(new Error('the count failed'), { code: '57014' });
+		});
+
+		assert.equal(id, undefined);
+		assert.deepEqual(
+			store.statements.map(({ text }) => text.split(' ')[0]),
+			['BEGIN', 'SELECT', 'INSERT', 'ROLLBACK'],
+		);
+		assert.deepEqual(
+			lines().map(({ code, eventType, message }) => ({
+				code,
+				eventType,
+				message,
+			})),
+			[
+				{
+					code: '57014',
+					eventType: 'bio.overture.application.registration',
+					message: 'audit.eventUnrecorded',
+				},
+			],
+		);
+	});
+
 	test("writes a line at error naming the event's type and the store's code, never its data, when its row cannot be written", async () => {
 		const failing = fakeStore((text) => ROW_INSERT.test(text));
 		const refused = Object.assign(new Error('the store refused it'), {

@@ -1,5 +1,7 @@
 import type { Clock } from '../configuration/index.js';
-import type { AuditEvent, AuditTrail, EventLog, TrailConnection } from '../eventLog/index.js';
+import type pg from 'pg';
+
+import type { AuditEvent, AuditTrail, EventLog } from '../eventLog/index.js';
 import type { RefusalKey, WindowedRoute } from '../refusalWindows/index.js';
 
 /** A window as its closing event records it. */
@@ -43,7 +45,7 @@ export interface WindowedRefusalSettings {
 	log: Pick<EventLog, 'error'>;
 
 	/** Where each closing event is recorded, as the system. */
-	trail: Pick<AuditTrail<TrailConnection>, 'recordEvent'>;
+	trail: Pick<AuditTrail<pg.ClientBase>, 'recordEvent'>;
 }
 
 /**

@@ -1,6 +1,6 @@
 import type pg from 'pg';
 
-import type { AuditEventType, AuditTrail, EventLog, JsonValue, TrailConnection } from '../eventLog/index.js';
+import type { AuditEventType, AuditTrail, AuditTransaction, EventLog, JsonValue } from '../eventLog/index.js';
 import type { PersonIdentity } from '../findOrRecordPerson.js';
 import type { Problem } from '../http/index.js';
 import type { TokenVerification } from '../identityProvider/index.js';
@@ -203,6 +203,17 @@ export interface OperationEvent {
 	named(request: NamedByRequest): Promise<EventMembers>;
 
 	/**
+	 * Work run in the transaction recording the event of a refusal or a failure, once its row is
+	 * written; none by default. An operation naming it must run the same work in the transaction of
+	 * each change it commits, and the work is then done once for each request admitted, however it is
+	 * answered.
+	 *
+	 * @param transaction the transaction recording the event.
+	 * @param principal whose request was refused or failed.
+	 */
+	recordedWith?(transaction: AuditTransaction<pg.ClientBase>, principal: Principal): Promise<void>;
+
+	/**
 	 * The event's type, or how it is read from what the request names, for an operation whose
 	 * request says which of its events it would record.
 	 */
@@ -298,5 +309,5 @@ export interface ManagementDependencies {
 	tokenVerifier: TokenVerifier;
 
 	/** Where refusals and failures are recorded. */
-	trail: Pick<AuditTrail<TrailConnection>, 'recordEvent'>;
+	trail: Pick<AuditTrail<pg.ClientBase>, 'recordEvent'>;
 }

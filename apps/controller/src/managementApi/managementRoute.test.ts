@@ -3,6 +3,7 @@ import { request } from 'node:http';
 import { suite, test, type TestContext } from 'node:test';
 
 import type { FastifyInstance } from 'fastify';
+import pg from 'pg';
 
 import { type Actor, type AuditEvent, type LineFields, REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import { createServer, problem } from '../http/index.js';
@@ -68,6 +69,12 @@ interface Recorded {
 	event: AuditEvent;
 }
 
+/** An event recorded with work to run in its transaction, and the events that work recorded. */
+interface RecordedWithWork {
+	alongside: readonly AuditEvent[];
+	event: AuditEvent;
+}
+
 interface Line {
 	fields: LineFields | undefined;
 	message: string;
@@ -87,6 +94,7 @@ interface Stand {
 	/** The windows the refused credentials are counted in, which a test stops to close them. */
 	refusals: WindowedRefusals;
 
+	recordedWithWork: RecordedWithWork[];
 	server: FastifyInstance;
 }
 
@@ -218,10 +226,23 @@ const standUp = async (
 	}: StandOptions = {},
 ): Promise<Stand> => {
 	const recorded: Recorded[] = [];
+	const recordedWithWork: RecordedWithWork[] = [];
 	const lines: Line[] = [];
 	const trail: ManagementDependencies['trail'] = {
-		recordEvent: async (actor, event) => {
+		recordEvent: async (actor, event, work) => {
 			recorded.push({ actor, event });
+			if (work !== undefined) {
+				const alongside: AuditEvent[] = [];
+				await work({
+					// A client that never connects: the work given here records, and queries nothing.
+					connection: new pg.Client(),
+					record: async (alongsideEvent) => {
+						alongside.push(alongsideEvent);
+						return 'alongside-id';
+					},
+				});
+				recordedWithWork.push({ alongside, event });
+			}
 			return EVENT_ID;
 		},
 	};
@@ -236,6 +257,7 @@ const standUp = async (
 		lines,
 		ran: [],
 		recorded,
+		recordedWithWork,
 		refusals: createWindowedRefusals({
 			clock: SETTINGS.clock,
 			closingEvents: {
@@ -1107,6 +1129,80 @@ suite("a management operation's refusals, as its own event records them", () => 
 					},
 					severity: 'error',
 				},
+			],
+		);
+	});
+
+	test('runs the work its event names in the transaction recording each refusal and failure, for the principal refused, and never for an answer', async (context) => {
+		const recordedWith = {
+			named: async () => ({}),
+			recordedWith: async (
+				{ record }: { record: (event: AuditEvent) => Promise<string> },
+				{ subject }: { subject: string },
+			) => {
+				await record({
+					data: { subject },
+					severity: 'info',
+					type: 'grant.rateExceeded',
+				});
+			},
+			type: 'application.registration' as const,
+		};
+		const outcomes: readonly (() => Promise<OperationOutcome>)[] = [
+			async () => ({ kind: 'refused', problem: SHELF_LIMIT }),
+			async () => {
+				throw Object.assign(new Error('the store went away'), {
+					code: '57P01',
+				});
+			},
+			async () => ({ kind: 'unavailable', problem: SHELF_LIMIT }),
+			async () => ({
+				body: { shelved: true },
+				forbidsStoring: false,
+				kind: 'answered',
+				status: 201,
+			}),
+		];
+		const stands = await Promise.all(
+			outcomes.map((outcome) =>
+				standUp(context, {
+					departures: { event: recordedWith },
+					outcome,
+					verifications: {
+						...ADMIN,
+						reader: verified({ realm_access: { roles: [] }, sub: 'subject-reader' }),
+					},
+				}),
+			),
+		);
+		const unread = stands[0] ?? assert.fail('no stand');
+
+		const answers = [
+			await post(unread, { token: 'reader' }),
+			await post(unread, { body: '{"title":7}' }),
+			...(await Promise.all(stands.map((stand) => post(stand)))),
+		];
+
+		assert.deepEqual(
+			answers.map(({ statusCode }) => statusCode),
+			[403, 400, 409, 503, 409, 201],
+		);
+		assert.deepEqual(
+			stands.map(({ recordedWithWork }) =>
+				recordedWithWork.map(({ alongside, event }) => [
+					event.data['result'],
+					alongside.map(({ data }) => data['subject']),
+				]),
+			),
+			[
+				[
+					['denied', ['subject-reader']],
+					['denied', ['subject-ana']],
+					['denied', ['subject-ana']],
+				],
+				[['failed', ['subject-ana']]],
+				[['failed', ['subject-ana']]],
+				[],
 			],
 		);
 	});

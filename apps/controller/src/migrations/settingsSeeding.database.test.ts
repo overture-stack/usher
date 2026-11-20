@@ -16,6 +16,8 @@ import {
 
 const SELF_GRANT_SETTING = 'selfGrantMaximumLifetimeSeconds';
 
+const GRANT_RATE_SETTING = 'grantRateThreshold';
+
 /** The names of every setting the store holds, in name order. */
 const settingNames = (owner: pg.ClientBase, schema: string) =>
 	selectRows<{ name: string }>(owner, `SELECT name FROM ${pg.escapeIdentifier(schema)}.settings ORDER BY name`).then(
@@ -41,7 +43,7 @@ const seedFileWithout = async (omitted: readonly string[]): Promise<string> => {
 suite('seeding the settings, and recording what each setting was seeded from', () => {
 	test('a first run to an earlier target seeds nothing, and the next full run seeds every setting', async (context) => {
 		const database = await openEmptyDatabase(context);
-		await migrateDatabaseInProcess(database, { target: '0008_settings' });
+		await migrateDatabaseInProcess(database, { target: '0009_grant_requests' });
 		const owner = await database.connect('migration');
 
 		assert.deepEqual(await settingNames(owner, database.schema), []);
@@ -54,7 +56,24 @@ suite('seeding the settings, and recording what each setting was seeded from', (
 
 		assert.equal(names.length, Object.keys(TEMPLATE_SETTINGS).length);
 		assert.ok(names.includes(SELF_GRANT_SETTING));
+		assert.ok(names.includes(GRANT_RATE_SETTING));
 		assert.equal(events.length, 1);
+	});
+
+	test("a first run on an empty store seeds the grant rate's threshold with its default, as any other setting", async (context) => {
+		const database = await openEmptyDatabase(context);
+		await migrateDatabase(database, { seedFile: await seedFileWithout([GRANT_RATE_SETTING]) });
+		const owner = await database.connect('migration');
+		const [threshold] = await selectRows<{ value: unknown }>(
+			owner,
+			`SELECT value FROM ${pg.escapeIdentifier(database.schema)}.settings WHERE name = $1`,
+			[GRANT_RATE_SETTING],
+		);
+		const [event] = await seedingEvents(owner, database.schema);
+		await owner.end();
+
+		assert.deepEqual(threshold, { value: { operationCount: 10, windowSeconds: 60 } });
+		assert.equal(event?.data.seededFrom[GRANT_RATE_SETTING], 'default');
 	});
 
 	test('a later run that adds no setting records no settings.seeding event', async (context) => {

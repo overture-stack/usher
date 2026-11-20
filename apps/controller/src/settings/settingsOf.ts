@@ -13,6 +13,7 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 		eventSource,
 		firstUser,
 		grantAutoAccept,
+		grantRateThreshold,
 		heartbeatMilliseconds,
 		issuer,
 		noticePageLimit,
@@ -31,6 +32,7 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 		eventSource.kind === 'read' &&
 		firstUser.kind === 'read' &&
 		grantAutoAccept.kind === 'read' &&
+		grantRateThreshold.kind === 'read' &&
 		heartbeatMilliseconds.kind === 'read' &&
 		issuer.kind === 'read' &&
 		noticePageLimit.kind === 'read' &&
@@ -49,6 +51,7 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 				eventSource: eventSource.value,
 				firstUser: firstUser.value,
 				grantAutoAccept: grantAutoAccept.value,
+				grantRateThreshold: grantRateThreshold.value,
 				heartbeatMilliseconds: heartbeatMilliseconds.value,
 				issuer: issuer.value,
 				noticePageLimit: noticePageLimit.value,
