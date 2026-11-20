@@ -31,7 +31,7 @@ apps/controller/scripts/
 # them alone leaves the image unchanged. Its contract, openapi.json, stays in, since the build bundles
 # it.
 apps/controller/test/
-apps/controller/test-support/
+apps/controller/testing/
 apps/controller/DEVELOPMENT.md
 apps/controller/tsdown.config.test.ts
 apps/controller/**/*.test.ts

@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 // Each folder under src/ holding TypeScript is a module. From outside a module, which takes in its
 // own subfolders, the only way in is its index.ts. The committed contract, openapi.json beside src/, is
-// in no module, so importing it enters none; any other file outside src/ is refused. From inside, a
+// in no module, so importing it enters none; nor is the test support, testing/ beside src/, which a
+// test may import and no other file may; any other file outside src/ is refused. From inside, a
 // file other than a test never imports that index, since the index re-exports it and the import would
 // close a cycle. These checks read the source as text, so a specifier written inside a comment counts
 // too, which errs towards refusing.
@@ -56,6 +57,12 @@ const COMMITTED_CONTRACT = '../openapi.json';
 
 const isCommittedContract = (target: string): boolean => target === COMMITTED_CONTRACT;
 
+// The test support, as a folder relative to src/: a test beside its source reaches it, and no other file may.
+const TEST_SUPPORT = '../testing/';
+
+const isTestSupportFor = (importer: string, target: string): boolean =>
+	isTest(importer) && target.startsWith(TEST_SUPPORT);
+
 // src/ itself is no module: its files are entered by path.
 const isWithin = (folder: string, module: string): boolean =>
 	module === '' || folder === module || folder.startsWith(`${module}/`);
@@ -93,6 +100,7 @@ suite("the controller's modules", () => {
 				const target = targetOf(path, specifier);
 				const module = topLevelFolderOf(target);
 				return isCommittedContract(target) ||
+					isTestSupportFor(path, target) ||
 					isWithin(folderOf(path), module) ||
 					target === `${module}/index.ts`
 					? []

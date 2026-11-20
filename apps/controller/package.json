@@ -31,8 +31,8 @@
 	"private": true,
 	"scripts": {
 		"build": "tsdown",
-		"test": "tsx --conditions=@overture-stack/source --test --test-global-setup=test-support/globalSetup.ts",
-		"test:newest": "USHER_TEST_POSTGRESQL=newest tsx --conditions=@overture-stack/source --test --test-global-setup=test-support/globalSetup.ts",
+		"test": "tsx --conditions=@overture-stack/source --test --test-global-setup=testing/harness/globalSetup.ts",
+		"test:newest": "USHER_TEST_POSTGRESQL=newest tsx --conditions=@overture-stack/source --test --test-global-setup=testing/harness/globalSetup.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"type": "module"

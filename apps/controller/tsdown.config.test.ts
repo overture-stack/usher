@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import { type AddressInfo, createServer, type Socket } from 'node:net';
 import { suite, test, type TestContext } from 'node:test';
 
-import { type BuiltEntry, builtEntry } from './test-support/build.js';
+import { type BuiltEntry, builtEntry } from './testing/harness/build.js';
 import {
 	type ControllerEnvironment,
 	ENVIRONMENT_VARIABLES,
@@ -16,8 +16,8 @@ import {
 	spawnWithUncaughtFailure,
 	type UncaughtFailure,
 	unusedPort,
-} from './test-support/controller.js';
-import { configurationToRead, passwordsApart } from './test-support/harness.js';
+} from './testing/harness/controller.js';
+import { configurationToRead, passwordsApart } from './testing/harness/harness.js';
 
 // The log stream's numbering of fatal, which a refusal to start is written at.
 const FATAL_LEVEL = 60;

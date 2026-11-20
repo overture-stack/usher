@@ -46,7 +46,7 @@ fix: remove the override once testcontainers depends on an archiver whose chain 
 or later and minimatch 11.0.1 or later.
 standalone: yes
 
-Two support modules in `apps/controller/test-support/` copy code the packages keep internal:
+Two support modules in `apps/controller/testing/peripherals/` copy code the packages keep internal:
 `sqonEvaluator.ts` copies usher-types' test-only SQON evaluator, and `bridgeWire.ts` reproduces the
 Bridge's side of the wire from `modules/bridge--express/src/core/` and `modules/types/src/`. Nothing
 compares a copy with its source, so a change to the source leaves the Controller's suites checking
@@ -58,11 +58,11 @@ standalone: no
 context: the evaluator waits on that package.
 
 The Controller's dedicated test containers draw their fixed host ports (`HOST_PORTS` in
-`apps/controller/test-support/containers.ts`) from 30000 to 32767 alone, the part below the
+`apps/controller/testing/harness/containers.ts`) from 30000 to 32767 alone, the part below the
 daemon's assigned ports that the CI Docker host admits today, which leaves fewer ports to draw from
 when many test files start their own containers at once.
 fix: widen `HOST_PORTS` again to 10000 to 32767, and the range where the module's TSDoc, its tests
-and the test-support README name it.
+and the testing README name it.
 standalone: no
 context: waits on the CI Docker host admitting 10000 to 32767.
 
@@ -75,7 +75,7 @@ cannot load, as the legacy CLI does.
 standalone: no
 context: waits on that Prettier release.
 
-In `apps/controller/test/database/storeTimeout.test.ts`, three cases failed under load and passed
+In `apps/controller/src/storeTimeout/storeTimeout.database.test.ts`, three cases failed under load and passed
 on every run alone. The suite on the Controller's start failed twice in one PostgreSQL 18 run while
 a shared Docker daemon was under load, and on CI's two-CPU pod: "refuses a start on a connection
 that drops the controller's statement limits, as a pooler dropping startup parameters does, naming
@@ -89,3 +89,14 @@ fix: every instance in the file now starts within four times the compressed stor
 an instance's whole start runs within its store timeout; confirm on CI's pod that each case passes,
 and establish the cause of any that still fails.
 standalone: yes
+
+Most files in `apps/controller/testing/fixtures/` hold helpers that start or drive the real system
+beside the data they build: `applications.ts`, `audit.ts`, `channel.ts`, `conformance.ts`,
+`database.ts`, `grants.ts`, `issuance.ts`, `listings.ts` and `resources.ts`. In the other
+direction, `testing/harness/auditEvents.ts` holds the audit-event table's expectations, which are
+fixed data, beside its log readers. Each folder must hold only what `DEVELOPMENT.md` defines it to
+hold.
+fix: move each driving helper into `testing/harness/` and the table's expectations into
+`testing/fixtures/`, after the grant operations land, so their suites move onto these paths once.
+standalone: no
+context: waits on the grant operations.

@@ -7,8 +7,8 @@
 //     pnpm exec tsx --conditions=@overture-stack/source scripts/generate-erd.ts > schema-diagrams.md
 import type pg from 'pg';
 
-import { startDedicatedPostgresql } from '../test-support/containers.js';
-import { createTestDatabase, USHER_SCHEMA, USHER_TEMPLATE } from '../test-support/database.js';
+import { startDedicatedPostgresql } from '../testing/harness/containers.js';
+import { createTestDatabase, USHER_SCHEMA, USHER_TEMPLATE } from '../testing/harness/database.js';
 import { SCHEMA_AREAS } from './erd/areas.js';
 import { type CatalogueTable, renderAreas } from './erd/diagram.js';
 

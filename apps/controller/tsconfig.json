@@ -4,5 +4,5 @@
 		"isolatedDeclarations": false
 	},
 	"extends": "../../tsconfig.base.json",
-	"include": ["scripts", "src", "test", "test-support", "tsdown.config.ts", "tsdown.config.test.ts"]
+	"include": ["scripts", "src", "test", "testing", "tsdown.config.ts", "tsdown.config.test.ts"]
 }

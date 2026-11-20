@@ -2,29 +2,39 @@
 
 ## Where the tests live
 
-The Controller's tests check it from the outside: through its HTTP API (the Policy Management API
-under `/admin`, and the Bridge-facing `POST /exchange`, `GET /notices` and `GET /notices/stream`),
-through the token and notices the Bridge reads, and through the database's own constraints. They
-live in `test/`, one folder per boundary:
+The Controller's boundary tests check it from the outside: through its HTTP API (the Policy Management API under
+`/admin`, and the Bridge-facing `POST /exchange`, `GET /notices` and `GET /notices/stream`), and through the token and
+notices the Bridge reads. They live in `test/`, one folder per boundary:
 
-| Folder              | What its tests go through                                                    |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `test/database/`    | the schema, its constraints and triggers, and the Controller's database role |
-| `test/exchange/`    | `POST /exchange`: sign-in token validation and the Usher token issued        |
-| `test/channel/`     | `GET /notices`, `GET /notices/stream` and the back-channel logout endpoint   |
-| `test/admin/`       | the Policy Management API                                                    |
-| `test/audit/`       | the audit log, the log stream and `GET /admin/audit`                         |
-| `test/conformance/` | the conformance corpus, replayed against the Controller                      |
-| `test/integration/` | the real Bridge running against the Controller                               |
-| `test/import/`      | the import of EGO's study groups                                             |
+| Folder              | What its tests go through                                                  |
+| ------------------- | -------------------------------------------------------------------------- |
+| `test/exchange/`    | `POST /exchange`: sign-in token validation and the Usher token issued      |
+| `test/channel/`     | `GET /notices`, `GET /notices/stream` and the back-channel logout endpoint |
+| `test/admin/`       | the Policy Management API                                                  |
+| `test/audit/`       | the audit log, the log stream and `GET /admin/audit`                       |
+| `test/conformance/` | the conformance corpus, replayed against the Controller                    |
+| `test/import/`      | the import of EGO's study groups                                           |
 
-This is a deliberate exception to the rule that a test sits beside the source file it tests. These
-tests pin a contract at a boundary, not a file, so the drift that rule guards against does not
-arise, and placing them under `src/` would decide the Controller's module layout before its
-implementation does. Unit tests of a single module still sit beside that module's source.
+This is a deliberate exception to the rule that a test sits beside the source it tests. These tests pin a contract at
+a boundary, not a file, so the drift that rule guards against does not arise, and placing them under `src/` would
+decide the Controller's module layout before its implementation does.
 
-Node's test runner treats every file under a directory named `test/` as a test file, so helpers
-belong in `test-support/`, never in `test/`.
+Every other test sits beside the source it exercises. A unit test is `<name>.test.ts` beside its module. A database
+suite, which checks the store through a migrated test database, is `<name>.database.test.ts` beside the source whose
+behaviour it checks; a suite checking what only the migrations' SQL defines, or the schema as a whole, sits beside
+`src/migrations/`.
+
+The support code lives in `testing/`, in four folders:
+
+| Folder                 | What it holds                                                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `testing/fixtures/`    | fixed data a test reads, and functions that only build such data; they start nothing and replace nothing                                                                               |
+| `testing/peripherals/` | lasting stand-ins, each replacing something a test should not need for real: the clocks, the identity provider and user directory stand-ins, the recording server                      |
+| `testing/harness/`     | code that runs, drives or observes the real system or the real services it runs against: the container launchers, test databases, the Controller seam, route drivers, the global setup |
+| `testing/integration/` | the suites spanning components: the real Bridge running against the Controller                                                                                                         |
+
+A peripheral replaces something; a harness runs the real thing. Node's test runner treats every file under a directory
+named `test/` as a test file, so support code belongs in `testing/`, never in `test/`.
 
 ## Running them
 
@@ -40,10 +50,10 @@ leaves them out, since they need Docker.
 The integration suite at the iMS defaults' own timescale takes minutes, so it runs on demand and before
 each release rather than with every run:
 
-    USHER_TEST_ON_DEMAND=ims-defaults pnpm test test/integration
+    USHER_TEST_ON_DEMAND=ims-defaults pnpm test testing/integration
 
-`test-support/README.md` describes the shared support code, and how every test reaches the
-Controller through `test-support/controller.ts` alone.
+`testing/README.md` describes the shared support code, and how every test reaches the
+Controller through `testing/harness/controller.ts` alone.
 
 Every database URL the tests give the Controller names a loopback host, so its connections need no
 TLS verification, and no test but that setting's own sets `USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION`.
