@@ -46,6 +46,12 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
 		exchanged_sids: { deletes: true, inserts: true, updates: 'every column' },
 		global_revocations: { deletes: false, inserts: true, updates: [] },
 		grant_decisions: { deletes: false, inserts: true, updates: [] },
+		grant_operations: { deletes: true, inserts: true, updates: [] },
+		grant_requests: {
+			deletes: false,
+			inserts: true,
+			updates: ['decided_at', 'decided_by', 'decision', 'grant_id'],
+		},
 		grants: {
 			deletes: false,
 			inserts: true,
@@ -90,6 +96,7 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
 			inserts: true,
 			updates: 'every column',
 		},
+		used_channel_assertions: { deletes: true, inserts: true, updates: [] },
 		user_identities: { deletes: false, inserts: true, updates: [] },
 		users: { deletes: false, inserts: true, updates: [] },
 	} satisfies Record<string, PermittedWrites>),

@@ -35,6 +35,39 @@ suite("reading a request's body", () => {
 		);
 	});
 
+	test('reads one JSON object sent as application/merge-patch+json where a merge patch is taken, and refuses it as JSON there, and as a merge patch anywhere else, with 415', () => {
+		const patch = bytes('{"a":null}');
+
+		assert.deepEqual(
+			[
+				readJsonBody(patch, 'application/merge-patch+json', 'application/merge-patch+json'),
+				readJsonBody(patch, 'Application/Merge-Patch+JSON; charset=utf-8', 'application/merge-patch+json'),
+			],
+			[
+				{ kind: 'object', value: { a: null } },
+				{ kind: 'object', value: { a: null } },
+			],
+		);
+		assert.deepEqual(
+			[
+				readJsonBody(patch, 'application/json', 'application/merge-patch+json'),
+				readJsonBody(patch, undefined, 'application/merge-patch+json'),
+				readJsonBody(patch, 'application/merge-patch+json; charset=latin1', 'application/merge-patch+json'),
+			],
+			[
+				{ kind: 'refused', problem: PROBLEMS.unsupportedMergePatch },
+				{ kind: 'refused', problem: PROBLEMS.unsupportedMergePatch },
+				{ kind: 'refused', problem: PROBLEMS.unsupportedMergePatch },
+			],
+		);
+		assert.deepEqual(readJsonBody(patch, 'application/merge-patch+json', 'application/json'), {
+			kind: 'refused',
+			problem: PROBLEMS.unsupportedMediaType,
+		});
+		assert.equal(PROBLEMS.unsupportedMergePatch.code, 'unsupportedMediaType');
+		assert.equal(PROBLEMS.unsupportedMergePatch.status, 415);
+	});
+
 	test('refuses as unreadable a body that is not UTF-8, not JSON, or not one object', () => {
 		const bodies = [
 			Uint8Array.of(0x7b, 0x22, 0xc3, 0x28, 0x22, 0x7d),

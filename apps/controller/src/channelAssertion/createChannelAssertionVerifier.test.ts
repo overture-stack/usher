@@ -303,6 +303,26 @@ suite('the channel assertion verifier', () => {
 		});
 	});
 
+	test('refuses a verified assertion whose jti holds a NUL character or an unpaired surrogate as unrepresentableJti, naming its application', async () => {
+		const application = applicationWith(1);
+		const verifier = verifierFor(application);
+		const assertions = await Promise.all(
+			['jti-with-a-\u0000-NUL', 'jti-with-an-\ud800-surrogate'].map((jti) =>
+				assertionOf(application, { claims: { jti } }),
+			),
+		);
+
+		const checks = await Promise.all(assertions.map((assertion) => verifier.verify(bearer(assertion))));
+
+		checks.forEach((check) => {
+			assert.deepEqual(refusalOf(check), {
+				applicationId: application.id,
+				kind: 'refused',
+				reason: 'unrepresentableJti',
+			});
+		});
+	});
+
 	test('refuses an assertion lacking a time or a jti, or whose exp is not after its iat, as unreadableAssertion before verifying it, naming its application', async () => {
 		const application = applicationWith(1);
 		const verifier = verifierFor(application);

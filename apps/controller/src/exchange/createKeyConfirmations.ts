@@ -19,8 +19,8 @@ const confirmation = (schema: string): string =>
     WHERE id = $1::uuid AND application_id = $2::uuid AND confirmed_at IS NULL AND revoked_at IS NULL
     RETURNING id`;
 
-const confirmationEvent = ({ applicationId, keyId }: ConfirmedKey): AuditEvent => ({
-	data: { applicationId, keyId },
+const confirmationEvent = ({ applicationId, keyId }: ConfirmedKey, sourceIp: string): AuditEvent => ({
+	data: { applicationId, keyId, sourceIp },
 	severity: 'info',
 	type: 'applicationKey.confirmation',
 });
@@ -35,11 +35,12 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
 /**
  * Creates this instance's confirmations of application keys. The first exchange verified with a key
  * sets its `confirmed_at` to the clock's instant and records `applicationKey.confirmation`, naming
- * the application and the key, in one transaction of their own declaring the system as its actor,
- * within the store timeout and the deadline of the exchange that began the write: the confirmation is
- * noticed by the system, so the record of its change names the system rather than whoever the exchange
- * was for. The write takes a key only while it is unconfirmed and live, so however many exchanges race
- * on one key, across instances alike, one write confirms it and one event records it. Once a write has
+ * the application, the key and the address of the exchange that began the write, in one transaction of
+ * their own declaring the system as its actor, within the store timeout and the deadline of that
+ * exchange: the confirmation is noticed by the system, so the record of its change names the system
+ * rather than whoever the exchange was for. The write takes a key only while it is unconfirmed and live,
+ * so however many exchanges race on one key, across instances alike, one write confirms it and one event
+ * records it. Once a write has
  * committed, confirming the key or finding it confirmed, the instance knows the key confirmed and
  * writes nothing more for it; exchanges racing on one instance share one write. A write that fails, a
  * write the store did not finish by its deadline among them, is written to the log naming the
@@ -56,7 +57,7 @@ export const createKeyConfirmations = ({ eventLog, settings, trail }: KeyConfirm
 	const writing = new Map<string, Promise<void>>();
 	const statement = confirmation(settings.databaseSchema);
 
-	const write = async (key: ConfirmedKey, deadline: Deadline | undefined): Promise<void> => {
+	const write = async (key: ConfirmedKey, sourceIp: string, deadline: Deadline | undefined): Promise<void> => {
 		try {
 			await trail.inTransaction(
 				SYSTEM,
@@ -67,7 +68,7 @@ export const createKeyConfirmations = ({ eventLog, settings, trail }: KeyConfirm
 						new Date(settings.clock.now()),
 					]);
 					if (rows.length > 0) {
-						await record(confirmationEvent(key));
+						await record(confirmationEvent(key, sourceIp));
 					}
 				},
 				deadline === undefined ? {} : { deadline },
@@ -86,13 +87,13 @@ export const createKeyConfirmations = ({ eventLog, settings, trail }: KeyConfirm
 	};
 
 	return {
-		confirm: (key, deadline) => {
+		confirm: (key, sourceIp, deadline) => {
 			if (confirmed.has(key.keyId)) {
 				return Promise.resolve();
 			}
 			const pending =
 				writing.get(key.keyId) ??
-				write(key, deadline).finally(() => {
+				write(key, sourceIp, deadline).finally(() => {
 					writing.delete(key.keyId);
 				});
 			writing.set(key.keyId, pending);

@@ -183,13 +183,17 @@ suite('the retention sweep', () => {
 		assert.equal(trail.transactions.length, 2);
 	});
 
-	test("takes its lock, deletes at most 1,000 exchanged sessions expired before the configured clock's now, then at most 1,000 sign-outs of each table expired more than the clock tolerance before it, then trims at most 1,000 notices, in one transaction as the system within the store timeout", async (context) => {
+	test("takes its lock, deletes at most 1,000 exchanged sessions expired before the configured clock's now, then at most 1,000 sign-outs of each table, then 1,000 grant operations and 1,000 used channel assertions expired more than the clock tolerance before it, then trims at most 1,000 notices, in one transaction as the system within the store timeout", async (context) => {
 		context.mock.timers.enable({ apis: ['setTimeout'] });
 		const trail = fakeTrail();
 		const collected = collectingLog();
 		const sweep = sweepFor(context, trail, collected.log);
 		const deletionOf = (table: string, cutoff: Date): Statement => ({
 			text: `DELETE FROM "usher"."${table}" WHERE ctid IN (SELECT ctid FROM "usher"."${table}" WHERE "expires_at" < $1 LIMIT $2)`,
+			values: [cutoff, RETENTION_SWEEP_ROWS_PER_TABLE],
+		});
+		const usedAssertionDeletion = (cutoff: Date): Statement => ({
+			text: `DELETE FROM "usher"."used_channel_assertions" WHERE ctid IN (SELECT ctid FROM "usher"."used_channel_assertions" WHERE "accepted_until" < $1 LIMIT $2)`,
 			values: [cutoff, RETENTION_SWEEP_ROWS_PER_TABLE],
 		});
 		const signOutCutoff = new Date(CONFIGURED_NOW - CLOCK_TOLERANCE_MILLISECONDS);
@@ -203,7 +207,8 @@ suite('the retention sweep', () => {
 		assert.deepEqual(transaction?.actor, { type: 'system' });
 		assert.equal(transaction?.options, undefined);
 		assert.deepEqual(transaction?.recorded, []);
-		const [lock, sessions, sidSignOuts, subjectSignOuts, trim, ...beyond] = transaction?.statements ?? [];
+		const [lock, sessions, sidSignOuts, subjectSignOuts, grantOperations, usedAssertions, trim, ...beyond] =
+			transaction?.statements ?? [];
 		assert.deepEqual(lock, {
 			text: 'SELECT pg_try_advisory_xact_lock($1) AS locked',
 			values: [RETENTION_SWEEP_LOCK],
@@ -211,6 +216,8 @@ suite('the retention sweep', () => {
 		assert.deepEqual(sessions, deletionOf('exchanged_sids', new Date(CONFIGURED_NOW)));
 		assert.deepEqual(sidSignOuts, deletionOf('sid_sign_outs', signOutCutoff));
 		assert.deepEqual(subjectSignOuts, deletionOf('subject_sign_outs', signOutCutoff));
+		assert.deepEqual(grantOperations, deletionOf('grant_operations', signOutCutoff));
+		assert.deepEqual(usedAssertions, usedAssertionDeletion(signOutCutoff));
 		assert.deepEqual(trim, {
 			text: 'SELECT "usher"."trim_notices"($1::integer)',
 			values: [RETENTION_SWEEP_ROWS_PER_TABLE],
@@ -232,7 +239,7 @@ suite('the retention sweep', () => {
 
 		assert.deepEqual(
 			trail.transactions.map(({ statements }) => statements.map(({ text }) => text.split(' ')[0])),
-			[['SELECT'], ['SELECT', 'DELETE', 'DELETE', 'DELETE', 'SELECT']],
+			[['SELECT'], ['SELECT', 'DELETE', 'DELETE', 'DELETE', 'DELETE', 'DELETE', 'SELECT']],
 		);
 		assert.deepEqual(collected.lines, []);
 	});
@@ -329,7 +336,7 @@ suite('the retention sweep', () => {
 		assert.equal(trail.transactions.length, 1);
 		assert.deepEqual(
 			trail.transactions[0]?.statements.map(({ text }) => text.split(' ')[0]),
-			['SELECT', 'DELETE', 'DELETE', 'DELETE', 'SELECT'],
+			['SELECT', 'DELETE', 'DELETE', 'DELETE', 'DELETE', 'DELETE', 'SELECT'],
 		);
 	});
 

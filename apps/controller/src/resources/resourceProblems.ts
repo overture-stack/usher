@@ -53,7 +53,6 @@ export const RESOURCE_PROBLEMS = Object.freeze({
 		'Owner named twice',
 		'owners names each person once, by one subject or one address.',
 	),
-	pageSizeTooSmall: problem('pageSizeTooSmall', 422, 'Page size too small', 'limit is a whole number of at least 1.'),
 	resourceNotFound: STANDING_PROBLEMS.resourceNotFound,
 	retiredListedToAdministrators: problem(
 		'administratorOnly',

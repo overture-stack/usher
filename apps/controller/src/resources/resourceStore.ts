@@ -1,7 +1,13 @@
 import pg from 'pg';
 
 import type { StoreReader } from '../managementApi/index.js';
-import { type ResourceStanding, standingColumns } from '../resourceStanding/index.js';
+import {
+	countedOwnerCondition,
+	latestDecisionOf,
+	liveGrantCondition,
+	type ResourceStanding,
+	standingColumns,
+} from '../resourceStanding/index.js';
 import type { ListingQuery, Registration, StoredResource } from './types.js';
 
 // An id as the store generates one; any other text names no application, and is never sent to the
@@ -30,8 +36,9 @@ const tableIn =
 const isApplicationIdForm = (id: string): boolean => UUID.test(id);
 
 // Every member of a resource's answer, each principal named by the subject of the identity that
-// acted, the trusted issuer's ($1) first. Each list is sorted, so two reads of one resource agree.
-const resourceColumns = (schema: string): string => {
+// acted, the trusted issuer's ($1) first, and its grant summary at the configured clock's instant,
+// bound at the placeholder given. Each list is sorted, so two reads of one resource agree.
+const resourceColumns = (schema: string, now: string): string => {
 	const table = tableIn(schema);
 	return `resource.base_tier AS "accessLevel",
           ARRAY(SELECT served.application_id::text FROM ${table('application_resources')} served
@@ -47,6 +54,17 @@ const resourceColumns = (schema: string): string => {
                       FROM ${table('resource_field_values')} held
                       JOIN ${table('resource_fields')} field ON field.id = held.field_id
                      WHERE held.resource_id = resource.id), '{}'::json) AS fields,
+          coalesce((SELECT json_object_agg(counted.role, counted.holders
+                                           ORDER BY counted.role COLLATE "C")
+                      FROM (SELECT role.name AS role,
+                                   count(DISTINCT held.holder_user_id)::int AS holders
+                              FROM ${table('grants')} held
+                              JOIN ${table('roles')} role ON role.id = held.role_id
+                             WHERE held.resource_id = resource.id
+                               AND held.holder_user_id IS NOT NULL
+                               AND ${liveGrantCondition('held', now)}
+                               AND ${latestDecisionOf(schema, 'held')} = 'accepted'
+                             GROUP BY role.name) counted), '{}'::json) AS "grantSummary",
           resource.registered_at AS "registeredAt",
           (SELECT identity.idp_subject_id FROM ${table('user_identities')} identity
             WHERE identity.user_id = resource.registered_by
@@ -74,7 +92,7 @@ export const readResource = async (
 	{ externalId, issuer, now, subject }: { externalId: string; issuer: string; now: Date; subject: string },
 ): Promise<(ResourceStanding & StoredResource) | undefined> => {
 	const { rows } = await store.query<ResourceStanding & StoredResource>(
-		`SELECT ${resourceColumns(schema)},
+		`SELECT ${resourceColumns(schema, '$3::timestamptz')},
             resource.id::text AS id,
             ${standingColumns(schema, {
 				issuer: '$1::text',
@@ -89,30 +107,50 @@ export const readResource = async (
 };
 
 /**
- * Reads one page of every resource, in the stable order of their externalIds in any letter case,
- * starting after the externalId the query names, retired ones left out unless the query asks for
- * them. One resource more than the page holds is read, so the caller can tell whether another page
- * follows.
+ * Reads one page of the resources listed, in the stable order of their externalIds in any letter
+ * case, starting after the externalId the query names, retired ones left out unless the query asks
+ * for them: every resource, or, where an owner is named, those the person holding the owner's
+ * identity under the trusted issuer is a counted owner of at the configured clock's instant. One
+ * resource more than the page holds is read, so the caller can tell whether another page follows.
  *
  * @param store where they are read.
  * @param schema the Controller's schema.
- * @param issuer the trusted issuer, whose identity names a principal holding several.
- * @param query where the page starts, its size, and whether it lists retired resources.
+ * @param query where the page starts, its size, and whether it lists retired resources, with the
+ *   trusted issuer, whose identity names a principal holding several, the configured clock's instant,
+ *   and the owner's subject or none, naming the owner whose resources are listed.
  */
 export const readResourcePage = async (
 	store: StoreReader,
 	schema: string,
-	issuer: string,
-	{ after, includeRetired, limit }: ListingQuery,
-): Promise<readonly StoredResource[]> => {
+	{
+		after,
+		includeRetired,
+		issuer,
+		limit,
+		now,
+		ownerSubject,
+	}: ListingQuery & {
+		issuer: string;
+		now: Date;
+		ownerSubject: string | undefined;
+	},
+): Promise<readonly (StoredResource & { id: string })[]> => {
+	const table = tableIn(schema);
 	const key = letterCaseKey('resource.external_id');
-	const { rows } = await store.query<StoredResource>(
-		`SELECT ${resourceColumns(schema)} FROM ${tableIn(schema)('resources')} resource
+	const { rows } = await store.query<StoredResource & { id: string }>(
+		`SELECT ${resourceColumns(schema, '$5::timestamptz')}, resource.id::text AS id
+       FROM ${table('resources')} resource
       WHERE ($2::boolean OR resource.retired_at IS NULL)
         AND ($3::text IS NULL OR ${key} > ${letterCaseKey('$3::text')})
+        AND ($6::text IS NULL OR EXISTS (
+              SELECT 1 FROM ${table('grants')} owned
+                JOIN ${table('user_identities')} owner ON owner.user_id = owned.holder_user_id
+               WHERE owned.resource_id = resource.id
+                 AND owner.idp_issuer = $1 AND owner.idp_subject_id = $6
+                 AND ${countedOwnerCondition(schema, 'owned', '$5::timestamptz')}))
       ORDER BY ${key}
       LIMIT $4`,
-		[issuer, includeRetired, after ?? null, limit + 1],
+		[issuer, includeRetired, after ?? null, limit + 1, now, ownerSubject ?? null],
 	);
 	return rows;
 };

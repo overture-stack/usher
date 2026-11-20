@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
 import type { TestContext } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -16,6 +15,7 @@ import {
 import {
 	AUDIT_EVENT_TYPES,
 	type AuditEventType,
+	type RecordedEventType,
 	type CloudEvent,
 	cloudEventsIn,
 	emittedType,
@@ -26,7 +26,6 @@ import {
 	type Severity,
 } from '../harness/auditEvents.js';
 import { createChannelAssertion, importApplicationKey } from '../peripherals/bridgeWire.js';
-import type { KeycloakRealmOptions } from '../harness/containers.js';
 import {
 	captureLog,
 	type ControllerApplication,
@@ -261,6 +260,12 @@ export interface AuditHarnessOptions {
 	/** The whole fixture: {@link auditPolicy}'s by default. */
 	fixture?: PolicyFixture;
 
+	/**
+	 * Whether the harness writes its applications into the store before its Controller starts, rather
+	 * than registering them through the API: false by default ({@link HarnessOptions.applicationsThroughStore}).
+	 */
+	applicationsThroughStore?: boolean;
+
 	/** A stand-in the test started itself, so the identity provider can fail before the start. */
 	identityProvider?: IdentityProvider;
 
@@ -278,6 +283,7 @@ const harnessOptions = (
 	log: LogCapture,
 	{
 		administratorToken,
+		applicationsThroughStore = false,
 		configuration = {},
 		fixture = auditPolicy(),
 		identityProvider,
@@ -286,6 +292,7 @@ const harnessOptions = (
 ): HarnessOptions => ({
 	...(administratorToken === undefined ? {} : { administratorToken }),
 	applications: [SEARCH_PORTAL, SUBMISSION_PORTAL],
+	applicationsThroughStore,
 	configuration: { logStream: log.stream, ...configuration },
 	fixture,
 	startsController,
@@ -469,7 +476,7 @@ export const eventsIn = (log: LogCapture, since: number = 0): readonly CloudEven
  * @param events the events.
  * @param type the event type, without the prefix.
  */
-export const ofType = (events: readonly CloudEvent[], type: AuditEventType): readonly CloudEvent[] =>
+export const ofType = (events: readonly CloudEvent[], type: RecordedEventType): readonly CloudEvent[] =>
 	events.filter((event) => event.type === emittedType(type));
 
 /** Where a wait reads from, and for how long. */
@@ -508,7 +515,7 @@ export const awaitEvents = async (
  */
 export const awaitEventsOfType = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	{ count = 1, ...options }: AwaitOptions & { count?: number } = {},
 ): Promise<readonly CloudEvent[]> =>
 	ofType(await awaitEvents(log, (events) => ofType(events, type).length >= count, options), type);
@@ -523,7 +530,7 @@ export const awaitEventsOfType = async (
  */
 export const awaitOneEvent = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	options: AwaitOptions = {},
 ): Promise<CloudEvent> => {
 	const [event, ...more] = await awaitEventsOfType(log, type, options);
@@ -542,7 +549,7 @@ export const awaitOneEvent = async (
  */
 export const awaitEventWhere = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	matches: (data: Readonly<Record<string, unknown>>) => boolean,
 	options: AwaitOptions = {},
 ): Promise<CloudEvent> => {
@@ -639,7 +646,7 @@ export const rowDataOf = (row: AuditRow): Readonly<Record<string, unknown>> =>
  * @param client a connection under the migration role.
  * @param type the event type, without the prefix.
  */
-export const auditRowsOfType = async (client: pg.ClientBase, type: AuditEventType): Promise<readonly AuditRow[]> =>
+export const auditRowsOfType = async (client: pg.ClientBase, type: RecordedEventType): Promise<readonly AuditRow[]> =>
 	(await auditRows(client)).filter((row) => row.type === emittedType(type));
 
 /**
@@ -932,45 +939,8 @@ export const untilInstant = async (instant: number): Promise<void> => {
 	}
 };
 
-const freshSecret = (): string => randomBytes(24).toString('base64url');
-
 /** The person a real Keycloak's realm holds as the administrator, signing in through the management client. */
 export const KEYCLOAK_ADMINISTRATOR = Object.freeze({
 	email: 'admin.one@example.org',
 	username: 'admin.one@example.org',
-});
-
-/**
- * A realm for telling a person's token from a service account's on a real Keycloak (#214 Q16): the
- * management client `usher-ui-test`, public, its tokens naming the management API through an audience
- * mapper; `lyric-svc`, confidential with a service account, its tokens naming the management API the
- * same way; and the administrator holding the first-user role, which marks the person the harness
- * seeds as an administrator once signed in.
- *
- * @param options the first-user role and the management API's audience: the harness's by default.
- */
-export const serviceAccountRealm = ({
-	firstUserRole = 'usher-first-user',
-	managementAudience = 'usher-management-test',
-}: {
-	firstUserRole?: string;
-	managementAudience?: string;
-} = {}): KeycloakRealmOptions => ({
-	clients: [
-		{ audiences: [managementAudience], clientId: 'usher-ui-test' },
-		{
-			audiences: [managementAudience],
-			clientId: SERVICE_ACCOUNT.clientId,
-			secret: freshSecret(),
-		},
-	],
-	people: [
-		{
-			...KEYCLOAK_ADMINISTRATOR,
-			password: freshSecret(),
-			realmRoles: [firstUserRole],
-		},
-	],
-	realm: 'usher-test',
-	realmRoles: [firstUserRole],
 });

@@ -14,7 +14,7 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'administratorGrantsNoConsumerAccess',
 		403,
 		"Access to records is the owners' to grant",
-		"A platform administrator grants the submitter and owner roles; any other role on a resource is its owners' to grant.",
+		"A platform administrator grants the submitter and owner roles; any other role on a resource with an owner is its owners' to grant, and to approve when asked for. On a resource without an owner, a platform administrator's grant of any other role is taken as a request another platform administrator decides.",
 	),
 	administratorRoleNotGranted: problem(
 		'administratorRoleNotGranted',
@@ -33,6 +33,12 @@ export const GRANT_PROBLEMS = Object.freeze({
 		409,
 		'Grant already held',
 		'The holder already holds a live grant of this role on this resource and category, whether pending, accepted or declined.',
+	),
+	alreadyRequested: problem(
+		'alreadyRequested',
+		409,
+		'Grant already requested',
+		'You have asked for this grant already, and the request awaits a decision. It lapses at its expiry if nobody decides it, and you may ask again then.',
 	),
 	alreadyRevoked: problem(
 		'doesNotHold',
@@ -58,11 +64,11 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'Category required',
 		"A grant of a data-plane role names the record category it applies to in category; only a submitter's grant may leave it out.",
 	),
-	directoryUnavailable: problem(
-		'directoryUnavailable',
-		503,
-		'Directory unavailable',
-		"A holder named by address is found through the identity provider's directory, which cannot answer now. Name the holder by subject, or try again later.",
+	controlPlaneSelfGrant: problem(
+		'controlPlaneSelfGrant',
+		422,
+		'Control-plane role not self-granted',
+		'A self-grant is of a data-plane role, such as viewer; a control-plane role is granted by someone else, through POST /admin/grants.',
 	),
 	doesNotHold: problem(
 		'doesNotHold',
@@ -84,11 +90,23 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'A grant names its record category alone: leave fieldCategory out.',
 	),
 	grantNotFound: problem('grantNotFound', 404, 'Grant not found', 'No grant you may act on has the id named.'),
+	grantReplaced: problem(
+		'grantReplaced',
+		409,
+		'Grant replaced',
+		'A newer grant on the same terms replaced this one once it had expired: change the newer grant instead.',
+	),
 	grantedByNotTaken: problem(
 		'grantedByNotTaken',
 		422,
 		'Granter not taken',
 		"The caller is the grant's granter: leave grantedBy out.",
+	),
+	holderNotFound: problem(
+		'holderNotFound',
+		404,
+		'Holder not found',
+		'No single account holds the address verified: check the address, or name the holder by subject.',
 	),
 	holderNotOnePerson: problem(
 		'holderNotOnePerson',
@@ -96,12 +114,66 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'Holder not one person',
 		'holder names exactly one person, by subject or by email, and nothing else.',
 	),
+	holderNotTaken: problem(
+		'holderNotTaken',
+		422,
+		'Holder not taken',
+		"A self-grant's holder is the caller: leave holder out.",
+	),
 	noAuthorityOnResource: STANDING_PROBLEMS.noAuthorityOnResource,
+	noHolderOfAddress: problem(
+		'holderNotFound',
+		404,
+		'Holder not found',
+		'No single account holds the address verified: check the address.',
+	),
+	notASubmitter: problem(
+		'doesNotHold',
+		409,
+		'Grant not in force',
+		'The address names no one holding a live submitter grant on this resource.',
+	),
+	orphanedResourceExpiryRequired: problem(
+		'orphanedResourceExpiryRequired',
+		422,
+		'Expiry required on a resource without an owner',
+		'A grant a platform administrator asks for on a resource without an owner keeps an expiry: send expiresAt as an instant.',
+	),
+	orphanedResourceGrantTooLong: problem(
+		'orphanedResourceGrantTooLong',
+		422,
+		'Grant too long for a resource without an owner',
+		"A grant a platform administrator asks for on a resource without an owner ends within the instance's longest self-grant life of its request: name an earlier expiresAt.",
+	),
+	ownRequest: problem(
+		'ownRequest',
+		403,
+		'Own request',
+		'A grant request is decided by someone other than the person who asked for it and its holder: an owner of its resource, or another platform administrator.',
+	),
 	ownerGrantsDoNotExpire: problem(
 		'ownerGrantsDoNotExpire',
 		422,
 		'Owner grants do not expire',
 		'An owner grant lasts until it is revoked: leave expiresAt out.',
+	),
+	requestDecided: problem(
+		'requestDecided',
+		409,
+		'Grant request decided',
+		'The grant request is granted or refused already, and keeps its decision.',
+	),
+	requestLapsed: problem(
+		'requestLapsed',
+		409,
+		'Grant request lapsed',
+		'The grant request reached its expiry undecided, and can no longer be decided. The person who asked for it may ask again.',
+	),
+	requestNotFound: problem(
+		'requestNotFound',
+		404,
+		'Grant request not found',
+		'No grant request you may decide has the id named.',
 	),
 	resourceNeedsAnOwner: problem(
 		'resourceNeedsAnOwner',
@@ -110,11 +182,47 @@ export const GRANT_PROBLEMS = Object.freeze({
 		"This is the resource's last accepted owner grant. Add another owner first, then try again.",
 	),
 	resourceNotFound: STANDING_PROBLEMS.resourceNotFound,
+	revokedGrantUnchanged: problem(
+		'doesNotHold',
+		409,
+		'Grant revoked',
+		'The grant is revoked, and takes no change: create a grant on its terms instead.',
+	),
+	revokedListedToAdministrators: problem(
+		'administratorOnly',
+		403,
+		'For platform administrators alone',
+		'Revoked grants are listed to platform administrators alone: leave includeRevoked out, or send it false.',
+	),
+	roleInOtherPlane: problem(
+		'roleInOtherPlane',
+		422,
+		'Role in the other plane',
+		"A grant's role changes within its plane: a data-plane grant to another data-plane role, keeping its category, and a control-plane grant, such as an owner grant, to another control-plane role, keeping the whole resource.",
+	),
+	selfGrantExpiryRequired: problem(
+		'selfGrantExpiryRequired',
+		422,
+		'Self-grant expiry required',
+		'A self-grant keeps an expiry, and so does a grant its holder extends or widens: send expiresAt as an instant, not null.',
+	),
+	selfGrantTooLong: problem(
+		'selfGrantTooLong',
+		422,
+		'Self-grant too long',
+		"A self-grant ends within the instance's longest self-grant life of its request, and a grant its holder extends or widens within that life of the change: name an earlier expiresAt.",
+	),
 	selfNamed: problem(
 		'selfNamed',
 		422,
 		'Holder is the caller',
 		'This operation grants to someone other than the caller; a principal grants themself through POST /admin/grants/self.',
+	),
+	selfWideningNotPermitted: problem(
+		'selfWideningNotPermitted',
+		403,
+		'Own grant extended or widened',
+		'Only an owner of the resource extends or widens a grant they hold. End it earlier, narrow its role, or ask for a self-grant instead.',
 	),
 	submitterCategoryNotOffered: problem(
 		'categoryNotOffered',
@@ -123,6 +231,7 @@ export const GRANT_PROBLEMS = Object.freeze({
 		"The grant names no category, and the instance's submitter category is not one the store holds: name the category in category.",
 	),
 	unknownDecision: problem('unknownDecision', 422, 'Unknown decision', 'decision is accepted or rejected.'),
+	unknownRequestDecision: problem('unknownDecision', 422, 'Unknown decision', 'decision is granted or refused.'),
 	unknownRevocationReason: problem(
 		'unknownRevocationReason',
 		422,

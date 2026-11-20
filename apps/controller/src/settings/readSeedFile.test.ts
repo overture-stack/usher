@@ -12,6 +12,7 @@ const defaultsWith = (overrides: Readonly<Record<string, unknown>>): Record<stri
 	eventSource: 'usher',
 	firstUser: { realmRole: 'usher-first-user' },
 	grantAutoAccept: false,
+	grantRateThreshold: { operationCount: 10, windowSeconds: 60 },
 	grantRules: SETTING_DEFINITIONS.grantRules.fallback,
 	heartbeatMilliseconds: 10000,
 	issuer: 'https://access.example.org/usher',
@@ -19,6 +20,7 @@ const defaultsWith = (overrides: Readonly<Record<string, unknown>>): Record<stri
 	noticeRereadMilliseconds: 2000,
 	retentionGraceSeconds: 60,
 	retentionMarginSeconds: 30,
+	selfGrantMaximumLifetimeSeconds: 86400,
 	signInTokenMaximumLifetimeSeconds: 300,
 	streamLimitPerAudience: 64,
 	streamMaximumLifetimeSeconds: 900,
@@ -58,6 +60,29 @@ suite('reading the seed file', () => {
 				submitterCategory: 'global.controlled',
 			}),
 		});
+	});
+
+	test('reads a grant rate threshold the file gives, and refuses one breaking its rule', () => {
+		const text = JSON.stringify({
+			eventSource: 'usher',
+			grantRateThreshold: { operationCount: 3, windowSeconds: 45 },
+			issuer: 'https://access.example.org/usher',
+		});
+
+		assert.deepEqual(readSeedFile(text), {
+			kind: 'read',
+			settings: defaultsWith({ grantRateThreshold: { operationCount: 3, windowSeconds: 45 } }),
+		});
+		assert.equal(
+			readSeedFile(
+				JSON.stringify({
+					eventSource: 'usher',
+					grantRateThreshold: { operationCount: 0, windowSeconds: 45 },
+					issuer: 'https://access.example.org/usher',
+				}),
+			).kind,
+			'refused',
+		);
 	});
 
 	test('reads a grant rules list the file gives as it is given', () => {

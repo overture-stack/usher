@@ -3,6 +3,7 @@ import { suite, test, type TestContext } from 'node:test';
 
 import type { FastifyInstance } from 'fastify';
 
+import type { AccountReading, AddressResolution } from '../directory/index.js';
 import type { AuditEvent } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import { createResourceRoutes } from './createResourceRoutes.js';
@@ -16,6 +17,9 @@ const ISSUER = 'https://auth.example.org/realms/usher';
 const APPLICATION_ID = '0b8f7f43-2b4c-4b55-9a39-6c1b7f6f0a11';
 
 interface Stand {
+	/** Each address the directory was asked to resolve, as asked. */
+	lookups: string[];
+
 	/** Each statement the resource operations sent the store outside a transaction. */
 	reads: string[];
 
@@ -26,10 +30,25 @@ interface Stand {
 	transactions: { count: number };
 }
 
-// The resource routes over a store and a trail that answer nothing, each counting what reaches it, and
-// a verifier admitting one platform administrator's token.
-const standUp = (context: TestContext): Stand => {
+/**
+ * The fake directory: the subjects it holds by lower-case address, holding no account by subject,
+ * or how it fails.
+ */
+type DirectoryWorld = Readonly<Record<string, string>> | 'unavailable' | 'unconfigured';
+
+// The subject of the one account holding each address verified, by the address in lower case.
+const ACCOUNTS: Readonly<Record<string, string>> = {
+	'ana@example.org': 'subject-ana',
+	'bo@example.org': 'subject-bo',
+	'root@example.org': 'subject-administrator',
+};
+
+// The resource routes over a store and a trail that answer nothing, each counting what reaches it,
+// a directory answering from the world given, and a verifier admitting one platform administrator's
+// token.
+const standUp = (context: TestContext, directory: DirectoryWorld = ACCOUNTS): Stand => {
 	const stand = {
+		lookups: [] as string[],
 		reads: [] as string[],
 		recorded: [] as AuditEvent[],
 		transactions: { count: 0 },
@@ -41,6 +60,18 @@ const standUp = (context: TestContext): Stand => {
 	});
 	createResourceRoutes(
 		{
+			directory: {
+				accountOf: async (): Promise<AccountReading> =>
+					typeof directory === 'string' ? { kind: directory } : { kind: 'absent' },
+				resolveAddress: async (address): Promise<AddressResolution> => {
+					stand.lookups.push(address);
+					if (typeof directory === 'string') {
+						return { kind: directory };
+					}
+					const subject = directory[address.toLowerCase()];
+					return subject === undefined ? { kind: 'unheld' } : { kind: 'resolved', subject };
+				},
+			},
 			settings: {
 				clock: { now: () => NOW },
 				grantAutoAccept: false,
@@ -200,39 +231,119 @@ suite('the resource routes, for a path parameter holding text that cannot be sto
 	});
 });
 
+// Registers STUDY-N1 at the grant level as the platform administrator, naming the owners given.
+const register = ({ server }: Stand, owners: readonly Readonly<Record<string, string>>[]) =>
+	server.inject({
+		headers: {
+			authorization: 'Bearer administrator',
+			'content-type': 'application/json',
+		},
+		method: 'POST',
+		payload: JSON.stringify({
+			accessLevel: 'grant',
+			displayName: 'Owned study',
+			externalId: 'STUDY-N1',
+			owners,
+		}),
+		url: '/admin/resources',
+	});
+
+// The events recorded, each by its data, its severity and its type.
+const eventsOf = ({ recorded }: Stand) => recorded.map(({ data, severity, type }) => ({ data, severity, type }));
+
 suite('the resource routes, for a registration naming its owners', () => {
-	test('answers a registration naming an owner by address 503 directoryUnavailable, beginning no transaction, and records it denied', async (context) => {
+	test('resolves each owner named by address in turn, as given, before its transaction begins', async (context) => {
 		const stand = standUp(context);
 
-		const answer = await stand.server.inject({
-			headers: {
-				authorization: 'Bearer administrator',
-				'content-type': 'application/json',
+		const answer = await register(stand, [
+			{ email: 'Bo@Example.org' },
+			{ subject: 'subject-cy' },
+			{ email: 'ana@example.org' },
+		]);
+
+		assert.deepEqual(stand.lookups, ['Bo@Example.org', 'ana@example.org']);
+		assert.equal(stand.transactions.count, 1);
+		assert.deepEqual([answer.statusCode, codeOf(answer.body)], [503, 'storeUnavailable']);
+	});
+
+	test('refuses an owner whose address no single account holds 404 holderNotFound, beginning no transaction, and records it denied', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await register(stand, [{ email: 'bo@example.org' }, { email: 'nobody@example.org' }]);
+
+		assert.deepEqual([answer.statusCode, codeOf(answer.body)], [404, 'holderNotFound']);
+		assert.equal(stand.transactions.count, 0);
+		assert.deepEqual(eventsOf(stand), [
+			{
+				data: {
+					reason: 'holderNotFound',
+					result: 'denied',
+					sourceIp: '127.0.0.1',
+				},
+				severity: 'warning',
+				type: 'resource.registration',
 			},
-			method: 'POST',
-			payload: JSON.stringify({
-				accessLevel: 'grant',
-				displayName: 'Owned study',
-				externalId: 'STUDY-N1',
-				owners: [{ subject: 'subject-ana' }, { email: 'owner.bo@example.org' }],
-			}),
-			url: '/admin/resources',
+		]);
+	});
+
+	test('refuses an owner whose address resolves to the caller 403 administratorSelfOwnership, beginning no transaction', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await register(stand, [{ email: 'ROOT@example.org' }]);
+
+		assert.deepEqual([answer.statusCode, codeOf(answer.body)], [403, 'administratorSelfOwnership']);
+		assert.equal(stand.transactions.count, 0);
+	});
+
+	test('refuses one person named twice once addresses are resolved, by a subject and an address or by two addresses, 422 ownerNamedTwice', async (context) => {
+		const stand = standUp(context, {
+			...ACCOUNTS,
+			'ana.alias@example.org': 'subject-ana',
 		});
+
+		const answers = [
+			await register(stand, [{ subject: 'subject-ana' }, { email: 'ana@example.org' }]),
+			await register(stand, [{ email: 'ana.alias@example.org' }, { email: 'ana@example.org' }]),
+		];
+
+		assert.deepEqual(
+			answers.map(({ body, statusCode }) => [statusCode, codeOf(body)]),
+			[
+				[422, 'ownerNamedTwice'],
+				[422, 'ownerNamedTwice'],
+			],
+		);
+		assert.equal(stand.transactions.count, 0);
+	});
+
+	test('answers 503 directoryNotConfigured with no directory configured, telling the caller to name the owner by subject, and records it failed at warning', async (context) => {
+		const stand = standUp(context, 'unconfigured');
+
+		const answer = await register(stand, [{ subject: 'subject-ana' }, { email: 'bo@example.org' }]);
+
+		assert.deepEqual([answer.statusCode, codeOf(answer.body)], [503, 'directoryNotConfigured']);
+		assert.equal(answer.headers['retry-after'], undefined);
+		assert.equal(
+			Reflect.get(JSON.parse(answer.body) as object, 'detail'),
+			'Addresses cannot be resolved without a configured directory, which the variables USHER_DIRECTORY_URL, USHER_DIRECTORY_REALM, USHER_DIRECTORY_CLIENT_ID, USHER_DIRECTORY_CLIENT_SECRET configure; name the owner by subject.',
+		);
+		assert.equal(stand.transactions.count, 0);
+		assert.deepEqual(
+			eventsOf(stand).map(({ data, severity }) => [data['reason'], data['result'], severity]),
+			[['directoryNotConfigured', 'failed', 'warning']],
+		);
+	});
+
+	test('answers 503 directoryUnavailable while the directory cannot answer, beginning no transaction, and records it failed at error', async (context) => {
+		const stand = standUp(context, 'unavailable');
+
+		const answer = await register(stand, [{ email: 'bo@example.org' }]);
 
 		assert.deepEqual([answer.statusCode, codeOf(answer.body)], [503, 'directoryUnavailable']);
 		assert.equal(stand.transactions.count, 0);
 		assert.deepEqual(
-			stand.recorded.map(({ data, type }) => ({ data, type })),
-			[
-				{
-					data: {
-						reason: 'directoryUnavailable',
-						result: 'denied',
-						sourceIp: '127.0.0.1',
-					},
-					type: 'resource.registration',
-				},
-			],
+			eventsOf(stand).map(({ data, severity }) => [data['reason'], data['result'], severity]),
+			[['directoryUnavailable', 'failed', 'error']],
 		);
 	});
 

@@ -9,6 +9,8 @@ suite('the applications module', () => {
 			'createApplicationKeyCipher',
 			'createApplicationRoutes',
 			'findApplication',
+			'insertApplication',
+			'insertKey',
 		]);
 	});
 });

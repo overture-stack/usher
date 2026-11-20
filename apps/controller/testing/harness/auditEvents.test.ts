@@ -65,7 +65,7 @@ const FIXTURE = [
 	'',
 	'| Event type | Description | Actor | Affected entity | Additional required fields | Severity |',
 	'| --- | --- | --- | --- | --- | --- |',
-	'| `token.exchange` | Usher token issued, or refused | User | Usher token | `userId`, `result`; on success `tokenTtl` and `rules` (the names of the rules); on refusal `reason` | follows `result` |',
+	'| `token.exchange` | Usher token issued, or refused | User | Usher token | `result`; on success `tokenTtl` and `rules` (the names of the rules); on refusal `reason` | follows `result` |',
 	'| `grant.revocation` | Category grant revoked | Custodian, owner or admin | User + category | `actorId`, `grantId`, `reason`; `causedBy` when a retirement ended it | `info` |',
 	'| `resource.orphaned` | Resource has no owner | System | Resource | `resourceId`, `lastOwnerId` | `critical` |',
 	'| `grant.unguarded` | A grant took effect without a custodian |  |  |  |  |',
@@ -243,6 +243,47 @@ suite("reading audit-events.md's Events table", () => {
 		});
 	});
 
+	test("reads an each clause's names as the members of each entry of the field before it, that field carried always", () => {
+		assert.deepEqual(fieldSetsIn('`changes`, each `name`, `value` and `previousValue`'), {
+			always: ['changes'],
+			conditional: [],
+			entryMembers: [{ entries: 'changes', names: ['name', 'value', 'previousValue'] }],
+			onRefusal: [],
+			onSuccess: [],
+		});
+	});
+
+	test("reads the real table's each clauses as the members of each entry, and a clause of other words as naming no field", () => {
+		const fieldsOf = (event: string) => readAuditEvents().find(({ event: name }) => name === event)?.fields;
+
+		assert.deepEqual(fieldsOf(AUDIT_EVENT_TYPES.settingsChange), {
+			always: ['changes'],
+			conditional: [],
+			entryMembers: [{ entries: 'changes', names: ['name', 'value', 'previousValue'] }],
+			onRefusal: ['reason'],
+			onSuccess: [],
+		});
+		assert.deepEqual(fieldsOf(AUDIT_EVENT_TYPES.identityProviderConfigurationChange), {
+			always: ['changes'],
+			conditional: [],
+			entryMembers: [{ entries: 'changes', names: ['name', 'value', 'previousValue'] }],
+			onRefusal: [],
+			onSuccess: [],
+		});
+		assert.deepEqual(fieldsOf(AUDIT_EVENT_TYPES.settingsSeeding), {
+			always: ['settings', 'seededFrom'],
+			conditional: [],
+			onRefusal: [],
+			onSuccess: [],
+		});
+		assert.deepEqual(fieldsOf(AUDIT_EVENT_TYPES.grantRulesChange), {
+			always: ['grantRules', 'previousGrantRules'],
+			conditional: [],
+			onRefusal: ['reason'],
+			onSuccess: [],
+		});
+	});
+
 	test('reads a condition named inside a list as carrying only the names before its when or for, in any clause, and a name after it as part of the condition', () => {
 		assert.deepEqual(
 			fieldSetsIn(
@@ -285,7 +326,7 @@ suite("reading audit-events.md's Events table", () => {
 					actor: { kind: 'roles', roles: ['user'] },
 					event: 'token.exchange',
 					fields: {
-						always: ['userId', 'result'],
+						always: ['result'],
 						conditional: [],
 						onRefusal: ['reason'],
 						onSuccess: ['tokenTtl', 'rules'],
@@ -830,6 +871,7 @@ suite("the controller's events, as the document registers them", () => {
 		);
 		assert.deepEqual(Object.values(FAULT_REASONS).toSorted(), [
 			'cacheUnavailable',
+			'directoryNotConfigured',
 			'directoryUnavailable',
 			'identityProviderUnavailable',
 			'storeUnavailable',
@@ -866,6 +908,7 @@ suite("the controller's events, as the document registers them", () => {
 			'reusedAssertion',
 			'unknownApplication',
 			'unreadableAssertion',
+			'unrepresentableJti',
 		]);
 	});
 });

@@ -29,6 +29,7 @@ import {
 } from '../../testing/fixtures/database.js';
 import {
 	DEFAULT_FIXTURE_ISSUER,
+	GRANT_OPERATIONS,
 	inTransactionAs,
 	inTurn,
 	NOTICE_KINDS,
@@ -37,6 +38,7 @@ import {
 	qualified,
 	seededId,
 	SELF_GRANT_NOTIFICATION,
+	SELF_GRANT_REQUEST,
 	SYSTEM_ACTOR,
 } from '../../testing/harness/policy.js';
 
@@ -51,6 +53,7 @@ const {
 	exchangedSids,
 	globalRevocations,
 	grantDecisions,
+	grantRequests,
 	grants,
 	groups,
 	invitations,
@@ -66,6 +69,7 @@ const {
 	schemaMigrations,
 	sidSignOuts,
 	subjectSignOuts,
+	usedChannelAssertions,
 	userIdentities,
 	users,
 } = POLICY_TABLES;
@@ -81,6 +85,8 @@ const UUID_KEYED_TABLES = [
 	changeRecords,
 	globalRevocations,
 	grantDecisions,
+	GRANT_OPERATIONS,
+	grantRequests,
 	grants,
 	groups,
 	invitations,
@@ -200,6 +206,19 @@ suite("the schema's shape", () => {
 					[globalRevocations.columns.revokedBy]: steward,
 				}),
 			);
+			await inTurn([1, 2], (days) =>
+				insertRow(owner, grantRequests, {
+					[grantRequests.columns.capabilities]: ['record.view'],
+					[grantRequests.columns.expiresAt]: new Date(Date.now() + days * 86_400_000),
+					[grantRequests.columns.holderUserId]: seededId(seeded.users, 'cy'),
+					[grantRequests.columns.kind]: SELF_GRANT_REQUEST,
+					[grantRequests.columns.recordCategoryId]: seededId(seeded.categories, 'controlled'),
+					[grantRequests.columns.requestedAt]: new Date(),
+					[grantRequests.columns.requestedBy]: seededId(seeded.users, 'cy'),
+					[grantRequests.columns.resourceId]: seededId(seeded.resources, 'STUDY-A1'),
+					[grantRequests.columns.roleId]: seededId(seeded.roles, 'viewer'),
+				}),
+			);
 			await insertRow(owner, auditLog, auditEntryRow({ grantId }));
 			await insertRow(owner, auditLog, auditEntryRow({ grantId: steward }));
 			await inTurn(
@@ -225,6 +244,14 @@ suite("the schema's shape", () => {
 					[notificationOutbox.columns.grantId]: grantId,
 					[notificationOutbox.columns.kind]: SELF_GRANT_NOTIFICATION,
 					[notificationOutbox.columns.recipientUserId]: seededId(seeded.users, name),
+				}),
+			);
+			await inTurn(['subject-ana', 'subject-bo'], (subject) =>
+				insertRow(owner, GRANT_OPERATIONS, {
+					[GRANT_OPERATIONS.columns.expiresAt]: new Date(Date.now() + 60_000),
+					[GRANT_OPERATIONS.columns.idpIssuer]: DEFAULT_FIXTURE_ISSUER,
+					[GRANT_OPERATIONS.columns.idpSubjectId]: subject,
+					[GRANT_OPERATIONS.columns.occurredAt]: new Date(),
 				}),
 			);
 		});
@@ -280,6 +307,15 @@ suite("the schema's shape", () => {
 			exchangedSids: [[exchangedSids.columns.expiresAt, 57]],
 			globalRevocations: [[globalRevocations.columns.revokedAt, 35]],
 			grantDecisions: [[grantDecisions.columns.decidedAt, 15]],
+			grantOperations: [
+				[GRANT_OPERATIONS.columns.expiresAt, 39],
+				[GRANT_OPERATIONS.columns.occurredAt, 38],
+			],
+			grantRequests: [
+				[grantRequests.columns.decidedAt, 36],
+				[grantRequests.columns.expiresAt, 37],
+				[grantRequests.columns.requestedAt, 34],
+			],
 			grants: [
 				[grants.columns.endedAt, 52],
 				[grants.columns.expiresAt, 50],
@@ -317,6 +353,7 @@ suite("the schema's shape", () => {
 				[subjectSignOuts.columns.expiresAt, 59],
 				[subjectSignOuts.columns.signedOutAt, 41],
 			],
+			usedChannelAssertions: [[usedChannelAssertions.columns.acceptedUntil, 47]],
 			userIdentities: [[userIdentities.columns.addedAt, 6]],
 			users: [[users.columns.createdAt, 0]],
 		} as const;
@@ -388,6 +425,18 @@ suite("the schema's shape", () => {
 				...decisionRow({ decision: 'accepted', grantId, userId }),
 				...timed(times.grantDecisions),
 			});
+			const request = await insertRow(toronto, grantRequests, {
+				[grantRequests.columns.capabilities]: ['record.view'],
+				[grantRequests.columns.decidedBy]: steward,
+				[grantRequests.columns.decision]: 'refused',
+				[grantRequests.columns.holderUserId]: userId,
+				[grantRequests.columns.kind]: SELF_GRANT_REQUEST,
+				[grantRequests.columns.recordCategoryId]: categoryId,
+				[grantRequests.columns.requestedBy]: userId,
+				[grantRequests.columns.resourceId]: resourceId,
+				[grantRequests.columns.roleId]: roleId,
+				...timed(times.grantRequests),
+			});
 			const revocation = await insertRow(toronto, principalRevocations, {
 				...revocationRow({
 					lifted: { at: new Date(), by: steward },
@@ -431,6 +480,11 @@ suite("the schema's shape", () => {
 				[subjectSignOuts.columns.idpSubjectId]: 'instant-probe-subject',
 				...timed(times.subjectSignOuts),
 			});
+			await insertRow(toronto, usedChannelAssertions, {
+				[usedChannelAssertions.columns.applicationId]: application[applications.columns.id] ?? null,
+				[usedChannelAssertions.columns.assertionId]: 'instant-probe-assertion',
+				...timed(times.usedChannelAssertions),
+			});
 			const globalRevocation = await insertRow(toronto, globalRevocations, {
 				[globalRevocations.columns.reasonCode]: 'securityIncident',
 				[globalRevocations.columns.revokedBy]: steward,
@@ -453,6 +507,11 @@ suite("the schema's shape", () => {
 				[inRepeatedHour(46)],
 			);
 			await toronto.query('COMMIT');
+			const grantOperation = await insertRow(toronto, GRANT_OPERATIONS, {
+				[GRANT_OPERATIONS.columns.idpIssuer]: DEFAULT_FIXTURE_ISSUER,
+				[GRANT_OPERATIONS.columns.idpSubjectId]: 'instant-probe-subject',
+				...timed(times.grantOperations),
+			});
 			return [
 				{
 					columns: times.users,
@@ -509,6 +568,12 @@ suite("the schema's shape", () => {
 					table: grantDecisions,
 				},
 				{
+					columns: times.grantRequests,
+					key: grantRequests.columns.id,
+					keyValue: request[grantRequests.columns.id],
+					table: grantRequests,
+				},
+				{
 					columns: times.principalRevocations,
 					key: principalRevocations.columns.id,
 					keyValue: revocation[principalRevocations.columns.id],
@@ -551,6 +616,12 @@ suite("the schema's shape", () => {
 					table: subjectSignOuts,
 				},
 				{
+					columns: times.usedChannelAssertions,
+					key: usedChannelAssertions.columns.assertionId,
+					keyValue: 'instant-probe-assertion',
+					table: usedChannelAssertions,
+				},
+				{
 					columns: times.identityProviderConfiguration,
 					key: identityProviderConfiguration.columns.name,
 					keyValue: 'managementAudience',
@@ -585,6 +656,12 @@ suite("the schema's shape", () => {
 					key: administrators.columns.userId,
 					keyValue: userId,
 					table: administrators,
+				},
+				{
+					columns: times.grantOperations,
+					key: GRANT_OPERATIONS.columns.id,
+					keyValue: grantOperation[GRANT_OPERATIONS.columns.id],
+					table: GRANT_OPERATIONS,
 				},
 			];
 		});

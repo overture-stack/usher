@@ -197,7 +197,11 @@ suite("each application's admission share, against the store", () => {
 		await withHarness(
 			{
 				...APPLICATION_SUITE,
-				configuration: { databaseExchangeConnections: EXCHANGE_CONNECTIONS },
+				configuration: {
+					databaseExchangeConnections: EXCHANGE_CONNECTIONS,
+					// Longer than each hold here: a request waiting out one succeeds, or the exchange deadline answers.
+					storeTimeoutMilliseconds: 15_000,
+				},
 			},
 			async (harness) => {
 				const { migration } = harness.clients;
@@ -318,7 +322,11 @@ suite("each application's admission share, against the store", () => {
 		await withHarness(
 			{
 				...APPLICATION_SUITE,
-				configuration: { databaseExchangeConnections: EXCHANGE_CONNECTIONS },
+				configuration: {
+					databaseExchangeConnections: EXCHANGE_CONNECTIONS,
+					// Longer than each hold here: a request waiting out one succeeds, or the exchange deadline answers.
+					storeTimeoutMilliseconds: 15_000,
+				},
 			},
 			async (harness) => {
 				const { migration } = harness.clients;
@@ -366,7 +374,11 @@ suite("the controller's store pools, against the store", () => {
 		await withHarness(
 			{
 				applications: ['Held exchanges'],
-				configuration: { databaseExchangeConnections: EXCHANGE_CONNECTIONS },
+				configuration: {
+					databaseExchangeConnections: EXCHANGE_CONNECTIONS,
+					// Longer than each hold here: a request waiting out one succeeds, or the exchange deadline answers.
+					storeTimeoutMilliseconds: 15_000,
+				},
 			},
 			async (harness) => {
 				const { migration } = harness.clients;
@@ -408,7 +420,13 @@ suite("the controller's store pools, against the store", () => {
 
 	test("with the stream route's recording cap full and the store slowed, a Management API revocation completes", async (context) => {
 		await withHarness(
-			{ applications: ['Refused on the stream'] },
+			{
+				applications: ['Refused on the stream'],
+				configuration: {
+					// Longer than the hold on the recordings: each recording waits it out and is written after release.
+					storeTimeoutMilliseconds: 15_000,
+				},
+			},
 			async (harness) => {
 				const { migration } = harness.clients;
 				const application = harness.application('Refused on the stream');

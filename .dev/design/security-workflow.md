@@ -675,14 +675,15 @@ propagation design above holds because revocation state lives in PostgreSQL and 
 Anything held by one Controller instance alone weakens as instances are added, quietly, in
 proportion to how far the platform scaled.
 
-- **The grant rate, compared by `grant.rateExceeded` against `grantRateThreshold`.** Counted per
-  instance, thirty operations across three instances read as ten each, and a threshold of twenty
-  never fires. That is the primary detection signal for a custodian acting at scale, so it weakens
-  exactly where scale makes the misuse worth detecting. **Recommended: derive it from the audit
-  table rather than keeping a counter.** The events are already written there, the window is a
-  `WHERE` clause, and a derived count cannot disagree with the audit trail it summarizes. Valkey
-  would be faster and would introduce a counter that can. The cost is one query per grant operation,
-  on a control-plane write path where operations are rare.
+- **The grant rate, compared by `grant.rateExceeded` against `grantRateThreshold`.** It is the
+  primary detection signal for a custodian acting at scale, so a count kept per instance would
+  weaken it exactly where scale makes the misuse worth detecting: thirty operations across three
+  instances would read as ten each, and a threshold of twenty would never fire. The count is kept in
+  the store instead, one row in `grant_operations` for each grant write, refused and failed ones
+  included, so every instance sharing the store counts alike; a transaction-scoped advisory lock per
+  actor makes two counts of one actor run in turn. Each row expires once the window in force when it
+  was written has passed, and the retention sweep deletes it. The cost is two statements per grant
+  write, on a control-plane write path where writes are rare.
 - **The fast path's one marker.** There is no per-principal timestamp and no category version; the
   payload cache is shared state by design, deleted per principal and cleared by a category change.
   Read as a scaling question this is the same question as the one above, and the answer is why it

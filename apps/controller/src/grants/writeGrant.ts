@@ -1,5 +1,70 @@
 import type { AuditEvent } from '../eventLog/index.js';
-import type { GrantStore, StoredRole, ViewedGrant } from './types.js';
+import type { GrantStore, GrantTerms, StoredDecision, StoredRole, ViewedGrant } from './types.js';
+
+/** One grant to place on its terms, once its holder's person is known. */
+export interface GrantToPlace {
+	/**
+	 * What the holder's acceptance, written with the grant, shows them; none for a grant written
+	 * pending.
+	 */
+	acceptance: readonly string[] | undefined;
+
+	/** None for a grant that never expires. */
+	expiresAt: Date | null;
+
+	/** The configured clock's instant, when it is granted. */
+	grantedAt: Date;
+
+	/** The granter's person. */
+	grantedBy: string;
+
+	/** The principal who asked for the grant in a request; `null` for any other grant. */
+	requestedBy: string | null;
+
+	terms: GrantTerms;
+}
+
+/**
+ * Places one grant in a change's transaction: ends the grant on its terms that has expired, if one
+ * has; writes the grant, unless its holder holds one on its terms that is neither revoked nor
+ * ended; and appends its holder's acceptance, where one is given, at the grant's instant.
+ *
+ * @param store the grant store, on the change's connection.
+ * @param grant what to place.
+ * @returns the grant's id and its holder's acceptance, or `undefined` when its holder holds one on
+ *   its terms already.
+ */
+export const placeGrant = async (
+	store: GrantStore,
+	{ acceptance, expiresAt, grantedAt, grantedBy, requestedBy, terms }: GrantToPlace,
+): Promise<{ decision: StoredDecision | null; id: string } | undefined> => {
+	await store.endExpiredGrant(terms, grantedAt);
+	const id = await store.insertGrant({
+		...terms,
+		expiresAt,
+		grantedAt,
+		grantedBy,
+		requestedBy,
+	});
+	if (id === undefined) {
+		return undefined;
+	}
+	const decision =
+		acceptance === undefined
+			? null
+			: {
+					capabilities: acceptance,
+					decidedAt: await store.appendDecision({
+						capabilities: acceptance,
+						decision: 'accepted',
+						grantId: id,
+						now: grantedAt,
+						userId: terms.holderUserId,
+					}),
+					decision: 'accepted' as const,
+				};
+	return { decision, id };
+};
 
 /** One grant to write, as its creation names it once every rule of it is judged. */
 export interface GrantToWrite {
@@ -50,35 +115,23 @@ export const writeGrant = async (
 	{ autoAccept, category, expiresAt, grantedAt, granter, holderSubject, resource, role, sourceIp }: GrantToWrite,
 ): Promise<ViewedGrant | undefined> => {
 	const holderUserId = await store.findOrRecordPerson(holderSubject, grantedAt);
-	const terms = {
-		holderUserId,
-		recordCategoryId: category?.id ?? null,
-		resourceId: resource.id,
-		roleId: role.id,
-	};
-	await store.endExpiredGrant(terms, grantedAt);
-	const id = await store.insertGrant({
-		...terms,
+	const placed = await placeGrant(store, {
+		acceptance: autoAccept ? role.capabilities : undefined,
 		expiresAt,
 		grantedAt,
 		grantedBy: granter.userId,
+		requestedBy: null,
+		terms: {
+			holderUserId,
+			recordCategoryId: category?.id ?? null,
+			resourceId: resource.id,
+			roleId: role.id,
+		},
 	});
-	if (id === undefined) {
+	if (placed === undefined) {
 		return undefined;
 	}
-	const decision = autoAccept
-		? {
-				capabilities: role.capabilities,
-				decidedAt: await store.appendDecision({
-					capabilities: role.capabilities,
-					decision: 'accepted',
-					grantId: id,
-					now: grantedAt,
-					userId: holderUserId,
-				}),
-				decision: 'accepted' as const,
-			}
-		: null;
+	const { decision, id } = placed;
 	await record({
 		data: {
 			category: category?.scopedName ?? null,

@@ -131,9 +131,12 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * is the code answered, or the reason the operation gives in its place, as where a `404` stands in
  * for a refusal of authority. It names what the operation reads the request to name, from the path
  * and from a body read as an object holding no text that cannot be stored. A failure of the store
- * answers 503 and records the event `failed`, at error, naming the same. A change whose `COMMIT`
- * the store did not confirm answers 503 `outcomeUnknown` and records nothing more, since it may
- * have been made. Text that cannot be stored, in the token's subject or session, in a path
+ * answers 503 and records the event `failed`, at error, naming the same; so does a dependency
+ * beyond the store that the operation answers unavailable, answered with its own problem and
+ * recorded with its code as the reason, running no step after a commit. The transaction recording a
+ * refusal's or a failure's event runs the work the event names to run with it. A change whose
+ * `COMMIT` the store did not confirm answers 503 `outcomeUnknown` and records nothing more, since
+ * it may have been made. Text that cannot be stored, in the token's subject or session, in a path
  * parameter, or anywhere in the body, is refused 400 before any transaction begins, a path
  * parameter's before the query and the body are read. A refusal of a request whose path parameter
  * cannot be stored names no entity, so its event is recorded without the operation being asked what
@@ -168,14 +171,22 @@ export const managementRoute = <Input>(
 		},
 	): Promise<void> => {
 		if (operation.event !== undefined) {
+			const { recordedWith, type } = operation.event;
+			const asked = { body, params: paramsOf(request) };
 			const named: EventMembers = holdsStorablePath(request)
-				? await operation.event.named({ body, params: paramsOf(request) }).catch(() => ({}))
+				? await operation.event.named(asked).catch(() => ({}))
 				: {};
-			await trail.recordEvent(actorOf(principal), {
-				data: { ...named, reason, result, sourceIp: request.ip },
-				severity,
-				type: operation.event.type,
-			});
+			await trail.recordEvent(
+				actorOf(principal),
+				{
+					data: { ...named, reason, result, sourceIp: request.ip },
+					severity,
+					type: typeof type === 'function' ? type(asked) : type,
+				},
+				recordedWith === undefined
+					? undefined
+					: (transaction) => recordedWith(transaction, principal, request.ip),
+			);
 		}
 	};
 
@@ -460,6 +471,15 @@ export const managementRoute = <Input>(
 			if (outcome.kind === 'answered') {
 				await runAfterCommit(operation.afterCommit ?? []);
 				return answer(reply, outcome);
+			}
+			if (outcome.kind === 'unavailable') {
+				await recordOperationEvent(request, principal, {
+					body,
+					reason: outcome.problem.code,
+					result: 'failed',
+					severity: outcome.severity ?? 'error',
+				});
+				return sendProblem(reply, outcome.problem);
 			}
 			return refuse(request, reply, principal, {
 				body,

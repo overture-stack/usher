@@ -1,5 +1,6 @@
 import type pg from 'pg';
 
+import type { Directory } from '../directory/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
 import type { NamedHolder } from '../grants/index.js';
 import type { StoreReader } from '../managementApi/index.js';
@@ -67,6 +68,12 @@ export interface StoredResource {
 	/** Its values, by resource field name. */
 	fields: Readonly<Record<string, string>>;
 
+	/**
+	 * How many people hold each role on it by a grant that is live and that their latest answer
+	 * accepted, each person counted once per role; a role nobody holds so is left out.
+	 */
+	grantSummary: Readonly<Record<string, number>>;
+
 	registeredAt: Date;
 
 	/** The subject of the identity that registered it. */
@@ -79,6 +86,12 @@ export interface StoredResource {
 
 /** What the resource operations are created from. */
 export interface ResourceOperationsSettings {
+	/**
+	 * Where an address naming a registration's owner is resolved to the subject of its account, and
+	 * where an administrator's listing reads each holder it names.
+	 */
+	directory: Pick<Directory, 'accountOf' | 'resolveAddress'>;
+
 	/**
 	 * Whether an owner grant written at registration is accepted with it, the clock each time written
 	 * is read from, the schema, and the trusted issuer people are found under.

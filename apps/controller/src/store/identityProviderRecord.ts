@@ -106,13 +106,17 @@ export const recordIdentityProvider = async (
 				type: 'identityProvider.configurationChange',
 			});
 		}
-		await Promise.all(
-			updated.map(({ held, name }) =>
-				connection.query(
-					`UPDATE ${pg.escapeIdentifier(settings.databaseSchema)}.identity_provider_configuration SET value = $1, recorded_at = $2 WHERE name = $3`,
-					[JSON.stringify(held), recordedAt, name],
+		// One connection runs one query at a time, so the updates run in turn; a failed update also stops the
+		// rest from being sent, leaving the rollback to run alone.
+		await updated.reduce<Promise<unknown>>(
+			(previous, { held, name }) =>
+				previous.then(() =>
+					connection.query(
+						`UPDATE ${pg.escapeIdentifier(settings.databaseSchema)}.identity_provider_configuration SET value = $1, recorded_at = $2 WHERE name = $3`,
+						[JSON.stringify(held), recordedAt, name],
+					),
 				),
-			),
+			Promise.resolve(),
 		);
 	});
 };

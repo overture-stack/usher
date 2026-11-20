@@ -12,6 +12,7 @@ const STORED: StoredResource = Object.freeze({
 	displayName: 'Wastewater surveillance, Montréal',
 	externalId: 'STUDY-A1',
 	fields: { organization: 'Lakeshore Example Institute' },
+	grantSummary: { owner: 1, viewer: 2 },
 	registeredAt: new Date(Date.UTC(2026, 10, 4, 12, 0, 0, 250)),
 	registeredBy: 'subject-administrator',
 	retired: false,
@@ -20,7 +21,7 @@ const STORED: StoredResource = Object.freeze({
 });
 
 suite('a resource as an answer shows it', () => {
-	test('shows a platform administrator every member, an empty grant summary among them, each instant in UTC with Z and the registrant by subject', () => {
+	test('shows a platform administrator every member, the grant summary among them, each instant in UTC with Z and the registrant by subject', () => {
 		assert.deepEqual(resourceView(STORED, 'administrator'), {
 			accessLevel: 'grant',
 			applications: ['0b8f7f43-2b4c-4b55-9a39-6c1b7f6f0a11'],
@@ -29,7 +30,7 @@ suite('a resource as an answer shows it', () => {
 			displayName: 'Wastewater surveillance, Montréal',
 			externalId: 'STUDY-A1',
 			fields: { organization: 'Lakeshore Example Institute' },
-			grantSummary: {},
+			grantSummary: { owner: 1, viewer: 2 },
 			registeredAt: '2026-11-04T12:00:00.250Z',
 			registeredBy: { subject: 'subject-administrator' },
 			retired: false,
@@ -38,7 +39,7 @@ suite('a resource as an answer shows it', () => {
 		});
 	});
 
-	test("shows a counted owner the administrator's answer, the empty grant summary included", () => {
+	test("shows a counted owner the administrator's answer, the grant summary included", () => {
 		assert.deepEqual(resourceView(STORED, 'owner'), resourceView(STORED, 'administrator'));
 	});
 
@@ -75,5 +76,15 @@ suite('a resource as an answer shows it', () => {
 			),
 			[[null], [null], []],
 		);
+	});
+
+	test("shows a listing entry's grants, as given, beside its grant summary", () => {
+		const grants = [{ id: '6b1f3c2e-8a4d-4f7b-9c1e-2d3a4b5c6d7e', kind: 'grant' }];
+
+		const view = resourceView(STORED, 'administrator', grants);
+
+		const member = (name: string): unknown =>
+			typeof view === 'object' && view !== null ? Reflect.get(view, name) : undefined;
+		assert.deepEqual([member('grants'), member('grantSummary')], [grants, { owner: 1, viewer: 2 }]);
 	});
 });

@@ -165,6 +165,8 @@ suite("a resource's read, by the reader's standing in the store", () => {
 		const listed = listingEntries(administratorListing, "the administrator's listing");
 		assert.ok(listed.length > 0, "the administrator's listing is empty");
 		assert.equal(listed.every(carriesRegistrant), true);
-		assert.deepEqual(listingEntries(ownerListing, "the owner's listing"), []);
+		const ownerListed = listingEntries(ownerListing, "the owner's listing");
+		assert.ok(ownerListed.length > 0, "the owner's listing is empty");
+		assert.equal(ownerListed.every(carriesRegistrant), true);
 	});
 });

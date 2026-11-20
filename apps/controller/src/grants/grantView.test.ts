@@ -31,7 +31,7 @@ const ACCEPTED = {
 } as const;
 
 suite('a grant as an answer shows it', () => {
-	test('shows every member, people by subject, the holder with an account and no address, each instant in UTC with Z', () => {
+	test('shows every member as a grant, people by subject, the holder with an account and no address, each instant in UTC with Z', () => {
 		assert.deepEqual(grantView({ ...PENDING, decision: ACCEPTED, expiresAt: at(3_600_000) }, NOW), {
 			category: 'global.controlled',
 			decision: {
@@ -44,6 +44,7 @@ suite('a grant as an answer shows it', () => {
 			grantedBy: { subject: 'subject-ana' },
 			holder: { hasAccount: true, subject: 'subject-cy' },
 			id: '6b1f3c2e-8a4d-4f7b-9c1e-2d3a4b5c6d7e',
+			kind: 'grant',
 			resource: 'STUDY-A1',
 			revokedAt: null,
 			revokedBy: null,
@@ -74,6 +75,65 @@ suite('a grant as an answer shows it', () => {
 			{ subject: 'subject-administrator' },
 			'revoked',
 		]);
+	});
+});
+
+suite('a grant as a listing shows it', () => {
+	test("shows each person as the listing's naming shows them, and the capabilities given as its first member", () => {
+		const view = grantView(
+			{
+				...PENDING,
+				revokedAt: at(-1000),
+				revokerSubject: 'subject-administrator',
+			},
+			NOW,
+			{
+				capabilities: [
+					{
+						description: null,
+						displayName: 'View records',
+						name: 'record.view',
+					},
+				],
+				naming: {
+					holder: (subject) => ({
+						email: 'cy@example.org',
+						hasAccount: true,
+						subject,
+					}),
+					principal: (subject) => ({ name: `named ${subject}` }),
+				},
+			},
+		);
+
+		const member = (name: string): unknown =>
+			typeof view === 'object' && view !== null ? Reflect.get(view, name) : undefined;
+		assert.deepEqual(
+			{
+				capabilities: member('capabilities'),
+				first: Object.keys(view ?? {})[0],
+				grantedBy: member('grantedBy'),
+				holder: member('holder'),
+				revokedBy: member('revokedBy'),
+			},
+			{
+				capabilities: [
+					{
+						description: null,
+						displayName: 'View records',
+						name: 'record.view',
+					},
+				],
+				first: 'capabilities',
+				grantedBy: { name: 'named subject-ana' },
+				holder: {
+					email: 'cy@example.org',
+					hasAccount: true,
+					subject: 'subject-cy',
+				},
+				revokedBy: { name: 'named subject-administrator' },
+			},
+		);
 	});
 });
 

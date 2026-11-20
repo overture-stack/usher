@@ -10,11 +10,11 @@ import { fileURLToPath } from 'node:url';
 
 import type { MigrationOptions as CommandMigrationOptions, SeedFile } from '../../src/migrations/index.js';
 import type { RecordAction } from '@overture-stack/usher-types';
-import type { GrantRuleAction, GrantRules, Settings } from '../../src/settings/index.js';
+import type { GrantRuleAction, GrantRateThreshold, GrantRules, Settings } from '../../src/settings/index.js';
 
 import type { AuditEventType, Severity } from './auditEvents.js';
 import { type BuiltEntry, builtEntry } from './build.js';
-import type { Actor } from './policy.js';
+import { type Actor, inTurn } from './policy.js';
 
 /** A source of the current time, in milliseconds since the Unix epoch. */
 export interface Clock {
@@ -111,6 +111,33 @@ export interface ControllerSettings {
 	 */
 	databaseUrl: string;
 
+	/**
+	 * The client whose service account the controller's directory signs in as, through the client
+	 * credentials grant (#212, #213 Q1); read while `directoryUrl` names a directory, empty by
+	 * default.
+	 */
+	directoryClientId: string;
+
+	/**
+	 * That client's secret, in a variable of its own, which no refusal, log line, event or answer
+	 * ever shows; read while `directoryUrl` names a directory, empty by default.
+	 */
+	directoryClientSecret: string;
+
+	/**
+	 * The identity provider realm the directory looks people up in, whose token endpoint issues the
+	 * directory's token; read while `directoryUrl` names a directory, empty by default.
+	 */
+	directoryRealm: string;
+
+	/**
+	 * The identity provider's base URL, whose admin API the directory reads
+	 * (`<url>/admin/realms/<realm>`): https, or http to a loopback host. Empty, the default, for
+	 * none, which answers every operation naming a person by address 503 `directoryNotConfigured`. The
+	 * controller starts whatever the directory answers, a refused credential included.
+	 */
+	directoryUrl: string;
+
 	/** The CloudEvents `source` every event carries: one per deployment, the same on every instance (#214). */
 	eventSource: string;
 
@@ -120,6 +147,12 @@ export interface ControllerSettings {
 	 * `USHER_ADMINISTRATOR_ROLE` set is refused, naming this setting's variable as its replacement.
 	 */
 	firstUserRole: string;
+
+	/**
+	 * When `grant.rateExceeded` fires: more grant operations by one actor than `operationCount` within
+	 * `windowSeconds` (#214 Q19). A setting the store holds, written to it by {@link storedSettingsOf}.
+	 */
+	grantRateThreshold: GrantRateThreshold;
 
 	/**
 	 * How long an open notice stream may stay silent before the Controller writes a heartbeat comment,
@@ -179,6 +212,14 @@ export interface ControllerSettings {
 
 	/** The margin, in seconds, that the notice retention floor adds beyond the token lifetime and the grace period. */
 	retentionMarginSeconds: number;
+
+	/**
+	 * The longest a self-grant may last, in seconds, from the instant it is asked for: 86,400 by
+	 * default (#212). An owner's self-grant and a platform administrator's request are held to it,
+	 * and so is a change to a self-grant's end. A setting the store holds, written to it by
+	 * {@link storedSettingsOf}.
+	 */
+	selfGrantMaximumLifetimeSeconds: number;
 
 	/** The identity provider realm role marking its holder's token as a service account's; a role other than the administrator role, `usher-service-account` by default. */
 	serviceAccountRole: string;
@@ -248,21 +289,6 @@ export interface PendingSettings {
 	/** The cache's (Valkey) URL, carrying no password: one carrying a password refuses the start. */
 	cacheUrl: string;
 
-	/** The client id of the service account the Controller resolves addresses through (#212, #213 Q1). */
-	directoryClientId: string;
-
-	/** That service account's secret, which no refusal, log line or answer ever shows. */
-	directoryClientSecret: string;
-
-	/** The identity provider realm the directory looks people up in. */
-	directoryRealm: string;
-
-	/**
-	 * The identity provider's base URL, whose admin API the directory reads (`<url>/admin/realms/<realm>`);
-	 * empty for none, which answers every operation needing an address as the directory unavailable.
-	 */
-	directoryUrl: string;
-
 	/**
 	 * The EGO policies granting every study, by name, matched as literal text (ruled, "#216: all-study
 	 * policies and data without a policy" 1): `ENVIRONMENTAL` in iMS. None by default. A run reads no
@@ -285,15 +311,6 @@ export interface PendingSettings {
 	 * variable (ruled, "#216's reasons, export size and prefixes" 3).
 	 */
 	egoImportPrefixes: readonly string[];
-
-	/**
-	 * When `grant.rateExceeded` fires: more grant operations by one actor than `operationCount` within
-	 * `windowSeconds` (#214 Q19), as `audit-events.md` names the setting.
-	 */
-	grantRateThreshold: { operationCount: number; windowSeconds: number };
-
-	/** The longest an administrator's self-grant may last, in seconds: 86,400 by default (#212). */
-	selfGrantMaximumSeconds: number;
 }
 
 /** The Controller's configuration as the harness holds it: the settings the Controller reads, and those it does not read yet. */
@@ -512,11 +529,14 @@ interface ControllerExport extends ControllerModule {
 
 const CONTROLLER_MODULES = {
 	app: { exportName: 'createController', path: 'src/app/index.ts' },
+	applicationKeyCipher: { exportName: 'createApplicationKeyCipher', path: 'src/applications/index.ts' },
 	auditTrail: { exportName: 'createAuditTrail', path: 'src/eventLog/index.ts' },
 	configuration: {
 		exportName: 'readConfiguration',
 		path: 'src/configuration/index.ts',
 	},
+	insertApplication: { exportName: 'insertApplication', path: 'src/applications/index.ts' },
+	insertKey: { exportName: 'insertKey', path: 'src/applications/index.ts' },
 	main: { path: 'src/main.ts' },
 	migrations: { exportName: 'migrate', path: 'src/migrations/index.ts' },
 	seededPolicy: { exportName: 'writeSeededPolicy', path: 'src/store/index.ts' },
@@ -535,12 +555,14 @@ export type StoredField =
 	| 'baseline'
 	| 'eventSource'
 	| 'firstUserRole'
+	| 'grantRateThreshold'
 	| 'heartbeatMilliseconds'
 	| 'issuer'
 	| 'noticePageLimit'
 	| 'noticeRereadMilliseconds'
 	| 'retentionGraceSeconds'
 	| 'retentionMarginSeconds'
+	| 'selfGrantMaximumLifetimeSeconds'
 	| 'signInTokenMaximumLifetimeSeconds'
 	| 'signedInRule'
 	| 'streamLimitPerAudience'
@@ -612,12 +634,14 @@ export const storedSettingsOf = ({
 	baseline,
 	eventSource,
 	firstUserRole,
+	grantRateThreshold,
 	heartbeatMilliseconds,
 	issuer,
 	noticePageLimit,
 	noticeRereadMilliseconds,
 	retentionGraceSeconds,
 	retentionMarginSeconds,
+	selfGrantMaximumLifetimeSeconds,
 	signInTokenMaximumLifetimeSeconds,
 	signedInRule,
 	streamLimitPerAudience,
@@ -629,6 +653,7 @@ export const storedSettingsOf = ({
 	eventSource,
 	firstUser: { realmRole: firstUserRole },
 	grantAutoAccept: autoAccept,
+	grantRateThreshold,
 	grantRules: grantRulesOf({ baseline, signedInRule }),
 	heartbeatMilliseconds,
 	issuer,
@@ -636,6 +661,7 @@ export const storedSettingsOf = ({
 	noticeRereadMilliseconds,
 	retentionGraceSeconds,
 	retentionMarginSeconds,
+	selfGrantMaximumLifetimeSeconds,
 	signInTokenMaximumLifetimeSeconds,
 	streamLimitPerAudience,
 	streamMaximumLifetimeSeconds,
@@ -654,6 +680,10 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
 	databasePassword: 'USHER_DATABASE_PASSWORD',
 	databaseSchema: 'USHER_DATABASE_SCHEMA',
 	databaseUrl: 'USHER_DATABASE_URL',
+	directoryClientId: 'USHER_DIRECTORY_CLIENT_ID',
+	directoryClientSecret: 'USHER_DIRECTORY_CLIENT_SECRET',
+	directoryRealm: 'USHER_DIRECTORY_REALM',
+	directoryUrl: 'USHER_DIRECTORY_URL',
 	host: 'USHER_HOST',
 	identityProviderIssuer: 'USHER_IDENTITY_PROVIDER_ISSUER',
 	instanceName: 'USHER_INSTANCE_NAME',
@@ -721,9 +751,9 @@ const loadExport = async <Exported>(module: ControllerExport): Promise<Exported>
 /**
  * The environment the config module reads for a configuration: the one place the Controller's
  * environment variable names live. Every setting the Controller reads but `clock` and `logStream` has
- * a variable; a list is comma-separated, empty for an empty list. The key-encryption key and the
- * database password travel as given, each in its own variable. The {@link PendingSettings}, which the
- * Controller does not read yet, travel in none.
+ * a variable; a list is comma-separated, empty for an empty list. The key-encryption key, the
+ * database password and the directory's client secret travel as given, each in its own variable.
+ * The {@link PendingSettings}, which the Controller does not read yet, travel in none.
  *
  * @param configuration the configuration to express.
  */
@@ -737,6 +767,10 @@ export const environmentFor = ({
 	databasePassword,
 	databaseSchema,
 	databaseUrl,
+	directoryClientId,
+	directoryClientSecret,
+	directoryRealm,
+	directoryUrl,
 	host,
 	identityProviderIssuer,
 	instanceName,
@@ -757,6 +791,10 @@ export const environmentFor = ({
 	[VARIABLE_NAMES.databasePassword]: databasePassword,
 	[VARIABLE_NAMES.databaseSchema]: databaseSchema,
 	[VARIABLE_NAMES.databaseUrl]: databaseUrl,
+	[VARIABLE_NAMES.directoryClientId]: directoryClientId,
+	[VARIABLE_NAMES.directoryClientSecret]: directoryClientSecret,
+	[VARIABLE_NAMES.directoryRealm]: directoryRealm,
+	[VARIABLE_NAMES.directoryUrl]: directoryUrl,
 	[VARIABLE_NAMES.host]: host,
 	[VARIABLE_NAMES.identityProviderIssuer]: identityProviderIssuer,
 	[VARIABLE_NAMES.instanceName]: instanceName,
@@ -842,6 +880,14 @@ export const createAuditTrail = async <Connection extends TrailConnection>(
 /** The Controller's store timeout where its configuration names none, in milliseconds. */
 export const DEFAULT_STORE_TIMEOUT_MILLISECONDS = 5000;
 
+/**
+ * The store timeout every harness start gets where a test's configuration names none, in milliseconds.
+ * A start runs wholly within its store timeout, and under load a start has taken 5,166 ms, past the
+ * product's 5,000 ms default, so the harness gives its starts a timeout about three times that slowest
+ * start seen. Suites that test the timeout itself name their own.
+ */
+export const HARNESS_STORE_TIMEOUT_MILLISECONDS = 15_000;
+
 // The names the seam's trail gives events it never writes: the seeded policy records none.
 const SEAM_EVENT_SOURCE = 'usher-seeded-policy-seam';
 
@@ -849,8 +895,8 @@ const SEAM_INSTANCE_NAME = 'usher-seeded-policy-seam';
 
 /**
  * Writes the policy a Controller's start seeds, through the Controller's own code, on the connection
- * given: in one transaction its audit trail holds as the system, within the Controller's default store
- * timeout, the capability vocabulary and the seeded roles the store lacks. A store already holding all of
+ * given: in one transaction its audit trail holds as the system, within the harness's store timeout, the
+ * capability vocabulary and the seeded roles the store lacks. A store already holding all of
  * it is written nothing, so it can run again on the same store. No privilege or key-encryption key is
  * checked: that is the start's alone.
  *
@@ -863,27 +909,119 @@ export const writeSeededPolicy = async (
 	settings: SeededPolicySettings,
 ): Promise<void> => {
 	const [trail, write] = await Promise.all([
-		createAuditTrail({
-			eventLog: { error: () => undefined, writeEvent: () => undefined },
-			// The seeded policy records no event, so the names the trail gives its events are never written.
-			settings: {
-				...settings,
-				eventSource: SEAM_EVENT_SOURCE,
-				instanceName: SEAM_INSTANCE_NAME,
-				storeTimeoutMilliseconds: DEFAULT_STORE_TIMEOUT_MILLISECONDS,
-			},
-			store: {
-				connect: async () => ({
-					query: (text: string, values?: readonly unknown[]) =>
-						connection.query(text, values === undefined ? undefined : [...values]),
-					release: () => undefined,
-				}),
-			},
-		}),
+		seamTrail(connection, settings),
 		loadExport<WriteSeededPolicy>(CONTROLLER_MODULES.seededPolicy),
 	]);
 	await trail.inTransaction({ type: 'system' }, (transaction) => write(transaction, settings));
 };
+
+/**
+ * The application a start writes: its display name and description, and the id the fixture seeded it
+ * under, which it keeps, when the fixture seeded it before the start.
+ */
+export interface ApplicationToWrite {
+	description: string | null;
+	displayName: string;
+
+	/** The id the fixture seeded the application under; `undefined` for one the start writes new. */
+	seededId: string | undefined;
+}
+
+/** An application a start wrote, with the first key it was issued: its id, and the key's id and value. */
+export interface WrittenApplication {
+	displayName: string;
+	id: string;
+	key: string;
+	keyId: string;
+}
+
+/** The settings an application is written under: the seeded policy's, and the key-encryption key sealing its key. */
+export interface ApplicationWriteSettings extends SeededPolicySettings {
+	keyEncryptionKey: string;
+}
+
+// The store module's exports the application writes use, as the seam calls them.
+type InsertApplication = (
+	connection: SeedingConnection,
+	schema: string,
+	application: { description: string | null; displayName: string; registeredAt: Date; registeredBy: string },
+) => Promise<string>;
+
+type InsertKey = (
+	connection: SeedingConnection,
+	schema: string,
+	cipher: unknown,
+	key: { applicationId: string; issuedAt: Date; issuedBy: string },
+) => Promise<{ id: string; value: string }>;
+
+type CreateApplicationKeyCipher = (keyEncryptionKey: string) => unknown;
+
+/**
+ * Writes the harness's applications and the first key of each, through the Controller's own code, on
+ * the connection given: in one transaction its audit trail holds as the system, each application
+ * inserted by the store, or kept under the id the fixture seeded it with, and its key sealed under the
+ * key-encryption key. The seam records no event, as the seeded policy records none. Nothing is checked
+ * of the registrant beyond its id, which the caller gives.
+ *
+ * @param connection the connection, holding no transaction; it is left open.
+ * @param settings the schema, the clock and the key-encryption key.
+ * @param applications the applications, in the order they are written.
+ * @param registrant the `users.id` of the person registering and issuing them.
+ * @throws until the modules exist, the seam's message that one is missing.
+ */
+export const writeApplicationsThroughStore = async (
+	connection: SeedingConnection,
+	settings: ApplicationWriteSettings,
+	applications: readonly ApplicationToWrite[],
+	registrant: string,
+): Promise<readonly WrittenApplication[]> => {
+	const [trail, insertApplication, insertKey, createCipher] = await Promise.all([
+		seamTrail(connection, settings),
+		loadExport<InsertApplication>(CONTROLLER_MODULES.insertApplication),
+		loadExport<InsertKey>(CONTROLLER_MODULES.insertKey),
+		loadExport<CreateApplicationKeyCipher>(CONTROLLER_MODULES.applicationKeyCipher),
+	]);
+	const cipher = createCipher(settings.keyEncryptionKey);
+	const now = new Date(settings.clock.now());
+	return trail.inTransaction({ type: 'system' }, ({ connection: transaction }) =>
+		inTurn(applications, async ({ description, displayName, seededId }) => {
+			const id =
+				seededId ??
+				(await insertApplication(transaction, settings.databaseSchema, {
+					description,
+					displayName,
+					registeredAt: now,
+					registeredBy: registrant,
+				}));
+			const key = await insertKey(transaction, settings.databaseSchema, cipher, {
+				applicationId: id,
+				issuedAt: now,
+				issuedBy: registrant,
+			});
+			return { displayName, id, key: key.value, keyId: key.id };
+		}),
+	);
+};
+
+// The audit trail a seam write runs its transaction on, over the connection given. It records no event:
+// the names the trail gives events are never written, and the seam's event sink drops any line.
+const seamTrail = (connection: SeedingConnection, settings: SeededPolicySettings) =>
+	createAuditTrail({
+		eventLog: { error: () => undefined, writeEvent: () => undefined },
+		settings: {
+			...settings,
+			eventSource: SEAM_EVENT_SOURCE,
+			instanceName: SEAM_INSTANCE_NAME,
+			storeTimeoutMilliseconds: HARNESS_STORE_TIMEOUT_MILLISECONDS,
+		},
+		store: {
+			connect: async () => ({
+				query: (text: string, values?: readonly unknown[]) =>
+					connection.query(text, values === undefined ? undefined : [...values]),
+				release: () => undefined,
+			}),
+		},
+	});
 
 const isPort = (value: number): boolean => Number.isInteger(value) && value > 0 && value < 65_536;
 

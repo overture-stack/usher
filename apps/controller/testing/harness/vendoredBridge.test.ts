@@ -132,7 +132,7 @@ suite("the bridge's timing profiles", () => {
 			pushIdleMs: 25_000,
 			tokenTtlMs: CONFIGURATION_DEFAULTS.tokenTtlMs,
 		});
-		assert.deepEqual(TIMING_PROFILES.ims.controller, {});
+		assert.deepEqual(TIMING_PROFILES.ims.controller, { storeTimeoutMilliseconds: 5000 });
 	});
 });
 

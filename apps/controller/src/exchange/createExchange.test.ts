@@ -364,8 +364,8 @@ interface Stand {
 	/** Closes every window refused credentials are counted in, settling once each closing is recorded. */
 	closeWindows(): Promise<void>;
 
-	/** Each key the exchange asked to confirm, as its confirmation settled. */
-	confirmed: { applicationId: string; keyId: string }[];
+	/** Each key the exchange asked to confirm, with the address of the request asking, as its confirmation settled. */
+	confirmed: { applicationId: string; keyId: string; sourceIp: string }[];
 
 	/** The deadline given with each key's confirmation, as it was asked for. */
 	confirmationDeadlines: (Deadline | undefined)[];
@@ -583,10 +583,10 @@ const standUp = (
 			return judgement;
 		},
 		keyConfirmations: {
-			confirm: async ({ applicationId, keyId }, deadline) => {
+			confirm: async ({ applicationId, keyId }, sourceIp, deadline) => {
 				stand.confirmationDeadlines.push(deadline);
 				await confirmationSettled;
-				stand.confirmed.push({ applicationId, keyId });
+				stand.confirmed.push({ applicationId, keyId, sourceIp });
 			},
 		},
 		lateRequestThresholdMilliseconds,
@@ -984,23 +984,23 @@ const committedIn = (stand: Pick<StoreStand, 'committed'>): readonly Readonly<Re
 		}
 		const data = JSON.parse(String(values[6])) as Readonly<Record<string, unknown>>;
 		return {
+			actorId: data['actorId'],
 			actorType: data['actorType'],
 			reason: data['reason'],
 			result: data['result'],
 			table,
 			type: values[3],
-			userId: data['userId'],
 		};
 	});
 
 // The token.exchange recorded for an exchange whose store work failed.
 const STORE_FAILURE_ROW = Object.freeze({
+	actorId: null,
 	actorType: 'anonymous',
 	reason: 'storeUnavailable',
 	result: 'failed',
 	table: 'audit_log',
 	type: 'bio.overture.token.exchange',
-	userId: null,
 });
 
 // What each event line names: its type, and its data's actor, result and reason.
@@ -1286,7 +1286,6 @@ suite('the token exchange', () => {
 						rules: ['everyone'],
 						sourceIp: '127.0.0.1',
 						tokenTtl: 300,
-						userId: null,
 					},
 					severity: 'info',
 					type: 'token.exchange',
@@ -1365,6 +1364,7 @@ suite('the token exchange', () => {
 				answers.map(() => ({
 					applicationId: APPLICATION,
 					keyId: KEY.keyId,
+					sourceIp: '127.0.0.1',
 				})),
 			);
 		});
@@ -1444,7 +1444,6 @@ suite('the token exchange', () => {
 							refusedSubject: 'subject "ana" \\',
 							result: 'denied',
 							sourceIp: '127.0.0.1',
-							userId: null,
 						},
 					},
 					{
@@ -1453,7 +1452,6 @@ suite('the token exchange', () => {
 							reason: 'invalidSignature',
 							result: 'denied',
 							sourceIp: '127.0.0.1',
-							userId: null,
 						},
 					},
 					{
@@ -1462,7 +1460,6 @@ suite('the token exchange', () => {
 							reason: 'missingCredential',
 							result: 'denied',
 							sourceIp: '127.0.0.1',
-							userId: null,
 						},
 					},
 					{
@@ -1471,7 +1468,6 @@ suite('the token exchange', () => {
 							reason: 'apiKeyVerifierNotConfigured',
 							result: 'denied',
 							sourceIp: '127.0.0.1',
-							userId: null,
 						},
 					},
 				].map(({ data }) => ({
@@ -1498,7 +1494,6 @@ suite('the token exchange', () => {
 						reason: 'identityProviderUnavailable',
 						result: 'failed',
 						sourceIp: '127.0.0.1',
-						userId: null,
 					},
 					severity: 'error',
 					type: 'token.exchange',
@@ -1526,7 +1521,6 @@ suite('the token exchange', () => {
 					reason: 'storedSettingsInvalid',
 					result: 'failed',
 					sourceIp: '127.0.0.1',
-					userId: null,
 				},
 				severity: 'error',
 				type: 'token.exchange',
@@ -1552,7 +1546,6 @@ suite('the token exchange', () => {
 						reason: 'signingKeyUnconfirmed',
 						result: 'denied',
 						sourceIp: '127.0.0.1',
-						userId: null,
 					},
 					severity: 'warning',
 					type: 'token.exchange',
@@ -1625,7 +1618,7 @@ suite('the token exchange', () => {
 			assert.deepEqual(await payloadIn(answer), SIGNED_IN_PAYLOAD);
 		});
 
-		test("records its token.exchange succeeded at info in the exchange's one transaction, its actor the person by the identity provider's subject, naming them as userId, both conferring rules, no recorded grant, its lifetime, its audience and its computation time", async (context) => {
+		test("records its token.exchange succeeded at info in the exchange's one transaction, its actor the person by the identity provider's subject, naming them only as that actor, both conferring rules, no recorded grant, its lifetime, its audience and its computation time", async (context) => {
 			const stand = standUp(context);
 
 			await post(stand, withCredential('credential-accepted'));
@@ -1646,7 +1639,6 @@ suite('the token exchange', () => {
 						rules: ['everyone', 'signedIn'],
 						sourceIp: '127.0.0.1',
 						tokenTtl: 300,
-						userId: 'subject-ana',
 					},
 					severity: 'info',
 					type: 'token.exchange',
@@ -1785,7 +1777,6 @@ suite('the token exchange', () => {
 									refusedSubject: 'subject-ana',
 									result: 'denied',
 									sourceIp: '127.0.0.1',
-									userId: null,
 								},
 								severity: 'warning',
 								type: 'token.exchange',
@@ -1822,7 +1813,6 @@ suite('the token exchange', () => {
 								refusedSubject: 'subject-ana',
 								result: 'denied',
 								sourceIp: '127.0.0.1',
-								userId: null,
 							},
 							severity: 'warning',
 							type: 'token.exchange',
@@ -1859,7 +1849,6 @@ suite('the token exchange', () => {
 								refusedSubject: 'subject-ana',
 								result: 'denied',
 								sourceIp: '127.0.0.1',
-								userId: null,
 							},
 							severity: 'warning',
 							type: 'token.exchange',
@@ -2001,7 +1990,6 @@ suite('the token exchange', () => {
 						result: 'failed',
 						sourceIp: '127.0.0.1',
 						tokenBytes: limit,
-						userId: null,
 					},
 					severity: 'error',
 					type: 'token.exchange',
@@ -2015,7 +2003,7 @@ suite('the token exchange', () => {
 			]);
 		});
 
-		test("answers a signed-in principal's token past the limit 503 tokenOverResponseCap, recording only its failed token.exchange, naming them as userId, and recording no session", async (context) => {
+		test("answers a signed-in principal's token past the limit 503 tokenOverResponseCap, recording only its failed token.exchange, naming them as its actor, and recording no session", async (context) => {
 			const tokenBytes = bodyBytesOf(await post(standUp(context), withCredential('credential-accepted')));
 			const stand = standUp(context, { tokenLimitBytes: tokenBytes - 1 });
 
@@ -2043,7 +2031,6 @@ suite('the token exchange', () => {
 						result: 'failed',
 						sourceIp: '127.0.0.1',
 						tokenBytes,
-						userId: 'subject-ana',
 					},
 					severity: 'error',
 					type: 'token.exchange',
@@ -2069,12 +2056,12 @@ suite('the token exchange', () => {
 				{ table: 'users' },
 				{ table: 'user_identities' },
 				{
+					actorId: 'subject-ana',
 					actorType: 'human',
 					reason: 'tokenOverResponseCap',
 					result: 'failed',
 					table: 'audit_log',
 					type: 'bio.overture.token.exchange',
-					userId: 'subject-ana',
 				},
 			]);
 		});
@@ -2257,7 +2244,6 @@ suite('the token exchange', () => {
 						reason: 'identityProviderUnavailable',
 						result: 'failed',
 						sourceIp: '127.0.0.1',
-						userId: null,
 					},
 					severity: 'error',
 					type: 'token.exchange',
@@ -2512,7 +2498,6 @@ suite('the token exchange', () => {
 						reason: 'storeUnavailable',
 						result: 'failed',
 						sourceIp: '127.0.0.1',
-						userId: null,
 					},
 					severity: 'error',
 					type: 'token.exchange',

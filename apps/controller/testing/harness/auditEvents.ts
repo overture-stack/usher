@@ -38,6 +38,8 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 	grantExtension: 'grant.extension',
 	grantRateExceeded: 'grant.rateExceeded',
 	grantReduction: 'grant.reduction',
+	grantRequest: 'grant.request',
+	grantRequestDecision: 'grant.requestDecision',
 	grantRevocation: 'grant.revocation',
 	grantRulesChange: 'grantRules.change',
 	grantSelfCreation: 'grant.selfCreation',
@@ -73,6 +75,20 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT_TYPES];
 
 /**
+ * The event of a grant's role change (ruled), without the prefix. The Events table has no row for it,
+ * so it is kept apart from {@link AUDIT_EVENT_TYPES}, which holds its rows.
+ */
+export const RULED_GRANT_EVENT_TYPES = Object.freeze({
+	grantRoleChange: 'grant.roleChange',
+} as const);
+
+/** A ruled grant event's type, without the prefix. */
+export type RuledGrantEventType = (typeof RULED_GRANT_EVENT_TYPES)[keyof typeof RULED_GRANT_EVENT_TYPES];
+
+/** An event's type a test reads, without the prefix: a row of the Events table, or a ruled one. */
+export type RecordedEventType = AuditEventType | RuledGrantEventType;
+
+/**
  * The Bridge's events, the keys of its catalogue. The Bridge keeps the catalogue internal, so its
  * names are copied here; when the Bridge adds one, add it. Follows `events.ts` `EVENT_CATALOGUE`.
  */
@@ -106,6 +122,12 @@ export const POST_MVP_EVENT_TYPES: readonly string[] = Object.freeze([
 	'grant.unguarded',
 ]);
 
+/**
+ * The Controller's rows written by the schema migration command rather than by a request, so no operation of the
+ * Controller's emits them: the migration command records them in the store before the Controller starts.
+ */
+export const MIGRATION_EVENT_TYPES: readonly string[] = Object.freeze(['settings.seeding']);
+
 /** A severity, as the table and the Bridge name them. */
 export type Severity = 'critical' | 'error' | 'info' | 'warning';
 
@@ -132,8 +154,22 @@ export interface EventFieldSets {
 	 */
 	conditional: readonly string[];
 
+	/**
+	 * The members of each entry of a collection field, one per `each X` clause. Absent when no clause names any.
+	 */
+	entryMembers?: readonly EntryMembers[];
+
 	onRefusal: readonly string[];
 	onSuccess: readonly string[];
+}
+
+/**
+ * The members each entry of a collection field carries, as an `each X` clause names them: `entries` is the
+ * field X, carried always as a field of its own, and `names` are the members of each of its entries.
+ */
+export interface EntryMembers {
+	entries: string;
+	names: readonly string[];
 }
 
 /**
@@ -346,42 +382,81 @@ const fieldsOfItem = (item: string): { conditional: boolean; names: readonly str
 		: { conditional: true, names: backtickedIn(item.slice(0, condition)) };
 };
 
+// An item leading with `each` names no field of its own: it may name a field the event carries already,
+// or a count the table leaves to prose.
+const EACH_ITEM = /^each\b/u;
+
+// An item leading with `each` and a backticked name opens the members of each entry of the field before it.
+const EACH_ENTRY_ITEM = /^each `\w+`/u;
+
+// A clause's items before its first `each X` item, and the items from it on: the members of each entry of X.
+const splitAtEachEntry = (clause: string): { fields: readonly string[]; members: readonly string[] } => {
+	const items = itemsOf(clause);
+	const start = items.findIndex((item) => EACH_ENTRY_ITEM.test(item));
+	return start === -1
+		? { fields: items, members: [] }
+		: { fields: items.slice(0, start), members: items.slice(start) };
+};
+
 /**
  * The field names a fields cell registers, by the clauses its semicolons divide it into and the items
  * its commas divide each clause into. An `on success` or `on refusal` clause's names are carried on
  * that result alone, and every other clause's are carried always. An item naming a condition with
  * `when` or `for` carries the names before that word only under the condition, in any clause. An item
- * naming no field and pointing below the table takes the names listed there. A cell reading `none`
+ * naming no field and pointing below the table takes the names listed there. An `each X` clause's names
+ * are the members of each entry of X, which X, the field before it, carries always. A cell reading `none`
  * registers no field.
  *
  * @param cell the cell.
  * @param listedBelow the names the event's note below the table lists: none by default.
- * @throws when the cell names no field and is not `none`, or points below the table and nothing is
- * listed there.
+ * @throws when the cell names no field and is not `none`, points below the table and nothing is listed
+ * there, or has an `each X` clause outside a clause carried always.
  */
 export const fieldSetsIn = (cell: string, listedBelow: readonly string[] = []): EventFieldSets => {
 	const clauses = cell.split(';').map((clause) => clause.trim());
-	const namesOf = (clause: string, underCondition: boolean): readonly string[] =>
-		itemsOf(clause).flatMap((item) => {
-			const { conditional, names } = fieldsOfItem(item);
-			if (conditional !== underCondition) {
-				return [];
-			}
-			if (names.length === 0 && item.includes(LISTED_BELOW)) {
-				return listedBelow.length > 0 ? listedBelow : unreadable('field name listed below the table', cell);
-			}
-			return names;
-		});
+	const namesOf = (items: readonly string[], underCondition: boolean): readonly string[] =>
+		items
+			.filter((item) => !EACH_ITEM.test(item))
+			.flatMap((item) => {
+				const { conditional, names } = fieldsOfItem(item);
+				if (conditional !== underCondition) {
+					return [];
+				}
+				if (names.length === 0 && item.includes(LISTED_BELOW)) {
+					return listedBelow.length > 0 ? listedBelow : unreadable('field name listed below the table', cell);
+				}
+				return names;
+			});
 	const byResult = (clause: string): boolean => clause.startsWith(ON_SUCCESS) || clause.startsWith(ON_REFUSAL);
+	const fieldsOfClause = (clause: string): readonly string[] => splitAtEachEntry(clause).fields;
 	const namesWhere = (holds: (clause: string) => boolean): readonly string[] =>
-		clauses.filter(holds).flatMap((clause) => namesOf(clause, false));
+		clauses.filter(holds).flatMap((clause) => namesOf(fieldsOfClause(clause), false));
+	const entryMembersOf = (clause: string): readonly EntryMembers[] => {
+		const { fields, members } = splitAtEachEntry(clause);
+		if (members.length === 0) {
+			return [];
+		}
+		if (byResult(clause)) {
+			return unreadable('each clause outside a clause carried always', cell);
+		}
+		const entries = namesOf(fields, false).at(-1);
+		const names = members.flatMap((item) => {
+			const { conditional, names: memberNames } = fieldsOfItem(item);
+			return conditional ? unreadable('member of an each clause under a condition', cell) : memberNames;
+		});
+		return [{ entries: entries ?? unreadable('field an each clause belongs to', cell), names }];
+	};
 	const fieldSets: EventFieldSets = {
 		always: namesWhere((clause) => !byResult(clause)),
-		conditional: clauses.flatMap((clause) => namesOf(clause, true)),
+		conditional: clauses.flatMap((clause) => namesOf(fieldsOfClause(clause), true)),
 		onRefusal: namesWhere((clause) => clause.startsWith(ON_REFUSAL)),
 		onSuccess: namesWhere((clause) => clause.startsWith(ON_SUCCESS)),
 	};
-	return Object.values(fieldSets).flat().length > 0 || cell === 'none' ? fieldSets : unreadable('field name', cell);
+	const entryMembers = clauses.flatMap((clause) => entryMembersOf(clause));
+	const readFieldSets = entryMembers.length > 0 ? { ...fieldSets, entryMembers } : fieldSets;
+	return Object.values(fieldSets).flat().length > 0 || cell === 'none'
+		? readFieldSets
+		: unreadable('field name', cell);
 };
 
 // One clause of a severity cell naming a severity per case.
@@ -699,6 +774,18 @@ export const DRY_RUN_LOG_LINE = Object.freeze({
 } as const);
 
 /**
+ * The operational line a start writes, at warning, for each grant its database role holds beyond
+ * the writes the release's migrations grant it (the name assumed): its `message` naming it, the
+ * grant's `object` and `privilege`, and its `column` for a grant on one column.
+ */
+export const GRANT_BEYOND_USE_LOG_LINE = Object.freeze({
+	message: Object.freeze({
+		member: 'message',
+		value: 'store.grantBeyondUse',
+	} as const),
+} as const);
+
+/**
  * How the exchange's event names a token past the Bridge's response cap (ruled, "#215's role route
  * and the held-grant scale" 2: the limit, the principal's held count and the token's size, never an
  * id; the names assumed until Usher's docs pass): the `token.exchange` event, its `reason` this limit's
@@ -941,7 +1028,8 @@ export const credentialRefusalsElsewhere = (events: readonly CloudEvent[]): read
  * - `expiredAssertion`: an assertion past its `exp`, though signed under a live key;
  * - `notYetValid`: an assertion whose `iat` is ahead of the Controller's clock, though signed under a
  *   live key;
- * - `reusedAssertion`: an assertion presented a second time, which only a copy of it can be.
+ * - `reusedAssertion`: an assertion presented a second time, which only a copy of it can be;
+ * - `unrepresentableJti`: an assertion whose `jti` holds a NUL character or an unpaired surrogate.
  *
  * Every such refusal is answered with one identical 401, so the code is in the Controller's log
  * alone. {@link CHANNEL_ASSERTION_TALLY_REASONS} are always counted, and
@@ -960,6 +1048,7 @@ export const CHANNEL_ASSERTION_REJECTION_REASONS = Object.freeze({
 	reusedAssertion: 'reusedAssertion',
 	unknownApplication: 'unknownApplication',
 	unreadableAssertion: 'unreadableAssertion',
+	unrepresentableJti: 'unrepresentableJti',
 } as const);
 
 /**
@@ -974,6 +1063,7 @@ export const CHANNEL_ASSERTION_VERIFIED_REJECTION_REASONS: readonly string[] = O
 	CHANNEL_ASSERTION_REJECTION_REASONS.otherAudience,
 	CHANNEL_ASSERTION_REJECTION_REASONS.excessiveLifetime,
 	CHANNEL_ASSERTION_REJECTION_REASONS.reusedAssertion,
+	CHANNEL_ASSERTION_REJECTION_REASONS.unrepresentableJti,
 ]);
 
 /**
@@ -1110,6 +1200,7 @@ export const cloudEventsIn = (lines: readonly string[]): readonly CloudEvent[] =
  */
 export const FAULT_REASONS = Object.freeze({
 	cacheUnavailable: 'cacheUnavailable',
+	directoryNotConfigured: 'directoryNotConfigured',
 	directoryUnavailable: 'directoryUnavailable',
 	identityProviderUnavailable: 'identityProviderUnavailable',
 	storeUnavailable: 'storeUnavailable',
@@ -1142,7 +1233,7 @@ export const eventsIn = (log: LogCapture, since: number = 0): readonly CloudEven
  * @param events the events.
  * @param type the event type, without the prefix.
  */
-export const ofType = (events: readonly CloudEvent[], type: AuditEventType): readonly CloudEvent[] =>
+export const ofType = (events: readonly CloudEvent[], type: RecordedEventType): readonly CloudEvent[] =>
 	events.filter((event) => event.type === emittedType(type));
 
 /**
@@ -1155,7 +1246,7 @@ export const ofType = (events: readonly CloudEvent[], type: AuditEventType): rea
  */
 export const eventDataOf = (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	since: number = 0,
 ): readonly Readonly<Record<string, unknown>>[] => ofType(eventsIn(log, since), type).map(dataOf);
 
@@ -1196,7 +1287,7 @@ export const awaitEvents = async (
  */
 export const awaitEventsOfType = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	{ count = 1, ...options }: AwaitOptions & { count?: number } = {},
 ): Promise<readonly CloudEvent[]> =>
 	ofType(await awaitEvents(log, (events) => ofType(events, type).length >= count, options), type);
@@ -1211,7 +1302,7 @@ export const awaitEventsOfType = async (
  */
 export const awaitEventData = async (
 	log: LogCapture,
-	type: AuditEventType,
+	type: RecordedEventType,
 	options: AwaitOptions & { count?: number } = {},
 ): Promise<readonly Readonly<Record<string, unknown>>[]> => (await awaitEventsOfType(log, type, options)).map(dataOf);
 

@@ -45,7 +45,8 @@ const subjectOf = (schema: string, person: string): string =>
      ORDER BY identity.idp_issuer = $2 DESC, identity.added_at, identity.id LIMIT 1)`;
 
 /**
- * Inserts an application, the store generating its id.
+ * Inserts an application, the store generating its id. It runs inside the caller's trail transaction and
+ * records no event of its own: the caller records the events of the change it makes.
  *
  * @param connection a connection in the registration's transaction.
  * @param schema the Controller's schema.
@@ -80,7 +81,8 @@ export const insertApplication = async (
 
 /**
  * Generates a key for an application and inserts it sealed, the store generating its id first, since
- * the sealed key is bound to it.
+ * the sealed key is bound to it. It runs inside the caller's trail transaction and records no event of
+ * its own: the caller records the events of the change it makes.
  *
  * @param connection a connection in the issue's transaction.
  * @param schema the Controller's schema.

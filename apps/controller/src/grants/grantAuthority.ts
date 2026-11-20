@@ -1,10 +1,24 @@
 import type { Problem } from '../http/index.js';
 import { maySee } from '../resourceStanding/index.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
-import type { GrantAuthority, GrantAuthorityQuestion } from './types.js';
+import type {
+	GrantAuthority,
+	GrantAuthorityQuestion,
+	SelfGrantAuthority,
+	SelfGrantAuthorityQuestion,
+} from './types.js';
 
 // The roles a platform administrator grants on any resource.
 const ADMINISTRATOR_GRANTED_ROLES: ReadonlySet<string> = new Set(['owner', 'submitter']);
+
+/**
+ * Whether a platform administrator grants a role on any resource, owned or not: `submitter` and
+ * `owner`, in their exact letter case. Any other role is its resource's owners' to grant while it
+ * has a counted owner.
+ *
+ * @param role the role's name.
+ */
+export const administratorGrants = (role: string): boolean => ADMINISTRATOR_GRANTED_ROLES.has(role);
 
 const refuse = (problem: Problem, recordedReason?: string): GrantAuthority => ({
 	kind: 'refuse',
@@ -15,19 +29,21 @@ const refuse = (problem: Problem, recordedReason?: string): GrantAuthority => ({
 /**
  * Decides whether a caller may issue a grant, judging in turn: a platform administrator naming
  * themself an owner is refused 403 `administratorSelfOwnership`; anyone naming themself is refused
- * 422 `selfNamed`; a platform administrator granting a role other than `submitter` and `owner` is
- * refused 403 `administratorGrantsNoConsumerAccess`, alike whether or not the resource exists; a
- * resource that does not exist, or is retired, is refused 404 `resourceNotFound`, and so is one the
- * caller may not see, its event recording `noAuthorityOnResource`. A platform administrator, and a
- * counted owner of the resource, issue the grant; anyone else is refused 403
- * `noAuthorityOnResource`.
+ * 422 `selfNamed`; a platform administrator granting a role other than `submitter` and `owner` asks
+ * for it, as a request of kind `orphanedResource` someone else decides, on a resource that exists,
+ * is not retired and has no counted owner, and is refused 403 `administratorGrantsNoConsumerAccess`
+ * on any other, alike whether or not it exists; a resource that does not exist, or is retired, is
+ * refused 404 `resourceNotFound`, and so is one the caller may not see, its event recording
+ * `noAuthorityOnResource`. A platform administrator, and a counted owner of the resource, issue the
+ * grant; anyone else is refused 403 `noAuthorityOnResource`.
  *
  * @param question whether the caller is a platform administrator and is the holder named, the role,
- *   and where the caller stands on the resource.
+ *   where the caller stands on the resource, and whether it has no counted owner.
  */
 export const grantAuthority = ({
 	administrator,
 	holderIsCaller,
+	orphaned,
 	role,
 	standing,
 }: GrantAuthorityQuestion): GrantAuthority => {
@@ -37,8 +53,10 @@ export const grantAuthority = ({
 	if (holderIsCaller) {
 		return refuse(GRANT_PROBLEMS.selfNamed);
 	}
-	if (administrator && !ADMINISTRATOR_GRANTED_ROLES.has(role)) {
-		return refuse(GRANT_PROBLEMS.administratorGrantsNoConsumerAccess);
+	if (administrator && !administratorGrants(role)) {
+		return orphaned && standing !== undefined && !standing.retired
+			? { kind: 'request' }
+			: refuse(GRANT_PROBLEMS.administratorGrantsNoConsumerAccess);
 	}
 	if (standing === undefined || standing.retired) {
 		return refuse(GRANT_PROBLEMS.resourceNotFound);
@@ -47,4 +65,31 @@ export const grantAuthority = ({
 		return refuse(GRANT_PROBLEMS.resourceNotFound, GRANT_PROBLEMS.noAuthorityOnResource.code);
 	}
 	return administrator || standing.countedOwner ? { kind: 'issue' } : refuse(GRANT_PROBLEMS.noAuthorityOnResource);
+};
+
+/**
+ * Decides how a caller's self-grant is answered, judging in turn: a resource that does not exist,
+ * or is retired, is refused 404 `resourceNotFound`, and so is one the caller may not see, its event
+ * recording `noAuthorityOnResource`. A counted owner of the resource, a platform administrator
+ * among them, is issued the grant at once; any other platform administrator asks for it, as a
+ * request someone else decides; anyone else is refused 403 `noAuthorityOnResource`.
+ *
+ * @param question whether the caller is a platform administrator, and where they stand on the
+ *   resource.
+ */
+export const selfGrantAuthority = ({ administrator, standing }: SelfGrantAuthorityQuestion): SelfGrantAuthority => {
+	if (standing === undefined || standing.retired) {
+		return { kind: 'refuse', problem: GRANT_PROBLEMS.resourceNotFound };
+	}
+	if (!maySee(standing, { administrator, asksForRetired: false })) {
+		return {
+			kind: 'refuse',
+			problem: GRANT_PROBLEMS.resourceNotFound,
+			recordedReason: GRANT_PROBLEMS.noAuthorityOnResource.code,
+		};
+	}
+	if (standing.countedOwner) {
+		return { kind: 'issue' };
+	}
+	return administrator ? { kind: 'request' } : { kind: 'refuse', problem: GRANT_PROBLEMS.noAuthorityOnResource };
 };

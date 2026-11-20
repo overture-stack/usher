@@ -2,6 +2,7 @@
 	"clients": [
 		{
 			"attributes": {
+				"backchannel.logout.session.required": "true",
 				"backchannel.logout.url": "http://127.0.0.1:3001/backchannel-logout"
 			},
 			"clientId": "usher-ui",

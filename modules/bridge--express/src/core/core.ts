@@ -14,6 +14,14 @@ import {
 	type ValidationProblem,
 } from '@overture-stack/usher-types';
 
+import {
+	accessOf,
+	anonymousPrincipal,
+	attributionOnlyPrincipal,
+	confirmedPrincipal,
+	deepFreeze,
+	unconfirmedSuspendedPrincipal,
+} from './access.js';
 import { type BoundedMap, createBoundedMap, type Expiry, hasExpired } from './boundedMap.js';
 import type { Channel, ChannelCore } from './channel.js';
 import type { Clock } from './clocks.js';
@@ -236,6 +244,8 @@ export interface BridgeCore {
 	 * - Any other 503 carrying a valid `Retry-After` holds that credential alone for it, capped at
 	 *   60 s, plus the same jitter, and it is exchanged once the hold ends.
 	 * - Any other failed exchange holds the credential for `stores.failureHoldMs`.
+	 * - A token read as `expired` right after its exchange is exchanged once more, at once, and only
+	 *   once per resolution; a second `expired` reading holds the credential as any rejection does.
 	 *
 	 * It rejects when the Controller client or the token reader throws, or when tagging the payload's
 	 * subject fails.
@@ -406,19 +416,6 @@ const NOTICE_LOG_MAX = 1_024;
  * The audiences of every Bridge running in this process: at most one Bridge serves each audience.
  */
 const audiencesInUse = new Set<string>();
-
-const deepFreeze = <Value>(value: Value): Value => {
-	if (typeof value === 'object' && value !== null) {
-		Object.values(value).forEach(deepFreeze);
-		Object.freeze(value);
-	}
-	return value;
-};
-
-const accessOf = (
-	principal: UsherPrincipal,
-	results: Readonly<Record<string, Enforcement>>,
-): Readonly<UsherRequestAccess> => deepFreeze({ principal: { ...principal }, results, version: 1 as const });
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 
@@ -757,7 +754,7 @@ const createRuntime = ({
 		}
 		const start = flightStart();
 		return anonymousFlight.run(`anonymous:${start.generation}`, (signal) =>
-			fetchAnonymous(signal, start, false).catch(() => {
+			fetchAnonymous(signal, start, false, false).catch(() => {
 				internalError();
 				return failedRefresh();
 			}),
@@ -794,11 +791,11 @@ const createRuntime = ({
 		const results = resultsFor(payload);
 		const receivedAt = clocks.wall.now();
 		anonymous.entry = {
-			access: accessOf({ credential: 'none', openTierOnly: true, suspended: false }, results),
+			access: accessOf(anonymousPrincipal(), results),
 			expiry: { monotonicMs: ttlFromNow(), wallMs: payload.exp * 1000 },
 			grants: grantSet(payload.permissions),
 			resources: new Set(Object.keys(payload.permissions)),
-			suspended: accessOf({ credential: 'unconfirmed', openTierOnly: true, suspended: true }, results),
+			suspended: accessOf(unconfirmedSuspendedPrincipal(), results),
 		};
 		anonymous.installedOnce = true;
 		anonymous.retries = 0;
@@ -839,6 +836,7 @@ const createRuntime = ({
 		signal: AbortSignal,
 		start: FlightStart,
 		overtaken: boolean,
+		expiryRetried: boolean,
 	): Promise<AnonymousFetch> => {
 		const since = notices.epoch();
 		const answer = await answeredBy(signal, client.exchange({ credential: null, signal }));
@@ -848,6 +846,11 @@ const createRuntime = ({
 		}
 		const reading = await reader.read(answer.token);
 		if (reading.kind === 'rejected') {
+			// As for a signed-in exchange: one more fetch, at once, when the token just fetched reads expired.
+			if (reading.reason === 'expired' && !expiryRetried && !lifecycle.stopped && !anonymousWaits()) {
+				events.emit('token.rejection', { reason: 'expired' });
+				return fetchAnonymous(signal, start, overtaken, true);
+			}
 			events.emit('token.rejection', { reason: reading.reason });
 			if (reading.reason === 'decryptionFailed') {
 				selfTestFailed();
@@ -873,7 +876,7 @@ const createRuntime = ({
 			if (lastDiscard) {
 				return failedRefresh();
 			}
-			return fetchAnonymous(signal, start, true);
+			return fetchAnonymous(signal, start, true, expiryRetried);
 		}
 		if (start.afterCheck) {
 			install(reading.payload);
@@ -926,6 +929,7 @@ const createRuntime = ({
 		claims: SignedTokenClaims | undefined,
 		signal: AbortSignal,
 		overtaken: boolean,
+		expiryRetried: boolean,
 	): Promise<FlightOutcome> => {
 		const since = notices.epoch();
 		const start = flightStart();
@@ -936,6 +940,12 @@ const createRuntime = ({
 		}
 		const reading = await reader.read(answer.token);
 		if (reading.kind === 'rejected') {
+			// A token the Controller minted in the last second of a grant's life can read expired by the
+			// time it is read: one exchange more is made, and the first reading is still logged.
+			if (reading.reason === 'expired' && !expiryRetried && !lifecycle.stopped && !backingOff()) {
+				events.emit('token.rejection', { reason: 'expired' });
+				return exchange(credential, digest, claims, signal, overtaken, true);
+			}
 			return rejected(digest, reading.reason);
 		}
 		const { payload } = reading;
@@ -949,18 +959,12 @@ const createRuntime = ({
 			events.emit('token.overtaken', {
 				outcome: lastDiscard ? lastDiscardOutcome() : 'exchangedAgain',
 			});
-			return lastDiscard ? { kind: 'degraded', subject } : exchange(credential, digest, claims, signal, true);
+			return lastDiscard
+				? { kind: 'degraded', subject }
+				: exchange(credential, digest, claims, signal, true, expiryRetried);
 		}
 		const results = resultsFor(payload);
-		const access = accessOf(
-			{
-				credential: 'confirmed',
-				openTierOnly: holdsOnlyOpenTier(payload, anonymousGrants),
-				subject,
-				suspended: false,
-			},
-			results,
-		);
+		const access = accessOf(confirmedPrincipal(subject, holdsOnlyOpenTier(payload, anonymousGrants)), results);
 		if (start.afterCheck) {
 			positive.set(
 				digest,
@@ -985,15 +989,7 @@ const createRuntime = ({
 	const suspendedFor = (mode: BridgeMode, subject: string | null): ResolveOutcome =>
 		servedFrom(mode, (entry) =>
 			isNonEmptyString(subject)
-				? accessOf(
-						{
-							attributionOnlySubject: subject,
-							credential: 'confirmed',
-							openTierOnly: true,
-							suspended: true,
-						},
-						entry.access.results,
-					)
+				? accessOf(attributionOnlyPrincipal(subject), entry.access.results)
 				: entry.suspended,
 		);
 
@@ -1046,7 +1042,9 @@ const createRuntime = ({
 		}
 		return outcomeOf(
 			await flights.run(digest, (signal) =>
-				backingOff() ? Promise.resolve(BACKED_OFF_FLIGHT) : exchange(credential, digest, claims, signal, false),
+				backingOff()
+					? Promise.resolve(BACKED_OFF_FLIGHT)
+					: exchange(credential, digest, claims, signal, false, false),
 			),
 		);
 	};

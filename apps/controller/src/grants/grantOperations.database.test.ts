@@ -146,24 +146,28 @@ suite("a grant's creation in the store", () => {
 
 	test('keeps one grant when two creations race to end one expired grant on their terms, answering the other 409 alreadyHolds', async () => {
 		const now = Date.now();
-		await withHarness({ fixture: withExpiredViewing(now) }, async (harness) => {
-			const owner = await personCaller(harness, CAST.ownerOfA1);
+		// Longer than the grants table hold this race takes: each creation waits it out rather than timing out.
+		await withHarness(
+			{ configuration: { storeTimeoutMilliseconds: 15_000 }, fixture: withExpiredViewing(now) },
+			async (harness) => {
+				const owner = await personCaller(harness, CAST.ownerOfA1);
 
-			const answers = await racedAtTheGrantsTable(harness, 2, () =>
-				createGrant(owner, grantFor(CAST.recipient, { category: UNMARKED })),
-			);
+				const answers = await racedAtTheGrantsTable(harness, 2, () =>
+					createGrant(owner, grantFor(CAST.recipient, { category: UNMARKED })),
+				);
 
-			const created = answers.filter(({ status }) => status >= 200 && status < 300);
-			const lost = answers.filter(({ status }) => status >= 300);
-			assert.equal(created.length, 1);
-			lost.forEach((answer) => {
-				assertRefused(answer, PROBLEMS.alreadyHolds, 'the losing creation');
-			});
-			const held = await storedGrants(harness, {
-				holder: CAST.recipient.subject,
-			});
-			assert.equal(held.length, 2);
-		});
+				const created = answers.filter(({ status }) => status >= 200 && status < 300);
+				const lost = answers.filter(({ status }) => status >= 300);
+				assert.equal(created.length, 1);
+				lost.forEach((answer) => {
+					assertRefused(answer, PROBLEMS.alreadyHolds, 'the losing creation');
+				});
+				const held = await storedGrants(harness, {
+					holder: CAST.recipient.subject,
+				});
+				assert.equal(held.length, 2);
+			},
+		);
 	});
 
 	test("names in a refused creation's event a resource registered under the externalId its body names, and none for an externalId no resource holds", async () => {
@@ -225,6 +229,8 @@ suite("a grant's answers and revocation in the store", () => {
 	test("keeps a resource's last owner when its two owners' grants are revoked at once, answering the later 409 resourceNeedsAnOwner", async () => {
 		await withHarness(
 			{
+				// Longer than the grants table hold: each revocation waits it out, and the second is refused once the first lands.
+				configuration: { storeTimeoutMilliseconds: 15_000 },
 				fixture: grantsFixture({
 					decisions: [answeredInFixture('alsoOwnsA1')],
 					grants: {

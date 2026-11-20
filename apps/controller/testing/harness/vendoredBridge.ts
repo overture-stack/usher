@@ -21,7 +21,11 @@ import express from 'express';
 
 import { type ChannelReader, createChannelReader, importApplicationKey } from '../peripherals/bridgeWire.js';
 import { RELAYED_PATHS } from './containers.js';
-import type { ControllerApplication, ControllerConfiguration } from './controller.js';
+import {
+	type ControllerApplication,
+	type ControllerConfiguration,
+	DEFAULT_STORE_TIMEOUT_MILLISECONDS,
+} from './controller.js';
 import { COMPRESSED_CONTROLLER_TIMING } from './harness.js';
 import { type EvaluatedRecord, matchesSqon } from '../peripherals/sqonEvaluator.js';
 import { type Cleanup, eventually } from './waiting.js';
@@ -69,7 +73,8 @@ export interface TimingProfile {
  *   {@link COMPRESSED_CONTROLLER_TIMING}. It keeps the Bridge's own order between them: I and R no
  *   more than T, 11 T + 20 D below 10 G, and I at least twice the Controller's 0.5 s heartbeat.
  * - `ims`: the Bridge's defaults (T 30 s, D 10 s, G 60 s, R 10 s, I 25 s) and the Controller's
- *   production defaults, which the harness's configuration holds.
+ *   production defaults, which the harness's configuration holds, the store timeout included: the
+ *   product's 5,000 ms, since this profile runs at production timing and its ratio to D is ruled.
  */
 export const TIMING_PROFILES: Readonly<{
 	compressed: TimingProfile;
@@ -90,7 +95,7 @@ export const TIMING_PROFILES: Readonly<{
 	}),
 	ims: Object.freeze({
 		bridge: Object.freeze({}),
-		controller: Object.freeze({}),
+		controller: Object.freeze({ storeTimeoutMilliseconds: DEFAULT_STORE_TIMEOUT_MILLISECONDS }),
 	}),
 });
 

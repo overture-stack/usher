@@ -143,7 +143,7 @@ suite('the grants a signed-in exchange reads from the store', () => {
 			.flatMap(({ data, type }) =>
 				type === emittedType(AUDIT_EVENT_TYPES.tokenExchange) &&
 				isRecord(data) &&
-				data['userId'] === PEOPLE.ana.subject
+				data['actorId'] === PEOPLE.ana.subject
 					? [data]
 					: [],
 			)

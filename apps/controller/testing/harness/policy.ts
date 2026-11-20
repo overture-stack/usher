@@ -88,6 +88,19 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  *   `notices`, both sign-out tables and `change_records`. `notices.idp_subject_id` holds the subject
  *   alone; see {@link noticeSubject}.
  * - `audit_log.severity`: the event's severity as its line carries it (#214 Q2).
+ * - `grant_requests` (ruled): a person's request for a grant someone else decides, by its `kind`:
+ *   `selfGrant`, asked for by its holder, or `orphanedResource`, asked for by a platform administrator
+ *   for another person on a resource with no counted owner, the principal asking in `requested_by`
+ *   and the holder in `holder_user_id`; the grant's terms as `grants` names them, the requested end in `expires_at`, and what the principal asking was
+ *   shown in `capabilities`; its decision, `granted` or `refused`, with who decided and when, all
+ *   three empty while undecided, the decider being neither the principal who asked nor its holder;
+ *   and the grant written by granting it, in `grant_id`, set exactly when granted. A decision is
+ *   kept once written, and a request is never deleted.
+ * - `grants.requested_by` (ruled): the principal who asked for a grant written by granting a
+ *   request, while `granted_by` names who granted it; `null` for any other grant, and never the
+ *   granter.
+ * - `notification_outbox.request_id` (ruled): the request a `grantRequest` row tells of, beside
+ *   `grant_id`, the grant a `selfGrant` row tells of; each row names the one its kind tells of.
  */
 export const POLICY_TABLES = {
 	administrators: {
@@ -202,6 +215,25 @@ export const POLICY_TABLES = {
 		},
 		name: 'grant_decisions',
 	},
+	grantRequests: {
+		columns: {
+			capabilities: 'capabilities',
+			decidedAt: 'decided_at',
+			decidedBy: 'decided_by',
+			decision: 'decision',
+			expiresAt: 'expires_at',
+			grantId: 'grant_id',
+			holderUserId: 'holder_user_id',
+			id: 'id',
+			kind: 'kind',
+			recordCategoryId: 'record_category_id',
+			requestedAt: 'requested_at',
+			requestedBy: 'requested_by',
+			resourceId: 'resource_id',
+			roleId: 'role_id',
+		},
+		name: 'grant_requests',
+	},
 	grants: {
 		columns: {
 			endedAt: 'ended_at',
@@ -213,6 +245,7 @@ export const POLICY_TABLES = {
 			holderUserId: 'holder_user_id',
 			id: 'id',
 			recordCategoryId: 'record_category_id',
+			requestedBy: 'requested_by',
 			resourceId: 'resource_id',
 			revokedAt: 'revoked_at',
 			revokedBy: 'revoked_by',
@@ -298,6 +331,7 @@ export const POLICY_TABLES = {
 			id: 'id',
 			kind: 'kind',
 			recipientUserId: 'recipient_user_id',
+			requestId: 'request_id',
 		},
 		name: 'notification_outbox',
 	},
@@ -398,6 +432,14 @@ export const POLICY_TABLES = {
 		},
 		name: 'subject_sign_outs',
 	},
+	usedChannelAssertions: {
+		columns: {
+			acceptedUntil: 'accepted_until',
+			applicationId: 'application_id',
+			assertionId: 'assertion_id',
+		},
+		name: 'used_channel_assertions',
+	},
 	userIdentities: {
 		columns: {
 			addedAt: 'added_at',
@@ -425,19 +467,55 @@ export const POLICY_TABLES = {
  * resource, category and role that is neither revoked nor ended (#212 Q17); the check that a grant
  * ends only once it has expired (`grantEndedAfterExpiry`); and the rule keeping an ended grant's
  * end, expiry and role as written (`grantEndKept`). The two keys carry PostgreSQL's default names.
+ *
+ * A grant request's rules (ruled; the names assumed): its kind one the store knows
+ * (`grantRequestKind`), a self-grant asked for by its holder (`grantRequestSelfHeld`), an orphaned
+ * resource's request held by someone other than the principal asking
+ * (`grantRequestOrphanedHeldByAnother`), its decision recorded whole or not at all
+ * (`grantRequestDecisionWhole`) and only as `granted` or `refused` (`grantRequestDecision`), its
+ * grant named exactly when granted (`grantRequestGrantWhenGranted`), its decider neither the
+ * principal who asked nor its holder (`grantRequestDecidedByAnother`), its decision kept once written
+ * (`grantRequestDecisionKept`) and the request never deleted (`grantRequestKept`); the principal
+ * asking for a grant never its granter (`grantRequestedByAnother`); and an outbox row naming the one
+ * reference its kind tells of (`notificationReference`), of a kind the outbox knows
+ * (`notificationKind`).
  */
 export const POLICY_CONSTRAINTS: Readonly<{
 	decisionOrder: string;
 	grantEndKept: string;
 	grantEndedAfterExpiry: string;
+	grantRequestDecidedByAnother: string;
+	grantRequestDecision: string;
+	grantRequestDecisionKept: string;
+	grantRequestDecisionWhole: string;
+	grantRequestGrantWhenGranted: string;
+	grantRequestKept: string;
+	grantRequestKind: string;
+	grantRequestOrphanedHeldByAnother: string;
+	grantRequestSelfHeld: string;
+	grantRequestedByAnother: string;
 	identity: string;
 	liveGrant: string;
+	notificationKind: string;
+	notificationReference: string;
 }> = Object.freeze({
 	decisionOrder: 'grant_decisions_user_id_grant_id_decided_at_key',
 	grantEndKept: 'grants_end_kept',
 	grantEndedAfterExpiry: 'grants_ended_after_expiry',
+	grantRequestDecidedByAnother: 'grant_requests_decided_by_another',
+	grantRequestDecision: 'grant_requests_decision_known',
+	grantRequestDecisionKept: 'grant_requests_decision_kept',
+	grantRequestDecisionWhole: 'grant_requests_decision_recorded',
+	grantRequestGrantWhenGranted: 'grant_requests_grant_when_granted',
+	grantRequestKept: 'grant_requests_kept',
+	grantRequestKind: 'grant_requests_kind_known',
+	grantRequestOrphanedHeldByAnother: 'grant_requests_orphaned_resource_held_by_another',
+	grantRequestSelfHeld: 'grant_requests_self_grant_requested_by_holder',
+	grantRequestedByAnother: 'grants_requested_by_another',
 	identity: 'user_identities_idp_issuer_idp_subject_id_key',
 	liveGrant: 'grants_live_unique',
+	notificationKind: 'notification_outbox_kind_check',
+	notificationReference: 'notification_outbox_reference_matches_kind',
 });
 
 /**
@@ -465,8 +543,9 @@ export const BOUNDED_TRIM_REFUSAL = '22023';
  * `lock` and ending at once, deleting nothing, while another session holds it. In the same
  * transaction, a run deletes at most `rowsPerRun` rows from each table, in this order: those of
  * `exchanged_sids` whose `expires_at` is before the configured clock's now, then those of
- * `sid_sign_outs` and then of `subject_sign_outs` whose `expires_at` is more than
- * `clockToleranceMilliseconds`, the Controller's clock tolerance, before that now. It then calls the
+ * `sid_sign_outs`, of `subject_sign_outs`, then of {@link GRANT_OPERATIONS} whose `expires_at`
+ * is more than `clockToleranceMilliseconds`, the Controller's clock tolerance, before that now, and then of
+ * `used_channel_assertions` whose `accepted_until` is more than that tolerance before that now. It then calls the
  * bounded trim with `rowsPerRun`. It records no event, and writes the operational line `failedLine`
  * at error once as runs start failing.
  */
@@ -485,6 +564,25 @@ export const RETENTION_SWEEP: Readonly<{
 });
 
 /**
+ * Where the grant rate's count is kept (assumed): one row for each grant operation counted, naming
+ * the identity acting by its issuer and subject, `occurred_at` the configured clock's instant it
+ * was counted at, and `expires_at` that instant plus the window the counting instance read, which
+ * nothing reads: the retention sweep deletes a row by `occurred_at` once the live window and the
+ * clock tolerance have passed. Kept apart from {@link POLICY_TABLES}, whose columns are those
+ * `schema.md` names, until the schema names it.
+ */
+export const GRANT_OPERATIONS = Object.freeze({
+	columns: Object.freeze({
+		expiresAt: 'expires_at',
+		id: 'id',
+		idpIssuer: 'idp_issuer',
+		idpSubjectId: 'idp_subject_id',
+		occurredAt: 'occurred_at',
+	}),
+	name: 'grant_operations',
+});
+
+/**
  * The column of `grant_decisions` marking a decision the EGO import recorded for an imported
  * submitter rather than one the person gave: it holds `'import'` on each acceptance an import
  * records, and `null` on a person's own answer.
@@ -498,6 +596,18 @@ export const NOTICE_KINDS = Object.freeze(['baseline', 'category', 'global', 'pr
 
 /** The kind of the outbox row that tells a resource's owners of a self-grant on it (#212 Q13). */
 export const SELF_GRANT_NOTIFICATION = 'selfGrant';
+
+/** The kind of the outbox row that tells a resource's owners of a grant request on it (ruled). */
+export const GRANT_REQUEST_NOTIFICATION = 'grantRequest';
+
+/** The kind of grant request asking for a grant to the principal asking for it themself (ruled). */
+export const SELF_GRANT_REQUEST = 'selfGrant';
+
+/**
+ * The kind of grant request a platform administrator's grant of access to records on a resource
+ * with no counted owner is written as (ruled): a grant to someone other than the principal asking.
+ */
+export const ORPHANED_RESOURCE_REQUEST = 'orphanedResource';
 
 /**
  * The seeded role whose holders own a resource (permissions-model.md). An owner grant is a person's
@@ -2587,40 +2697,45 @@ export interface PolicySnapshot {
  * @param client a connection under the migration role.
  */
 export const policySnapshot = async (client: pg.ClientBase): Promise<PolicySnapshot> => {
-	const [servedRows, categoryRows, fieldValueRows, fieldRows, grantRows, resourceRows] = await Promise.all([
-		rowsOf(
-			client,
+	// One connection runs one query at a time, so the reads run in turn, each after the one before, and each
+	// lands under its own name.
+	const reads: readonly (readonly [keyof PolicySnapshot, string])[] = [
+		[
+			'applicationResources',
 			`SELECT ${quotedColumn(applicationResources.columns.applicationId)}::text AS application, ${quotedColumn(applicationResources.columns.resourceId)}::text AS resource FROM ${qualified(applicationResources)} ORDER BY 1, 2`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'categories',
 			`SELECT ${quotedColumn(categories.columns.scope)}::text AS scope, ${quotedColumn(categories.columns.name)} AS name, ${quotedColumn(categories.columns.description)} AS description, ${quotedColumn(categories.columns.resourceId)}::text AS resource FROM ${qualified(categories)} ORDER BY 1, 2, 4`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'fieldValues',
 			`SELECT ${quotedColumn(resourceFieldValues.columns.resourceId)}::text AS resource, ${quotedColumn(resourceFieldValues.columns.fieldId)}::text AS field, ${quotedColumn(resourceFieldValues.columns.value)} AS value FROM ${qualified(resourceFieldValues)} ORDER BY 1, 2`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'fields',
 			`SELECT ${quotedColumn(resourceFields.columns.name)} AS name, ${quotedColumn(resourceFields.columns.description)} AS description FROM ${qualified(resourceFields)} ORDER BY 1`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'grants',
 			`SELECT ${quotedColumn(grants.columns.id)}::text AS id, ${quotedColumn(grants.columns.revokedAt)}::text AS revoked FROM ${qualified(grants)} ORDER BY 1`,
-		),
-		rowsOf(
-			client,
+		],
+		[
+			'resources',
 			`SELECT ${quotedColumn(resources.columns.externalId)} AS external_id, ${quotedColumn(resources.columns.name)} AS name, ${quotedColumn(resources.columns.description)} AS description, ${quotedColumn(resources.columns.baseTier)}::text AS tier, ${quotedColumn(resources.columns.suppressed)} AS suppressed, ${quotedColumn(resources.columns.retiredAt)}::text AS retired, ${quotedColumn(resources.columns.updatedAt)}::text AS updated FROM ${qualified(resources)} ORDER BY 1`,
-		),
-	]);
-	return {
-		applicationResources: servedRows,
-		categories: categoryRows,
-		fieldValues: fieldValueRows,
-		fields: fieldRows,
-		grants: grantRows,
-		resources: resourceRows,
-	};
+		],
+	];
+	return reads.reduce<Promise<PolicySnapshot>>(
+		(previous, [name, text]) => previous.then(async (done) => ({ ...done, [name]: await rowsOf(client, text) })),
+		Promise.resolve({
+			applicationResources: [],
+			categories: [],
+			fieldValues: [],
+			fields: [],
+			grants: [],
+			resources: [],
+		}),
+	);
 };
 
 /**

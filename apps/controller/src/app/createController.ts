@@ -23,6 +23,7 @@ import {
 	rejectionTallyEvent,
 } from '../channelAssertion/index.js';
 import { type ControllerConfiguration, ENVIRONMENT_VARIABLES } from '../configuration/index.js';
+import { createDirectory } from '../directory/index.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
 import {
 	createExchange,
@@ -32,6 +33,7 @@ import {
 	TOKEN_LIMIT_BYTES,
 } from '../exchange/index.js';
 import { ControllerError } from '../failures/index.js';
+import { createGrantRate } from '../grantRate/index.js';
 import { createGrantRoutes, sqlGrantStore } from '../grants/index.js';
 import { createServer } from '../http/index.js';
 import { createTokenVerifier } from '../identityProvider/index.js';
@@ -78,6 +80,9 @@ interface Lifecycle {
 	writes: boolean;
 }
 
+/** The line written, at info, once the Controller listens: every start writes one. */
+export const CONTROLLER_STARTED = 'controller.started';
+
 const isAddress = (address: unknown): address is AddressInfo =>
 	typeof address === 'object' && address !== null && 'port' in address;
 
@@ -118,7 +123,8 @@ const READINESS_CONNECTIONS = 1;
  * configured clock passes the reload interval, and a stored key that does not open is recorded as
  * `applicationKey.unreadable`. A start finding that its database role writes then runs the
  * retention sweep until the stop, giving it the configured clock; a run of it that fails changes no
- * answer of any route, readiness's included. The Management API, the exchange and the back-channel
+ * answer of any route, readiness's included. Each grant write is counted against the grant rate in the
+ * store, so every instance sharing it counts alike. The Management API, the exchange and the back-channel
  * logout verify the identity provider's tokens through one verifier, and the revocation channel and
  * the exchange check channel assertions through one verifier, counting those they cannot verify in
  * one tally. The credentials refused by those three routes are counted in one set of windows for the
@@ -126,6 +132,8 @@ const READINESS_CONNECTIONS = 1;
  * event. Every unit of its store work, a request's statement or transaction, a recorded event,
  * a read of the keys or the notices, a run of the sweep, or the start's transaction, runs within
  * the store timeout.
+ * The operations naming a person by address resolve the address through one directory, which the
+ * start does not contact.
  *
  * Every start allowed a database connection that does not verify the server it reaches writes one
  * line at warning, {@link UNVERIFIED_CONNECTION_ALLOWED}, naming the variable allowing it, before
@@ -280,7 +288,7 @@ export const createController = (configuration: ControllerConfiguration): Contro
 		reader: createNoticeReader(reader, configuration.databaseSchema),
 		rejections,
 		settings,
-		usedAssertions: createUsedAssertions(configuration.clock),
+		usedAssertions: createUsedAssertions(reader, configuration.databaseSchema),
 		verifier: assertionVerifier,
 	});
 	const noticeWake = { name: 'noticeWake', run: () => channel.wake() };
@@ -298,6 +306,8 @@ export const createController = (configuration: ControllerConfiguration): Contro
 	// One verifier for every route verifying the identity provider's tokens, so the keys fetched for
 	// one are held for all, and their fetches share one cooldown.
 	const tokenVerifier = createTokenVerifier(configuration, eventLog);
+	// One directory for every operation naming a person by address, so its token is held for all.
+	const directory = createDirectory(configuration, eventLog);
 	// The shares divide the exchange pool the instance holds; the registered count follows each read of
 	// the key ring.
 	const admission = createAdmission({
@@ -379,9 +389,11 @@ export const createController = (configuration: ControllerConfiguration): Contro
 			},
 			management,
 		),
-		...createResourceRoutes({ settings, store: reader, trail: wakingTrail }, management),
+		...createResourceRoutes({ directory, settings, store: reader, trail: wakingTrail }, management),
 		...createGrantRoutes(
 			{
+				directory,
+				grantRate: createGrantRate(settings),
 				grantStoreOf: (connection) =>
 					sqlGrantStore(connection, {
 						issuer: configuration.identityProviderIssuer,
@@ -465,7 +477,16 @@ export const createController = (configuration: ControllerConfiguration): Contro
 			sweep.start();
 		}
 		lifecycle.ready = lifecycle.stopped === undefined;
-		return { url: urlOf(server.server.address()) };
+		const bound = server.server.address();
+		const url = urlOf(bound);
+		if (isAddress(bound)) {
+			eventLog.info(CONTROLLER_STARTED, {
+				host: bound.address,
+				instance: configuration.instanceName,
+				port: bound.port,
+			});
+		}
+		return { url };
 	};
 
 	const stopOnce = async (): Promise<void> => {

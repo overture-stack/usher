@@ -36,6 +36,10 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
 	return typeof code === 'string' ? { code } : {};
 };
 
+// What a request's admission gives: its assertion once admitted, the store's failure to record it, or
+// the refusal it is answered with.
+type Admission = { assertion: VerifiedAssertion<ChannelKey> } | { failure: unknown } | { problem: Problem };
+
 const headerOf = (request: FastifyRequest, name: string): string | undefined => {
 	const value = request.headers[name];
 	return typeof value === 'string' ? value : undefined;
@@ -59,9 +63,11 @@ const headerOf = (request: FastifyRequest, name: string): string | undefined => 
  *   newest place; a poll after a cursor with the audience's notices after it, a page at a time, and a
  *   `next` naming the last notice returned while more wait, or the newest place once none does. An
  *   assertion serves any number of polls within its lifetime.
- * - A stream's assertion is recorded as used as soon as it verifies, before anything else the request
- *   carries is read: one presented to the stream before is refused `401` as `reusedAssertion`, and
- *   handed to the recorder as any other refusal of an assertion that verified is. Once its cursor is read, the stream reserves its place under the audience's
+ * - A stream's assertion is recorded in the store as used as soon as it verifies, before anything else
+ *   the request carries is read, once across every instance sharing the store: one already recorded is
+ *   refused `401` as `reusedAssertion`, and handed to the recorder as any other refusal of an assertion
+ *   that verified is. One the store cannot record is answered `503` as any store failure on the route is,
+ *   and no stream is opened for it. Once its cursor is read, the stream reserves its place under the audience's
  *   limit on the instance, refused `503` past it, and sends its headers and a first byte at once. It
  *   replays the notices after its cursor, then delivers each new one as the instance's tail reads it.
  * - A wake has the tail read at once, so a change this instance committed is pushed without waiting
@@ -116,26 +122,37 @@ export const createNoticeChannel = ({
 		return undefined;
 	};
 
-	// The refusal earned before any store read: the assertion's, then the notice versions'. An assertion
-	// opening a stream is recorded as used once it verifies, so a second presentation to the stream is
-	// refused from memory, and handed to the recorder, whatever else its request carries.
+	// The assertion's verification and its refusal come from memory. An assertion opening a stream is then
+	// recorded in the store, which judges a second presentation to the stream a reuse: refused, and handed
+	// to the recorder whatever else its request carries. A failure to record it is answered 503 with no
+	// stream opened. The notice versions' refusal comes last, so a stream refused for them has spent its
+	// assertion.
 	const admission = async (
 		request: FastifyRequest,
 		{ opensStream }: { opensStream: boolean },
-	): Promise<{ assertion: VerifiedAssertion<ChannelKey> } | { problem: Problem }> => {
+	): Promise<Admission> => {
 		const assertion = await admit(request);
 		if (assertion === undefined) {
 			return { problem: CHANNEL_PROBLEMS.channelAssertionRefused };
 		}
 		const { acceptedUntil, id, key, signingInputDigest } = assertion;
-		if (opensStream && !usedAssertions.record(key.applicationId, id, acceptedUntil)) {
-			assertionRefusals.refused({
-				applicationId: key.applicationId,
-				reason: 'reusedAssertion',
-				signingInputDigest,
-				sourceIp: request.ip,
-			});
-			return { problem: CHANNEL_PROBLEMS.channelAssertionRefused };
+		if (opensStream) {
+			const recorded = await usedAssertions.record(key.applicationId, id, acceptedUntil).then(
+				(wrote) => ({ kind: 'recorded' as const, wrote }),
+				(failure: unknown) => ({ failure, kind: 'failed' as const }),
+			);
+			if (recorded.kind === 'failed') {
+				return { failure: recorded.failure };
+			}
+			if (!recorded.wrote) {
+				assertionRefusals.refused({
+					applicationId: key.applicationId,
+					reason: 'reusedAssertion',
+					signingInputDigest,
+					sourceIp: request.ip,
+				});
+				return { problem: CHANNEL_PROBLEMS.channelAssertionRefused };
+			}
 		}
 		return listsServedVersion(headerOf(request, NOTICE_VERSIONS_HEADER))
 			? { assertion }
@@ -199,6 +216,9 @@ export const createNoticeChannel = ({
 		exposeHeadRoute: false,
 		handler: async (request, reply) => {
 			const admitted = await admission(request, { opensStream: false });
+			if ('failure' in admitted) {
+				return storeFailed(reply, CHANNEL_PATHS.poll, admitted.failure);
+			}
 			if ('problem' in admitted) {
 				return sendChannelProblem(reply, admitted.problem);
 			}
@@ -234,6 +254,9 @@ export const createNoticeChannel = ({
 		exposeHeadRoute: false,
 		handler: async (request, reply) => {
 			const admitted = await admission(request, { opensStream: true });
+			if ('failure' in admitted) {
+				return storeFailed(reply, CHANNEL_PATHS.stream, admitted.failure);
+			}
 			if ('problem' in admitted) {
 				return sendChannelProblem(reply, admitted.problem);
 			}
