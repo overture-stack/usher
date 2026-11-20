@@ -415,7 +415,7 @@ const standUp = (context: TestContext, world: Partial<World> = {}, autoAccept = 
 		{
 			directory: fakeDirectory(known, stand.lookups),
 			grantRate: {
-				count: async ({ record }, subject) => {
+				count: async ({ record }, { subject }) => {
 					countsIn.get(record)?.push(subject);
 				},
 			},

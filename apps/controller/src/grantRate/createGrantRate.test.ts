@@ -13,6 +13,8 @@ const ISSUER = 'https://auth.example.org/realms/usher';
 
 const SUBJECT = 'subject-ana';
 
+const SOURCE_IP = '203.0.113.17';
+
 const THRESHOLD = Object.freeze({ operationCount: 3, windowSeconds: 30 });
 
 // The live settings the grant rate reads: the clock and the issuer as fixed, the threshold as given.
@@ -50,7 +52,7 @@ const countWith = async (earlier: number, settings: GrantRateSettings = settings
 			return 'event-id';
 		},
 	};
-	await createGrantRate(settings).count(transaction, SUBJECT);
+	await createGrantRate(settings).count(transaction, { sourceIp: SOURCE_IP, subject: SUBJECT });
 	return counting;
 };
 
@@ -78,13 +80,14 @@ suite("the grant rate's count", () => {
 		]);
 	});
 
-	test("records grant.rateExceeded at warning, naming the count and the window, when the actor's operations before this one number exactly the threshold", async () => {
+	test("records grant.rateExceeded at warning, naming the count, the window and the address of the request counted, when the actor's operations before this one number exactly the threshold", async () => {
 		const { recorded } = await countWith(THRESHOLD.operationCount);
 
 		assert.deepEqual(recorded, [
 			{
 				data: {
 					operationCount: THRESHOLD.operationCount + 1,
+					sourceIp: SOURCE_IP,
 					windowSeconds: THRESHOLD.windowSeconds,
 				},
 				severity: 'warning',
@@ -118,7 +121,7 @@ suite("the grant rate's count", () => {
 		};
 
 		settings.grantRateThreshold = { operationCount: 5, windowSeconds: 30 };
-		await grantRate.count(transaction, SUBJECT);
+		await grantRate.count(transaction, { sourceIp: SOURCE_IP, subject: SUBJECT });
 
 		assert.deepEqual(recorded, []);
 	});

@@ -65,7 +65,7 @@ const assertRefusedAny = (answer: AdminResponse, what: string): void => {
 };
 
 suite('the grant rate against the store', () => {
-	test("records grant.rateExceeded as one actor's grant writes cross the threshold, alike in the store and the log, naming the actor, the count and the window, and completes the write crossing it", async () => {
+	test("records grant.rateExceeded as one actor's grant writes cross the threshold, alike in the store and the log, naming the actor, the count, the window and the address of the request crossing it, and completes the write crossing it", async () => {
 		const log = captureLog();
 		await withHarness(
 			{
@@ -104,6 +104,7 @@ suite('the grant rate against the store', () => {
 					actorType: 'human',
 					instance: harness.configuration.instanceName,
 					operationCount: 3,
+					sourceIp: '127.0.0.1',
 					windowSeconds: 60,
 				});
 				assert.equal(row.severity, 'warning');

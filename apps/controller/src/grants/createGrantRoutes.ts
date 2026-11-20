@@ -279,7 +279,7 @@ export const createGrantRoutes = (
 									granter,
 								})) ?? refuseWithin(GRANT_PROBLEMS.alreadyHolds),
 							);
-				await grantRate.count({ connection, record }, principal.subject);
+				await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 				return outcome;
 			}),
 			{
@@ -327,7 +327,7 @@ export const createGrantRoutes = (
 		if (recordedRefusal !== undefined) {
 			await trail.inTransaction(actorOf(principal), async (transaction) => {
 				await transaction.record(unansweredRefusal(terms.resource, recordedRefusal, sourceIp));
-				await grantRate.count(transaction, principal.subject);
+				await grantRate.count(transaction, { sourceIp, subject: principal.subject });
 			});
 		}
 		return outcome;
@@ -413,7 +413,7 @@ export const createGrantRoutes = (
 						severity: 'info',
 						type: 'grant.decision',
 					});
-					await grantRate.count({ connection, record }, principal.subject);
+					await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 					return answered(204, undefined);
 				}),
 				{ resources_keep_an_owner: GRANT_PROBLEMS.resourceNeedsAnOwner },
@@ -483,7 +483,7 @@ export const createGrantRoutes = (
 						severity: 'info',
 						type: 'grant.revocation',
 					});
-					await grantRate.count({ connection, record }, principal.subject);
+					await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 					return answered(
 						200,
 						grantView({ ...grant, revokedAt: now, revokerSubject: principal.subject }, now.getTime()),

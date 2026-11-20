@@ -183,7 +183,9 @@ export const managementRoute = <Input>(
 					severity,
 					type: typeof type === 'function' ? type(asked) : type,
 				},
-				recordedWith === undefined ? undefined : (transaction) => recordedWith(transaction, principal),
+				recordedWith === undefined
+					? undefined
+					: (transaction) => recordedWith(transaction, principal, request.ip),
 			);
 		}
 	};

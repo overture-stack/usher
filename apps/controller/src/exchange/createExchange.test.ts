@@ -364,8 +364,8 @@ interface Stand {
 	/** Closes every window refused credentials are counted in, settling once each closing is recorded. */
 	closeWindows(): Promise<void>;
 
-	/** Each key the exchange asked to confirm, as its confirmation settled. */
-	confirmed: { applicationId: string; keyId: string }[];
+	/** Each key the exchange asked to confirm, with the address of the request asking, as its confirmation settled. */
+	confirmed: { applicationId: string; keyId: string; sourceIp: string }[];
 
 	/** The deadline given with each key's confirmation, as it was asked for. */
 	confirmationDeadlines: (Deadline | undefined)[];
@@ -583,10 +583,10 @@ const standUp = (
 			return judgement;
 		},
 		keyConfirmations: {
-			confirm: async ({ applicationId, keyId }, deadline) => {
+			confirm: async ({ applicationId, keyId }, sourceIp, deadline) => {
 				stand.confirmationDeadlines.push(deadline);
 				await confirmationSettled;
-				stand.confirmed.push({ applicationId, keyId });
+				stand.confirmed.push({ applicationId, keyId, sourceIp });
 			},
 		},
 		lateRequestThresholdMilliseconds,
@@ -1365,6 +1365,7 @@ suite('the token exchange', () => {
 				answers.map(() => ({
 					applicationId: APPLICATION,
 					keyId: KEY.keyId,
+					sourceIp: '127.0.0.1',
 				})),
 			);
 		});

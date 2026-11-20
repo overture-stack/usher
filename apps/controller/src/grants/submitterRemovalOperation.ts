@@ -192,7 +192,7 @@ export const submitterRemovalOperation = ({
 							}),
 						Promise.resolve(),
 					);
-					await grantRate.count({ connection, record }, principal.subject);
+					await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 					return answered(204, undefined);
 				}),
 			);

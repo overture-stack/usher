@@ -289,7 +289,7 @@ export const selfGrantOperation = ({
 				};
 				const outcome =
 					authority.kind === 'issue' ? await issue(grants, judged) : await request(grants, judged);
-				await grantRate.count({ connection, record }, principal.subject);
+				await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 				return outcome;
 			}),
 			{

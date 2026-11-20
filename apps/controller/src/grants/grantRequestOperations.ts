@@ -271,7 +271,7 @@ export const grantRequestDecisionOperation = ({
 					};
 					const outcome =
 						input.decision === 'granted' ? await grant(grants, deciding) : await refuse(grants, deciding);
-					await grantRate.count({ connection, record }, principal.subject);
+					await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 					return outcome;
 				}),
 				{

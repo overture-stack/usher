@@ -18,8 +18,8 @@ const SECOND_MILLISECONDS = 1000;
  * passed from it, and counts the actor's rows within that window before this one. When those
  * number exactly the threshold's `operationCount`, this operation carries the count past it, and
  * `grant.rateExceeded` is recorded at warning in the same transaction, naming the count with this
- * operation and the window; a count already past the threshold records nothing more, so the event
- * is recorded once each time the count crosses.
+ * operation, the window and the address the request came from; a count already past the threshold
+ * records nothing more, so the event is recorded once each time the count crosses.
  *
  * @param settings the clock, the schema, the trusted issuer and the live settings.
  */
@@ -36,7 +36,7 @@ export const createGrantRate = (settings: GrantRateSettings): GrantRate => {
      WHERE idp_issuer = $1 AND idp_subject_id = $2 AND occurred_at > $5`;
 
 	return {
-		count: async ({ connection, record }, subject) => {
+		count: async ({ connection, record }, { sourceIp, subject }) => {
 			await connection.query('SELECT pg_advisory_xact_lock($1::integer, hashtext($2))', [
 				ACTOR_LOCK_CLASS,
 				subject,
@@ -54,7 +54,7 @@ export const createGrantRate = (settings: GrantRateSettings): GrantRate => {
 			]);
 			if (rows[0]?.earlier === operationCount) {
 				await record({
-					data: { operationCount: operationCount + 1, windowSeconds },
+					data: { operationCount: operationCount + 1, sourceIp, windowSeconds },
 					severity: 'warning',
 					type: 'grant.rateExceeded',
 				});

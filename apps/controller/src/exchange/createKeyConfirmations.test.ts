@@ -16,6 +16,8 @@ const KEY = Object.freeze({
 	keyId: '6a1e9c3b-2f4d-4b8a-9c7e-1d5f3a8b2e90',
 });
 
+const SOURCE_IP = '203.0.113.17';
+
 const OTHER_KEY = Object.freeze({
 	applicationId: KEY.applicationId,
 	keyId: 'b3d8f1a2-7c4e-4e9b-8a6d-5f2c1e9a7b34',
@@ -100,10 +102,10 @@ const standUp = ({ begun = Promise.resolve(), failures = [], unconfirmed = [] }:
 const storeFailure = (code: string): Error => Object.assign(new Error('the store refused the statement'), { code });
 
 suite("an application key's confirmation", () => {
-	test("sets a key's confirmed_at by the clock where it is still unset, and records applicationKey.confirmation naming the application and the key, in one transaction its own, its actor the system", async () => {
+	test("sets a key's confirmed_at by the clock where it is still unset, and records applicationKey.confirmation naming the application, the key and the address of the exchange that began it, in one transaction its own, its actor the system", async () => {
 		const stand = standUp();
 
-		await stand.confirmations.confirm(KEY);
+		await stand.confirmations.confirm(KEY, SOURCE_IP);
 
 		assert.equal(stand.transactions.length, 1);
 		const [transaction] = stand.transactions;
@@ -116,7 +118,7 @@ suite("an application key's confirmation", () => {
 		assert.deepEqual(transaction?.statements[0]?.values, [KEY.keyId, KEY.applicationId, new Date(NOW)]);
 		assert.deepEqual(transaction?.recorded, [
 			{
-				data: { applicationId: KEY.applicationId, keyId: KEY.keyId },
+				data: { applicationId: KEY.applicationId, keyId: KEY.keyId, sourceIp: SOURCE_IP },
 				severity: 'info',
 				type: 'applicationKey.confirmation',
 			},
@@ -126,7 +128,7 @@ suite("an application key's confirmation", () => {
 	test('records no event where the store finds the key confirmed already, as by another instance first', async () => {
 		const stand = standUp({ unconfirmed: [false] });
 
-		await stand.confirmations.confirm(KEY);
+		await stand.confirmations.confirm(KEY, SOURCE_IP);
 
 		assert.equal(stand.transactions[0]?.statements.length, 1);
 		assert.deepEqual(stand.transactions[0]?.recorded, []);
@@ -136,10 +138,10 @@ suite("an application key's confirmation", () => {
 		const confirming = standUp();
 		const finding = standUp({ unconfirmed: [false] });
 
-		await confirming.confirmations.confirm(KEY);
-		await confirming.confirmations.confirm(KEY);
-		await finding.confirmations.confirm(KEY);
-		await finding.confirmations.confirm(KEY);
+		await confirming.confirmations.confirm(KEY, SOURCE_IP);
+		await confirming.confirmations.confirm(KEY, SOURCE_IP);
+		await finding.confirmations.confirm(KEY, SOURCE_IP);
+		await finding.confirmations.confirm(KEY, SOURCE_IP);
 
 		assert.equal(confirming.transactions.length, 1);
 		assert.equal(finding.transactions.length, 1);
@@ -152,7 +154,7 @@ suite("an application key's confirmation", () => {
 		});
 		const stand = standUp({ begun });
 
-		const racing = [1, 2, 3].map(() => stand.confirmations.confirm(KEY));
+		const racing = [1, 2, 3].map(() => stand.confirmations.confirm(KEY, SOURCE_IP));
 		await delay(0);
 		const settledBefore = await Promise.race([Promise.all(racing).then(() => true), delay(10).then(() => false)]);
 		held.release();
@@ -166,8 +168,8 @@ suite("an application key's confirmation", () => {
 	test("confirms each key apart, a key known confirmed leaving its application's other key to its own first exchange", async () => {
 		const stand = standUp();
 
-		await stand.confirmations.confirm(KEY);
-		await stand.confirmations.confirm(OTHER_KEY);
+		await stand.confirmations.confirm(KEY, SOURCE_IP);
+		await stand.confirmations.confirm(OTHER_KEY, SOURCE_IP);
 
 		assert.deepEqual(
 			stand.transactions.map(({ statements }) => statements[0]?.values?.[0]),
@@ -178,8 +180,8 @@ suite("an application key's confirmation", () => {
 	test("settles when its write fails, writing a line naming the application, the key and the failure's code alone, and remembering nothing, so the next exchange tries again", async () => {
 		const stand = standUp({ failures: [storeFailure('57P01')] });
 
-		await stand.confirmations.confirm(KEY);
-		await stand.confirmations.confirm(KEY);
+		await stand.confirmations.confirm(KEY, SOURCE_IP);
+		await stand.confirmations.confirm(KEY, SOURCE_IP);
 
 		assert.deepEqual(stand.lines, [
 			{
@@ -200,8 +202,8 @@ suite("an application key's confirmation", () => {
 			unconfirmed: [true, false],
 		});
 
-		await stand.confirmations.confirm(KEY);
-		await stand.confirmations.confirm(KEY);
+		await stand.confirmations.confirm(KEY, SOURCE_IP);
+		await stand.confirmations.confirm(KEY, SOURCE_IP);
 
 		assert.deepEqual(stand.lines, []);
 		assert.equal(stand.transactions.length, 2);
@@ -212,8 +214,8 @@ suite("an application key's confirmation", () => {
 		const deadline: Deadline = { remainingMilliseconds: () => 4000 };
 		const stand = standUp();
 
-		await stand.confirmations.confirm(KEY, deadline);
-		await stand.confirmations.confirm(OTHER_KEY);
+		await stand.confirmations.confirm(KEY, SOURCE_IP, deadline);
+		await stand.confirmations.confirm(OTHER_KEY, SOURCE_IP);
 
 		assert.equal(stand.transactions[0]?.options?.deadline, deadline);
 		assert.equal(stand.transactions[1]?.options?.deadline, undefined);
@@ -223,8 +225,8 @@ suite("an application key's confirmation", () => {
 		const deadline: Deadline = { remainingMilliseconds: () => 4000 };
 		const stand = standUp({ failures: [new StoreTimeout()] });
 
-		await stand.confirmations.confirm(KEY, deadline);
-		await stand.confirmations.confirm(KEY, deadline);
+		await stand.confirmations.confirm(KEY, SOURCE_IP, deadline);
+		await stand.confirmations.confirm(KEY, SOURCE_IP, deadline);
 
 		assert.deepEqual(stand.lines, [
 			{

@@ -210,8 +210,9 @@ export interface OperationEvent {
 	 *
 	 * @param transaction the transaction recording the event.
 	 * @param principal whose request was refused or failed.
+	 * @param sourceIp the address the request came from.
 	 */
-	recordedWith?(transaction: AuditTransaction<pg.ClientBase>, principal: Principal): Promise<void>;
+	recordedWith?(transaction: AuditTransaction<pg.ClientBase>, principal: Principal, sourceIp: string): Promise<void>;
 
 	/**
 	 * The event's type, or how it is read from what the request names, for an operation whose

@@ -13,9 +13,10 @@ export interface GrantRate {
 	 *
 	 * @param transaction the transaction of the change counted, or of the event recording its
 	 *   refusal.
-	 * @param subject the actor's subject under the trusted issuer.
+	 * @param request the actor's subject under the trusted issuer, and the address the request
+	 *   counted came from.
 	 */
-	count(transaction: AuditTransaction<pg.ClientBase>, subject: string): Promise<void>;
+	count(transaction: AuditTransaction<pg.ClientBase>, request: { sourceIp: string; subject: string }): Promise<void>;
 }
 
 /**

@@ -488,7 +488,7 @@ export const createExchange = ({
 		if (check.kind === 'verified') {
 			const { key } = check.assertion;
 			admitted.set(request, { deadline, key });
-			confirming.set(request, keyConfirmations.confirm(key, deadline));
+			confirming.set(request, keyConfirmations.confirm(key, request.ip, deadline));
 			return undefined;
 		}
 		// The refusal is answered from memory, so the store's state never delays it.

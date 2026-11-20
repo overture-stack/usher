@@ -157,7 +157,7 @@ export const grantChangeOperation = (
 					role: judgement.role.name,
 				};
 				if (judgement.endMoved === 'kept' && judgement.roleMoved === 'kept') {
-					await grantRate.count({ connection, record }, principal.subject);
+					await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 					return answered(200, grantView(changed, now.getTime()));
 				}
 				await grants.changeGrant({
@@ -169,7 +169,7 @@ export const grantChangeOperation = (
 					await earlier;
 					return record(event);
 				}, Promise.resolve());
-				await grantRate.count({ connection, record }, principal.subject);
+				await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 				return answered(200, grantView(changed, now.getTime()));
 			}),
 			{
