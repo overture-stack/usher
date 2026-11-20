@@ -1,4 +1,4 @@
-import { SUSPENDED_HEADER } from '@overture-stack/usher-express-bridge';
+import { SUSPENDED_HEADER } from '@overture-stack/usher-bridge--express';
 import type { KeyRegistration, PermissionsPayload } from '@overture-stack/usher-types';
 import pg from 'pg';
 

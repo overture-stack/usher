@@ -19,7 +19,7 @@ to that app, working with the shared Bridge. Their responsibilities together:
 5. Maintain the revocation channel (push subscription + poll fallback).
 6. Enter revocation-uncertain mode and suspend sessions if the revocation channel goes dark.
 
-Items 1-3 and 5-6 are implemented by the shared Bridge library (`@overture-stack/usher-express-bridge`),
+Items 1-3 and 5-6 are implemented by the shared Bridge library (`@overture-stack/usher-bridge--express`),
 whose middleware the host application mounts, and the Bridge renders each enforcement result. Each
 app-specific adapter (`@overture-stack/arranger-usher-adapter`, etc.) is handed the Bridge and
 adds item 4.
@@ -486,7 +486,7 @@ The full responsibility split between Bridge and adapter is in [architecture.md]
 The lists below summarize the requirements relevant to implementation, including specifics not
 captured in the component description.
 
-**Bridge (`@overture-stack/usher-express-bridge`), shared by all adapters:**
+**Bridge (`@overture-stack/usher-bridge--express`), shared by all adapters:**
 
 - Hold its own application's JWE key. The key is symmetric: the Controller generates it when the
   application is registered, and the application receives it once, through its own secrets.

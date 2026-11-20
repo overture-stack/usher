@@ -14,7 +14,7 @@ each person may see, and the application enforces them at its own query layer.
   result for each catalogue it serves at the application's query layer. It describes those
   catalogues to the Bridge with the `KeyRegistration` types. At run time, an adapter depends on this
   package alone.
-- **A Bridge**, such as `@overture-stack/usher-express-bridge`, validates each request's access and
+- **A Bridge**, such as `@overture-stack/usher-bridge--express`, validates each request's access and
   attaches it to the framework's per-request store with `attachAccess`.
 - **A portal's browser code** reads the Bridge's answers through `SUSPENDED_HEADER`,
   `SUSPENDED_VALUE` and `CHALLENGE_ERRORS` rather than writing their values inline.
@@ -25,7 +25,7 @@ each person may see, and the application enforces them at its own query layer.
 
 It is an ES module, for Node 24 or later. It depends on `@overture-stack/sqon`, and through it on
 zod, since its validators apply sqon's `SqonSchema`. An application using
-`@overture-stack/usher-express-bridge` installs this package itself, since the Bridge takes it as a
+`@overture-stack/usher-bridge--express` installs this package itself, since the Bridge takes it as a
 peer dependency, so the Bridge and the adapter share one copy.
 
 ## Usage

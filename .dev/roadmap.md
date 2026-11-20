@@ -547,9 +547,9 @@ Requirements that surfaced while earlier units were reviewed, held here so each 
 
 Types and runtime validators shared by the Controller, the Bridge and adapters: the permissions payload, the enforcement result, the request's access value and the notices. Lives in `modules/types`. Built and tested on the Bridge's branch, awaiting review; unpublished.
 
-### `@overture-stack/usher-express-bridge`
+### `@overture-stack/usher-bridge--express`
 
-Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/express-bridge`, with its core free of Express so a Bridge for another framework can reuse it. Built and tested on the Bridge's branch, awaiting review; unpublished.
+Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/bridge--express`, with its core free of Express so a Bridge for another framework can reuse it. Built and tested on the Bridge's branch, awaiting review; unpublished.
 
 ### First publish of the two packages
 
@@ -584,7 +584,7 @@ Design not yet started; see `.dev/design/management-ui.md`. High-level scope: re
 
 ### Finding untested code, settled before the Bridge is built
 
-To be worked out before implementation of `@overture-stack/usher-express-bridge` begins, so the Bridge and the Controller are measured from their first commit.
+To be worked out before implementation of `@overture-stack/usher-bridge--express` begins, so the Bridge and the Controller are measured from their first commit.
 
 A whole-suite coverage report misses the gaps that matter. A branch that one module's own test never reaches still reads as covered when another test runs it incidentally, and a file no test imports may not appear at all. Two layers find them mechanically:
 

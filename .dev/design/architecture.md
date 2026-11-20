@@ -183,7 +183,7 @@ refuses or drops startup parameters it does not track, in any mode.
 
 ---
 
-### Bridge (`@overture-stack/usher-express-bridge`)
+### Bridge (`@overture-stack/usher-bridge--express`)
 
 **Role:** Shared authorization library embedded in applications. Connects the application to the
 Controller: token exchange, Usher token caching, decryption, and revocation channel maintenance.

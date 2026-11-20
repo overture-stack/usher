@@ -8,7 +8,7 @@
 		"swagger-ui-dist": "catalog:"
 	},
 	"devDependencies": {
-		"@overture-stack/usher-express-bridge": "workspace:^",
+		"@overture-stack/usher-bridge--express": "workspace:^",
 		"@overture-stack/usher-types": "workspace:^",
 		"@testcontainers/postgresql": "catalog:",
 		"@testcontainers/valkey": "catalog:",

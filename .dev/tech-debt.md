@@ -48,7 +48,7 @@ standalone: yes
 
 Two support modules in `apps/controller/test-support/` copy code the packages keep internal:
 `sqonEvaluator.ts` copies usher-types' test-only SQON evaluator, and `bridgeWire.ts` reproduces the
-Bridge's side of the wire from `modules/express-bridge/src/core/` and `modules/types/src/`. Nothing
+Bridge's side of the wire from `modules/bridge--express/src/core/` and `modules/types/src/`. Nothing
 compares a copy with its source, so a change to the source leaves the Controller's suites checking
 the old behaviour without failing.
 fix: import the evaluator from the private workspace package planned with the Bridge refactor, and

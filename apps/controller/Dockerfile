@@ -33,7 +33,7 @@ RUN set -eu; \
 # Every workspace package's manifest, so the install resolves the workspace as the lockfile records
 # it; the libraries' sources are left out, since the controller imports only their types.
 COPY apps/controller/package.json apps/controller/
-COPY modules/express-bridge/package.json modules/express-bridge/
+COPY modules/bridge--express/package.json modules/bridge--express/
 COPY modules/types/package.json modules/types/
 
 # The workspace's settings in pnpm-workspace.yaml apply here as on any machine: the release age,

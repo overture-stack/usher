@@ -30,7 +30,7 @@ const packedManifest = (overrides: Readonly<Record<string, unknown>> = {}): Read
 		},
 	},
 	files: ['dist'],
-	name: '@overture-stack/usher-express-bridge',
+	name: '@overture-stack/usher-bridge--express',
 	peerDependencies: {
 		'@overture-stack/usher-types': '^0.1.0',
 		'@types/express-serve-static-core': '^4.17.33 || ^5.1.3',
@@ -729,7 +729,7 @@ suite('inspectTarball', () => {
 		assert.deepEqual(report, {
 			files: SHIPPED_FILES,
 			findings: [],
-			packageName: '@overture-stack/usher-express-bridge',
+			packageName: '@overture-stack/usher-bridge--express',
 		});
 	});
 
@@ -842,14 +842,14 @@ suite('reportOf', () => {
 				files: [...SHIPPED_FILES, 'src/index.ts'],
 				manifest: packedManifest({ private: true }),
 			}),
-			packageName: '@overture-stack/usher-express-bridge',
+			packageName: '@overture-stack/usher-bridge--express',
 		};
 
 		assert.deepEqual(reportOf([failing, cleanReport('@overture-stack/usher-types')]), {
 			failed: true,
 			lines: [
-				'FAIL  @overture-stack/usher-express-bridge  only-intended-files: src/index.ts ships, and only dist, a README, a licence and package.json may',
-				'NOTE  @overture-stack/usher-express-bridge  private: marked private, so it cannot be published until that is lifted',
+				'FAIL  @overture-stack/usher-bridge--express  only-intended-files: src/index.ts ships, and only dist, a README, a licence and package.json may',
+				'NOTE  @overture-stack/usher-bridge--express  private: marked private, so it cannot be published until that is lifted',
 				'ok    @overture-stack/usher-types  ships README.md, dist/index.d.ts, dist/index.js, package.json',
 				'NOTE  @overture-stack/usher-types  private: marked private, so it cannot be published until that is lifted',
 				'checked 2 packages: 1 failure, 2 notes',

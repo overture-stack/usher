@@ -6,7 +6,7 @@ to 7.0.2, tsdown 0.23.0, tsx 4.23.15, zod 4.6.5, jose 6.2.12, Express 4.22.3 and
 source, read from documentation, or reasoned.
 
 This note sets how the shared libraries of Usher, the access enforcement system for
-Overture applications, are built, published and tested. The Bridge, `@overture-stack/usher-express-bridge`,
+Overture applications, are built, published and tested. The Bridge, `@overture-stack/usher-bridge--express`,
 is the library each protected application embeds to turn a person's sign-in credential into the
 request's access. The types package, `@overture-stack/usher-types`, holds the types and runtime
 validators shared by the Bridge and every adapter, and it depends on no web framework.
@@ -93,8 +93,8 @@ and the workspace's version is set below.
 
 ### The core's place
 
-- The framework-free core stays inside `express-bridge`, separate from the Express layer, as the
-  [roadmap](../../../roadmap.md#overture-stackusher-express-bridge) records, in a directory kept free
+- The framework-free core stays inside `bridge--express`, separate from the Express layer, as the
+  [roadmap](../../../roadmap.md#overture-stackusher-bridge--express) records, in a directory kept free
   of Express imports by a test.
 - The core moves to a package of its own when a second framework's Bridge starts, and both Bridges
   depend on it. A subpath of the Express Bridge would leave the new Bridge depending on a package

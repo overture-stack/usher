@@ -158,7 +158,7 @@ payload, a case already names both, so case 21 needs only records carrying the f
 withholding, each still served or withheld.
 
 **A case enters `expectations.json` only once it is implementable.** The Bridge's test reading the
-file, `modules/express-bridge/src/core/rendering.conformance.test.ts`, and `.dev/check-fixtures.py`
+file, `modules/bridge--express/src/core/rendering.conformance.test.ts`, and `.dev/check-fixtures.py`
 each fail on a case there marked `"implementable": false` in `principals.json`, rather than skipping
 it: a skip would let the flag switch an assertion off with nothing announcing it.
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import { CONFIGURATION_DEFAULTS } from '@overture-stack/usher-express-bridge';
+import { CONFIGURATION_DEFAULTS } from '@overture-stack/usher-bridge--express';
 
 import { EXCHANGE_PROBLEMS, TOKEN_LIMIT_BYTES } from './exchangeProblems.js';
 

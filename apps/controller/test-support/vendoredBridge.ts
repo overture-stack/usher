@@ -15,7 +15,7 @@ import {
 	createBridgeCore,
 	createUsherMiddleware,
 	type ResolveOutcome,
-} from '@overture-stack/usher-express-bridge';
+} from '@overture-stack/usher-bridge--express';
 import { type KeyRegistration, PAYLOAD_VERSION, readAccess, type UsherPrincipal } from '@overture-stack/usher-types';
 import express from 'express';
 
@@ -249,7 +249,7 @@ const isBridgeUndici = (value: unknown): value is BridgeUndici =>
 // undici is the Bridge's dependency, not this project's, so it is resolved from the
 // Bridge's own location: the one the Bridge's default fetch runs on (`defaultSeams.ts`).
 const bridgeUndici = (): BridgeUndici => {
-	const loaded: unknown = createRequire(import.meta.resolve('@overture-stack/usher-express-bridge'))('undici');
+	const loaded: unknown = createRequire(import.meta.resolve('@overture-stack/usher-bridge--express'))('undici');
 	if (isBridgeUndici(loaded)) {
 		return loaded;
 	}

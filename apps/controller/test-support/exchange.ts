@@ -1,6 +1,6 @@
 import { webcrypto } from 'node:crypto';
 
-import type { Clock } from '@overture-stack/usher-express-bridge';
+import type { Clock } from '@overture-stack/usher-bridge--express';
 import { type NonEmpty, PAYLOAD_VERSION } from '@overture-stack/usher-types';
 
 import { createChannelAssertion, createTokenReader, importApplicationKey, type TokenReading } from './bridgeWire.js';

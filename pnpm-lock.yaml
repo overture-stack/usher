@@ -270,9 +270,9 @@ importers:
         specifier: 'catalog:'
         version: 5.34.1
     devDependencies:
-      '@overture-stack/usher-express-bridge':
+      '@overture-stack/usher-bridge--express':
         specifier: workspace:^
-        version: link:../../modules/express-bridge
+        version: link:../../modules/bridge--express
       '@overture-stack/usher-types':
         specifier: workspace:^
         version: link:../../modules/types
@@ -316,7 +316,7 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
-  modules/express-bridge:
+  modules/bridge--express:
     dependencies:
       eventsource-parser:
         specifier: 'catalog:'

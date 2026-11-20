@@ -1,7 +1,7 @@
 # Bridge tests: the step 2 plan
 
 In the build order in [phase-1.md](phase-1.md), step 2 is the
-Bridge, `@overture-stack/usher-express-bridge`, in this repository: its tests first, with the
+Bridge, `@overture-stack/usher-bridge--express`, in this repository: its tests first, with the
 Controller mocked, then the Bridge itself, then the Bridge and the Arranger adapter tested together.
 This file is the plan for those tests. The adapter's own plan is step 1's, in Arranger's repository
 at `.dev/docs/arranger-auth/usher-adapter-tests.md`, and this one picks up exactly where it stops.

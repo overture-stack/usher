@@ -119,7 +119,7 @@ and fail-secure session suspension. Every adapter builds on it. Named for the dr
 open when the Controller connection is healthy, raised when it is not: anything needing a granted
 permission then answers 503, while the open tier is still served.
 
-Published as `@overture-stack/usher-express-bridge`, from `modules/express-bridge` in Usher's own
+Published as `@overture-stack/usher-bridge--express`, from `modules/bridge--express` in Usher's own
 repository, which is created when implementation begins. The package and its directory name Express
 because the first Bridge serves Express applications; prose calls it the Bridge.
 

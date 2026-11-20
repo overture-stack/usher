@@ -33,7 +33,7 @@ The design documents in `.dev/design/` are the primary specification, and the pa
       CLAUDE.md          (instructions for Claude)
       DEVELOPMENT.md     (this file)
       modules/
-        express-bridge/  (@overture-stack/usher-express-bridge, the bridge for Express applications)
+        bridge--express/ (@overture-stack/usher-bridge--express, the bridge for Express applications)
         types/           (@overture-stack/usher-types, the types and schemas the packages share)
       package.json       (workspace scripts)
       pnpm-workspace.yaml (workspace packages, pnpm settings and shared dependency versions)

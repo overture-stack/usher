@@ -1,4 +1,4 @@
-# @overture-stack/usher-express-bridge
+# @overture-stack/usher-bridge--express
 
 Express middleware connecting an application to [Usher](https://github.com/overture-stack/usher),
 the access enforcement system for the [Overture](https://www.overture.bio/) platform. For each
@@ -24,7 +24,7 @@ it serves, as its adapter describes them. The adapter reads each request's acces
 
 ## Install
 
-    npm install @overture-stack/usher-express-bridge @overture-stack/usher-types express
+    npm install @overture-stack/usher-bridge--express @overture-stack/usher-types express
 
 | Peer dependency                    | What it is for                                                                       |
 | ---------------------------------- | ------------------------------------------------------------------------------------ |
@@ -40,7 +40,7 @@ It is an ES module, for Node 24 or later.
 import {
   createBridgeCore,
   createUsherMiddleware,
-} from '@overture-stack/usher-express-bridge';
+} from '@overture-stack/usher-bridge--express';
 import express from 'express';
 import pino from 'pino';
 
@@ -115,7 +115,7 @@ start logs `bridge.exchangeTimeoutShort` at warning, naming the timeout and the 
 
 ## Design
 
-- [Architecture: the Bridge](https://github.com/overture-stack/usher/blob/main/.dev/design/architecture.md#bridge-overture-stackusher-express-bridge):
+- [Architecture: the Bridge](https://github.com/overture-stack/usher/blob/main/.dev/design/architecture.md#bridge-overture-stackusher-bridge--express):
   what the Bridge owns, and what it leaves to the adapter
 - [Security workflow](https://github.com/overture-stack/usher/blob/main/.dev/design/security-workflow.md):
   the token exchange, caching, revocation, and failing closed

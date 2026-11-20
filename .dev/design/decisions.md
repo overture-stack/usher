@@ -2365,7 +2365,7 @@ it, and the conformance fixtures it has to satisfy sit beside it.
 
 | Component            | Package                                  | Where it lives                                   |
 | -------------------- | ---------------------------------------- | ------------------------------------------------ |
-| the Bridge           | `@overture-stack/usher-express-bridge`   | `modules/express-bridge` in Usher's repository   |
+| the Bridge           | `@overture-stack/usher-bridge--express`  | `modules/bridge--express` in Usher's repository  |
 | the Arranger adapter | `@overture-stack/arranger-usher-adapter` | `modules/usher-adapter` in Arranger's repository |
 
 **The Bridge's logic does not depend on Express.** Token exchange, caching, the revocation channel

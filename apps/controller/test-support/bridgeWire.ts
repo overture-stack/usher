@@ -1,6 +1,6 @@
 import { hkdfSync, randomUUID, webcrypto } from 'node:crypto';
 
-import type { BridgeEventData, Clock } from '@overture-stack/usher-express-bridge';
+import type { BridgeEventData, Clock } from '@overture-stack/usher-bridge--express';
 import {
 	isLiteralValue,
 	type NonEmpty,
@@ -17,7 +17,7 @@ import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import { compactDecrypt, decodeProtectedHeader, jwtDecrypt, SignJWT } from 'jose';
 
 // Every export below reproduces the Bridge's side of the wire from its source,
-// under modules/express-bridge/src/core/, or modules/types/src/ for what usher-types keeps internal,
+// under modules/bridge--express/src/core/, or modules/types/src/ for what usher-types keeps internal,
 // because those functions are not exported. Each TSDoc names the file and function it follows; a
 // change there is a change to copy here.
 

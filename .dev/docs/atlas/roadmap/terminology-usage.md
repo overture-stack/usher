@@ -440,7 +440,7 @@ meant and Usher when the system is.
 plural: the Controller, a Controller instance, each application's Bridge, the Bridges a Controller
 instance serves. The capital is what separates a component from the ordinary word, so a lowercase
 controller or bridge, or the verb to bridge, never refers to Usher. Identifiers, paths and package
-names keep their own spelling: `apps/controller`, `usher-express-bridge`, a `bridge` parameter.
+names keep their own spelling: `apps/controller`, `usher-bridge--express`, a `bridge` parameter.
 **The adapter stays lowercase, because it names a pattern rather than a reusable piece**: the shape
 each ushered application follows to become compatible with Usher. So there is an Arranger adapter
 and a Lyric adapter, each its own application's, and no one adapter that every application shares.

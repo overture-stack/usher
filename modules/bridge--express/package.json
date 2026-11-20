@@ -31,7 +31,7 @@
 		"README.md"
 	],
 	"license": "UNLICENSED",
-	"name": "@overture-stack/usher-express-bridge",
+	"name": "@overture-stack/usher-bridge--express",
 	"peerDependencies": {
 		"@overture-stack/usher-types": "workspace:^",
 		"@types/express-serve-static-core": "^4.17.33 || ^5.1.3",

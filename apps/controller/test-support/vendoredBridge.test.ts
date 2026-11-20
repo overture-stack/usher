@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { suite, test } from 'node:test';
 
-import { CONFIGURATION_DEFAULTS } from '@overture-stack/usher-express-bridge';
+import { CONFIGURATION_DEFAULTS } from '@overture-stack/usher-bridge--express';
 import { CompactEncrypt } from 'jose';
 
 import { SUBKEY_LABELS, subkeyBytes } from './bridgeWire.js';

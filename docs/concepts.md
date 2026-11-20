@@ -139,7 +139,7 @@ The PEP (door + staff) is what physically stops you from entering.
 
 In Usher: two pieces working together inside the application that serves the data.
 
-The **Bridge** (`@overture-stack/usher-express-bridge`) is a shared library. It obtains the Usher token
+The **Bridge** (`@overture-stack/usher-bridge--express`) is a shared library. It obtains the Usher token
 from Usher, decrypts it, and works out one of three answers: deny the request, narrow it with a
 filter, or allow it unrestricted.
 
