@@ -101,6 +101,7 @@ export const submitterRemovalOperation = ({
 		const authority = grantAuthority({
 			administrator: principal.administrator,
 			holderIsCaller: false,
+			orphaned: false,
 			role: 'submitter',
 			standing,
 		});

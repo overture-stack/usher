@@ -28,14 +28,19 @@ import { readGrantRequestDecision } from './readGrantRequestDecision.js';
 import type {
 	GrantOperationsSettings,
 	GrantRequestDecision,
+	GrantRequestKind,
 	GrantRequestListing,
 	GrantStore,
 	StoredGrantRequest,
+	StoredRole,
 } from './types.js';
 import { placeGrant } from './writeGrant.js';
 
 // What a decision is given once its request is judged decidable.
 interface Deciding {
+	/** Whether the instance accepts a grant at its creation. */
+	autoAccept: boolean;
+
 	decidedBy: { subject: string; userId: string };
 	now: Date;
 	record: (event: AuditEvent) => Promise<string>;
@@ -43,16 +48,30 @@ interface Deciding {
 	sourceIp: string;
 }
 
-// Grants a request: writes the grant it asks for, with the holder's acceptance of what the
-// principal asking was shown.
+// What the holder's acceptance written with a granted request's grant shows them, by the request's
+// kind; none leaves the grant pending its holder's answer. A self-grant's holder asked for it, and
+// accepts what they were shown then. The holder of an orphaned resource's grant asked for nothing,
+// and starts as a created grant's holder does: accepting what the role confers now where the
+// instance accepts a grant at its creation, and pending otherwise.
+const ACCEPTANCE_OF: Readonly<
+	Record<
+		GrantRequestKind,
+		(request: StoredGrantRequest, role: StoredRole, autoAccept: boolean) => readonly string[] | undefined
+	>
+> = {
+	orphanedResource: (_request, role, autoAccept) => (autoAccept ? role.capabilities : undefined),
+	selfGrant: (request) => request.capabilities,
+};
+
+// Grants a request: writes the grant it asks for, with the holder's acceptance its kind gives.
 const grant = async (
 	grants: GrantStore,
-	{ decidedBy, now, record, request, sourceIp }: Deciding,
+	{ autoAccept, decidedBy, now, record, request, sourceIp }: Deciding,
 ): Promise<OperationOutcome> => {
 	const role = (await grants.findRole(request.role)) ?? roleMissing();
 	const placed =
 		(await placeGrant(grants, {
-			acceptance: request.capabilities,
+			acceptance: ACCEPTANCE_OF[request.kind](request, role, autoAccept),
 			expiresAt: request.expiresAt,
 			grantedAt: now,
 			grantedBy: decidedBy.userId,
@@ -77,6 +96,7 @@ const grant = async (
 			decision: 'granted',
 			expiresAt: eventInstant(request.expiresAt.getTime()),
 			grantId: placed.id,
+			granteeId: request.holderSubject,
 			requestId: request.id,
 			requestedById: request.requestedBySubject,
 			resourceId: request.resource,
@@ -124,6 +144,7 @@ const refuse = async (
 	await record({
 		data: {
 			decision: 'refused',
+			granteeId: request.holderSubject,
 			requestId: request.id,
 			requestedById: request.requestedBySubject,
 			result: 'succeeded',
@@ -142,19 +163,25 @@ const refuse = async (
  * locked first and then the request's, it judges in turn: an id naming no request, malformed or
  * not, and a request on a retired resource, 404 `requestNotFound`; a caller who asked for it or is
  * its holder 403 `ownRequest`; a caller neither a counted owner of its resource nor a platform
- * administrator 404 `requestNotFound`, its event recording `noAuthorityOnResource`; a request
- * decided already 409 `requestDecided`; and one at or past its expiry on the configured clock 409
- * `requestLapsed`. The caller is recorded on first meeting them.
+ * administrator 404 `requestNotFound`, its event recording `noAuthorityOnResource`; a grant of a
+ * request of kind `orphanedResource` whose resource has a counted owner, by a caller who is not one,
+ * 403 `administratorGrantsNoConsumerAccess`; a request decided already 409 `requestDecided`; and one
+ * at or past its expiry on the configured clock 409 `requestLapsed`. The caller is recorded on first
+ * meeting them. Whether a resource has a counted owner is judged when the request is decided, so a
+ * platform administrator grants an orphaned resource's request while it has none, and refuses one
+ * at any time.
  *
  * Granting a request writes the grant it names, as a grant is placed: its holder the request's, its
  * granter the caller, the principal who asked for it named beside the granter, at the configured
- * clock's instant, ending at the request's expiry, with the holder's acceptance showing what the
- * principal asking was shown; a holder holding one on its terms neither revoked nor ended is
- * refused 409 `alreadyHolds`. It records the decision, naming the grant, and
- * `grant.requestDecision` at warning, and answers 200 with the grant, `kind` `grant`. A refusal
- * records the decision and `grant.requestDecision` at info, and answers 200 with the request
- * decided, `kind` `grantRequest`.
- * Each event names the decision, and the principal who asked as `requestedById`.
+ * clock's instant, ending at the request's expiry; a holder holding one on its terms neither revoked
+ * nor ended is refused 409 `alreadyHolds`. The holder's acceptance written with it follows the
+ * request's kind: for a self-grant, showing what the principal asking was shown; for an orphaned
+ * resource's, showing what the role confers then where the instance accepts a grant at its
+ * creation, and none otherwise, leaving the grant pending its holder's answer. It records the
+ * decision, naming the grant, and `grant.requestDecision` at warning, and answers 200 with the
+ * grant, `kind` `grant`. A refusal records the decision and `grant.requestDecision` at info, and
+ * answers 200 with the request decided, `kind` `grantRequest`. Each event names the decision, the
+ * holder's subject as `granteeId`, and the principal who asked as `requestedById`.
  *
  * A refusal of the operation records `grant.requestDecision`, naming the request when one has the
  * id, and the decision when the body is read as one. Each decision is counted against the grant
@@ -167,10 +194,11 @@ const refuse = async (
 export const grantRequestDecisionOperation = ({
 	grantRate,
 	grantStoreOf,
-	settings: { clock, databaseSchema },
+	settings,
 	store,
 	trail,
 }: GrantOperationsSettings): ManagementOperation<GrantRequestDecision> => {
+	const { clock, databaseSchema } = settings;
 	const namedRequest = async ({ body, params }: NamedByRequest): Promise<EventMembers> => {
 		const reading = body === undefined ? undefined : readGrantRequestDecision(body);
 		const named = reading?.kind === 'read' ? { decision: reading.input.decision } : {};
@@ -217,6 +245,13 @@ export const grantRequestDecisionOperation = ({
 					if (!(await mayDecide(grants, principal, request, now))) {
 						refuseWithin(GRANT_PROBLEMS.requestNotFound, GRANT_PROBLEMS.noAuthorityOnResource.code);
 					}
+					if (
+						input.decision === 'granted' &&
+						request.kind === 'orphanedResource' &&
+						!(await mayGrantOrphaned(grants, caller, request, now))
+					) {
+						refuseWithin(GRANT_PROBLEMS.administratorGrantsNoConsumerAccess);
+					}
 					if (request.decision !== null) {
 						refuseWithin(GRANT_PROBLEMS.requestDecided);
 					}
@@ -224,6 +259,7 @@ export const grantRequestDecisionOperation = ({
 						refuseWithin(GRANT_PROBLEMS.requestLapsed);
 					}
 					const deciding: Deciding = {
+						autoAccept: settings.grantAutoAccept,
 						decidedBy: {
 							subject: principal.subject,
 							userId: await grants.findOrRecordPerson(principal.subject, now),
@@ -244,6 +280,18 @@ export const grantRequestDecisionOperation = ({
 			);
 		},
 	};
+};
+
+// Whether a caller may grant an orphaned resource's request, read with the resource's row locked
+// already: while its resource has no counted owner, and once it has, if the caller is one of them.
+const mayGrantOrphaned = async (
+	grants: GrantStore,
+	caller: string | undefined,
+	{ resourceId }: StoredGrantRequest,
+	now: Date,
+): Promise<boolean> => {
+	const owners = await grants.countedOwnersOf({ now, resourceId });
+	return owners.length === 0 || (caller !== undefined && owners.includes(caller));
 };
 
 // Whether a principal may decide a request: a platform administrator, or a counted owner of its

@@ -112,6 +112,15 @@ const ASKED: StoredGrantRequest = {
 	roleId: 'role-viewer',
 };
 
+// The administrator's pending request for Cy's viewer grant on STUDY-A1 under `global.controlled`,
+// asked for while STUDY-A1 had no counted owner, shown two of the role's capabilities.
+const ORPHANED_ASKED: StoredGrantRequest = {
+	...ASKED,
+	holderSubject: 'subject-cy',
+	holderUserId: 'person-cy',
+	kind: 'orphanedResource',
+};
+
 /** What the fake store and the fake directory hold for one test. */
 interface World {
 	/** The subject of the one account holding each address verified, by the address in lower case. */
@@ -1089,6 +1098,244 @@ suite('creating a grant whose holder is named by address', () => {
 	});
 });
 
+// The administrator's viewer grant for Cy on STUDY-A1 under `global.controlled`, ending in two
+// hours.
+const ORPHANED_VIEWER = {
+	...VIEWER_CREATION,
+	expiresAt: new Date(NOW + 2 * HOUR_MS).toISOString(),
+};
+
+// STUDY-A1 with no counted owner.
+const UNOWNED: Partial<World> = { countedOwners: [] };
+
+suite('creating a grant on a resource without a counted owner', () => {
+	test("takes a platform administrator's grant of a role other than submitter and owner as a request of kind orphanedResource for the holder named, telling no one, and answers 202 with the request", async (context) => {
+		const stand = standUp(context, UNOWNED);
+
+		const asked = await create(stand, 'administrator', ORPHANED_VIEWER);
+
+		assert.equal(asked.statusCode, 202);
+		assert.deepEqual(parsed(asked), {
+			category: 'global.controlled',
+			decidedAt: null,
+			expiresAt: '2026-11-12T14:00:00.000Z',
+			grantId: null,
+			holder: { hasAccount: true, subject: 'subject-cy' },
+			id: REQUEST_ID,
+			kind: 'grantRequest',
+			requestKind: 'orphanedResource',
+			requestedAt: '2026-11-12T12:00:00.000Z',
+			requestedBy: { subject: 'subject-administrator' },
+			resource: 'STUDY-A1',
+			role: 'viewer',
+			state: 'pending',
+		});
+		assert.deepEqual(methodsCalled(stand), [
+			'findRole',
+			'readStanding',
+			'countedOwnersOf',
+			'findOfferedCategory',
+			'findOrRecordPerson',
+			'findOrRecordPerson',
+			'holdsLiveGrant',
+			'holdsPendingRequest',
+			'insertGrantRequest',
+		]);
+		const terms = {
+			holderUserId: 'person-cy',
+			recordCategoryId: 'category-controlled',
+			resourceId: 'resource-a1',
+			roleId: 'role-viewer',
+		};
+		assert.deepEqual(valuesOf(stand, 'countedOwnersOf'), [{ now: new Date(NOW), resourceId: 'resource-a1' }]);
+		assert.deepEqual(valuesOf(stand, 'holdsLiveGrant'), [terms, new Date(NOW)]);
+		assert.deepEqual(valuesOf(stand, 'holdsPendingRequest'), [
+			{
+				...terms,
+				kind: 'orphanedResource',
+				now: new Date(NOW),
+				requestedBy: 'person-administrator',
+			},
+		]);
+		assert.deepEqual(valuesOf(stand, 'insertGrantRequest'), [
+			{
+				...terms,
+				capabilities: VIEWER.capabilities,
+				expiresAt: new Date(NOW + 2 * HOUR_MS),
+				kind: 'orphanedResource',
+				requestedAt: new Date(NOW),
+				requestedBy: 'person-administrator',
+			},
+		]);
+		assert.deepEqual(eventData(stand), [
+			{
+				category: 'global.controlled',
+				expiresAt: '2026-11-12T14:00:00.000Z',
+				granteeId: 'subject-cy',
+				kind: 'orphanedResource',
+				requestId: REQUEST_ID,
+				resourceId: 'STUDY-A1',
+				result: 'succeeded',
+				role: 'viewer',
+				sourceIp: '127.0.0.1',
+				type: 'grant.request',
+			},
+		]);
+		assert.deepEqual(severities(stand), [['grant.request', 'warning']]);
+		assert.deepEqual(stand.counted, ['subject-administrator']);
+	});
+
+	test('reads whether the resource has a counted owner for an administrator granting such a role alone', async (context) => {
+		const stand = standUp(context, UNOWNED);
+
+		await create(stand, 'ana', ORPHANED_VIEWER);
+		await create(stand, 'administrator', {
+			holder: { subject: 'subject-cy' },
+			resource: 'STUDY-A1',
+			role: 'submitter',
+		});
+		await create(stand, 'administrator', {
+			holder: { subject: 'subject-cy' },
+			resource: 'STUDY-A1',
+			role: 'owner',
+		});
+
+		assert.equal(methodsCalled(stand).includes('countedOwnersOf'), false);
+	});
+
+	test('names the holder by address, resolved once every other rule is judged, and answers 202 with the request for the subject the address resolves to', async (context) => {
+		const stand = standUp(context, UNOWNED);
+
+		const asked = await create(stand, 'administrator', {
+			...ORPHANED_VIEWER,
+			holder: { email: 'Cy@Example.org' },
+		});
+
+		assert.equal(asked.statusCode, 202);
+		assert.deepEqual(parsed(asked)['holder'], {
+			hasAccount: true,
+			subject: 'subject-cy',
+		});
+		assert.deepEqual(stand.lookups, ['Cy@Example.org']);
+		assert.equal(
+			(valuesOf(stand, 'insertGrantRequest') as readonly NewGrantRequest[])[0]?.holderUserId,
+			'person-cy',
+		);
+		assert.equal(asked.body.includes('Cy@Example.org'), false);
+	});
+
+	test('answers an address held by no single account 404 holderNotFound, a directory that cannot answer 503, and an address resolving to the administrator 422 selfNamed, writing nothing', async (context) => {
+		const unheld = standUp(context, UNOWNED);
+		const unavailable = standUp(context, {
+			...UNOWNED,
+			directory: 'unavailable',
+		});
+		const addressed = (email: string) => ({
+			...ORPHANED_VIEWER,
+			holder: { email },
+		});
+
+		const answers = [
+			await create(unheld, 'administrator', addressed('nobody@example.org')),
+			await create(unavailable, 'administrator', addressed('cy@example.org')),
+			await create(unheld, 'administrator', addressed('root@example.org')),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[404, 'holderNotFound'],
+			[503, 'directoryUnavailable'],
+			[422, 'selfNamed'],
+		]);
+		[unheld, unavailable].forEach((stand) => {
+			assert.equal(methodsCalled(stand).includes('insertGrantRequest'), false);
+		});
+	});
+
+	test('refuses one naming no expiry 422 orphanedResourceExpiryRequired, and one ending past the longest self-grant life of its request 422 orphanedResourceGrantTooLong, once its category is judged, recording each denied', async (context) => {
+		const stand = standUp(context, UNOWNED);
+		const longest = NOW + 86_400_000;
+
+		const answers = [
+			await create(stand, 'administrator', VIEWER_CREATION),
+			await create(stand, 'administrator', {
+				...ORPHANED_VIEWER,
+				expiresAt: new Date(longest + 1).toISOString(),
+			}),
+			await create(stand, 'administrator', {
+				...VIEWER_CREATION,
+				category: 'resource.internal',
+			}),
+			await create(stand, 'administrator', {
+				...ORPHANED_VIEWER,
+				expiresAt: new Date(longest).toISOString(),
+			}),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[422, 'orphanedResourceExpiryRequired'],
+			[422, 'orphanedResourceGrantTooLong'],
+			[422, 'categoryNotOffered'],
+			[202, undefined],
+		]);
+		assert.deepEqual(
+			eventData(stand)
+				.slice(0, 3)
+				.map(({ reason, result, type }) => [type, result, reason]),
+			[
+				['grant.creation', 'denied', 'orphanedResourceExpiryRequired'],
+				['grant.creation', 'denied', 'orphanedResourceGrantTooLong'],
+				['grant.creation', 'denied', 'categoryNotOffered'],
+			],
+		);
+		assert.equal(stand.calls.filter(({ method }) => method === 'insertGrantRequest').length, 1);
+	});
+
+	test('refuses a holder holding the grant live 409 alreadyHolds, and a request of the administrator for the holder on its terms pending and unlapsed 409 alreadyRequested, writing nothing', async (context) => {
+		const held = standUp(context, { ...UNOWNED, holdsLive: true });
+		const pending = standUp(context, { ...UNOWNED, pendingRequest: true });
+
+		const answers = [
+			await create(held, 'administrator', ORPHANED_VIEWER),
+			await create(pending, 'administrator', ORPHANED_VIEWER),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[409, 'alreadyHolds'],
+			[409, 'alreadyRequested'],
+		]);
+		[held, pending].forEach((stand) => {
+			assert.equal(methodsCalled(stand).includes('insertGrantRequest'), false);
+		});
+	});
+
+	test('refuses such a grant 403 administratorGrantsNoConsumerAccess on a resource with a counted owner, alike on one that does not exist or is retired, its detail naming the request', async (context) => {
+		const owned = standUp(context);
+		const retired = standUp(context, {
+			...UNOWNED,
+			standings: {
+				...WORLD.standings,
+				'subject-administrator': { retired: true },
+			},
+		});
+
+		const onOwned = await create(owned, 'administrator', ORPHANED_VIEWER);
+		const onAbsent = await create(owned, 'administrator', {
+			...ORPHANED_VIEWER,
+			resource: 'STUDY-Z9',
+		});
+		const onRetired = await create(retired, 'administrator', ORPHANED_VIEWER);
+
+		assert.deepEqual(outcomeOf(onOwned), [403, 'administratorGrantsNoConsumerAccess']);
+		assert.equal(onAbsent.body, onOwned.body);
+		assert.equal(onRetired.body, onOwned.body);
+		assert.match(String(parsed(onOwned)['detail']), /without an owner/u);
+		assert.match(String(parsed(onOwned)['detail']), /request/u);
+		[owned, retired].forEach((stand) => {
+			assert.equal(methodsCalled(stand).includes('insertGrantRequest'), false);
+		});
+	});
+});
+
 const FIRST_SUBMITTER_ID = '2a4c6e8f-1b3d-4f5a-9c7e-0d2f4a6c8e1b';
 
 const SECOND_SUBMITTER_ID = '9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a';
@@ -1701,6 +1948,7 @@ suite('creating a self-grant', () => {
 			decidedAt: null,
 			expiresAt: '2026-11-12T14:00:00.000Z',
 			grantId: null,
+			holder: { hasAccount: true, subject: 'subject-administrator' },
 			id: REQUEST_ID,
 			kind: 'grantRequest',
 			requestKind: 'selfGrant',
@@ -1758,6 +2006,7 @@ suite('creating a self-grant', () => {
 			{
 				category: 'global.controlled',
 				expiresAt: '2026-11-12T14:00:00.000Z',
+				granteeId: 'subject-administrator',
 				kind: 'selfGrant',
 				requestId: REQUEST_ID,
 				resourceId: 'STUDY-A1',
@@ -1944,6 +2193,7 @@ suite('deciding a grant request', () => {
 				decision: 'granted',
 				expiresAt: '2026-11-12T14:00:00.000Z',
 				grantId: GRANT_ID,
+				granteeId: 'subject-administrator',
 				requestId: REQUEST_ID,
 				requestedById: 'subject-administrator',
 				resourceId: 'STUDY-A1',
@@ -1956,7 +2206,7 @@ suite('deciding a grant request', () => {
 		assert.deepEqual(severities(stand), [['grant.requestDecision', 'warning']]);
 	});
 
-	test('refuses for another platform administrator, recording the decision alone, and answers 200 with the decided request', async (context) => {
+	test('refuses for another platform administrator, recording the decision alone with its holder, and answers 200 with the decided request', async (context) => {
 		const stand = standUp(context);
 
 		const refused = await decide(stand, 'secondAdministrator', {
@@ -1986,6 +2236,7 @@ suite('deciding a grant request', () => {
 		assert.deepEqual(eventData(stand), [
 			{
 				decision: 'refused',
+				granteeId: 'subject-administrator',
 				requestId: REQUEST_ID,
 				requestedById: 'subject-administrator',
 				result: 'succeeded',
@@ -1994,6 +2245,187 @@ suite('deciding a grant request', () => {
 			},
 		]);
 		assert.deepEqual(severities(stand), [['grant.requestDecision', 'info']]);
+	});
+
+	test("names an orphaned resource's holder as granteeId when another platform administrator refuses its request", async (context) => {
+		const stand = standUp(context, { ...UNOWNED, grantRequest: ORPHANED_ASKED });
+
+		const refused = await decide(stand, 'secondAdministrator', { decision: 'refused' });
+
+		assert.equal(refused.statusCode, 200);
+		assert.deepEqual(eventData(stand), [
+			{
+				decision: 'refused',
+				granteeId: 'subject-cy',
+				requestId: REQUEST_ID,
+				requestedById: 'subject-administrator',
+				result: 'succeeded',
+				sourceIp: '127.0.0.1',
+				type: 'grant.requestDecision',
+			},
+		]);
+	});
+
+	test("grants an orphaned resource's request as another platform administrator while its resource has no counted owner, writing the grant pending its holder's answer, granted by that administrator and requested by the one who asked", async (context) => {
+		const stand = standUp(context, {
+			...UNOWNED,
+			grantRequest: ORPHANED_ASKED,
+		});
+
+		const granted = await decide(stand, 'secondAdministrator', {
+			decision: 'granted',
+		});
+
+		assert.equal(granted.statusCode, 200);
+		assert.deepEqual(parsed(granted), {
+			category: 'global.controlled',
+			decision: null,
+			expiresAt: '2026-11-12T14:00:00.000Z',
+			grantedAt: '2026-11-12T12:00:00.000Z',
+			grantedBy: { subject: 'subject-second-administrator' },
+			holder: { hasAccount: true, subject: 'subject-cy' },
+			id: GRANT_ID,
+			kind: 'grant',
+			resource: 'STUDY-A1',
+			revokedAt: null,
+			revokedBy: null,
+			role: 'viewer',
+			selfGrant: false,
+			state: 'pending',
+		});
+		assert.deepEqual(methodsCalled(stand), [
+			'locateGrantRequest',
+			'lockResource',
+			'readGrantRequest',
+			'findPerson',
+			'countedOwnersOf',
+			'findOrRecordPerson',
+			'findRole',
+			'endExpiredGrant',
+			'insertGrant',
+			'recordDecision',
+		]);
+		assert.deepEqual(valuesOf(stand, 'insertGrant'), [
+			{
+				expiresAt: new Date(NOW + 2 * HOUR_MS),
+				grantedAt: new Date(NOW),
+				grantedBy: 'person-second-administrator',
+				holderUserId: 'person-cy',
+				recordCategoryId: 'category-controlled',
+				requestedBy: 'person-administrator',
+				resourceId: 'resource-a1',
+				roleId: 'role-viewer',
+			},
+		]);
+		assert.deepEqual(eventData(stand), [
+			{
+				category: 'global.controlled',
+				decision: 'granted',
+				expiresAt: '2026-11-12T14:00:00.000Z',
+				grantId: GRANT_ID,
+				granteeId: 'subject-cy',
+				requestId: REQUEST_ID,
+				requestedById: 'subject-administrator',
+				resourceId: 'STUDY-A1',
+				result: 'succeeded',
+				role: 'viewer',
+				sourceIp: '127.0.0.1',
+				type: 'grant.requestDecision',
+			},
+		]);
+	});
+
+	test("records the holder's acceptance of what the role confers at the grant with an orphaned resource's grant when auto-accept is on", async (context) => {
+		const stand = standUp(context, { ...UNOWNED, grantRequest: ORPHANED_ASKED }, true);
+
+		const granted = await decide(stand, 'secondAdministrator', {
+			decision: 'granted',
+		});
+
+		assert.equal(parsed(granted)['state'], 'accepted');
+		assert.deepEqual(valuesOf(stand, 'appendDecision'), [
+			{
+				capabilities: VIEWER.capabilities,
+				decision: 'accepted',
+				grantId: GRANT_ID,
+				now: new Date(NOW),
+				userId: 'person-cy',
+			},
+		]);
+	});
+
+	test("refuses a platform administrator who is not a counted owner granting an orphaned resource's request 403 administratorGrantsNoConsumerAccess once its resource has one, ahead of whether it is decided, and lets them refuse it and a counted owner grant it", async (context) => {
+		const owned = { grantRequest: ORPHANED_ASKED };
+		const refusedStand = standUp(context, owned);
+		const decidedAlready = {
+			grantRequest: {
+				...ORPHANED_ASKED,
+				decidedAt: new Date(NOW - 1000),
+				decision: 'refused' as const,
+			},
+		};
+
+		const answers = [
+			await decide(refusedStand, 'secondAdministrator', {
+				decision: 'granted',
+			}),
+			await decide(standUp(context, decidedAlready), 'secondAdministrator', {
+				decision: 'granted',
+			}),
+			await decide(standUp(context, owned), 'secondAdministrator', {
+				decision: 'refused',
+			}),
+			await decide(standUp(context, owned), 'ana', { decision: 'granted' }),
+			await decide(
+				standUp(context, {
+					...owned,
+					countedOwners: ['person-ana', 'person-second-administrator'],
+				}),
+				'secondAdministrator',
+				{ decision: 'granted' },
+			),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[403, 'administratorGrantsNoConsumerAccess'],
+			[403, 'administratorGrantsNoConsumerAccess'],
+			[200, undefined],
+			[200, undefined],
+			[200, undefined],
+		]);
+		assert.equal(methodsCalled(refusedStand).includes('recordDecision'), false);
+		assert.deepEqual(
+			eventData(refusedStand).map(({ reason, result, type }) => [type, result, reason]),
+			[['grant.requestDecision', 'denied', 'administratorGrantsNoConsumerAccess']],
+		);
+	});
+
+	test("refuses whoever asked for an orphaned resource's request and its holder 403 ownRequest", async (context) => {
+		const stand = standUp(context, {
+			...UNOWNED,
+			grantRequest: ORPHANED_ASKED,
+		});
+
+		const answers = [
+			await decide(stand, 'administrator', { decision: 'granted' }),
+			await decide(stand, 'cy', { decision: 'granted' }),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[403, 'ownRequest'],
+			[403, 'ownRequest'],
+		]);
+	});
+
+	test('lets a platform administrator grant a self-grant request on a resource with a counted owner, reading none of its owners', async (context) => {
+		const stand = standUp(context);
+
+		const granted = await decide(stand, 'secondAdministrator', {
+			decision: 'granted',
+		});
+
+		assert.equal(granted.statusCode, 200);
+		assert.equal(methodsCalled(stand).includes('countedOwnersOf'), false);
 	});
 
 	test('refuses whoever asked and the holder 403 ownRequest, deciding nothing', async (context) => {
@@ -2092,6 +2524,7 @@ suite('listing grant requests', () => {
 		decision: null,
 		expiresAt: new Date(NOW + 2 * HOUR_MS),
 		grantId: null,
+		holderSubject: 'subject-administrator',
 		id,
 		kind: 'selfGrant',
 		requestedAt: new Date(NOW - 60_000),
@@ -2116,6 +2549,7 @@ suite('listing grant requests', () => {
 					decidedAt: null,
 					expiresAt: '2026-11-12T14:00:00.000Z',
 					grantId: null,
+					holder: { hasAccount: true, subject: 'subject-administrator' },
 					id: REQUEST_ID,
 					kind: 'grantRequest',
 					requestKind: 'selfGrant',

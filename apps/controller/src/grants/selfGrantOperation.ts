@@ -153,6 +153,7 @@ const request = async (
 		data: {
 			category: category?.scopedName ?? null,
 			expiresAt: eventInstant(expiresAt.getTime()),
+			granteeId: caller.subject,
 			kind: 'selfGrant',
 			requestId,
 			resourceId: resource.externalId,
@@ -179,6 +180,7 @@ const request = async (
 				decision: null,
 				expiresAt,
 				grantId: null,
+				holderSubject: caller.subject,
 				id: requestId,
 				kind: 'selfGrant',
 				requestedAt: now,

@@ -1600,6 +1600,8 @@ export const PROBLEMS = Object.freeze({
 	nominationSuperseded: problem('nominationSuperseded', 409),
 	nomineeNotFound: problem('nomineeNotFound', 404),
 	notFirstUser: problem('notFirstUser', 403),
+	orphanedResourceExpiryRequired: problem('orphanedResourceExpiryRequired', 422),
+	orphanedResourceGrantTooLong: problem('orphanedResourceGrantTooLong', 422),
 	ownRequest: problem('ownRequest', 403),
 	ownerGrantsDoNotExpire: problem('ownerGrantsDoNotExpire', 422),
 	ownersAndAdministratorsOnly: problem('ownersAndAdministratorsOnly', 403),

@@ -14,7 +14,7 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'administratorGrantsNoConsumerAccess',
 		403,
 		"Access to records is the owners' to grant",
-		"A platform administrator grants the submitter and owner roles; any other role on a resource is its owners' to grant.",
+		"A platform administrator grants the submitter and owner roles; any other role on a resource with an owner is its owners' to grant, and to approve when asked for. On a resource without an owner, a platform administrator's grant of any other role is taken as a request another platform administrator decides.",
 	),
 	administratorRoleNotGranted: problem(
 		'administratorRoleNotGranted',
@@ -132,6 +132,18 @@ export const GRANT_PROBLEMS = Object.freeze({
 		409,
 		'Grant not in force',
 		'The address names no one holding a live submitter grant on this resource.',
+	),
+	orphanedResourceExpiryRequired: problem(
+		'orphanedResourceExpiryRequired',
+		422,
+		'Expiry required on a resource without an owner',
+		'A grant a platform administrator asks for on a resource without an owner keeps an expiry: send expiresAt as an instant.',
+	),
+	orphanedResourceGrantTooLong: problem(
+		'orphanedResourceGrantTooLong',
+		422,
+		'Grant too long for a resource without an owner',
+		"A grant a platform administrator asks for on a resource without an owner ends within the instance's longest self-grant life of its request: name an earlier expiresAt.",
 	),
 	ownRequest: problem(
 		'ownRequest',

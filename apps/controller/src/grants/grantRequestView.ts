@@ -23,8 +23,9 @@ export const grantRequestStateOf = (
 
 /**
  * A grant request as an answer shows it: `kind` `grantRequest`, beside the request's own kind as
- * `requestKind`; the principal who asked for it by subject, as `requestedBy`; the resource by
- * externalId; each instant in UTC with `Z`; and its state on the configured clock.
+ * `requestKind`; the principal who asked for it by subject, as `requestedBy`; the holder by subject,
+ * as one with an account and no address, since none is read; the resource by externalId; each
+ * instant in UTC with `Z`; and its state on the configured clock.
  *
  * @param request the request.
  * @param now the configured clock's instant, in milliseconds since the Unix epoch.
@@ -34,6 +35,7 @@ export const grantRequestView = (request: ViewedGrantRequest, now: number): Json
 	decidedAt: request.decidedAt === null ? null : eventInstant(request.decidedAt.getTime()),
 	expiresAt: eventInstant(request.expiresAt.getTime()),
 	grantId: request.grantId,
+	holder: { hasAccount: true, subject: request.holderSubject },
 	id: request.id,
 	kind: 'grantRequest',
 	requestKind: request.kind,

@@ -935,6 +935,8 @@ suite('the problem codes and reason vocabularies', () => {
 			415: ['unsupportedMediaType'],
 			422: [
 				'importNeedsAnAudience',
+				'orphanedResourceExpiryRequired',
+				'orphanedResourceGrantTooLong',
 				'ownerGrantsDoNotExpire',
 				'registrationHasHistory',
 				'selfGrantExpiryRequired',

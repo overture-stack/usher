@@ -14,7 +14,7 @@ import { isLive, type StandingLock } from '../resourceStanding/index.js';
 import { addressedAnswer, type AddressedTerms, unansweredRefusal } from './addressedCreation.js';
 import { countedWithRefusal } from './countedWithRefusal.js';
 import { unresolvedByDirectory } from './directoryOutcome.js';
-import { grantAuthority } from './grantAuthority.js';
+import { administratorGrants, grantAuthority } from './grantAuthority.js';
 import { categoryNamingOf, offeredCategory } from './grantCategory.js';
 import { grantChangeOperation } from './grantChangeOperation.js';
 import {
@@ -37,6 +37,7 @@ import {
 import { readGrantAnswer } from './readGrantAnswer.js';
 import { readGrantCreation } from './readGrantCreation.js';
 import { readGrantRevocation } from './readGrantRevocation.js';
+import { askForOrphanedResource, orphanedResourceExpiry } from './orphanedResourceRequest.js';
 import { selfGrantOperation } from './selfGrantOperation.js';
 import { submitterRemovalOperation } from './submitterRemovalOperation.js';
 import type {
@@ -81,19 +82,28 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
  * judges in turn: a role the instance does not define, in its exact letter case, 422 `unknownRole`;
  * a control-plane role naming a category 422 `wholeResourceRole`, and a data-plane role naming none
  * 422 `categoryRequired`, except `submitter`, which takes the instance's submitter category; the
- * grant's authority, decided by {@link grantAuthority} on the resource's row locked for share; and
- * a category the resource does not offer 422 `categoryNotOffered`. It then writes the grant with
- * {@link writeGrant}, its granter the caller, recorded on first meeting them, refusing 409
- * `alreadyHolds` a holder holding one on its terms neither revoked nor ended, and answers 201 with
- * the grant. A creation whose commit fails since its resource was retired first is answered 404
- * `resourceNotFound`. Its event, refused, names the resource the body names.
+ * grant's authority, decided by {@link grantAuthority} on the resource's row locked for share,
+ * whether the resource has a counted owner read for a platform administrator granting a role other
+ * than `submitter` and `owner` alone; a category the resource does not offer 422
+ * `categoryNotOffered`; and a request's expiry, as {@link orphanedResourceExpiry} judges it. It
+ * then writes the grant with {@link writeGrant}, its granter the caller, recorded on first meeting
+ * them, refusing 409 `alreadyHolds` a holder holding one on its terms neither revoked nor ended,
+ * and answers 201 with the grant. A creation whose commit fails since its resource was retired
+ * first is answered 404 `resourceNotFound`. Its event, refused, names the resource the body names.
+ *
+ * A platform administrator's grant of a role other than `submitter` and `owner`, on a resource that
+ * has no counted owner, is asked for instead: {@link askForOrphanedResource} writes it as a grant
+ * request of kind `orphanedResource`, its requestedBy the caller asking, recorded on first meeting them, and
+ * its holder the person named, and it answers 202 with the request. Its holder is named as a
+ * grant's is, and a refusal of it records `grant.creation` as a grant's does.
  *
  * A holder named by address is resolved through the directory only once every other rule is judged,
- * in a transaction of its own writing nothing, and never while a transaction is open. The grant is
- * then written as for the subject the address resolves to, every rule judged again, so an address
- * resolving to the caller is refused as their own subject is. It is answered as {@link
- * addressedAnswer} decides, and a directory resolving nothing as {@link unresolvedByDirectory}
- * decides.
+ * in a transaction of its own writing nothing, and never while a transaction is open. The grant or
+ * the request is then written as for the subject the address resolves to, every rule judged again,
+ * so an address resolving to the caller is refused as their own subject is. A grant is answered as
+ * {@link addressedAnswer} decides, and a request as one naming its holder by subject is; an address
+ * held by no single account is answered as addressedAnswer decides, and a directory resolving
+ * nothing as {@link unresolvedByDirectory} decides.
  *
  * Answering a grant, `POST /admin/grants/{id}/decisions`, reads its body with {@link
  * readGrantAnswer}. Only the grant's holder answers it, the person holding the caller's identity
@@ -164,7 +174,8 @@ export const createGrantRoutes = (
 
 	// Judges every rule of a creation but its holder's address, in a change's transaction: the role,
 	// the category it names, the caller's authority on the resource read under the lock given, the
-	// holder named being the caller among it, and the category the resource offers.
+	// holder named being the caller among it, the category the resource offers, and a request's
+	// expiry. Whether the resource has no counted owner is read only where it decides the authority.
 	const judgeCreation = async (
 		grants: GrantStore,
 		{
@@ -188,9 +199,14 @@ export const createGrantRoutes = (
 			now,
 			subject: principal.subject,
 		});
+		const orphaned =
+			principal.administrator && !administratorGrants(role.name) && standing?.retired === false
+				? (await grants.countedOwnersOf({ now, resourceId: standing.id })).length === 0
+				: false;
 		const authority = grantAuthority({
 			administrator: principal.administrator,
 			holderIsCaller: holderSubject === principal.subject,
+			orphaned,
 			role: role.name,
 			standing,
 		});
@@ -199,11 +215,27 @@ export const createGrantRoutes = (
 		}
 		const resource = standing ?? refuseWithin(GRANT_PROBLEMS.resourceNotFound);
 		const category = await offeredCategory(grants, naming, resource.id);
-		return { category, kind: 'judged', resource, role };
+		return {
+			authority:
+				authority.kind === 'request'
+					? {
+							expiresAt: orphanedResourceExpiry(input.expiresAt, {
+								maximumSeconds: settings.selfGrantMaximumLifetimeSeconds,
+								now,
+							}),
+							kind: 'request',
+						}
+					: { kind: 'issue' },
+			category,
+			kind: 'judged',
+			resource,
+			role,
+		};
 	};
 
-	// Writes a creation's grant for the holder's subject in one transaction, judging every rule again
-	// on the resource's row locked for share, and answers as `answerOf` says.
+	// Writes a creation for the holder's subject in one transaction, judging every rule again on the
+	// resource's row locked for share: its grant, answered as `answerOf` says, or the request a
+	// platform administrator asks for on a resource with no counted owner, answered 202.
 	const writeCreation = (
 		request: { input: GrantCreation; now: Date; principal: Principal },
 		holderSubject: string,
@@ -214,7 +246,7 @@ export const createGrantRoutes = (
 		return changeOutcome(
 			trail.inTransaction(actorOf(principal), async ({ connection, record }): Promise<OperationOutcome> => {
 				const grants = grantStoreOf(connection);
-				const { category, resource, role } = await judgeCreation(
+				const { authority, category, resource, role } = await judgeCreation(
 					grants,
 					{ ...request, lock: 'share' },
 					holderSubject,
@@ -223,20 +255,32 @@ export const createGrantRoutes = (
 					subject: principal.subject,
 					userId: await grants.findOrRecordPerson(principal.subject, now),
 				};
-				const written =
-					(await writeGrant(grants, record, {
-						autoAccept: settings.grantAutoAccept,
-						category,
-						expiresAt: request.input.expiresAt ?? null,
-						grantedAt: now,
-						granter,
-						holderSubject,
-						resource: { externalId: resource.externalId, id: resource.id },
-						role,
-						sourceIp,
-					})) ?? refuseWithin(GRANT_PROBLEMS.alreadyHolds);
+				const terms = {
+					category,
+					holderSubject,
+					resource: { externalId: resource.externalId, id: resource.id },
+					role,
+					sourceIp,
+				};
+				const outcome =
+					authority.kind === 'request'
+						? await askForOrphanedResource(grants, record, {
+								...terms,
+								expiresAt: authority.expiresAt,
+								now,
+								requestedBy: granter,
+							})
+						: answerOf(
+								(await writeGrant(grants, record, {
+									...terms,
+									autoAccept: settings.grantAutoAccept,
+									expiresAt: request.input.expiresAt ?? null,
+									grantedAt: now,
+									granter,
+								})) ?? refuseWithin(GRANT_PROBLEMS.alreadyHolds),
+							);
 				await grantRate.count({ connection, record }, principal.subject);
-				return answerOf(written);
+				return outcome;
 			}),
 			{
 				resources_retired_without_live_grants: GRANT_PROBLEMS.resourceNotFound,

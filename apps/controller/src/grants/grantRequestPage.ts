@@ -7,28 +7,31 @@ import type { GrantRequestListing, ViewedGrantRequest } from './types.js';
 /**
  * The columns, in SQL, giving a grant request as {@link ViewedGrantRequest} holds it, from a
  * statement naming the request `request`, its resource `resource`, its role `role` and its record
- * category, left joined, `record`; the principal who asked for it is named by the subject of their
- * identity under the trusted issuer first, bound at the placeholder given.
+ * category, left joined, `record`; the principal who asked for it and its holder are each named by
+ * the subject of their identity under the trusted issuer first, bound at the placeholder given.
  *
  * @param schema the controller's schema.
  * @param issuer the placeholder the trusted issuer is bound to, such as `$1`.
  */
-export const requestColumns = (schema: string, issuer: string): string =>
-	`CASE WHEN record.id IS NULL THEN NULL ELSE record.scope || '.' || record.name END
+export const requestColumns = (schema: string, issuer: string): string => {
+	const subjectOf = (column: string): string =>
+		`(SELECT identity.idp_subject_id FROM ${pg.escapeIdentifier(schema)}.user_identities identity
+       WHERE identity.user_id = ${column}
+       ORDER BY identity.idp_issuer = ${issuer} DESC, identity.added_at, identity.id LIMIT 1)`;
+	return `CASE WHEN record.id IS NULL THEN NULL ELSE record.scope || '.' || record.name END
      AS category,
    request.decided_at AS "decidedAt",
    request.decision,
    request.expires_at AS "expiresAt",
    request.grant_id::text AS "grantId",
+   ${subjectOf('request.holder_user_id')} AS "holderSubject",
    request.id::text AS id,
    request.kind,
    request.requested_at AS "requestedAt",
-   (SELECT identity.idp_subject_id FROM ${pg.escapeIdentifier(schema)}.user_identities identity
-     WHERE identity.user_id = request.requested_by
-     ORDER BY identity.idp_issuer = ${issuer} DESC, identity.added_at, identity.id LIMIT 1)
-     AS "requestedBySubject",
+   ${subjectOf('request.requested_by')} AS "requestedBySubject",
    resource.external_id AS resource,
    role.name AS role`;
+};
 
 /**
  * Reads one page of the grant requests a principal is listed, in one statement, in the order of

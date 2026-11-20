@@ -43,7 +43,7 @@ const seedFileWithout = async (omitted: readonly string[]): Promise<string> => {
 suite('seeding the settings, and recording what each setting was seeded from', () => {
 	test('a first run to an earlier target seeds nothing, and the next full run seeds every setting', async (context) => {
 		const database = await openEmptyDatabase(context);
-		await migrateDatabaseInProcess(database, { target: '0009_grant_requests' });
+		await migrateDatabaseInProcess(database, { target: '0010_grant_operations' });
 		const owner = await database.connect('migration');
 
 		assert.deepEqual(await settingNames(owner, database.schema), []);

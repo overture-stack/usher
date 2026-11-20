@@ -1108,7 +1108,7 @@
 			},
 			"GrantRequest": {
 				"additionalProperties": false,
-				"description": "A principal's request for a grant, decided by someone other than the principal who asked for it and its holder. A request lapses at its expiry while undecided.",
+				"description": "A principal's request for a grant, for themself or for someone else, decided by someone other than the principal who asked for it and its holder. A request lapses at its expiry while undecided.",
 				"properties": {
 					"category": {
 						"description": "The scoped record category the grant would apply to.",
@@ -1134,6 +1134,10 @@
 						"format": "uuid",
 						"type": ["string", "null"]
 					},
+					"holder": {
+						"$ref": "#/components/schemas/HolderView",
+						"description": "Who would hold the grant: the principal asking, for a self-grant; the person named, for an orphaned resource's request. Named by subject, with `hasAccount` true and no `email`, since no directory is read for the answer."
+					},
 					"id": {
 						"description": "The request's opaque id.",
 						"format": "uuid",
@@ -1145,7 +1149,7 @@
 						"type": "string"
 					},
 					"requestKind": {
-						"description": "What is requested: `selfGrant`, a grant to the principal asking for it. Other kinds may be added, so a reader takes an unknown one as a request it cannot act on.",
+						"description": "What is requested: `selfGrant`, a grant to the principal asking for it; `orphanedResource`, a platform administrator's grant to the holder on a resource with no counted owner. Other kinds may be added, so a reader takes an unknown one as a request it cannot act on.",
 						"type": "string"
 					},
 					"requestedAt": {
@@ -1169,6 +1173,7 @@
 					"decidedAt",
 					"expiresAt",
 					"grantId",
+					"holder",
 					"id",
 					"kind",
 					"requestKind",
@@ -3369,7 +3374,7 @@
 		},
 		"/admin/grant-requests/{id}/decisions": {
 			"post": {
-				"description": "Grants or refuses a grant request. A request is decided once, by an owner of its resource, as `createGrant` defines one, or by any platform administrator, and never by the principal who asked for it or its holder. To anyone else a request is answered as one that does not exist, as is a request on a retired resource.\n\nGranting a request writes the grant it names, its holder the principal who asked for it, `grantedAt` the instant it is granted and `expiresAt` the request's, with the holder's acceptance showing the capabilities they were shown when they asked, and answers `200` with the `Grant`, `kind` `grant`. A refusal records the decision alone and answers `200` with the decided `GrantRequest`, `kind` `grantRequest`.\n\nA request decided already is refused with `requestDecided`, and one at or past its expiry with `requestLapsed`. Granting a request for a holder holding the grant live already is refused with `alreadyHolds`.",
+				"description": "Grants or refuses a grant request. A request is decided once, by an owner of its resource, as `createGrant` defines one, or by any platform administrator, and never by the principal who asked for it or its holder. To anyone else a request is answered as one that does not exist, as is a request on a retired resource.\n\nGranting a request writes the grant it names, its holder the request's holder, `grantedAt` the instant it is granted and `expiresAt` the request's, and answers `200` with the `Grant`, `kind` `grant`. For a self-grant, the holder's acceptance is written with it, showing the capabilities they were shown when they asked. The holder of an orphaned resource's request asked for nothing, so its grant starts as one `createGrant` issues does: pending the holder's answer, or accepted at once, showing what the role confers then, when the instance accepts grants at creation. A refusal records the decision alone and answers `200` with the decided `GrantRequest`, `kind` `grantRequest`.\n\nWhile the resource of a request of kind `orphanedResource` has no counted owner, any platform administrator but the one who asked and its holder decides it. Once it has one, a platform administrator who is not an owner is refused granting it with `administratorGrantsNoConsumerAccess` but may still refuse it. Should the resource have no owner again before anyone decides, platform administrators may grant it again.\n\nA request decided already is refused with `requestDecided`, and one at or past its expiry with `requestLapsed`. Granting a request for a holder holding the grant live already is refused with `alreadyHolds`.",
 				"operationId": "decideGrantRequest",
 				"parameters": [
 					{
@@ -3422,7 +3427,11 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["ownRequest", "serviceAccountNotPermitted"]
+													"enum": [
+														"administratorGrantsNoConsumerAccess",
+														"ownRequest",
+														"serviceAccountNotPermitted"
+													]
 												}
 											},
 											"type": "object"
@@ -3431,7 +3440,7 @@
 								}
 							}
 						},
-						"description": "`ownRequest`: the principal asked for the request or is its holder. `serviceAccountNotPermitted`: a service account calls, before any lookup."
+						"description": "`ownRequest`: the principal asked for the request or is its holder. `administratorGrantsNoConsumerAccess`: a grant of an orphaned resource's request, once the resource has a counted owner, by a principal who is not one. `serviceAccountNotPermitted`: a service account calls, before any lookup."
 					},
 					"404": {
 						"content": {
@@ -3508,7 +3517,7 @@
 		},
 		"/admin/grants": {
 			"post": {
-				"description": "Creates a grant: a role on a resource for a holder, named by subject or by address. A holder named by address is the one account in the identity provider's directory holding the address, matched exactly in any letter case, and verified; a disabled account counts. The address is never stored. A platform administrator naming the holder by address is answered `201` with the grant, and `404` `holderNotFound` when no single account holds the address. A counted owner naming the holder by address is answered `202` with a `GrantByAddress` whether or not an account holds the address, naming neither the grant nor its holder, and nothing is written when none does. An address resolving to the principal is refused as naming the principal's own subject is. A holder named by a subject the controller has never met is recorded with the grant, and answers it once signed in.\n\nA data-plane role names a record category offered by the resource: any global category, as `global.` and its name, or one of the resource's own, as `resource.` and its name. A control-plane role, such as `owner`, names none and takes the whole resource, and an owner grant takes no expiry. A `submitter` grant naming no category takes the instance's submitter category. A grant names its record category alone: the member naming a field category, `fieldCategory`, is refused with `422`, whatever it holds, and so is `grantedBy`, since the caller is the granter. A `holder.email` that is no string, such as a list of addresses, is refused with `400`.\n\nWho may see a resource: a platform administrator; a person holding a grant on it, an owner grant included, that is neither revoked nor expired and that they have not declined, pending or accepted; and, for a resource at the `open` or `registered` access level that is not suppressed, every signed-in principal. A retired resource is seen only by a platform administrator asking for it, and every grant operation answers it as one that does not exist. A principal who may not see a resource is answered exactly as for one that does not exist; one who may see it and holds no authority for what they ask is refused with `403` `noAuthorityOnResource`.\n\nA resource's owners grant any role on it, `owner` included. An owner is a person holding an owner grant on it that is neither revoked nor expired and that they have accepted. A platform administrator grants the `submitter` and `owner` roles on any resource and makes anyone but themself an owner. No one grants the administrator role, `admin`.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; whether the instance defines the role, and whether the role names a category, `422`; a platform administrator naming themself an owner, `403` `administratorSelfOwnership`; a principal naming themself, `422`, the text naming `/admin/grants/self`; a platform administrator granting any role but `submitter` and `owner`, `403` `administratorGrantsNoConsumerAccess`, answered alike whether or not the resource exists; whether the principal may see the resource, `404`, and holds authority on it, `403`; and the category, `422`. A holder named by address is looked up only once all of these pass; an address resolving to the principal is then refused as the principal's own subject is, and a grant held already is judged last, `409`.\n\nThe holder answers the grant through its decisions. When the instance accepts grants at creation, the controller records the holder's acceptance with the grant, showing the capabilities the grant's role confers then. A grant on the same terms that has expired does not stop the holder from being granted those terms again.",
+				"description": "Creates a grant: a role on a resource for a holder, named by subject or by address. A holder named by address is the one account in the identity provider's directory holding the address, matched exactly in any letter case, and verified; a disabled account counts. The address is never stored. A platform administrator naming the holder by address is answered `201` with the grant, and `404` `holderNotFound` when no single account holds the address. A counted owner naming the holder by address is answered `202` with a `GrantByAddress` whether or not an account holds the address, naming neither the grant nor its holder, and nothing is written when none does. An address resolving to the principal is refused as naming the principal's own subject is. A holder named by a subject the controller has never met is recorded with the grant, and answers it once signed in.\n\nA data-plane role names a record category offered by the resource: any global category, as `global.` and its name, or one of the resource's own, as `resource.` and its name. A control-plane role, such as `owner`, names none and takes the whole resource, and an owner grant takes no expiry. A `submitter` grant naming no category takes the instance's submitter category. A grant names its record category alone: the member naming a field category, `fieldCategory`, is refused with `422`, whatever it holds, and so is `grantedBy`, since the caller is the granter. A `holder.email` that is no string, such as a list of addresses, is refused with `400`.\n\nWho may see a resource: a platform administrator; a person holding a grant on it, an owner grant included, that is neither revoked nor expired and that they have not declined, pending or accepted; and, for a resource at the `open` or `registered` access level that is not suppressed, every signed-in principal. A retired resource is seen only by a platform administrator asking for it, and every grant operation answers it as one that does not exist. A principal who may not see a resource is answered exactly as for one that does not exist; one who may see it and holds no authority for what they ask is refused with `403` `noAuthorityOnResource`.\n\nA resource's owners grant any role on it, `owner` included. An owner is a person holding an owner grant on it that is neither revoked nor expired and that they have accepted. A platform administrator grants the `submitter` and `owner` roles on any resource and makes anyone but themself an owner. No one grants the administrator role, `admin`.\n\nA platform administrator's grant of any other role, for someone else, on a resource without an owner, a newly registered one whose named owners have not accepted included, is not issued: it is recorded as a request, `requestKind` `orphanedResource`, its requester the principal and its holder the person named, and answered `202` with the `GrantRequest`, `kind` `grantRequest`. It names an expiry, within the instance's longest self-grant life of the request. Nobody is told of it, since the resource has no owner: other platform administrators find it through `GET /admin/grant-requests` and decide it through `POST /admin/grant-requests/{id}/decisions`, and an owner the resource gains before then decides it instead. On a resource with an owner, such a grant is refused with `administratorGrantsNoConsumerAccess`.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; whether the instance defines the role, and whether the role names a category, `422`; a platform administrator naming themself an owner, `403` `administratorSelfOwnership`; a principal naming themself, `422`, the text naming `/admin/grants/self`; a platform administrator granting any role but `submitter` and `owner`, `403` `administratorGrantsNoConsumerAccess`, answered alike whether or not the resource exists, unless it exists, is not retired and has no owner, when the grant is asked for as a request; whether the principal may see the resource, `404`, and holds authority on it, `403`; the category, `422`; and, for a request, its expiry, `422`. A holder named by address is looked up only once all of these pass; an address resolving to the principal is then refused as the principal's own subject is, and a grant held already is judged last, `409`, as is, for a request, one by the principal for the holder on the same terms that is pending and has not lapsed.\n\nThe holder answers the grant through its decisions. When the instance accepts grants at creation, the controller records the holder's acceptance with the grant, showing the capabilities the grant's role confers then. A grant on the same terms that has expired does not stop the holder from being granted those terms again.",
 				"operationId": "createGrant",
 				"requestBody": {
 					"content": {
@@ -3536,11 +3545,18 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/GrantByAddress"
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/GrantByAddress"
+										},
+										{
+											"$ref": "#/components/schemas/GrantRequest"
+										}
+									]
 								}
 							}
 						},
-						"description": "A counted owner named the holder by address: answered alike whether or not an account holds the address. `kind` is `grantByAddress`."
+						"description": "Told apart by `kind`. `grantByAddress`: a counted owner named the holder by address, answered alike whether or not an account holds the address. `grantRequest`: a platform administrator's grant on a resource without an owner is recorded as a request, `requestKind` `orphanedResource`, pending until another platform administrator, or an owner the resource gains, decides it."
 					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
@@ -3574,7 +3590,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorGrantsNoConsumerAccess`: a platform administrator grants access that is the owners' to grant, answered alike whether or not the resource exists. `administratorSelfOwnership`: a platform administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorGrantsNoConsumerAccess`: a platform administrator grants access that is the owners' to grant, on a resource with a counted owner, or on one that does not exist or is retired, answered alike. `administratorSelfOwnership`: a platform administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
 					},
 					"404": {
 						"content": {
@@ -3609,7 +3625,7 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["alreadyHolds"]
+													"enum": ["alreadyHolds", "alreadyRequested"]
 												}
 											},
 											"type": "object"
@@ -3618,7 +3634,7 @@
 								}
 							}
 						},
-						"description": "The holder already holds a grant of this role on this resource and category that is neither revoked nor expired, whether pending, accepted or declined; `alreadyHolds`."
+						"description": "The holder already holds a grant of this role on this resource and category that is neither revoked nor expired, whether pending, accepted or declined; `alreadyHolds`. `alreadyRequested`: a platform administrator asked for this grant on a resource without an owner for the same holder already, and the request is pending and has not lapsed."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3634,7 +3650,7 @@
 								}
 							}
 						},
-						"description": "A rule is broken. `ownerGrantsDoNotExpire` names an owner grant given an expiry. The rest carry unnamed codes: a role not defined by the instance, in its exact letter case, or the administrator role, `admin`; a category not offered by the resource; a data-plane role naming no category, but `submitter`, or a control-plane role naming one; a `fieldCategory`, whatever it holds; a `holder` naming other than exactly one person, by subject or by address; an address not in the form of an address: text before and after a single `@`, holding no whitespace, comma or control character; a `grantedBy`, whatever it holds; an expiry that is no RFC 3339 instant with an offset, or one not in the future; and the principal naming themself, by subject or by an address resolving to them, the text then naming the self-grant operation, `/admin/grants/self`."
+						"description": "A rule is broken. `ownerGrantsDoNotExpire` names an owner grant given an expiry. `orphanedResourceExpiryRequired`: a platform administrator's grant asked for on a resource without an owner names no expiry. `orphanedResourceGrantTooLong`: its expiry is past the instance's longest self-grant life of the request. The rest carry unnamed codes: a role not defined by the instance, in its exact letter case, or the administrator role, `admin`; a category not offered by the resource; a data-plane role naming no category, but `submitter`, or a control-plane role naming one; a `fieldCategory`, whatever it holds; a `holder` naming other than exactly one person, by subject or by address; an address not in the form of an address: text before and after a single `@`, holding no whitespace, comma or control character; a `grantedBy`, whatever it holds; an expiry that is no RFC 3339 instant with an offset, or one not in the future; and the principal naming themself, by subject or by an address resolving to them, the text then naming the self-grant operation, `/admin/grants/self`."
 					},
 					"503": {
 						"content": {

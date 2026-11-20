@@ -34,11 +34,6 @@ export const sqlGrantStore = (
 	{ issuer, schema }: { issuer: string; schema: string },
 ): GrantStore => {
 	const table = (name: string): string => `${pg.escapeIdentifier(schema)}.${name}`;
-	// The subject naming the person a column holds, the trusted issuer's identity ($1) first.
-	const subjectOf = (column: string): string =>
-		`(SELECT identity.idp_subject_id FROM ${table('user_identities')} identity
-       WHERE identity.user_id = ${column}
-       ORDER BY identity.idp_issuer = $1 DESC, identity.added_at, identity.id LIMIT 1)`;
 	const idOf = async (text: string, values: readonly unknown[]): Promise<string | undefined> =>
 		(await connection.query<IdRow>(text, [...values])).rows[0]?.id;
 
@@ -264,7 +259,6 @@ export const sqlGrantStore = (
 				await connection.query<StoredGrantRequest>(
 					`SELECT ${requestColumns(schema, '$1')},
                   request.capabilities,
-                  ${subjectOf('request.holder_user_id')} AS "holderSubject",
                   request.holder_user_id::text AS "holderUserId",
                   request.record_category_id::text AS "recordCategoryId",
                   request.requested_by::text AS "requestedBy",

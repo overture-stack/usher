@@ -22,6 +22,7 @@ import { withHarness } from '../../testing/harness/harness.js';
 import {
 	GRANT_REQUEST_NOTIFICATION,
 	inTurn,
+	ORPHANED_RESOURCE_REQUEST,
 	POLICY_CONSTRAINTS,
 	POLICY_TABLES,
 	qualified,
@@ -120,6 +121,21 @@ suite('grant requests in the store', () => {
 
 		assert.deepEqual(refused, [POLICY_CONSTRAINTS.grantRequestKind, POLICY_CONSTRAINTS.grantRequestSelfHeld]);
 		assert.equal(held, 'accepted');
+	});
+
+	test("holds an orphaned resource's request for a holder other than the principal who asked alone", async (context) => {
+		const { owner, seeded } = await openSeededDatabase(context, BASE_FIXTURE);
+		const orphaned = (requestedBy: string): Row =>
+			cyAsking(seeded, {
+				[grantRequests.columns.kind]: ORPHANED_RESOURCE_REQUEST,
+				[grantRequests.columns.requestedBy]: seededId(seeded.users, requestedBy),
+			});
+
+		const forThemself = await constraintOf(committedInsert(owner, grantRequests, orphaned('cy')));
+		const forAnother = await writeOutcome(committedInsert(owner, grantRequests, orphaned('bo')));
+
+		assert.equal(forThemself, POLICY_CONSTRAINTS.grantRequestOrphanedHeldByAnother);
+		assert.equal(forAnother, 'accepted');
 	});
 
 	test('records a decision whole, granted with its grant or refused without one, by someone other than the principal who asked', async (context) => {

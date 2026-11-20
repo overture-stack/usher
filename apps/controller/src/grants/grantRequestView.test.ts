@@ -14,6 +14,7 @@ const PENDING: ViewedGrantRequest = {
 	decision: null,
 	expiresAt: at(3_600_000),
 	grantId: null,
+	holderSubject: 'subject-administrator',
 	id: '0c2d4e6f-1a3b-4c5d-8e9f-0a1b2c3d4e5f',
 	kind: 'selfGrant',
 	requestedAt: at(-60_000),
@@ -29,6 +30,7 @@ suite('a grant request as an answer shows it', () => {
 			decidedAt: null,
 			expiresAt: '2026-11-12T13:00:00.000Z',
 			grantId: null,
+			holder: { hasAccount: true, subject: 'subject-administrator' },
 			id: '0c2d4e6f-1a3b-4c5d-8e9f-0a1b2c3d4e5f',
 			kind: 'grantRequest',
 			requestKind: 'selfGrant',
@@ -38,6 +40,24 @@ suite('a grant request as an answer shows it', () => {
 			role: 'viewer',
 			state: 'pending',
 		});
+	});
+
+	test("shows an orphaned resource's request by its kind, its holder apart from the one who asked", () => {
+		const view = grantRequestView(
+			{
+				...PENDING,
+				holderSubject: 'subject-cy',
+				kind: 'orphanedResource',
+			},
+			NOW,
+		);
+
+		assert.deepEqual(
+			['holder', 'requestKind', 'requestedBy'].map((name) =>
+				typeof view === 'object' && view !== null ? Reflect.get(view, name) : undefined,
+			),
+			[{ hasAccount: true, subject: 'subject-cy' }, 'orphanedResource', { subject: 'subject-administrator' }],
+		);
 	});
 
 	test('shows a granted request with its instant and the grant it wrote', () => {

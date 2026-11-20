@@ -184,6 +184,12 @@ export interface GrantAuthorityQuestion {
 	/** Whether the holder named is the caller, named by the caller's own subject. */
 	holderIsCaller: boolean;
 
+	/**
+	 * Whether the resource named has no counted owner, which decides only a platform administrator's
+	 * grant of a role other than `submitter` and `owner`; `false` where it was not read.
+	 */
+	orphaned: boolean;
+
 	/** The role's name. */
 	role: string;
 
@@ -192,10 +198,12 @@ export interface GrantAuthorityQuestion {
 }
 
 /**
- * The decision of a grant's authority, by its kind: issue the grant, or refuse it with its problem
- * and, where it differs from the code answered, the reason its event records.
+ * The decision of a grant's authority, by its kind: issue the grant, take it as a request of kind
+ * `orphanedResource` someone else decides, or refuse it with its problem and, where it differs from
+ * the code answered, the reason its event records.
  */
-export type GrantAuthority = { kind: 'issue' } | { kind: 'refuse'; problem: Problem; recordedReason?: string };
+export type GrantAuthority =
+	{ kind: 'issue' } | { kind: 'refuse'; problem: Problem; recordedReason?: string } | { kind: 'request' };
 
 /** What a self-grant's authority is decided from. */
 export interface SelfGrantAuthorityQuestion {
@@ -263,13 +271,16 @@ export interface ViewedGrant {
 }
 
 /**
- * What a grant request asks for: `selfGrant`, a grant to the principal asking for it. A kind joins
- * here as one more member, with its own branch wherever a request is judged.
+ * What a grant request asks for: `selfGrant`, a grant to the principal asking for it, and
+ * `orphanedResource`, a platform administrator's grant to someone else on a resource with no
+ * counted owner. A kind joins here as one more member, with its own branch wherever a request is
+ * judged.
  */
-export type GrantRequestKind = 'selfGrant';
+export type GrantRequestKind = 'orphanedResource' | 'selfGrant';
 
 /**
- * A grant request as an answer shows it, the principal who asked for it by subject and its resource
+ * A grant request as an answer shows it, the principal who asked for it and its holder by subject,
+ * and its resource by externalId.
  * by externalId.
  */
 export interface ViewedGrantRequest {
@@ -287,6 +298,9 @@ export interface ViewedGrantRequest {
 	/** The grant written by granting it; `null` unless granted. */
 	grantId: string | null;
 
+	/** Who would hold the grant: the principal asking for a self-grant, the person named for any other. */
+	holderSubject: string;
+
 	id: string;
 	kind: GrantRequestKind;
 	requestedAt: Date;
@@ -302,8 +316,6 @@ export interface ViewedGrantRequest {
 export interface StoredGrantRequest extends ViewedGrantRequest {
 	/** What the principal asking was shown of the role's capabilities, as `entity.action` names. */
 	capabilities: readonly string[];
-
-	holderSubject: string;
 
 	/** The holder's person, whose id never leaves the store's own statements. */
 	holderUserId: string;
@@ -590,6 +602,12 @@ export interface GrantStore {
 
 /** A creation's terms once every rule of it but its holder's address is judged. */
 export interface JudgedCreation {
+	/**
+	 * How the grant is written: `issue` at once, or `request`, asked for as a request of kind
+	 * `orphanedResource` ending at the expiry given.
+	 */
+	authority: { expiresAt: Date; kind: 'request' } | { kind: 'issue' };
+
 	/** Its record category, by id and as a payload names it; `null` for the whole resource. */
 	category: { id: string; scopedName: string } | null;
 
@@ -625,8 +643,8 @@ export interface GrantOperationsSettings {
 
 	/**
 	 * Whether a grant is accepted at its creation, the clock each time written is read from, the
-	 * schema, the trusted issuer, the longest a self-grant lives, and the instance's submitter
-	 * category.
+	 * schema, the trusted issuer, the longest a self-grant or a grant asked for on a resource with no
+	 * counted owner lives, and the instance's submitter category.
 	 */
 	settings: Pick<
 		ControllerSettings,
