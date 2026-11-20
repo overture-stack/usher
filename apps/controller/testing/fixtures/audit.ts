@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
 import type { TestContext } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -27,7 +26,6 @@ import {
 	type Severity,
 } from '../harness/auditEvents.js';
 import { createChannelAssertion, importApplicationKey } from '../peripherals/bridgeWire.js';
-import type { KeycloakRealmOptions } from '../harness/containers.js';
 import {
 	captureLog,
 	type ControllerApplication,
@@ -941,45 +939,8 @@ export const untilInstant = async (instant: number): Promise<void> => {
 	}
 };
 
-const freshSecret = (): string => randomBytes(24).toString('base64url');
-
 /** The person a real Keycloak's realm holds as the administrator, signing in through the management client. */
 export const KEYCLOAK_ADMINISTRATOR = Object.freeze({
 	email: 'admin.one@example.org',
 	username: 'admin.one@example.org',
-});
-
-/**
- * A realm for telling a person's token from a service account's on a real Keycloak (#214 Q16): the
- * management client `usher-ui-test`, public, its tokens naming the management API through an audience
- * mapper; `lyric-svc`, confidential with a service account, its tokens naming the management API the
- * same way; and the administrator holding the first-user role, which marks the person the harness
- * seeds as an administrator once signed in.
- *
- * @param options the first-user role and the management API's audience: the harness's by default.
- */
-export const serviceAccountRealm = ({
-	firstUserRole = 'usher-first-user',
-	managementAudience = 'usher-management-test',
-}: {
-	firstUserRole?: string;
-	managementAudience?: string;
-} = {}): KeycloakRealmOptions => ({
-	clients: [
-		{ audiences: [managementAudience], clientId: 'usher-ui-test' },
-		{
-			audiences: [managementAudience],
-			clientId: SERVICE_ACCOUNT.clientId,
-			secret: freshSecret(),
-		},
-	],
-	people: [
-		{
-			...KEYCLOAK_ADMINISTRATOR,
-			password: freshSecret(),
-			realmRoles: [firstUserRole],
-		},
-	],
-	realm: 'usher-test',
-	realmRoles: [firstUserRole],
 });

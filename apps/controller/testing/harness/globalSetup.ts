@@ -1,6 +1,7 @@
 import type * as Build from './build.js';
 import type * as ContainerEnvironment from './containerEnvironment.js';
 import type * as Containers from './containers.js';
+import type * as SharedRealm from './sharedRealm.js';
 
 // Node's test runner loads this module in its own process, which runs none of tsx's hooks: only
 // Node's type stripping applies. So the modules below are loaded by their .ts file names at run
@@ -22,13 +23,21 @@ const run: {
  * runner calls it once, before any test file starts, when given `--test-global-setup`.
  */
 export const globalSetup = async (): Promise<void> => {
-	const [{ buildController, environmentForBuild, removeBuild }, { environmentForContainers }, { startContainers }] =
-		await Promise.all([
-			loadBeside<typeof Build>('./build.ts'),
-			loadBeside<typeof ContainerEnvironment>('./containerEnvironment.ts'),
-			loadBeside<typeof Containers>('./containers.ts'),
-		]);
-	const [built, started] = await Promise.allSettled([buildController(), startContainers()]);
+	const [
+		{ buildController, environmentForBuild, removeBuild },
+		{ environmentForContainers },
+		{ startContainers },
+		{ sharedRealmPlan },
+	] = await Promise.all([
+		loadBeside<typeof Build>('./build.ts'),
+		loadBeside<typeof ContainerEnvironment>('./containerEnvironment.ts'),
+		loadBeside<typeof Containers>('./containers.ts'),
+		loadBeside<typeof SharedRealm>('./sharedRealm.ts'),
+	]);
+	const [built, started] = await Promise.allSettled([
+		buildController(),
+		startContainers(undefined, sharedRealmPlan()),
+	]);
 	if (built.status === 'fulfilled' && started.status === 'fulfilled') {
 		run.build = built.value;
 		run.started = started.value;

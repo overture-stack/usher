@@ -13,7 +13,7 @@ import pg from 'pg';
 
 import { runningContainers } from './containerEnvironment.js';
 import {
-	addressKeycloakRealm,
+	connectSharedKeycloak,
 	DEFAULT_KEYCLOAK_REALM,
 	flushValkey,
 	openCacheConnection,
@@ -30,6 +30,7 @@ import {
 	watchCache,
 } from './containers.js';
 import { startRecordingServer } from '../peripherals/recordingServer.js';
+import { addressKeycloakRealm } from './sharedRealm.js';
 import { cleanupFor, eventually, suiteCleanup } from './waiting.js';
 
 const respCommand = (command: readonly string[]): string =>
@@ -992,6 +993,21 @@ suite('a real Keycloak', () => {
 				onceRemoved: 'ECONNREFUSED',
 				whileRunning: 'connected',
 			},
+		);
+	});
+});
+
+suite('the shared Keycloak the run started', () => {
+	test('is read by a test process from the environment the global setup wrote, with no remove, and answers for the people the run holds', async () => {
+		const running = runningContainers().keycloak;
+		const shared = connectSharedKeycloak(running);
+
+		assert.equal(running.realm.realm, 'overture');
+		assert.match(shared.issuer, /^http:\/\/127\.0\.0\.1:\d+\/realms\/overture$/u);
+		assert.equal('remove' in shared, false);
+		assert.match(
+			await shared.subject('sub.bo@example.org'),
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
 		);
 	});
 });

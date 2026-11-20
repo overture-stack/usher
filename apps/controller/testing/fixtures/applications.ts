@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import pg from 'pg';
 
@@ -14,17 +14,13 @@ import {
 	type RegisteredApplication,
 	registeredApplicationOf,
 } from '../harness/admin.js';
-import type { KeycloakPerson, KeycloakRealmOptions } from '../harness/containers.js';
+import type { KeycloakRealmOptions, SharedKeycloakRealm } from '../harness/containers.js';
 import type { ControllerApplication } from '../harness/controller.js';
 import { exchange, type ExchangeRequest, PEOPLE, type WireResponse } from '../harness/exchange.js';
-import {
-	APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS,
-	configurationToRead,
-	type Harness,
-	type HarnessOptions,
-} from '../harness/harness.js';
+import { APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS, type Harness, type HarnessOptions } from '../harness/harness.js';
 import { mintServiceAccountToken } from '../peripherals/identityProvider.js';
 import { POLICY_TABLES, qualified } from '../harness/policy.js';
+import { sharedKeycloak } from '../harness/sharedKeycloak.js';
 
 // The helpers of the application suites alone: the Policy Management API for applications and their
 // keys, under test/admin/applications/, and the exchange's side of those keys, under
@@ -47,38 +43,19 @@ export const APPLICATION_SUITE: HarnessOptions = Object.freeze({
 	applications: [],
 });
 
-const REGISTERING = configurationToRead();
-
-const realmPerson = (username: string, realmRoles: readonly string[]): KeycloakPerson => ({
-	email: username,
-	password: randomBytes(18).toString('base64url'),
-	realmRoles,
-	username,
-});
-
 /**
- * The username of {@link REGISTRAR_REALM}'s administrator, who registers a realm harness's
- * applications.
+ * The username of the administrator {@link registrarRealm}'s suites sign in as: the person who registers a
+ * realm harness's applications, named because other holders of the first-user role share the realm.
  */
 export const REALM_ADMINISTRATOR = 'registrar@example.org';
 
 /**
- * A Keycloak realm for a harness registering its applications as the realm's own administrator: the
- * harness's management client, naming the management API; {@link REALM_ADMINISTRATOR}, holding the
- * configured first-user role, which marks the person the harness seeds as an administrator once
- * signed in; and a person holding none.
+ * The run's shared realm for a harness registering its applications as the realm's own administrator:
+ * its management client naming the management API, {@link REALM_ADMINISTRATOR} holding the configured
+ * first-user role, and a person holding none. Nothing is started or removed: the global setup owns the
+ * Keycloak, and {@link REALM_ADMINISTRATOR} is named when its administrator is signed in.
  */
-export const REGISTRAR_REALM: KeycloakRealmOptions = Object.freeze({
-	clients: [
-		{
-			audiences: [REGISTERING.managementAudience],
-			clientId: REGISTERING.managementClients[0] ?? 'usher-ui-test',
-		},
-	],
-	people: [realmPerson(REALM_ADMINISTRATOR, [REGISTERING.firstUserRole]), realmPerson('bystander@example.org', [])],
-	realm: 'usher-applications-test',
-	realmRoles: [REGISTERING.firstUserRole],
-});
+export const registrarRealm = (): { keycloak: SharedKeycloakRealm; options: KeycloakRealmOptions } => sharedKeycloak();
 
 /** A uuid in its text form, as every application's id and every key's id is generated. */
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;

@@ -1,17 +1,14 @@
-import { randomBytes } from 'node:crypto';
-import { after } from 'node:test';
-
 import { type AdminCaller, type GrantView, instantOf } from '../harness/admin.js';
-import {
-	addressKeycloakRealm,
-	type KeycloakDirectory,
-	type KeycloakPerson,
-	type KeycloakRealm,
-	type KeycloakRealmOptions,
-	startKeycloak,
+import type {
+	KeycloakDirectory,
+	KeycloakPerson,
+	KeycloakRealmOptions,
+	SharedKeycloakRealm,
 } from '../harness/containers.js';
 import type { ControllerConfiguration } from '../harness/controller.js';
 import { type Harness, realmAdministrator, startHarness } from '../harness/harness.js';
+import { CAST } from '../harness/sharedRealm.js';
+import { sharedKeycloak } from '../harness/sharedKeycloak.js';
 import {
 	type FixtureDecision,
 	type FixtureGrant,
@@ -95,26 +92,8 @@ export type CastName =
 	| 'outsider'
 	| 'quinn';
 
-/**
- * Each cast member's username, which is also their address. The administrator, Bo and the account
- * holding nothing are the address realm's own (`admin.one@`, `sub.bo@`, `abo@`); the rest are added
- * to it. Fay's account is deleted once her subject is known, so the seed holds a grant whose holder
- * the directory no longer knows.
- */
-export const CAST: Readonly<Record<CastName, string>> = Object.freeze({
-	administrator: 'admin.one@example.org',
-	ana: 'ana@example.org',
-	bo: 'sub.bo@example.org',
-	cy: 'cy@example.org',
-	dee: 'dee@example.org',
-	eve: 'eve@example.org',
-	fay: 'fay@example.org',
-	gil: 'gil@example.org',
-	hal: 'hal@example.org',
-	holdsNothing: 'abo@example.org',
-	outsider: 'outsider@example.org',
-	quinn: 'quinn@example.org',
-});
+/** Each cast member's username is in sharedRealm.ts, which the run's shared realm is built from. */
+export { CAST };
 
 /** Every cast member's name. */
 export const CAST_NAMES: readonly CastName[] = Object.freeze(
@@ -127,59 +106,12 @@ export const HAL_NAME = 'Hal Example';
 /** Ana's full name, as a granter is shown to an owner (#213 Q7). */
 export const ANA_NAME = 'Ana Example';
 
-interface AddedPerson {
-	firstName: string | null;
-	lastName: string | null;
-	name: CastName;
-
-	/** Realm roles beside Keycloak's defaults. */
-	realmRoles?: readonly string[];
-}
-
-// Quinn's username is their address and they have neither name (#213 Q9). Quinn never signs in,
-// since Keycloak may refuse a person with no names a direct access grant.
-const ADDED_PEOPLE: readonly AddedPerson[] = Object.freeze([
-	{ firstName: 'Ana', lastName: 'Example', name: 'ana' },
-	{ firstName: 'Cy', lastName: 'Example', name: 'cy' },
-	{ firstName: 'Dee', lastName: 'Example', name: 'dee' },
-	{ firstName: 'Eve', lastName: 'Example', name: 'eve' },
-	{ firstName: 'Fay', lastName: 'Example', name: 'fay' },
-	{ firstName: 'Gil', lastName: 'Example', name: 'gil' },
-	{ firstName: 'Hal', lastName: 'Example', name: 'hal' },
-	{ firstName: 'Olu', lastName: 'Example', name: 'outsider' },
-	{
-		firstName: null,
-		lastName: null,
-		name: 'quinn',
-		realmRoles: ['usher-platform-admin'],
-	},
-]);
-
-const randomPassword = (): string => randomBytes(24).toString('base64url');
-
-/**
- * The address realm with the listing cast added: Ana, Cy, Dee, Eve, Fay, Gil, Hal and the outsider
- * with given and family names, and Quinn, an administrator with neither.
- */
-export const listingRealmOptions = (): KeycloakRealmOptions => {
-	const base = addressKeycloakRealm();
-	const added = ADDED_PEOPLE.map(({ firstName, lastName, name, realmRoles }): KeycloakPerson => ({
-		email: CAST[name],
-		firstName,
-		lastName,
-		password: randomPassword(),
-		...(realmRoles === undefined ? {} : { realmRoles }),
-		username: CAST[name],
-	}));
-	return { ...base, people: [...base.people, ...added] };
-};
-
-/** A Keycloak holding the listing cast, each member's subject learned from it. */
+/** The run's shared realm holding the listing cast, each member's subject learned from it. */
 export interface ListingRealm {
 	/** The configuration fields pointing a Controller's directory at the realm. */
 	directory: KeycloakDirectory;
 
-	keycloak: KeycloakRealm;
+	keycloak: SharedKeycloakRealm;
 
 	/** What the realm was set up with, its administrator among its people. */
 	options: KeycloakRealmOptions;
@@ -208,11 +140,10 @@ const shownNameOf = ({ firstName, lastName }: KeycloakPerson): string => {
 	return names.length > 0 ? names.join(' ') : UNNAMED_SHARER;
 };
 
-const learnedRealm = async (keycloak: KeycloakRealm, options: KeycloakRealmOptions): Promise<ListingRealm> => {
+const learnedRealm = async (keycloak: SharedKeycloakRealm, options: KeycloakRealmOptions): Promise<ListingRealm> => {
 	const subjects = new Map<CastName, string>(
 		await Promise.all(CAST_NAMES.map(async (name) => [name, await keycloak.subject(CAST[name])] as const)),
 	);
-	await keycloak.deleteUser(CAST.fay);
 	const personOf = (name: CastName): KeycloakPerson => {
 		const person = options.people.find(({ username }) => username === CAST[name]);
 		if (person !== undefined) {
@@ -237,44 +168,19 @@ const learnedRealm = async (keycloak: KeycloakRealm, options: KeycloakRealmOptio
 };
 
 /**
- * Starts a Keycloak holding the listing cast, learns each member's subject from it, and deletes Fay's
- * account. A start that fails after the container started removes it.
+ * The listing realm of the run's shared Keycloak, its cast's subjects read from the environment the global
+ * setup wrote: Fay's account was removed before any test started, so her subject is the one learned then.
  */
-export const startListingRealm = async (): Promise<ListingRealm> => {
-	const options = listingRealmOptions();
-	const keycloak = await startKeycloak(options);
-	try {
-		return await learnedRealm(keycloak, options);
-	} catch (error) {
-		await keycloak.remove();
-		throw error;
-	}
+export const sharedListingRealm = async (): Promise<ListingRealm> => {
+	const { keycloak, options } = sharedKeycloak();
+	return learnedRealm(keycloak, options);
 };
 
 /**
- * The listing realm one test file shares: started by the first test asking for it, tried again by
- * the next one when a start failed, and removed once every test in the file has ended. Call it at a
- * test file's top level.
+ * The listing realm a test file reads, the run's shared one: no container is started or removed by the
+ * file. Call it at a test file's top level.
  */
-export const fileRealm = (): (() => Promise<ListingRealm>) => {
-	const state: { starting: Promise<ListingRealm> | undefined } = {
-		starting: undefined,
-	};
-	after(async () => {
-		const started = await state.starting?.catch(() => undefined);
-		await started?.keycloak.remove();
-	});
-	return () => {
-		const starting =
-			state.starting ??
-			startListingRealm().catch((error: unknown) => {
-				state.starting = undefined;
-				throw error;
-			});
-		state.starting = starting;
-		return starting;
-	};
-};
+export const fileRealm = (): (() => Promise<ListingRealm>) => sharedListingRealm;
 
 /** Whole seconds since the Unix epoch, in milliseconds, so every seeded time reads back exactly in any instant form. */
 export const wholeSecondNow = (): number => Math.floor(Date.now() / 1000) * 1000;

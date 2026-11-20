@@ -17,7 +17,7 @@ import {
 	registeredApplicationOf,
 } from './admin.js';
 import { runningContainers } from './containerEnvironment.js';
-import type { DedicatedContainer, KeycloakRealm, KeycloakRealmOptions } from './containers.js';
+import type { DedicatedContainer, KeycloakRealm, KeycloakRealmOptions, SharedKeycloakRealm } from './containers.js';
 import {
 	type ControllerApplication,
 	type ControllerConfiguration,
@@ -650,19 +650,32 @@ export const standInAdministrator =
 
 /**
  * An {@link AdministratorTokenSource} for a Controller trusting a Keycloak realm: the realm's own
- * administrator, the first of its people holding the configured first-user role, signed in through
- * the first of its clients that is a configured management client and carries the management API's
- * audience. The token is Keycloak's own, from a real sign-in.
+ * administrator, signed in through the first of its clients that is a configured management client and
+ * carries the management API's audience. The administrator is the person named by `administrator` when
+ * one is given, and otherwise the first of the realm's people holding the configured first-user role.
+ * The token is Keycloak's own, from a real sign-in.
  *
- * @param realm the running realm and what it was set up with.
+ * @param realm the running realm, what it was set up with, and the username of its administrator
+ *   when more than one person holds the first-user role.
  */
 export const realmAdministrator =
-	({ keycloak, options }: { keycloak: KeycloakRealm; options: KeycloakRealmOptions }): AdministratorTokenSource =>
+	({
+		administrator: administratorName,
+		keycloak,
+		options,
+	}: {
+		administrator?: string | undefined;
+		keycloak: Pick<KeycloakRealm, 'signIn'>;
+		options: KeycloakRealmOptions;
+	}): AdministratorTokenSource =>
 	async ({ firstUserRole, managementAudience, managementClients }) => {
 		const client = options.clients.find(
 			({ audiences, clientId }) => audiences.includes(managementAudience) && managementClients.includes(clientId),
 		);
-		const administrator = options.people.find(({ realmRoles = [] }) => realmRoles.includes(firstUserRole));
+		const administrator =
+			administratorName === undefined
+				? options.people.find(({ realmRoles = [] }) => realmRoles.includes(firstUserRole))
+				: options.people.find(({ username }) => username === administratorName);
 		if (client === undefined || administrator === undefined) {
 			throw new Error('the realm holds no management client or no administrator to sign in');
 		}
@@ -671,7 +684,7 @@ export const realmAdministrator =
 
 /** A running realm and what it was set up with, as {@link realmAdministrator} reads one. */
 export interface StartedRealm {
-	keycloak: KeycloakRealm;
+	keycloak: SharedKeycloakRealm;
 	options: KeycloakRealmOptions;
 }
 
@@ -693,7 +706,7 @@ export interface RealmRegistrar {
  * its Controller first listens, after the restart trusting the realm, and registers its applications
  * and issues their first keys as the realm's own administrator.
  */
-export const realmRegistrar = (): RealmRegistrar => {
+export const realmRegistrar = (administrator?: string): RealmRegistrar => {
 	const state: { realm: StartedRealm | undefined } = { realm: undefined };
 	return {
 		administratorToken: (configuration) =>
@@ -701,7 +714,7 @@ export const realmRegistrar = (): RealmRegistrar => {
 				? Promise.reject(
 						new Error('the realm was not given to the registrar before the harness first listened'),
 					)
-				: realmAdministrator(state.realm)(configuration),
+				: realmAdministrator({ administrator, ...state.realm })(configuration),
 		started: (realm) => {
 			state.realm = realm;
 		},

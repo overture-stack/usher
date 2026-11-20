@@ -20,7 +20,7 @@ import {
 	Wait,
 } from 'testcontainers';
 
-import type { RunningContainer, RunningContainers } from './containerEnvironment.js';
+import type { RunningContainer, RunningContainers, RunningKeycloak } from './containerEnvironment.js';
 import type { ControllerConfiguration } from './controller.js';
 import type { Cleanup } from './waiting.js';
 
@@ -143,18 +143,21 @@ export const reachOnLoopback = async (url: string): Promise<LoopbackPostgresql> 
 };
 
 /**
- * Starts one PostgreSQL and one Valkey, each with a password made for this run, the PostgreSQL's URL
- * on this machine's loopback ({@link reachOnLoopback}). A container that started is stopped again
- * when the other fails, so a failed start leaves nothing running.
+ * Starts one PostgreSQL, one Valkey and the run's shared Keycloak, each with a password made for this
+ * run, the PostgreSQL's URL on this machine's loopback ({@link reachOnLoopback}). A container that
+ * started is stopped again when another fails, so a failed start leaves nothing running.
  *
  * @param selection the PostgreSQL image's name in {@link POSTGRESQL_IMAGES}: `USHER_TEST_POSTGRESQL`,
  *   `floor` when unset.
+ * @param keycloak the realm the shared Keycloak imports, and the accounts it learns and removes
+ *   ({@link startSharedKeycloak}).
  */
 export const startContainers = async (
 	selection: string | undefined = process.env['USHER_TEST_POSTGRESQL'],
+	keycloak: SharedKeycloakPlan,
 ): Promise<StartedContainers> => {
 	const image = postgresqlImage(selection);
-	const [postgresql, valkey] = await Promise.allSettled([
+	const [postgresql, valkey, shared] = await Promise.allSettled([
 		new PostgreSqlContainer(image)
 			.withCommand(['postgres', '-c', `max_connections=${SHARED_MAX_CONNECTIONS}`])
 			.withDatabase('postgres')
@@ -162,24 +165,26 @@ export const startContainers = async (
 			.withPassword(randomPassword())
 			.start(),
 		new ValkeyContainer(VALKEY_IMAGE).withPassword(randomPassword()).start(),
+		startSharedKeycloak(keycloak),
 	]);
-	if (postgresql.status === 'fulfilled' && valkey.status === 'fulfilled') {
+	if (postgresql.status === 'fulfilled' && valkey.status === 'fulfilled' && shared.status === 'fulfilled') {
 		const reached = await reachOnLoopback(postgresql.value.getConnectionUri()).catch(async (failure: unknown) => {
-			await Promise.all([postgresql.value.stop(), valkey.value.stop()]);
+			await Promise.all([postgresql.value.stop(), valkey.value.stop(), shared.value.stop()]);
 			throw failure;
 		});
 		return {
 			containers: {
+				keycloak: shared.value.running,
 				postgresql: { image, url: reached.url },
 				valkey: { image: VALKEY_IMAGE, url: valkey.value.getConnectionUrl() },
 			},
 			stop: async () => {
 				await reached.stop();
-				await Promise.all([postgresql.value.stop(), valkey.value.stop()]);
+				await Promise.all([postgresql.value.stop(), valkey.value.stop(), shared.value.stop()]);
 			},
 		};
 	}
-	const outcomes = [postgresql, valkey];
+	const outcomes = [postgresql, valkey, shared];
 	await Promise.all(outcomes.flatMap((outcome) => (outcome.status === 'fulfilled' ? [outcome.value.stop()] : [])));
 	throw new AggregateError(
 		outcomes.flatMap((outcome) => (outcome.status === 'rejected' ? [outcome.reason] : [])),
@@ -1302,6 +1307,28 @@ export interface KeycloakRealm {
 }
 
 /**
+ * A realm a test process holds on the run's shared Keycloak: every method of {@link KeycloakRealm}
+ * but `remove`, since the global setup owns the container and stops it once the run ends.
+ */
+export type SharedKeycloakRealm = Omit<KeycloakRealm, 'remove'>;
+
+/**
+ * What the run's shared Keycloak is set up with, and the accounts the run learns and removes before its
+ * first test starts: a learned subject is read by a test process from the environment, so a test never
+ * looks an account up live after it has been removed.
+ */
+export interface SharedKeycloakPlan {
+	/** The realm the shared Keycloak imports, with its clients and people. */
+	options: KeycloakRealmOptions;
+
+	/** The usernames whose subjects the run learns, before any removal. */
+	learned: readonly string[];
+
+	/** The usernames the run removes, once their subjects are learned. */
+	removed: readonly string[];
+}
+
+/**
  * The realm the tests needing a real Keycloak use by default: `usher-test`, with `portal-test`, a
  * public client whose tokens name `arranger-test`; `bare-test`, one naming no audience of ours;
  * `lyric-svc`, a confidential client with a service account; and Ana at example.org.
@@ -1321,89 +1348,6 @@ export const DEFAULT_KEYCLOAK_REALM: KeycloakRealmOptions = Object.freeze({
 	],
 	realm: 'usher-test',
 });
-
-/**
- * A realm for the suites resolving addresses (#212, #213): realm `overture`; a public client issuing
- * management tokens, its `azp` a management client and an audience mapper naming the management API;
- * `usher-directory`, a confidential client whose service account may view and query users, for the
- * Controller's directory; and people at example.org: Bo verified (`sub.bo@`), his near misses
- * (`bo.smith@`, `abo@`), non-ASCII text (`zoë@`), plus-addressing (`bo+ims@`), an unverified address
- * (`una@`), a disabled account (`disabled@`), two accounts sharing `dup@` (the realm allowing it), an
- * administrator (`admin.one@`) holding the first-user role, an owner (`owner.ana@`) and an outsider
- * (`outsider.cy@`) for the grants suites, and two accounts a test disables (`paused@`) or deletes
- * (`leaving@`) while it runs, each its own so a realm a suite shares stays as imported for every other
- * test. Usernames are the addresses, the two sharing one apart.
- *
- * @param options the first-user role, the management API's audience and client, and the realm's
- *   name, each the harness's by default.
- */
-export const addressKeycloakRealm = ({
-	firstUserRole = 'usher-first-user',
-	managementAudience = 'usher-management-test',
-	managementClient = 'usher-ui-test',
-	realm = 'overture',
-}: {
-	firstUserRole?: string;
-	managementAudience?: string;
-	managementClient?: string;
-	realm?: string;
-} = {}): KeycloakRealmOptions => {
-	const person = (username: string, email: string, details: Partial<KeycloakPerson> = {}): KeycloakPerson => ({
-		email,
-		password: randomPassword(),
-		username,
-		...details,
-	});
-	return {
-		clients: [
-			{ audiences: [managementAudience], clientId: managementClient },
-			{
-				audiences: [],
-				clientId: 'usher-directory',
-				directoryRoles: ['query-users', 'view-users'],
-				secret: randomPassword(),
-			},
-		],
-		duplicateEmailsAllowed: true,
-		people: [
-			person('sub.bo@example.org', 'sub.bo@example.org', {
-				firstName: 'Bo',
-				lastName: 'Example',
-			}),
-			person('bo.smith@example.org', 'bo.smith@example.org'),
-			person('abo@example.org', 'abo@example.org'),
-			person('zoë@example.org', 'zoë@example.org'),
-			person('bo+ims@example.org', 'bo+ims@example.org'),
-			person('una@example.org', 'una@example.org', { emailVerified: false }),
-			person('disabled@example.org', 'disabled@example.org', {
-				enabled: false,
-			}),
-			person('dup.one', 'dup@example.org'),
-			person('dup.two', 'dup@example.org'),
-			person('admin.one@example.org', 'admin.one@example.org', {
-				realmRoles: [firstUserRole],
-			}),
-			person('owner.ana@example.org', 'owner.ana@example.org', {
-				firstName: 'Ana',
-				lastName: 'Example',
-			}),
-			person('outsider.cy@example.org', 'outsider.cy@example.org', {
-				firstName: 'Cy',
-				lastName: 'Example',
-			}),
-			person('leaving@example.org', 'leaving@example.org', {
-				firstName: 'Lee',
-				lastName: 'Example',
-			}),
-			person('paused@example.org', 'paused@example.org', {
-				firstName: 'Pat',
-				lastName: 'Example',
-			}),
-		],
-		realm,
-		realmRoles: [firstUserRole],
-	};
-};
 
 const KEYCLOAK_PORT = 8080;
 
@@ -1520,6 +1464,33 @@ const hostInUrl = (host: string): string => (host.includes(':') ? `[${host}]` : 
  * @param options the realm, its clients and its people: {@link DEFAULT_KEYCLOAK_REALM} by default.
  */
 export const startKeycloak = async (options: KeycloakRealmOptions = DEFAULT_KEYCLOAK_REALM): Promise<KeycloakRealm> => {
+	const container = await startKeycloakContainer(options);
+	return { ...keycloakHandle(container.endpoint, options, new Map()), remove: container.stop };
+};
+
+/** Where a started Keycloak answers and the admin password its admin API takes. */
+interface KeycloakEndpoint {
+	adminPassword: string;
+
+	/** The relay's origin, `http://127.0.0.1:<port>`. */
+	origin: string;
+}
+
+/** A Keycloak container a run or a test started, with the relay it is reached through, and how to stop both. */
+interface KeycloakContainer {
+	endpoint: KeycloakEndpoint;
+
+	/** Ends the container and the relay, so its issuer refuses connections. */
+	stop(): Promise<void>;
+}
+
+/**
+ * Starts a current Keycloak in a container, with the relay it is reached through, and nothing imported
+ * yet beyond the realm's own import. A failed relay start stops the container.
+ *
+ * @param options the realm, its clients and its people, imported at start.
+ */
+const startKeycloakContainer = async (options: KeycloakRealmOptions): Promise<KeycloakContainer> => {
 	await TestContainers.exposeHostPorts();
 	const adminPassword = randomPassword();
 	const started = await new GenericContainer(KEYCLOAK_IMAGE)
@@ -1544,7 +1515,32 @@ export const startKeycloak = async (options: KeycloakRealmOptions = DEFAULT_KEYC
 		await started.stop();
 		throw error;
 	});
-	const base = new URL(relay.url).origin;
+	return {
+		endpoint: { adminPassword, origin: new URL(relay.url).origin },
+		stop: async () => {
+			try {
+				await started.stop();
+			} finally {
+				await relay.stop();
+			}
+		},
+	};
+};
+
+/**
+ * The methods a test uses on a Keycloak realm, over its admin API and its realm's endpoints, reached
+ * through the endpoint's origin. Its `subject` answers from `subjects` for an account the run learned
+ * before removing it, and asks the admin API for any other.
+ *
+ * @param endpoint where the Keycloak answers and its admin password.
+ * @param options the realm the handle is over: its name, clients and people.
+ * @param subjects the subjects of accounts learned before their removal, by username.
+ */
+const keycloakHandle = (
+	{ adminPassword, origin: base }: KeycloakEndpoint,
+	options: KeycloakRealmOptions,
+	subjects: ReadonlyMap<string, string>,
+): SharedKeycloakRealm => {
 	const issuer = `${base}/realms/${options.realm}`;
 	const admin = `${base}/admin/realms/${options.realm}`;
 	const secretOf = (clientId: string): Readonly<Record<string, string>> => {
@@ -1678,14 +1674,6 @@ export const startKeycloak = async (options: KeycloakRealmOptions = DEFAULT_KEYC
 
 		issuer,
 
-		remove: async () => {
-			try {
-				await started.stop();
-			} finally {
-				await relay.stop();
-			}
-		},
-
 		serviceAccountToken: async (clientId) =>
 			text(
 				await formPost(`${issuer}/protocol/openid-connect/token`, {
@@ -1720,6 +1708,52 @@ export const startKeycloak = async (options: KeycloakRealmOptions = DEFAULT_KEYC
 			});
 		},
 
-		subject: (username) => userIdOf(username),
+		subject: async (username) => subjects.get(username) ?? (await userIdOf(username)),
 	};
 };
+
+/**
+ * Starts the run's shared Keycloak with its realm imported, learns the subjects of the accounts the plan
+ * names, and removes the accounts it names. A failure after the container started stops it.
+ *
+ * @param plan the realm, and the accounts to learn and to remove.
+ * @returns what the test files need, and how to stop the container.
+ */
+export const startSharedKeycloak = async (
+	plan: SharedKeycloakPlan,
+): Promise<{ running: RunningKeycloak; stop: () => Promise<void> }> => {
+	const container = await startKeycloakContainer(plan.options);
+	const handle = keycloakHandle(container.endpoint, plan.options, new Map());
+	try {
+		const subjects = await Promise.all(
+			plan.learned.map(async (username) => [username, await handle.subject(username)] as const),
+		);
+		await Promise.all(plan.removed.map((username) => handle.deleteUser(username)));
+		return {
+			running: {
+				adminPassword: container.endpoint.adminPassword,
+				image: KEYCLOAK_IMAGE,
+				origin: container.endpoint.origin,
+				realm: plan.options,
+				subjects: Object.fromEntries(subjects),
+			},
+			stop: container.stop,
+		};
+	} catch (error) {
+		await container.stop();
+		throw error;
+	}
+};
+
+/**
+ * A test process's handle on the run's shared Keycloak, read from the environment the global setup
+ * wrote. It starts nothing and has no `remove`: the global setup stops the container.
+ *
+ * @param running the shared Keycloak as {@link runningContainers} reads it.
+ */
+export const connectSharedKeycloak = (running: RunningKeycloak): SharedKeycloakRealm =>
+	keycloakHandle(
+		{ adminPassword: running.adminPassword, origin: running.origin },
+		running.realm,
+		new Map(Object.entries(running.subjects)),
+	);

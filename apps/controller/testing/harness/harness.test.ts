@@ -452,11 +452,38 @@ suite("the platform administrator registering a harness's applications", () => {
 		assert.deepEqual(Object.fromEntries(Object.keys(expected).map((name) => [name, claims[name]])), expected);
 	});
 
+	test('signs in the administrator the caller names, not the first holder of the first-user role, and the first holder by default', async () => {
+		const signedIn: string[] = [];
+		const keycloak = {
+			signIn: async (_clientId: string, person: KeycloakPerson) => {
+				signedIn.push(person.username);
+				return { accessToken: 'token', idToken: 'id', refreshToken: 'refresh' };
+			},
+		};
+		const options: KeycloakRealmOptions = {
+			...REGISTRAR_REALM,
+			people: [
+				realmPerson('first.holder@example.org', [REGISTERING.firstUserRole]),
+				realmPerson(REALM_ADMINISTRATOR, [REGISTERING.firstUserRole]),
+				realmPerson('bystander@example.org', []),
+			],
+		};
+
+		await realmAdministrator({ keycloak, options })(REGISTERING);
+		await realmAdministrator({ administrator: REALM_ADMINISTRATOR, keycloak, options })(REGISTERING);
+
+		assert.deepEqual(signedIn, ['first.holder@example.org', REALM_ADMINISTRATOR]);
+	});
+
 	test("is, given a realm's source, the realm's own administrator signed in through its management client under the realm's issuer, and is refused by a realm holding no administrator", async (context) => {
 		const keycloak = await startKeycloak(REGISTRAR_REALM);
 		context.after(() => keycloak.remove());
 
-		const claims = decodeJwt(await realmAdministrator({ keycloak, options: REGISTRAR_REALM })(REGISTERING));
+		const claims = decodeJwt(
+			await realmAdministrator({ administrator: REALM_ADMINISTRATOR, keycloak, options: REGISTRAR_REALM })(
+				REGISTERING,
+			),
+		);
 		const withoutAdministrator = realmAdministrator({
 			keycloak,
 			options: {
