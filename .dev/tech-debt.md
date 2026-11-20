@@ -83,11 +83,15 @@ the database URL" and "refuses a start the store will not sign in, naming the pa
 refused password and the database URL for a database the store lacks". On CI's two-CPU pod, "answers
 a Management API request 503 storeUnavailable within about the store timeout while the store is
 paused, writing nothing, and serves the next once the store answers" failed before its request,
-its harness's start refused for not answering within the store timeout. Each must pass under load
-as it does alone.
-fix: every instance in the file now starts within four times the compressed store timeout, since
-an instance's whole start runs within its store timeout; confirm on CI's pod that each case passes,
-and establish the cause of any that still fails.
+its harness's start refused for not answering within the store timeout. Outside that file,
+`src/noticeChannel/noticeChannel.database.test.ts` failed one run in ten under load the same way:
+"answers 410 on both channels to a cursor below the trim watermark, and serves one at it", its
+harness's start taking 5166 ms against the product's default store timeout of 5000 ms. Each must
+pass under load as it does alone.
+fix: every instance in the storeTimeout file now starts within four times the compressed store
+timeout, since an instance's whole start runs within its store timeout; give every other harness
+start a store timeout well above a loaded start, except where a suite tests the timeout itself;
+confirm on CI's pod that each case passes, and establish the cause of any that still fails.
 standalone: yes
 
 Most files in `apps/controller/testing/fixtures/` hold helpers that start or drive the real system
@@ -100,3 +104,13 @@ fix: move each driving helper into `testing/harness/` and the table's expectatio
 `testing/fixtures/`, after the grant operations land, so their suites move onto these paths once.
 standalone: no
 context: waits on the grant operations.
+
+Two parts of the Controller's tests bound how fast CI runs them. The migrations suite,
+`src/migrations/migrations.database.test.ts`, is the longest single suite at about three minutes,
+its 16 tests each running the migration command against a new database. Every Keycloak test starts
+a Keycloak of its own, three in `testing/harness/containers.test.ts` alone at about 50 s each.
+fix: start one Keycloak per run in the global setup, its realm imported with every user the suites
+need, and share it; profile the migrations suite for work its tests repeat without observing it, and
+cut that, keeping every migration run a test watches.
+standalone: no
+context: after the grant operations, whose suites add to both.
