@@ -247,6 +247,8 @@ suite('the grant rate against the store', () => {
 			{
 				configuration: {
 					grantRateThreshold: { operationCount: 1, windowSeconds: 60 },
+					// Longer than the table hold: both writes wait it out and are counted together.
+					storeTimeoutMilliseconds: 15_000,
 				},
 				fixture: grantsFixture(),
 			},

@@ -658,22 +658,28 @@ suite('creating a grant', () => {
 	});
 
 	test('keeps one live grant when identical creations race', async () => {
-		await withHarness({ fixture: grantsFixture() }, async (harness) => {
-			const owner = await ownerOf(harness);
+		// Longer than the grants table hold racedAtTheGrantsTable takes: each creation waits it out rather than timing out.
+		await withHarness(
+			{ configuration: { storeTimeoutMilliseconds: 15_000 }, fixture: grantsFixture() },
+			async (harness) => {
+				const owner = await ownerOf(harness);
 
-			const answers = await racedAtTheGrantsTable(harness, 3, () => createGrant(owner, grantFor(CAST.recipient)));
+				const answers = await racedAtTheGrantsTable(harness, 3, () =>
+					createGrant(owner, grantFor(CAST.recipient)),
+				);
 
-			const created = answers.filter(({ status }) => status >= 200 && status < 300);
-			const lost = answers.filter(({ status }) => status >= 300);
-			assert.equal(created.length, 1, 'one creation succeeds');
-			lost.forEach((answer, index) => {
-				assertRefused(answer, PROBLEMS.alreadyHolds, `losing creation ${index}`);
-			});
-			const live = (await recipientsGrants(harness)).filter(
-				({ resource, revokedAt, role }) => resource === STUDY_A1 && revokedAt === null && role === 'viewer',
-			);
-			assert.equal(live.length, 1);
-		});
+				const created = answers.filter(({ status }) => status >= 200 && status < 300);
+				const lost = answers.filter(({ status }) => status >= 300);
+				assert.equal(created.length, 1, 'one creation succeeds');
+				lost.forEach((answer, index) => {
+					assertRefused(answer, PROBLEMS.alreadyHolds, `losing creation ${index}`);
+				});
+				const live = (await recipientsGrants(harness)).filter(
+					({ resource, revokedAt, role }) => resource === STUDY_A1 && revokedAt === null && role === 'viewer',
+				);
+				assert.equal(live.length, 1);
+			},
+		);
 	});
 
 	test('creates a grant for an account that has never used an application', async () => {

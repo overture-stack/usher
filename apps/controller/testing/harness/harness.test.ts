@@ -22,7 +22,7 @@ import {
 	TEMPLATE_SETTINGS,
 	USHER_SCHEMA,
 } from './database.js';
-import { ENVIRONMENT_VARIABLES } from './controller.js';
+import { ENVIRONMENT_VARIABLES, HARNESS_STORE_TIMEOUT_MILLISECONDS } from './controller.js';
 import { PEOPLE } from './exchange.js';
 import {
 	APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS,
@@ -864,7 +864,7 @@ suite('a second controller instance beside the harness', () => {
 });
 
 suite('the timing settings', () => {
-	test('default to production values, and compress to a 0.5 s heartbeat, 10 s tokens, a 20 s retention floor and a 250 ms store timeout', () => {
+	test('default to production values, a store timeout above a loaded start, and compress to a 0.5 s heartbeat, 10 s tokens, a 20 s retention floor and a 250 ms store timeout', () => {
 		const usual = harnessConfiguration(SETTINGS);
 		const compressed = harnessConfiguration({
 			...SETTINGS,
@@ -878,7 +878,6 @@ suite('the timing settings', () => {
 				heartbeatMilliseconds: usual.heartbeatMilliseconds,
 				noticePageLimit: usual.noticePageLimit,
 				noticeRereadMilliseconds: usual.noticeRereadMilliseconds,
-				storeTimeoutMilliseconds: usual.storeTimeoutMilliseconds,
 				streamMaximumLifetimeSeconds: usual.streamMaximumLifetimeSeconds,
 				tokenLifetimeSeconds: usual.tokenLifetimeSeconds,
 			},
@@ -888,11 +887,11 @@ suite('the timing settings', () => {
 				heartbeatMilliseconds: 10_000,
 				noticePageLimit: 500,
 				noticeRereadMilliseconds: 2000,
-				storeTimeoutMilliseconds: 5000,
 				streamMaximumLifetimeSeconds: 900,
 				tokenLifetimeSeconds: 300,
 			},
 		);
+		assert.equal(usual.storeTimeoutMilliseconds, HARNESS_STORE_TIMEOUT_MILLISECONDS);
 		assert.equal(usual.tokenLifetimeSeconds, RETENTION_DEFAULTS.tokenLifetimeSeconds);
 		assert.equal(retentionFloorSeconds(usual), retentionFloorSeconds(RETENTION_DEFAULTS));
 		assert.equal(compressed.heartbeatMilliseconds, 500);

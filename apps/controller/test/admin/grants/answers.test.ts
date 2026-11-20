@@ -167,36 +167,48 @@ suite('naming people and resources in answers', () => {
 			directoryRealm: 'overture',
 			directoryUrl: `http://127.0.0.1:${await unusedPort()}`,
 		};
-		await withHarness({ configuration: directory, fixture: grantsFixture() }, async (harness) => {
-			const owner = await personCaller(harness, CAST.ownerOfA1);
+		// Longer than the grants table hold racedAtTheGrantsTable takes: each creation waits it out rather than timing out.
+		await withHarness(
+			{ configuration: { ...directory, storeTimeoutMilliseconds: 15_000 }, fixture: grantsFixture() },
+			async (harness) => {
+				const owner = await personCaller(harness, CAST.ownerOfA1);
 
-			const invalidJson = await createGrant(owner, grantFor(CAST.recipient), {
-				body: `{"resource": "${STUDY_A1}",`,
-			});
-			const race = await racedAtTheGrantsTable(harness, 3, () => createGrant(owner, grantFor(CAST.recipient)));
-			const unreachable = await addSubmitter(await administratorCaller(harness), STUDY_A1, CAST.recipient.email);
-
-			const lost = race.filter(({ status }) => status >= 300);
-			assert.equal(lost.length, 2, 'two creations lose the race');
-			assertUnreadable(invalidJson, 'an invalid body');
-			lost.forEach((answer, index) => {
-				assertRefused(answer, PROBLEMS.alreadyHolds, `losing creation ${index}`);
-			});
-			assertRefused(unreachable, PROBLEMS.directoryUnavailable, 'a directory unreachable');
-			const identifiers = await internalIdsInStore(harness.clients.migration);
-			[invalidJson, ...lost, unreachable].forEach((answer) => {
-				assert.deepEqual(
-					internalDetailIn(answer.text, identifiers),
-					[],
-					`an answer ${answer.status} carries nothing internal`,
+				const invalidJson = await createGrant(owner, grantFor(CAST.recipient), {
+					body: `{"resource": "${STUDY_A1}",`,
+				});
+				const race = await racedAtTheGrantsTable(harness, 3, () =>
+					createGrant(owner, grantFor(CAST.recipient)),
 				);
-				[directory.directoryClientSecret, directory.directoryUrl.replace('http://', '')].forEach((withheld) => {
-					assert.ok(
-						!answer.text.toLowerCase().includes(withheld.toLowerCase()),
-						`an answer ${answer.status} carries what it must withhold`,
+				const unreachable = await addSubmitter(
+					await administratorCaller(harness),
+					STUDY_A1,
+					CAST.recipient.email,
+				);
+
+				const lost = race.filter(({ status }) => status >= 300);
+				assert.equal(lost.length, 2, 'two creations lose the race');
+				assertUnreadable(invalidJson, 'an invalid body');
+				lost.forEach((answer, index) => {
+					assertRefused(answer, PROBLEMS.alreadyHolds, `losing creation ${index}`);
+				});
+				assertRefused(unreachable, PROBLEMS.directoryUnavailable, 'a directory unreachable');
+				const identifiers = await internalIdsInStore(harness.clients.migration);
+				[invalidJson, ...lost, unreachable].forEach((answer) => {
+					assert.deepEqual(
+						internalDetailIn(answer.text, identifiers),
+						[],
+						`an answer ${answer.status} carries nothing internal`,
+					);
+					[directory.directoryClientSecret, directory.directoryUrl.replace('http://', '')].forEach(
+						(withheld) => {
+							assert.ok(
+								!answer.text.toLowerCase().includes(withheld.toLowerCase()),
+								`an answer ${answer.status} carries what it must withhold`,
+							);
+						},
 					);
 				});
-			});
-		});
+			},
+		);
 	});
 });

@@ -208,7 +208,8 @@ suite("a resource's registration in the store", () => {
 
 	test('answers two registrations racing for one externalId in two letter cases once 201 and once 409 alreadyExists, holding one resource', async (context) => {
 		await withHarness(
-			{ fixture: FIXTURE },
+			// Longer than the hold these changes wait on: each waits it out rather than timing out.
+			{ configuration: { storeTimeoutMilliseconds: 15_000 }, fixture: FIXTURE },
 			async (harness) => {
 				const administrator = await administratorCaller(harness);
 
@@ -234,7 +235,8 @@ suite("a resource's registration in the store", () => {
 
 	test('commits a registration in one transaction: the resource, a served row and a servedResources notice for each application named once, its resource.registration and an application.servedResourcesChange for each', async (context) => {
 		await withHarness(
-			{ fixture: FIXTURE },
+			// Longer than the hold these changes wait on: each waits it out rather than timing out.
+			{ configuration: { storeTimeoutMilliseconds: 15_000 }, fixture: FIXTURE },
 			async (harness) => {
 				const { migration } = harness.clients;
 				const administrator = await administratorCaller(harness);
@@ -466,7 +468,8 @@ suite("a registration's owners in the store", () => {
 suite("a change to a resource's served set in the store", () => {
 	test('commits adding and removing one application in one transaction each, with its servedResources notice and its event', async (context) => {
 		await withHarness(
-			{ fixture: FIXTURE },
+			// Longer than the hold these changes wait on: each waits it out rather than timing out.
+			{ configuration: { storeTimeoutMilliseconds: 15_000 }, fixture: FIXTURE },
 			async (harness) => {
 				const { migration } = harness.clients;
 				const administrator = await administratorCaller(harness);

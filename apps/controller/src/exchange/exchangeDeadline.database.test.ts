@@ -17,7 +17,7 @@ import {
 	ofType,
 } from '../../testing/harness/auditEvents.js';
 import { startDedicatedPostgresql } from '../../testing/harness/containers.js';
-import { captureLog, type LogCapture } from '../../testing/harness/controller.js';
+import { captureLog, HARNESS_STORE_TIMEOUT_MILLISECONDS, type LogCapture } from '../../testing/harness/controller.js';
 import { freshAssertion, type WireResponse } from '../../testing/harness/exchange.js';
 import { anonymousExchange } from '../../testing/fixtures/applications.js';
 import { withHarness } from '../../testing/harness/harness.js';
@@ -27,10 +27,10 @@ import { cleanupFor, eventually } from '../../testing/harness/waiting.js';
 const { tokenExchange } = AUDIT_EVENT_TYPES;
 
 /**
- * The harness's own store timeout, the Controller's default: longer than the exchange's deadline, so
- * the deadline, not the store timeout, bounds every unit of an exchange here.
+ * The harness's store timeout, {@link HARNESS_STORE_TIMEOUT_MILLISECONDS}: longer than the exchange's
+ * deadline, so the deadline, not the store timeout, bounds every unit of an exchange here.
  */
-const HARNESS_STORE_TIMEOUT_MS = 5000;
+const HARNESS_STORE_TIMEOUT_MS = HARNESS_STORE_TIMEOUT_MILLISECONDS;
 
 /**
  * When the paused store is resumed, from the request's start, as offsets from the deadline. With the
@@ -140,7 +140,8 @@ suite("the exchange's deadline on a paused store", () => {
 		await withHarness(
 			{
 				applications: [APPLICATION],
-				configuration: { logStream: log.stream },
+				// Longer than the pause: the exchange deadline, not the store timeout, answers each request on the paused store.
+				configuration: { logStream: log.stream, storeTimeoutMilliseconds: 15_000 },
 				postgresql,
 			},
 			async (harness) => {

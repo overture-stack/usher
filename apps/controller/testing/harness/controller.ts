@@ -877,6 +877,14 @@ export const createAuditTrail = async <Connection extends TrailConnection>(
 /** The Controller's store timeout where its configuration names none, in milliseconds. */
 export const DEFAULT_STORE_TIMEOUT_MILLISECONDS = 5000;
 
+/**
+ * The store timeout every harness start gets where a test's configuration names none, in milliseconds.
+ * A start runs wholly within its store timeout, and under load a start has taken 5,166 ms, past the
+ * product's 5,000 ms default, so the harness gives its starts a timeout about three times that slowest
+ * start seen. Suites that test the timeout itself name their own.
+ */
+export const HARNESS_STORE_TIMEOUT_MILLISECONDS = 15_000;
+
 // The names the seam's trail gives events it never writes: the seeded policy records none.
 const SEAM_EVENT_SOURCE = 'usher-seeded-policy-seam';
 
@@ -884,8 +892,8 @@ const SEAM_INSTANCE_NAME = 'usher-seeded-policy-seam';
 
 /**
  * Writes the policy a Controller's start seeds, through the Controller's own code, on the connection
- * given: in one transaction its audit trail holds as the system, within the Controller's default store
- * timeout, the capability vocabulary and the seeded roles the store lacks. A store already holding all of
+ * given: in one transaction its audit trail holds as the system, within the harness's store timeout, the
+ * capability vocabulary and the seeded roles the store lacks. A store already holding all of
  * it is written nothing, so it can run again on the same store. No privilege or key-encryption key is
  * checked: that is the start's alone.
  *
@@ -905,7 +913,7 @@ export const writeSeededPolicy = async (
 				...settings,
 				eventSource: SEAM_EVENT_SOURCE,
 				instanceName: SEAM_INSTANCE_NAME,
-				storeTimeoutMilliseconds: DEFAULT_STORE_TIMEOUT_MILLISECONDS,
+				storeTimeoutMilliseconds: HARNESS_STORE_TIMEOUT_MILLISECONDS,
 			},
 			store: {
 				connect: async () => ({
