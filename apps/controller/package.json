@@ -35,5 +35,6 @@
 		"test:newest": "USHER_TEST_POSTGRESQL=newest tsx --conditions=@overture-stack/source --test --test-global-setup=testing/harness/globalSetup.ts",
 		"typecheck": "tsc --noEmit"
 	},
-	"type": "module"
+	"type": "module",
+	"version": "0.0.0-alpha.1"
 }
