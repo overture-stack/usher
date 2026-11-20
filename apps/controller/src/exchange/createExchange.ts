@@ -375,7 +375,7 @@ const judgedCredentialOf = (
  * the identity provider's subject in `sub` and expiring a token lifetime after it is issued, with the
  * sign-in token, or with the earliest grant it drew on, whichever is soonest, is sealed as the
  * anonymous one is; and the session the sign-in token names, if it names one, is recorded with that
- * token's `exp`. Its `token.exchange` is recorded as `succeeded`, naming the subject as `userId` and
+ * token's `exp`. Its `token.exchange` is recorded as `succeeded`, naming the subject as its actor and
  * counting the grants drawn on as `grantCount`, and the token is answered `200` as the anonymous one
  * is, once that transaction has committed.
  *
@@ -384,8 +384,8 @@ const judgedCredentialOf = (
  * exactly the limit is answered, and a larger one is not. Such an exchange is answered
  * `503 tokenOverResponseCap`, with no token and no `Retry-After`, and its `token.exchange` is recorded
  * `failed` at `error` in its issuance's place, its actor the exchange's, naming the resources its
- * payload holds an entry for as `heldResourceCount`, the token's size as `tokenBytes` and its subject
- * as `userId`, and no resource, grant count or rule; one line at error,
+ * payload holds an entry for as `heldResourceCount` and the token's size as `tokenBytes`, and no
+ * subject, resource, grant count or rule; one line at error,
  * {@link EXCHANGE_TOKEN_OVER_RESPONSE_CAP}, names the route alone. No session is recorded for it, and a
  * person met for the first time is kept, committed with that event.
  *
@@ -526,7 +526,6 @@ export const createExchange = ({
 			overLimitExchangeEvent({
 				heldResourceCount: Object.keys(payload.permissions).length,
 				sourceIp,
-				subject: payload.sub,
 				tokenBytes,
 			}),
 		);
@@ -558,7 +557,6 @@ export const createExchange = ({
 							grantCount: calculation.grantCount,
 							rules: calculation.rules,
 							sourceIp,
-							subject: payload.sub,
 							tokenTtl: payload.exp - payload.iat,
 						}),
 					);
@@ -730,7 +728,6 @@ export const createExchange = ({
 					grantCount: calculation.grantCount,
 					rules: calculation.rules,
 					sourceIp,
-					subject,
 					tokenTtl: payload.exp - payload.iat,
 				}),
 			);

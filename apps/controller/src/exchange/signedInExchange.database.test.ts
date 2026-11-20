@@ -199,7 +199,6 @@ suite('the signed-in exchange against the store', () => {
 				actorType: data['actorType'],
 				reason: data['reason'],
 				result: data['result'],
-				userId: data['userId'],
 			})),
 			[
 				{
@@ -207,7 +206,6 @@ suite('the signed-in exchange against the store', () => {
 					actorType: 'anonymous',
 					reason: 'revokedPrincipal',
 					result: 'denied',
-					userId: null,
 				},
 			],
 		);

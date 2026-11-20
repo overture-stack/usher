@@ -1035,7 +1035,7 @@ suite('a transaction given a deadline', () => {
 suite('a transaction naming a failure event', () => {
 	const STORE_FAILURE: AuditEvent = Object.freeze({
 		actor: { type: 'anonymous' } as const,
-		data: { reason: 'storeUnavailable', result: 'failed', userId: null },
+		data: { reason: 'storeUnavailable', result: 'failed' },
 		severity: 'error',
 		type: 'token.exchange',
 	});

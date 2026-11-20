@@ -65,7 +65,7 @@ const FIXTURE = [
 	'',
 	'| Event type | Description | Actor | Affected entity | Additional required fields | Severity |',
 	'| --- | --- | --- | --- | --- | --- |',
-	'| `token.exchange` | Usher token issued, or refused | User | Usher token | `userId`, `result`; on success `tokenTtl` and `rules` (the names of the rules); on refusal `reason` | follows `result` |',
+	'| `token.exchange` | Usher token issued, or refused | User | Usher token | `result`; on success `tokenTtl` and `rules` (the names of the rules); on refusal `reason` | follows `result` |',
 	'| `grant.revocation` | Category grant revoked | Custodian, owner or admin | User + category | `actorId`, `grantId`, `reason`; `causedBy` when a retirement ended it | `info` |',
 	'| `resource.orphaned` | Resource has no owner | System | Resource | `resourceId`, `lastOwnerId` | `critical` |',
 	'| `grant.unguarded` | A grant took effect without a custodian |  |  |  |  |',
@@ -326,7 +326,7 @@ suite("reading audit-events.md's Events table", () => {
 					actor: { kind: 'roles', roles: ['user'] },
 					event: 'token.exchange',
 					fields: {
-						always: ['userId', 'result'],
+						always: ['result'],
 						conditional: [],
 						onRefusal: ['reason'],
 						onSuccess: ['tokenTtl', 'rules'],

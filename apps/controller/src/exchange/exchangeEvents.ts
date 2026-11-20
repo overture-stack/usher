@@ -32,9 +32,6 @@ export interface Issuance {
 
 	sourceIp: string;
 
-	/** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
-	subject: string | null;
-
 	/** Its lifetime, `exp` less `iat`, in seconds. */
 	tokenTtl: number;
 }
@@ -42,9 +39,10 @@ export interface Issuance {
 const TYPE = 'token.exchange';
 
 /**
- * The `token.exchange` of a token issued, at info: `succeeded`, its subject as `userId`, its lifetime
- * as `tokenTtl`, the recorded grants counted as `grantCount`, never their values, the conferring
- * `rules`, its `audience`, and `generatedAt` as an instant.
+ * The `token.exchange` of a token issued, at info: `succeeded`, its lifetime as `tokenTtl`, the recorded
+ * grants counted as `grantCount`, never their values, the conferring `rules`, its `audience`, and
+ * `generatedAt` as an instant. It names no subject: a signed-in principal's exchange is recorded in a
+ * transaction declaring them its actor, which is where they are named.
  *
  * @param issuance what was issued, and for whom.
  */
@@ -54,7 +52,6 @@ export const issuedExchangeEvent = ({
 	grantCount,
 	rules,
 	sourceIp,
-	subject,
 	tokenTtl,
 }: Issuance): AuditEvent => ({
 	data: {
@@ -65,7 +62,6 @@ export const issuedExchangeEvent = ({
 		rules: [...rules],
 		sourceIp,
 		tokenTtl,
-		userId: subject,
 	},
 	severity: 'info',
 	type: TYPE,
@@ -73,7 +69,7 @@ export const issuedExchangeEvent = ({
 
 /**
  * The `token.exchange` of a credential refused, or of one whose signing key is not confirmed yet, at
- * warning: `denied`, under its reason, naming no `userId`. It names the subject given in
+ * warning: `denied`, under its reason. It names the subject given in
  * `refusedSubject` whole when that is at most {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters, and
  * leaves the member out for a longer one, never cut short, or where none is given. A subject given
  * must be that of a token whose signature verified, so a forged token can put no subject in the trail.
@@ -102,7 +98,6 @@ export const deniedExchangeEvent = ({
 			: {}),
 		result: 'denied',
 		sourceIp,
-		userId: null,
 	},
 	severity: 'warning',
 	type: TYPE,
@@ -115,9 +110,6 @@ export interface OverLimitToken {
 
 	sourceIp: string;
 
-	/** Its `sub`: the identity provider's subject, or `null` for the anonymous visitor. */
-	subject: string | null;
-
 	/** Its size in bytes, as the `200` body would have sent it. */
 	tokenBytes: number;
 }
@@ -125,24 +117,17 @@ export interface OverLimitToken {
 /**
  * The `token.exchange` of an exchange whose token would pass the token limit, at error: `failed`,
  * under `tokenOverResponseCap`, with the resources its payload holds as `heldResourceCount`, the
- * token's size as `tokenBytes`, and its subject as `userId`. It names no resource, no grant count and
- * no rule.
+ * token's size as `tokenBytes`. It names no subject, no resource, no grant count and no rule.
  *
- * @param token the token's subject, its size and the resources it holds, and the request's address.
+ * @param token the token's size and the resources it holds, and the request's address.
  */
-export const overLimitExchangeEvent = ({
-	heldResourceCount,
-	sourceIp,
-	subject,
-	tokenBytes,
-}: OverLimitToken): AuditEvent => ({
+export const overLimitExchangeEvent = ({ heldResourceCount, sourceIp, tokenBytes }: OverLimitToken): AuditEvent => ({
 	data: {
 		heldResourceCount,
 		reason: 'tokenOverResponseCap',
 		result: 'failed',
 		sourceIp,
 		tokenBytes,
-		userId: subject,
 	},
 	severity: 'error',
 	type: TYPE,
@@ -150,12 +135,12 @@ export const overLimitExchangeEvent = ({
 
 /**
  * The `token.exchange` of an exchange a fault kept from being answered, at error: `failed`, under the
- * code answered, naming no `userId`.
+ * code answered.
  *
  * @param failure the code answered, and the request's address.
  */
 export const failedExchangeEvent = ({ reason, sourceIp }: { reason: ExchangeFault; sourceIp: string }): AuditEvent => ({
-	data: { reason, result: 'failed', sourceIp, userId: null },
+	data: { reason, result: 'failed', sourceIp },
 	severity: 'error',
 	type: TYPE,
 });
