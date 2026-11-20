@@ -243,6 +243,47 @@ suite("reading audit-events.md's Events table", () => {
 		});
 	});
 
+	test("reads an each clause's names as the members of each entry of the field before it, that field carried always", () => {
+		assert.deepEqual(fieldSetsIn('`changes`, each `name`, `value` and `previousValue`'), {
+			always: ['changes'],
+			conditional: [],
+			entryMembers: [{ entries: 'changes', names: ['name', 'value', 'previousValue'] }],
+			onRefusal: [],
+			onSuccess: [],
+		});
+	});
+
+	test("reads the real table's each clauses as the members of each entry, and a clause of other words as naming no field", () => {
+		const fieldsOf = (event: string) => readAuditEvents().find(({ event: name }) => name === event)?.fields;
+
+		assert.deepEqual(fieldsOf(AUDIT_EVENT_TYPES.settingsChange), {
+			always: ['changes'],
+			conditional: [],
+			entryMembers: [{ entries: 'changes', names: ['name', 'value', 'previousValue'] }],
+			onRefusal: ['reason'],
+			onSuccess: [],
+		});
+		assert.deepEqual(fieldsOf(AUDIT_EVENT_TYPES.identityProviderConfigurationChange), {
+			always: ['changes'],
+			conditional: [],
+			entryMembers: [{ entries: 'changes', names: ['name', 'value', 'previousValue'] }],
+			onRefusal: [],
+			onSuccess: [],
+		});
+		assert.deepEqual(fieldsOf(AUDIT_EVENT_TYPES.settingsSeeding), {
+			always: ['settings', 'seededFrom'],
+			conditional: [],
+			onRefusal: [],
+			onSuccess: [],
+		});
+		assert.deepEqual(fieldsOf(AUDIT_EVENT_TYPES.grantRulesChange), {
+			always: ['grantRules', 'previousGrantRules'],
+			conditional: [],
+			onRefusal: ['reason'],
+			onSuccess: [],
+		});
+	});
+
 	test('reads a condition named inside a list as carrying only the names before its when or for, in any clause, and a name after it as part of the condition', () => {
 		assert.deepEqual(
 			fieldSetsIn(

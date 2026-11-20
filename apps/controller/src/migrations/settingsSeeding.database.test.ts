@@ -108,8 +108,7 @@ suite('seeding the settings, and recording what each setting was seeded from', (
 		assert.equal(seededFrom['noticePageLimit'], 'default');
 		assert.equal(seededFrom['issuer'], 'seedFile');
 		assert.equal(seededFrom['firstUser'], 'seedFile');
-		// The event's fields and severity, against its row of the Events table as the events table suite reads it. The
-		// row's note names `settings` again inside its own clause, so the row's names are taken once each.
+		// The event's fields and severity, against its row of the Events table as the events table suite reads it.
 		const row = readAuditEvents().find(({ event: name }) => name === AUDIT_EVENT_TYPES.settingsSeeding);
 		const recorded = rows.filter(({ type }) => type === emittedType(AUDIT_EVENT_TYPES.settingsSeeding));
 		const recurring: readonly string[] = Object.values(RECURRING_PROPERTIES);
@@ -118,7 +117,7 @@ suite('seeding the settings, and recording what each setting was seeded from', (
 			Object.keys(event.data)
 				.filter((name) => !recurring.includes(name))
 				.toSorted(),
-			[...new Set(row.fields.always)].toSorted(),
+			row.fields.always.toSorted(),
 		);
 		assert.deepEqual(
 			recorded.map(({ severity }) => severity),

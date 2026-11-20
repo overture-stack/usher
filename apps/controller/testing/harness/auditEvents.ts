@@ -154,8 +154,22 @@ export interface EventFieldSets {
 	 */
 	conditional: readonly string[];
 
+	/**
+	 * The members of each entry of a collection field, one per `each X` clause. Absent when no clause names any.
+	 */
+	entryMembers?: readonly EntryMembers[];
+
 	onRefusal: readonly string[];
 	onSuccess: readonly string[];
+}
+
+/**
+ * The members each entry of a collection field carries, as an `each X` clause names them: `entries` is the
+ * field X, carried always as a field of its own, and `names` are the members of each of its entries.
+ */
+export interface EntryMembers {
+	entries: string;
+	names: readonly string[];
 }
 
 /**
@@ -368,42 +382,81 @@ const fieldsOfItem = (item: string): { conditional: boolean; names: readonly str
 		: { conditional: true, names: backtickedIn(item.slice(0, condition)) };
 };
 
+// An item leading with `each` names no field of its own: it may name a field the event carries already,
+// or a count the table leaves to prose.
+const EACH_ITEM = /^each\b/u;
+
+// An item leading with `each` and a backticked name opens the members of each entry of the field before it.
+const EACH_ENTRY_ITEM = /^each `\w+`/u;
+
+// A clause's items before its first `each X` item, and the items from it on: the members of each entry of X.
+const splitAtEachEntry = (clause: string): { fields: readonly string[]; members: readonly string[] } => {
+	const items = itemsOf(clause);
+	const start = items.findIndex((item) => EACH_ENTRY_ITEM.test(item));
+	return start === -1
+		? { fields: items, members: [] }
+		: { fields: items.slice(0, start), members: items.slice(start) };
+};
+
 /**
  * The field names a fields cell registers, by the clauses its semicolons divide it into and the items
  * its commas divide each clause into. An `on success` or `on refusal` clause's names are carried on
  * that result alone, and every other clause's are carried always. An item naming a condition with
  * `when` or `for` carries the names before that word only under the condition, in any clause. An item
- * naming no field and pointing below the table takes the names listed there. A cell reading `none`
+ * naming no field and pointing below the table takes the names listed there. An `each X` clause's names
+ * are the members of each entry of X, which X, the field before it, carries always. A cell reading `none`
  * registers no field.
  *
  * @param cell the cell.
  * @param listedBelow the names the event's note below the table lists: none by default.
- * @throws when the cell names no field and is not `none`, or points below the table and nothing is
- * listed there.
+ * @throws when the cell names no field and is not `none`, points below the table and nothing is listed
+ * there, or has an `each X` clause outside a clause carried always.
  */
 export const fieldSetsIn = (cell: string, listedBelow: readonly string[] = []): EventFieldSets => {
 	const clauses = cell.split(';').map((clause) => clause.trim());
-	const namesOf = (clause: string, underCondition: boolean): readonly string[] =>
-		itemsOf(clause).flatMap((item) => {
-			const { conditional, names } = fieldsOfItem(item);
-			if (conditional !== underCondition) {
-				return [];
-			}
-			if (names.length === 0 && item.includes(LISTED_BELOW)) {
-				return listedBelow.length > 0 ? listedBelow : unreadable('field name listed below the table', cell);
-			}
-			return names;
-		});
+	const namesOf = (items: readonly string[], underCondition: boolean): readonly string[] =>
+		items
+			.filter((item) => !EACH_ITEM.test(item))
+			.flatMap((item) => {
+				const { conditional, names } = fieldsOfItem(item);
+				if (conditional !== underCondition) {
+					return [];
+				}
+				if (names.length === 0 && item.includes(LISTED_BELOW)) {
+					return listedBelow.length > 0 ? listedBelow : unreadable('field name listed below the table', cell);
+				}
+				return names;
+			});
 	const byResult = (clause: string): boolean => clause.startsWith(ON_SUCCESS) || clause.startsWith(ON_REFUSAL);
+	const fieldsOfClause = (clause: string): readonly string[] => splitAtEachEntry(clause).fields;
 	const namesWhere = (holds: (clause: string) => boolean): readonly string[] =>
-		clauses.filter(holds).flatMap((clause) => namesOf(clause, false));
+		clauses.filter(holds).flatMap((clause) => namesOf(fieldsOfClause(clause), false));
+	const entryMembersOf = (clause: string): readonly EntryMembers[] => {
+		const { fields, members } = splitAtEachEntry(clause);
+		if (members.length === 0) {
+			return [];
+		}
+		if (byResult(clause)) {
+			return unreadable('each clause outside a clause carried always', cell);
+		}
+		const entries = namesOf(fields, false).at(-1);
+		const names = members.flatMap((item) => {
+			const { conditional, names: memberNames } = fieldsOfItem(item);
+			return conditional ? unreadable('member of an each clause under a condition', cell) : memberNames;
+		});
+		return [{ entries: entries ?? unreadable('field an each clause belongs to', cell), names }];
+	};
 	const fieldSets: EventFieldSets = {
 		always: namesWhere((clause) => !byResult(clause)),
-		conditional: clauses.flatMap((clause) => namesOf(clause, true)),
+		conditional: clauses.flatMap((clause) => namesOf(fieldsOfClause(clause), true)),
 		onRefusal: namesWhere((clause) => clause.startsWith(ON_REFUSAL)),
 		onSuccess: namesWhere((clause) => clause.startsWith(ON_SUCCESS)),
 	};
-	return Object.values(fieldSets).flat().length > 0 || cell === 'none' ? fieldSets : unreadable('field name', cell);
+	const entryMembers = clauses.flatMap((clause) => entryMembersOf(clause));
+	const readFieldSets = entryMembers.length > 0 ? { ...fieldSets, entryMembers } : fieldSets;
+	return Object.values(fieldSets).flat().length > 0 || cell === 'none'
+		? readFieldSets
+		: unreadable('field name', cell);
 };
 
 // One clause of a severity cell naming a severity per case.
