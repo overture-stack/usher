@@ -50,6 +50,20 @@ These properties recur across entities:
 | `result`    | actions only            | `succeeded`; `denied`, the request refused for the actor's authority or its content; or `failed`, a fault in the Controller or its configuration                                                |
 | `actorType` | all                     | `human`, `serviceAccount`, `anonymous` or `system`. Not derivable from `actorId`, whose format is the same for the first two and absent for the last two, and alerting needs to tell them apart |
 
+**`result` marks an action, and `sourceIp` a single request.** An action is one attempt, by a
+person, a service account or the system, recorded with one of `result`'s three values. An
+observation carries no `result`: a tally; a detection that reports without blocking,
+`grant.rateExceeded` and `grant.unguarded`; a lapse, `invitation.lapse`; a check of stored state,
+`applicationKey.confirmation` and `applicationKey.unreadable`; and a record written by a start or a
+migration, `identityProvider.configurationChange` and `settings.seeding`. A refusal record is a
+refused action: `channelAssertion.rejection`, `managementToken.refusal` and `logoutToken.refusal`
+carry `result` `denied`. `sourceIp` is carried by an event recorded while one request is served,
+whatever its actor: `identity.signOut`, from the identity provider's back-channel request;
+`grant.rateExceeded`, from the grant write that crosses the threshold;
+`applicationKey.confirmation`, from the first exchange; and the three refusal records. A tally
+counts many requests and carries none, nor does an event recorded with no request, such as
+`applicationKey.unreadable`, which the key ring records as it reads the keys.
+
 **`actorId` carries the identity provider's `sub`, which is what makes it correlate.** A correlation
 key has to be producible by every service that correlates on it, and `sub` is the only identifier
 held by every ushered application, since the Usher token carries it. Usher stores the subject with
