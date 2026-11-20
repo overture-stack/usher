@@ -6,7 +6,7 @@ import { Writable } from 'node:stream';
 import { suite, test } from 'node:test';
 
 import { type ControllerConfiguration, ENVIRONMENT_VARIABLES, readConfiguration } from '../configuration/index.js';
-import { createController } from './createController.js';
+import { CONTROLLER_STARTED, createController } from './createController.js';
 
 const LOOPBACK = '127.0.0.1';
 
@@ -142,5 +142,28 @@ suite("a controller's start allowing an unverified database connection", () => {
 		);
 
 		assert.deepEqual(starts, [[{ level: 40, variable: 'USHER_DATABASE_ALLOW_UNVERIFIED_CONNECTION' }], []]);
+	});
+});
+
+suite("a controller's refused start logging no controller.started", () => {
+	test('logs no controller.started line, the refusal coming before anything listens', async () => {
+		const lines: string[] = [];
+		const logStream = new Writable({
+			write: (chunk: unknown, _encoding, done) => {
+				lines.push(String(chunk));
+				done();
+			},
+		});
+		const controller = createController({ ...(await unreachableStore()), logStream });
+
+		await assert.rejects(controller.start(), { name: 'StartRefusal' });
+		await controller.stop();
+
+		const messages = lines
+			.join('')
+			.split('\n')
+			.filter((line) => line !== '')
+			.map((line) => (JSON.parse(line) as { message?: unknown }).message);
+		assert.equal(messages.includes(CONTROLLER_STARTED), false);
 	});
 });

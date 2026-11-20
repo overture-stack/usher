@@ -78,6 +78,9 @@ interface Lifecycle {
 	writes: boolean;
 }
 
+/** The line written, at info, once the Controller listens: every start writes one. */
+export const CONTROLLER_STARTED = 'controller.started';
+
 const isAddress = (address: unknown): address is AddressInfo =>
 	typeof address === 'object' && address !== null && 'port' in address;
 
@@ -465,7 +468,16 @@ export const createController = (configuration: ControllerConfiguration): Contro
 			sweep.start();
 		}
 		lifecycle.ready = lifecycle.stopped === undefined;
-		return { url: urlOf(server.server.address()) };
+		const bound = server.server.address();
+		const url = urlOf(bound);
+		if (isAddress(bound)) {
+			eventLog.info(CONTROLLER_STARTED, {
+				host: bound.address,
+				instance: configuration.instanceName,
+				port: bound.port,
+			});
+		}
+		return { url };
 	};
 
 	const stopOnce = async (): Promise<void> => {
