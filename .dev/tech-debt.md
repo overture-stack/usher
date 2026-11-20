@@ -76,23 +76,47 @@ cannot load, as the legacy CLI does.
 standalone: no
 context: waits on that Prettier release.
 
-In `apps/controller/src/storeTimeout/storeTimeout.database.test.ts`, three cases failed under load and passed
-on every run alone. The suite on the Controller's start failed twice in one PostgreSQL 18 run while
-a shared Docker daemon was under load, and on CI's two-CPU pod: "refuses a start on a connection
-that drops the controller's statement limits, as a pooler dropping startup parameters does, naming
-the database URL" and "refuses a start the store will not sign in, naming the password for a
-refused password and the database URL for a database the store lacks". On CI's two-CPU pod, "answers
-a Management API request 503 storeUnavailable within about the store timeout while the store is
-paused, writing nothing, and serves the next once the store answers" failed before its request,
-its harness's start refused for not answering within the store timeout. Outside that file,
-`src/noticeChannel/noticeChannel.database.test.ts` failed one run in ten under load the same way:
-"answers 410 on both channels to a cursor below the trim watermark, and serves one at it", its
-harness's start taking 5166 ms against the product's default store timeout of 5000 ms. Each must
+In `apps/controller/src/storeTimeout/storeTimeout.database.test.ts`, three cases failed under load
+and passed on every run alone. The suite on the Controller's start failed twice in one PostgreSQL 18
+run while a shared Docker daemon was under load, and on CI's two-CPU pod: "refuses a start on a
+connection that drops the controller's statement limits, as a pooler dropping startup parameters
+does, naming the database URL" and "refuses a start the store will not sign in, naming the password
+for a refused password and the database URL for a database the store lacks". On CI's two-CPU pod,
+"answers a Management API request 503 storeUnavailable within about the store timeout while the
+store is paused, writing nothing, and serves the next once the store answers" failed before its
+request, its harness's start refused for not answering within the store timeout. In the same file,
+"abandons a transaction the store holds past the store timeout" failed its timing once in a full
+run, at 1967 ms. Outside that file, `src/noticeChannel/noticeChannel.database.test.ts` failed one
+run in ten under load the same way: "answers 410 on both channels to a cursor below the trim
+watermark, and serves one at it", its harness's start taking 5166 ms against the product's default
+store timeout of 5000 ms. Three more failed once each in a full chain on PostgreSQL 18 and passed
+every run alone: `src/admission/admission.database.test.ts`'s "with one application borrowing the
+whole exchange pool, another application's exchange within its share is answered within the
+deadline", answered in 42286 ms against its 4 s deadline (three runs of three alone);
+`src/store/databaseTls.database.test.ts`'s "takes a reissued CA certificate at the next connection",
+past its 10 s wait (two of two alone); and the harness start in
+`testing/harness/workerBridge.test.ts`, refused once for a store commit not answered within the
+store timeout (passing on its rerun). The cause they share is load on the test process: the chain
+runs every database suite at once, at Node's default file concurrency, eleven here against six CPUs
+for Docker and two on CI's pod, and the harness runs each Controller inside the test process, so a
+starved event loop fires the Controller's own timers late, its exchange deadline among them. The
+exchange's deadline does bound its wait for a pooled connection, since `withinStoreTimeout` arms it
+before asking the pool, so admission's 42 s is that starvation, not an unbounded wait. Each must
 pass under load as it does alone.
 fix: every instance in the storeTimeout file now starts within four times the compressed store
-timeout, since an instance's whole start runs within its store timeout; give every other harness
-start a store timeout well above a loaded start, except where a suite tests the timeout itself;
-confirm on CI's pod that each case passes, and establish the cause of any that still fails.
+timeout, since an instance's whole start runs within its store timeout; bound the database suites'
+file concurrency in the chain to what the machine carries, give every other harness start a store
+timeout well above a loaded start except where a suite tests the timeout itself, confirm on CI's pod
+that each case passes, and establish the cause of any that still fails.
+standalone: yes
+
+The test run's one Keycloak, which the global setup starts and every Keycloak suite shares, fails
+the whole run when it does not start: every suite fails, not only the few that use it. Seen once:
+its realm's discovery document did not answer within 180 s in both global setups of one chain and in
+the held run after it, while Docker was otherwise healthy, and the next run started it normally.
+fix: retry the shared Keycloak's start a bounded number of times, keeping its container's log from
+each failed attempt, and when every attempt fails, fail the global setup naming Keycloak and where
+its logs are, rather than as an unnamed container timeout.
 standalone: yes
 
 Most files in `apps/controller/testing/fixtures/` hold helpers that start or drive the real system
@@ -105,16 +129,6 @@ fix: move each driving helper into `testing/harness/` and the table's expectatio
 `testing/fixtures/`, after the grant operations land, so their suites move onto these paths once.
 standalone: no
 context: waits on the grant operations.
-
-Two parts of the Controller's tests bound how fast CI runs them. The migrations suite,
-`src/migrations/migrations.database.test.ts`, is the longest single suite at about three minutes,
-its 16 tests each running the migration command against a new database. Every Keycloak test starts
-a Keycloak of its own, three in `testing/harness/containers.test.ts` alone at about 50 s each.
-fix: start one Keycloak per run in the global setup, its realm imported with every user the suites
-need, and share it; profile the migrations suite for work its tests repeat without observing it, and
-cut that, keeping every migration run a test watches.
-standalone: no
-context: after the grant operations, whose suites add to both.
 
 Every setting's first value must have a `settings.seeding` event. When a run's migrations add a
 setting to a seeded store, the schema migration command records that event after the migration
