@@ -352,6 +352,15 @@ Per-instance specifics belong in that integration's own repository, not here.
 
 MVP uses pre-registration: cohorts exist in Usher before data is submitted. Three design items gate Lyric integration. See [cohort registration and Lyric integration](docs/atlas/roadmap/cohort-registration-lyric.md).
 
+### A submitter chooses each record's category (Epic 5, controlled submissions)
+
+Recorded 2026-11-19 as a requirement, not yet planned. In iMicroSeq's terms, a submitter chooses
+whether what they submit is controlled, open, or any other category the study they submit into
+offers. The submission system (Stage, and possibly Lyric) offers that choice and writes it into a
+predefined column of the uploaded data. Where the submitted data already holds a value in that
+column, the value is read from the data instead, so one CSV can mix records of different categories.
+Whether consumers see that column is Arranger's concern.
+
 ### Deployment runbook has no home, and three procedures now want one
 
 Three sequences are recorded in design documents and nowhere an operator reads, which means each is a responsibility with no owner. They are not related to each other beyond that, and the absence of a destination is what they have in common.
