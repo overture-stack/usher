@@ -349,6 +349,50 @@ suite('checkPackedPackage', () => {
 			assert.deepEqual(rulesFailed(manifest), ['exports-resolve']);
 		});
 
+		test('resolves a testing subpath whose declaration and JavaScript ship', () => {
+			const manifest = packedManifest({
+				exports: {
+					'.': { types: './dist/index.d.ts', import: './dist/index.js', default: './dist/index.js' },
+					'./testing': {
+						types: './dist/testing.d.ts',
+						import: './dist/testing.js',
+						default: './dist/testing.js',
+					},
+				},
+			});
+			const files = [...SHIPPED_FILES, 'dist/testing.d.ts', 'dist/testing.js'];
+
+			assert.deepEqual(failuresOf(manifest, files), []);
+		});
+
+		test('fails each condition of a testing subpath whose target the tarball does not hold, naming it', () => {
+			const manifest = packedManifest({
+				exports: {
+					'.': { types: './dist/index.d.ts', import: './dist/index.js', default: './dist/index.js' },
+					'./testing': {
+						types: './dist/testing.d.ts',
+						import: './dist/testing.js',
+						default: './dist/testing.js',
+					},
+				},
+			});
+
+			assert.deepEqual(failuresOf(manifest), [
+				{
+					message: 'exports["./testing"].types names ./dist/testing.d.ts, which the tarball does not hold',
+					rule: 'exports-resolve',
+				},
+				{
+					message: 'exports["./testing"].import names ./dist/testing.js, which the tarball does not hold',
+					rule: 'exports-resolve',
+				},
+				{
+					message: 'exports["./testing"].default names ./dist/testing.js, which the tarball does not hold',
+					rule: 'exports-resolve',
+				},
+			]);
+		});
+
 		test('skips a null target, which blocks a subpath', () => {
 			const manifest = packedManifest({
 				exports: { '.': './dist/index.js', './internal/*': null },

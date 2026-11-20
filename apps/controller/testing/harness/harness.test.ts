@@ -22,19 +22,22 @@ import {
 	TEMPLATE_SETTINGS,
 	USHER_SCHEMA,
 } from './database.js';
-import { ENVIRONMENT_VARIABLES } from './controller.js';
-import { PEOPLE } from './exchange.js';
+import { ENVIRONMENT_VARIABLES, HARNESS_STORE_TIMEOUT_MILLISECONDS } from './controller.js';
+import { exchange, PEOPLE } from './exchange.js';
 import {
 	APPLICATION_KEY_RELOAD_INTERVAL_MILLISECONDS,
 	COMPRESSED_CONTROLLER_TIMING,
 	configurationToRead,
 	HARNESS_EVENT_SOURCE,
+	type Harness,
 	startInstance,
 	HARNESS_LOGOUT_CLIENT,
 	harnessApplicationNames,
 	harnessConfiguration,
 	passwordsApart,
 	realmAdministrator,
+	realmRegistrar,
+	REALM_REGISTRANT_REFUSAL,
 	RETENTION_DEFAULTS,
 	restoreSnapshot,
 	retentionFloorSeconds,
@@ -284,13 +287,16 @@ const recordingSchemaOnly = (migrations: MigrationOptions[]): DatabaseTemplate =
 				`CREATE TABLE IF NOT EXISTS ${pg.escapeIdentifier(options.schema)}.settings (name text PRIMARY KEY, value jsonb NOT NULL, changed_at timestamptz NOT NULL DEFAULT now())`,
 			);
 			// Every setting the template seeds, so a start on this stand-in reads each of them from its store.
-			await Promise.all(
-				Object.entries(TEMPLATE_SETTINGS).map(([name, value]) =>
-					postgres.query(
-						`INSERT INTO ${pg.escapeIdentifier(options.schema)}.settings (name, value) VALUES ($1, $2::jsonb) ON CONFLICT DO NOTHING`,
-						[name, JSON.stringify(value)],
+			// One connection runs one query at a time, so the inserts run in turn, each after the one before.
+			await Object.entries(TEMPLATE_SETTINGS).reduce<Promise<unknown>>(
+				(previous, [name, value]) =>
+					previous.then(() =>
+						postgres.query(
+							`INSERT INTO ${pg.escapeIdentifier(options.schema)}.settings (name, value) VALUES ($1, $2::jsonb) ON CONFLICT DO NOTHING`,
+							[name, JSON.stringify(value)],
+						),
 					),
-				),
+				Promise.resolve(),
 			);
 		} finally {
 			await postgres.end();
@@ -446,11 +452,38 @@ suite("the platform administrator registering a harness's applications", () => {
 		assert.deepEqual(Object.fromEntries(Object.keys(expected).map((name) => [name, claims[name]])), expected);
 	});
 
+	test('signs in the administrator the caller names, not the first holder of the first-user role, and the first holder by default', async () => {
+		const signedIn: string[] = [];
+		const keycloak = {
+			signIn: async (_clientId: string, person: KeycloakPerson) => {
+				signedIn.push(person.username);
+				return { accessToken: 'token', idToken: 'id', refreshToken: 'refresh' };
+			},
+		};
+		const options: KeycloakRealmOptions = {
+			...REGISTRAR_REALM,
+			people: [
+				realmPerson('first.holder@example.org', [REGISTERING.firstUserRole]),
+				realmPerson(REALM_ADMINISTRATOR, [REGISTERING.firstUserRole]),
+				realmPerson('bystander@example.org', []),
+			],
+		};
+
+		await realmAdministrator({ keycloak, options })(REGISTERING);
+		await realmAdministrator({ administrator: REALM_ADMINISTRATOR, keycloak, options })(REGISTERING);
+
+		assert.deepEqual(signedIn, ['first.holder@example.org', REALM_ADMINISTRATOR]);
+	});
+
 	test("is, given a realm's source, the realm's own administrator signed in through its management client under the realm's issuer, and is refused by a realm holding no administrator", async (context) => {
 		const keycloak = await startKeycloak(REGISTRAR_REALM);
 		context.after(() => keycloak.remove());
 
-		const claims = decodeJwt(await realmAdministrator({ keycloak, options: REGISTRAR_REALM })(REGISTERING));
+		const claims = decodeJwt(
+			await realmAdministrator({ administrator: REALM_ADMINISTRATOR, keycloak, options: REGISTRAR_REALM })(
+				REGISTERING,
+			),
+		);
 		const withoutAdministrator = realmAdministrator({
 			keycloak,
 			options: {
@@ -607,6 +640,144 @@ suite("a harness's applications", () => {
 		assert.equal(
 			withRegisteredIds(withoutApplications, [{ displayName: 'arranger-test', id: registeredId }]),
 			withoutApplications,
+		);
+	});
+});
+
+suite("a harness's applications written through the store", () => {
+	const tables = POLICY_TABLES;
+	// The issuer of the stand-in a harness starts, named where the rows of two harnesses are compared.
+	const STAND_IN_ISSUER = 'the stand-in';
+
+	// The application and key rows a harness's store holds, the identity of each registrant and issuer
+	// by subject and issuer, and no id, instant or sealed key.
+	const storedRowsOf = async (
+		harness: Harness,
+	): Promise<{
+		applications: readonly {
+			description: string | null;
+			displayName: string;
+			registeredBy: string;
+			registeredByIssuer: string;
+		}[];
+		keys: readonly {
+			applicationName: string;
+			confirmed: boolean;
+			issuedBy: string;
+			issuedByIssuer: string;
+			live: boolean;
+		}[];
+	}> => {
+		const { rows: applications } = await harness.clients.migration.query<{
+			description: string | null;
+			displayName: string;
+			registeredBy: string;
+			registeredByIssuer: string;
+		}>(
+			`SELECT application.${tables.applications.columns.description} AS description,
+                  application.${tables.applications.columns.displayName} AS "displayName",
+                  identity.${tables.userIdentities.columns.idpSubjectId} AS "registeredBy",
+                  identity.${tables.userIdentities.columns.idpIssuer} AS "registeredByIssuer"
+             FROM ${qualified(tables.applications)} application
+             JOIN ${qualified(tables.userIdentities)} identity
+               ON identity.${tables.userIdentities.columns.userId} = application.${tables.applications.columns.registeredBy}
+            ORDER BY application.${tables.applications.columns.displayName}`,
+		);
+		const { rows: keys } = await harness.clients.migration.query<{
+			applicationName: string;
+			confirmed: boolean;
+			issuedBy: string;
+			issuedByIssuer: string;
+			live: boolean;
+		}>(
+			`SELECT application.${tables.applications.columns.displayName} AS "applicationName",
+                  held.${tables.applicationKeys.columns.confirmedAt} IS NOT NULL AS confirmed,
+                  identity.${tables.userIdentities.columns.idpSubjectId} AS "issuedBy",
+                  identity.${tables.userIdentities.columns.idpIssuer} AS "issuedByIssuer",
+                  held.${tables.applicationKeys.columns.revokedAt} IS NULL AS live
+             FROM ${qualified(tables.applicationKeys)} held
+             JOIN ${qualified(tables.applications)} application
+               ON application.${tables.applications.columns.id} = held.${tables.applicationKeys.columns.applicationId}
+             JOIN ${qualified(tables.userIdentities)} identity
+               ON identity.${tables.userIdentities.columns.userId} = held.${tables.applicationKeys.columns.issuedBy}
+            ORDER BY application.${tables.applications.columns.displayName}, held.${tables.applicationKeys.columns.issuedAt}`,
+		);
+		const issuerNamed = (issuer: string): string =>
+			issuer === harness.configuration.identityProviderIssuer ? STAND_IN_ISSUER : issuer;
+		return {
+			applications: applications.map((row) => ({
+				...row,
+				registeredByIssuer: issuerNamed(row.registeredByIssuer),
+			})),
+			keys: keys.map((row) => ({ ...row, issuedByIssuer: issuerNamed(row.issuedByIssuer) })),
+		};
+	};
+
+	test('starts its controller with the identity provider never asked, and serves an anonymous exchange through one of its applications', async () => {
+		await withHarness({ applicationsThroughStore: true }, async (harness) => {
+			assert.deepEqual(harness.identityProvider.requests, []);
+
+			const answer = await exchange(harness.url, { application: harness.application('arranger-test') });
+
+			assert.equal(answer.status, 200);
+		});
+	});
+
+	test('starts, and binds its applications, with the identity provider refusing connections from before the start', async (context) => {
+		const provider = await startIdentityProvider();
+		cleanupFor(context).defer(() => provider.stop());
+		await provider.refuseConnections();
+
+		await withHarness({ applicationsThroughStore: true, identityProvider: provider }, async (harness) => {
+			assert.deepEqual(
+				harness.applications.map(({ displayName }) => displayName),
+				['arranger-test', 'lyric-test'],
+			);
+			assert.ok(harness.application('lyric-test').key.length > 0);
+		});
+	});
+
+	test('writes the application and key rows that registering through the API writes, the platform administrator registering and issuing in both', async () => {
+		const names = ['arranger-test', 'lyric-test'];
+
+		const throughStore = await withHarness(
+			{ applications: names, applicationsThroughStore: true },
+			async (harness) => ({
+				requests: harness.identityProvider.requests.length,
+				rows: await storedRowsOf(harness),
+			}),
+		);
+		const throughApi = await withHarness({ applications: names }, async (harness) => ({
+			rows: await storedRowsOf(harness),
+		}));
+
+		assert.equal(throughStore.requests, 0);
+		assert.deepEqual(throughStore.rows, throughApi.rows);
+		assert.equal(throughStore.rows.applications.length, names.length);
+		assert.equal(throughStore.rows.keys.length, names.length);
+		assert.ok(
+			throughStore.rows.applications.every(
+				({ registeredBy, registeredByIssuer }) =>
+					registeredBy === PEOPLE.administrator.subject && registeredByIssuer === STAND_IN_ISSUER,
+			),
+			'each application is registered by the administrator',
+		);
+		assert.ok(
+			throughStore.rows.keys.every(
+				({ issuedBy, issuedByIssuer }) =>
+					issuedBy === PEOPLE.administrator.subject && issuedByIssuer === STAND_IN_ISSUER,
+			),
+			'each key is issued by the administrator',
+		);
+	});
+
+	test("refuses a start that also gives a Keycloak realm's administrator token, before anything starts, since the registrant would not be the realm's administrator", async () => {
+		await assert.rejects(
+			startHarness({
+				administratorToken: realmRegistrar().administratorToken,
+				applicationsThroughStore: true,
+			}),
+			{ message: REALM_REGISTRANT_REFUSAL },
 		);
 	});
 });
@@ -826,7 +997,7 @@ suite("batch 2's configuration defaults", () => {
 				eventSource: configuration.eventSource,
 				grantRateThreshold: configuration.grantRateThreshold,
 				instanceName: configuration.instanceName,
-				selfGrantMaximumSeconds: configuration.selfGrantMaximumSeconds,
+				selfGrantMaximumLifetimeSeconds: configuration.selfGrantMaximumLifetimeSeconds,
 				submitterCategory: configuration.submitterCategory,
 				trustedProxies: configuration.trustedProxies,
 			},
@@ -836,7 +1007,7 @@ suite("batch 2's configuration defaults", () => {
 				eventSource: HARNESS_EVENT_SOURCE,
 				grantRateThreshold: { operationCount: 100, windowSeconds: 60 },
 				instanceName: 'usher-test-1',
-				selfGrantMaximumSeconds: 86_400,
+				selfGrantMaximumLifetimeSeconds: 86_400,
 				submitterCategory: 'global.unmarked',
 				trustedProxies: [],
 			},
@@ -864,7 +1035,7 @@ suite('a second controller instance beside the harness', () => {
 });
 
 suite('the timing settings', () => {
-	test('default to production values, and compress to a 0.5 s heartbeat, 10 s tokens, a 20 s retention floor and a 250 ms store timeout', () => {
+	test('default to production values, a store timeout above a loaded start, and compress to a 0.5 s heartbeat, 10 s tokens, a 20 s retention floor and a 250 ms store timeout', () => {
 		const usual = harnessConfiguration(SETTINGS);
 		const compressed = harnessConfiguration({
 			...SETTINGS,
@@ -878,7 +1049,6 @@ suite('the timing settings', () => {
 				heartbeatMilliseconds: usual.heartbeatMilliseconds,
 				noticePageLimit: usual.noticePageLimit,
 				noticeRereadMilliseconds: usual.noticeRereadMilliseconds,
-				storeTimeoutMilliseconds: usual.storeTimeoutMilliseconds,
 				streamMaximumLifetimeSeconds: usual.streamMaximumLifetimeSeconds,
 				tokenLifetimeSeconds: usual.tokenLifetimeSeconds,
 			},
@@ -888,11 +1058,11 @@ suite('the timing settings', () => {
 				heartbeatMilliseconds: 10_000,
 				noticePageLimit: 500,
 				noticeRereadMilliseconds: 2000,
-				storeTimeoutMilliseconds: 5000,
 				streamMaximumLifetimeSeconds: 900,
 				tokenLifetimeSeconds: 300,
 			},
 		);
+		assert.equal(usual.storeTimeoutMilliseconds, HARNESS_STORE_TIMEOUT_MILLISECONDS);
 		assert.equal(usual.tokenLifetimeSeconds, RETENTION_DEFAULTS.tokenLifetimeSeconds);
 		assert.equal(retentionFloorSeconds(usual), retentionFloorSeconds(RETENTION_DEFAULTS));
 		assert.equal(compressed.heartbeatMilliseconds, 500);

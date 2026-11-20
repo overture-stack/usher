@@ -1,6 +1,6 @@
 import type pg from 'pg';
 
-import type { AuditEventType, AuditTrail, EventLog, JsonValue, TrailConnection } from '../eventLog/index.js';
+import type { AuditEventType, AuditTrail, AuditTransaction, EventLog, JsonValue } from '../eventLog/index.js';
 import type { PersonIdentity } from '../findOrRecordPerson.js';
 import type { Problem } from '../http/index.js';
 import type { TokenVerification } from '../identityProvider/index.js';
@@ -130,7 +130,11 @@ export interface OperationRequest<Input> {
 	sourceIp: string;
 }
 
-/** What an operation answered: a success, or a refusal. */
+/**
+ * What an operation answered: a success; a refusal; or a dependency beyond the store that could not
+ * answer, such as the directory, answered with its problem and recorded `failed` at error, its
+ * reason the problem's code.
+ */
 export type OperationOutcome =
 	| {
 			/** The answer's JSON body, or none for a success answered with no content. */
@@ -152,6 +156,15 @@ export type OperationOutcome =
 			 * on from what does not exist, while the event says what happened.
 			 */
 			recordedReason?: string;
+	  }
+	| {
+			kind: 'unavailable';
+			problem: Problem;
+			/**
+			 * The severity the event records the unavailable answer at: `error` unless the answer names a fault
+			 * in configuration, which is `warning`. Read as `error` when none is given.
+			 */
+			severity?: 'error' | 'warning';
 	  };
 
 /** What an operation read from a request's body and query: its input, or the refusal it earned. */
@@ -189,7 +202,23 @@ export interface OperationEvent {
 	 */
 	named(request: NamedByRequest): Promise<EventMembers>;
 
-	type: AuditEventType;
+	/**
+	 * Work run in the transaction recording the event of a refusal or a failure, once its row is
+	 * written; none by default. An operation naming it must run the same work in the transaction of
+	 * each change it commits, and the work is then done once for each request admitted, however it is
+	 * answered.
+	 *
+	 * @param transaction the transaction recording the event.
+	 * @param principal whose request was refused or failed.
+	 * @param sourceIp the address the request came from.
+	 */
+	recordedWith?(transaction: AuditTransaction<pg.ClientBase>, principal: Principal, sourceIp: string): Promise<void>;
+
+	/**
+	 * The event's type, or how it is read from what the request names, for an operation whose
+	 * request says which of its events it would record.
+	 */
+	type: AuditEventType | ((request: NamedByRequest) => AuditEventType);
 }
 
 /**
@@ -231,6 +260,7 @@ export interface ManagementOperation<Input> {
 	 */
 	firstUserOnly?: boolean;
 
+	/** Its method: a `PATCH` takes its body as a JSON Merge Patch, any other as JSON. */
 	method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
 	/**
@@ -246,8 +276,8 @@ export interface ManagementOperation<Input> {
 	takesQuery?: boolean;
 
 	/**
-	 * Answers an admitted, readable request. A failure it throws is the store's, since the store is
-	 * the one thing an operation reaches beyond itself.
+	 * Answers an admitted, readable request. A failure it throws is the store's; any other dependency
+	 * it reaches answers its failure as an `unavailable` outcome instead.
 	 */
 	run(request: OperationRequest<Input>): Promise<OperationOutcome>;
 }
@@ -280,5 +310,5 @@ export interface ManagementDependencies {
 	tokenVerifier: TokenVerifier;
 
 	/** Where refusals and failures are recorded. */
-	trail: Pick<AuditTrail<TrailConnection>, 'recordEvent'>;
+	trail: Pick<AuditTrail<pg.ClientBase>, 'recordEvent'>;
 }

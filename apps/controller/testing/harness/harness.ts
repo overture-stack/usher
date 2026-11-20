@@ -17,15 +17,17 @@ import {
 	registeredApplicationOf,
 } from './admin.js';
 import { runningContainers } from './containerEnvironment.js';
-import type { DedicatedContainer, KeycloakRealm, KeycloakRealmOptions } from './containers.js';
+import type { DedicatedContainer, KeycloakRealm, KeycloakRealmOptions, SharedKeycloakRealm } from './containers.js';
 import {
 	type ControllerApplication,
 	type ControllerConfiguration,
+	HARNESS_STORE_TIMEOUT_MILLISECONDS,
 	type MigrationOptions,
 	type RunningController,
 	type SeededPolicySettings,
 	startController,
 	storedSettingsOf,
+	writeApplicationsThroughStore,
 	writeSeededPolicy,
 } from './controller.js';
 import {
@@ -84,6 +86,23 @@ export interface HarnessOptions {
 	 * {@link Harness.application}.
 	 */
 	applications?: readonly string[];
+
+	/**
+	 * For a start that makes no Management API call, so the Controller holds no key of the identity
+	 * provider until a test's own exchange needs one: false by default. The harness writes its
+	 * applications and their first keys into the store before its Controller starts, instead of
+	 * registering them through the Management API once it listens, and the Controller loads the keys
+	 * at its start. Each application is inserted, and its key issued and sealed under the
+	 * key-encryption key, by the Controller's own insert functions, in one transaction its audit trail
+	 * holds as the system, recording no event, as for the seeded policy. An application the fixture
+	 * seeded keeps its id and is issued its first key the same way. The registrant and issuer of each
+	 * are the person {@link PEOPLE} names as the platform administrator, seeded as one first. A start
+	 * giving {@link HarnessOptions.administratorToken} as well, as a Keycloak realm's fixture does, is
+	 * refused before anything starts, since the registrant would be that stand-in person and not the
+	 * realm's administrator. With `startsController: false` the writes wait for the first start of the
+	 * Controller, which the test makes.
+	 */
+	applicationsThroughStore?: boolean;
 
 	/** Fields set over the harness's configuration, last, so a test can set any of them. */
 	configuration?: Partial<ControllerConfiguration>;
@@ -373,8 +392,9 @@ export const passwordsApart = (configuration: ControllerConfiguration): Controll
  * back-channel logout audience, {@link HARNESS_EVENT_SOURCE} and the instance `usher-test-1`, no
  * directory, no EGO import settings, a grant rate threshold of 100 operations in 60 s, high enough
  * for no test to reach it by accident, the defaults given by the rulings (the timing settings at their
- * production defaults: a 10 s heartbeat, 300 s Usher tokens, a 500-notice page, a 2 s re-read, a 5 s
- * store timeout and a 15 min stream), the store connections at their defaults (10 for the exchange
+ * production defaults: a 10 s heartbeat, 300 s Usher tokens, a 500-notice page, a 2 s re-read and a 15 min
+ * stream, with the store timeout {@link HARNESS_STORE_TIMEOUT_MILLISECONDS} instead of production's 5 s),
+ * the store connections at their defaults (10 for the exchange
  * and 5 for everything else), loopback on any free port, the system's clock and the process's
  * standard output as the log stream; then the test's overrides over all of it. The configuration
  * names no application: the harness registers its applications through the API once its Controller
@@ -429,11 +449,11 @@ export const harnessConfiguration = ({
 		port: 0,
 		retentionGraceSeconds: RETENTION_DEFAULTS.retentionGraceSeconds,
 		retentionMarginSeconds: RETENTION_DEFAULTS.retentionMarginSeconds,
-		selfGrantMaximumSeconds: 86_400,
+		selfGrantMaximumLifetimeSeconds: 86_400,
 		serviceAccountRole: 'usher-service-account',
 		signInTokenMaximumLifetimeSeconds: 3600,
 		signedInRule: ['count', 'view', 'export'],
-		storeTimeoutMilliseconds: 5000,
+		storeTimeoutMilliseconds: HARNESS_STORE_TIMEOUT_MILLISECONDS,
 		streamLimitPerAudience: 64,
 		streamMaximumLifetimeSeconds: 900,
 		streamQueueLimit: 1000,
@@ -630,19 +650,32 @@ export const standInAdministrator =
 
 /**
  * An {@link AdministratorTokenSource} for a Controller trusting a Keycloak realm: the realm's own
- * administrator, the first of its people holding the configured first-user role, signed in through
- * the first of its clients that is a configured management client and carries the management API's
- * audience. The token is Keycloak's own, from a real sign-in.
+ * administrator, signed in through the first of its clients that is a configured management client and
+ * carries the management API's audience. The administrator is the person named by `administrator` when
+ * one is given, and otherwise the first of the realm's people holding the configured first-user role.
+ * The token is Keycloak's own, from a real sign-in.
  *
- * @param realm the running realm and what it was set up with.
+ * @param realm the running realm, what it was set up with, and the username of its administrator
+ *   when more than one person holds the first-user role.
  */
 export const realmAdministrator =
-	({ keycloak, options }: { keycloak: KeycloakRealm; options: KeycloakRealmOptions }): AdministratorTokenSource =>
+	({
+		administrator: administratorName,
+		keycloak,
+		options,
+	}: {
+		administrator?: string | undefined;
+		keycloak: Pick<KeycloakRealm, 'signIn'>;
+		options: KeycloakRealmOptions;
+	}): AdministratorTokenSource =>
 	async ({ firstUserRole, managementAudience, managementClients }) => {
 		const client = options.clients.find(
 			({ audiences, clientId }) => audiences.includes(managementAudience) && managementClients.includes(clientId),
 		);
-		const administrator = options.people.find(({ realmRoles = [] }) => realmRoles.includes(firstUserRole));
+		const administrator =
+			administratorName === undefined
+				? options.people.find(({ realmRoles = [] }) => realmRoles.includes(firstUserRole))
+				: options.people.find(({ username }) => username === administratorName);
 		if (client === undefined || administrator === undefined) {
 			throw new Error('the realm holds no management client or no administrator to sign in');
 		}
@@ -651,7 +684,7 @@ export const realmAdministrator =
 
 /** A running realm and what it was set up with, as {@link realmAdministrator} reads one. */
 export interface StartedRealm {
-	keycloak: KeycloakRealm;
+	keycloak: SharedKeycloakRealm;
 	options: KeycloakRealmOptions;
 }
 
@@ -673,7 +706,7 @@ export interface RealmRegistrar {
  * its Controller first listens, after the restart trusting the realm, and registers its applications
  * and issues their first keys as the realm's own administrator.
  */
-export const realmRegistrar = (): RealmRegistrar => {
+export const realmRegistrar = (administrator?: string): RealmRegistrar => {
 	const state: { realm: StartedRealm | undefined } = { realm: undefined };
 	return {
 		administratorToken: (configuration) =>
@@ -681,7 +714,7 @@ export const realmRegistrar = (): RealmRegistrar => {
 				? Promise.reject(
 						new Error('the realm was not given to the registrar before the harness first listened'),
 					)
-				: realmAdministrator(state.realm)(configuration),
+				: realmAdministrator({ administrator, ...state.realm })(configuration),
 		started: (realm) => {
 			state.realm = realm;
 		},
@@ -754,6 +787,13 @@ interface Started {
 
 const UNDEFINED_TABLE = '42P01';
 
+/**
+ * Why a start giving both `applicationsThroughStore` and an `administratorToken`, as a Keycloak realm's
+ * fixture does, is refused.
+ */
+export const REALM_REGISTRANT_REFUSAL =
+	"applicationsThroughStore cannot start with a Keycloak realm's administratorToken: the applications' registrant would be the harness's stand-in administrator, not the realm's administrator";
+
 // Writes what a start's configuration gives the store, before the Controller starts. A store with no settings
 // table is left to the start, which refuses it naming its schema, as a store the migrations never built is refused.
 const writeStartSettings = async (
@@ -775,6 +815,7 @@ const startedWith = async (
 	{
 		administratorToken = standInAdministrator(identityProvider),
 		applications: givenNames = DEFAULT_APPLICATIONS,
+		applicationsThroughStore = false,
 		configuration: overrides = {},
 		fixture,
 		seedsAdministrator = true,
@@ -831,6 +872,7 @@ const startedWith = async (
 			...startOverrides,
 		});
 		await writeSettingsOnce();
+		await writeApplicationsOnce();
 		const { port } = state.configuration;
 		const running = await startController({
 			...state.configuration,
@@ -874,6 +916,29 @@ const startedWith = async (
 		}
 		await seedAdministratorOf(sub);
 		return token;
+	};
+	// Under applicationsThroughStore, the applications and their first keys are written once, before the
+	// Controller first starts, so registerOnce finds them bound already. The fixture's seeded ids, known by
+	// then with startsController false, keep theirs.
+	const writeApplicationsOnce = async (): Promise<void> => {
+		if (!applicationsThroughStore || state.applications !== undefined) {
+			return;
+		}
+		const registrant = await seedAdministratorOf(PEOPLE.administrator.subject);
+		state.applications = await writeApplicationsThroughStore(
+			migration,
+			{
+				clock: state.configuration.clock,
+				databaseSchema: database.schema,
+				keyEncryptionKey: state.configuration.keyEncryptionKey,
+			},
+			displayNames.map((displayName) => ({
+				description: fixture?.applications?.[displayName]?.description ?? null,
+				displayName,
+				seededId: state.seededIds.get(displayName),
+			})),
+			registrant,
+		);
 	};
 	const seeding: PolicyFixture | undefined =
 		fixture === undefined ? undefined : { issuer: identityProvider.issuer, ...fixture };
@@ -958,6 +1023,9 @@ const seedOf = ({ eventSource, firstUserRole, issuer }: Partial<ControllerConfig
  *   of the test file's own, whether to start a Controller, and the template.
  */
 export const startHarness = async (options: HarnessOptions = {}): Promise<Harness> => {
+	if (options.applicationsThroughStore === true && options.administratorToken !== undefined) {
+		throw new Error(REALM_REGISTRANT_REFUSAL);
+	}
 	const database = await createTestDatabase(
 		options.template ??
 			(options.startsController === false

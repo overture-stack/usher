@@ -490,8 +490,9 @@ jose and the type both accept a `sub` of either kind. Only the Bridge knows whic
 ## When a token is rejected
 
 Every failure in reading the token, from the header pre-check to the validator, has one outcome: the
-token is rejected, never rendered, treated as not received, and answered 503. The
-[test plan](../../bridge-tests.md) says the same of a malformed payload.
+token is rejected, never rendered, treated as not received, and answered 503, except that a token
+read as `expired` straight after its exchange is exchanged once more first, and is rejected only if
+that second token reads `expired` too. The [test plan](../../bridge-tests.md) says the same of a malformed payload.
 [Bridge core and Express layer](core-and-express-layer.md) calls the outcome malformed and answers it
 the same way.
 

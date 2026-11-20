@@ -3,6 +3,7 @@ import { request } from 'node:http';
 import { suite, test, type TestContext } from 'node:test';
 
 import type { FastifyInstance } from 'fastify';
+import pg from 'pg';
 
 import { type Actor, type AuditEvent, type LineFields, REFUSED_SUBJECT_MAXIMUM_LENGTH } from '../eventLog/index.js';
 import { createServer, problem } from '../http/index.js';
@@ -68,6 +69,12 @@ interface Recorded {
 	event: AuditEvent;
 }
 
+/** An event recorded with work to run in its transaction, and the events that work recorded. */
+interface RecordedWithWork {
+	alongside: readonly AuditEvent[];
+	event: AuditEvent;
+}
+
 interface Line {
 	fields: LineFields | undefined;
 	message: string;
@@ -87,6 +94,7 @@ interface Stand {
 	/** The windows the refused credentials are counted in, which a test stops to close them. */
 	refusals: WindowedRefusals;
 
+	recordedWithWork: RecordedWithWork[];
 	server: FastifyInstance;
 }
 
@@ -218,10 +226,23 @@ const standUp = async (
 	}: StandOptions = {},
 ): Promise<Stand> => {
 	const recorded: Recorded[] = [];
+	const recordedWithWork: RecordedWithWork[] = [];
 	const lines: Line[] = [];
 	const trail: ManagementDependencies['trail'] = {
-		recordEvent: async (actor, event) => {
+		recordEvent: async (actor, event, work) => {
 			recorded.push({ actor, event });
+			if (work !== undefined) {
+				const alongside: AuditEvent[] = [];
+				await work({
+					// A client that never connects: the work given here records, and queries nothing.
+					connection: new pg.Client(),
+					record: async (alongsideEvent) => {
+						alongside.push(alongsideEvent);
+						return 'alongside-id';
+					},
+				});
+				recordedWithWork.push({ alongside, event });
+			}
 			return EVENT_ID;
 		},
 	};
@@ -236,6 +257,7 @@ const standUp = async (
 		lines,
 		ran: [],
 		recorded,
+		recordedWithWork,
 		refusals: createWindowedRefusals({
 			clock: SETTINGS.clock,
 			closingEvents: {
@@ -975,6 +997,35 @@ suite("a management operation's refusals, as its own event records them", () => 
 		);
 	});
 
+	test('records a refusal under the event type the operation reads from what the request names', async (context) => {
+		const stand = await standUp(context, {
+			departures: {
+				event: {
+					named: async () => ({}),
+					type: ({ body }) =>
+						body?.['title'] === 'Ulysses'
+							? 'application.registration'
+							: 'application.servedResourcesChange',
+				},
+			},
+			outcome: async () => ({ kind: 'refused', problem: SHELF_LIMIT }),
+			verifications: ADMIN,
+		});
+
+		await post(stand, { body: '{"title":"Ulysses"}' });
+		await post(stand);
+		await post(stand, { body: '{"title":"\\u0000"}' });
+
+		assert.deepEqual(
+			stand.recorded.map(({ event }) => [event.type, event.data['reason']]),
+			[
+				['application.registration', 'shelfFull'],
+				['application.servedResourcesChange', 'shelfFull'],
+				['application.servedResourcesChange', 'unrepresentableText'],
+			],
+		);
+	});
+
 	test('records the reason an operation gives for its refusal in place of the code answered, the answer unchanged', async (context) => {
 		const hidden = problem('shelfNotFound', 404, 'Shelf not found', 'No shelf you may see has the id named.');
 		const stand = await standUp(context, {
@@ -1039,6 +1090,119 @@ suite("a management operation's refusals, as its own event records them", () => 
 					},
 					severity: 'error',
 				},
+			],
+		);
+	});
+
+	test('answers a dependency the operation names unavailable with its problem, the event recorded failed at error naming its code, running no step after a commit', async (context) => {
+		const unavailable = {
+			code: 'shelfCatalogueUnavailable',
+			detail: 'The shelf catalogue cannot answer now. Try again later.',
+			status: 503,
+			title: 'Shelf catalogue unavailable',
+		};
+		const stand = await standUp(context, {
+			afterCommit: ['keyReload'],
+			outcome: async () => ({ kind: 'unavailable', problem: unavailable }),
+			verifications: ADMIN,
+		});
+
+		const answer = await post(stand);
+
+		assert.equal(answer.statusCode, 503);
+		assert.deepEqual(JSON.parse(answer.body), unavailable);
+		assert.equal(answer.headers['retry-after'], undefined);
+		assert.deepEqual(stand.lines, []);
+		assert.deepEqual(stand.afterCommit, []);
+		assert.deepEqual(
+			stand.recorded.map(({ event }) => ({
+				data: event.data,
+				severity: event.severity,
+			})),
+			[
+				{
+					data: {
+						reason: 'shelfCatalogueUnavailable',
+						result: 'failed',
+						shelfId: 'shelf-1',
+						sourceIp: '127.0.0.1',
+					},
+					severity: 'error',
+				},
+			],
+		);
+	});
+
+	test('runs the work its event names in the transaction recording each refusal and failure, for the principal refused, and never for an answer', async (context) => {
+		const recordedWith = {
+			named: async () => ({}),
+			recordedWith: async (
+				{ record }: { record: (event: AuditEvent) => Promise<string> },
+				{ subject }: { subject: string },
+			) => {
+				await record({
+					data: { subject },
+					severity: 'info',
+					type: 'grant.rateExceeded',
+				});
+			},
+			type: 'application.registration' as const,
+		};
+		const outcomes: readonly (() => Promise<OperationOutcome>)[] = [
+			async () => ({ kind: 'refused', problem: SHELF_LIMIT }),
+			async () => {
+				throw Object.assign(new Error('the store went away'), {
+					code: '57P01',
+				});
+			},
+			async () => ({ kind: 'unavailable', problem: SHELF_LIMIT }),
+			async () => ({
+				body: { shelved: true },
+				forbidsStoring: false,
+				kind: 'answered',
+				status: 201,
+			}),
+		];
+		const stands = await Promise.all(
+			outcomes.map((outcome) =>
+				standUp(context, {
+					departures: { event: recordedWith },
+					outcome,
+					verifications: {
+						...ADMIN,
+						reader: verified({ realm_access: { roles: [] }, sub: 'subject-reader' }),
+					},
+				}),
+			),
+		);
+		const unread = stands[0] ?? assert.fail('no stand');
+
+		const answers = [
+			await post(unread, { token: 'reader' }),
+			await post(unread, { body: '{"title":7}' }),
+			...(await Promise.all(stands.map((stand) => post(stand)))),
+		];
+
+		assert.deepEqual(
+			answers.map(({ statusCode }) => statusCode),
+			[403, 400, 409, 503, 409, 201],
+		);
+		assert.deepEqual(
+			stands.map(({ recordedWithWork }) =>
+				recordedWithWork.map(({ alongside, event }) => [
+					event.data['result'],
+					alongside.map(({ data }) => data['subject']),
+				]),
+			),
+			[
+				[
+					['denied', ['subject-reader']],
+					['denied', ['subject-ana']],
+					['denied', ['subject-ana']],
+				],
+				[['failed', ['subject-ana']]],
+				[['failed', ['subject-ana']]],
+				[],
 			],
 		);
 	});
@@ -1474,6 +1638,39 @@ suite('a management operation taking a query, or answering with no content', () 
 			['shelfFull'],
 		);
 		assert.deepEqual(stand.ran, []);
+	});
+
+	test('serves an operation at PATCH, reading its body as a JSON Merge Patch alone, and refusing any other media type 415, recorded denied', async (context) => {
+		const stand = await standUp(context, {
+			departures: { method: 'PATCH' },
+			verifications: ADMIN,
+		});
+		const patch = (contentType: string) =>
+			stand.server.inject({
+				headers: {
+					authorization: 'Bearer admin',
+					'content-type': contentType,
+				},
+				method: 'PATCH',
+				payload: BODY,
+				url: '/admin/shelves/shelf-1/books',
+			});
+
+		const answers = [await patch('application/merge-patch+json'), await patch('application/json')];
+
+		assert.deepEqual(
+			answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+			[
+				[201, undefined],
+				[415, 'unsupportedMediaType'],
+			],
+		);
+		assert.match(String(JSON.parse(answers[1]?.body ?? '{}').detail), /application\/merge-patch\+json/u);
+		assert.deepEqual(stand.ran, [{ input: { title: 'Dubliners' }, params: { id: 'shelf-1' } }]);
+		assert.deepEqual(
+			stand.recorded.map(({ event }) => event.data['reason']),
+			['unsupportedMediaType'],
+		);
 	});
 
 	test('serves an operation at PUT, and answers a success carrying no content with no body and no media type', async (context) => {

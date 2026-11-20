@@ -64,6 +64,7 @@ export const PROBLEMS = Object.freeze({
 		'Outcome unknown',
 		'The store did not confirm whether this change was made. Read what it changes before trying again.',
 	),
+	pageSizeTooSmall: problem('pageSizeTooSmall', 422, 'Page size too small', 'limit is a whole number of at least 1.'),
 	serviceAccountNotPermitted: problem(
 		'serviceAccountNotPermitted',
 		403,

@@ -51,6 +51,9 @@ export const liveSettingsOf = (
 	get grantAutoAccept() {
 		return source.current().grantAutoAccept;
 	},
+	get grantRateThreshold() {
+		return source.current().grantRateThreshold;
+	},
 	get heartbeatMilliseconds() {
 		return source.current().heartbeatMilliseconds;
 	},
@@ -68,6 +71,9 @@ export const liveSettingsOf = (
 	},
 	get retentionMarginSeconds() {
 		return source.current().retentionMarginSeconds;
+	},
+	get selfGrantMaximumLifetimeSeconds() {
+		return source.current().selfGrantMaximumLifetimeSeconds;
 	},
 	get signInTokenMaximumLifetimeSeconds() {
 		return source.current().signInTokenMaximumLifetimeSeconds;

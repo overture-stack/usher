@@ -249,9 +249,17 @@ export const createAuditTrail = <Connection extends TrailConnection>({
 		throw outcome.failure;
 	};
 
-	const recordEvent = async (actor: Actor, event: AuditEvent): Promise<string | undefined> => {
+	const recordEvent = async (
+		actor: Actor,
+		event: AuditEvent,
+		work?: (transaction: AuditTransaction<Connection>) => Promise<void>,
+	): Promise<string | undefined> => {
 		try {
-			return await inTransaction(actor, ({ record }) => record(event));
+			return await inTransaction(actor, async (transaction) => {
+				const id = await transaction.record(event);
+				await work?.(transaction);
+				return id;
+			});
 		} catch (failure) {
 			// An event whose commit went unconfirmed may be recorded, and its line already names it.
 			if (failure instanceof CommitUnconfirmed) {

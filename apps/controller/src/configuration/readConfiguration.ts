@@ -31,6 +31,10 @@ const valueOf = <Value>(reading: Reading<Value>): Value => {
 	throw new StartRefusal([reading.problem]);
 };
 
+// The rule a directory with only some of its four variables set breaks.
+const PARTIAL_DIRECTORY_RULE =
+	'is unset or empty while another directory variable is set: a directory needs all four, or none for no directory';
+
 /**
  * Reads the Controller's configuration from an environment, every variable checked before any is
  * used: a refusal lists every rule broken, each naming the variable at fault and never its value.
@@ -38,8 +42,10 @@ const valueOf = <Value>(reading: Reading<Value>): Value => {
  * left out; the database's password is read from its own variable, as given, and a database URL
  * carrying one is refused, as is one naming no database role, one naming a file the driver cannot
  * read, and one whose connection leaves the host without verifying the server while that is not
- * allowed. The clock is the system's and the log stream the process's standard output; neither is
- * read from the environment.
+ * allowed. The directory's four variables are set together or not at all, a start setting only some
+ * of them refused, naming each one missing; the secret is read as given, and the URL is held to
+ * https, or http to a loopback host. The clock is the system's and the log stream the process's
+ * standard output; neither is read from the environment.
  *
  * @param environment the environment variables, such as `process.env`.
  * @throws {StartRefusal} naming each variable at fault.
@@ -51,6 +57,30 @@ export const readConfiguration = (environment: ConfigurationEnvironment): Contro
 	});
 	const managementClients = readList(variable('managementClients'));
 	const databaseAllowUnverifiedConnection = readSwitch(variable('databaseAllowUnverifiedConnection'), false);
+	// A directory takes all four of its variables or none: a start setting only some of them is refused,
+	// naming each left unset or empty and never a value. Every one read empty, none is set: no directory.
+	const directoryRaw = {
+		directoryClientId: readText(variable('directoryClientId'), { emptyAllowed: true, fallback: '' }),
+		directoryClientSecret: readText(variable('directoryClientSecret'), { emptyAllowed: true, fallback: '' }),
+		directoryRealm: readText(variable('directoryRealm'), { emptyAllowed: true, fallback: '' }),
+		directoryUrl: readText(variable('directoryUrl'), { emptyAllowed: true, fallback: '' }),
+	};
+	const directoryIsSet = Object.values(directoryRaw).some(
+		(reading) => reading.kind === 'read' && reading.value !== '',
+	);
+	const directoryUrl = then(directoryRaw.directoryUrl, (url): Reading<string> =>
+		url !== ''
+			? readSecureUrl(variable('directoryUrl'))
+			: directoryIsSet
+				? refused(variable('directoryUrl'), PARTIAL_DIRECTORY_RULE)
+				: read(url),
+	);
+	const directorySetting = (
+		field: 'directoryClientId' | 'directoryClientSecret' | 'directoryRealm',
+	): Reading<string> =>
+		then(directoryRaw[field], (value): Reading<string> =>
+			value === '' && directoryIsSet ? refused(variable(field), PARTIAL_DIRECTORY_RULE) : read(value),
+		);
 	const readings = {
 		// The page's tokens are management tokens, so its client is one of the management clients, as listed.
 		apiDocsClient: then(
@@ -83,6 +113,10 @@ export const readConfiguration = (environment: ConfigurationEnvironment): Contro
 					databaseAllowUnverifiedConnection.kind === 'read' && databaseAllowUnverifiedConnection.value,
 				),
 		),
+		directoryClientId: directorySetting('directoryClientId'),
+		directoryClientSecret: directorySetting('directoryClientSecret'),
+		directoryRealm: directorySetting('directoryRealm'),
+		directoryUrl,
 		host: readText(variable('host')),
 		identityProviderIssuer: readSecureUrl(variable('identityProviderIssuer')),
 		instanceName: readText(variable('instanceName')),
@@ -119,6 +153,10 @@ export const readConfiguration = (environment: ConfigurationEnvironment): Contro
 			databasePassword: valueOf(readings.databasePassword),
 			databaseSchema: valueOf(readings.databaseSchema),
 			databaseUrl: valueOf(readings.databaseUrl),
+			directoryClientId: valueOf(readings.directoryClientId),
+			directoryClientSecret: valueOf(readings.directoryClientSecret),
+			directoryRealm: valueOf(readings.directoryRealm),
+			directoryUrl: valueOf(readings.directoryUrl),
 			host: valueOf(readings.host),
 			identityProviderIssuer: valueOf(readings.identityProviderIssuer),
 			instanceName: valueOf(readings.instanceName),

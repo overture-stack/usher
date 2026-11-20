@@ -8,10 +8,16 @@ import pg from 'pg';
 import { fixedClock } from '../../testing/peripherals/clocks.js';
 import { captureLog, type LogCapture } from '../../testing/harness/controller.js';
 import { type Harness, startReadOnlyInstance, suiteHarness, withHarness } from '../../testing/harness/harness.js';
-import { holdRetentionSweep, POLICY_TABLES, qualified, RETENTION_SWEEP } from '../../testing/harness/policy.js';
+import {
+	GRANT_OPERATIONS,
+	holdRetentionSweep,
+	POLICY_TABLES,
+	qualified,
+	RETENTION_SWEEP,
+} from '../../testing/harness/policy.js';
 import { cleanupFor, eventually } from '../../testing/harness/waiting.js';
 
-const { exchangedSids, sidSignOuts, subjectSignOuts } = POLICY_TABLES;
+const { exchangedSids, sidSignOuts, subjectSignOuts, usedChannelAssertions } = POLICY_TABLES;
 
 const HOUR_MILLISECONDS = 3_600_000;
 
@@ -98,14 +104,43 @@ const signOutsOf = (harness: Harness, client: pg.ClientBase, { key, table }: Sig
 	};
 };
 
+// Grant operations counted for subjects of one test's own, each counted an hour before its expiry.
+const grantOperationsOf = (harness: Harness, client: pg.ClientBase): OwnRows => {
+	const prefix = `${randomUUID()}:`;
+	const { columns } = GRANT_OPERATIONS;
+	return {
+		held: () => heldWithPrefix(client, GRANT_OPERATIONS, columns.idpSubjectId, prefix),
+		record: async (count, expiresAt) => {
+			await client.query(
+				`INSERT INTO ${qualified(GRANT_OPERATIONS)}
+           (${quoted(columns.idpIssuer)}, ${quoted(columns.idpSubjectId)},
+            ${quoted(columns.occurredAt)}, ${quoted(columns.expiresAt)})
+         SELECT $1, $2 || gen_random_uuid(), $3, $4 FROM generate_series(1, $5)`,
+				[
+					harness.configuration.identityProviderIssuer,
+					prefix,
+					new Date(expiresAt.getTime() - HOUR_MILLISECONDS),
+					expiresAt,
+					count,
+				],
+			);
+		},
+	};
+};
+
 // One test's own rows in every table the sweep deletes from, in the order it deletes from them.
 const sweptRowsOf = (harness: Harness, client: pg.ClientBase): readonly OwnRows[] => [
 	sessionsOf(harness, client),
 	...SIGN_OUT_TABLES.map((table) => signOutsOf(harness, client, table)),
+	grantOperationsOf(harness, client),
 ];
 
+// One connection runs one query at a time, so the counts are read in turn, each after the one before.
 const heldIn = (tables: readonly OwnRows[]): Promise<readonly number[]> =>
-	Promise.all(tables.map((rows) => rows.held()));
+	tables.reduce<Promise<readonly number[]>>(
+		(previous, rows) => previous.then(async (done) => [...done, await rows.held()]),
+		Promise.resolve([]),
+	);
 
 suite('the retention sweep against the store', () => {
 	const shared = suiteHarness({ applications: [] });
@@ -130,7 +165,10 @@ suite('the retention sweep against the store', () => {
 		const tables = sweptRowsOf(harness, harness.clients.migration);
 		const backlog = RETENTION_SWEEP.rowsPerRun + 500;
 		const hold = await holdRetentionSweep(holder);
-		await Promise.all(tables.map((rows) => rows.record(backlog, new Date(Date.now() - HOUR_MILLISECONDS))));
+		await tables.reduce<Promise<unknown>>(
+			(previous, rows) => previous.then(() => rows.record(backlog, new Date(Date.now() - HOUR_MILLISECONDS))),
+			Promise.resolve(),
+		);
 
 		await hold.release();
 		const firstRunEnded = await eventually(
@@ -159,7 +197,10 @@ suite('the retention sweep against the store', () => {
 		cleanupFor(context).defer(() => holder.end());
 		const tables = sweptRowsOf(harness, harness.clients.migration);
 		const hold = await holdRetentionSweep(holder);
-		await Promise.all(tables.map((rows) => rows.record(5, new Date(Date.now() - HOUR_MILLISECONDS))));
+		await tables.reduce<Promise<unknown>>(
+			(previous, rows) => previous.then(() => rows.record(5, new Date(Date.now() - HOUR_MILLISECONDS))),
+			Promise.resolve(),
+		);
 
 		await delay(RUNS_WITHIN_MILLISECONDS);
 		const whileHeld = await heldIn(tables);
@@ -218,13 +259,13 @@ suite("the retention sweep on the controller's configured clock", () => {
 					pastTolerance: signOutsOf(harness, client, table),
 					withinTolerance: signOutsOf(harness, client, table),
 				}));
-				await Promise.all(
-					tables.flatMap(({ atTolerance, pastTolerance, withinTolerance }) => [
-						atTolerance.record(1, new Date(cutoff)),
-						pastTolerance.record(1, new Date(cutoff - 1)),
-						withinTolerance.record(1, new Date(cutoff + 1)),
-					]),
-				);
+				await tables
+					.flatMap(({ atTolerance, pastTolerance, withinTolerance }) => [
+						() => atTolerance.record(1, new Date(cutoff)),
+						() => pastTolerance.record(1, new Date(cutoff - 1)),
+						() => withinTolerance.record(1, new Date(cutoff + 1)),
+					])
+					.reduce<Promise<unknown>>((previous, record) => previous.then(record), Promise.resolve());
 
 				const gone = await eventually(
 					async () =>
@@ -238,6 +279,85 @@ suite("the retention sweep on the controller's configured clock", () => {
 					await heldIn(tables.flatMap(({ atTolerance, withinTolerance }) => [atTolerance, withinTolerance])),
 					[1, 1, 1, 1],
 				);
+			},
+			context,
+		);
+	});
+
+	test("keeps a used channel assertion until its accepted_until is more than the clock tolerance before the configured clock's now", async (context) => {
+		// The clock starts now, so the harness's application registration is answered with a current token.
+		const now = Date.now();
+		const cutoff = now - RETENTION_SWEEP.clockToleranceMilliseconds;
+		await withHarness(
+			{ applications: ['Assertion retention'], configuration: { clock: fixedClock(now) } },
+			async (harness) => {
+				const client = harness.clients.migration;
+				const applicationId = harness.application('Assertion retention').id;
+				// Each test's own rows, told apart from every other test's by the prefix of their jti.
+				const prefix = `${randomUUID()}:`;
+				const recordAt = async (jti: string, acceptedUntil: number): Promise<void> => {
+					await client.query(
+						`INSERT INTO ${qualified(usedChannelAssertions)} (application_id, assertion_id, accepted_until)
+         VALUES ($1, $2, $3)`,
+						[applicationId, `${prefix}${jti}`, new Date(acceptedUntil)],
+					);
+				};
+				const heldOf = (jti: string): Promise<number> =>
+					heldWithPrefix(
+						client,
+						usedChannelAssertions,
+						usedChannelAssertions.columns.assertionId,
+						`${prefix}${jti}`,
+					);
+				await recordAt('past-tolerance', cutoff - 1);
+				await recordAt('at-tolerance', cutoff);
+				await recordAt('within-tolerance', cutoff + 1);
+
+				const gone = await eventually(
+					async () => (await heldOf('past-tolerance')) === 0,
+					RUNS_WITHIN_MILLISECONDS,
+					20,
+				);
+
+				assert.equal(
+					gone,
+					true,
+					'a used assertion more than the clock tolerance past its accepted_until outlived the sweep',
+				);
+				assert.deepEqual([await heldOf('at-tolerance'), await heldOf('within-tolerance')], [1, 1]);
+			},
+			context,
+		);
+	});
+});
+
+suite("the retention sweep of the grant rate's count", () => {
+	test("keeps a grant operation until its expiry is more than the clock tolerance before the configured clock's now", async (context) => {
+		const now = Date.now() + 2 * HOUR_MILLISECONDS;
+		const cutoff = now - RETENTION_SWEEP.clockToleranceMilliseconds;
+		await withHarness(
+			{ applications: [], configuration: { clock: fixedClock(now) } },
+			async (harness) => {
+				const client = harness.clients.migration;
+				const atTolerance = grantOperationsOf(harness, client);
+				const pastTolerance = grantOperationsOf(harness, client);
+				const withinTolerance = grantOperationsOf(harness, client);
+				await atTolerance.record(1, new Date(cutoff));
+				await pastTolerance.record(2, new Date(cutoff - 1));
+				await withinTolerance.record(1, new Date(cutoff + 1));
+
+				const gone = await eventually(
+					async () => (await pastTolerance.held()) === 0,
+					RUNS_WITHIN_MILLISECONDS,
+					20,
+				);
+
+				assert.equal(
+					gone,
+					true,
+					'a grant operation more than the clock tolerance past its expiry outlived the sweep',
+				);
+				assert.deepEqual(await heldIn([atTolerance, withinTolerance]), [1, 1]);
 			},
 			context,
 		);

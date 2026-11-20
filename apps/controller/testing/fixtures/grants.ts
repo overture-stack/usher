@@ -12,16 +12,12 @@ import {
 	stringsIn,
 } from '../harness/admin.js';
 import { AUDIT_EVENT_TYPES, emittedType } from '../harness/auditEvents.js';
-import {
-	addressKeycloakRealm,
-	type KeycloakRealm,
-	type KeycloakRealmOptions,
-	startKeycloak,
-} from '../harness/containers.js';
+import type { KeycloakRealmOptions, SharedKeycloakRealm } from '../harness/containers.js';
 import type { Clock } from '../harness/controller.js';
 import { holdTable, untilBlocked } from '../harness/database.js';
 import { PEOPLE, type Person } from '../harness/exchange.js';
 import { type Harness, startHarness } from '../harness/harness.js';
+import { sharedKeycloak } from '../harness/sharedKeycloak.js';
 import type { MintOptions } from '../peripherals/identityProvider.js';
 import {
 	type FixtureApplication,
@@ -34,7 +30,6 @@ import {
 	seedPolicy,
 	SYSTEM_ACTOR,
 } from '../harness/policy.js';
-import { suiteCleanup } from '../harness/waiting.js';
 
 // The fixture and helpers of #212's tests alone: grants and acceptance decisions. Every path, body,
 // table and column they use comes from the shared support modules; what this file assumes beyond
@@ -420,6 +415,7 @@ const {
 	capabilities,
 	categories,
 	grantDecisions,
+	grantRequests,
 	grants,
 	invitations,
 	notificationOutbox,
@@ -580,6 +576,124 @@ export const notificationsOf = async (harness: Harness, grantId: string): Promis
 	return rows;
 };
 
+/** A grant request as the store holds it (ruled), people by subject. */
+export interface StoredGrantRequest {
+	/** What the principal asking was shown, as `entity.action` names, sorted. */
+	capabilities: readonly string[];
+
+	/** `global.controlled` or `resource.internal`; `null` for the whole resource. */
+	category: string | null;
+
+	decidedAt: Date | null;
+	deciderSubject: string | null;
+	decision: string | null;
+	expiresAt: Date;
+	grantId: string | null;
+	holderSubject: string;
+	kind: string;
+	requestedAt: Date;
+	requestedBySubject: string;
+
+	/** By externalId. */
+	resource: string;
+
+	role: string;
+}
+
+/**
+ * One grant request as the store holds it.
+ *
+ * @param harness the harness, read under the migration role.
+ * @param requestId the request's id.
+ * @throws when the store holds no request by that id.
+ */
+export const storedGrantRequest = async (harness: Harness, requestId: string): Promise<StoredGrantRequest> => {
+	const subjectOf = (column: string): string =>
+		`(SELECT ${at('identity', userIdentities.columns.idpSubjectId)}
+      FROM ${qualified(userIdentities)} identity
+       WHERE ${at('identity', userIdentities.columns.userId)} = ${column} LIMIT 1)`;
+	const { rows } = await harness.clients.migration.query<StoredGrantRequest>(
+		`SELECT ARRAY(SELECT unnest(${at('asked', grantRequests.columns.capabilities)})
+              ORDER BY 1) AS capabilities,
+            ${at('record_category', categories.columns.scope)} || '.'
+              || ${at('record_category', categories.columns.name)} AS category,
+            ${at('asked', grantRequests.columns.decidedAt)} AS "decidedAt",
+            ${subjectOf(at('asked', grantRequests.columns.decidedBy))} AS "deciderSubject",
+            ${at('asked', grantRequests.columns.decision)} AS decision,
+            ${at('asked', grantRequests.columns.expiresAt)} AS "expiresAt",
+            ${at('asked', grantRequests.columns.grantId)}::text AS "grantId",
+            ${subjectOf(at('asked', grantRequests.columns.holderUserId))} AS "holderSubject",
+            ${at('asked', grantRequests.columns.kind)} AS kind,
+            ${at('asked', grantRequests.columns.requestedAt)} AS "requestedAt",
+            ${subjectOf(at('asked', grantRequests.columns.requestedBy))} AS "requestedBySubject",
+            ${at('resource_row', resources.columns.externalId)} AS resource,
+            ${at('role_row', roles.columns.name)} AS role
+       FROM ${qualified(grantRequests)} asked
+       JOIN ${qualified(resources)} resource_row
+         ON ${at('resource_row', resources.columns.id)}
+          = ${at('asked', grantRequests.columns.resourceId)}
+       JOIN ${qualified(roles)} role_row
+         ON ${at('role_row', roles.columns.id)} = ${at('asked', grantRequests.columns.roleId)}
+       LEFT JOIN ${qualified(categories)} record_category
+         ON ${at('record_category', categories.columns.id)}
+          = ${at('asked', grantRequests.columns.recordCategoryId)}
+      WHERE ${at('asked', grantRequests.columns.id)}::text = $1`,
+		[requestId],
+	);
+	const [found] = rows;
+	if (found !== undefined) {
+		return found;
+	}
+	throw new Error('the store holds no grant request by that id');
+};
+
+/**
+ * The subject of the person a grant names as having asked for it (ruled), or `null` for a grant no
+ * request asked for.
+ *
+ * @param harness the harness, read under the migration role.
+ * @param grantId the grant's id.
+ */
+export const grantRequestedBy = async (harness: Harness, grantId: string): Promise<string | null> => {
+	const { rows } = await harness.clients.migration.query<{
+		subject: string | null;
+	}>(
+		`SELECT ${at('identity', userIdentities.columns.idpSubjectId)} AS subject
+       FROM ${qualified(grants)} held
+       LEFT JOIN ${qualified(userIdentities)} identity
+         ON ${at('identity', userIdentities.columns.userId)}
+          = ${at('held', grants.columns.requestedBy)}
+      WHERE ${at('held', grants.columns.id)}::text = $1`,
+		[grantId],
+	);
+	return rows[0]?.subject ?? null;
+};
+
+/**
+ * The outbox rows naming a grant request (ruled), by recipient.
+ *
+ * @param harness the harness.
+ * @param requestId the request's id.
+ */
+export const requestNotificationsOf = async (
+	harness: Harness,
+	requestId: string,
+): Promise<readonly StoredNotification[]> => {
+	const { rows } = await harness.clients.migration.query<StoredNotification>(
+		`SELECT ${at('outbox', notificationOutbox.columns.deliveredAt)} AS "deliveredAt",
+            ${at('outbox', notificationOutbox.columns.kind)} AS kind,
+            ${at('recipient', userIdentities.columns.idpSubjectId)} AS "recipientSubject"
+       FROM ${qualified(notificationOutbox)} outbox
+       JOIN ${qualified(userIdentities)} recipient
+         ON ${at('recipient', userIdentities.columns.userId)}
+          = ${at('outbox', notificationOutbox.columns.recipientUserId)}
+      WHERE ${at('outbox', notificationOutbox.columns.requestId)}::text = $1
+      ORDER BY 3`,
+		[requestId],
+	);
+	return rows;
+};
+
 /** How many rows each table a refused write must leave untouched holds. */
 export interface RowCounts {
 	categories: number;
@@ -682,9 +796,9 @@ export const withdrawCapabilityInStore = async (harness: Harness, role: string, 
 };
 
 /**
- * The people `addressKeycloakRealm` holds, by address and the part each plays here: among them an
- * owner of STUDY-A1, an outsider, and two accounts a test disables or deletes while it runs, each its
- * own so the realm a suite shares stays as imported for every other test.
+ * The people the run's shared realm holds for the address suites, by address and the part each plays
+ * here: among them an owner of STUDY-A1, an outsider, and two accounts a test disables or deletes while
+ * it runs, each its own, read by no other suite.
  */
 export const ADDRESSES = Object.freeze({
 	administrator: 'admin.one@example.org',
@@ -701,45 +815,20 @@ export const ADDRESSES = Object.freeze({
 	unverified: 'una@example.org',
 });
 
-/** A real Keycloak holding the address realm, and the options it was imported from. */
+/** The run's shared realm, a test process's handle on it and the options it was imported from. */
 export interface AddressRealm {
-	keycloak: KeycloakRealm;
+	keycloak: SharedKeycloakRealm;
 	options: KeycloakRealmOptions;
 }
 
-const startAddressRealm = async (): Promise<AddressRealm> => {
-	const options = addressKeycloakRealm();
-	return { keycloak: await startKeycloak(options), options };
-};
-
-/** The address realm one suite's tests share, started by the first test asking for it. */
+/** The shared realm a suite reads, the same handle and options for every test. */
 export type SharedAddressRealm = () => Promise<AddressRealm>;
 
 /**
- * A Keycloak holding the address realm, which one suite's tests share: started by the first test
- * asking, so a test failing before it asks starts none; removed once the suite's tests have ended.
- * Call it in the suite's body.
+ * The run's shared Keycloak, for the address suites: nothing is started here, since the global setup
+ * started it before any test file, and nothing is removed, since the global setup removes it.
  */
-export const sharedAddressRealm = (): SharedAddressRealm => {
-	const scope = suiteCleanup();
-	const state: { starting: Promise<AddressRealm> | undefined } = {
-		starting: undefined,
-	};
-	scope.defer(async () => {
-		const started = await state.starting?.catch(() => undefined);
-		await started?.keycloak.remove();
-	});
-	return () => {
-		const starting =
-			state.starting ??
-			startAddressRealm().catch((error: unknown) => {
-				state.starting = undefined;
-				throw error;
-			});
-		state.starting = starting;
-		return starting;
-	};
-};
+export const sharedAddressRealm = (): SharedAddressRealm => async () => sharedKeycloak();
 
 /** A realm person signed in through the management client. */
 export interface SignedIn {
@@ -756,7 +845,7 @@ export interface AddressSession {
 	caller(signedIn: SignedIn): AdminCaller;
 
 	harness: Harness;
-	keycloak: KeycloakRealm;
+	keycloak: SharedKeycloakRealm;
 	options: KeycloakRealmOptions;
 
 	/** Ana, signed in, the accepted owner of STUDY-A1. */

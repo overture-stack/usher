@@ -1643,8 +1643,8 @@ type ColumnShapes<Table extends keyof PolicyTables> = Readonly<
  * text, required), a person held apart from their identities in `user_identities` (several
  * identities per person), and the subject identifier named `idp_subject_id` wherever it is stored.
  * The tables the rulings add are checked by their columns alone, unless a ruling fixes their types,
- * as it does for `user_identities`, and as `schema.md` § Applications does for an application's id,
- * its display name and its keys' two tables.
+ * as it does for `user_identities` and `grant_requests`, and as `schema.md` § Applications does for
+ * an application's id, its display name and its keys' two tables.
  */
 export const DESIGNED_COLUMNS: {
 	readonly [Table in keyof PolicyTables]?: ColumnShapes<Table>;
@@ -1708,6 +1708,22 @@ export const DESIGNED_COLUMNS: {
 		id: required(UUID),
 		userId: required(UUID),
 	},
+	grantRequests: {
+		capabilities: required(TEXTS),
+		decidedAt: optional(INSTANT),
+		decidedBy: optional(UUID),
+		decision: optional(TEXT),
+		expiresAt: required(INSTANT),
+		grantId: optional(UUID),
+		holderUserId: required(UUID),
+		id: required(UUID),
+		kind: required(TEXT),
+		recordCategoryId: optional(UUID),
+		requestedAt: required(INSTANT),
+		requestedBy: required(UUID),
+		resourceId: required(UUID),
+		roleId: required(UUID),
+	},
 	grants: {
 		endedAt: optional(INSTANT),
 		expiresAt: optional(INSTANT),
@@ -1718,6 +1734,7 @@ export const DESIGNED_COLUMNS: {
 		holderUserId: optional(UUID),
 		id: required(UUID),
 		recordCategoryId: optional(UUID),
+		requestedBy: optional(UUID),
 		resourceId: required(UUID),
 		revokedAt: optional(INSTANT),
 		revokedBy: optional(UUID),
@@ -1818,6 +1835,11 @@ export const DESIGNED_COLUMNS: {
 	settingsGeneration: {
 		generation: required(BIGINT),
 		singleton: required(BOOLEAN),
+	},
+	usedChannelAssertions: {
+		acceptedUntil: required(INSTANT),
+		applicationId: required(UUID),
+		assertionId: required(TEXT),
 	},
 	userIdentities: {
 		addedAt: required(INSTANT),

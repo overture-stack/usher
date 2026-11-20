@@ -1,6 +1,6 @@
 # Why Usher
 
-> If you are not yet familiar with the access control problem addressed by Usher, read
+> If you are not familiar with the access control problem addressed by Usher, read
 > [docs/intro.md](intro.md) first. This document assumes that context.
 >
 > This document is primarily aimed at developers and architects evaluating or integrating Usher.
@@ -59,8 +59,7 @@ by one, and it is a list rather than a query filter. Nor can it hand someone aut
 the policies: its administrative roles cover every resource server in a realm, or a client's
 authorization settings as a whole.
 
-The deciding reason is independence. Usher's design does not depend on Keycloak specifically, and
-support for other identity providers follows the first release, so the rules about who may reach what
+The deciding reason is independence. Usher's design does not depend on Keycloak specifically, so the rules about who may reach what
 cannot live inside one of them. Usher works with Keycloak rather than replacing it: Keycloak
 authenticates the user, and Usher resolves the grant set and delivers it to the application as a
 [Usher token](concepts.md#usher-tokens), applied by the adapter to every query.
@@ -106,7 +105,7 @@ which has viewer access to document C. They answer "does A have access to C?" an
 reach?", as a list of identifiers, and SpiceDB streams relationship changes to subscribers.
 
 What they do not provide is a filter for a search engine, or a check on who may write a
-relationship: OpenFGA writes any relationship submitted by a permitted credential, so a custodian
+relationship: OpenFGA writes any relationship submitted by a permitted credential, so a person
 granting themselves access has to be stopped by whatever administers the store. Usher is that
 administering layer, with its governance rules, its audit trail and its delivery to applications.
 Deploying a relationship store also carries operational overhead that is hard to justify for
@@ -124,7 +123,7 @@ compatible with them.
 **Gen3**
 
 Gen3 is a data commons platform, and its authorization is the nearest existing match to what Usher's
-first release does. Its policy engine, Arborist, returns a map of every resource reachable by a
+does. Its policy engine, Arborist, returns a map of every resource reachable by a
 user, and its Elasticsearch search service, Guppy, applies that map as a filter, with access levels
 that include aggregate counts above a minimum. An access-request service lets an approver act for
 one project without administrator rights. It is part of Gen3 rather than a separate component, and
@@ -166,10 +165,7 @@ platform scale.
 
 ## What Usher specifically adds
 
-Usher is in design and not yet built, so the list below describes intended behaviour rather than
-shipped features.
-
-One capability is deliberately absent from it. Several policy engines already produce a filter
+One capability is deliberately absent from the list below. Several policy engines already produce a filter
 describing what a principal may reach, rather than a yes or no for one request: Cerbos returns
 exactly that from its query planner, and the Zanzibar-derived systems answer it as a resource
 lookup. Usher's evaluation step is a candidate for one of those engines rather than a reason to
@@ -182,11 +178,9 @@ Across the tools above, its specific contribution is the combination of:
   dataset, and every application serving the data applies them the same way.
 - **Grant lifecycle as data.** Access is a set of grant records, each with an origin, an expiring
   validity and an audit trail, administered through an interface rather than deployed as policy
-  files. This is what a governance reviewer reads and what a custodian changes, and it is the half
+  files. This is what a governance reviewer reads and what an administrator changes, and it is the half
   of the problem left unaddressed by a policy engine.
-- **Built-in grant management.** A management interface for non-technical administrators to assign
-  and revoke access, audit the current state, and respond to governance reviews without touching
-  application code or configuration files.
+- **Built-in grant management.** Administrators assign and revoke access through the Management API, audit the current state, and respond to governance reviews without touching application code or configuration files.
 - **Push revocation.** Applications are notified when grants change, so cached decisions are
   invalidated promptly rather than waiting for a token to expire.
 - **Fail-secure by design.** When the revocation channel is unavailable, applications suspend data
@@ -211,7 +205,4 @@ Across the tools above, its specific contribution is the combination of:
   potentially with Usher's management and delivery layer on top.
 - **Not a compliance framework.** Usher provides the technical mechanism for access enforcement. The
   policies (who gets access, under what conditions) are a governance and organizational concern,
-  implemented by Usher but not defined by it. Who reviews a request, and where that review happens,
-  is the part of this that is scoped to the first release rather than settled. A data access
-  committee layer is expected to be an application governed by Usher rather than part of it, so that
-  Usher stores no application documents or applicant details.
+  implemented by Usher but not defined by it. Who reviews a request, and where that review happens, is outside Usher. A data access committee layer is an application governed by Usher rather than part of it, so that Usher stores no application documents or applicant details.

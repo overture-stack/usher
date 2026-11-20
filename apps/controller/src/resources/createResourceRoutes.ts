@@ -4,7 +4,7 @@ import { findApplication } from '../applications/index.js';
 import type { Actor, AuditEvent, JsonValue } from '../eventLog/index.js';
 import { ControllerError } from '../failures/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
-import { GRANT_PROBLEMS, type GrantStore, type GrantToWrite, sqlGrantStore, writeGrant } from '../grants/index.js';
+import { type GrantStore, grantsOnResources, type GrantToWrite, sqlGrantStore, writeGrant } from '../grants/index.js';
 import type { Problem } from '../http/index.js';
 import {
 	type InputReading,
@@ -12,10 +12,12 @@ import {
 	type ManagementOperation,
 	managementRoute,
 	type OperationOutcome,
+	pageOf,
 	type Principal,
 } from '../managementApi/index.js';
 import { maySee, type ResourceStanding } from '../resourceStanding/index.js';
 import { cursorAfter, readListingQuery } from './listingQuery.js';
+import { ownerSubjects } from './ownerSubjects.js';
 import { readRegistration } from './readRegistration.js';
 import { RESOURCE_PROBLEMS } from './resourceProblems.js';
 import {
@@ -166,9 +168,9 @@ const readerOf = ({ administrator }: Principal, { countedOwner }: ResourceStandi
  * names its access level, and every application it names must be registered, else it is refused 422
  * `unknownApplication` whole. One externalId names one resource in any letter case under ICU's root
  * collation, a retired resource included: a registration of an externalId held already is refused
- * 409 `alreadyExists`, as is the loser of two racing for one. A registration naming an owner by
- * address is refused 503 `directoryUnavailable` before anything is read, since no directory is
- * read. A registration commits in one transaction with its `resource.registration` event, whose
+ * 409 `alreadyExists`, as is the loser of two racing for one. Each owner named by address is
+ * resolved through the directory before the transaction begins, as {@link ownerSubjects} resolves
+ * them. A registration commits in one transaction with its `resource.registration` event, whose
  * `initialOwnerId` is the subject of the first owner it names, or `null` for none, the served rows,
  * a servedResources notice for each application named, an `application.servedResourcesChange` event
  * for each, and an owner grant on the whole resource for each owner named, in order, as a grant is
@@ -184,17 +186,21 @@ const readerOf = ({ administrator }: Principal, { countedOwner }: ResourceStandi
  * their latest answer did not reject, its owners among them; and, while it is neither retired nor
  * suppressed, every signed-in principal when its access level is `open` or `registered`. Anyone
  * else is answered 404 `resourceNotFound`, as for one that does not exist. A platform
- * administrator's answer and a counted owner's carry the grant summary and who registered the
- * resource, and no one else's carries either. A platform administrator lists every resource, and
- * any other principal is listed an empty page. A listing pages in the order of the externalIds in
- * any letter case, retired resources only to an administrator asking for them.
+ * administrator's answer and a counted owner's carry the grant summary, counting each role's
+ * holders by their live grants that they accepted; a registration's counts its owners where
+ * auto-accept accepts their grants with it. A platform administrator is listed every resource, each
+ * entry carrying its unrevoked grants as {@link grantsOnResources} shows them; anyone else is
+ * listed the resources they are a counted owner of, each entry as an owner's read shows it, and a
+ * principal owning none an empty page. A listing pages in the order of the externalIds in any
+ * letter case, retired resources only to an administrator asking for them.
  *
- * @param settings whether an owner grant written at registration is accepted with it, the clock,
- *   the schema, the trusted issuer, the store and the trail, each on the control pool.
+ * @param settings the directory, whether an owner grant written at registration is accepted with
+ *   it, the clock, the schema, the trusted issuer, the store and the trail, each on the control
+ *   pool.
  * @param dependencies what every Management API operation's route is built on.
  */
 export const createResourceRoutes = (
-	{ settings, store, trail }: ResourceOperationsSettings,
+	{ directory, settings, store, trail }: ResourceOperationsSettings,
 	dependencies: ManagementDependencies,
 ): readonly RouteOptions[] => {
 	const { clock, databaseSchema, identityProviderIssuer } = settings;
@@ -256,10 +262,11 @@ export const createResourceRoutes = (
 		readInput: (body, { principal }) => readRegistration(body, principal.subject),
 		route: '/admin/resources',
 		run: async ({ input, principal, sourceIp }) => {
-			const owners = input.owners.flatMap((owner) => (owner.kind === 'subject' ? [owner.subject] : []));
-			if (owners.length < input.owners.length) {
-				return refused(GRANT_PROBLEMS.directoryUnavailable);
+			const named = await ownerSubjects(directory, input.owners, principal.subject);
+			if (named.kind === 'refused') {
+				return named.outcome;
 			}
+			const owners = named.subjects;
 			const now = new Date(clock.now());
 			return changeOutcome(
 				trail.inTransaction(actorOf(principal), async ({ connection, record }) => {
@@ -332,6 +339,9 @@ export const createResourceRoutes = (
 								displayName: input.displayName,
 								externalId: input.externalId,
 								fields: {},
+								// Each owner named is one person, whose grant auto-accept accepts with it.
+								grantSummary:
+									settings.grantAutoAccept && owners.length > 0 ? { owner: owners.length } : {},
 								registeredAt: now,
 								registeredBy: principal.subject,
 								retired: false,
@@ -376,16 +386,37 @@ export const createResourceRoutes = (
 		readInput: (_body, context) => readListingQuery(context),
 		route: '/admin/resources',
 		run: async ({ input, principal }) => {
-			if (!principal.administrator) {
-				return answered(200, { next: null, resources: [] });
-			}
-			const read = await readResourcePage(store, databaseSchema, identityProviderIssuer, input);
-			const page = read.slice(0, input.limit);
-			const last = page.at(-1);
-			return answered(200, {
-				next: read.length > page.length && last !== undefined ? cursorAfter(last.externalId) : null,
-				resources: page.map((resource) => resourceView(resource, 'administrator')),
+			const now = clock.now();
+			const read = await readResourcePage(store, databaseSchema, {
+				...input,
+				issuer: identityProviderIssuer,
+				now: new Date(now),
+				ownerSubject: principal.administrator ? undefined : principal.subject,
 			});
+			const { entries, next } = pageOf(read, input.limit, ({ externalId }) => cursorAfter(externalId));
+			if (!principal.administrator) {
+				return answered(200, {
+					next,
+					resources: entries.map((resource) => resourceView(resource, 'owner')),
+				});
+			}
+			const listed = await grantsOnResources(
+				{
+					directory,
+					issuer: identityProviderIssuer,
+					schema: databaseSchema,
+					store,
+				},
+				{ now, resourceIds: entries.map(({ id }) => id) },
+			);
+			return listed.kind === 'unavailable'
+				? listed.outcome
+				: answered(200, {
+						next,
+						resources: entries.map((resource) =>
+							resourceView(resource, 'administrator', listed.grantsOf(resource.id)),
+						),
+					});
 		},
 		takesQuery: true,
 	};

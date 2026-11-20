@@ -83,10 +83,12 @@ export interface KeyConfirmations {
 	 * written by that deadline, is written to the log, and tried again at the key's next exchange.
 	 *
 	 * @param key the application and the key the assertion verified under.
+	 * @param sourceIp the address the exchange that begins the write came from, which the write's
+	 *   `applicationKey.confirmation` records.
 	 * @param deadline the exchange's deadline, which bounds the write it begins; none bounds it by the
 	 *   store timeout alone.
 	 */
-	confirm(key: Pick<ExchangeKey, 'applicationId' | 'keyId'>, deadline?: Deadline): Promise<void>;
+	confirm(key: Pick<ExchangeKey, 'applicationId' | 'keyId'>, sourceIp: string, deadline?: Deadline): Promise<void>;
 }
 
 /** What the confirmations are created from. */

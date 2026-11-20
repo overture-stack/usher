@@ -9,7 +9,7 @@ import { MIGRATIONS_REFUSE_TO_RUN, MigrationRefusal } from './migrationRefusal.j
 import { pendingMigrations } from './pendingMigrations.js';
 import { readMigrations } from './readMigrations.js';
 import { substituteNames } from './substituteNames.js';
-import { seedSettings } from './seedSettings.js';
+import { recordMigratedSettings, seedSettings } from './seedSettings.js';
 import type {
 	AppliedMigration,
 	Migration,
@@ -163,6 +163,17 @@ const settingsTablePresent = async (client: pg.ClientBase, schema: string): Prom
 	return rows[0]?.present === true;
 };
 
+// The names of the settings the schema holds, in name order: none where the schema has no settings table.
+const storedSettingNames = async (client: pg.ClientBase, schema: string): Promise<readonly string[]> => {
+	if (!(await settingsTablePresent(client, schema))) {
+		return [];
+	}
+	const { rows } = await client.query<{ name: string }>(
+		`SELECT name FROM ${qualified(schema, SETTINGS_TABLE)} ORDER BY name`,
+	);
+	return rows.map(({ name }) => name);
+};
+
 // Whether the settings table holds any setting: a run is a first run, which seeds them, when it does not.
 const settingsStored = async (client: pg.ClientBase, schema: string): Promise<boolean> => {
 	if (!(await settingsTablePresent(client, schema))) {
@@ -272,8 +283,13 @@ const migrateOn = async (
 		await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK]);
 		await refuseUnsafeRuntimeRole(client, runtimeRole);
 		await refuseForeignSchema(client, schema);
-		const pending = pendingMigrations(known, await appliedMigrations(client, schema), target);
+		const applied = await appliedMigrations(client, schema);
+		const pending = pendingMigrations(known, applied, target);
+		// A run seeds only once it leaves the store at the latest migration this release knows, so a run to an
+		// earlier target seeds nothing, and the next run that reaches the latest seeds the settings then.
+		const reachesLatest = applied.length + pending.length === known.length;
 		const firstRun = !(await settingsStored(client, schema));
+		const namesBefore = await storedSettingNames(client, schema);
 		const file = await seed();
 		const loaded = firstRun ? firstRunSeed(file) : undefined;
 		await ensureRecord(client, { runtimeRole, schema });
@@ -281,7 +297,7 @@ const migrateOn = async (
 			await earlier;
 			await applyMigration(client, migration, { runtimeRole, schema });
 		}, Promise.resolve());
-		if (loaded !== undefined && (await settingsTablePresent(client, schema))) {
+		if (loaded !== undefined && reachesLatest && (await settingsTablePresent(client, schema))) {
 			await seedSettings(client, {
 				clock,
 				eventLog,
@@ -294,6 +310,12 @@ const migrateOn = async (
 				seedFile: { kind: 'seeded' },
 				settingsSeeded: true,
 			};
+		}
+		if (!firstRun) {
+			const added = (await storedSettingNames(client, schema)).filter((name) => !namesBefore.includes(name));
+			if (added.length > 0) {
+				await recordMigratedSettings(client, { clock, eventLog, names: added, schema });
+			}
 		}
 		const seedFile: SeedFileOutcome = firstRun ? { kind: 'absent' } : await compareLaterSeed(client, schema, file);
 		return {

@@ -20,6 +20,7 @@ export type {
 	ChangeableSettingName,
 	FirstUser,
 	FixedSettingName,
+	GrantRateThreshold,
 	GrantRuleRecipient,
 	GrantRule,
 	GrantRuleAction,

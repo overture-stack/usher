@@ -66,6 +66,15 @@
 					"type": "string"
 				}
 			},
+			"GrantRequestId": {
+				"description": "The grant request's id.",
+				"in": "path",
+				"name": "id",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
 			"IncludeRetired": {
 				"description": "`true` lists retired resources too, and `false`, like leaving it out, lists none. Any other value is refused with `400`. A principal other than a platform administrator sending `true` is refused with `403` `administratorOnly`.",
 				"in": "query",
@@ -923,7 +932,7 @@
 				"additionalProperties": false,
 				"properties": {
 					"capabilities": {
-						"description": "What the grant would let its holder use; in a principal's listing of their own grants.",
+						"description": "What the grant's role lets its holder use now, ordered by name; in a principal's listing of their own grants.",
 						"items": {
 							"$ref": "#/components/schemas/Capability"
 						},
@@ -941,7 +950,8 @@
 							{
 								"type": "null"
 							}
-						]
+						],
+						"description": "The holder's latest answer, as recorded when given; `null` while they have given none."
 					},
 					"expiresAt": {
 						"anyOf": [
@@ -966,6 +976,11 @@
 					"id": {
 						"description": "The grant's opaque id.",
 						"format": "uuid",
+						"type": "string"
+					},
+					"kind": {
+						"const": "grant",
+						"description": "Marks the answer as a grant, beside `grantRequest` on a `GrantRequest` and `grantByAddress` on a `GrantByAddress`.",
 						"type": "string"
 					},
 					"resource": {
@@ -995,7 +1010,7 @@
 						"type": "string"
 					},
 					"selfGrant": {
-						"description": "`true` for a principal's grant to themself.",
+						"description": "`true` for a principal's grant to themself: one they granted themself, or one they asked for in a request someone else granted.",
 						"type": "boolean"
 					},
 					"state": {
@@ -1009,6 +1024,7 @@
 					"grantedBy",
 					"holder",
 					"id",
+					"kind",
 					"resource",
 					"revokedAt",
 					"role",
@@ -1089,6 +1105,118 @@
 				},
 				"required": ["grants"],
 				"type": "object"
+			},
+			"GrantRequest": {
+				"additionalProperties": false,
+				"description": "A principal's request for a grant, for themself or for someone else, decided by someone other than the principal who asked for it and its holder. A request lapses at its expiry while undecided.",
+				"properties": {
+					"category": {
+						"description": "The scoped record category the grant would apply to.",
+						"type": "string"
+					},
+					"decidedAt": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/Instant"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "When it was granted or refused; `null` while undecided."
+					},
+					"expiresAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the grant would end, and when the request lapses while undecided."
+					},
+					"grantId": {
+						"description": "The grant written by granting it; `null` unless it was granted.",
+						"format": "uuid",
+						"type": ["string", "null"]
+					},
+					"holder": {
+						"$ref": "#/components/schemas/HolderView",
+						"description": "Who would hold the grant: the principal asking, for a self-grant; the person named, for an orphaned resource's request. Named by subject, with `hasAccount` true and no `email`, since no directory is read for the answer."
+					},
+					"id": {
+						"description": "The request's opaque id.",
+						"format": "uuid",
+						"type": "string"
+					},
+					"kind": {
+						"const": "grantRequest",
+						"description": "Marks the answer as a grant request, beside `grant` on a `Grant`.",
+						"type": "string"
+					},
+					"requestKind": {
+						"description": "What is requested: `selfGrant`, a grant to the principal asking for it; `orphanedResource`, a platform administrator's grant to the holder on a resource with no counted owner. Other kinds may be added, so a reader takes an unknown one as a request it cannot act on.",
+						"type": "string"
+					},
+					"requestedAt": {
+						"$ref": "#/components/schemas/Instant"
+					},
+					"requestedBy": {
+						"$ref": "#/components/schemas/PrincipalBySubject"
+					},
+					"resource": {
+						"$ref": "#/components/schemas/ExternalId"
+					},
+					"role": {
+						"type": "string"
+					},
+					"state": {
+						"$ref": "#/components/schemas/GrantRequestState"
+					}
+				},
+				"required": [
+					"category",
+					"decidedAt",
+					"expiresAt",
+					"grantId",
+					"holder",
+					"id",
+					"kind",
+					"requestKind",
+					"requestedAt",
+					"requestedBy",
+					"resource",
+					"role",
+					"state"
+				],
+				"type": "object"
+			},
+			"GrantRequestDecision": {
+				"description": "A decision on a grant request. Members not listed here are refused with `400`.",
+				"properties": {
+					"decision": {
+						"description": "`granted` or `refused`; any other string is refused with `422`.",
+						"type": "string"
+					}
+				},
+				"required": ["decision"],
+				"type": "object"
+			},
+			"GrantRequestPage": {
+				"additionalProperties": false,
+				"properties": {
+					"next": {
+						"description": "The cursor of the next page; `null` or left out on the last.",
+						"type": ["string", "null"]
+					},
+					"requests": {
+						"items": {
+							"$ref": "#/components/schemas/GrantRequest"
+						},
+						"type": "array"
+					}
+				},
+				"required": ["requests"],
+				"type": "object"
+			},
+			"GrantRequestState": {
+				"description": "A grant request's state: `pending` while undecided and before its expiry, `lapsed` once its expiry passes undecided, and `granted` or `refused` once decided.",
+				"enum": ["granted", "lapsed", "pending", "refused"],
+				"type": "string"
 			},
 			"GrantRevocation": {
 				"properties": {
@@ -1204,10 +1332,11 @@
 				"additionalProperties": false,
 				"properties": {
 					"email": {
-						"description": "The address held by the directory, read when the answer is written and never stored; left out for an account no longer known to the directory.",
+						"description": "The address the directory holds, read when the answer is written and never stored; left out for an account the directory no longer holds or one holding none, and while no directory is configured.",
 						"type": "string"
 					},
 					"hasAccount": {
+						"description": "`false` for a holder the directory no longer holds; `true` for every holder while no directory is configured.",
 						"type": "boolean"
 					},
 					"subject": {
@@ -1375,7 +1504,7 @@
 				"type": "object"
 			},
 			"NamedPrincipal": {
-				"description": "How an answer names a principal: by subject to a platform administrator, and in the answer to the principal's own act; by name in a listing to anyone else.",
+				"description": "How an answer names a principal: by subject to a platform administrator, and in the answer to the principal's own act; by name in a principal's listing of their own grants, a platform administrator's included, and in any other listing to anyone but a platform administrator. A name is the given and family names the directory holds, or `a data steward` for a person holding neither, one the directory no longer holds, and anyone while no directory is configured.",
 				"oneOf": [
 					{
 						"$ref": "#/components/schemas/PrincipalBySubject"
@@ -1733,11 +1862,11 @@
 							"minimum": 0,
 							"type": "integer"
 						},
-						"description": "How many principals hold each role, counting accepted, unexpired, unrevoked grants alone. Given to platform administrators and the resource's owners.",
+						"description": "How many principals hold each role, counting accepted, unexpired, unrevoked grants alone, each principal once per role, and leaving out a role nobody holds. Given to platform administrators and the resource's owners.",
 						"type": "object"
 					},
 					"grants": {
-						"description": "Its grants, holders included, in a listing entry.",
+						"description": "Its grants, revoked ones left out, holders included, in an entry of a platform administrator's listing.",
 						"items": {
 							"$ref": "#/components/schemas/Grant"
 						},
@@ -1964,18 +2093,18 @@
 			"SelfGrantCreation": {
 				"properties": {
 					"category": {
-						"description": "A scoped record category.",
+						"description": "A scoped record category the resource offers. A `submitter` self-grant naming none takes the instance's submitter category; any other data-plane role names one.",
 						"type": "string"
 					},
 					"expiresAt": {
-						"description": "When the self-grant ends: an RFC 3339 instant with an offset, in the future and within the instance's longest self-grant life. Any other string is refused with `422`.",
+						"description": "When the self-grant ends: an RFC 3339 instant with an offset, in the future and within the instance's longest self-grant life of the request. Any other string is refused with `422`, and an absent or `null` expiry with `400`.",
 						"type": "string"
 					},
 					"resource": {
 						"$ref": "#/components/schemas/ExternalId"
 					},
 					"role": {
-						"description": "A data-plane role defined by the instance; any other is refused with `422`.",
+						"description": "A data-plane role defined by the instance; any other is refused with `422`, but `owner` named by a platform administrator, refused with `403`.",
 						"type": "string"
 					}
 				},
@@ -2027,6 +2156,25 @@
 						"description": "Whether a grant request is accepted without review.",
 						"type": "boolean"
 					},
+					"grantRateThreshold": {
+						"additionalProperties": false,
+						"description": "When grant.rateExceeded fires: more grant operations by one actor than operationCount within windowSeconds.",
+						"properties": {
+							"operationCount": {
+								"description": "The most grant operations one actor performs within the window without being reported.",
+								"minimum": 1,
+								"type": "integer"
+							},
+							"windowSeconds": {
+								"description": "The window's length, in seconds, measured back from each operation.",
+								"maximum": 2147483647,
+								"minimum": 1,
+								"type": "integer"
+							}
+						},
+						"required": ["operationCount", "windowSeconds"],
+						"type": "object"
+					},
 					"heartbeatMilliseconds": {
 						"description": "The interval between heartbeats on a notice stream, in milliseconds.",
 						"minimum": 1,
@@ -2054,6 +2202,11 @@
 					"retentionMarginSeconds": {
 						"description": "The margin a notice is kept beyond the grace period, in seconds.",
 						"minimum": 0,
+						"type": "integer"
+					},
+					"selfGrantMaximumLifetimeSeconds": {
+						"description": "The longest a self-grant lives, in seconds, from the instant it is asked for; it bounds an owner extending or widening a grant they hold too, measured from the change.",
+						"minimum": 1,
 						"type": "integer"
 					},
 					"signInTokenMaximumLifetimeSeconds": {
@@ -2095,12 +2248,14 @@
 					"eventSource",
 					"firstUser",
 					"grantAutoAccept",
+					"grantRateThreshold",
 					"heartbeatMilliseconds",
 					"issuer",
 					"noticePageLimit",
 					"noticeRereadMilliseconds",
 					"retentionGraceSeconds",
 					"retentionMarginSeconds",
+					"selfGrantMaximumLifetimeSeconds",
 					"signInTokenMaximumLifetimeSeconds",
 					"streamLimitPerAudience",
 					"streamMaximumLifetimeSeconds",
@@ -2121,6 +2276,25 @@
 					"grantAutoAccept": {
 						"description": "Whether a grant request is accepted without review.",
 						"type": "boolean"
+					},
+					"grantRateThreshold": {
+						"additionalProperties": false,
+						"description": "When grant.rateExceeded fires: more grant operations by one actor than operationCount within windowSeconds.",
+						"properties": {
+							"operationCount": {
+								"description": "The most grant operations one actor performs within the window without being reported.",
+								"minimum": 1,
+								"type": "integer"
+							},
+							"windowSeconds": {
+								"description": "The window's length, in seconds, measured back from each operation.",
+								"maximum": 2147483647,
+								"minimum": 1,
+								"type": "integer"
+							}
+						},
+						"required": ["operationCount", "windowSeconds"],
+						"type": "object"
 					},
 					"heartbeatMilliseconds": {
 						"description": "The interval between heartbeats on a notice stream, in milliseconds.",
@@ -2145,6 +2319,11 @@
 					"retentionMarginSeconds": {
 						"description": "The margin a notice is kept beyond the grace period, in seconds.",
 						"minimum": 0,
+						"type": "integer"
+					},
+					"selfGrantMaximumLifetimeSeconds": {
+						"description": "The longest a self-grant lives, in seconds, from the instant it is asked for; it bounds an owner extending or widening a grant they hold too, measured from the change.",
+						"minimum": 1,
 						"type": "integer"
 					},
 					"signInTokenMaximumLifetimeSeconds": {
@@ -2212,6 +2391,33 @@
 					}
 				},
 				"required": ["reason"],
+				"type": "object"
+			},
+			"GrantByAddress": {
+				"additionalProperties": false,
+				"description": "A counted owner's answer to a grant whose holder they named by address, the same whether or not an account holds the address: the terms and the address as given, naming neither the grant's id nor its holder. When one account holds the address verified, it holds the grant now; when none does, nothing is written.",
+				"properties": {
+					"category": {
+						"description": "The scoped record category the grant takes; `null` for a grant on the whole resource.",
+						"type": ["string", "null"]
+					},
+					"email": {
+						"description": "The address, exactly as given.",
+						"type": "string"
+					},
+					"kind": {
+						"const": "grantByAddress",
+						"description": "Marks the answer as a grant named by address, beside `grant` on a `Grant`.",
+						"type": "string"
+					},
+					"resource": {
+						"$ref": "#/components/schemas/ExternalId"
+					},
+					"role": {
+						"type": "string"
+					}
+				},
+				"required": ["category", "email", "kind", "resource", "role"],
 				"type": "object"
 			}
 		},
@@ -3092,9 +3298,226 @@
 				"tags": ["Categories"]
 			}
 		},
+		"/admin/grant-requests": {
+			"get": {
+				"description": "Lists grant requests, a page at a time, in a stable order: those the principal may decide that are pending and have not lapsed, and the principal's own, in any state. An owner of a resource decides the requests on it, and a platform administrator any request but their own.\n\nA request on a retired resource is listed to nobody.",
+				"operationId": "listGrantRequests",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/ListingLimit"
+					}
+				],
+				"responses": {
+					"400": {
+						"$ref": "#/components/responses/Unreadable"
+					},
+					"401": {
+						"$ref": "#/components/responses/CredentialRefused"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["serviceAccountNotPermitted"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`serviceAccountNotPermitted`: a service account calls."
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetails"
+								}
+							}
+						},
+						"description": "`pageSizeTooSmall`: the page size is zero or below it."
+					},
+					"503": {
+						"$ref": "#/components/responses/ReadUnavailable"
+					},
+					"2XX": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/GrantRequestPage"
+								}
+							}
+						},
+						"description": "A page of grant requests."
+					}
+				},
+				"security": [
+					{
+						"managementToken": []
+					}
+				],
+				"summary": "Lists grant requests",
+				"tags": ["Grants"]
+			}
+		},
+		"/admin/grant-requests/{id}/decisions": {
+			"post": {
+				"description": "Grants or refuses a grant request. A request is decided once, by an owner of its resource, as `createGrant` defines one, or by any platform administrator, and never by the principal who asked for it or its holder. To anyone else a request is answered as one that does not exist, as is a request on a retired resource.\n\nGranting a request writes the grant it names, its holder the request's holder, `grantedAt` the instant it is granted and `expiresAt` the request's, and answers `200` with the `Grant`, `kind` `grant`. For a self-grant, the holder's acceptance is written with it, showing the capabilities they were shown when they asked. The holder of an orphaned resource's request asked for nothing, so its grant starts as one `createGrant` issues does: pending the holder's answer, or accepted at once, showing what the role confers then, when the instance accepts grants at creation. A refusal records the decision alone and answers `200` with the decided `GrantRequest`, `kind` `grantRequest`.\n\nWhile the resource of a request of kind `orphanedResource` has no counted owner, any platform administrator but the one who asked and its holder decides it. Once it has one, a platform administrator who is not an owner is refused granting it with `administratorGrantsNoConsumerAccess` but may still refuse it. Should the resource have no owner again before anyone decides, platform administrators may grant it again.\n\nA request decided already is refused with `requestDecided`, and one at or past its expiry with `requestLapsed`. Granting a request for a holder holding the grant live already is refused with `alreadyHolds`.",
+				"operationId": "decideGrantRequest",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/GrantRequestId"
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/GrantRequestDecision"
+							}
+						}
+					},
+					"description": "The decision.",
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/Grant"
+										},
+										{
+											"$ref": "#/components/schemas/GrantRequest"
+										}
+									]
+								}
+							}
+						},
+						"description": "The request is decided: granted, answered with the grant written, `kind` `grant`; or refused, answered with the request, `kind` `grantRequest`."
+					},
+					"400": {
+						"$ref": "#/components/responses/Unreadable"
+					},
+					"401": {
+						"$ref": "#/components/responses/CredentialRefused"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": [
+														"administratorGrantsNoConsumerAccess",
+														"ownRequest",
+														"serviceAccountNotPermitted"
+													]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`ownRequest`: the principal asked for the request or is its holder. `administratorGrantsNoConsumerAccess`: a grant of an orphaned resource's request, once the resource has a counted owner, by a principal who is not one. `serviceAccountNotPermitted`: a service account calls, before any lookup."
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["requestNotFound"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "The id is unknown or malformed, names a request on a resource where the principal holds no authority to decide it, or names a request on a retired resource; `requestNotFound` for each."
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["alreadyHolds", "requestDecided", "requestLapsed"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`requestDecided`: the request is granted or refused already, and keeps its decision. `requestLapsed`: its expiry has passed undecided. `alreadyHolds`: granting a request for a holder who holds the grant live already."
+					},
+					"413": {
+						"$ref": "#/components/responses/BodyTooLarge"
+					},
+					"415": {
+						"$ref": "#/components/responses/JsonOnly"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetails"
+								}
+							}
+						},
+						"description": "The decision is neither `granted` nor `refused`."
+					},
+					"503": {
+						"$ref": "#/components/responses/ChangeUnavailable"
+					}
+				},
+				"security": [
+					{
+						"managementToken": []
+					}
+				],
+				"summary": "Decides a grant request",
+				"tags": ["Grants"]
+			}
+		},
 		"/admin/grants": {
 			"post": {
-				"description": "Creates a grant: a role on a resource for a holder, named by subject or by address. A holder named by address is found through the identity provider's directory, by exact address in any letter case, and the address is never stored. An owner naming the holder by address receives the same answer whether or not an account holds the address. A holder named by a subject the controller has never met is recorded with the grant, and answers it once signed in.\n\nA data-plane role names a record category offered by the resource: any global category, as `global.` and its name, or one of the resource's own, as `resource.` and its name. A control-plane role, such as `owner`, names none and takes the whole resource, and an owner grant takes no expiry. A `submitter` grant naming no category takes the instance's submitter category. A grant names its record category alone: the member naming a field category, `fieldCategory`, is refused with `422`, whatever it holds, and so is `grantedBy`, since the caller is the granter. A `holder.email` that is no string, such as a list of addresses, is refused with `400`.\n\nWho may see a resource: a platform administrator; a person holding a grant on it, an owner grant included, that is neither revoked nor expired and that they have not declined, pending or accepted; and, for a resource at the `open` or `registered` access level that is not suppressed, every signed-in principal. A retired resource is seen only by a platform administrator asking for it, and every grant operation answers it as one that does not exist. A principal who may not see a resource is answered exactly as for one that does not exist; one who may see it and holds no authority for what they ask is refused with `403` `noAuthorityOnResource`.\n\nA resource's owners grant any role on it, `owner` included. An owner is a person holding an owner grant on it that is neither revoked nor expired and that they have accepted. A platform administrator grants the `submitter` and `owner` roles on any resource and makes anyone but themself an owner. No one grants the administrator role, `admin`.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; whether the instance defines the role, and whether the role names a category, `422`; a platform administrator naming themself an owner, `403` `administratorSelfOwnership`; a principal naming themself, `422`, the text naming `/admin/grants/self`; a platform administrator granting any role but `submitter` and `owner`, `403` `administratorGrantsNoConsumerAccess`, answered alike whether or not the resource exists; whether the principal may see the resource, `404`, and holds authority on it, `403`; and the category, `422`. A holder named by address is looked up only once all of these pass, and a grant held already is judged last, `409`.\n\nThe holder answers the grant through its decisions. When the instance accepts grants at creation, the controller records the holder's acceptance with the grant, showing the capabilities the grant's role confers then. A grant on the same terms that has expired does not stop the holder from being granted those terms again.",
+				"description": "Creates a grant: a role on a resource for a holder, named by subject or by address. A holder named by address is the one account in the identity provider's directory holding the address, matched exactly in any letter case, and verified; a disabled account counts. The address is never stored. A platform administrator naming the holder by address is answered `201` with the grant, and `404` `holderNotFound` when no single account holds the address. A counted owner naming the holder by address is answered `202` with a `GrantByAddress` whether or not an account holds the address, naming neither the grant nor its holder, and nothing is written when none does. An address resolving to the principal is refused as naming the principal's own subject is. A holder named by a subject the controller has never met is recorded with the grant, and answers it once signed in.\n\nA data-plane role names a record category offered by the resource: any global category, as `global.` and its name, or one of the resource's own, as `resource.` and its name. A control-plane role, such as `owner`, names none and takes the whole resource, and an owner grant takes no expiry. A `submitter` grant naming no category takes the instance's submitter category. A grant names its record category alone: the member naming a field category, `fieldCategory`, is refused with `422`, whatever it holds, and so is `grantedBy`, since the caller is the granter. A `holder.email` that is no string, such as a list of addresses, is refused with `400`.\n\nWho may see a resource: a platform administrator; a person holding a grant on it, an owner grant included, that is neither revoked nor expired and that they have not declined, pending or accepted; and, for a resource at the `open` or `registered` access level that is not suppressed, every signed-in principal. A retired resource is seen only by a platform administrator asking for it, and every grant operation answers it as one that does not exist. A principal who may not see a resource is answered exactly as for one that does not exist; one who may see it and holds no authority for what they ask is refused with `403` `noAuthorityOnResource`.\n\nA resource's owners grant any role on it, `owner` included. An owner is a person holding an owner grant on it that is neither revoked nor expired and that they have accepted. A platform administrator grants the `submitter` and `owner` roles on any resource and makes anyone but themself an owner. No one grants the administrator role, `admin`.\n\nA platform administrator's grant of any other role, for someone else, on a resource without an owner, a newly registered one whose named owners have not accepted included, is not issued: it is recorded as a request, `requestKind` `orphanedResource`, its requester the principal and its holder the person named, and answered `202` with the `GrantRequest`, `kind` `grantRequest`. It names an expiry, within the instance's longest self-grant life of the request. Nobody is told of it, since the resource has no owner: other platform administrators find it through `GET /admin/grant-requests` and decide it through `POST /admin/grant-requests/{id}/decisions`, and an owner the resource gains before then decides it instead. On a resource with an owner, such a grant is refused with `administratorGrantsNoConsumerAccess`.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; whether the instance defines the role, and whether the role names a category, `422`; a platform administrator naming themself an owner, `403` `administratorSelfOwnership`; a principal naming themself, `422`, the text naming `/admin/grants/self`; a platform administrator granting any role but `submitter` and `owner`, `403` `administratorGrantsNoConsumerAccess`, answered alike whether or not the resource exists, unless it exists, is not retired and has no owner, when the grant is asked for as a request; whether the principal may see the resource, `404`, and holds authority on it, `403`; the category, `422`; and, for a request, its expiry, `422`. A holder named by address is looked up only once all of these pass; an address resolving to the principal is then refused as the principal's own subject is, and a grant held already is judged last, `409`, as is, for a request, one by the principal for the holder on the same terms that is pending and has not lapsed.\n\nThe holder answers the grant through its decisions. When the instance accepts grants at creation, the controller records the holder's acceptance with the grant, showing the capabilities the grant's role confers then. A grant on the same terms that has expired does not stop the holder from being granted those terms again.",
 				"operationId": "createGrant",
 				"requestBody": {
 					"content": {
@@ -3108,6 +3531,33 @@
 					"required": true
 				},
 				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Grant"
+								}
+							}
+						},
+						"description": "The grant is created, for a holder named by subject, or named by address by a platform administrator. `id` is its opaque id, and `kind` is `grant`. Its holder is named by subject, with `hasAccount` true and no `email`, since no directory is read for the answer."
+					},
+					"202": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/GrantByAddress"
+										},
+										{
+											"$ref": "#/components/schemas/GrantRequest"
+										}
+									]
+								}
+							}
+						},
+						"description": "Told apart by `kind`. `grantByAddress`: a counted owner named the holder by address, answered alike whether or not an account holds the address. `grantRequest`: a platform administrator's grant on a resource without an owner is recorded as a request, `requestKind` `orphanedResource`, pending until another platform administrator, or an owner the resource gains, decides it."
+					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
 					},
@@ -3140,7 +3590,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorGrantsNoConsumerAccess`: a platform administrator grants access that is the owners' to grant, answered alike whether or not the resource exists. `administratorSelfOwnership`: a platform administrator names themself an owner. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorGrantsNoConsumerAccess`: a platform administrator grants access that is the owners' to grant, on a resource with a counted owner, or on one that does not exist or is retired, answered alike. `administratorSelfOwnership`: a platform administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
 					},
 					"404": {
 						"content": {
@@ -3175,7 +3625,7 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["alreadyHolds"]
+													"enum": ["alreadyHolds", "alreadyRequested"]
 												}
 											},
 											"type": "object"
@@ -3184,7 +3634,7 @@
 								}
 							}
 						},
-						"description": "The holder already holds a grant of this role on this resource and category that is neither revoked nor expired, whether pending, accepted or declined; `alreadyHolds`."
+						"description": "The holder already holds a grant of this role on this resource and category that is neither revoked nor expired, whether pending, accepted or declined; `alreadyHolds`. `alreadyRequested`: a platform administrator asked for this grant on a resource without an owner for the same holder already, and the request is pending and has not lapsed."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3200,7 +3650,7 @@
 								}
 							}
 						},
-						"description": "A rule is broken. `ownerGrantsDoNotExpire` names an owner grant given an expiry. The rest carry unnamed codes: a role not defined by the instance, in its exact letter case, or the administrator role, `admin`; a category not offered by the resource; a data-plane role naming no category, but `submitter`, or a control-plane role naming one; a `fieldCategory`, whatever it holds; a `holder` naming other than exactly one person, by subject or by address; an address not in the form of an address: text before and after a single `@`, holding no whitespace, comma or control character; a `grantedBy`, whatever it holds; an expiry that is no RFC 3339 instant with an offset, or one not in the future; and the principal naming themself, the text then naming the self-grant operation, `/admin/grants/self`."
+						"description": "A rule is broken. `ownerGrantsDoNotExpire` names an owner grant given an expiry. `orphanedResourceExpiryRequired`: a platform administrator's grant asked for on a resource without an owner names no expiry. `orphanedResourceGrantTooLong`: its expiry is past the instance's longest self-grant life of the request. The rest carry unnamed codes: a role not defined by the instance, in its exact letter case, or the administrator role, `admin`; a category not offered by the resource; a data-plane role naming no category, but `submitter`, or a control-plane role naming one; a `fieldCategory`, whatever it holds; a `holder` naming other than exactly one person, by subject or by address; an address not in the form of an address: text before and after a single `@`, holding no whitespace, comma or control character; a `grantedBy`, whatever it holds; an expiry that is no RFC 3339 instant with an offset, or one not in the future; and the principal naming themself, by subject or by an address resolving to them, the text then naming the self-grant operation, `/admin/grants/self`."
 					},
 					"503": {
 						"content": {
@@ -3214,6 +3664,7 @@
 											"properties": {
 												"code": {
 													"enum": [
+														"directoryNotConfigured",
 														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"outcomeUnknown",
@@ -3228,22 +3679,12 @@
 								}
 							}
 						},
-						"description": "`directoryUnavailable`: a holder named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: a holder named by address while no directory answers. The answer's `detail` tells two cases apart: no directory is configured, so the instance resolves no addresses and no retry succeeds while its configuration stands; or the configured directory cannot answer now, and a later try may succeed. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
 							}
 						}
-					},
-					"2XX": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/Grant"
-								}
-							}
-						},
-						"description": "The grant is created. `id` is its opaque id. Its holder is named by subject, with `hasAccount` true and no `email`, since no directory is read for the answer."
 					}
 				},
 				"security": [
@@ -3257,7 +3698,7 @@
 		},
 		"/admin/grants/self": {
 			"post": {
-				"description": "Creates the principal's own grant, which is also its acceptance: a data-plane role on a resource where they hold grant authority, a platform administrator on any resource. The expiry is required, in the future, and within the instance's longest self-grant life.\n\nEach owner of the resource is told of the self-grant.",
+				"description": "Asks for the principal's own grant of a data-plane role on a resource, ending at an expiry in the future and within the instance's longest self-grant life of the request. The holder is always the principal, so a `holder` member is refused with `422`.\n\nAn owner of the resource, as `createGrant` defines one, is granted at once, with their acceptance showing what the role confers then, and is answered `201` with the `Grant`, `kind` `grant`. Each other owner of the resource is told of the self-grant.\n\nA platform administrator who is not an owner of the resource asks instead, and is answered `202` with a `GrantRequest`, `kind` `grantRequest`, pending. Each owner of the resource is told of the request, and no other platform administrator is. An owner of the resource or another platform administrator decides it through `POST /admin/grant-requests/{id}/decisions`, never the platform administrator who asked; one left undecided lapses at its expiry. A request on a resource without an owner is told to nobody, and only another platform administrator can grant it.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; a platform administrator naming the `owner` role, `403` `administratorSelfOwnership`; whether the instance defines the role, and whether it is a data-plane role, `422`; whether the principal may see the resource, `404`, and holds authority on it, `403`, as for `createGrant`: a platform administrator on any resource, an owner on their own; the category, `422`; a grant held live on the same terms, `409` `alreadyHolds`; and, for a request, one by the principal on the same terms that is pending and has not lapsed, `409` `alreadyRequested`.",
 				"operationId": "createSelfGrant",
 				"requestBody": {
 					"content": {
@@ -3271,6 +3712,26 @@
 					"required": true
 				},
 				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Grant"
+								}
+							}
+						},
+						"description": "An owner's self-grant is created, with its acceptance. `id` is its opaque id, and `kind` is `grant`."
+					},
+					"202": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/GrantRequest"
+								}
+							}
+						},
+						"description": "A platform administrator's request is recorded, pending until another decides it. `kind` is `grantRequest`."
+					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
 					},
@@ -3337,7 +3798,7 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["alreadyHolds"]
+													"enum": ["alreadyHolds", "alreadyRequested"]
 												}
 											},
 											"type": "object"
@@ -3346,7 +3807,7 @@
 								}
 							}
 						},
-						"description": "The principal already holds this grant live; `alreadyHolds`."
+						"description": "`alreadyHolds`: the principal already holds this grant live. `alreadyRequested`: the principal has asked for this grant already, and the request is pending and has not lapsed."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3362,20 +3823,10 @@
 								}
 							}
 						},
-						"description": "A rule is broken: an expiry in the past or past the longest self-grant life, a control-plane role, or a member naming a holder."
+						"description": "A rule is broken. `holderNotTaken`: the body names a `holder`. `controlPlaneSelfGrant`: the role is a control-plane role. `selfGrantTooLong`: the expiry is past the instance's longest self-grant life of the request. The rest carry the codes `createGrant` gives them: the administrator role, `admin`; a role not defined by the instance, in its exact letter case; a category not offered by the resource; a data-plane role naming no category, but `submitter`; and an expiry that is no RFC 3339 instant with an offset, or one not in the future."
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
-					},
-					"2XX": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/Grant"
-								}
-							}
-						},
-						"description": "The self-grant is created, with its acceptance."
 					}
 				},
 				"security": [
@@ -3383,7 +3834,7 @@
 						"managementToken": []
 					}
 				],
-				"summary": "Creates a self-grant",
+				"summary": "Creates a self-grant, or asks for one",
 				"tags": ["Grants"]
 			}
 		},
@@ -3519,7 +3970,7 @@
 				"tags": ["Grants"]
 			},
 			"patch": {
-				"description": "Changes a grant's expiry, or removes it with `null`, or changes its role, as a JSON Merge Patch. A principal notice names the holder.",
+				"description": "Changes a grant's expiry, removes it with `null`, or changes its role, as a JSON Merge Patch. A principal notice names the holder.\n\nAn owner of the grant's resource, as `createGrant` defines one, changes any grant on it. When they extend a grant they hold, moving its end later or removing it, or widen it, giving it a role that confers anything its current role does not, the grant must end within the instance's longest self-grant life from the change, so it gives them no more than a self-grant could; ending it earlier or narrowing its role has no such limit. A platform administrator who is not an owner of the resource may reduce any grant, ending it earlier while still in the future or giving it a narrower role, one whose capabilities are among the current role's. They may neither extend nor widen a grant they hold, whatever its role, and are refused with `403` `selfWideningNotPermitted`; of anyone else's grants they may extend only `submitter` and `owner` grants and widen a grant only within those two roles, and any other change of theirs is refused with `403` `administratorGrantsNoConsumerAccess`. To anyone else a grant is answered as one that does not exist, as is a grant on a retired resource.\n\nA role changes within its plane: a data-plane grant to another data-plane role, keeping its category, and a control-plane grant, such as an owner grant, to another control-plane role, keeping the whole resource. No one is given the administrator role, `admin`, and an owner grant takes no expiry. A self-grant, one its holder granted themself or asked for, keeps an expiry within the instance's longest self-grant life of its request.\n\nA revoked grant is refused with `doesNotHold`. A grant replaced by a newer grant on its terms, once it had expired, is refused with `grantReplaced`, and the newer grant is the one to change. An expired grant that nothing replaced is live again once extended.\n\nWidening a role confers nothing new until the holder accepts the grant again: their answers are left as they are, and a grant confers only capabilities its holder accepted.",
 				"operationId": "changeGrant",
 				"parameters": [
 					{
@@ -3538,6 +3989,16 @@
 					"required": true
 				},
 				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Grant"
+								}
+							}
+						},
+						"description": "The grant is changed, and answered as it now stands."
+					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
 					},
@@ -3555,7 +4016,12 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["noAdministratorYet", "serviceAccountNotPermitted"]
+													"enum": [
+														"administratorGrantsNoConsumerAccess",
+														"noAdministratorYet",
+														"selfWideningNotPermitted",
+														"serviceAccountNotPermitted"
+													]
 												}
 											},
 											"type": "object"
@@ -3564,7 +4030,7 @@
 								}
 							}
 						},
-						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`administratorGrantsNoConsumerAccess`: a platform administrator who is not an owner of the grant's resource extends a grant someone else holds other than a `submitter` or an `owner` grant, or widens one beyond those two roles. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts. `selfWideningNotPermitted`: a platform administrator who is not an owner of the grant's resource extends or widens a grant they hold, whatever its role, the text saying to end it earlier, narrow its role, or ask for a self-grant instead. `serviceAccountNotPermitted`: a service account calls, before any lookup."
 					},
 					"404": {
 						"content": {
@@ -3586,7 +4052,7 @@
 								}
 							}
 						},
-						"description": "The id is unknown or malformed, or names a grant on a resource where the principal holds no authority for the operation; `grantNotFound` for each."
+						"description": "The id is unknown or malformed, names a grant on a resource where the principal holds no authority for the operation, or names a grant on a retired resource; `grantNotFound` for each."
 					},
 					"409": {
 						"content": {
@@ -3599,7 +4065,12 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["doesNotHold"]
+													"enum": [
+														"alreadyHolds",
+														"doesNotHold",
+														"grantReplaced",
+														"resourceNeedsAnOwner"
+													]
 												}
 											},
 											"type": "object"
@@ -3608,7 +4079,7 @@
 								}
 							}
 						},
-						"description": "The grant is revoked; `doesNotHold`."
+						"description": "`doesNotHold`: the grant is revoked. `grantReplaced`: a newer grant on its terms replaced it once it had expired, the text saying to change that grant instead. `alreadyHolds`: the holder already holds a grant of the new role on this resource and category that is neither revoked nor expired. `resourceNeedsAnOwner`: the change takes the role of its resource's last accepted owner grant away, the text saying to add another owner first."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3624,13 +4095,10 @@
 								}
 							}
 						},
-						"description": "A rule is broken. `ownerGrantsDoNotExpire` names an expiry on an owner grant. An expiry that is no RFC 3339 instant with an offset, or one in the past, and a role not defined by the instance carry unnamed codes."
+						"description": "A rule is broken. `ownerGrantsDoNotExpire`: an expiry on an owner grant. `roleInOtherPlane`: a role of the other plane, such as `owner` for a data-plane grant. `selfGrantTooLong`: a self-grant's end past the instance's longest self-grant life of its request, or the end of a grant an owner of its resource holds and extends or widens past that life from the change. `selfGrantExpiryRequired`: a self-grant's expiry removed, or a grant an owner of its resource holds and extends or widens left without one. The rest carry the codes `createGrant` gives them: an expiry that is no RFC 3339 instant with an offset, or one not in the future; a role not defined by the instance, in its exact letter case; and the administrator role, `admin`."
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
-					},
-					"2XX": {
-						"description": "The grant is changed."
 					}
 				},
 				"security": [
@@ -3769,7 +4237,7 @@
 		},
 		"/admin/me/grants": {
 			"get": {
-				"description": "Lists the principal's own grants, a page at a time, pending ones included and revoked ones left out. Each carries the capabilities it would let them use, and names its granter by name. Any signed-in principal lists their own; one holding nothing receives an empty list.",
+				"description": "Lists the principal's own grants, a page at a time, in the order of their ids: pending, declined and expired ones included, revoked ones left out, and an expired grant on a retired resource left out too. Each carries the capabilities its role confers now, each with its display name and description, and names its granter, and any revoker, by name alone. Any signed-in principal lists their own; one holding nothing receives an empty page.",
 				"operationId": "listOwnGrants",
 				"parameters": [
 					{
@@ -3823,7 +4291,7 @@
 								}
 							}
 						},
-						"description": "The page size is zero or below it."
+						"description": "`pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"content": {
@@ -3850,7 +4318,7 @@
 								}
 							}
 						},
-						"description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a granter. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`directoryUnavailable`: a configured directory that cannot answer, for a page that would name a granter or show an address. With no directory configured, the listing still answers, naming each granter `a data steward` and showing no address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -4063,6 +4531,7 @@
 											"properties": {
 												"code": {
 													"enum": [
+														"directoryNotConfigured",
 														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"importNotConfigured",
@@ -4078,7 +4547,7 @@
 								}
 							}
 						},
-						"description": "`importNotConfigured`: a setting read by the import from the instance's configuration is missing, checked before the export is read. `directoryUnavailable`: the directory cannot answer a lookup during the run. `storeUnavailable`: the store cannot complete the run, and nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `importNotConfigured`: a setting read by the import from the instance's configuration is missing, checked before the export is read. `directoryUnavailable`: the directory cannot answer a lookup during the run. `storeUnavailable`: the store cannot complete the run, and nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -4331,7 +4800,7 @@
 		},
 		"/admin/people/grants": {
 			"post": {
-				"description": "Lists, a page at a time, the grants of the principal holding an address. The principal is found by exact address in any letter case, the address in the body.\n\nA platform administrator receives every grant across resources, and a resource's owner the grants on resources they own. Revoked grants are listed only to an administrator asking with `includeRevoked=true`.\n\nTo a platform administrator, an address held by no single account is refused with `holderNotFound`. To an owner, it is answered as an account holding nothing on their resources.",
+				"description": "Lists, a page at a time, the grants of the principal holding an address. The principal is found by exact address in any letter case, the address in the body.\n\nA platform administrator receives every grant across resources, and a resource's owner the grants on resources they own, each granter by subject to an administrator and by name to an owner. Anyone else, owning no resource, receives an empty page whatever the address, and nothing is looked up. Revoked grants are listed only to an administrator asking with `includeRevoked=true`, and a grant on a retired resource only once revoked.\n\nTo a platform administrator, an address held by no single account is refused with `holderNotFound`. To an owner, it is answered as an account holding nothing on their resources.",
 				"operationId": "listPersonGrants",
 				"parameters": [
 					{
@@ -4408,7 +4877,7 @@
 								}
 							}
 						},
-						"description": "To a platform administrator, no single account holds the address; `holderNotFound`."
+						"description": "To a platform administrator, no single account holds the address verified, a partial address or one holding a wildcard among them; `holderNotFound`."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -4424,7 +4893,7 @@
 								}
 							}
 						},
-						"description": "The address is not in the form of an address, or the page size is zero or below it."
+						"description": "`addressForm`: the address is not in the form of an address. `pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"content": {
@@ -4438,6 +4907,7 @@
 											"properties": {
 												"code": {
 													"enum": [
+														"directoryNotConfigured",
 														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"signingKeyUnconfirmed",
@@ -4451,7 +4921,7 @@
 								}
 							}
 						},
-						"description": "`directoryUnavailable`: the directory cannot answer. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: the directory cannot answer, for an address that cannot be resolved, or for a page that would show a name or an address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -4754,7 +5224,7 @@
 		},
 		"/admin/resources": {
 			"get": {
-				"description": "Lists the resources the principal may see, a page at a time, in a stable order: every resource to a platform administrator, and the resources they own to anyone else.\n\nA retired resource is listed, marked `retired`, only to an administrator asking with `includeRetired=true`.",
+				"description": "Lists the resources the principal may see, a page at a time, in a stable order: every resource to a platform administrator, and to anyone else the resources they own, by an owner grant that is live and that they accepted. A principal owning none receives an empty page. An administrator's entries carry each resource's grants, revoked ones left out, each holder with the address the directory holds; an owner's entries carry the grant summary and no grants.\n\nA retired resource is listed, marked `retired`, only to an administrator asking with `includeRetired=true`.",
 				"operationId": "listResources",
 				"parameters": [
 					{
@@ -4808,7 +5278,7 @@
 								}
 							}
 						},
-						"description": "The page size is zero or below it."
+						"description": "`pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"content": {
@@ -4835,7 +5305,7 @@
 								}
 							}
 						},
-						"description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a holder by address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`directoryUnavailable`: a configured directory that cannot answer, for an administrator's page whose resources hold a grant; an owner's listing names nobody and never asks it. With no directory configured, the listing still answers, showing no address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -4862,7 +5332,7 @@
 				"tags": ["Resources"]
 			},
 			"post": {
-				"description": "Registers a resource under its externalId, for platform administrators.\n\n`applications` names every application serving the resource from registration on, and each must be registered. `owners` names its first owners, each one person by subject or by address, as a grant's holder is named, and each person once. Each is written as an owner grant on the whole resource, with no expiry, in the registration's transaction: a holder the controller has never met is recorded with it, and its acceptance is recorded with it when the instance accepts grants at creation. A platform administrator never names themself. Each value in `fields` names a resource field defined by the instance.\n\nAn externalId is in Unicode normalization form C, and from 1 to 128 characters long. It starts with a letter or a digit and holds letters, digits, dots, underscores and hyphens, or the wider set configured for the instance, never a filter marker, and is never `__proto__`. One externalId names one resource in any letter case, a retired resource included.",
+				"description": "Registers a resource under its externalId, for platform administrators.\n\n`applications` names every application serving the resource from registration on, and each must be registered. `owners` names its first owners, each one person by subject or by address, as a grant's holder is named, and each person once. Each address is resolved through the directory, in the order named, before anything is written: an address held by no single account is refused with `404` `holderNotFound`, one resolving to the registering administrator with `403` `administratorSelfOwnership`, and one person named twice once the addresses are resolved, by a subject and an address or by two addresses, with `422`. Each is written as an owner grant on the whole resource, with no expiry, in the registration's transaction: a holder the controller has never met is recorded with it, and its acceptance is recorded with it when the instance accepts grants at creation. A platform administrator never names themself. Each value in `fields` names a resource field defined by the instance.\n\nAn externalId is in Unicode normalization form C, and from 1 to 128 characters long. It starts with a letter or a digit and holds letters, digits, dots, underscores and hyphens, or the wider set configured for the instance, never a filter marker, and is never `__proto__`. One externalId names one resource in any letter case, a retired resource included.",
 				"operationId": "registerResource",
 				"requestBody": {
 					"content": {
@@ -4907,7 +5377,29 @@
 								}
 							}
 						},
-						"description": "`administratorOnly`: the principal is no platform administrator. `administratorSelfOwnership`: the administrator names themself an owner. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`administratorOnly`: the principal is no platform administrator. `administratorSelfOwnership`: the administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["holderNotFound"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`holderNotFound`: no single account holds an owner's address verified, whether no account holds it, the account holding it has not verified it, or several accounts hold it; nothing is written."
 					},
 					"409": {
 						"content": {
@@ -4945,7 +5437,7 @@
 								}
 							}
 						},
-						"description": "A rule is broken. `unknownApplication` names an application that is not registered, refusing the whole registration. The rest carry unnamed codes: an externalId breaking a rule of its form, NFC included; a display name that is blank or longer than 256 characters; a description longer than 4096 characters; an access level left out, or other than `open`, `registered` and `grant`; a value for a field not defined by the instance; an owner naming other than exactly one person, or an address not in the form of an address; and one person named twice among the owners, by one subject or by one address in any letter case."
+						"description": "A rule is broken. `unknownApplication` names an application that is not registered, refusing the whole registration. The rest carry unnamed codes: an externalId breaking a rule of its form, NFC included; a display name that is blank or longer than 256 characters; a description longer than 4096 characters; an access level left out, or other than `open`, `registered` and `grant`; a value for a field not defined by the instance; an owner naming other than exactly one person, or an address not in the form of an address; and one person named twice among the owners, by one subject, by one address in any letter case, or, once the addresses are resolved, by a subject and an address or by two addresses held by one account."
 					},
 					"503": {
 						"content": {
@@ -4959,6 +5451,7 @@
 											"properties": {
 												"code": {
 													"enum": [
+														"directoryNotConfigured",
 														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"outcomeUnknown",
@@ -4973,7 +5466,7 @@
 								}
 							}
 						},
-						"description": "`directoryUnavailable`: an owner named by address while the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: an owner named by address while no directory answers. The answer's `detail` tells two cases apart: no directory is configured, so the instance resolves no addresses and no retry succeeds while its configuration stands; or the configured directory cannot answer now, and a later try may succeed. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -5172,7 +5665,6 @@
 											"properties": {
 												"code": {
 													"enum": [
-														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"signingKeyUnconfirmed",
 														"storeUnavailable"
@@ -5185,7 +5677,7 @@
 								}
 							}
 						},
-						"description": "`directoryUnavailable`: the directory cannot answer, for a resource whose answer names a holder by address. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -5483,7 +5975,7 @@
 		},
 		"/admin/resources/{externalId}/grants": {
 			"get": {
-				"description": "Lists every grant on a resource, a page at a time, with its holder, category, role, expiry and state, to platform administrators and the resource's owners. A platform administrator receives each granter by subject, and an owner by name.\n\nRevoked grants are listed only to an administrator asking with `includeRevoked=true`.",
+				"description": "Lists every grant on a resource, a page at a time, with its holder, category, role, expiry and state, to platform administrators and the resource's owners. A platform administrator receives each granter by subject, and an owner by name.\n\nThe externalId is matched exactly, and a retired resource is seen by platform administrators alone. Expired, pending and declined grants are listed; a grant's `state` comes from its revocation, then its expiry, then its holder's latest decision, which `decision` shows as recorded, `null` while there is none. A grant its holder granted themself, or asked for, is marked `selfGrant`. Each holder carries the address the directory holds. Invitations are not grants, and are not listed. Revoked grants are listed only to an administrator asking with `includeRevoked=true`.",
 				"operationId": "listResourceGrants",
 				"parameters": [
 					{
@@ -5563,7 +6055,7 @@
 								}
 							}
 						},
-						"description": "The page size is zero or below it."
+						"description": "`pageSizeTooSmall`: the page size is zero or below it."
 					},
 					"503": {
 						"content": {
@@ -5590,7 +6082,7 @@
 								}
 							}
 						},
-						"description": "`directoryUnavailable`: the directory cannot answer, for a listing naming a holder by address or a granter by name. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
+						"description": "`directoryUnavailable`: a configured directory that cannot answer, for a page that would show a name or an address. With no directory configured, the listing still answers, showing no address and naming each granter `a data steward` to an owner. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed. `storeUnavailable`: the policy store cannot be read.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
@@ -5935,7 +6427,7 @@
 		},
 		"/admin/resources/{externalId}/submitters/removal": {
 			"post": {
-				"description": "Removes a submitter from a study by address, the address in the body, by revoking their `submitter` grant on it. Platform administrators and the study's owners remove submitters. A principal holding no submitter grant on the study is refused with `doesNotHold`.",
+				"description": "Removes a submitter from a study by address, the address in the body, by revoking every live `submitter` grant the account holding it holds on the study, in any category; a grant of any other role is left as it is. Platform administrators and the study's counted owners remove submitters. Each revocation is recorded as a `grant.revocation` with reason `unspecified`, the principal removing the submitter its revoker.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the address's form, `422`; whether the principal may see the study, `404`, and holds authority on its submitters, `403`, answered alike whatever the address; then the address is resolved through the directory, as `createGrant` resolves a holder's. An address held by no single account is refused with `404` `holderNotFound` to a platform administrator, and with `409` `doesNotHold` to a counted owner, exactly as an account holding no live submitter grant on the study is, so an owner cannot tell whether an account holds the address.",
 				"operationId": "removeSubmitter",
 				"parameters": [
 					{
@@ -5954,6 +6446,9 @@
 					"required": true
 				},
 				"responses": {
+					"204": {
+						"description": "The submitter is removed. The answer carries no body."
+					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
 					},
@@ -6006,7 +6501,7 @@
 								}
 							}
 						},
-						"description": "`resourceNotFound`: no resource holds the externalId, or the principal may not see the one that does. `holderNotFound`, to a platform administrator: no single account holds the address."
+						"description": "`resourceNotFound`: no resource holds the externalId, or the principal may not see the one that does. `holderNotFound`, to a platform administrator: no single account holds the address verified."
 					},
 					"409": {
 						"content": {
@@ -6028,7 +6523,7 @@
 								}
 							}
 						},
-						"description": "The account holds no submitter grant on the study; `doesNotHold`."
+						"description": "`doesNotHold`: the account holding the address holds no live submitter grant on the study; or, to a counted owner, no single account holds the address, answered alike."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -6044,7 +6539,7 @@
 								}
 							}
 						},
-						"description": "The address is not in the form of an address."
+						"description": "`addressForm`: the address is not in the form of an address: text before and after a single `@`, holding no whitespace, comma or control character. It is judged before anything is read."
 					},
 					"503": {
 						"content": {
@@ -6058,6 +6553,7 @@
 											"properties": {
 												"code": {
 													"enum": [
+														"directoryNotConfigured",
 														"directoryUnavailable",
 														"identityProviderUnavailable",
 														"outcomeUnknown",
@@ -6072,15 +6568,12 @@
 								}
 							}
 						},
-						"description": "`directoryUnavailable`: the directory cannot answer. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
+						"description": "`directoryNotConfigured`: no directory is configured, so an address cannot be resolved; no `Retry-After`, since no retry changes it. `directoryUnavailable`: no directory answers. The answer's `detail` tells two cases apart: no directory is configured, so the instance resolves no addresses and no retry succeeds while its configuration stands; or the configured directory cannot answer now, and a later try may succeed. `storeUnavailable`: the policy store cannot take the operation now, because it cannot be reached or the instance's database role may only read; nothing of it is written. `outcomeUnknown`: the store did not confirm whether the change was made; read what it changes before trying again. `identityProviderUnavailable`: the identity provider's signing keys cannot be fetched to verify the access token, or the token's signing key is not among those held while the latest fetch of them has failed. `signingKeyUnconfirmed`: the access token's signing key is not among those held, and the keys were fetched too recently to fetch them again; try again once the seconds in `Retry-After` have passed.",
 						"headers": {
 							"Retry-After": {
 								"$ref": "#/components/headers/RetryAfter"
 							}
 						}
-					},
-					"2XX": {
-						"description": "The submitter is removed."
 					}
 				},
 				"security": [
@@ -7344,7 +7837,7 @@
 			"name": "Resource fields"
 		},
 		{
-			"description": "Grants, self-grants, revocations and decisions.",
+			"description": "Grants, self-grants and the requests for them, revocations and decisions.",
 			"name": "Grants"
 		},
 		{

@@ -122,22 +122,27 @@ const migrationOrder = async (context: TestContext): Promise<readonly string[]> 
 	return (await appliedMigrations(owner)).map(({ name }) => name);
 };
 
-// The earliest migration after which every given table exists, found by migrating an empty
-// database to each migration in turn, so a test of an upgrade starts as early as it can.
+// The earliest migration after which every given table exists, found by migrating one empty database
+// forward through the order and stopping at the first migration that holds them all, so a test of an
+// upgrade starts as early as it can.
 const earliestMigrationHolding = async (
 	context: TestContext,
 	order: readonly string[],
 	tables: readonly NamedTable[],
 ): Promise<string> => {
-	const holding = await inTurn(order, async (target) => {
-		const database = await openEmptyDatabase(context);
+	const database = await openEmptyDatabase(context);
+	const owner = await database.connect('migration');
+	const holdingFrom = async (remaining: readonly string[]): Promise<string | undefined> => {
+		const [target, ...later] = remaining;
+		if (target === undefined) {
+			return undefined;
+		}
 		await migrateDatabaseInProcess(database, { target });
-		const owner = await database.connect('migration');
 		const present = await inTurn(tables, (table) => tableExists(owner, table));
-		await owner.end();
-		return present.every(Boolean) ? [target] : [];
-	});
-	const [earliest] = holding.flat();
+		return present.every(Boolean) ? target : holdingFrom(later);
+	};
+	const earliest = await holdingFrom(order);
+	await owner.end();
 	if (earliest !== undefined) {
 		return earliest;
 	}
@@ -154,6 +159,22 @@ const relationsBeside = async (client: pg.ClientBase, kept: readonly string[]): 
 	)
 		.map(({ name }) => name)
 		.filter((name) => !kept.includes(name) && !name.startsWith(schemaMigrations.name));
+
+// The relations the schema holds after each migration in the order, read from one database migrated
+// forward through the order: each state is the one a fresh build to that migration reaches.
+const relationsAfterEach = async (
+	context: TestContext,
+	order: readonly string[],
+): Promise<readonly (readonly string[])[]> => {
+	const database = await openEmptyDatabase(context);
+	const owner = await database.connect('migration');
+	const built = await inTurn(order, async (target) => {
+		await migrateDatabaseInProcess(database, { target });
+		return relationsBeside(owner, []);
+	});
+	await owner.end();
+	return built;
+};
 
 const auditTrail = async (client: pg.ClientBase): Promise<readonly string[]> =>
 	[
@@ -338,7 +359,7 @@ suite('migrations', () => {
 		);
 		const revoked = await runtimeReadsRecord(owner);
 
-		await migrateDatabase(database);
+		await migrateDatabaseInProcess(database);
 
 		assert.deepEqual([revoked, await runtimeReadsRecord(owner)], [false, true]);
 	});
@@ -348,17 +369,7 @@ suite('migrations', () => {
 		const referenceOwner = await reference.connect('migration');
 		const clean = await catalogueSnapshot(referenceOwner);
 		const order = (await appliedMigrations(referenceOwner)).map(({ name }) => name);
-		const builtThrough: readonly (readonly string[])[] = [
-			[],
-			...(await inTurn(order, async (target) => {
-				const partial = await openEmptyDatabase(context);
-				await migrateDatabaseInProcess(partial, { target });
-				const partialOwner = await partial.connect('migration');
-				const built = await relationsBeside(partialOwner, []);
-				await partialOwner.end();
-				return built;
-			})),
-		];
+		const builtThrough: readonly (readonly string[])[] = [[], ...(await relationsAfterEach(context, order))];
 
 		const outcomes = await inTurn(DESIGNED_TABLES, async (table) => {
 			const database = await openEmptyDatabase(context);
@@ -366,13 +377,13 @@ suite('migrations', () => {
 			await owner.query(`CREATE SCHEMA ${SCHEMA}`);
 			await owner.query(`CREATE TABLE ${qualified(table)} (conflicting integer)`);
 
-			const failed = !(await succeeded(migrateDatabase(database)));
+			const failed = !(await succeeded(migrateDatabaseInProcess(database)));
 			const applied = (await appliedMigrations(owner)).map(({ name }) => name);
 			const halfBuilt = await relationsBeside(owner, [table.name, ...(builtThrough[applied.length] ?? [])]);
 			await owner.query(
 				applied.length === 0 ? `DROP SCHEMA ${SCHEMA} CASCADE` : `DROP TABLE ${qualified(table)}`,
 			);
-			const retried = await succeeded(migrateDatabase(database));
+			const retried = await succeeded(migrateDatabaseInProcess(database));
 			const rebuilt = await catalogueSnapshot(owner);
 			await owner.end();
 			return {
@@ -447,7 +458,7 @@ suite('migrations', () => {
 
 	test('leaves every object owned by the schema migration role', async (context) => {
 		const database = await openEmptyDatabase(context);
-		await migrateDatabase(database);
+		await migrateDatabaseInProcess(database);
 		const owner = await database.connect('migration');
 
 		const owned = await selectRows<{ object: string; owner: string }>(
@@ -543,8 +554,11 @@ suite('migrations', () => {
 		const [earliest] = (await appliedMigrations(owner)).map(({ name }) => name);
 		const before = await storeState(owner);
 
-		await succeeded(migrateDatabaseInProcess(database, earliest === undefined ? {} : { target: earliest }));
+		const ran = await succeeded(
+			migrateDatabaseInProcess(database, earliest === undefined ? {} : { target: earliest }),
+		);
 
+		assert.equal(ran, true);
 		assert.notEqual(earliest, undefined);
 		assert.deepEqual(await storeState(owner), before);
 	});
@@ -634,8 +648,7 @@ suite('migrations', () => {
 
 suite('a freshly migrated store', () => {
 	test('starts the notice stream with one row, an epoch and nothing trimmed', async (context) => {
-		const database = await openEmptyDatabase(context);
-		await migrateDatabase(database);
+		const database = await openDatabase(context);
 		const owner = await database.connect('migration');
 
 		const stream = await noticeStreamRows(owner);
@@ -647,8 +660,7 @@ suite('a freshly migrated store', () => {
 	});
 
 	test('holds the global category unmarked from the start', async (context) => {
-		const database = await openEmptyDatabase(context);
-		await migrateDatabase(database);
+		const database = await openDatabase(context);
 		const owner = await database.connect('migration');
 
 		const held = await selectRows<{ name: string; scope: string }>(
@@ -660,8 +672,7 @@ suite('a freshly migrated store', () => {
 	});
 
 	test('holds the retention floor the settings a first run seeds give', async (context) => {
-		const database = await openEmptyDatabase(context);
-		await migrateDatabase(database);
+		const database = await openDatabase(context);
 		const owner = await database.connect('migration');
 
 		const floors = await selectRows<{ floorSeconds: number }>(

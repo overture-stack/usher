@@ -1834,6 +1834,132 @@ suite('createBridgeCoreWithSeams', () => {
 			await harness.core.stop();
 		});
 
+		test('exchanges once more when the token it just obtained reads expired, and serves the request on the second token', async () => {
+			const harness = await running();
+			const credential = signInToken({ sub: 'subject-ana' });
+			let exchangesMade = 0;
+			harness.answers.set(credential, () => {
+				exchangesMade += 1;
+				return Promise.resolve({
+					kind: 'token',
+					token: exchangesMade === 1 ? 'token:stale' : 'token:fresh',
+				});
+			});
+			harness.readings.set('token:stale', { kind: 'rejected', reason: 'expired' });
+			harness.readings.set('token:fresh', { kind: 'payload', payload: signedIn('05', 'subject-ana') });
+
+			const outcome = await harness.core.resolve(credential);
+			const next = await harness.core.resolve(credential);
+
+			assert.deepEqual(
+				[outcome, next].map(({ kind }) => kind),
+				['access', 'access'],
+			);
+			assert.equal(subjectInForce((await accessOf(harness.core, credential)).principal), 'subject-ana');
+			assert.equal(exchangesOf(harness, credential), 2);
+			assert.deepEqual(
+				harness.events('token.rejection').map(({ data }) => data['reason']),
+				['expired'],
+			);
+			await harness.core.stop();
+		});
+
+		test('holds a rejection after two expired tokens in a row, with exactly two exchanges, as it does for any rejection', async () => {
+			const harness = await running();
+			const credential = signInToken({ sub: 'subject-ana' });
+			let exchangesMade = 0;
+			harness.answers.set(credential, () => {
+				exchangesMade += 1;
+				return Promise.resolve({
+					kind: 'token',
+					token: exchangesMade === 1 ? 'token:stale' : 'token:staler',
+				});
+			});
+			harness.readings.set('token:stale', { kind: 'rejected', reason: 'expired' });
+			harness.readings.set('token:staler', { kind: 'rejected', reason: 'expired' });
+
+			const first = await harness.core.resolve(credential);
+			const held = await harness.core.resolve(credential);
+
+			assert.deepEqual([first, held], [{ kind: 'unavailable' }, { kind: 'unavailable' }]);
+			assert.equal(exchangesOf(harness, credential), 2);
+			assert.deepEqual(
+				harness.events('token.rejection').map(({ data }) => data['reason']),
+				['expired', 'expired'],
+			);
+			await harness.core.stop();
+		});
+
+		test('exchanges the anonymous payload once more when the one it just obtained reads expired, and keeps the second', async () => {
+			const harness = await running();
+			const exchangesBefore = harness.exchanges.filter((sent) => sent === null).length;
+			let anonymousExchanges = 0;
+			harness.answers.set(null, () => {
+				anonymousExchanges += 1;
+				return Promise.resolve({
+					kind: 'token',
+					token: anonymousExchanges === 1 ? 'token:anonymous-stale' : 'token:anonymous',
+				});
+			});
+			harness.readings.set('token:anonymous-stale', { kind: 'rejected', reason: 'expired' });
+
+			const fetched = await harness.core.refreshAnonymous();
+
+			assert.equal(fetched, true);
+			assert.equal(harness.exchanges.filter((sent) => sent === null).length - exchangesBefore, 2);
+			assert.equal(harness.core.mode(), 'normal');
+			assert.deepEqual(
+				harness.events('token.rejection').map(({ data }) => data['reason']),
+				['expired'],
+			);
+			await harness.core.stop();
+		});
+
+		test('fetches the anonymous payload no more than twice when both tokens read expired', async () => {
+			const harness = await running();
+			const exchangesBefore = harness.exchanges.filter((sent) => sent === null).length;
+			let anonymousExchanges = 0;
+			harness.answers.set(null, () => {
+				anonymousExchanges += 1;
+				return Promise.resolve({
+					kind: 'token',
+					token: anonymousExchanges === 1 ? 'token:anonymous-stale' : 'token:anonymous-staler',
+				});
+			});
+			harness.readings.set('token:anonymous-stale', { kind: 'rejected', reason: 'expired' });
+			harness.readings.set('token:anonymous-staler', { kind: 'rejected', reason: 'expired' });
+
+			const fetched = await harness.core.refreshAnonymous();
+
+			assert.equal(fetched, false);
+			assert.equal(harness.exchanges.filter((sent) => sent === null).length - exchangesBefore, 2);
+			assert.deepEqual(
+				harness.events('token.rejection').map(({ data }) => data['reason']),
+				['expired', 'expired'],
+			);
+			await harness.core.stop();
+		});
+
+		for (const reason of ['audienceRejected', 'payloadMalformed'] as const) {
+			test(`holds a ${reason} rejection at once, with one exchange, and does not exchange again on expiry grounds`, async () => {
+				const harness = await running();
+				const credential = signInToken({ sub: 'subject-ana' });
+				harness.answers.set(credential, { kind: 'token', token: 'token:rejected' });
+				harness.readings.set('token:rejected', { kind: 'rejected', reason });
+
+				const first = await harness.core.resolve(credential);
+				const held = await harness.core.resolve(credential);
+
+				assert.deepEqual([first, held], [{ kind: 'unavailable' }, { kind: 'unavailable' }]);
+				assert.equal(exchangesOf(harness, credential), 1);
+				assert.deepEqual(
+					harness.events('token.rejection').map(({ data }) => data['reason']),
+					[reason],
+				);
+				await harness.core.stop();
+			});
+		}
+
 		test('rejects an Usher token with a null subject answering an exchange that carried a credential', async () => {
 			const harness = await running();
 			const credential = 'uak_3f9d2c7b1e8a4f6d';

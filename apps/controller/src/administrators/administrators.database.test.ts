@@ -51,6 +51,8 @@ const { administrators, grants, nominations } = POLICY_TABLES;
 // Controller registering no application, which only an administrator may; Bo and Cy have met Usher.
 const BEFORE_THE_FIRST: HarnessOptions = {
 	applications: [],
+	// Longer than the nominations hold each test here takes: a request waiting on it succeeds.
+	configuration: { storeTimeoutMilliseconds: 15_000 },
 	fixture: {
 		users: {
 			bo: { subject: PEOPLE.bo.subject },

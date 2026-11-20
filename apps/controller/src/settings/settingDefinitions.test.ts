@@ -9,6 +9,7 @@ const ALL_NAMES: readonly SettingName[] = [
 	'eventSource',
 	'firstUser',
 	'grantAutoAccept',
+	'grantRateThreshold',
 	'grantRules',
 	'heartbeatMilliseconds',
 	'issuer',
@@ -16,6 +17,7 @@ const ALL_NAMES: readonly SettingName[] = [
 	'noticeRereadMilliseconds',
 	'retentionGraceSeconds',
 	'retentionMarginSeconds',
+	'selfGrantMaximumLifetimeSeconds',
 	'signInTokenMaximumLifetimeSeconds',
 	'streamLimitPerAudience',
 	'streamMaximumLifetimeSeconds',
@@ -32,12 +34,14 @@ const CRITICAL: readonly SettingName[] = [
 	'grantRules',
 	'retentionGraceSeconds',
 	'retentionMarginSeconds',
+	'selfGrantMaximumLifetimeSeconds',
 	'signInTokenMaximumLifetimeSeconds',
 	'submitterCategory',
 	'tokenLifetimeSeconds',
 ];
 
 const WARNING: readonly SettingName[] = [
+	'grantRateThreshold',
 	'heartbeatMilliseconds',
 	'noticePageLimit',
 	'noticeRereadMilliseconds',

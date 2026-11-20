@@ -8,6 +8,8 @@ suite("the management API's module", () => {
 		assert.deepEqual(Object.keys(managementApi).toSorted(), [
 			'PROBLEMS',
 			'managementRoute',
+			'pageOf',
+			'readPageQuery',
 			'readTextMembers',
 			'refusalTallyEvent',
 			'unreadableBody',

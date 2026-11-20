@@ -5,6 +5,17 @@ import { validateRegistration } from '@overture-stack/usher-types';
 
 import * as bridge from './index.js';
 import type { KeyRegistration, OpenKeyRegistration, RecordKeyRegistration } from './index.js';
+import * as testing from './testing.js';
+
+suite('the testing subpath', () => {
+	test('exports exactly three functions, each building an access outcome for a consumer', () => {
+		assert.deepEqual(Object.keys(testing).sort(), ['anonymousAccess', 'openTierAccess', 'signedInAccess']);
+		assert.deepEqual(
+			[testing.anonymousAccess, testing.openTierAccess, testing.signedInAccess].map((member) => typeof member),
+			['function', 'function', 'function'],
+		);
+	});
+});
 
 suite('the package root', () => {
 	test('exports the bridge, the Express layer and the credential reader as functions', () => {

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
 import type { ResourceStanding } from '../resourceStanding/index.js';
-import { grantAuthority } from './grantAuthority.js';
-import type { GrantAuthority, GrantAuthorityQuestion } from './types.js';
+import { administratorGrants, grantAuthority, selfGrantAuthority } from './grantAuthority.js';
+import type { GrantAuthority, GrantAuthorityQuestion, SelfGrantAuthority } from './types.js';
 
 const standing = (over: Partial<ResourceStanding> = {}): ResourceStanding => ({
 	accessLevel: 'grant',
@@ -21,6 +21,7 @@ const OWNER = standing({ countedOwner: true, holder: true });
 const asked = (over: Partial<GrantAuthorityQuestion>): GrantAuthorityQuestion => ({
 	administrator: false,
 	holderIsCaller: false,
+	orphaned: false,
 	role: 'viewer',
 	standing: OWNER,
 	...over,
@@ -28,14 +29,14 @@ const asked = (over: Partial<GrantAuthorityQuestion>): GrantAuthorityQuestion =>
 
 // What a decision comes to, as its kind, the code answered, and the reason its event records.
 const outcomeOf = (authority: GrantAuthority): readonly unknown[] =>
-	authority.kind === 'issue'
-		? ['issue']
-		: [
+	authority.kind === 'refuse'
+		? [
 				'refuse',
 				authority.problem.status,
 				authority.problem.code,
 				authority.recordedReason ?? authority.problem.code,
-			];
+			]
+		: [authority.kind];
 
 const decided = (over: Partial<GrantAuthorityQuestion>): readonly unknown[] => outcomeOf(grantAuthority(asked(over)));
 
@@ -72,6 +73,84 @@ suite("deciding a grant's authority", () => {
 				'administratorGrantsNoConsumerAccess',
 			]),
 		);
+	});
+
+	test("takes a platform administrator's grant of any other role on a resource without a counted owner as a request someone else decides, on any resource they may see", () => {
+		const seen = [
+			standing(),
+			standing({ accessLevel: 'open' }),
+			standing({ holder: true }),
+			standing({ suppressed: true }),
+		];
+
+		const asked = ['viewer', 'editor', 'curator'].flatMap((role) =>
+			seen.map((standingSeen) =>
+				decided({
+					administrator: true,
+					orphaned: true,
+					role,
+					standing: standingSeen,
+				}),
+			),
+		);
+
+		assert.deepEqual(
+			asked,
+			asked.map(() => ['request']),
+		);
+	});
+
+	test("refuses a platform administrator's grant of any other role 403 administratorGrantsNoConsumerAccess on a resource that does not exist or is retired, however its owners are counted", () => {
+		const refused = [undefined, standing({ retired: true })].map((seen) =>
+			decided({ administrator: true, orphaned: true, standing: seen }),
+		);
+
+		assert.deepEqual(
+			refused,
+			refused.map(() => [
+				'refuse',
+				403,
+				'administratorGrantsNoConsumerAccess',
+				'administratorGrantsNoConsumerAccess',
+			]),
+		);
+	});
+
+	test("issues a platform administrator's submitter and owner grants on a resource without a counted owner, and refuses a principal naming themself there 422 selfNamed", () => {
+		assert.deepEqual(
+			[
+				decided({
+					administrator: true,
+					orphaned: true,
+					role: 'submitter',
+					standing: standing(),
+				}),
+				decided({
+					administrator: true,
+					orphaned: true,
+					role: 'owner',
+					standing: standing(),
+				}),
+				decided({
+					administrator: true,
+					holderIsCaller: true,
+					orphaned: true,
+					standing: standing(),
+				}),
+			],
+			[['issue'], ['issue'], ['refuse', 422, 'selfNamed', 'selfNamed']],
+		);
+	});
+
+	test('names the roles a platform administrator grants on any resource, owned or not: submitter and owner alone', () => {
+		assert.deepEqual(['submitter', 'owner', 'viewer', 'editor', 'curator', 'Owner'].map(administratorGrants), [
+			true,
+			true,
+			false,
+			false,
+			false,
+			false,
+		]);
 	});
 
 	test('refuses a platform administrator naming themself an owner 403 administratorSelfOwnership, ahead of every other rule', () => {
@@ -146,6 +225,73 @@ suite("deciding a grant's authority", () => {
 		assert.deepEqual(
 			seenWithoutAuthority.map((seen) => decided({ standing: seen })),
 			seenWithoutAuthority.map(() => ['refuse', 403, 'noAuthorityOnResource', 'noAuthorityOnResource']),
+		);
+	});
+});
+
+// What a self-grant's authority comes to, as its kind, the code answered, and the reason its event
+// records.
+const selfOutcomeOf = (authority: SelfGrantAuthority): readonly unknown[] =>
+	authority.kind === 'refuse'
+		? [
+				'refuse',
+				authority.problem.status,
+				authority.problem.code,
+				authority.recordedReason ?? authority.problem.code,
+			]
+		: [authority.kind];
+
+const selfDecided = (administrator: boolean, seen: ResourceStanding | undefined): readonly unknown[] =>
+	selfOutcomeOf(selfGrantAuthority({ administrator, standing: seen }));
+
+suite("deciding a self-grant's authority", () => {
+	test('issues a counted owner the grant on their own resource at once, a platform administrator among them', () => {
+		assert.deepEqual([selfDecided(false, OWNER), selfDecided(true, OWNER)], [['issue'], ['issue']]);
+	});
+
+	test('takes a platform administrator who does not own the resource as asking for the grant, on any resource they may see', () => {
+		const seen = [
+			standing(),
+			standing({ accessLevel: 'open' }),
+			standing({ holder: true }),
+			standing({ suppressed: true }),
+		];
+
+		assert.deepEqual(
+			seen.map((standingSeen) => selfDecided(true, standingSeen)),
+			seen.map(() => ['request']),
+		);
+	});
+
+	test('refuses a resource that does not exist, or a retired one, 404 resourceNotFound, to an administrator and an owner alike', () => {
+		assert.deepEqual(
+			[
+				selfDecided(true, undefined),
+				selfDecided(false, undefined),
+				selfDecided(true, standing({ retired: true })),
+				selfDecided(false, { ...OWNER, retired: true }),
+			],
+			[
+				['refuse', 404, 'resourceNotFound', 'resourceNotFound'],
+				['refuse', 404, 'resourceNotFound', 'resourceNotFound'],
+				['refuse', 404, 'resourceNotFound', 'resourceNotFound'],
+				['refuse', 404, 'resourceNotFound', 'resourceNotFound'],
+			],
+		);
+	});
+
+	test('refuses a principal who may not see the resource as for one that does not exist, recording a refusal of authority, and one who may see it and owns it not 403 noAuthorityOnResource', () => {
+		assert.deepEqual(
+			[
+				selfDecided(false, standing()),
+				selfDecided(false, standing({ holder: true })),
+				selfDecided(false, standing({ accessLevel: 'open' })),
+			],
+			[
+				['refuse', 404, 'resourceNotFound', 'noAuthorityOnResource'],
+				['refuse', 403, 'noAuthorityOnResource', 'noAuthorityOnResource'],
+				['refuse', 403, 'noAuthorityOnResource', 'noAuthorityOnResource'],
+			],
 		);
 	});
 });

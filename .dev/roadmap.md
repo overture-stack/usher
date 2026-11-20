@@ -134,7 +134,7 @@ not change; who decides does.
 Recorded previously as absent from the design with nothing addressing it. The flows put email on the
 critical path in four places: sharing with an existing user, sharing with an unregistered address,
 declining an invitation, and the registration invitation. Revocation and owner-removal notices are
-nice-to-have in both documents. A design omitting notification does not deliver these flows, so this
+nice-to-have in both documents. A notice telling a person their own grant lapsed is one more: a refusal cannot say so, by design, so only a notice can, sent by Usher rather than by the application. A design omitting notification does not deliver these flows, so this
 moves from unaddressed to specified-but-undesigned. Which component sends it is undesigned too, but
 it is not Keycloak, which holds no grants and knows nothing of an invitation's link.
 
@@ -528,7 +528,7 @@ Requirements that surfaced while earlier units were reviewed, held here so each 
 - **A contract test, once the exchange has landed.** Every `$ref` in `openapi.json` resolves, and every code an implemented route can answer appears among its responses, so the contract and the code cannot drift apart unnoticed.
 - **Back-channel logout.** The identity provider calls it, so it follows OIDC Back-Channel Logout: a failed logout answers `400`, carrying `storeUnavailable`, `outcomeUnknown` or `identityProviderUnavailable` in its problem body, and a token naming an audience outside the configured list is refused.
 - **`role.define`.** It refuses a role carrying any `custodianship.*` capability while the self-appointment hole stands, per [permissions-model.md](design/permissions-model.md).
-- **Valkey, optional, after alpha.1 (decided by the developer, 2026-11-18).** The Controller answers correctly without it, so a deployment from scratch needs none and one can add it when it wants the speed. Once added, it carries the shared payload cache and the wake-ups that tell every Controller instance of a new notice at once, rather than at its next reread of the store.
+- **Valkey, optional, after alpha.1 (decided by the developer, 2026-11-18).** The Controller answers correctly without it, so a deployment from scratch needs none and one can add it when it wants the speed. Once added, it carries the shared payload cache and the wake-ups that tell every Controller instance of a new notice at once, rather than at its next reread of the store. Its connection takes its password from a variable of its own, never from inside its URL, as the store's does from `USHER_DATABASE_PASSWORD`, and a URL carrying a password is refused.
 - **A computation cache, whichever unit builds it.** Its key carries the settings generation, or a digest of the grant rules and token lifetimes in force, so a cached computation never outlives a change to the rules it was computed under.
 - **Application keys.** The key ring's remaining work: waking through Valkey, the token key, and reload hooks precise to the change they follow. The channel's held refusal test for an application with no live key resumes there, since `noLiveKey` is now tallied.
 - **The log stream, in whichever unit next changes it.** It holds a bounded amount for a sink that falls behind, so a slow sink cannot grow the process's memory without limit. What the stream does at that bound is decided with the unit. If it refuses further lines, that counts as a failed write and takes liveness down.
@@ -549,7 +549,9 @@ Types and runtime validators shared by the Controller, the Bridge and adapters: 
 
 ### `@overture-stack/usher-bridge--express`
 
-Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/bridge--express`, with its core free of Express so a Bridge for another framework can reuse it. Built and tested on the Bridge's branch, awaiting review; unpublished.
+Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/bridge--express`, with its core free of Express so a Bridge for another framework can reuse it. Published as `0.0.0-alpha.1`.
+
+**A testing entry point, before Arranger's adapter merges (decided by the developer, 2026-11-20).** A consumer's tests mount the real Express layer over a stand-in core through `createUsherMiddleware(core: LayerCore)`, and reach the core's degraded states, `uncertain` and a failed exchange, only by copying what the core computes in them, since the real core reaches them only by failing against a Controller. The package gains a testing entry point that builds those outcomes with the core's own functions, so each consumer imports them and no copy drifts from the core. Arranger's adapter tests are its first consumer.
 
 ### First publish of the two packages
 
@@ -557,7 +559,7 @@ Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `
 
 - The first publish is `0.0.0-alpha.1` under the `rc` dist-tag, for the initial overture-dev deployment alone (developer, 2026-11-13).
 - The review of both packages and the publishing-integrity choice come when the packages move off beta into `0.0.1` proper, so betas publish before that review (developer, 2026-11-13).
-- Betas, `0.0.1-beta.N` under `next`, follow once that deployment is stable.
+- Betas, `0.0.1-beta.N` under `next`, follow once that deployment is stable. No further `0.0.0` prerelease is published: npm created a placeholder, `0.0.0-stage`, with each package's first publish, and it sorts above every `0.0.0-alpha`, so a caret range on one picks the placeholder. npm creates the same placeholder for every new package, so a package added later, such as a Bridge for another framework, publishes first at `0.0.1` or later. npm refuses its owners' deprecation of the placeholder; whether it can be removed later, or goes by itself, is open.
 - Dist-tags follow the branch: `next` from main, `rc` from `release-test`, `latest` from `release` (developer, 2026-11-13). The pipeline publishes from `release-test` and `release` today. Publishing from main under `next` needs the pipeline to publish there too, with a version scheme for main's builds, since main keeps `0.0.0-dev`.
 
 ### Licence for Usher's packages, with their v1 releases

@@ -4,6 +4,7 @@ export type SettingName =
 	| 'eventSource'
 	| 'firstUser'
 	| 'grantAutoAccept'
+	| 'grantRateThreshold'
 	| 'grantRules'
 	| 'heartbeatMilliseconds'
 	| 'issuer'
@@ -11,6 +12,7 @@ export type SettingName =
 	| 'noticeRereadMilliseconds'
 	| 'retentionGraceSeconds'
 	| 'retentionMarginSeconds'
+	| 'selfGrantMaximumLifetimeSeconds'
 	| 'signInTokenMaximumLifetimeSeconds'
 	| 'streamLimitPerAudience'
 	| 'streamMaximumLifetimeSeconds'
@@ -60,6 +62,15 @@ export type GrantRule = {
 	resources: readonly GrantRuleResource[];
 };
 
+/** When `grant.rateExceeded` fires: more than `operationCount` grant operations by one actor within `windowSeconds`. */
+export type GrantRateThreshold = {
+	/** The most grant operations one actor performs within the window without being reported. */
+	operationCount: number;
+
+	/** The window's length, in seconds, measured back from each operation. */
+	windowSeconds: number;
+};
+
 /** The grant rules an instance holds: a list of entries, each recipient named at most once. */
 export type GrantRules = readonly GrantRule[];
 
@@ -79,6 +90,9 @@ export interface Settings {
 
 	/** Whether a grant request is accepted without review. */
 	grantAutoAccept: boolean;
+
+	/** When `grant.rateExceeded` fires, the same on every instance sharing the store. */
+	grantRateThreshold: GrantRateThreshold;
 
 	/** The grant rules, held in the store and never read from the environment. */
 	grantRules: GrantRules;
@@ -100,6 +114,12 @@ export interface Settings {
 
 	/** The margin a notice is kept beyond the grace period, in seconds. */
 	retentionMarginSeconds: number;
+
+	/**
+	 * The longest a self-grant lives, in seconds, from the instant it is asked for; it bounds an owner extending or
+	 * widening a grant they hold too, measured from the change.
+	 */
+	selfGrantMaximumLifetimeSeconds: number;
 
 	/** The longest a sign-in token may live, in seconds. */
 	signInTokenMaximumLifetimeSeconds: number;

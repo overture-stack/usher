@@ -1,8 +1,15 @@
 import pg from 'pg';
 
+import { ControllerError } from '../failures/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
-import { countedOwnerCondition, readResourceStanding } from '../resourceStanding/index.js';
-import type { GrantStore, StoredDecision, StoredGrant, StoredRole } from './types.js';
+import { countedOwnerCondition, liveGrantCondition, readResourceStanding } from '../resourceStanding/index.js';
+import { viewedGrantColumns, viewedGrantOf, type ViewedGrantRow } from './grantColumns.js';
+import { requestColumns } from './grantRequestPage.js';
+import type { GrantStore, StoredGrant, StoredGrantRequest, StoredRole } from './types.js';
+
+const requestUnwritten = (): never => {
+	throw new ControllerError('the store wrote no grant request, and named none');
+};
 
 // A category as a payload names it: its scope, a dot, and a name holding no dot.
 const SCOPED_NAME = /^(?<scope>global|resource)\.(?<name>[^.]+)$/u;
@@ -12,9 +19,7 @@ interface IdRow {
 }
 
 // A grant's row as read, its latest answer as JSON, whose instant arrives as text.
-interface GrantRow extends Omit<StoredGrant, 'decision'> {
-	decision: (Omit<StoredDecision, 'decidedAt'> & { decidedAt: string }) | null;
-}
+type GrantRow = Omit<StoredGrant, 'decision'> & ViewedGrantRow;
 
 /**
  * The grant store over one transaction's connection, every statement binding its values and naming
@@ -29,11 +34,6 @@ export const sqlGrantStore = (
 	{ issuer, schema }: { issuer: string; schema: string },
 ): GrantStore => {
 	const table = (name: string): string => `${pg.escapeIdentifier(schema)}.${name}`;
-	// The subject naming the person a column holds, the trusted issuer's identity ($1) first.
-	const subjectOf = (column: string): string =>
-		`(SELECT identity.idp_subject_id FROM ${table('user_identities')} identity
-       WHERE identity.user_id = ${column}
-       ORDER BY identity.idp_issuer = $1 DESC, identity.added_at, identity.id LIMIT 1)`;
 	const idOf = async (text: string, values: readonly unknown[]): Promise<string | undefined> =>
 		(await connection.query<IdRow>(text, [...values])).rows[0]?.id;
 
@@ -52,6 +52,13 @@ export const sqlGrantStore = (
 			);
 			return rows[0]?.decidedAt ?? now;
 		},
+		changeGrant: async ({ expiresAt, grantId, roleId }) => {
+			await connection.query(`UPDATE ${table('grants')} SET expires_at = $2, role_id = $3 WHERE id = $1`, [
+				grantId,
+				expiresAt,
+				roleId,
+			]);
+		},
 		countedOwnersBesides: async ({ grantId, now, resourceId }) => {
 			const { rows } = await connection.query<{ count: number }>(
 				`SELECT count(*)::int AS count FROM ${table('grants')} owned
@@ -61,6 +68,16 @@ export const sqlGrantStore = (
 			);
 			return rows[0]?.count ?? 0;
 		},
+		countedOwnersOf: async ({ now, resourceId }) =>
+			(
+				await connection.query<IdRow>(
+					`SELECT DISTINCT owned.holder_user_id::text AS id FROM ${table('grants')} owned
+            WHERE owned.resource_id = $1
+              AND ${countedOwnerCondition(schema, 'owned', '$2::timestamptz')}
+            ORDER BY id`,
+					[resourceId, now],
+				)
+			).rows.map(({ id }) => id),
 		endExpiredGrant: async ({ holderUserId, recordCategoryId, resourceId, roleId }, now) =>
 			(
 				await connection.query(
@@ -112,15 +129,87 @@ export const sqlGrantStore = (
 					[name],
 				)
 			).rows[0],
-		insertGrant: ({ expiresAt, grantedAt, grantedBy, holderUserId, recordCategoryId, resourceId, roleId }) =>
+		holdsLiveGrant: async ({ holderUserId, recordCategoryId, resourceId, roleId }, now) =>
+			(
+				await connection.query(
+					`SELECT 1 FROM ${table('grants')} held
+            WHERE held.holder_user_id = $1 AND held.resource_id = $2
+              AND held.record_category_id IS NOT DISTINCT FROM $3 AND held.role_id = $4
+              AND ${liveGrantCondition('held', '$5::timestamptz')}`,
+					[holderUserId, resourceId, recordCategoryId, roleId, now],
+				)
+			).rowCount !== 0,
+		holdsPendingRequest: async ({ holderUserId, kind, now, recordCategoryId, requestedBy, resourceId, roleId }) =>
+			(
+				await connection.query(
+					`SELECT 1 FROM ${table('grant_requests')} asked
+            WHERE asked.requested_by = $1 AND asked.holder_user_id = $2
+              AND asked.kind = $3 AND asked.resource_id = $4
+              AND asked.record_category_id IS NOT DISTINCT FROM $5 AND asked.role_id = $6
+              AND asked.decision IS NULL AND asked.expires_at > $7`,
+					[requestedBy, holderUserId, kind, resourceId, recordCategoryId, roleId, now],
+				)
+			).rowCount !== 0,
+		insertGrant: ({
+			expiresAt,
+			grantedAt,
+			grantedBy,
+			holderUserId,
+			recordCategoryId,
+			requestedBy,
+			resourceId,
+			roleId,
+		}) =>
 			idOf(
 				`INSERT INTO ${table('grants')}
            (resource_id, record_category_id, holder_user_id, role_id, granted_by, granted_at,
-            expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+            expires_at, requested_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT DO NOTHING RETURNING id::text AS id`,
-				[resourceId, recordCategoryId, holderUserId, roleId, grantedBy, grantedAt, expiresAt],
+				[resourceId, recordCategoryId, holderUserId, roleId, grantedBy, grantedAt, expiresAt, requestedBy],
 			),
+		insertGrantRequest: async ({
+			capabilities,
+			expiresAt,
+			holderUserId,
+			kind,
+			recordCategoryId,
+			requestedAt,
+			requestedBy,
+			resourceId,
+			roleId,
+		}) => {
+			const id = await idOf(
+				`INSERT INTO ${table('grant_requests')}
+           (kind, requested_by, holder_user_id, resource_id, record_category_id, role_id,
+            expires_at, capabilities, requested_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9)
+         RETURNING id::text AS id`,
+				[
+					kind,
+					requestedBy,
+					holderUserId,
+					resourceId,
+					recordCategoryId,
+					roleId,
+					expiresAt,
+					[...capabilities],
+					requestedAt,
+				],
+			);
+			return id ?? requestUnwritten();
+		},
+		liveGrantIdsOf: async ({ holderUserId, now, resourceId, roleId }) =>
+			(
+				await connection.query<IdRow>(
+					`SELECT held.id::text AS id FROM ${table('grants')} held
+            WHERE held.holder_user_id = $1 AND held.resource_id = $2 AND held.role_id = $3
+              AND ${liveGrantCondition('held', '$4::timestamptz')}
+            ORDER BY held.granted_at, held.id
+              FOR UPDATE`,
+					[holderUserId, resourceId, roleId, now],
+				)
+			).rows.map(({ id }) => id),
 		locateGrant: async (grantId) =>
 			(
 				await connection.query<{ externalId: string; resourceId: string }>(
@@ -131,33 +220,29 @@ export const sqlGrantStore = (
 					[grantId],
 				)
 			).rows[0],
+		locateGrantRequest: async (requestId) =>
+			(
+				await connection.query<{ resourceId: string }>(
+					`SELECT resource_id::text AS "resourceId" FROM ${table('grant_requests')}
+            WHERE id = $1::uuid`,
+					[requestId],
+				)
+			).rows[0],
 		lockResource: async (resourceId) => {
 			await connection.query(`SELECT 1 FROM ${table('resources')} WHERE id = $1 FOR NO KEY UPDATE`, [resourceId]);
 		},
 		readGrant: async (grantId) => {
 			const { rows } = await connection.query<GrantRow>(
-				`SELECT CASE WHEN record.id IS NULL THEN NULL ELSE record.scope || '.' || record.name END
-                  AS category,
-                (SELECT json_build_object('capabilities', answer.capabilities,
-                                          'decidedAt', answer.decided_at,
-                                          'decision', answer.decision)
-                   FROM ${table('grant_decisions')} answer
-                  WHERE answer.grant_id = held.id AND answer.user_id = held.holder_user_id
-                  ORDER BY answer.decided_at DESC LIMIT 1) AS decision,
-                held.ended_at AS "endedAt",
-                held.expires_at AS "expiresAt",
-                held.granted_at AS "grantedAt",
-                ${subjectOf('held.granted_by')} AS "granterSubject",
-                ${subjectOf('held.holder_user_id')} AS "holderSubject",
+				`SELECT ${viewedGrantColumns(schema, '$1')},
                 held.holder_user_id::text AS "holderUserId",
-                held.id::text AS id,
-                resource.external_id AS resource,
                 resource.id::text AS "resourceId",
                 resource.retired_at IS NOT NULL AS "resourceRetired",
-                held.revoked_at AS "revokedAt",
-                ${subjectOf('held.revoked_by')} AS "revokerSubject",
-                role.name AS role,
-                held.granted_by = held.holder_user_id AS "selfGrant"
+                CASE WHEN held.requested_by = held.holder_user_id
+                     THEN coalesce((SELECT asked.requested_at FROM ${table('grant_requests')} asked
+                                     WHERE asked.grant_id = held.id),
+                                   held.granted_at)
+                     WHEN held.granted_by = held.holder_user_id THEN held.granted_at
+                END AS "selfGrantSince"
            FROM ${table('grants')} held
            JOIN ${table('resources')} resource ON resource.id = held.resource_id
            JOIN ${table('roles')} role ON role.id = held.role_id
@@ -167,19 +252,28 @@ export const sqlGrantStore = (
 				[issuer, grantId],
 			);
 			const [row] = rows;
-			return row === undefined
-				? undefined
-				: {
-						...row,
-						decision:
-							row.decision === null
-								? null
-								: {
-										...row.decision,
-										decidedAt: new Date(row.decision.decidedAt),
-									},
-					};
+			return row === undefined ? undefined : viewedGrantOf(row);
 		},
+		readGrantRequest: async (requestId) =>
+			(
+				await connection.query<StoredGrantRequest>(
+					`SELECT ${requestColumns(schema, '$1')},
+                  request.capabilities,
+                  request.holder_user_id::text AS "holderUserId",
+                  request.record_category_id::text AS "recordCategoryId",
+                  request.requested_by::text AS "requestedBy",
+                  resource.id::text AS "resourceId",
+                  resource.retired_at IS NOT NULL AS "resourceRetired",
+                  role.id::text AS "roleId"
+             FROM ${table('grant_requests')} request
+             JOIN ${table('resources')} resource ON resource.id = request.resource_id
+             JOIN ${table('roles')} role ON role.id = request.role_id
+             LEFT JOIN ${table('categories')} record ON record.id = request.record_category_id
+            WHERE request.id = $2::uuid
+            FOR UPDATE OF request`,
+					[issuer, requestId],
+				)
+			).rows[0],
 		readStanding: ({ externalId, lock, now, subject }) =>
 			readResourceStanding(connection, schema, {
 				externalId,
@@ -188,11 +282,29 @@ export const sqlGrantStore = (
 				now,
 				subject,
 			}),
+		recordDecision: async ({ decidedAt, decidedBy, decision, grantId, requestId }) => {
+			await connection.query(
+				`UPDATE ${table('grant_requests')}
+            SET decided_at = $2, decided_by = $3, decision = $4, grant_id = $5
+          WHERE id = $1 AND decision IS NULL`,
+				[requestId, decidedAt, decidedBy, decision, grantId],
+			);
+		},
 		revokeGrant: async ({ grantId, now, revokedBy }) => {
 			await connection.query(
 				`UPDATE ${table('grants')} SET revoked_at = $2, revoked_by = $3
           WHERE id = $1 AND revoked_at IS NULL`,
 				[grantId, now, revokedBy],
+			);
+		},
+		writeNotifications: async ({ createdAt, kind, recipients, reference }) => {
+			await connection.query(
+				`INSERT INTO ${table('notification_outbox')}
+           (kind, grant_id, request_id, recipient_user_id, created_at)
+         SELECT $1, CASE WHEN $1 = 'selfGrant' THEN $2::uuid END,
+                CASE WHEN $1 = 'grantRequest' THEN $2::uuid END, recipient, $4
+           FROM unnest($3::uuid[]) AS recipient`,
+				[kind, reference, [...recipients], createdAt],
 			);
 		},
 	};

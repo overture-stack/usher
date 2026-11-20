@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { suite, test } from 'node:test';
 
+import type pg from 'pg';
+
 import { assertSucceeded, revokeApplicationKey } from '../../testing/harness/admin.js';
 import { auditRows } from '../../testing/harness/auditEvents.js';
-import { poll, pollAll } from '../../testing/harness/channel.js';
-import { freshAssertion } from '../../testing/harness/exchange.js';
+import { poll, pollAll, type RawStream } from '../../testing/harness/channel.js';
+import { exchange, freshAssertion } from '../../testing/harness/exchange.js';
 import {
 	administratorCaller,
 	AUDIENCES,
@@ -22,8 +24,16 @@ import {
 	trimNotices,
 	untilNoticesOlderThan,
 } from '../../testing/fixtures/channel.js';
-import { type Harness, retentionFloorSeconds } from '../../testing/harness/harness.js';
-import { holdRetentionSweep, insertNotices, noticePositions, simulateRestore } from '../../testing/harness/policy.js';
+import { type Harness, retentionFloorSeconds, startInstance } from '../../testing/harness/harness.js';
+import {
+	failNthInsert,
+	holdRetentionSweep,
+	insertNotices,
+	noticePositions,
+	POLICY_TABLES,
+	qualified,
+	simulateRestore,
+} from '../../testing/harness/policy.js';
 import { cleanupFor, eventually, nowSeconds } from '../../testing/harness/waiting.js';
 
 const { portal, search, submission } = AUDIENCES;
@@ -67,6 +77,21 @@ const writtenBaselines = async (
 		positions: (await noticePositions(harness.clients.migration)).slice(-count),
 	};
 };
+
+// The rows the record of used assertions holds, under the migration role.
+const usedAssertionRows = async (client: pg.ClientBase): Promise<number> => {
+	const { rows } = await client.query<{ held: number }>(
+		`SELECT count(*)::int AS held FROM ${qualified(POLICY_TABLES.usedChannelAssertions)}`,
+	);
+	return rows[0]?.held ?? 0;
+};
+
+// The refusals recorded as unrepresentableJti, read under the migration role.
+const unstorableRejections = async (harness: Harness): Promise<readonly unknown[]> =>
+	(await auditRows(harness.clients.migration)).filter(
+		({ type, data }) =>
+			type === 'bio.overture.channelAssertion.rejection' && reasonOf(data) === 'unrepresentableJti',
+	);
 
 const reasonOf = (data: unknown): string =>
 	typeof data === 'object' && data !== null && 'reason' in data ? String(data.reason) : '';
@@ -384,6 +409,110 @@ suite('the revocation channel, against the store', () => {
 				sourceIp: '127.0.0.1',
 			},
 		]);
+	});
+
+	test('refuses a second use of one assertion on the same instance, and on another instance sharing the store, which holds its one record', async (context) => {
+		const scope = cleanupFor(context);
+		const harness = await startChannelHarness(scope);
+		const beside = await startInstance(scope, harness);
+		const searchApplication = harness.application(search);
+		const cursors = await headCursors(harness);
+		const assertion = await freshAssertion(searchApplication);
+		const presented = (url: URL): Promise<RawStream> =>
+			rawStreamFrom(scope, url, {
+				application: searchApplication,
+				assertion,
+				lastEventId: cursors[search] ?? '',
+			});
+
+		const opened = await presented(harness.url);
+		const repeated = await presented(harness.url);
+		const elsewhere = await presented(beside.url);
+
+		assert.deepEqual([opened.status, repeated.status, elsewhere.status], [200, 401, 401]);
+		assert.equal(await usedAssertionRows(harness.clients.migration), 1);
+	});
+
+	test('refuses a stream whose assertion the store cannot record with 503 storeUnavailable, opening no stream and recording nothing, and serves the same assertion once the store takes its record', async (context) => {
+		const scope = cleanupFor(context);
+		const harness = await startChannelHarness(scope);
+		const searchApplication = harness.application(search);
+		const cursors = await headCursors(harness);
+		const assertion = await freshAssertion(searchApplication);
+		const presented = (): Promise<RawStream> =>
+			rawStreamFrom(scope, harness.url, {
+				application: searchApplication,
+				assertion,
+				lastEventId: cursors[search] ?? '',
+			});
+		const fault = await failNthInsert(scope, harness.clients.migration, POLICY_TABLES.usedChannelAssertions, 1);
+
+		const refused = await presented();
+		await refused.ended;
+		await fault.remove();
+		const rowsAfterRefusal = await usedAssertionRows(harness.clients.migration);
+		const served = await presented();
+
+		assert.equal(refused.status, 503);
+		assert.equal(JSON.parse(refused.text()).code, 'storeUnavailable');
+		assert.equal(rowsAfterRefusal, 0);
+		assert.equal(served.status, 200);
+		assert.equal(await usedAssertionRows(harness.clients.migration), 1);
+	});
+
+	test('refuses a validly signed assertion whose jti cannot be stored with the one 401 on the stream and on the exchange, recording it as unrepresentableJti, with no record written and no 503', async (context) => {
+		const scope = cleanupFor(context);
+		const harness = await startChannelHarness(scope);
+		const searchApplication = harness.application(search);
+		const cursors = await headCursors(harness);
+		const unstorable = await Promise.all(
+			['jti-with-a-\u0000-NUL', 'jti-with-an-\ud800-surrogate'].map((jti) =>
+				signedAssertion(searchApplication, { claims: { jti } }),
+			),
+		);
+
+		// The stream answers at once with its one refusal, and a refused stream never stays open, so no
+		// presentation here waits on a body that would not end.
+		const answers = await unstorable.reduce<Promise<readonly { code: unknown; status: number }[]>>(
+			async (earlier, assertion) => {
+				const stream = await rawStreamFrom(scope, harness.url, {
+					application: searchApplication,
+					assertion,
+					lastEventId: cursors[search] ?? '',
+				});
+				await Promise.race([
+					stream.ended,
+					new Promise<undefined>((resolve) => {
+						setTimeout(() => {
+							resolve(undefined);
+						}, WAIT_MS);
+					}),
+				]);
+				const streamed = { code: JSON.parse(stream.text()).code, status: stream.status };
+				const exchanged = await exchange(harness.url, { application: searchApplication, assertion });
+				return [
+					...(await earlier),
+					streamed,
+					{ code: JSON.parse(exchanged.body).code, status: exchanged.status },
+				];
+			},
+			Promise.resolve([]),
+		);
+		const recorded = await eventually(
+			async () => (await unstorableRejections(harness)).length === unstorable.length,
+			WAIT_MS,
+			50,
+		);
+
+		assert.deepEqual(
+			answers,
+			unstorable.flatMap(() => [
+				{ code: 'channelAssertionRefused', status: 401 },
+				{ code: 'channelAssertionRefused', status: 401 },
+			]),
+		);
+		assert.equal(recorded, true, 'the refusals were not recorded as unrepresentableJti');
+		assert.equal(await usedAssertionRows(harness.clients.migration), 0);
 	});
 
 	test('ends a stream opened under a key once that key is revoked', async (context) => {

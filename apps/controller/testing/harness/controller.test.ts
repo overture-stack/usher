@@ -73,7 +73,7 @@ const CONFIGURATION: ControllerConfiguration = {
 	port: 0,
 	retentionGraceSeconds: 60,
 	retentionMarginSeconds: 30,
-	selfGrantMaximumSeconds: 86_400,
+	selfGrantMaximumLifetimeSeconds: 86_400,
 	serviceAccountRole: 'usher-service-account',
 	signInTokenMaximumLifetimeSeconds: 3600,
 	signedInRule: ['count', 'view', 'export'],
@@ -98,6 +98,10 @@ const OTHER_VALUES: {
 	databasePassword: freshSecret(),
 	databaseSchema: 'usher_other',
 	databaseUrl: 'postgres://usher_controller@127.0.0.1:5433/usher_test',
+	directoryClientId: 'usher-directory-other',
+	directoryClientSecret: syntheticKey(7),
+	directoryRealm: 'overture',
+	directoryUrl: 'https://auth.example.org',
 	host: '::1',
 	identityProviderIssuer: 'https://auth.example.org/realms/usher',
 	instanceName: 'usher-test-2',
@@ -118,12 +122,14 @@ const STORED_VALUES: {
 	baseline: [],
 	eventSource: 'https://usher-two.example.org/controller',
 	firstUserRole: 'ims-usher-first-user',
+	grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
 	heartbeatMilliseconds: 500,
 	issuer: 'https://usher-two.example.org',
 	noticePageLimit: 20,
 	noticeRereadMilliseconds: 250,
 	retentionGraceSeconds: 90,
 	retentionMarginSeconds: 45,
+	selfGrantMaximumLifetimeSeconds: 14_400,
 	signInTokenMaximumLifetimeSeconds: 900,
 	signedInRule: ['view'],
 	streamLimitPerAudience: 2,
@@ -140,15 +146,9 @@ const PENDING_VALUES: {
 	allowedCharactersExtra: ' :*/Éé',
 	cachePassword: freshSecret(),
 	cacheUrl: 'redis://127.0.0.1:6380',
-	directoryClientId: 'usher-directory-other',
-	directoryClientSecret: syntheticKey(7),
-	directoryRealm: 'overture',
-	directoryUrl: 'https://auth.example.org',
 	egoImportAllStudyPolicies: ['ENVIRONMENTAL', 'ALL, STUDIES'],
 	egoImportBaseTier: 'grant',
 	egoImportPrefixes: [''],
-	grantRateThreshold: { operationCount: 3, windowSeconds: 5 },
-	selfGrantMaximumSeconds: 14_400,
 };
 
 suite('the environment a configuration is expressed as', () => {
@@ -187,16 +187,24 @@ suite('the environment a configuration is expressed as', () => {
 		);
 	});
 
-	test('carries the key-encryption key and the database password as given, each in a variable of its own', () => {
+	test("carries the key-encryption key, the database password and the directory's client secret as given, each in a variable of its own", () => {
 		const environment = environmentFor(CONFIGURATION);
 
 		assert.deepEqual(
-			[environment[ENVIRONMENT_VARIABLES.keyEncryptionKey], environment[ENVIRONMENT_VARIABLES.databasePassword]],
-			[CONFIGURATION.keyEncryptionKey, CONFIGURATION.databasePassword],
+			[
+				environment[ENVIRONMENT_VARIABLES.keyEncryptionKey],
+				environment[ENVIRONMENT_VARIABLES.databasePassword],
+				environment[ENVIRONMENT_VARIABLES.directoryClientSecret],
+			],
+			[CONFIGURATION.keyEncryptionKey, CONFIGURATION.databasePassword, CONFIGURATION.directoryClientSecret],
 		);
 		assert.deepEqual(
-			[ENVIRONMENT_VARIABLES.keyEncryptionKey, ENVIRONMENT_VARIABLES.databasePassword],
-			['USHER_KEY_ENCRYPTION_KEY', 'USHER_DATABASE_PASSWORD'],
+			[
+				ENVIRONMENT_VARIABLES.keyEncryptionKey,
+				ENVIRONMENT_VARIABLES.databasePassword,
+				ENVIRONMENT_VARIABLES.directoryClientSecret,
+			],
+			['USHER_KEY_ENCRYPTION_KEY', 'USHER_DATABASE_PASSWORD', 'USHER_DIRECTORY_CLIENT_SECRET'],
 		);
 	});
 
@@ -281,6 +289,7 @@ suite('the settings a configuration gives the store', () => {
 			eventSource: CONFIGURATION.eventSource,
 			firstUser: { realmRole: CONFIGURATION.firstUserRole },
 			grantAutoAccept: CONFIGURATION.autoAccept,
+			grantRateThreshold: CONFIGURATION.grantRateThreshold,
 			grantRules: DEFAULT_GRANT_RULES,
 			heartbeatMilliseconds: CONFIGURATION.heartbeatMilliseconds,
 			issuer: CONFIGURATION.issuer,
@@ -288,6 +297,7 @@ suite('the settings a configuration gives the store', () => {
 			noticeRereadMilliseconds: CONFIGURATION.noticeRereadMilliseconds,
 			retentionGraceSeconds: CONFIGURATION.retentionGraceSeconds,
 			retentionMarginSeconds: CONFIGURATION.retentionMarginSeconds,
+			selfGrantMaximumLifetimeSeconds: CONFIGURATION.selfGrantMaximumLifetimeSeconds,
 			signInTokenMaximumLifetimeSeconds: CONFIGURATION.signInTokenMaximumLifetimeSeconds,
 			streamLimitPerAudience: CONFIGURATION.streamLimitPerAudience,
 			streamMaximumLifetimeSeconds: CONFIGURATION.streamMaximumLifetimeSeconds,

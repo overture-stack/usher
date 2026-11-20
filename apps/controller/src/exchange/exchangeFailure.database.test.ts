@@ -51,7 +51,6 @@ suite("the exchange's store work failing against the store", () => {
 									actorType: data['actorType'],
 									reason: data['reason'],
 									result: data['result'],
-									userId: data['userId'],
 								},
 							]
 						: [],
@@ -65,7 +64,6 @@ suite("the exchange's store work failing against the store", () => {
 						actorType: 'anonymous',
 						reason: 'storeUnavailable',
 						result: 'failed',
-						userId: null,
 					},
 				]);
 				assert.deepEqual(afterRefusal, before);

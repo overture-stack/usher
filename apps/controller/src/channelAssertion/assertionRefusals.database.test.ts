@@ -65,7 +65,8 @@ suite("an instance's recording of refused channel assertions on a paused store",
 		await withHarness(
 			{
 				applications: [APPLICATION],
-				configuration: { logStream: log.stream },
+				// Longer than the pause: the refusals answer from memory, and the recordings left pending wait it out.
+				configuration: { logStream: log.stream, storeTimeoutMilliseconds: 15_000 },
 				postgresql,
 			},
 			async (harness) => {

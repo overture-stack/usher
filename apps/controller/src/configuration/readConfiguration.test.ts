@@ -26,6 +26,9 @@ const CURSOR_KEY = freshKey();
 // Passwords holding characters a URL escapes, and whitespace kept as given.
 const DATABASE_PASSWORD = ` ${randomBytes(12).toString('base64url')}/@:% `;
 
+// A client secret holding characters a form escapes, and whitespace kept as given.
+const DIRECTORY_SECRET = ` ${randomBytes(12).toString('base64url')}+&=% `;
+
 // Every variable the Controller requires, and no other.
 const REQUIRED: Readonly<Record<string, string>> = {
 	backChannelLogoutAudiences: 'portal-test',
@@ -85,6 +88,10 @@ suite('reading the configuration from an environment', () => {
 				databaseAllowUnverifiedConnection: 'true',
 				databaseControlConnections: '3',
 				databaseExchangeConnections: '12',
+				directoryClientId: 'usher-directory',
+				directoryClientSecret: DIRECTORY_SECRET,
+				directoryRealm: 'overture',
+				directoryUrl: 'https://auth.example.org',
 				serviceAccountRole: 'ims-usher-service',
 				storeTimeoutMilliseconds: '250',
 				trustedProxies: '127.0.0.1,::1',
@@ -101,6 +108,10 @@ suite('reading the configuration from an environment', () => {
 			databasePassword: DATABASE_PASSWORD,
 			databaseSchema: 'usher',
 			databaseUrl: 'postgres://usher_controller@127.0.0.1:5432/usher',
+			directoryClientId: 'usher-directory',
+			directoryClientSecret: DIRECTORY_SECRET,
+			directoryRealm: 'overture',
+			directoryUrl: 'https://auth.example.org',
 			host: '127.0.0.1',
 			identityProviderIssuer: 'https://auth.example.org/realms/usher',
 			instanceName: 'usher-1',
@@ -123,6 +134,10 @@ suite('reading the configuration from an environment', () => {
 				databaseAllowUnverifiedConnection: configuration.databaseAllowUnverifiedConnection,
 				databaseControlConnections: configuration.databaseControlConnections,
 				databaseExchangeConnections: configuration.databaseExchangeConnections,
+				directoryClientId: configuration.directoryClientId,
+				directoryClientSecret: configuration.directoryClientSecret,
+				directoryRealm: configuration.directoryRealm,
+				directoryUrl: configuration.directoryUrl,
 				serviceAccountRole: configuration.serviceAccountRole,
 				storeTimeoutMilliseconds: configuration.storeTimeoutMilliseconds,
 				trustedProxies: configuration.trustedProxies,
@@ -132,6 +147,10 @@ suite('reading the configuration from an environment', () => {
 				databaseAllowUnverifiedConnection: false,
 				databaseControlConnections: 5,
 				databaseExchangeConnections: 10,
+				directoryClientId: '',
+				directoryClientSecret: '',
+				directoryRealm: '',
+				directoryUrl: '',
 				serviceAccountRole: 'usher-service-account',
 				storeTimeoutMilliseconds: 5000,
 				trustedProxies: [],
@@ -528,6 +547,121 @@ suite('reading the identity provider', () => {
 		);
 
 		assert.deepEqual(refusal.variables, [ENVIRONMENT_VARIABLES.identityProviderIssuer]);
+		assert.equal(shownBy(refusal).includes(marker), false);
+	});
+});
+
+// A directory's four settings, every one set.
+const DIRECTORY: FieldValues = {
+	directoryClientId: 'usher-directory',
+	directoryClientSecret: DIRECTORY_SECRET,
+	directoryRealm: 'overture',
+	directoryUrl: 'https://auth.example.org',
+};
+
+suite("reading the directory's settings", () => {
+	test('reads no directory when none of its four variables is set, unset or empty', () => {
+		const read = [undefined, ''].map((value) =>
+			readConfiguration(
+				environmentWith({
+					directoryClientId: value,
+					directoryClientSecret: value,
+					directoryRealm: value,
+					directoryUrl: value,
+				}),
+			),
+		);
+
+		assert.deepEqual(
+			read.map(({ directoryUrl }) => directoryUrl),
+			['', ''],
+		);
+	});
+
+	test('refuses some of its four variables set, naming each left unset or empty and never a value', () => {
+		const marker = randomUUID();
+		const refusal = refusalOf(
+			environmentWith({
+				directoryClientId: 'usher-directory',
+				directoryClientSecret: undefined,
+				directoryRealm: marker,
+				directoryUrl: '',
+			}),
+		);
+
+		assert.deepEqual(refusal.variables, [
+			ENVIRONMENT_VARIABLES.directoryClientSecret,
+			ENVIRONMENT_VARIABLES.directoryUrl,
+		]);
+		assert.equal(shownBy(refusal).includes(marker), false);
+	});
+
+	test('reads a directory over https, or over http to a loopback host, with its realm, client and secret as given', () => {
+		const urls = [
+			'https://auth.example.org',
+			'https://auth.example.org/auth',
+			'http://127.0.0.1:8080',
+			'http://localhost:8080',
+			'http://[::1]:8080',
+		];
+
+		const read = urls.map((directoryUrl) => readConfiguration(environmentWith({ ...DIRECTORY, directoryUrl })));
+
+		assert.deepEqual(
+			read.map(({ directoryUrl }) => directoryUrl),
+			urls,
+		);
+		read.forEach(({ directoryClientId, directoryClientSecret, directoryRealm }) => {
+			assert.deepEqual(
+				{ directoryClientId, directoryClientSecret, directoryRealm },
+				{
+					directoryClientId: 'usher-directory',
+					directoryClientSecret: DIRECTORY_SECRET,
+					directoryRealm: 'overture',
+				},
+			);
+		});
+	});
+
+	test('refuses a directory over http to any other host, or no URL at all, naming its variable', () => {
+		const urls = ['http://auth.example.org', 'http://10.0.0.5:8080', 'ftp://auth.example.org', 'auth.example.org'];
+
+		urls.forEach((directoryUrl) =>
+			assert.deepEqual(refusalOf(environmentWith({ ...DIRECTORY, directoryUrl })).variables, [
+				ENVIRONMENT_VARIABLES.directoryUrl,
+			]),
+		);
+	});
+
+	test('refuses a directory naming no realm, client or secret, naming each variable left unset or empty', () => {
+		const refusal = refusalOf(
+			environmentWith({
+				directoryClientId: '',
+				directoryClientSecret: undefined,
+				directoryRealm: '',
+				directoryUrl: 'https://auth.example.org',
+			}),
+		);
+
+		assert.deepEqual(refusal.variables, [
+			ENVIRONMENT_VARIABLES.directoryClientId,
+			ENVIRONMENT_VARIABLES.directoryClientSecret,
+			ENVIRONMENT_VARIABLES.directoryRealm,
+		]);
+	});
+
+	test('never shows the client secret or a password in the URL in a refusal', () => {
+		const marker = randomUUID();
+		const refusal = refusalOf(
+			environmentWith({
+				...DIRECTORY,
+				directoryClientSecret: marker,
+				directoryUrl: `https://usher:${marker}@auth.example.org`,
+				port: 'refused',
+			}),
+		);
+
+		assert.deepEqual(refusal.variables, [ENVIRONMENT_VARIABLES.directoryUrl, ENVIRONMENT_VARIABLES.port]);
 		assert.equal(shownBy(refusal).includes(marker), false);
 	});
 });
