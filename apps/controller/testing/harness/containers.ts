@@ -86,6 +86,14 @@ export interface DedicatedContainer {
 
 const SUPERUSER = 'usher_superuser';
 
+// The connections the run's shared PostgreSQL accepts, in place of the image's 100, of which 3 are kept for
+// superusers. Each harness Controller holds up to 15 (5 control and 10 exchange connections, `harnessConfiguration`
+// in harness.ts), a file adds a few clients of its own, and the test runner runs one file per core but one at a time:
+// 11 files on 12 cores. One Controller per file at full pools is 11 x 15 = 165, past 100, so 300 covers that on up to
+// 20 cores, or two Controllers per file on up to 10. Raise it with a pool size, the Controllers a file holds at once,
+// or the cores a run uses.
+const SHARED_MAX_CONNECTIONS = 300;
+
 const POSTGRESQL_PORT = 5432;
 
 const VALKEY_PORT = 6379;
@@ -148,6 +156,7 @@ export const startContainers = async (
 	const image = postgresqlImage(selection);
 	const [postgresql, valkey] = await Promise.allSettled([
 		new PostgreSqlContainer(image)
+			.withCommand(['postgres', '-c', `max_connections=${SHARED_MAX_CONNECTIONS}`])
 			.withDatabase('postgres')
 			.withUsername(SUPERUSER)
 			.withPassword(randomPassword())
