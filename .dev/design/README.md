@@ -74,6 +74,7 @@ means, renewal, and what a portal shows the person), then
 | [token-calculation.md](token-calculation.md)         | The calculation producing a token: the rule, the five steps, and the cases that force each branch                                | specced                  |
 | [conformance/](conformance/)                         | `principals.json`, the cases expanded into real payload shape, with the validator that checks them                               | draft                    |
 | [schema.md](schema.md)                               | The Controller's PostgreSQL store: tables, keys, indexes against the token calculation, the notice stream, the data access layer | draft for review         |
+| [schema-diagrams.md](schema-diagrams.md)             | The Controller's tables by area, generated from its migrations                                                                   |
 | [delegated-access.md](delegated-access.md)           | A client acting for a person: who the principal is, which token reaches which application, what stays the client's               | specced                  |
 | [admin-model.md](admin-model.md)                     | Role taxonomy, OIDC-first admin identification, bootstrap, self-grant flow, service accounts, audit integrity                    | in progress              |
 | [decisions.md](decisions.md)                         | Tools reviewed before building; architectural decisions with rationale                                                           | reference                |
@@ -82,6 +83,7 @@ means, renewal, and what a portal shows the person), then
 | [management-ui.md](management-ui.md)                 | Access management UI (PAP layer): what it is, how it ships, what a consumer may rely on                                          | in progress              |
 | [profile-view.md](profile-view.md)                   | Where a person acts on their own access: permissions held, API tokens                                                            | not started              |
 | [audit-events.md](audit-events.md)                   | Policy-plane events, common fields, severity mapping                                                                             | specced                  |
+| [ga4gh-passports.md](ga4gh-passports.md)             | GA4GH Passport integration, not implemented: honouring access approvals issued outside the instance                              |
 | [to-discuss.md](to-discuss.md)                       | Design gaps, inconsistencies, and security properties requiring resolution before implementation                                 | review                   |
 
 **This table is kept complete by a count, not by a read.** A document added to this directory is

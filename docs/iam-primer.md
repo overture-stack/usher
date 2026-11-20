@@ -2,7 +2,7 @@
 
 This document covers the background concepts that come up before Usher-specific design: what
 happens when a user logs in, where the token comes from, what it contains, and how [authorization](concepts.md#authentication-vs-authorization)
-services fit into that picture. It is intended for readers who are not yet familiar with OAuth 2.0,
+services fit into that picture. It is intended for readers who are not familiar with OAuth 2.0,
 [JWTs](concepts.md#jwts-signed-jws-vs-encrypted-jwe), or the standard roles in an access control system.
 
 If you are already comfortable with these, skip directly to [intro.md](intro.md) or
@@ -162,7 +162,7 @@ in the Usher design and are worth knowing before reading the design documents:
   ensures the user only receives what they are permitted to see. In Usher, each application's
   adapter is the PEP.
 - **[PAP](concepts.md#pap-policy-administration-point) (Policy Administration Point):** the interface through which administrators define and
-  manage policy: who has access to what. Usher's Management API, which its management UI calls, is the PAP.
+  manage policy: who has access to what. Usher's Management API is the PAP.
 
 These roles are always present in an access control system; the question is which software plays
 each one. In a system without a dedicated access control service, the application plays all three

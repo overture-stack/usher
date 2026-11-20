@@ -134,7 +134,7 @@ not change; who decides does.
 Recorded previously as absent from the design with nothing addressing it. The flows put email on the
 critical path in four places: sharing with an existing user, sharing with an unregistered address,
 declining an invitation, and the registration invitation. Revocation and owner-removal notices are
-nice-to-have in both documents. A design omitting notification does not deliver these flows, so this
+nice-to-have in both documents. A notice telling a person their own grant lapsed is one more: a refusal cannot say so, by design, so only a notice can, sent by Usher rather than by the application. A design omitting notification does not deliver these flows, so this
 moves from unaddressed to specified-but-undesigned. Which component sends it is undesigned too, but
 it is not Keycloak, which holds no grants and knows nothing of an invitation's link.
 
@@ -549,7 +549,9 @@ Types and runtime validators shared by the Controller, the Bridge and adapters: 
 
 ### `@overture-stack/usher-bridge--express`
 
-Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/bridge--express`, with its core free of Express so a Bridge for another framework can reuse it. Built and tested on the Bridge's branch, awaiting review; unpublished.
+Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/bridge--express`, with its core free of Express so a Bridge for another framework can reuse it. Published as `0.0.0-alpha.1`.
+
+**A testing entry point, before Arranger's adapter merges (decided by the developer, 2026-11-20).** A consumer's tests mount the real Express layer over a stand-in core through `createUsherMiddleware(core: LayerCore)`, and reach the core's degraded states, `uncertain` and a failed exchange, only by copying what the core computes in them, since the real core reaches them only by failing against a Controller. The package gains a testing entry point that builds those outcomes with the core's own functions, so each consumer imports them and no copy drifts from the core. Arranger's adapter tests are its first consumer.
 
 ### First publish of the two packages
 

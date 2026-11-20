@@ -4,11 +4,7 @@ This document explains the security and authorization concepts used throughout U
 Security concepts are framed around the threat they address. Model concepts are framed around the
 problem they solve.
 
-The Controller, the Bridge and the contract between them are built. Passport integration, user
-groups, the Custodian role and field-level narrowing have no implementation, and the text says so
-where each arises. Two things are worth knowing before you read on: every record belongs to exactly
-one resource, and a grant reaches the records of one category within it, so a resource holding a mix
-is served in part rather than whole. No grant narrows further, down to individual fields.
+The sections below cover what Usher decides, how a decision is expressed, and the security properties underlying both. Two facts shape everything after this opening: every record belongs to exactly one resource, and a grant reaches the records of one category within it, so a resource holding a mix is served in part rather than whole. No grant narrows below the record, down to individual fields.
 
 ---
 
@@ -35,10 +31,7 @@ corrupt, alter, or annotate source records. Any system that reads the underlying
 transformation of the stored records. The access policy layer is additive and external. The data
 layer is untouched.
 
-Field-level access control is designed but not built. When it arrives, Usher will express which
-fields a user may see as grants in the token. The application will omit the rest from its response.
-The stored record stays complete and unchanged either way. See the field-level restriction section
-in [permissions-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/permissions-model.md).
+Usher does not narrow access to individual fields. A person who reaches a record reaches all of its fields, and the stored record stays complete and unchanged.
 
 ---
 
@@ -120,7 +113,7 @@ access what.
 Analogy: the box office and event management system. This is where seat allocations are configured,
 VIP lists are maintained, and access tiers are defined.
 
-In Usher: the Controller's Management API, which the management UI calls. Owners and administrators
+In Usher: the Controller's Management API. Owners and administrators
 grant and revoke access, each grant naming a resource, a category and its holder's role, and
 administrators register the resources and the platform's global categories. None of that requires
 access to Keycloak or any IdP admin panel.
@@ -173,7 +166,7 @@ represents, and why they are separate, makes the rest of the model easier to rea
 
 A **resource** is whatever Usher is protecting. The term is deliberately generic. Usher's core
 model does not know or care what kind of thing it is protecting. Domain-specific names appear only
-in the management UI layer. That layer is configured per instance.
+in an instance's own presentation layer, which is configured per instance.
 
 **In the Overture context, a resource is a cohort.** This is a deliberate departure from the
 "study" or "project" vocabulary used in other platforms. Those terms carry a silo implication:
@@ -204,25 +197,7 @@ A cohort in Usher is not a fixed list of enrolled principals. It is a named slic
 Which records belong to it is determined by their own field values, not by a separate enrolment
 step. So if a record is re-categorized, the cohort changes with it.
 
-**What the first release supports, and what it does not.** Every record belongs to exactly one
-resource. Enforcement works by filtering on a single field that names that resource, and the
-instance says which field. Support for overlapping cohorts comes in a later release.
-
-The difference matters if you are planning an instance:
-
-|                                                                                                                 | Supported in the first release | Not yet |
-| --------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------- |
-| One record, one resource, named by a field value                                                                | Yes                            |         |
-| Records narrowed within a resource by the categories they carry, each a condition over their fields             | Yes                            |         |
-| A record satisfying two cohort predicates at once, such as `disease_type == "rare"` and `age_at_diagnosis < 18` |                                | Later   |
-| A record carrying two categories at once, needing a grant for both                                              | Yes                            |         |
-| Narrowing to individual fields                                                                                  |                                | Later   |
-
-One resource per record also settles a question that would otherwise be open. If a record could
-belong to two cohorts and a user held only one of them, should they see it? There was a real choice
-there between requiring all of a record's cohorts and requiring any one of them. The case cannot
-arise in the first release, so the choice is deferred rather than made. It returns when overlapping
-cohorts do.
+**One resource per record.** Every record belongs to exactly one resource, and enforcement filters on a single field that names it; the instance says which field. Within a resource, records are narrowed by the categories they carry, each a condition over their fields, and a record carrying two categories needs a grant for both.
 
 Resources are the unit of scope for all other entities. Every grant is resource-scoped. Usher does
 not think "a user can see record X". It thinks "a user holds a grant on category Z of resource Y,
@@ -275,56 +250,16 @@ The category names the protected dimension; the category grant says who is grant
 Two users with the same role in the same resource can have meaningfully different views of the data
 depending on their category grants.
 
-### User groups
-
-Administering access for a research team of 40 users as 40 individual grants would be error-prone
-and slow. **User groups** exist to make administration tractable at scale.
-
-Access is held by people. A person holds grants, and each one names a resource, a category within
-it, and the role they act in there. Their effective access is the union of the grants they hold and
-have accepted, each reaching the records of the category it names and permitting what its role
-allows.
-
-User groups, which would let one operation cover a whole team, are designed and not in the first
-release.
-
-Three relations carry this, and only two of them are about access:
-
-| Entity            | What it means                                               |
-| ----------------- | ----------------------------------------------------------- |
-| `group_users`     | which users are in a group                                  |
-| `grants`          | who acts in which role, on which category of which resource |
-| `grant_decisions` | whether the recipient accepted, and what they were shown    |
-
-A group confers nothing by belonging to it. What a group does is let one grant name a set of people
-instead of one, so the same set can be trusted as a curator in one place and a viewer in another.
-Each person reached by the grant accepts or declines it for themselves. If a grant is revoked,
-everyone who reached data through it loses that access at once, and revocation propagates through the
-standard channel.
-
-Groups do not create a separate access model. They are a convenience layer over the same entity
-structure used by individual users.
-
 ### Privileged roles
 
-Beyond the resource-level roles (`owner`, `viewer`), Usher defines two roles with broader scope.
-Actions taken in these roles are always logged as auditable events.
-
-**Custodian** holds grant-management rights over one or more categories, across all resources
-in the platform. A Custodian can grant or revoke category grants for the categories they govern
-without holding full Admin rights. This is the governance role for instances where a specific
-community needs direct control over who accesses their data. A community representative is
-designated as Custodian for their category. They then govern grants for it independently of
-platform staff.
-
-The role is in the design and not in the first release, because nothing appoints a custodian in it.
+Beyond the resource-level roles (`owner`, `viewer`), Usher defines one role with broader scope, and actions taken in it are always logged as auditable events. Usher has no custodian role, so no one can be appointed to govern a category across datasets.
 
 For First Nations data the governing framework is OCAP, the principles of Ownership, Control,
 Access and Possession administered by the First Nations Information Governance Centre. Inuit and
 Métis data have frameworks of their own, the National Inuit Strategy on Research and the Métis data
 governance principles, and the CARE principles apply internationally. Those principles concern who
-holds authority over data, not only who may read it, so this role is at most a mechanism for
-honouring them and never evidence of having done so. Usher has not been studied against any of
+holds authority over data, not only who may read it, so a permissions model is at most a mechanism
+for honouring them and never evidence of having done so. Usher has not been studied against any of
 them, and that study belongs with the communities concerned rather than in a design document.
 
 **Admin** holds platform-wide authorization management rights: registering resources, granting the
@@ -349,8 +284,7 @@ no privacy risk fall into this tier. The Bridge requests an anonymous Usher toke
 Controller, with no IdP bearer needed. The Controller returns a token containing only open-tier
 grants. This keeps all access, including anonymous requests, audited and fail-secure.
 
-**Registered:** the user must have a confirmed identity and must have accepted the platform's
-terms of access. No further approval is required beyond that. This tier is appropriate when
+**Registered:** any signed-in person reaches this tier, and no further approval is required. This tier is appropriate when
 accountability matters but a full approval process would be disproportionate. Examples: summarized
 clinical data, or non-sensitive genomic aggregates where knowing who accessed the data is
 sufficient protection.
@@ -359,10 +293,9 @@ In Usher terms: the user authenticates and Usher issues an Usher token. The open
 enough for a resource whose only category is its unrestricted portion.
 
 **Controlled:** access requires an explicit, per-dataset grant. In simpler instances, an
-owner of the resource grants access directly through the management UI. In larger or federated
+owner of the resource grants access directly through the Management API. In larger or federated
 instances, a data access committee reviews researcher applications. It approves or denies
-access based on research purpose and institution. Approved grants can be mapped automatically via
-GA4GH Passports, if configured.
+access based on research purpose and institution.
 
 In Usher terms: the records carrying that category are reached only by a grant naming it, held in
 that resource. The resource's other records answer to their own categories, so the tier applies to
@@ -384,99 +317,10 @@ The Controller computes grants across all three tiers in a single additive pipel
 
 ---
 
-## GA4GH Passports and federated identity
+## GA4GH Passports
 
-Usher has no Passport integration: nothing in the Controller reads a Visa or a Passport claim. This
-section covers an optional integration path. Some instances manage all grants internally,
-through the management UI or a local approval workflow. They do not need Passport support. Passport
-integration is relevant when researchers hold access approvals issued by institutions outside the
-instance. Those approvals then need to be honoured automatically.
-
-The scenario: a researcher at one institution holds a data access approval. It was issued by a data
-access committee at a different institution. Those two institutions do not share identity
-infrastructure. Without a shared standard, each data holder must establish a direct trust
-relationship with each approving institution. That does not scale.
-
-GA4GH (Global Alliance for Genomics and Health) is an international standards body. Its
-**Passport** specification defines a standard format for expressing access claims inside OIDC
-tokens. Specifically, it defines a structured JWT claim (`ga4gh_passport_v1`), and any
-OIDC-compliant identity system can carry it. It is not a new protocol. It is a defined schema for
-access grants inside tokens you already use.
-
-### Visa types
-
-A Passport contains one or more **Visas**: individual signed claim assertions. The types
-relevant to Overture:
-
-| Visa type                  | What it asserts                                                             |
-| -------------------------- | --------------------------------------------------------------------------- |
-| `ControlledAccessGrants`   | Researcher is granted dataset X, access type Y, until date Z                |
-| `AcceptedTermsAndPolicies` | Researcher accepted data use agreement B                                    |
-| `AffiliationAndRole`       | Researcher is affiliated with institution A in role R                       |
-| `ResearcherStatus`         | Researcher holds bona fide researcher status, for example ELIXIR Researcher |
-
-`ControlledAccessGrants` is the visa type that maps directly to Usher's Controlled access tier. A
-data access committee's approval for a specific dataset is the external origin of a category grant.
-
-### The three roles in a Passport ecosystem
-
-Different parties in a Passport-enabled ecosystem play distinct roles:
-
-| Role                | What it does                                                           | Examples                             |
-| ------------------- | ---------------------------------------------------------------------- | ------------------------------------ |
-| **Visa Issuer**     | Signs and issues individual Visa assertions after a grant event        | REMS, ELIXIR AAI, institutional DACs |
-| **Passport Broker** | Aggregates Visas from multiple Issuers into a single Passport          | LifeScience Login, ELIXIR Login      |
-| **Clearinghouse**   | Validates incoming Passports and maps approved claims to access grants | Usher, via Keycloak                  |
-
-The examples above are real services you may meet in this space. REMS is the Resource Entitlement
-Management System from CSC Finland, described further below. ELIXIR is Europe's life-science data
-infrastructure, and ELIXIR AAI is its authentication and authorization service. GHGA, mentioned
-later, is the German Human Genome-Phenome Archive. A data access committee is the group that
-reviews and approves researcher applications.
-
-Usher plays the Clearinghouse role. It does not validate Passport signatures itself: that belongs
-to the identity layer, which validates each Visa's signature against the issuer's public JWKS
-endpoint, checks the issuer against a configured trusted-issuers list, verifies expiry, and maps
-validated claims to token attributes. Usher reads those attributes and maps them to
-`grants` in its policy store. Which component performs that validation for a given
-instance is an integration choice rather than a settled part of this design. The per-app PEP adapters see only
-the Usher token. They do not know whether a grant came from an internal admin action or an
-external Passport Visa.
-
-### The flow
-
-    Researcher obtains Visas from an external data access committee via REMS or similar
-      -> Passport Broker (LifeScience Login / ELIXIR) bundles them into a Passport
-      -> Researcher authenticates to Keycloak with their Passport
-      -> Keycloak (GA4GH Passport extension):
-           validates each Visa signature against issuer JWKS
-           checks issuer against trusted-issuers list
-           maps ControlledAccessGrants claims to Keycloak token attributes
-      -> Usher reads Keycloak attributes, maps to grants
-      -> Usher issues JWE Usher token
-      -> PEP adapter enforces it as normal (unchanged)
-
-### Visa expiry and revocation
-
-Passport Visas carry their own `expires` timestamp, set by the Visa Issuer. When a Visa expires,
-Usher treats this as a revocation trigger. The same `revoked_at` mechanism used for internal
-revocations fires. The researcher's session is suspended during the fail-secure grace period.
-Resuming it means re-authenticating with a refreshed Passport.
-
-Local administrators can also revoke a grant that originated from an external Visa. Local policy
-can always restrict access downward. It cannot grant access not covered by a Visa.
-
-### REMS: running your own Visa Issuer
-
-An Overture instance may want its own controlled-access approval workflow. That means a data access
-committee reviewing applications and approving or denying them through a managed process. For that, REMS
-(Resource Entitlement Management System, from CSC Finland) is the standard tool. REMS issues
-`ControlledAccessGrants` Visas as output when a data access committee approves a request, and integrates with
-Keycloak. It is used in production by ELIXIR, GHGA, and other GA4GH-aligned platforms.
-
-REMS is optional. An Overture instance can accept Passports from external Brokers without running
-its own REMS instance. Accepting external grants and issuing internal grants are separable
-permissions.
+Usher reads no GA4GH Passport or Visa claim. Access is decided by Usher's own grants and data access
+tiers alone.
 
 ---
 
@@ -542,7 +386,7 @@ Usher combines a short TTL with local validation. The Bridge validates and cache
 call to Usher happens on each request. That gives a short exposure window without per-request
 overhead.
 
-The designed lifetime is five minutes, and it is configurable. For comparison, the EGO access token
+The lifetime is five minutes by default, and it is configurable. For comparison, the EGO access token
 replaced by Usher on the iMS platform lives three hours, so this closes a large window.
 
 ---
@@ -561,20 +405,9 @@ stop someone from entering, your only options are:
 3. Use a signal that marks a class of tickets invalid, for example "all tickets printed before 3pm
    are invalid".
 
-Usher uses approach (3), with the signal kept next to whatever changed rather than on the person.
-The Controller caches the payload it computed for each principal, and anything altering what that
-principal holds deletes the entry, so absence means recompute. A change to a resource's categories
-clears every cached payload, since it can change what anyone reaches. On refresh the Controller
-reissues from the cache only when the entry is still there. The cache is the Controller's own
-state, so nothing sent with the request decides whether a cached answer is still fresh. Meanwhile
-the revocation signal reaches Bridges by push (immediate, best effort) and poll (configurable
-interval, reliable fallback).
+Usher uses approach (3), with the signal kept next to whatever changed rather than on the person. The Controller computes each principal's payload on every exchange, from the grants and categories as they stand, and sets `generatedAt` to the instant of issue. Meanwhile the revocation signal reaches Bridges by push (immediate, best effort) and poll (configurable interval, reliable fallback).
 
-A marker on the principal was the first design and does not work, which is worth knowing because it
-is the obvious one. Adding a category to a resource changes nothing about that person's own records,
-so a marker scoped to them never moves and their cached answer stays valid while the resource has
-closed to them. The two markers above each sit next to the write that changes them, so no list of
-writes has to be remembered.
+A marker on the principal does not work, which is worth knowing because it is the obvious one. Adding a category to a resource changes nothing about that person's own records, so a marker scoped to them never moves while the resource has closed to them. The signal sits next to the write that changes it, so no list of writes has to be remembered.
 
 A per-token blocklist (approach 2) is more precise. But it requires the issuer to track every token
 ID ever issued, and adapters to check the blocklist on each request. That reintroduces the
@@ -604,10 +437,8 @@ Analogy: a fire door.
 
 Usher's revocation channel is fail-secure. If the Bridge cannot confirm revocation status within a
 configurable grace period, it suspends active sessions until connectivity is restored. Suspended
-sessions resume when Usher is reachable again, without requiring re-authentication. That differs
-from an expired Passport Visa, which does require re-authenticating, because the two failures are
-not the same: here the grants are still valid and only the channel confirming them is down, whereas
-an expired Visa means the underlying grant itself has lapsed.
+sessions resume when Usher is reachable again, without requiring re-authentication, since the grants
+are still valid and only the channel confirming them is down.
 
 **Suspending rather than continuing to serve is the deliberate part**, and the reason is
 adversarial: someone able to block the revocation channel could otherwise keep a compromised session
@@ -634,7 +465,7 @@ In practice, every instance will have its own name for what Usher calls a "resou
 
 These domain-specific names appear in:
 
-- The management UI's labels (configured per instance)
+- The labels of an instance's presentation layer (configured per instance)
 - The adapter's field mapping config, which names the field identifying which records belong to a
   given resource
 - User-facing documentation for that instance

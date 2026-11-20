@@ -74,8 +74,6 @@ If the channel goes quiet for longer than a configurable grace period, the Bridg
 
 **Usher does not touch the underlying data.** It does not write to the data store, run data rewrites, or modify records. Access policy is applied at query time by the adapter. An instance can adopt Usher without touching the data it protects, and removing it leaves no data artifacts behind.
 
-**Community data governance.** For instances where a specific community holds data sovereignty rights over their contributed data, Usher's **Custodian** role lets a community representative govern grants for their categories independently of platform administrators. The role is in the design and not in the first release, because nothing appoints a custodian in it. See [Concepts](concepts.md#privileged-roles) for the Custodian and Admin roles.
-
 ---
 
 ## Where to go next
@@ -86,8 +84,8 @@ PDP/PEP/PAP) before Usher-specific vocabulary.
 
 **Evaluating Usher for your instance** (principal investigator, data manager, governance lead)
 
-- [Concepts](concepts.md): the data access tier model, how grants work, what the Custodian and
-  Admin roles enable, and data sovereignty support
+- [Concepts](concepts.md): the data access tier model, how grants work, what the
+  Admin role enables
 - [Why Usher](why-usher.md): how Usher relates to adjacent tools and what it specifically adds
 
 **Working with data on an Usher-enabled platform** (researcher, analyst)
@@ -110,6 +108,4 @@ PDP/PEP/PAP) before Usher-specific vocabulary.
   schema migration before each rollout, readiness and liveness, and the identity provider's
   requirements
 
-**Any of the above may become a Custodian or Admin.** Custodians govern category access for a
-specific community or data type; Admins manage the platform authorization model. Both are covered
-in [Concepts](concepts.md) and the [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md).
+**Admins manage the platform authorization model.** They are covered in [Concepts](concepts.md) and the [Design Index](https://github.com/overture-stack/usher/blob/main/.dev/design/README.md).
