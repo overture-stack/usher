@@ -1,5 +1,6 @@
 import type pg from 'pg';
 
+import type { Directory } from '../directory/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
 import type { Problem } from '../http/index.js';
 import type { StoreReader } from '../managementApi/index.js';
@@ -11,6 +12,11 @@ export type NamedHolder = { email: string; kind: 'address' } | { kind: 'subject'
 
 /** What reading a holder gave: the person named, or the refusal the value earned. */
 export type HolderReading = { holder: NamedHolder; kind: 'read' } | { kind: 'refused'; problem: Problem };
+
+/** An address lookup as read from its body: the address, in an address's form, as given. */
+export interface AddressLookup {
+	email: string;
+}
 
 /** A grant's creation as read from its body, every rule of its form kept. */
 export interface GrantCreation {
@@ -472,6 +478,17 @@ export interface GrantStore {
 	insertGrantRequest(request: NewGrantRequest): Promise<string>;
 
 	/**
+	 * The ids of a person's grants of one role on one resource that are live at the instant given, in
+	 * any category, in the order granted, each row locked for update until the transaction ends.
+	 */
+	liveGrantIdsOf(question: {
+		holderUserId: string;
+		now: Date;
+		resourceId: string;
+		roleId: string;
+	}): Promise<readonly string[]>;
+
+	/**
 	 * Where a grant held by a person stands: its resource's id and externalId, read without a lock.
 	 *
 	 * @param grantId an id in the form the store gives one.
@@ -527,8 +544,24 @@ export interface GrantStore {
 	writeNotifications(notifications: NewNotifications): Promise<void>;
 }
 
+/** A creation's terms once every rule of it but its holder's address is judged. */
+export interface JudgedCreation {
+	/** Its record category, by id and as a payload names it; `null` for the whole resource. */
+	category: { id: string; scopedName: string } | null;
+
+	kind: 'judged';
+
+	/** Where the caller stands on its resource, which exists and is not retired. */
+	resource: ResourceStanding;
+
+	role: StoredRole;
+}
+
 /** What the grant operations are created from. */
 export interface GrantOperationsSettings {
+	/** Where an address naming a holder is resolved to the subject of the account holding it. */
+	directory: Pick<Directory, 'resolveAddress'>;
+
 	/**
 	 * The grant store over one transaction's connection.
 	 *

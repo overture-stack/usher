@@ -1565,7 +1565,8 @@ const problem = <Code extends string, Status extends number>(
  *   `importNeedsAnAudience`, an EGO import whose `audiences` is empty (ruled);
  *   `ownerGrantsDoNotExpire`, an owner grant given an expiry. Other 422s carry no code the rulings
  *   name.
- * - 503: `directoryUnavailable`, an address operation the directory cannot answer;
+ * - 503: `directoryNotConfigured`, an address operation on an instance with no directory, with no
+ *   `Retry-After`; `directoryUnavailable`, an address operation the directory cannot answer;
  *   `importNotConfigured`, a run of the EGO import while its settings are missing, before its
  *   export is read; `storeUnavailable`, an operation that would write on a Controller whose
  *   database role may only read, failing closed with no partial effect (#216's refusals and the
@@ -1582,6 +1583,7 @@ export const PROBLEMS = Object.freeze({
 	applicationKeyNotFound: problem('applicationKeyNotFound', 404),
 	applicationNotFound: problem('applicationNotFound', 404),
 	bodyTooLarge: problem('bodyTooLarge', 413),
+	directoryNotConfigured: problem('directoryNotConfigured', 503),
 	directoryUnavailable: problem('directoryUnavailable', 503),
 	doesNotHold: problem('doesNotHold', 409),
 	firstAdministratorAccepted: problem('firstAdministratorAccepted', 409),

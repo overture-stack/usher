@@ -3,9 +3,15 @@ import { unreadableBody } from '../managementApi/index.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import type { HolderReading } from './types.js';
 
-// An address's form: text before and after a single @, holding no whitespace, comma or control
-// character. The form alone is judged here, never whether an account holds the address.
 const ADDRESS_FORM = /^[^\s@,\p{Cc}]+@[^\s@,\p{Cc}]+$/u;
+
+/**
+ * Whether text is in an address's form: text before and after a single `@`, holding no whitespace,
+ * comma or control character. Whether an account holds the address is never judged here.
+ *
+ * @param text the text.
+ */
+export const isAddressForm = (text: string): boolean => ADDRESS_FORM.test(text);
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -44,7 +50,7 @@ export const readHolder = (value: unknown, member: string): HolderReading => {
 	if (name !== 'email' || typeof text !== 'string') {
 		return refused(GRANT_PROBLEMS.holderNotOnePerson);
 	}
-	return ADDRESS_FORM.test(text)
+	return isAddressForm(text)
 		? { holder: { email: text, kind: 'address' }, kind: 'read' }
 		: refused(GRANT_PROBLEMS.addressForm);
 };

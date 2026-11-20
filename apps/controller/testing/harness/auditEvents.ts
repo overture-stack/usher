@@ -1139,6 +1139,7 @@ export const cloudEventsIn = (lines: readonly string[]): readonly CloudEvent[] =
  */
 export const FAULT_REASONS = Object.freeze({
 	cacheUnavailable: 'cacheUnavailable',
+	directoryNotConfigured: 'directoryNotConfigured',
 	directoryUnavailable: 'directoryUnavailable',
 	identityProviderUnavailable: 'identityProviderUnavailable',
 	storeUnavailable: 'storeUnavailable',

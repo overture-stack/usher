@@ -98,6 +98,10 @@ const OTHER_VALUES: {
 	databasePassword: freshSecret(),
 	databaseSchema: 'usher_other',
 	databaseUrl: 'postgres://usher_controller@127.0.0.1:5433/usher_test',
+	directoryClientId: 'usher-directory-other',
+	directoryClientSecret: syntheticKey(7),
+	directoryRealm: 'overture',
+	directoryUrl: 'https://auth.example.org',
 	host: '::1',
 	identityProviderIssuer: 'https://auth.example.org/realms/usher',
 	instanceName: 'usher-test-2',
@@ -141,10 +145,6 @@ const PENDING_VALUES: {
 	allowedCharactersExtra: ' :*/Éé',
 	cachePassword: freshSecret(),
 	cacheUrl: 'redis://127.0.0.1:6380',
-	directoryClientId: 'usher-directory-other',
-	directoryClientSecret: syntheticKey(7),
-	directoryRealm: 'overture',
-	directoryUrl: 'https://auth.example.org',
 	egoImportAllStudyPolicies: ['ENVIRONMENTAL', 'ALL, STUDIES'],
 	egoImportBaseTier: 'grant',
 	egoImportPrefixes: [''],
@@ -187,16 +187,24 @@ suite('the environment a configuration is expressed as', () => {
 		);
 	});
 
-	test('carries the key-encryption key and the database password as given, each in a variable of its own', () => {
+	test("carries the key-encryption key, the database password and the directory's client secret as given, each in a variable of its own", () => {
 		const environment = environmentFor(CONFIGURATION);
 
 		assert.deepEqual(
-			[environment[ENVIRONMENT_VARIABLES.keyEncryptionKey], environment[ENVIRONMENT_VARIABLES.databasePassword]],
-			[CONFIGURATION.keyEncryptionKey, CONFIGURATION.databasePassword],
+			[
+				environment[ENVIRONMENT_VARIABLES.keyEncryptionKey],
+				environment[ENVIRONMENT_VARIABLES.databasePassword],
+				environment[ENVIRONMENT_VARIABLES.directoryClientSecret],
+			],
+			[CONFIGURATION.keyEncryptionKey, CONFIGURATION.databasePassword, CONFIGURATION.directoryClientSecret],
 		);
 		assert.deepEqual(
-			[ENVIRONMENT_VARIABLES.keyEncryptionKey, ENVIRONMENT_VARIABLES.databasePassword],
-			['USHER_KEY_ENCRYPTION_KEY', 'USHER_DATABASE_PASSWORD'],
+			[
+				ENVIRONMENT_VARIABLES.keyEncryptionKey,
+				ENVIRONMENT_VARIABLES.databasePassword,
+				ENVIRONMENT_VARIABLES.directoryClientSecret,
+			],
+			['USHER_KEY_ENCRYPTION_KEY', 'USHER_DATABASE_PASSWORD', 'USHER_DIRECTORY_CLIENT_SECRET'],
 		);
 	});
 

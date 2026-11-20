@@ -1,5 +1,6 @@
 import type pg from 'pg';
 
+import type { Directory } from '../directory/index.js';
 import type { AuditTrail } from '../eventLog/index.js';
 import type { NamedHolder } from '../grants/index.js';
 import type { StoreReader } from '../managementApi/index.js';
@@ -79,6 +80,9 @@ export interface StoredResource {
 
 /** What the resource operations are created from. */
 export interface ResourceOperationsSettings {
+	/** Where an address naming a registration's owner is resolved to the subject of its account. */
+	directory: Pick<Directory, 'resolveAddress'>;
+
 	/**
 	 * Whether an owner grant written at registration is accepted with it, the clock each time written
 	 * is read from, the schema, and the trusted issuer people are found under.

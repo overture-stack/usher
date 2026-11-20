@@ -111,6 +111,33 @@ export interface ControllerSettings {
 	 */
 	databaseUrl: string;
 
+	/**
+	 * The client whose service account the controller's directory signs in as, through the client
+	 * credentials grant (#212, #213 Q1); read while `directoryUrl` names a directory, empty by
+	 * default.
+	 */
+	directoryClientId: string;
+
+	/**
+	 * That client's secret, in a variable of its own, which no refusal, log line, event or answer
+	 * ever shows; read while `directoryUrl` names a directory, empty by default.
+	 */
+	directoryClientSecret: string;
+
+	/**
+	 * The identity provider realm the directory looks people up in, whose token endpoint issues the
+	 * directory's token; read while `directoryUrl` names a directory, empty by default.
+	 */
+	directoryRealm: string;
+
+	/**
+	 * The identity provider's base URL, whose admin API the directory reads
+	 * (`<url>/admin/realms/<realm>`): https, or http to a loopback host. Empty, the default, for
+	 * none, which answers every operation naming a person by address 503 `directoryNotConfigured`. The
+	 * controller starts whatever the directory answers, a refused credential included.
+	 */
+	directoryUrl: string;
+
 	/** The CloudEvents `source` every event carries: one per deployment, the same on every instance (#214). */
 	eventSource: string;
 
@@ -255,21 +282,6 @@ export interface PendingSettings {
 
 	/** The cache's (Valkey) URL, carrying no password: one carrying a password refuses the start. */
 	cacheUrl: string;
-
-	/** The client id of the service account the Controller resolves addresses through (#212, #213 Q1). */
-	directoryClientId: string;
-
-	/** That service account's secret, which no refusal, log line or answer ever shows. */
-	directoryClientSecret: string;
-
-	/** The identity provider realm the directory looks people up in. */
-	directoryRealm: string;
-
-	/**
-	 * The identity provider's base URL, whose admin API the directory reads (`<url>/admin/realms/<realm>`);
-	 * empty for none, which answers every operation needing an address as the directory unavailable.
-	 */
-	directoryUrl: string;
 
 	/**
 	 * The EGO policies granting every study, by name, matched as literal text (ruled, "#216: all-study
@@ -662,6 +674,10 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
 	databasePassword: 'USHER_DATABASE_PASSWORD',
 	databaseSchema: 'USHER_DATABASE_SCHEMA',
 	databaseUrl: 'USHER_DATABASE_URL',
+	directoryClientId: 'USHER_DIRECTORY_CLIENT_ID',
+	directoryClientSecret: 'USHER_DIRECTORY_CLIENT_SECRET',
+	directoryRealm: 'USHER_DIRECTORY_REALM',
+	directoryUrl: 'USHER_DIRECTORY_URL',
 	host: 'USHER_HOST',
 	identityProviderIssuer: 'USHER_IDENTITY_PROVIDER_ISSUER',
 	instanceName: 'USHER_INSTANCE_NAME',
@@ -729,9 +745,9 @@ const loadExport = async <Exported>(module: ControllerExport): Promise<Exported>
 /**
  * The environment the config module reads for a configuration: the one place the Controller's
  * environment variable names live. Every setting the Controller reads but `clock` and `logStream` has
- * a variable; a list is comma-separated, empty for an empty list. The key-encryption key and the
- * database password travel as given, each in its own variable. The {@link PendingSettings}, which the
- * Controller does not read yet, travel in none.
+ * a variable; a list is comma-separated, empty for an empty list. The key-encryption key, the
+ * database password and the directory's client secret travel as given, each in its own variable.
+ * The {@link PendingSettings}, which the Controller does not read yet, travel in none.
  *
  * @param configuration the configuration to express.
  */
@@ -745,6 +761,10 @@ export const environmentFor = ({
 	databasePassword,
 	databaseSchema,
 	databaseUrl,
+	directoryClientId,
+	directoryClientSecret,
+	directoryRealm,
+	directoryUrl,
 	host,
 	identityProviderIssuer,
 	instanceName,
@@ -765,6 +785,10 @@ export const environmentFor = ({
 	[VARIABLE_NAMES.databasePassword]: databasePassword,
 	[VARIABLE_NAMES.databaseSchema]: databaseSchema,
 	[VARIABLE_NAMES.databaseUrl]: databaseUrl,
+	[VARIABLE_NAMES.directoryClientId]: directoryClientId,
+	[VARIABLE_NAMES.directoryClientSecret]: directoryClientSecret,
+	[VARIABLE_NAMES.directoryRealm]: directoryRealm,
+	[VARIABLE_NAMES.directoryUrl]: directoryUrl,
 	[VARIABLE_NAMES.host]: host,
 	[VARIABLE_NAMES.identityProviderIssuer]: identityProviderIssuer,
 	[VARIABLE_NAMES.instanceName]: instanceName,

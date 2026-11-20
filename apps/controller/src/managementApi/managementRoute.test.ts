@@ -1072,6 +1072,45 @@ suite("a management operation's refusals, as its own event records them", () => 
 		);
 	});
 
+	test('answers a dependency the operation names unavailable with its problem, the event recorded failed at error naming its code, running no step after a commit', async (context) => {
+		const unavailable = {
+			code: 'shelfCatalogueUnavailable',
+			detail: 'The shelf catalogue cannot answer now. Try again later.',
+			status: 503,
+			title: 'Shelf catalogue unavailable',
+		};
+		const stand = await standUp(context, {
+			afterCommit: ['keyReload'],
+			outcome: async () => ({ kind: 'unavailable', problem: unavailable }),
+			verifications: ADMIN,
+		});
+
+		const answer = await post(stand);
+
+		assert.equal(answer.statusCode, 503);
+		assert.deepEqual(JSON.parse(answer.body), unavailable);
+		assert.equal(answer.headers['retry-after'], undefined);
+		assert.deepEqual(stand.lines, []);
+		assert.deepEqual(stand.afterCommit, []);
+		assert.deepEqual(
+			stand.recorded.map(({ event }) => ({
+				data: event.data,
+				severity: event.severity,
+			})),
+			[
+				{
+					data: {
+						reason: 'shelfCatalogueUnavailable',
+						result: 'failed',
+						shelfId: 'shelf-1',
+						sourceIp: '127.0.0.1',
+					},
+					severity: 'error',
+				},
+			],
+		);
+	});
+
 	test('answers an operation whose COMMIT the store did not confirm 503 outcomeUnknown, recording no event and writing no line of its own', async (context) => {
 		const stand = await standUp(context, {
 			outcome: async () => {

@@ -205,6 +205,17 @@ export const sqlGrantStore = (
 			);
 			return id ?? requestUnwritten();
 		},
+		liveGrantIdsOf: async ({ holderUserId, now, resourceId, roleId }) =>
+			(
+				await connection.query<IdRow>(
+					`SELECT held.id::text AS id FROM ${table('grants')} held
+            WHERE held.holder_user_id = $1 AND held.resource_id = $2 AND held.role_id = $3
+              AND ${liveGrantCondition('held', '$4::timestamptz')}
+            ORDER BY held.granted_at, held.id
+              FOR UPDATE`,
+					[holderUserId, resourceId, roleId, now],
+				)
+			).rows.map(({ id }) => id),
 		locateGrant: async (grantId) =>
 			(
 				await connection.query<{ externalId: string; resourceId: string }>(

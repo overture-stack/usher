@@ -130,7 +130,11 @@ export interface OperationRequest<Input> {
 	sourceIp: string;
 }
 
-/** What an operation answered: a success, or a refusal. */
+/**
+ * What an operation answered: a success; a refusal; or a dependency beyond the store that could not
+ * answer, such as the directory, answered with its problem and recorded `failed` at error, its
+ * reason the problem's code.
+ */
 export type OperationOutcome =
 	| {
 			/** The answer's JSON body, or none for a success answered with no content. */
@@ -152,6 +156,15 @@ export type OperationOutcome =
 			 * on from what does not exist, while the event says what happened.
 			 */
 			recordedReason?: string;
+	  }
+	| {
+			kind: 'unavailable';
+			problem: Problem;
+			/**
+			 * The severity the event records the unavailable answer at: `error` unless the answer names a fault
+			 * in configuration, which is `warning`. Read as `error` when none is given.
+			 */
+			severity?: 'error' | 'warning';
 	  };
 
 /** What an operation read from a request's body and query: its input, or the refusal it earned. */
@@ -251,8 +264,8 @@ export interface ManagementOperation<Input> {
 	takesQuery?: boolean;
 
 	/**
-	 * Answers an admitted, readable request. A failure it throws is the store's, since the store is
-	 * the one thing an operation reaches beyond itself.
+	 * Answers an admitted, readable request. A failure it throws is the store's; any other dependency
+	 * it reaches answers its failure as an `unavailable` outcome instead.
 	 */
 	run(request: OperationRequest<Input>): Promise<OperationOutcome>;
 }

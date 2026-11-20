@@ -33,13 +33,16 @@ export const refuseWithin = (problem: Problem, recordedReason?: string): never =
 	throw new RefusedWithin(problem, recordedReason);
 };
 
+/** An operation's refusal, as {@link refused} gives one. */
+export type RefusedOutcome = Extract<OperationOutcome, { kind: 'refused' }>;
+
 /**
  * An operation's refusal.
  *
  * @param problem the refusal answered.
  * @param recordedReason the reason its event records, where it differs from the code answered.
  */
-export const refused = (problem: Problem, recordedReason?: string): OperationOutcome => ({
+export const refused = (problem: Problem, recordedReason?: string): RefusedOutcome => ({
 	kind: 'refused',
 	problem,
 	...(recordedReason === undefined ? {} : { recordedReason }),
@@ -65,17 +68,17 @@ const constraintOf = (failure: unknown): string | undefined => {
 };
 
 /**
- * A change's outcome: what it answered once committed, the refusal it reached through {@link
- * refuseWithin}, or the refusal a rule the store checks answers, by the constraint the store names,
- * nothing of it written. Any other failure is thrown on, as the store's.
+ * A change's outcome: what its transaction gave once committed, the refusal it reached through
+ * {@link refuseWithin}, or the refusal a rule the store checks answers, by the constraint the store
+ * names, nothing of it written. Any other failure is thrown on, as the store's.
  *
  * @param change the change, run in its transaction.
  * @param refusedByStore the refusal each constraint the store may name answers.
  */
-export const changeOutcome = (
-	change: Promise<OperationOutcome>,
+export const changeOutcome = <Result>(
+	change: Promise<Result>,
 	refusedByStore: Readonly<Record<string, Problem>> = {},
-): Promise<OperationOutcome> =>
+): Promise<RefusedOutcome | Result> =>
 	change.catch((failure: unknown) => {
 		if (failure instanceof RefusedWithin) {
 			return refused(failure.problem, failure.recordedReason);

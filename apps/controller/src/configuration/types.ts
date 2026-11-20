@@ -61,6 +61,31 @@ export interface ControllerConfiguration {
 	/** A connection URL under the Controller's runtime role, which it names, carrying no password. */
 	databaseUrl: string;
 
+	/**
+	 * The client whose service account the directory signs in as, through the client credentials
+	 * grant; required while `directoryUrl` names a directory, and empty by default.
+	 */
+	directoryClientId: string;
+
+	/**
+	 * That client's secret, read from a variable of its own, as given, and never shown; required
+	 * while `directoryUrl` names a directory, and empty by default.
+	 */
+	directoryClientSecret: string;
+
+	/**
+	 * The identity provider realm the directory looks people up in; required while `directoryUrl`
+	 * names a directory, and empty by default.
+	 */
+	directoryRealm: string;
+
+	/**
+	 * The identity provider's base URL, whose `admin/realms/<realm>` API the directory reads: https,
+	 * or http to a loopback host, carrying no password. Empty, the default, for no directory, which
+	 * resolves no address.
+	 */
+	directoryUrl: string;
+
 	/** The host the Controller listens on. */
 	host: string;
 

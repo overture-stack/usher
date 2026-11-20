@@ -941,7 +941,7 @@ suite('the problem codes and reason vocabularies', () => {
 				'selfGrantTooLong',
 				'unknownApplication',
 			],
-			503: ['directoryUnavailable', 'importNotConfigured', 'storeUnavailable'],
+			503: ['directoryNotConfigured', 'directoryUnavailable', 'importNotConfigured', 'storeUnavailable'],
 		});
 		assert.ok(Object.entries(PROBLEMS).every(([name, { code }]) => name === code));
 	});

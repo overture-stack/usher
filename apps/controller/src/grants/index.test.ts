@@ -10,6 +10,7 @@ suite('the grants module', () => {
 			'createGrantRoutes',
 			'readHolder',
 			'sqlGrantStore',
+			'unresolvedByDirectory',
 			'writeGrant',
 		]);
 	});

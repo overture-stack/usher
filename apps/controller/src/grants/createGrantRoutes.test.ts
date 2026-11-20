@@ -4,6 +4,7 @@ import { suite, test, type TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 
+import type { AddressResolution } from '../directory/index.js';
 import type { AuditEvent } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import type { ResourceStanding } from '../resourceStanding/index.js';
@@ -111,8 +112,11 @@ const ASKED: StoredGrantRequest = {
 	roleId: 'role-viewer',
 };
 
-/** What the fake store holds for one test. */
+/** What the fake store and the fake directory hold for one test. */
 interface World {
+	/** The subject of the one account holding each address verified, by the address in lower case. */
+	accounts: Readonly<Record<string, string>>;
+
 	/** The categories every resource offers, by scoped name, each with its id. */
 	categories: Readonly<Record<string, string>>;
 
@@ -121,6 +125,9 @@ interface World {
 
 	/** How many counted owners a resource has besides a grant's holder. */
 	countedOwnersBesides: number;
+
+	/** Whether the directory answers, cannot answer, or is not configured. */
+	directory: 'answering' | 'unavailable' | 'unconfigured';
 
 	/** The people holding a counted owner grant on STUDY-A1. */
 	countedOwners: readonly string[];
@@ -148,6 +155,9 @@ interface World {
 
 	/** Where each subject stands on STUDY-A1. */
 	standings: Readonly<Record<string, Partial<ResourceStanding>>>;
+
+	/** The live submitter grants the store holds, each in a category of its own. */
+	submitterGrants: readonly StoredGrant[];
 }
 
 interface Call {
@@ -163,6 +173,9 @@ interface Read {
 interface Stand {
 	calls: Call[];
 
+	/** Each address the directory was asked to resolve, as asked. */
+	lookups: string[];
+
 	/** The statements read outside any transaction, as read. */
 	reads: Read[];
 
@@ -174,12 +187,19 @@ interface Stand {
 }
 
 const WORLD: World = {
+	accounts: {
+		'ana@example.org': 'subject-ana',
+		'cy@example.org': 'subject-cy',
+		'root@example.org': 'subject-administrator',
+		'sub.bo@example.org': 'subject-bo',
+	},
 	categories: {
 		'global.controlled': 'category-controlled',
 		'global.unmarked': 'category-unmarked',
 	},
 	countedOwners: ['person-ana', 'person-dana'],
 	countedOwnersBesides: 1,
+	directory: 'answering',
 	grant: PENDING,
 	grantRequest: ASKED,
 	held: false,
@@ -193,6 +213,7 @@ const WORLD: World = {
 		'subject-bo': { holder: true },
 		'subject-cy': { holder: true },
 	},
+	submitterGrants: [],
 };
 
 // A store answering from the world given, keeping each call made of it in order.
@@ -268,9 +289,18 @@ const fakeStore = (world: World, calls: Call[]): GrantStore => {
 		lockResource: async (resourceId) => {
 			called('lockResource', resourceId);
 		},
+		liveGrantIdsOf: async (question) => {
+			called('liveGrantIdsOf', question);
+			return world.submitterGrants
+				.filter(
+					({ holderUserId, resourceId }) =>
+						holderUserId === question.holderUserId && resourceId === question.resourceId,
+				)
+				.map(({ id }) => id);
+		},
 		readGrant: async (grantId) => {
 			called('readGrant', grantId);
-			return world.grant?.id === grantId ? world.grant : undefined;
+			return [world.grant, ...world.submitterGrants].find((held) => held?.id === grantId);
 		},
 		readGrantRequest: async (requestId) => {
 			called('readGrantRequest', requestId);
@@ -292,6 +322,18 @@ const fakeStore = (world: World, calls: Call[]): GrantStore => {
 		},
 	};
 };
+
+// A directory answering from the world given, keeping each address it is asked to resolve.
+const fakeDirectory = (world: World, lookups: string[]) => ({
+	resolveAddress: async (address: string): Promise<AddressResolution> => {
+		lookups.push(address);
+		if (world.directory !== 'answering') {
+			return { kind: world.directory };
+		}
+		const subject = world.accounts[address.toLowerCase()];
+		return subject === undefined ? { kind: 'unheld' } : { kind: 'resolved', subject };
+	},
+});
 
 const tokenOf = (subject: string, extra: Readonly<Record<string, unknown>> = {}) => ({
 	claims: {
@@ -326,6 +368,7 @@ const standUp = (context: TestContext, world: Partial<World> = {}, autoAccept = 
 	const known: World = { ...WORLD, ...world };
 	const stand = {
 		calls: [] as Call[],
+		lookups: [] as string[],
 		reads: [] as Read[],
 		recorded: [] as AuditEvent[],
 		transactions: { count: 0 },
@@ -337,6 +380,7 @@ const standUp = (context: TestContext, world: Partial<World> = {}, autoAccept = 
 	});
 	createGrantRoutes(
 		{
+			directory: fakeDirectory(known, stand.lookups),
 			grantStoreOf: () => fakeStore(known, stand.calls),
 			settings: {
 				clock: { now: () => NOW },
@@ -758,25 +802,6 @@ suite('creating a grant', () => {
 		assert.equal(methodsCalled(stand).includes('insertGrant'), false);
 	});
 
-	test('answers a holder named by address 503 directoryUnavailable once the rest is judged, recording no person and writing no grant', async (context) => {
-		const stand = standUp(context);
-		const byAddress = {
-			holder: { email: 'sub.bo@example.org' },
-			resource: 'STUDY-A1',
-			role: 'submitter',
-		};
-
-		const unavailable = await create(stand, 'administrator', byAddress);
-		const hidden = await create(stand, 'cy', {
-			...byAddress,
-			resource: 'STUDY-Z9',
-		});
-
-		assert.deepEqual(outcomeOf(unavailable), [503, 'directoryUnavailable']);
-		assert.deepEqual(outcomeOf(hidden), [404, 'resourceNotFound']);
-		assert.equal(methodsCalled(stand).includes('findOrRecordPerson'), false);
-	});
-
 	test('answers a retirement committed first 404 resourceNotFound, as for a retired resource', async (context) => {
 		const stand = standUp(context, {
 			commitFailure: Object.assign(new Error('a retired resource'), {
@@ -788,6 +813,450 @@ suite('creating a grant', () => {
 		const refused = await create(stand, 'ana');
 
 		assert.deepEqual(outcomeOf(refused), [404, 'resourceNotFound']);
+	});
+});
+
+// A submitter grant on STUDY-A1, its holder named by an address.
+const submitterAt = (email: string, resource = 'STUDY-A1') => ({
+	holder: { email },
+	resource,
+	role: 'submitter',
+});
+
+// The events recorded, each by its type, its data and its severity.
+const eventsOf = ({ recorded }: Stand): readonly Readonly<Record<string, unknown>>[] =>
+	recorded.map(({ data, severity, type }) => ({ severity, type, ...data }));
+
+suite('creating a grant whose holder is named by address', () => {
+	test('answers a platform administrator 201 with the grant, written under the subject of the account holding the address, once the directory resolves it as given', async (context) => {
+		const stand = standUp(context);
+
+		const created = await create(stand, 'administrator', submitterAt('Sub.Bo@Example.ORG'));
+
+		assert.equal(created.statusCode, 201);
+		assert.equal(parsed(created)['kind'], 'grant');
+		assert.deepEqual(parsed(created)['holder'], {
+			hasAccount: true,
+			subject: 'subject-bo',
+		});
+		assert.deepEqual(stand.lookups, ['Sub.Bo@Example.ORG']);
+		assert.deepEqual(
+			stand.calls
+				.filter(({ method }) => method === 'findOrRecordPerson')
+				.map(({ values }) => String(values[0]))
+				.toSorted(),
+			['subject-administrator', 'subject-bo'],
+		);
+		assert.deepEqual(eventData(stand), [
+			{
+				category: 'global.unmarked',
+				grantId: GRANT_ID,
+				granteeId: 'subject-bo',
+				resourceId: 'STUDY-A1',
+				result: 'succeeded',
+				role: 'submitter',
+				sourceIp: '127.0.0.1',
+				type: 'grant.creation',
+			},
+		]);
+		assert.equal(created.body.includes('Sub.Bo'), false);
+	});
+
+	test("asks the directory only once the role, the category, the administrator's limits, may-see and authority are judged", async (context) => {
+		const stand = standUp(context, {
+			standings: { ...WORLD.standings, 'subject-eli': {} },
+		});
+		const viewerAt = {
+			...VIEWER_CREATION,
+			holder: { email: 'cy@example.org' },
+		};
+
+		const answers = [
+			await create(stand, 'ana', { ...viewerAt, role: 'Viewer' }),
+			await create(stand, 'ana', { ...viewerAt, category: undefined }),
+			await create(stand, 'administrator', viewerAt),
+			await create(stand, 'eli', viewerAt),
+			await create(stand, 'cy', { ...viewerAt, resource: 'STUDY-Z9' }),
+			await create(stand, 'bo', viewerAt),
+			await create(stand, 'ana', {
+				...viewerAt,
+				category: 'resource.internal',
+			}),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[422, 'unknownRole'],
+			[422, 'categoryRequired'],
+			[403, 'administratorGrantsNoConsumerAccess'],
+			[404, 'resourceNotFound'],
+			[404, 'resourceNotFound'],
+			[403, 'noAuthorityOnResource'],
+			[422, 'categoryNotOffered'],
+		]);
+		assert.deepEqual(stand.lookups, []);
+		assert.equal(methodsCalled(stand).includes('findOrRecordPerson'), false);
+	});
+
+	test('answers a platform administrator 404 holderNotFound for an address held by no single account, recording it denied and writing nothing', async (context) => {
+		const stand = standUp(context);
+
+		const refused = await create(stand, 'administrator', submitterAt('nobody@example.org'));
+
+		assert.deepEqual(outcomeOf(refused), [404, 'holderNotFound']);
+		assert.equal(methodsCalled(stand).includes('findOrRecordPerson'), false);
+		assert.deepEqual(eventsOf(stand), [
+			{
+				reason: 'holderNotFound',
+				resourceId: 'STUDY-A1',
+				result: 'denied',
+				severity: 'warning',
+				sourceIp: '127.0.0.1',
+				type: 'grant.creation',
+			},
+		]);
+	});
+
+	test('answers a counted owner 202 alike whether or not an account holds the address, naming the terms and the address as given and neither the grant nor the holder', async (context) => {
+		const stand = standUp(context);
+		const viewerAt = (email: string) => ({
+			...VIEWER_CREATION,
+			holder: { email },
+		});
+
+		const held = await create(stand, 'ana', viewerAt('Cy@Example.org'));
+		const writtenForHeld = methodsCalled(stand).includes('insertGrant');
+		const unheld = await create(stand, 'ana', viewerAt('Nobody@Example.org'));
+
+		assert.equal(held.statusCode, 202);
+		assert.equal(unheld.statusCode, 202);
+		assert.deepEqual(parsed(held), {
+			category: 'global.controlled',
+			email: 'Cy@Example.org',
+			kind: 'grantByAddress',
+			resource: 'STUDY-A1',
+			role: 'viewer',
+		});
+		assert.deepEqual(parsed(unheld), {
+			category: 'global.controlled',
+			email: 'Nobody@Example.org',
+			kind: 'grantByAddress',
+			resource: 'STUDY-A1',
+			role: 'viewer',
+		});
+		assert.deepEqual(Object.keys(held.headers).toSorted(), Object.keys(unheld.headers).toSorted());
+		assert.ok(writtenForHeld);
+		assert.equal(stand.calls.filter(({ method }) => method === 'insertGrant').length, 1);
+		[held, unheld].forEach(({ body }) => {
+			assert.equal(body.includes(GRANT_ID), false);
+			assert.equal(body.includes('subject-'), false);
+		});
+		assert.deepEqual(eventsOf(stand), [
+			{
+				category: 'global.controlled',
+				grantId: GRANT_ID,
+				granteeId: 'subject-cy',
+				resourceId: 'STUDY-A1',
+				result: 'succeeded',
+				role: 'viewer',
+				severity: 'info',
+				sourceIp: '127.0.0.1',
+				type: 'grant.creation',
+			},
+			{
+				reason: 'holderNotFound',
+				resourceId: 'STUDY-A1',
+				result: 'denied',
+				severity: 'warning',
+				sourceIp: '127.0.0.1',
+				type: 'grant.creation',
+			},
+		]);
+	});
+
+	test('refuses an address resolving to the caller as naming their own subject is refused', async (context) => {
+		const stand = standUp(context);
+
+		const selfOwned = await create(stand, 'administrator', {
+			holder: { email: 'root@example.org' },
+			resource: 'STUDY-A1',
+			role: 'owner',
+		});
+		const selfSubmitting = await create(stand, 'administrator', submitterAt('root@example.org'));
+		const ownerSelfNamed = await create(stand, 'ana', {
+			...VIEWER_CREATION,
+			holder: { email: 'ANA@example.org' },
+		});
+
+		assert.deepEqual(outcomeOf(selfOwned), [403, 'administratorSelfOwnership']);
+		assert.deepEqual(outcomeOf(selfSubmitting), [422, 'selfNamed']);
+		assert.deepEqual(outcomeOf(ownerSelfNamed), [422, 'selfNamed']);
+		assert.equal(stand.lookups.length, 3);
+		assert.equal(methodsCalled(stand).includes('insertGrant'), false);
+	});
+
+	test('answers a resolved holder holding the grant live 409 alreadyHolds, once the directory has answered', async (context) => {
+		const stand = standUp(context, { held: true });
+
+		const refused = await create(stand, 'administrator', submitterAt('sub.bo@example.org'));
+
+		assert.deepEqual(outcomeOf(refused), [409, 'alreadyHolds']);
+		assert.deepEqual(stand.lookups, ['sub.bo@example.org']);
+	});
+
+	test('answers 503 directoryNotConfigured with no directory configured and no Retry-After, telling the caller to name the holder by subject, recording it failed at warning', async (context) => {
+		const stand = standUp(context, { directory: 'unconfigured' });
+
+		const refused = await create(stand, 'administrator', submitterAt('sub.bo@example.org'));
+
+		assert.deepEqual(outcomeOf(refused), [503, 'directoryNotConfigured']);
+		assert.equal(
+			parsed(refused)['detail'],
+			'Addresses cannot be resolved without a configured directory, which the variables USHER_DIRECTORY_URL, USHER_DIRECTORY_REALM, USHER_DIRECTORY_CLIENT_ID, USHER_DIRECTORY_CLIENT_SECRET configure; name the holder by subject.',
+		);
+		assert.equal(refused.headers['retry-after'], undefined);
+		assert.equal(methodsCalled(stand).includes('findOrRecordPerson'), false);
+		assert.deepEqual(eventsOf(stand), [
+			{
+				reason: 'directoryNotConfigured',
+				resourceId: 'STUDY-A1',
+				result: 'failed',
+				severity: 'warning',
+				sourceIp: '127.0.0.1',
+				type: 'grant.creation',
+			},
+		]);
+	});
+
+	test('answers 503 directoryUnavailable while the directory cannot answer, to an owner as to an administrator, recording it failed at error', async (context) => {
+		const stand = standUp(context, { directory: 'unavailable' });
+
+		const toAdministrator = await create(stand, 'administrator', submitterAt('sub.bo@example.org'));
+		const toOwner = await create(stand, 'ana', {
+			...VIEWER_CREATION,
+			holder: { email: 'cy@example.org' },
+		});
+
+		[toAdministrator, toOwner].forEach((refused) => {
+			assert.deepEqual(outcomeOf(refused), [503, 'directoryUnavailable']);
+			assert.equal(
+				parsed(refused)['detail'],
+				"A holder named by address is found through the identity provider's directory, which cannot answer now. Name the holder by subject, or try again later.",
+			);
+		});
+		assert.equal(methodsCalled(stand).includes('findOrRecordPerson'), false);
+		assert.deepEqual(
+			eventsOf(stand).map(({ reason, result, severity }) => ({
+				reason,
+				result,
+				severity,
+			})),
+			[
+				{ reason: 'directoryUnavailable', result: 'failed', severity: 'error' },
+				{ reason: 'directoryUnavailable', result: 'failed', severity: 'error' },
+			],
+		);
+	});
+});
+
+const FIRST_SUBMITTER_ID = '2a4c6e8f-1b3d-4f5a-9c7e-0d2f4a6c8e1b';
+
+const SECOND_SUBMITTER_ID = '9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a';
+
+// Bo's submitter grants on STUDY-A1, pending, one under `global.unmarked` and one under
+// `global.controlled`, granted by Ana.
+const BO_SUBMITS: readonly StoredGrant[] = [
+	{
+		...PENDING,
+		category: 'global.unmarked',
+		holderSubject: 'subject-bo',
+		holderUserId: 'person-bo',
+		id: FIRST_SUBMITTER_ID,
+		role: 'submitter',
+	},
+	{
+		...PENDING,
+		holderSubject: 'subject-bo',
+		holderUserId: 'person-bo',
+		id: SECOND_SUBMITTER_ID,
+		role: 'submitter',
+	},
+];
+
+const removeAt = (stand: Stand, caller: string, email: string, resource = 'STUDY-A1') =>
+	send(stand, caller, {
+		body: { email },
+		method: 'POST',
+		url: `/admin/resources/${encodeURIComponent(resource)}/submitters/removal`,
+	});
+
+suite('removing a submitter by address', () => {
+	test('revokes for a platform administrator each live submitter grant of the account holding the address, the caller their revoker, recording each as grant.revocation unspecified, and answers 204 with no body', async (context) => {
+		const stand = standUp(context, { submitterGrants: BO_SUBMITS });
+
+		const removed = await removeAt(stand, 'administrator', 'Sub.Bo@Example.ORG');
+
+		assert.equal(removed.statusCode, 204);
+		assert.equal(removed.body, '');
+		assert.deepEqual(stand.lookups, ['Sub.Bo@Example.ORG']);
+		assert.deepEqual(stand.calls.find(({ method }) => method === 'liveGrantIdsOf')?.values, [
+			{
+				holderUserId: 'person-bo',
+				now: new Date(NOW),
+				resourceId: 'resource-a1',
+				roleId: 'role-submitter',
+			},
+		]);
+		assert.deepEqual(
+			stand.calls.filter(({ method }) => method === 'revokeGrant').map(({ values }) => values[0]),
+			[FIRST_SUBMITTER_ID, SECOND_SUBMITTER_ID].map((grantId) => ({
+				grantId,
+				now: new Date(NOW),
+				revokedBy: 'person-administrator',
+			})),
+		);
+		assert.deepEqual(stand.calls.findLast(({ method }) => method === 'readStanding')?.values, [
+			{
+				externalId: 'STUDY-A1',
+				lock: 'noKeyUpdate',
+				now: new Date(NOW),
+				subject: 'subject-administrator',
+			},
+		]);
+		assert.deepEqual(
+			eventData(stand),
+			BO_SUBMITS.map(({ category, id }) => ({
+				category,
+				grantId: id,
+				granteeId: 'subject-bo',
+				reason: 'unspecified',
+				resourceId: 'STUDY-A1',
+				result: 'succeeded',
+				role: 'submitter',
+				sourceIp: '127.0.0.1',
+				type: 'grant.revocation',
+			})),
+		);
+	});
+
+	test('revokes for a counted owner of the study, the owner their revoker', async (context) => {
+		const stand = standUp(context, { submitterGrants: BO_SUBMITS });
+
+		const removed = await removeAt(stand, 'ana', 'sub.bo@example.org');
+
+		assert.equal(removed.statusCode, 204);
+		assert.deepEqual(
+			stand.calls
+				.filter(({ method }) => method === 'revokeGrant')
+				.map(({ values }) => Reflect.get(Object(values[0]), 'revokedBy')),
+			['person-ana', 'person-ana'],
+		);
+	});
+
+	test('answers a caller without authority on the study alike whatever the address, asking the directory nothing', async (context) => {
+		const stand = standUp(context, {
+			standings: { ...WORLD.standings, 'subject-eli': {} },
+			submitterGrants: BO_SUBMITS,
+		});
+
+		const holderHeld = await removeAt(stand, 'bo', 'sub.bo@example.org');
+		const holderUnheld = await removeAt(stand, 'bo', 'nobody@example.org');
+		const hiddenHeld = await removeAt(stand, 'eli', 'sub.bo@example.org');
+		const hiddenUnheld = await removeAt(stand, 'eli', 'nobody@example.org');
+		const absent = await removeAt(stand, 'eli', 'sub.bo@example.org', 'STUDY-Z9');
+
+		assert.deepEqual(outcomeOf(holderHeld), [403, 'noAuthorityOnResource']);
+		assert.equal(holderHeld.body, holderUnheld.body);
+		assert.deepEqual(outcomeOf(hiddenHeld), [404, 'resourceNotFound']);
+		assert.equal(hiddenHeld.body, hiddenUnheld.body);
+		assert.equal(hiddenHeld.body, absent.body);
+		assert.deepEqual(stand.lookups, []);
+		assert.deepEqual(
+			eventData(stand).map(({ reason, resourceId, type }) => [type, resourceId, reason]),
+			[
+				['grant.revocation', 'STUDY-A1', 'noAuthorityOnResource'],
+				['grant.revocation', 'STUDY-A1', 'noAuthorityOnResource'],
+				['grant.revocation', 'STUDY-A1', 'noAuthorityOnResource'],
+				['grant.revocation', 'STUDY-A1', 'noAuthorityOnResource'],
+				['grant.revocation', undefined, 'resourceNotFound'],
+			],
+		);
+	});
+
+	test("refuses an address out of an address's form 422 addressForm, and a body it cannot read 400, before reading the store or the directory", async (context) => {
+		const stand = standUp(context, { submitterGrants: BO_SUBMITS });
+		const url = '/admin/resources/STUDY-A1/submitters/removal';
+
+		const malformed = await removeAt(stand, 'administrator', ' sub.bo@example.org');
+		const listed = await send(stand, 'administrator', {
+			body: { email: ['a@example.org', 'b@example.org'] },
+			method: 'POST',
+			url,
+		});
+		const another = await send(stand, 'administrator', {
+			body: { email: 'sub.bo@example.org', subject: 'subject-bo' },
+			method: 'POST',
+			url,
+		});
+
+		assert.deepEqual(outcomeOf(malformed), [422, 'addressForm']);
+		assert.deepEqual(outcomeOf(listed), [400, 'unreadableBody']);
+		assert.deepEqual(outcomeOf(another), [400, 'unreadableBody']);
+		assert.deepEqual(stand.lookups, []);
+		assert.equal(stand.transactions.count, 0);
+	});
+
+	test('answers a platform administrator 404 holderNotFound for an address no single account holds, and a counted owner 409 doesNotHold as for an account holding no submitter grant, recording holderNotFound for both', async (context) => {
+		const stand = standUp(context, { submitterGrants: BO_SUBMITS });
+
+		const toAdministrator = await removeAt(stand, 'administrator', 'nobody@example.org');
+		const toOwner = await removeAt(stand, 'ana', 'nobody@example.org');
+		const notSubmitting = await removeAt(stand, 'ana', 'cy@example.org');
+
+		assert.deepEqual(outcomeOf(toAdministrator), [404, 'holderNotFound']);
+		assert.deepEqual(outcomeOf(toOwner), [409, 'doesNotHold']);
+		assert.equal(toOwner.body, notSubmitting.body);
+		assert.equal(methodsCalled(stand).includes('revokeGrant'), false);
+		assert.deepEqual(
+			eventData(stand).map(({ reason, result }) => [reason, result]),
+			[
+				['holderNotFound', 'denied'],
+				['holderNotFound', 'denied'],
+				['doesNotHold', 'denied'],
+			],
+		);
+	});
+
+	test("answers 503 directoryNotConfigured with no directory configured, recorded failed at warning, and 503 directoryUnavailable while the directory cannot answer, recorded failed at error, each telling the caller to revoke the submitter's grant by its id", async (context) => {
+		const unconfigured = standUp(context, { directory: 'unconfigured' });
+		const unavailable = standUp(context, { directory: 'unavailable' });
+
+		const answers = [
+			await removeAt(unconfigured, 'administrator', 'sub.bo@example.org'),
+			await removeAt(unavailable, 'ana', 'sub.bo@example.org'),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[503, 'directoryNotConfigured'],
+			[503, 'directoryUnavailable'],
+		]);
+		assert.deepEqual(
+			answers.map((answer) => parsed(answer)['detail']),
+			[
+				"Addresses cannot be resolved without a configured directory, which the variables USHER_DIRECTORY_URL, USHER_DIRECTORY_REALM, USHER_DIRECTORY_CLIENT_ID, USHER_DIRECTORY_CLIENT_SECRET configure; revoke the submitter's grant by its id, through DELETE /admin/grants/{id}.",
+				"A submitter named by address is found through the identity provider's directory, which cannot answer now. Revoke the submitter's grant by its id, through DELETE /admin/grants/{id}, or try again later.",
+			],
+		);
+		assert.deepEqual(
+			[...eventsOf(unconfigured), ...eventsOf(unavailable)].map(({ reason, result, severity }) => [
+				reason,
+				result,
+				severity,
+			]),
+			[
+				['directoryNotConfigured', 'failed', 'warning'],
+				['directoryUnavailable', 'failed', 'error'],
+			],
+		);
 	});
 });
 

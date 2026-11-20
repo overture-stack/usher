@@ -23,6 +23,7 @@ import {
 	rejectionTallyEvent,
 } from '../channelAssertion/index.js';
 import { type ControllerConfiguration, ENVIRONMENT_VARIABLES } from '../configuration/index.js';
+import { createDirectory } from '../directory/index.js';
 import { createAuditTrail, createEventLog } from '../eventLog/index.js';
 import {
 	createExchange,
@@ -129,6 +130,8 @@ const READINESS_CONNECTIONS = 1;
  * event. Every unit of its store work, a request's statement or transaction, a recorded event,
  * a read of the keys or the notices, a run of the sweep, or the start's transaction, runs within
  * the store timeout.
+ * The operations naming a person by address resolve the address through one directory, which the
+ * start does not contact.
  *
  * Every start allowed a database connection that does not verify the server it reaches writes one
  * line at warning, {@link UNVERIFIED_CONNECTION_ALLOWED}, naming the variable allowing it, before
@@ -301,6 +304,8 @@ export const createController = (configuration: ControllerConfiguration): Contro
 	// One verifier for every route verifying the identity provider's tokens, so the keys fetched for
 	// one are held for all, and their fetches share one cooldown.
 	const tokenVerifier = createTokenVerifier(configuration, eventLog);
+	// One directory for every operation naming a person by address, so its token is held for all.
+	const directory = createDirectory(configuration, eventLog);
 	// The shares divide the exchange pool the instance holds; the registered count follows each read of
 	// the key ring.
 	const admission = createAdmission({
@@ -382,9 +387,10 @@ export const createController = (configuration: ControllerConfiguration): Contro
 			},
 			management,
 		),
-		...createResourceRoutes({ settings, store: reader, trail: wakingTrail }, management),
+		...createResourceRoutes({ directory, settings, store: reader, trail: wakingTrail }, management),
 		...createGrantRoutes(
 			{
+				directory,
 				grantStoreOf: (connection) =>
 					sqlGrantStore(connection, {
 						issuer: configuration.identityProviderIssuer,

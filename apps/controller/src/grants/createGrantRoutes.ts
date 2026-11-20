@@ -8,8 +8,11 @@ import {
 	managementRoute,
 	type NamedByRequest,
 	type OperationOutcome,
+	type Principal,
 } from '../managementApi/index.js';
-import { isLive } from '../resourceStanding/index.js';
+import { isLive, type StandingLock } from '../resourceStanding/index.js';
+import { addressedAnswer, type AddressedTerms, unansweredRefusal } from './addressedCreation.js';
+import { unresolvedByDirectory } from './directoryOutcome.js';
 import { grantAuthority } from './grantAuthority.js';
 import { categoryNamingOf, offeredCategory } from './grantCategory.js';
 import { grantChangeOperation } from './grantChangeOperation.js';
@@ -29,13 +32,17 @@ import { readGrantAnswer } from './readGrantAnswer.js';
 import { readGrantCreation } from './readGrantCreation.js';
 import { readGrantRevocation } from './readGrantRevocation.js';
 import { selfGrantOperation } from './selfGrantOperation.js';
+import { submitterRemovalOperation } from './submitterRemovalOperation.js';
 import type {
 	GrantAnswer,
 	GrantCreation,
 	GrantOperationsSettings,
 	GrantRevocation,
+	GrantStore,
+	JudgedCreation,
 	StoredGrant,
 	StoredRole,
+	ViewedGrant,
 } from './types.js';
 import { writeGrant } from './writeGrant.js';
 
@@ -53,26 +60,32 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
 /**
  * Creates the routes of the Management API's grant operations: creating a grant, a holder answering
  * one, revoking one, and the operations {@link selfGrantOperation}, {@link grantChangeOperation},
- * {@link grantRequestDecisionOperation} and {@link grantRequestListingOperation} build, over the
- * same store, settings and trail. Each change commits in one transaction with its event and its
- * notices, or writes nothing; a refusal inside the transaction rolls it back whole, and a service
- * account is refused 403 `serviceAccountNotPermitted` before anything is read. Every instant is
- * read from the configured clock, and a grant is live while it is neither revoked, nor replaced
- * once expired, nor expired on that clock. A retired resource, and every grant on one, is answered
- * as one that does not exist, to everyone. Each change locks the resource's row before any grant's.
+ * {@link grantRequestDecisionOperation}, {@link grantRequestListingOperation} and {@link
+ * submitterRemovalOperation} build, over the same store, directory, settings and trail. Each change
+ * commits in one transaction with its event and its notices, or writes nothing; a refusal inside
+ * the transaction rolls it back whole, and a service account is refused 403
+ * `serviceAccountNotPermitted` before anything is read. Every instant is read from the configured
+ * clock, and a grant is live while it is neither revoked, nor replaced once expired, nor expired on
+ * that clock. A retired resource, and every grant on one, is answered as one that does not exist,
+ * to everyone. Each change locks the resource's row before any grant's.
  *
  * Creating a grant, `POST /admin/grants`, reads its body with {@link readGrantCreation}, then
  * judges in turn: a role the instance does not define, in its exact letter case, 422 `unknownRole`;
  * a control-plane role naming a category 422 `wholeResourceRole`, and a data-plane role naming none
  * 422 `categoryRequired`, except `submitter`, which takes the instance's submitter category; the
- * grant's authority, decided by {@link grantAuthority} on the resource's row locked for share; a
- * category the resource does not offer 422 `categoryNotOffered`; and a holder named by address, 503
- * `directoryUnavailable`, since no directory is read. It then writes the grant with {@link
- * writeGrant}, its granter the caller, recorded on first meeting them, refusing 409 `alreadyHolds`
- * a holder holding one on its terms neither revoked nor ended, and answers 201 with the grant. A
- * creation whose commit fails since its resource was retired first is answered 404
- * `resourceNotFound`. Its event, refused, names the resource the body names only when the store
- * holds a resource under that externalId, whatever its standing.
+ * grant's authority, decided by {@link grantAuthority} on the resource's row locked for share; and
+ * a category the resource does not offer 422 `categoryNotOffered`. It then writes the grant with
+ * {@link writeGrant}, its granter the caller, recorded on first meeting them, refusing 409
+ * `alreadyHolds` a holder holding one on its terms neither revoked nor ended, and answers 201 with
+ * the grant. A creation whose commit fails since its resource was retired first is answered 404
+ * `resourceNotFound`. Its event, refused, names the resource the body names.
+ *
+ * A holder named by address is resolved through the directory only once every other rule is judged,
+ * in a transaction of its own writing nothing, and never while a transaction is open. The grant is
+ * then written as for the subject the address resolves to, every rule judged again, so an address
+ * resolving to the caller is refused as their own subject is. It is answered as {@link
+ * addressedAnswer} decides, and a directory resolving nothing as {@link unresolvedByDirectory}
+ * decides.
  *
  * Answering a grant, `POST /admin/grants/{id}/decisions`, reads its body with {@link
  * readGrantAnswer}. Only the grant's holder answers it, the person holding the caller's identity
@@ -97,15 +110,15 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
  * reason; an event of an answer or a revocation refused names the grant when one held by a person
  * has the id.
  *
- * @param operations the grant store over a transaction's connection, the settings, the store reader
- *   and the trail, each on the control pool.
+ * @param operations the grant store over a transaction's connection, the directory, the settings,
+ *   the store reader and the trail, each on the control pool.
  * @param dependencies what every Management API operation's route is built on.
  */
 export const createGrantRoutes = (
 	operations: GrantOperationsSettings,
 	dependencies: ManagementDependencies,
 ): readonly RouteOptions[] => {
-	const { grantStoreOf, settings, store, trail } = operations;
+	const { directory, grantStoreOf, settings, store, trail } = operations;
 	const { clock, databaseSchema } = settings;
 	const namedGrant = async ({ params }: NamedByRequest): Promise<EventMembers> => {
 		const grantId = params['id'] ?? '';
@@ -133,6 +146,131 @@ export const createGrantRoutes = (
 		return rows[0]?.exists === true ? { resourceId: resource } : {};
 	};
 
+	// Judges every rule of a creation but its holder's address, in a change's transaction: the role,
+	// the category it names, the caller's authority on the resource read under the lock given, the
+	// holder named being the caller among it, and the category the resource offers.
+	const judgeCreation = async (
+		grants: GrantStore,
+		{
+			input,
+			lock,
+			now,
+			principal,
+		}: {
+			input: GrantCreation;
+			lock: StandingLock;
+			now: Date;
+			principal: Principal;
+		},
+		holderSubject: string | undefined,
+	): Promise<JudgedCreation> => {
+		const role = (await grants.findRole(input.role)) ?? refuseWithin(GRANT_PROBLEMS.unknownRole);
+		const naming = categoryNamingOf(role, input.category, settings.submitterCategory);
+		const standing = await grants.readStanding({
+			externalId: input.resource,
+			lock,
+			now,
+			subject: principal.subject,
+		});
+		const authority = grantAuthority({
+			administrator: principal.administrator,
+			holderIsCaller: holderSubject === principal.subject,
+			role: role.name,
+			standing,
+		});
+		if (authority.kind === 'refuse') {
+			refuseWithin(authority.problem, authority.recordedReason);
+		}
+		const resource = standing ?? refuseWithin(GRANT_PROBLEMS.resourceNotFound);
+		const category = await offeredCategory(grants, naming, resource.id);
+		return { category, kind: 'judged', resource, role };
+	};
+
+	// Writes a creation's grant for the holder's subject in one transaction, judging every rule again
+	// on the resource's row locked for share, and answers as `answerOf` says.
+	const writeCreation = (
+		request: { input: GrantCreation; now: Date; principal: Principal },
+		holderSubject: string,
+		sourceIp: string,
+		answerOf: (written: ViewedGrant) => OperationOutcome,
+	): Promise<OperationOutcome> => {
+		const { now, principal } = request;
+		return changeOutcome(
+			trail.inTransaction(actorOf(principal), async ({ connection, record }): Promise<OperationOutcome> => {
+				const grants = grantStoreOf(connection);
+				const { category, resource, role } = await judgeCreation(
+					grants,
+					{ ...request, lock: 'share' },
+					holderSubject,
+				);
+				const granter = {
+					subject: principal.subject,
+					userId: await grants.findOrRecordPerson(principal.subject, now),
+				};
+				const written =
+					(await writeGrant(grants, record, {
+						autoAccept: settings.grantAutoAccept,
+						category,
+						expiresAt: request.input.expiresAt ?? null,
+						grantedAt: now,
+						granter,
+						holderSubject,
+						resource: { externalId: resource.externalId, id: resource.id },
+						role,
+						sourceIp,
+					})) ?? refuseWithin(GRANT_PROBLEMS.alreadyHolds);
+				return answerOf(written);
+			}),
+			{
+				resources_retired_without_live_grants: GRANT_PROBLEMS.resourceNotFound,
+			},
+		);
+	};
+
+	// Creates a grant whose holder is named by address: every other rule judged first, in a
+	// transaction writing nothing, then the address resolved, then the grant written as for the
+	// subject it resolves to, and answered as addressedAnswer decides.
+	const createByAddress = async (
+		request: { input: GrantCreation; now: Date; principal: Principal },
+		email: string,
+		sourceIp: string,
+	): Promise<OperationOutcome> => {
+		const { now, principal } = request;
+		const judged = await changeOutcome(
+			trail.inTransaction(actorOf(principal), ({ connection }) =>
+				judgeCreation(grantStoreOf(connection), { ...request, lock: 'none' }, undefined),
+			),
+		);
+		if (judged.kind === 'refused') {
+			return judged;
+		}
+		const resolution = await directory.resolveAddress(email);
+		if (resolution.kind === 'unavailable' || resolution.kind === 'unconfigured') {
+			return unresolvedByDirectory(resolution, 'holderBySubject');
+		}
+		const terms: AddressedTerms = {
+			category: judged.category?.scopedName ?? null,
+			email,
+			resource: judged.resource.externalId,
+			role: judged.role.name,
+		};
+		if (resolution.kind === 'resolved') {
+			return writeCreation(
+				request,
+				resolution.subject,
+				sourceIp,
+				(written) => addressedAnswer(principal, terms, written, now.getTime()).outcome,
+			);
+		}
+		const { outcome, recordedRefusal } = addressedAnswer(principal, terms, undefined, now.getTime());
+		if (recordedRefusal !== undefined) {
+			await trail.inTransaction(actorOf(principal), ({ record }) =>
+				record(unansweredRefusal(terms.resource, recordedRefusal, sourceIp)),
+			);
+		}
+		return outcome;
+	};
+
 	const creation: ManagementOperation<GrantCreation> = {
 		administratorOnly: false,
 		body: 'required',
@@ -141,55 +279,12 @@ export const createGrantRoutes = (
 		readInput: (body) => readGrantCreation(body ?? {}, clock.now()),
 		route: '/admin/grants',
 		run: ({ input, principal, sourceIp }) => {
-			const now = new Date(clock.now());
-			return changeOutcome(
-				trail.inTransaction(actorOf(principal), async ({ connection, record }): Promise<OperationOutcome> => {
-					const grants = grantStoreOf(connection);
-					const role = (await grants.findRole(input.role)) ?? refuseWithin(GRANT_PROBLEMS.unknownRole);
-					const naming = categoryNamingOf(role, input.category, settings.submitterCategory);
-					const standing = await grants.readStanding({
-						externalId: input.resource,
-						lock: 'share',
-						now,
-						subject: principal.subject,
-					});
-					const authority = grantAuthority({
-						administrator: principal.administrator,
-						holderIsCaller: input.holder.kind === 'subject' && input.holder.subject === principal.subject,
-						role: role.name,
-						standing,
-					});
-					if (authority.kind === 'refuse') {
-						refuseWithin(authority.problem, authority.recordedReason);
-					}
-					const resource = standing ?? refuseWithin(GRANT_PROBLEMS.resourceNotFound);
-					const category = await offeredCategory(grants, naming, resource.id);
-					const holderSubject =
-						input.holder.kind === 'subject'
-							? input.holder.subject
-							: refuseWithin(GRANT_PROBLEMS.directoryUnavailable);
-					const granter = {
-						subject: principal.subject,
-						userId: await grants.findOrRecordPerson(principal.subject, now),
-					};
-					const written =
-						(await writeGrant(grants, record, {
-							autoAccept: settings.grantAutoAccept,
-							category,
-							expiresAt: input.expiresAt ?? null,
-							grantedAt: now,
-							granter,
-							holderSubject,
-							resource: { externalId: resource.externalId, id: resource.id },
-							role,
-							sourceIp,
-						})) ?? refuseWithin(GRANT_PROBLEMS.alreadyHolds);
-					return answered(201, grantView(written, now.getTime()));
-				}),
-				{
-					resources_retired_without_live_grants: GRANT_PROBLEMS.resourceNotFound,
-				},
-			);
+			const request = { input, now: new Date(clock.now()), principal };
+			return input.holder.kind === 'subject'
+				? writeCreation(request, input.holder.subject, sourceIp, (written) =>
+						answered(201, grantView(written, request.now.getTime())),
+					)
+				: createByAddress(request, input.holder.email, sourceIp);
 		},
 	};
 
@@ -343,5 +438,6 @@ export const createGrantRoutes = (
 		managementRoute(grantChangeOperation(operations, namedGrant), dependencies),
 		managementRoute(grantRequestDecisionOperation(operations), dependencies),
 		managementRoute(grantRequestListingOperation(operations), dependencies),
+		managementRoute(submitterRemovalOperation(operations), dependencies),
 	];
 };

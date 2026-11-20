@@ -70,12 +70,6 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'Control-plane role not self-granted',
 		'A self-grant is of a data-plane role, such as viewer; a control-plane role is granted by someone else, through POST /admin/grants.',
 	),
-	directoryUnavailable: problem(
-		'directoryUnavailable',
-		503,
-		'Directory unavailable',
-		"A holder named by address is found through the identity provider's directory, which cannot answer now. Name the holder by subject, or try again later.",
-	),
 	doesNotHold: problem(
 		'doesNotHold',
 		409,
@@ -108,6 +102,12 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'Granter not taken',
 		"The caller is the grant's granter: leave grantedBy out.",
 	),
+	holderNotFound: problem(
+		'holderNotFound',
+		404,
+		'Holder not found',
+		'No single account holds the address verified: check the address, or name the holder by subject.',
+	),
 	holderNotOnePerson: problem(
 		'holderNotOnePerson',
 		422,
@@ -121,6 +121,12 @@ export const GRANT_PROBLEMS = Object.freeze({
 		"A self-grant's holder is the caller: leave holder out.",
 	),
 	noAuthorityOnResource: STANDING_PROBLEMS.noAuthorityOnResource,
+	notASubmitter: problem(
+		'doesNotHold',
+		409,
+		'Grant not in force',
+		'The address names no one holding a live submitter grant on this resource.',
+	),
 	ownRequest: problem(
 		'ownRequest',
 		403,

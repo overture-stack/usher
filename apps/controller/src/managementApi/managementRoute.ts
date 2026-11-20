@@ -131,13 +131,14 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * is the code answered, or the reason the operation gives in its place, as where a `404` stands in
  * for a refusal of authority. It names what the operation reads the request to name, from the path
  * and from a body read as an object holding no text that cannot be stored. A failure of the store
- * answers 503 and records the event `failed`, at error, naming the same. A change whose `COMMIT`
- * the store did not confirm answers 503 `outcomeUnknown` and records nothing more, since it may
- * have been made. Text that cannot be stored, in the token's subject or session, in a path
- * parameter, or anywhere in the body, is refused 400 before any transaction begins, a path
- * parameter's before the query and the body are read. A refusal of a request whose path parameter
- * cannot be stored names no entity, so its event is recorded without the operation being asked what
- * the request named.
+ * answers 503 and records the event `failed`, at error, naming the same; so does a dependency
+ * beyond the store that the operation answers unavailable, answered with its own problem and
+ * recorded with its code as the reason, running no step after a commit. A change whose `COMMIT` the
+ * store did not confirm answers 503 `outcomeUnknown` and records nothing more, since it may have
+ * been made. Text that cannot be stored, in the token's subject or session, in a path parameter, or
+ * anywhere in the body, is refused 400 before any transaction begins, a path parameter's before the
+ * query and the body are read. A refusal of a request whose path parameter cannot be stored names
+ * no entity, so its event is recorded without the operation being asked what the request named.
  *
  * @param operation the operation.
  * @param dependencies the verifier, the windows, the store's readings of a principal's standing and
@@ -462,6 +463,15 @@ export const managementRoute = <Input>(
 			if (outcome.kind === 'answered') {
 				await runAfterCommit(operation.afterCommit ?? []);
 				return answer(reply, outcome);
+			}
+			if (outcome.kind === 'unavailable') {
+				await recordOperationEvent(request, principal, {
+					body,
+					reason: outcome.problem.code,
+					result: 'failed',
+					severity: outcome.severity ?? 'error',
+				});
+				return sendProblem(reply, outcome.problem);
 			}
 			return refuse(request, reply, principal, {
 				body,

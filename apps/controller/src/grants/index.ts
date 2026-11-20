@@ -1,4 +1,5 @@
 export { createGrantRoutes } from './createGrantRoutes.js';
+export { type DirectoryAlternative, unresolvedByDirectory } from './directoryOutcome.js';
 export { GRANT_PROBLEMS } from './grantProblems.js';
 export { readHolder } from './readHolder.js';
 export { sqlGrantStore } from './sqlGrantStore.js';

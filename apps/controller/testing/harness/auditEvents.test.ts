@@ -830,6 +830,7 @@ suite("the controller's events, as the document registers them", () => {
 		);
 		assert.deepEqual(Object.values(FAULT_REASONS).toSorted(), [
 			'cacheUnavailable',
+			'directoryNotConfigured',
 			'directoryUnavailable',
 			'identityProviderUnavailable',
 			'storeUnavailable',
