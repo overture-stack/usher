@@ -17,7 +17,7 @@ on disk against entries here; a sweep starting from either list cannot find what
 
 - [Admin model: open questions](roadmap/admin-model-open-questions.md): three v1 blockers and lower-priority follow-ups for the admin API
 - [API keys](roadmap/api-keys.md): why they stay opaque, and the narrowing worth building later
-- [Arranger integration blockers](roadmap/arranger-integration-blockers.md): eleven items from the first adapter integration, grouped by what blocks each; two are fail-open defects
+- [Arranger integration blockers](roadmap/arranger-integration-blockers.md): the open items from the first adapter integration, grouped by what blocks each
 - [Bounded surveyor](roadmap/bounded-surveyor.md): post-MVP; a surveyor who views a bounded number of records and counts nothing, what serving it takes, and why granting it early serves a full viewer
 - [Categories that select](roadmap/categories-that-select.md): research on top of the decided overlay category; using overlays to define synthetic resources, what that solves for multi-category records, and the three rules it needs
 - [Cohort registration and Lyric integration](roadmap/cohort-registration-lyric.md): pre-registration approach and three design items gating Lyric integration
