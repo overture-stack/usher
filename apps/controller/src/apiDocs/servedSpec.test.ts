@@ -117,6 +117,28 @@ suite('the contract the API documentation page serves', () => {
 		});
 	});
 
+	test("names the identity provider's end-session endpoint in its sign-in scheme where one is given, and nothing in its place where none is", async () => {
+		const committed = await committedSpec();
+		const endSessionEndpoint = 'https://auth.example.org/realms/usher/protocol/openid-connect/logout';
+
+		const schemes = [
+			servedSpec(committed, { ...ENDPOINTS, endSessionEndpoint }),
+			servedSpec(committed, ENDPOINTS),
+		].map(({ components }) => components.securitySchemes['identityProviderSignIn']);
+
+		assert.deepEqual(
+			schemes.map((scheme) => (isRecord(scheme) ? scheme['x-end-session-endpoint'] : 'no scheme')),
+			[endSessionEndpoint, undefined],
+		);
+		assert.deepEqual(
+			schemes.map((scheme) => (isRecord(scheme) ? Object.keys(scheme) : [])),
+			[
+				['flows', 'type', 'x-end-session-endpoint'],
+				['flows', 'type'],
+			],
+		);
+	});
+
 	test('names exactly one flow in its sign-in scheme, authorizationCode', async () => {
 		const served = servedSpec(await committedSpec(), ENDPOINTS);
 		const scheme = served.components.securitySchemes['identityProviderSignIn'];

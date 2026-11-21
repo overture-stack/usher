@@ -27,8 +27,18 @@ const readEndpoints = async (issuer: string): Promise<Step<SignInEndpoints, Issu
 	if (token.kind === 'failed') {
 		return token;
 	}
+	// Optional, and held to the same rules as the others where it is named: a discovery naming none
+	// leaves a sign-out on the page to the page alone.
+	const endSession =
+		discovery.value['end_session_endpoint'] === undefined
+			? undefined
+			: issuerEndpoint(discovery.value, 'end_session_endpoint', issuer);
+	if (endSession?.kind === 'failed') {
+		return endSession;
+	}
 	return obtained({
 		authorizationEndpoint: authorization.value.href,
+		...(endSession === undefined ? {} : { endSessionEndpoint: endSession.value.href }),
 		tokenEndpoint: token.value.href,
 	});
 };
@@ -43,7 +53,8 @@ interface EndpointsCache {
  * Creates the trusted issuer's sign-in endpoints, reading nothing until they are first asked for. They
  * are read from the issuer's discovery document, which must name the issuer exactly, and an
  * authorization and a token endpoint each reachable over https, or over http to a loopback host, at
- * exactly the issuer's origin. Endpoints once read are held from then on and never read again, and
+ * exactly the issuer's origin; an end-session endpoint is optional, and held to the same rules where
+ * the document names one. Endpoints once read are held from then on and never read again, and
  * concurrent askers share one read. After a failed read none starts until
  * {@link ENDPOINTS_RETRY_COOLDOWN_MILLISECONDS} have passed on the configured clock, and an ask before
  * then is answered unavailable at once, with the milliseconds left. Each failed read writes

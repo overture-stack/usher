@@ -168,6 +168,22 @@ suite("the trusted issuer's sign-in endpoints", () => {
 		assert.deepEqual(provider.asked, [DISCOVERY_PATH]);
 	});
 
+	test('reads the end-session endpoint too where the discovery document names one', async (context) => {
+		const provider = await startProvider(context);
+		provider.departures = { end_session_endpoint: `${provider.issuer}/protocol/openid-connect/logout` };
+
+		const reading = await endpointsFor(provider).current();
+
+		assert.deepEqual(reading, {
+			endpoints: {
+				authorizationEndpoint: `${provider.issuer}/protocol/openid-connect/auth`,
+				endSessionEndpoint: `${provider.issuer}/protocol/openid-connect/logout`,
+				tokenEndpoint: `${provider.issuer}/protocol/openid-connect/token`,
+			},
+			kind: 'read',
+		});
+	});
+
 	test('shares one read among the asks made while it is in flight', async (context) => {
 		const provider = await startProvider(context, true);
 		const endpoints = endpointsFor(provider);
@@ -267,6 +283,14 @@ suite('writing a failed read of the sign-in endpoints', () => {
 			{
 				cause: 'endpointOrigin',
 				departure: { departures: { token_endpoint: `${elsewhere}/token` } },
+			},
+			{
+				cause: 'endpointLocation',
+				departure: { departures: { end_session_endpoint: 'not a url' } },
+			},
+			{
+				cause: 'endpointOrigin',
+				departure: { departures: { end_session_endpoint: `${elsewhere}/logout` } },
 			},
 		];
 
