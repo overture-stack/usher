@@ -533,7 +533,7 @@ suite('creating a grant', () => {
 			const atCreation = await storedDecisions(harness, grantId);
 			const answered = await answerGrant(await personCaller(harness, CAST.recipient), grantId, {
 				capabilities: SHOWN.viewer,
-				decision: 'accepted',
+				decision: 'accept',
 			});
 			const afterAnswer = await storedDecisions(harness, grantId);
 
@@ -575,7 +575,7 @@ suite('creating a grant', () => {
 				fixture: grantsFixture({
 					decisions: [
 						answeredInFixture('acceptedUnmarked'),
-						answeredInFixture('declinedCurator', 'rejected'),
+						answeredInFixture('declinedCurator', 'declined'),
 					],
 					grants: {
 						acceptedUnmarked: fixtureGrant('recipient', 'viewer', {
@@ -693,7 +693,7 @@ suite('creating a grant', () => {
 			);
 			const answered = await answerGrant(await personCaller(harness, newcomer), grantId, {
 				capabilities: SHOWN.viewer,
-				decision: 'accepted',
+				decision: 'accept',
 			});
 
 			assert.equal(beforehand, 0);

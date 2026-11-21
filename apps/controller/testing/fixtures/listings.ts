@@ -270,7 +270,7 @@ export const listingPolicy = (realm: ListingRealm, base: number): PolicyFixture 
 			{
 				capabilities: SUBMITTER_CAPABILITIES,
 				decidedAt: daysBefore(base, 29),
-				decision: 'rejected',
+				decision: 'declined',
 				grant: 'a1Bo',
 			},
 			{
@@ -280,7 +280,7 @@ export const listingPolicy = (realm: ListingRealm, base: number): PolicyFixture 
 				grant: 'a1Bo',
 			},
 			answer('a1Dee', 'accepted', daysBefore(base, 25)),
-			answer('a1Dee', 'rejected', daysBefore(base, 24)),
+			answer('a1Dee', 'declined', daysBefore(base, 24)),
 			answer('a1Eve', 'accepted', daysBefore(base, 22)),
 			answer('a1Fay', 'accepted', daysBefore(base, 20)),
 			answer('a1Gil', 'accepted', daysBefore(base, 18)),
@@ -390,7 +390,7 @@ export const ownerStatesPolicy = (realm: ListingRealm, base: number): PolicyFixt
 		...main,
 		decisions: [
 			...(main.decisions ?? []).filter(({ grant }) => grant !== 'a1Owner' && grant !== 'b2Owner'),
-			answer('b2Owner', 'rejected', daysBefore(base, 1)),
+			answer('b2Owner', 'declined', daysBefore(base, 1)),
 			answer('c3CyOwner', 'accepted', daysBefore(base, 14)),
 			answer('c3DeeOwner', 'accepted', daysBefore(base, 11)),
 		],

@@ -168,9 +168,9 @@ suite("a grant's state", () => {
 			[
 				grantStateOf(PENDING, NOW),
 				grantStateOf({ ...PENDING, decision: ACCEPTED }, NOW),
-				grantStateOf({ ...PENDING, decision: { ...ACCEPTED, decision: 'rejected' } }, NOW),
+				grantStateOf({ ...PENDING, decision: { ...ACCEPTED, decision: 'declined' } }, NOW),
 			],
-			['pending', 'accepted', 'rejected'],
+			['pending', 'accepted', 'declined'],
 		);
 	});
 });

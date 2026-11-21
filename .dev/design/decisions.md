@@ -3648,7 +3648,7 @@ ungrantable: a resource carrying no concrete category holds all its records ther
 A grant is the granter's act. Whether the recipient takes it up is theirs, and it is a separate row:
 
     Ana | HEART_STUDY | controlled | as curator | CRUD | accepted | 2026-09-18T14:32:07Z
-    Bo  | REEF_ARCHIVE | controlled | as viewer | read | rejected | 2026-09-18T15:04:51Z
+    Bo  | REEF_ARCHIVE | controlled | as viewer | read | declined | 2026-09-18T15:04:51Z
 
     Ana's token carries HEART_STUDY/controlled. Bo's carries nothing for REEF_ARCHIVE.
     Neither grant is changed by the answer to it.
@@ -3666,7 +3666,7 @@ member, and they answer independently:
     a grant to G1 on HEART_STUDY / controlled, G1 holding curator
 
     Ana | through G1 | as curator | CRUD | accepted | 2026-09-18T14:32:07Z
-    Bo  | through G1 | as curator | CRUD | rejected | 2026-09-18T15:04:51Z
+    Bo  | through G1 | as curator | CRUD | declined | 2026-09-18T15:04:51Z
 
     Ana's token carries it, Bo's does not, and the group's grant is unchanged by either.
 

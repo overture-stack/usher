@@ -73,7 +73,7 @@ const SUBJECT_SIGN_OUT: SignOut = Object.freeze({
 const signOutEvent = (subject?: string): AuditEvent => ({
 	data: {
 		result: 'succeeded',
-		...(subject === undefined ? {} : { signedOutUserId: subject }),
+		...(subject === undefined ? {} : { signedOutUserSubject: subject }),
 		sourceIp: CONTEXT.sourceIp,
 	},
 	severity: 'info',
@@ -126,7 +126,7 @@ suite('recording the sign-out of a session', () => {
 		assert.deepEqual(recording, { kind: 'recorded', subject: undefined });
 		assert.equal(stand.statements.length, 1);
 		assert.deepEqual(stand.recorded, [signOutEvent()]);
-		assert.equal(Object.hasOwn(stand.recorded[0]?.data ?? {}, 'signedOutUserId'), false);
+		assert.equal(Object.hasOwn(stand.recorded[0]?.data ?? {}, 'signedOutUserSubject'), false);
 	});
 
 	test('writes nothing more for a sign-out the store holds already: no notice and no event', async () => {

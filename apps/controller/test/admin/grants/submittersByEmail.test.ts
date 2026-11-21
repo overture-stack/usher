@@ -390,7 +390,7 @@ suite('adding and removing a submitter by email', () => {
 			const submitter = await session.signIn(ADDRESSES.submitter);
 			const add = (): Promise<AdminResponse> =>
 				addSubmitter(session.caller(administrator), STUDY_A1, ADDRESSES.submitter);
-			const answer = async (decision: 'accepted' | 'rejected'): Promise<void> => {
+			const answer = async (decision: 'accept' | 'decline'): Promise<void> => {
 				const [grant] = await liveSubmitterGrants(session, submitter);
 				const grantId = grant?.id ?? assert.fail('no grant holds the subject');
 				assertSucceeded(
@@ -404,9 +404,9 @@ suite('adding and removing a submitter by email', () => {
 			assertSucceeded(await add(), 'the first addition');
 
 			const whilePending = await add();
-			await answer('accepted');
+			await answer('accept');
 			const whileAccepted = await add();
-			await answer('rejected');
+			await answer('decline');
 			const whileDeclined = await add();
 
 			[whilePending, whileAccepted, whileDeclined].forEach((again, index) => {
@@ -596,7 +596,7 @@ suite('adding and removing a submitter by email', () => {
 
 			const accepted = await answerGrant(session.caller(submitter), grantId, {
 				capabilities: SHOWN.submitter,
-				decision: 'accepted',
+				decision: 'accept',
 			});
 
 			assertSucceeded(accepted, "the submitter's acceptance");

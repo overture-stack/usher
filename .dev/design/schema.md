@@ -104,6 +104,46 @@ alternatives the corpus left open:
 The fast-path rejection of a per-principal marker does not reach this: that marker existed to detect
 changes to what a principal holds, where this one records that the principal is stopped altogether.
 
+### Administrators and nominations
+
+    nominations
+      id                 uuid         primary key
+      nominee_id         uuid         not null  references users
+      nominated_by       uuid         not null  references users
+      nominated_at       timestamptz  not null  unique
+
+    administrators
+      user_id            uuid         primary key references users
+      nomination_id      uuid         not null  unique
+      accepted_at        timestamptz  not null
+      foreign key (nomination_id, user_id) references nominations (id, nominee_id)
+
+    nomination_declines
+      nomination_id      uuid         primary key references nominations
+      declined_at        timestamptz  not null
+
+    nomination_revocations
+      nomination_id      uuid         primary key references nominations
+      revoked_at         timestamptz  not null
+
+A nomination is kept as written and is never updated or deleted. Its state is derived from the rows
+naming it, in this order: `accepted` when an administrator row names it, `declined` when a decline
+row does, `revoked` when a revocation row does, `replaced` when a later nomination exists, and
+otherwise `pending`.
+
+**Each nomination is answered once, and the schema holds that as well as the store.** A
+`BEFORE INSERT` trigger on each of `administrators`, `nomination_declines` and
+`nomination_revocations` refuses an insert whose nomination already has a row in either of the other
+two, with the constraint `nomination_answered_once`. A table's own duplicate is refused by its own
+key, so the trigger on `administrators` leaves a second administrator for one nomination to its
+unique key. The store takes the nominations lock before any answer, which is what keeps the two
+inserts from racing; the trigger is what refuses one that gets through anyway.
+
+**The answers are rows of their own, not columns of `nominations`.** The nominations table
+refuses updates, so a decline or a revocation cannot be written onto the row it answers. Each answer
+is a row keyed by the nomination it answers, so the history of a nomination is its row plus the at
+most one answer row naming it.
+
 ### Groups and membership
 
     groups
@@ -313,7 +353,7 @@ role carries `record.delete` (case 25) when the grant is written, since both rul
       id                 uuid         primary key
       user_id            uuid         not null  references users
       grant_id           uuid         not null  references grants
-      decision           text         not null  check (decision in ('accepted', 'rejected'))
+      decision           text         not null  check (decision in ('accepted', 'declined'))
       capabilities       text[]       not null
       decided_at         timestamptz  not null
 
@@ -589,8 +629,8 @@ writes every table or reaches the server itself: `pg_write_all_data`, `pg_execut
 `pg_read_server_files` and `pg_write_server_files`. It also refuses ownership of anything in the
 schema, `CREATE` on the schema or the database, any grant option, `TRUNCATE`, `TRIGGER`, and any
 write on an append-only table beyond what the migrations grant, `INSERT` included. The append-only
-tables are `audit_log`, `change_records`, `grant_decisions`, `key_fingerprints`, `nominations`
-and `notices`. `change_records` is written only by its trigger, so a role able to insert
+tables are `audit_log`, `change_records`, `grant_decisions`, `key_fingerprints`, `nomination_declines`,
+`nomination_revocations`, `nominations` and `notices`. `change_records` is written only by its trigger, so a role able to insert
 into it could forge history. Any other grant the release does not use, `pg_read_all_data` among
 them, is tolerated and logged at `warning`, naming the privilege and the table. So an instance of one
 release keeps running after the next release's migration adds a grant. A role that may write

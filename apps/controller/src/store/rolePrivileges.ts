@@ -63,6 +63,8 @@ export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
 			updates: ['recorded_at', 'value'],
 		},
 		key_fingerprints: { deletes: false, inserts: true, updates: [] },
+		nomination_declines: { deletes: false, inserts: true, updates: [] },
+		nomination_revocations: { deletes: false, inserts: true, updates: [] },
 		nominations: { deletes: false, inserts: true, updates: [] },
 		notices: { deletes: false, inserts: true, updates: [] },
 		notification_outbox: {
@@ -129,6 +131,8 @@ const APPEND_ONLY_TABLES: ReadonlySet<string> = new Set([
 	'change_records',
 	'grant_decisions',
 	'key_fingerprints',
+	'nomination_declines',
+	'nomination_revocations',
 	'nominations',
 	'notices',
 ]);

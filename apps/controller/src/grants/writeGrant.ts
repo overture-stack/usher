@@ -136,7 +136,7 @@ export const writeGrant = async (
 		data: {
 			category: category?.scopedName ?? null,
 			grantId: id,
-			granteeId: holderSubject,
+			granteeSubject: holderSubject,
 			resourceId: resource.externalId,
 			result: 'succeeded',
 			role: role.name,

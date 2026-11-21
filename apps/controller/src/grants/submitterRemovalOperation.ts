@@ -179,7 +179,7 @@ export const submitterRemovalOperation = ({
 									data: {
 										category: grant.category,
 										grantId,
-										granteeId: grant.holderSubject,
+										granteeSubject: grant.holderSubject,
 										reason: UNSPECIFIED_REASON,
 										resourceId: grant.resource,
 										result: 'succeeded',

@@ -33,12 +33,12 @@ import { inTurn, seededId } from '../../../testing/harness/policy.js';
 
 const ACCEPTING: GrantDecision = {
 	capabilities: SHOWN.viewer,
-	decision: 'accepted',
+	decision: 'accept',
 };
 
 const REJECTING: GrantDecision = {
 	capabilities: SHOWN.viewer,
-	decision: 'rejected',
+	decision: 'decline',
 };
 
 const pendingForRecipient = grantsFixture({
@@ -99,7 +99,7 @@ suite('answering a grant', () => {
 					decider: deciderSubject,
 					decision,
 				})),
-				[{ decider: CAST.recipient.subject, decision: 'rejected' }],
+				[{ decider: CAST.recipient.subject, decision: 'declined' }],
 			);
 		});
 	});
@@ -154,7 +154,7 @@ suite('answering a grant', () => {
 			const decisions = await storedDecisions(harness, pendingId(harness));
 			assert.deepEqual(
 				decisions.map(({ decision }) => decision),
-				['accepted', 'rejected', 'accepted'],
+				['accepted', 'declined', 'accepted'],
 			);
 			decisions.slice(1).forEach(({ decidedAt }, index) => {
 				assert.ok(
@@ -210,7 +210,7 @@ suite('answering a grant', () => {
 					'a pair of answers landed within one second in three attempts',
 				);
 				const [declined, accepted] = withinOneSecond;
-				assert.equal(declined?.decision, 'rejected');
+				assert.equal(declined?.decision, 'declined');
 				assert.equal(accepted?.decision, 'accepted');
 				assert.ok(
 					accepted !== undefined && declined !== undefined && accepted.decidedAt > declined.decidedAt,
@@ -223,7 +223,7 @@ suite('answering a grant', () => {
 	test('accepts only the two answers', async () => {
 		await withHarness({ fixture: pendingForRecipient }, async (harness) => {
 			const recipient = await recipientOf(harness);
-			const words = ['accept', 'ACCEPTED', 'pending', 'revoked', 'expired', ''];
+			const words = ['accepted', 'ACCEPT', 'rejected', 'pending', 'revoked', 'expired', ''];
 
 			const refused = await inTurn(words, async (word) => ({
 				answer: await answerGrant(recipient, pendingId(harness), ACCEPTING, {
@@ -282,7 +282,7 @@ suite('answering a grant', () => {
 				);
 				const live = await answerGrant(recipient, pendingId(harness), {
 					capabilities: SHOWN.curator,
-					decision: 'accepted',
+					decision: 'accept',
 				});
 
 				refused.forEach(({ answer, state }) => {
@@ -305,19 +305,19 @@ suite('answering a grant', () => {
 			const refused = await inTurn(Object.entries(mismatches), async ([name, capabilities]) => ({
 				answer: await answerGrant(recipient, pendingId(harness), {
 					capabilities,
-					decision: 'accepted',
+					decision: 'accept',
 				}),
 				name,
 			}));
 			await withdrawCapabilityInStore(harness, 'viewer', 'record.export');
 			const asGranted = await answerGrant(recipient, pendingId(harness), {
 				capabilities: SHOWN.viewer,
-				decision: 'accepted',
+				decision: 'accept',
 			});
 			const afterRefusals = await storedDecisions(harness, pendingId(harness));
 			const asNow = await answerGrant(recipient, pendingId(harness), {
 				capabilities: ['record.view', 'record.count'],
-				decision: 'accepted',
+				decision: 'accept',
 			});
 
 			refused.forEach(({ answer, name }) => {
@@ -349,7 +349,7 @@ suite('answering a grant', () => {
 				const owner = await personCaller(harness, CAST.ownerOfA1);
 				const declining: GrantDecision = {
 					capabilities: SHOWN.owner,
-					decision: 'rejected',
+					decision: 'decline',
 				};
 
 				const whileAlone = await answerGrant(owner, ownership, declining);
@@ -357,7 +357,7 @@ suite('answering a grant', () => {
 				assertSucceeded(
 					await answerGrant(await recipientOf(harness), seededId(harness.seeded.grants, 'pendingOwner'), {
 						capabilities: SHOWN.owner,
-						decision: 'accepted',
+						decision: 'accept',
 					}),
 					'a second owner accepting',
 				);
@@ -373,7 +373,7 @@ suite('answering a grant', () => {
 					['accepted'],
 				);
 				assertSucceeded(withSecondOwner, 'declining beside a second owner');
-				assert.equal(afterDecline.at(-1)?.decision, 'rejected');
+				assert.equal(afterDecline.at(-1)?.decision, 'declined');
 			},
 		);
 	});

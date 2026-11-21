@@ -153,7 +153,7 @@ suite("a grant's change in the store", () => {
 				selfGrantUntil(instantIn(2 * HOUR_MS)),
 			);
 			const grantId = createdId(
-				await decideGrantRequest(owner, createdId(asked, 'the request'), 'granted'),
+				await decideGrantRequest(owner, createdId(asked, 'the request'), 'grant'),
 				'the grant',
 			);
 

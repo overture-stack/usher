@@ -142,7 +142,7 @@ export interface BridgeEventData {
 		payloadVersion: number;
 		reason: 'notImplemented';
 		resourceId: ResourceIdentifier;
-		userId: string | null;
+		userSubject: string | null;
 	};
 	'category.unknown': {
 		catalogue: string;
@@ -289,7 +289,7 @@ export const EVENT_CATALOGUE: Readonly<Record<BridgeEventName, EventDefinition>>
 			payloadVersion: count,
 			reason: oneOf(['notImplemented']),
 			resourceId: text,
-			userId: { kind: 'text', nullable: true },
+			userSubject: { kind: 'text', nullable: true },
 		},
 		severity: 'warning',
 	},

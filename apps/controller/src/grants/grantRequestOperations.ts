@@ -96,9 +96,9 @@ const grant = async (
 			decision: 'granted',
 			expiresAt: eventInstant(request.expiresAt.getTime()),
 			grantId: placed.id,
-			granteeId: request.holderSubject,
+			granteeSubject: request.holderSubject,
 			requestId: request.id,
-			requestedById: request.requestedBySubject,
+			requestedBySubject: request.requestedBySubject,
 			resourceId: request.resource,
 			result: 'succeeded',
 			role: request.role,
@@ -130,34 +130,34 @@ const grant = async (
 	);
 };
 
-const refuse = async (
+const decline = async (
 	grants: GrantStore,
 	{ decidedBy, now, record, request, sourceIp }: Deciding,
 ): Promise<OperationOutcome> => {
 	await grants.recordDecision({
 		decidedAt: now,
 		decidedBy: decidedBy.userId,
-		decision: 'refused',
+		decision: 'declined',
 		grantId: null,
 		requestId: request.id,
 	});
 	await record({
 		data: {
-			decision: 'refused',
-			granteeId: request.holderSubject,
+			decision: 'declined',
+			granteeSubject: request.holderSubject,
 			requestId: request.id,
-			requestedById: request.requestedBySubject,
+			requestedBySubject: request.requestedBySubject,
 			result: 'succeeded',
 			sourceIp,
 		},
 		severity: 'info',
 		type: 'grant.requestDecision',
 	});
-	return answered(200, grantRequestView({ ...request, decidedAt: now, decision: 'refused' }, now.getTime()));
+	return answered(200, grantRequestView({ ...request, decidedAt: now, decision: 'declined' }, now.getTime()));
 };
 
 /**
- * The operation deciding a grant request, `POST /admin/grant-requests/{id}/decisions`. Its body is
+ * The operation deciding a grant request, `POST /admin/grant-requests/{grantRequestId}/decisions`. Its body is
  * read with {@link readGrantRequestDecision}, and a service account is refused 403
  * `serviceAccountNotPermitted` before anything is read. In one transaction, its resource's row
  * locked first and then the request's, it judges in turn: an id naming no request, malformed or
@@ -179,9 +179,9 @@ const refuse = async (
  * resource's, showing what the role confers then where the instance accepts a grant at its
  * creation, and none otherwise, leaving the grant pending its holder's answer. It records the
  * decision, naming the grant, and `grant.requestDecision` at warning, and answers 200 with the
- * grant, `kind` `grant`. A refusal records the decision and `grant.requestDecision` at info, and
+ * grant, `kind` `grant`. A decline records the decision and `grant.requestDecision` at info, and
  * answers 200 with the request decided, `kind` `grantRequest`. Each event names the decision, the
- * holder's subject as `granteeId`, and the principal who asked as `requestedById`.
+ * holder's subject as `granteeSubject`, and the principal who asked as `requestedBySubject`.
  *
  * A refusal of the operation records `grant.requestDecision`, naming the request when one has the
  * id, and the decision when the body is read as one. Each decision is counted against the grant
@@ -202,7 +202,7 @@ export const grantRequestDecisionOperation = ({
 	const namedRequest = async ({ body, params }: NamedByRequest): Promise<EventMembers> => {
 		const reading = body === undefined ? undefined : readGrantRequestDecision(body);
 		const named = reading?.kind === 'read' ? { decision: reading.input.decision } : {};
-		const requestId = params['id'] ?? '';
+		const requestId = params['grantRequestId'] ?? '';
 		if (!STORED_ID_FORM.test(requestId)) {
 			return named;
 		}
@@ -220,9 +220,9 @@ export const grantRequestDecisionOperation = ({
 		event: { named: namedRequest, recordedWith: countedWithRefusal({ grantRate }), type: 'grant.requestDecision' },
 		method: 'POST',
 		readInput: (body) => readGrantRequestDecision(body ?? {}),
-		route: '/admin/grant-requests/{id}/decisions',
+		route: '/admin/grant-requests/{grantRequestId}/decisions',
 		run: async ({ input, params, principal, sourceIp }) => {
-			const requestId = params['id'] ?? '';
+			const requestId = params['grantRequestId'] ?? '';
 			if (!STORED_ID_FORM.test(requestId)) {
 				return refused(GRANT_PROBLEMS.requestNotFound);
 			}
@@ -270,7 +270,7 @@ export const grantRequestDecisionOperation = ({
 						sourceIp,
 					};
 					const outcome =
-						input.decision === 'granted' ? await grant(grants, deciding) : await refuse(grants, deciding);
+						input.decision === 'granted' ? await grant(grants, deciding) : await decline(grants, deciding);
 					await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
 					return outcome;
 				}),

@@ -476,7 +476,7 @@ suite('foreign keys', () => {
 				label: 'the grant a decision answers',
 				row: (id) =>
 					decisionRow({
-						decision: 'rejected',
+						decision: 'declined',
 						grantId: id,
 						userId: user('ana'),
 					}),
@@ -485,7 +485,7 @@ suite('foreign keys', () => {
 			{
 				held: user('ana'),
 				label: 'the person deciding',
-				row: (id) => decisionRow({ decision: 'rejected', grantId: anaViews, userId: id }),
+				row: (id) => decisionRow({ decision: 'declined', grantId: anaViews, userId: id }),
 				table: grantDecisions,
 			},
 			{
@@ -921,7 +921,7 @@ suite('foreign keys', () => {
 						owner,
 						grantDecisions,
 						decisionRow({
-							decision: 'rejected',
+							decision: 'declined',
 							grantId: anaViews,
 							userId: target,
 						}),

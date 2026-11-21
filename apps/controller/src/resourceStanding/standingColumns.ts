@@ -27,6 +27,6 @@ export const standingColumns = (schema: string, { issuer, now, subject }: Standi
 	return `${heldByPrincipal(countedOwnerCondition(schema, 'held', now))} AS "countedOwner",
           ${heldByPrincipal(
 				`${liveGrantCondition('held', now)}
-             AND ${latestDecisionOf(schema, 'held')} IS DISTINCT FROM 'rejected'`,
+             AND ${latestDecisionOf(schema, 'held')} IS DISTINCT FROM 'declined'`,
 			)} AS holder`;
 };

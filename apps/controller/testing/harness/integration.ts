@@ -404,7 +404,7 @@ export const acceptAsHolder = async (caller: AdminCaller, harness: Harness, gran
 	assertSucceeded(
 		await answerGrant(caller, seededId(harness.seeded.grants, grant), {
 			capabilities: SEEDED_ROLES.viewer.capabilities,
-			decision: 'accepted',
+			decision: 'accept',
 		}),
 		`the acceptance of ${grant}`,
 	);

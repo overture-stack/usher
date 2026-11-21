@@ -39,12 +39,12 @@ export interface NamedCategory {
 }
 
 /**
- * A person's latest decision on a grant, as the calculation reads it: whether it accepted or rejected
+ * A person's latest decision on a grant, as the calculation reads it: whether it accepted or declined
  * the grant, and the capabilities it was given on, as `entity.action` names.
  */
 export interface LatestDecision {
 	capabilities: readonly string[];
-	decision: 'accepted' | 'rejected';
+	decision: 'accepted' | 'declined';
 }
 
 /**

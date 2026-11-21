@@ -82,7 +82,7 @@ export interface HarnessOptions {
 	 * ({@link harnessApplicationNames}). Once its own Controller first listens, the harness registers
 	 * each through `POST /admin/applications` as the platform administrator
 	 * ({@link HarnessOptions.administratorToken}), or, for one seeded by SQL already, issues its first
-	 * key through `POST /admin/applications/{id}/keys`. Each answer's id and key are kept for
+	 * key through `POST /admin/applications/{applicationId}/keys`. Each answer's id and key are kept for
 	 * {@link Harness.application}.
 	 */
 	applications?: readonly string[];

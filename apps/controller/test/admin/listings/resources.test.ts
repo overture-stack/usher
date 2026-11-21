@@ -145,7 +145,7 @@ suite('listing resources for an administrator', () => {
 				{
 					email: CAST.dee,
 					noAccount: false,
-					state: GRANT_STATES.rejected,
+					state: GRANT_STATES.declined,
 					subject: given.realm.subject('dee'),
 				},
 				{

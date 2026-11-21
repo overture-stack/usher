@@ -55,7 +55,7 @@ const APPLICATION_PROBLEMS = Object.freeze({
 		'applicationNotFound',
 		404,
 		'Application not found',
-		'No registered application has the id named.',
+		'No registered application has the applicationId named.',
 	),
 	displayNameBlank: problem(
 		'displayNameBlank',
@@ -172,7 +172,7 @@ export const createApplicationRoutes = (
 
 	const namedApplication = (params: Readonly<Record<string, string>>, keyNamed: boolean): Promise<EventMembers> =>
 		readNamedEntities(store, databaseSchema, {
-			applicationId: params['id'] ?? '',
+			applicationId: params['applicationId'] ?? '',
 			keyId: keyNamed ? (params['keyId'] ?? '') : undefined,
 		});
 
@@ -259,13 +259,13 @@ export const createApplicationRoutes = (
 		body: 'none',
 		method: 'GET',
 		readInput: noInput,
-		route: '/admin/applications/{id}',
+		route: '/admin/applications/{applicationId}',
 		run: async ({ params }) => {
 			const application = await readStoredApplication(
 				store,
 				databaseSchema,
 				identityProviderIssuer,
-				params['id'] ?? '',
+				params['applicationId'] ?? '',
 			);
 			return application === undefined
 				? refused(APPLICATION_PROBLEMS.applicationNotFound)
@@ -290,13 +290,17 @@ export const createApplicationRoutes = (
 		},
 		method: 'POST',
 		readInput: noInput,
-		route: '/admin/applications/{id}/keys',
+		route: '/admin/applications/{applicationId}/keys',
 		run: async ({ params, principal, sourceIp }) => {
 			const now = new Date(clock.now());
 			const decided = await trail.inTransaction(
 				actorOf(principal),
 				async ({ connection, record }): Promise<Decided<IssuedApplicationKey>> => {
-					const applicationId = await lockApplication(connection, databaseSchema, params['id'] ?? '');
+					const applicationId = await lockApplication(
+						connection,
+						databaseSchema,
+						params['applicationId'] ?? '',
+					);
 					if (applicationId === undefined) {
 						return refusedWithin(APPLICATION_PROBLEMS.applicationNotFound);
 					}
@@ -350,13 +354,17 @@ export const createApplicationRoutes = (
 						problem: APPLICATION_PROBLEMS.unknownRevocationReason,
 					};
 		},
-		route: '/admin/applications/{id}/keys/{keyId}',
+		route: '/admin/applications/{applicationId}/keys/{keyId}',
 		run: async ({ input: { reason }, params, principal, sourceIp }) => {
 			const now = new Date(clock.now());
 			const decided = await trail.inTransaction(
 				actorOf(principal),
 				async ({ connection, record }): Promise<Decided<string>> => {
-					const applicationId = await findApplication(connection, databaseSchema, params['id'] ?? '');
+					const applicationId = await findApplication(
+						connection,
+						databaseSchema,
+						params['applicationId'] ?? '',
+					);
 					if (applicationId === undefined) {
 						return refusedWithin(APPLICATION_PROBLEMS.applicationNotFound);
 					}

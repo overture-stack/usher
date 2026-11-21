@@ -104,21 +104,21 @@ suite('a grant whose holder is named by address, in the store', () => {
 			assert.deepEqual(afterUnheld, before);
 			assert.equal((await storedGrants(harness, { holder: CAST.newcomer.subject })).length, 1);
 			assert.deepEqual(
-				(await creationRows(harness.clients.migration)).map(({ granteeId, reason, result, severity }) => ({
-					granteeId,
+				(await creationRows(harness.clients.migration)).map(({ granteeSubject, reason, result, severity }) => ({
+					granteeSubject,
 					reason,
 					result,
 					severity,
 				})),
 				[
 					{
-						granteeId: undefined,
+						granteeSubject: undefined,
 						reason: PROBLEMS.holderNotFound.code,
 						result: 'denied',
 						severity: 'warning',
 					},
 					{
-						granteeId: CAST.newcomer.subject,
+						granteeSubject: CAST.newcomer.subject,
 						reason: undefined,
 						result: 'succeeded',
 						severity: 'info',

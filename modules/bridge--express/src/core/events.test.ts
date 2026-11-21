@@ -443,7 +443,7 @@ suite('createEventLog', () => {
 		);
 	});
 
-	test('carries the principal of an unenforced grant as userId, a null subject included', () => {
+	test('carries the principal of an unenforced grant as userSubject, a null subject included', () => {
 		const logger = recordingLogger();
 		const events = createEventLog({
 			logger,
@@ -457,7 +457,7 @@ suite('createEventLog', () => {
 			payloadVersion: 1,
 			reason: 'notImplemented',
 			resourceId: 'HEART_STUDY',
-			userId: null,
+			userSubject: null,
 		});
 
 		assert.deepEqual(logger.lines[0]?.object['data'], {
@@ -468,7 +468,7 @@ suite('createEventLog', () => {
 			payloadVersion: 1,
 			reason: 'notImplemented',
 			resourceId: 'HEART_STUDY',
-			userId: null,
+			userSubject: null,
 		});
 	});
 

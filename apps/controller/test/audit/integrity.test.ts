@@ -135,7 +135,7 @@ suite('audit integrity', () => {
 			const selfGrant = await decideGrantRequest(
 				await personCaller(harness, PEOPLE.owner),
 				requested.grantId ?? '',
-				'granted',
+				'grant',
 			);
 			assertSucceeded(selfGrant, 'the approval');
 			const exchanged = await exchangeBy(harness, PEOPLE.administrator);

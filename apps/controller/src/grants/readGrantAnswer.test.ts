@@ -11,15 +11,15 @@ const outcomeOf = (body: Readonly<Record<string, unknown>>): unknown => {
 };
 
 suite("reading a holder's answer to a grant", () => {
-	test('reads an acceptance and a decline, with the capabilities shown as sent', () => {
+	test('reads an accept and a decline as accepted and declined, with the capabilities shown as sent', () => {
 		assert.deepEqual(
 			[
-				outcomeOf({ capabilities: SHOWN, decision: 'accepted' }),
-				outcomeOf({ capabilities: [], decision: 'rejected' }),
+				outcomeOf({ capabilities: SHOWN, decision: 'accept' }),
+				outcomeOf({ capabilities: [], decision: 'decline' }),
 			],
 			[
 				{ capabilities: SHOWN, decision: 'accepted' },
-				{ capabilities: [], decision: 'rejected' },
+				{ capabilities: [], decision: 'declined' },
 			],
 		);
 	});
@@ -27,11 +27,11 @@ suite("reading a holder's answer to a grant", () => {
 	test('refuses 400 an answer lacking either member, holding another, or holding one of another type', () => {
 		const unreadable = [
 			{ capabilities: SHOWN },
-			{ decision: 'accepted' },
+			{ decision: 'accept' },
 			{ capabilities: SHOWN, decision: true },
-			{ capabilities: 'record.view', decision: 'accepted' },
-			{ capabilities: [7], decision: 'accepted' },
-			{ capabilities: SHOWN, decision: 'accepted', grantId: 'g' },
+			{ capabilities: 'record.view', decision: 'accept' },
+			{ capabilities: [7], decision: 'accept' },
+			{ capabilities: SHOWN, decision: 'accept', grantId: 'g' },
 		];
 
 		assert.deepEqual(
@@ -40,8 +40,8 @@ suite("reading a holder's answer to a grant", () => {
 		);
 	});
 
-	test('refuses 422 any decision but accepted and rejected, in their letter case', () => {
-		const words = ['accept', 'ACCEPTED', 'pending', 'revoked', 'expired', ''];
+	test('refuses 422 any decision but accept and decline, in their letter case', () => {
+		const words = ['accepted', 'ACCEPT', 'rejected', 'pending', 'revoked', ''];
 
 		assert.deepEqual(
 			words.map((decision) => outcomeOf({ capabilities: SHOWN, decision })),

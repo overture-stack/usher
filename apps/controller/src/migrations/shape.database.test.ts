@@ -58,6 +58,8 @@ const {
 	groups,
 	invitations,
 	keyFingerprints,
+	nominationDeclines,
+	nominationRevocations,
 	nominations,
 	notices,
 	notificationOutbox,
@@ -328,6 +330,8 @@ suite("the schema's shape", () => {
 				[invitations.columns.invitedAt, 10],
 			],
 			keyFingerprints: [[keyFingerprints.columns.recordedAt, 11]],
+			nominationDeclines: [[nominationDeclines.columns.declinedAt, 14]],
+			nominationRevocations: [[nominationRevocations.columns.revokedAt, 15]],
 			nominations: [[nominations.columns.nominatedAt, 12]],
 			notices: [[notices.columns.createdAt, 30]],
 			notificationOutbox: [
@@ -379,6 +383,24 @@ suite("the schema's shape", () => {
 				}),
 				...timed(times.administrators),
 			});
+			const declined = String(
+				(await insertRow(toronto, nominations, nominationRow({ nominatedBy: steward, nomineeId: userId })))[
+					nominations.columns.id
+				],
+			);
+			await insertRow(toronto, nominationDeclines, {
+				[nominationDeclines.columns.nominationId]: declined,
+				...timed(times.nominationDeclines),
+			});
+			const revoked = String(
+				(await insertRow(toronto, nominations, nominationRow({ nominatedBy: steward, nomineeId: userId })))[
+					nominations.columns.id
+				],
+			);
+			await insertRow(toronto, nominationRevocations, {
+				[nominationRevocations.columns.nominationId]: revoked,
+				...timed(times.nominationRevocations),
+			});
 			const resource = await insertRow(toronto, resources, {
 				...resourceRow('STUDY-T9', steward),
 				[resources.columns.retiredBy]: steward,
@@ -428,7 +450,7 @@ suite("the schema's shape", () => {
 			const request = await insertRow(toronto, grantRequests, {
 				[grantRequests.columns.capabilities]: ['record.view'],
 				[grantRequests.columns.decidedBy]: steward,
-				[grantRequests.columns.decision]: 'refused',
+				[grantRequests.columns.decision]: 'declined',
 				[grantRequests.columns.holderUserId]: userId,
 				[grantRequests.columns.kind]: SELF_GRANT_REQUEST,
 				[grantRequests.columns.recordCategoryId]: categoryId,
@@ -658,6 +680,18 @@ suite("the schema's shape", () => {
 					table: administrators,
 				},
 				{
+					columns: times.nominationDeclines,
+					key: nominationDeclines.columns.nominationId,
+					keyValue: declined,
+					table: nominationDeclines,
+				},
+				{
+					columns: times.nominationRevocations,
+					key: nominationRevocations.columns.nominationId,
+					keyValue: revoked,
+					table: nominationRevocations,
+				},
+				{
 					columns: times.grantOperations,
 					key: GRANT_OPERATIONS.columns.id,
 					keyValue: grantOperation[GRANT_OPERATIONS.columns.id],
@@ -745,7 +779,7 @@ suite("the schema's shape", () => {
 			{
 				column: grantDecisions.columns.decision,
 				table: grantDecisions,
-				values: ['accepted', 'rejected'],
+				values: ['accepted', 'declined'],
 			},
 			{ column: notices.columns.kind, table: notices, values: NOTICE_KINDS },
 			{

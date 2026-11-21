@@ -999,7 +999,7 @@ the issuer as well, which is a payload version change. Usher stores no email add
 name; a portal resolves those from the identity provider. The one exception is `invitations`, which
 is keyed by email address for grants sent to users who have not yet registered.
 
-**`grant_decisions.decision`** is `accepted` or `rejected`, and there is no third value. Pending
+**`grant_decisions.decision`** is `accepted` or `declined`, and there is no third value. Pending
 is the absence of a row rather than a state on one, and expired and revoked are read from the grant
 rather than stored here. Where auto-accept is enabled an accepted decision is written at creation
 without the member acting; where it is off, which is the default, no row exists until they answer and
@@ -1100,7 +1100,7 @@ acting.
   category, and none does until the invitee's identity is bound.
 - **A grant with no decision row**: never appears. The person can see the offer through the portal
   and reaches none of the data, because no answer is not an acceptance.
-- **A grant whose latest decision refused it**: never appears while that is the latest answer. A
+- **A grant whose latest decision declined it**: never appears while that is the latest answer. A
   later acceptance is another row and takes effect from then.
 - **A revoked grant**: never appears. Distinct from an expired one, which is read from `expires_at`
   rather than stored, because the dates cannot say which of the two ended it.

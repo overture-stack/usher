@@ -169,8 +169,8 @@ suite('who may create and revoke a grant', () => {
 			{
 				fixture: grantsFixture({
 					decisions: [
-						answeredInFixture('declinedOnControlled', 'rejected'),
-						answeredInFixture('declinedOnOpen', 'rejected'),
+						answeredInFixture('declinedOnControlled', 'declined'),
+						answeredInFixture('declinedOnOpen', 'declined'),
 						answeredInFixture('revoked', 'accepted', new Date(now - 2 * HOUR_MS)),
 					],
 					grants: {
@@ -230,7 +230,7 @@ suite('who may create and revoke a grant', () => {
 		await withHarness(
 			{
 				fixture: grantsFixture({
-					decisions: [answeredInFixture('declinedByLookalike', 'rejected')],
+					decisions: [answeredInFixture('declinedByLookalike', 'declined')],
 					grants: { declinedByLookalike: fixtureGrant('lookalike', 'viewer') },
 				}),
 			},
@@ -468,7 +468,7 @@ suite('who may create and revoke a grant', () => {
 							),
 							"the first administrator's self-grant request",
 						),
-						'granted',
+						'grant',
 					),
 					"the first administrator's self-grant",
 				);

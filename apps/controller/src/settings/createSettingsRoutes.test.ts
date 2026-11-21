@@ -104,6 +104,9 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 				appendNomination: async () => {
 					throw new Error('not called by settings');
 				},
+				declineNomination: async () => {
+					throw new Error('not called by settings');
+				},
 				findOrRecordPerson: async () => {
 					throw new Error('not called by settings');
 				},
@@ -113,6 +116,9 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 				},
 				lockNominations: async () => undefined,
 				readNomination: async () => undefined,
+				revokeNomination: async () => {
+					throw new Error('not called by settings');
+				},
 			}),
 			settings: {
 				backChannelLogoutAudiences: ['portal-ui'],

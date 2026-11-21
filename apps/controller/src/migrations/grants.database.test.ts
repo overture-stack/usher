@@ -316,7 +316,7 @@ const OWNER_ANSWERED_AT = new Date('2026-09-01T12:00:00Z');
 /** An owner grant on one resource, as the owner-guard tests write it. */
 interface OwnerGrant {
 	/** Its holder's answers in order, the last deciding: one acceptance by default, none while pending. */
-	answers?: readonly ('accepted' | 'rejected')[];
+	answers?: readonly ('accepted' | 'declined')[];
 
 	holder: string;
 
@@ -387,7 +387,7 @@ const retirementOf = (externalId: string, retiredBy: string): Statement => ({
 
 const declining = (grantId: string, userId: string): Statement => ({
 	parameters: [grantId, userId],
-	text: `INSERT INTO ${qualified(grantDecisions)} (${grantDecisions.columns.capabilities}, ${grantDecisions.columns.decidedAt}, ${grantDecisions.columns.decision}, ${grantDecisions.columns.grantId}, ${grantDecisions.columns.userId}) VALUES ('{grant.create,grant.revoke,resource.view}', now(), 'rejected', $1, $2)`,
+	text: `INSERT INTO ${qualified(grantDecisions)} (${grantDecisions.columns.capabilities}, ${grantDecisions.columns.decidedAt}, ${grantDecisions.columns.decision}, ${grantDecisions.columns.grantId}, ${grantDecisions.columns.userId}) VALUES ('{grant.create,grant.revoke,resource.view}', now(), 'declined', $1, $2)`,
 });
 
 const committedOutcome = (
@@ -553,10 +553,10 @@ suite('the owners a resource keeps', () => {
 		const secondOwners: Readonly<Record<string, OwnerGrant>> = {
 			'OWNED-ACCEPTED': { holder: 'cy' },
 			'OWNED-PENDING': { answers: [], holder: 'cy' },
-			'OWNED-RECONSIDERED': { answers: ['rejected', 'accepted'], holder: 'cy' },
-			'OWNED-REJECTED': { answers: ['rejected'], holder: 'cy' },
+			'OWNED-RECONSIDERED': { answers: ['declined', 'accepted'], holder: 'cy' },
+			'OWNED-REJECTED': { answers: ['declined'], holder: 'cy' },
 			'OWNED-REVOKED': { holder: 'cy', revoked: true },
-			'OWNED-WITHDRAWN': { answers: ['accepted', 'rejected'], holder: 'cy' },
+			'OWNED-WITHDRAWN': { answers: ['accepted', 'declined'], holder: 'cy' },
 		};
 		const { owner, seeded } = await openSeededDatabase(
 			context,

@@ -130,7 +130,7 @@ suite('grant requests through the store', () => {
 			);
 
 			const grantId = createdId(
-				await decideGrantRequest(await personCaller(harness, CAST.ownerOfA1), requestId, 'granted'),
+				await decideGrantRequest(await personCaller(harness, CAST.ownerOfA1), requestId, 'grant'),
 				'the grant',
 			);
 
@@ -164,7 +164,7 @@ suite('grant requests through the store', () => {
 			);
 			assert.deepEqual(
 				(await eventsNaming(harness, AUDIT_EVENT_TYPES.grantRequestDecision, 'grantId', grantId)).map(
-					({ decision, requestedById }) => [decision, requestedById],
+					({ decision, requestedBySubject }) => [decision, requestedBySubject],
 				),
 				[['granted', CAST.administrator.subject]],
 			);
@@ -187,16 +187,16 @@ suite('grant requests through the store', () => {
 				),
 			);
 
-			const own = await decideGrantRequest(administrator, refusedId, 'granted');
-			assertSucceeded(await decideGrantRequest(owner, refusedId, 'refused'), 'the refusal');
-			const again = await decideGrantRequest(await personCaller(harness, CAST.spare), refusedId, 'granted');
+			const own = await decideGrantRequest(administrator, refusedId, 'grant');
+			assertSucceeded(await decideGrantRequest(owner, refusedId, 'decline'), 'the refusal');
+			const again = await decideGrantRequest(await personCaller(harness, CAST.spare), refusedId, 'grant');
 			clock.advance(MINUTE_MS + 1000);
-			const lapsed = await decideGrantRequest(await personCaller(harness, CAST.ownerOfA1), lapsingId, 'granted');
+			const lapsed = await decideGrantRequest(await personCaller(harness, CAST.ownerOfA1), lapsingId, 'grant');
 
 			assertRefused(own, PROBLEMS.ownRequest, 'deciding their own request');
 			assertRefused(again, PROBLEMS.requestDecided, 'a second decision');
 			assertRefused(lapsed, PROBLEMS.requestLapsed, 'a lapsed request');
-			assert.equal((await storedGrantRequest(harness, refusedId)).decision, 'refused');
+			assert.equal((await storedGrantRequest(harness, refusedId)).decision, 'declined');
 			assert.equal((await storedGrantRequest(harness, lapsingId)).decision, null);
 		});
 	});
@@ -207,15 +207,11 @@ suite('grant requests through the store', () => {
 			const requestId = requestIdOf(await createSelfGrant(administrator, selfGrantUntil(inTwoHours())));
 
 			const twice = await createSelfGrant(administrator, selfGrantUntil(inTwoHours()));
-			const byOutsider = await decideGrantRequest(
-				await personCaller(harness, CAST.outsider),
-				requestId,
-				'granted',
-			);
+			const byOutsider = await decideGrantRequest(await personCaller(harness, CAST.outsider), requestId, 'grant');
 			const byOtherOwner = await decideGrantRequest(
 				await personCaller(harness, CAST.ownerOfB2),
 				requestId,
-				'granted',
+				'grant',
 			);
 
 			assertRefused(twice, PROBLEMS.alreadyRequested, 'asking twice');
@@ -256,7 +252,7 @@ suite('grant requests through the store', () => {
 			const toOtherOwner = await listedTo(await personCaller(harness, CAST.ownerOfB2));
 			const toOutsider = await listedTo(await personCaller(harness, CAST.outsider));
 			assertSucceeded(
-				await decideGrantRequest(await personCaller(harness, CAST.ownerOfA1), requestId, 'refused'),
+				await decideGrantRequest(await personCaller(harness, CAST.ownerOfA1), requestId, 'decline'),
 				'the refusal',
 			);
 			const toOwnerOnceDecided = await listedTo(await personCaller(harness, CAST.ownerOfA1));
@@ -267,7 +263,7 @@ suite('grant requests through the store', () => {
 				[[[requestId, 'pending']], [[requestId, 'pending']], [[requestId, 'pending']], [], []],
 			);
 			assert.deepEqual(toOwnerOnceDecided, []);
-			assert.deepEqual(toAdministratorOnceDecided, [[requestId, 'refused']]);
+			assert.deepEqual(toAdministratorOnceDecided, [[requestId, 'declined']]);
 		});
 	});
 

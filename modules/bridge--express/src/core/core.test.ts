@@ -2162,7 +2162,7 @@ suite('createBridgeCoreWithSeams', () => {
 			assert.deepEqual(
 				harness
 					.events('category.unenforced')
-					.map(({ data }) => [data['userId'], data['resourceId'], data['entry']]),
+					.map(({ data }) => [data['userSubject'], data['resourceId'], data['entry']]),
 				[['subject-ana', 'HEART_STUDY', 'fieldPartition']],
 			);
 			await harness.core.stop();

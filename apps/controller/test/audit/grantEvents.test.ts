@@ -86,7 +86,7 @@ suite('grant events', () => {
 		const data = dataOf(event);
 
 		assert.equal(data['actorId'], PEOPLE.owner.subject);
-		assert.equal(data['granteeId'], PEOPLE.ana.subject);
+		assert.equal(data['granteeSubject'], PEOPLE.ana.subject);
 		assert.equal(data['resourceId'], RESOURCES.a1);
 		assert.equal(data['category'], CONTROLLED);
 		assert.equal(data['role'], 'viewer');
@@ -270,7 +270,7 @@ suite('grant events', () => {
 			since,
 		});
 		const grantId = createdId(
-			await decideGrantRequest(await personCaller(harness, PEOPLE.owner), requestId, 'granted'),
+			await decideGrantRequest(await personCaller(harness, PEOPLE.owner), requestId, 'grant'),
 			'the approved self-grant',
 		);
 		const approved = await awaitEventWhere(log, 'grant.requestDecision', namingGrant(grantId), { since });
@@ -287,7 +287,7 @@ suite('grant events', () => {
 		assert.equal(asked['role'], 'viewer');
 		assert.equal(decided['actorId'], PEOPLE.owner.subject);
 		assert.equal(decided['requestId'], requestId);
-		assert.equal(decided['requestedById'], PEOPLE.administrator.subject);
+		assert.equal(decided['requestedBySubject'], PEOPLE.administrator.subject);
 		assert.ok(stored.expiresAt);
 		[asked, decided].forEach((data) => {
 			assert.equal(Date.parse(String(data['expiresAt'])), stored.expiresAt?.getTime());
@@ -341,7 +341,7 @@ suite('grant events', () => {
 		const data = dataOf(event);
 
 		assert.equal(data['actorId'], PEOPLE.administrator.subject);
-		assert.equal(data['granteeId'], PEOPLE.ana.subject);
+		assert.equal(data['granteeSubject'], PEOPLE.ana.subject);
 		assert.equal(data['resourceId'], RESOURCES.b2);
 		assert.equal(data['category'], CONTROLLED);
 		assert.equal(data['role'], 'viewer');
@@ -440,7 +440,7 @@ suite('grant events', () => {
 			assertSucceeded(
 				await answerGrant(await personCaller(harness, PEOPLE.bo), grantId, {
 					capabilities: VIEWER_CAPABILITIES,
-					decision: 'accepted',
+					decision: 'accept',
 				}),
 				'the acceptance',
 			);

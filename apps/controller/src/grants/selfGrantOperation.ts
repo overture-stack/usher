@@ -153,7 +153,7 @@ const request = async (
 		data: {
 			category: category?.scopedName ?? null,
 			expiresAt: eventInstant(expiresAt.getTime()),
-			granteeId: caller.subject,
+			granteeSubject: caller.subject,
 			kind: 'selfGrant',
 			requestId,
 			resourceId: resource.externalId,

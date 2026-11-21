@@ -290,7 +290,7 @@ suite('listing my own grants', () => {
 				resource,
 				state,
 			})),
-			[{ resource: STUDIES.a1, state: GRANT_STATES.rejected }],
+			[{ resource: STUDIES.a1, state: GRANT_STATES.declined }],
 		);
 	});
 

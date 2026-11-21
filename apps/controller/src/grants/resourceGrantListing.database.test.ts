@@ -45,7 +45,7 @@ const PAST = new Date(Date.now() - 2 * HOUR_MS);
 // Ana held a viewer grant, since expired.
 const ON_A1 = grantsFixture({
 	decisions: [
-		answeredInFixture('cyDeclined', 'rejected'),
+		answeredInFixture('cyDeclined', 'declined'),
 		answeredInFixture('spareRevoked'),
 		answeredInFixture('lookalikeExpired'),
 		answeredInFixture('administratorSelf'),
@@ -121,7 +121,7 @@ const UNREVOKED: readonly (readonly [string, string])[] = [
 	['administratorSelf', GRANT_STATES.accepted],
 	['administratorUnmarked', GRANT_STATES.accepted],
 	['curatesA1', GRANT_STATES.accepted],
-	['cyDeclined', GRANT_STATES.rejected],
+	['cyDeclined', GRANT_STATES.declined],
 	['cyPending', GRANT_STATES.pending],
 	['lookalikeExpired', GRANT_STATES.expired],
 	['ownsA1', GRANT_STATES.accepted],
@@ -189,7 +189,7 @@ suite('the grants on a resource, in the store', () => {
 					listedOn(grants, grantIdOf(harness, 'cyPending')).decision,
 					listedOn(grants, grantIdOf(harness, 'cyDeclined')).decision?.decision,
 				],
-				[undefined, GRANT_STATES.rejected],
+				[undefined, GRANT_STATES.declined],
 			);
 		});
 	});

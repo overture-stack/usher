@@ -171,7 +171,7 @@ const readerOf = ({ administrator }: Principal, { countedOwner }: ResourceStandi
  * 409 `alreadyExists`, as is the loser of two racing for one. Each owner named by address is
  * resolved through the directory before the transaction begins, as {@link ownerSubjects} resolves
  * them. A registration commits in one transaction with its `resource.registration` event, whose
- * `initialOwnerId` is the subject of the first owner it names, or `null` for none, the served rows,
+ * `initialOwnerSubject` is the subject of the first owner it names, or `null` for none, the served rows,
  * a servedResources notice for each application named, an `application.servedResourcesChange` event
  * for each, and an owner grant on the whole resource for each owner named, in order, as a grant is
  * written: its holder recorded on first meeting them, no expiry, the registering administrator its
@@ -293,7 +293,7 @@ export const createResourceRoutes = (
 					});
 					await record({
 						data: {
-							initialOwnerId: owners[0] ?? null,
+							initialOwnerSubject: owners[0] ?? null,
 							resourceId: input.externalId,
 							result: 'succeeded',
 							sourceIp,

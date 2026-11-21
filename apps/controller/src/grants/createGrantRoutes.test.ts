@@ -571,7 +571,7 @@ const methodsCalled = ({ calls }: Stand): readonly string[] => calls.map(({ meth
 const eventData = ({ recorded }: Stand): readonly Readonly<Record<string, unknown>>[] =>
 	recorded.map(({ data, type }) => ({ type, ...data }));
 
-const ACCEPTING = { capabilities: VIEWER.capabilities, decision: 'accepted' };
+const ACCEPTING = { capabilities: VIEWER.capabilities, decision: 'accept' };
 
 suite('creating a grant', () => {
 	test("records an unmet holder, ends an expired grant on the grant's terms before writing it, and answers 201 with the grant", async (context) => {
@@ -644,7 +644,7 @@ suite('creating a grant', () => {
 			{
 				category: 'global.controlled',
 				grantId: GRANT_ID,
-				granteeId: 'subject-cy',
+				granteeSubject: 'subject-cy',
 				resourceId: 'STUDY-A1',
 				result: 'succeeded',
 				role: 'viewer',
@@ -891,7 +891,7 @@ suite('creating a grant whose holder is named by address', () => {
 			{
 				category: 'global.unmarked',
 				grantId: GRANT_ID,
-				granteeId: 'subject-bo',
+				granteeSubject: 'subject-bo',
 				resourceId: 'STUDY-A1',
 				result: 'succeeded',
 				role: 'submitter',
@@ -994,7 +994,7 @@ suite('creating a grant whose holder is named by address', () => {
 			{
 				category: 'global.controlled',
 				grantId: GRANT_ID,
-				granteeId: 'subject-cy',
+				granteeSubject: 'subject-cy',
 				resourceId: 'STUDY-A1',
 				result: 'succeeded',
 				role: 'viewer',
@@ -1171,7 +1171,7 @@ suite('creating a grant on a resource without a counted owner', () => {
 			{
 				category: 'global.controlled',
 				expiresAt: '2026-11-12T14:00:00.000Z',
-				granteeId: 'subject-cy',
+				granteeSubject: 'subject-cy',
 				kind: 'orphanedResource',
 				requestId: REQUEST_ID,
 				resourceId: 'STUDY-A1',
@@ -1405,7 +1405,7 @@ suite('removing a submitter by address', () => {
 			BO_SUBMITS.map(({ category, id }) => ({
 				category,
 				grantId: id,
-				granteeId: 'subject-bo',
+				granteeSubject: 'subject-bo',
 				reason: 'unspecified',
 				resourceId: 'STUDY-A1',
 				result: 'succeeded',
@@ -1520,8 +1520,8 @@ suite('removing a submitter by address', () => {
 		assert.deepEqual(
 			answers.map((answer) => parsed(answer)['detail']),
 			[
-				"Addresses cannot be resolved without a configured directory, which the variables USHER_DIRECTORY_URL, USHER_DIRECTORY_REALM, USHER_DIRECTORY_CLIENT_ID, USHER_DIRECTORY_CLIENT_SECRET configure; revoke the submitter's grant by its id, through DELETE /admin/grants/{id}.",
-				"A submitter named by address is found through the identity provider's directory, which cannot answer now. Revoke the submitter's grant by its id, through DELETE /admin/grants/{id}, or try again later.",
+				"Addresses cannot be resolved without a configured directory, which the variables USHER_DIRECTORY_URL, USHER_DIRECTORY_REALM, USHER_DIRECTORY_CLIENT_ID, USHER_DIRECTORY_CLIENT_SECRET configure; revoke the submitter's grant by its id, through DELETE /admin/grants/{grantId}.",
+				"A submitter named by address is found through the identity provider's directory, which cannot answer now. Revoke the submitter's grant by its id, through DELETE /admin/grants/{grantId}, or try again later.",
 			],
 		);
 		assert.deepEqual(
@@ -1544,7 +1544,7 @@ suite('answering a grant', () => {
 
 		const answered = await answer(stand, 'cy', {
 			capabilities: [...VIEWER.capabilities].reverse(),
-			decision: 'accepted',
+			decision: 'accept',
 		});
 
 		assert.deepEqual(outcomeOf(answered), [204, undefined]);
@@ -1632,11 +1632,11 @@ suite('answering a grant', () => {
 		const refused = [
 			await answer(stand, 'cy', {
 				capabilities: [...VIEWER.capabilities, 'record.delete'],
-				decision: 'accepted',
+				decision: 'accept',
 			}),
 			await answer(stand, 'cy', {
 				capabilities: ['record.view'],
-				decision: 'accepted',
+				decision: 'accept',
 			}),
 		];
 
@@ -1659,7 +1659,7 @@ suite('answering a grant', () => {
 		};
 		const declining = {
 			capabilities: ROLES['owner']?.capabilities ?? [],
-			decision: 'rejected',
+			decision: 'decline',
 		};
 		const alone = standUp(context, {
 			countedOwnersBesides: 0,
@@ -1727,7 +1727,7 @@ suite('revoking a grant', () => {
 			{
 				category: 'global.controlled',
 				grantId: GRANT_ID,
-				granteeId: 'subject-cy',
+				granteeSubject: 'subject-cy',
 				reason: 'accessReview',
 				resourceId: 'STUDY-A1',
 				result: 'succeeded',
@@ -2006,7 +2006,7 @@ suite('creating a self-grant', () => {
 			{
 				category: 'global.controlled',
 				expiresAt: '2026-11-12T14:00:00.000Z',
-				granteeId: 'subject-administrator',
+				granteeSubject: 'subject-administrator',
 				kind: 'selfGrant',
 				requestId: REQUEST_ID,
 				resourceId: 'STUDY-A1',
@@ -2121,7 +2121,7 @@ suite('deciding a grant request', () => {
 	test('grants for a counted owner, the resource locked before the request, writing the grant asked for with the acceptance shown at the request, and answers 200 with the grant', async (context) => {
 		const stand = standUp(context);
 
-		const granted = await decide(stand, 'ana', { decision: 'granted' });
+		const granted = await decide(stand, 'ana', { decision: 'grant' });
 
 		assert.equal(granted.statusCode, 200);
 		assert.deepEqual(parsed(granted), {
@@ -2193,9 +2193,9 @@ suite('deciding a grant request', () => {
 				decision: 'granted',
 				expiresAt: '2026-11-12T14:00:00.000Z',
 				grantId: GRANT_ID,
-				granteeId: 'subject-administrator',
+				granteeSubject: 'subject-administrator',
 				requestId: REQUEST_ID,
-				requestedById: 'subject-administrator',
+				requestedBySubject: 'subject-administrator',
 				resourceId: 'STUDY-A1',
 				result: 'succeeded',
 				role: 'viewer',
@@ -2210,7 +2210,7 @@ suite('deciding a grant request', () => {
 		const stand = standUp(context);
 
 		const refused = await decide(stand, 'secondAdministrator', {
-			decision: 'refused',
+			decision: 'decline',
 		});
 
 		assert.equal(refused.statusCode, 200);
@@ -2221,24 +2221,24 @@ suite('deciding a grant request', () => {
 				parsed(refused)['decidedAt'],
 				parsed(refused)['grantId'],
 			],
-			['grantRequest', 'refused', '2026-11-12T12:00:00.000Z', null],
+			['grantRequest', 'declined', '2026-11-12T12:00:00.000Z', null],
 		);
 		assert.equal(methodsCalled(stand).includes('insertGrant'), false);
 		assert.deepEqual(valuesOf(stand, 'recordDecision'), [
 			{
 				decidedAt: new Date(NOW),
 				decidedBy: 'person-second-administrator',
-				decision: 'refused',
+				decision: 'declined',
 				grantId: null,
 				requestId: REQUEST_ID,
 			},
 		]);
 		assert.deepEqual(eventData(stand), [
 			{
-				decision: 'refused',
-				granteeId: 'subject-administrator',
+				decision: 'declined',
+				granteeSubject: 'subject-administrator',
 				requestId: REQUEST_ID,
-				requestedById: 'subject-administrator',
+				requestedBySubject: 'subject-administrator',
 				result: 'succeeded',
 				sourceIp: '127.0.0.1',
 				type: 'grant.requestDecision',
@@ -2247,18 +2247,18 @@ suite('deciding a grant request', () => {
 		assert.deepEqual(severities(stand), [['grant.requestDecision', 'info']]);
 	});
 
-	test("names an orphaned resource's holder as granteeId when another platform administrator refuses its request", async (context) => {
+	test("names an orphaned resource's holder as granteeSubject when another platform administrator refuses its request", async (context) => {
 		const stand = standUp(context, { ...UNOWNED, grantRequest: ORPHANED_ASKED });
 
-		const refused = await decide(stand, 'secondAdministrator', { decision: 'refused' });
+		const refused = await decide(stand, 'secondAdministrator', { decision: 'decline' });
 
 		assert.equal(refused.statusCode, 200);
 		assert.deepEqual(eventData(stand), [
 			{
-				decision: 'refused',
-				granteeId: 'subject-cy',
+				decision: 'declined',
+				granteeSubject: 'subject-cy',
 				requestId: REQUEST_ID,
-				requestedById: 'subject-administrator',
+				requestedBySubject: 'subject-administrator',
 				result: 'succeeded',
 				sourceIp: '127.0.0.1',
 				type: 'grant.requestDecision',
@@ -2273,7 +2273,7 @@ suite('deciding a grant request', () => {
 		});
 
 		const granted = await decide(stand, 'secondAdministrator', {
-			decision: 'granted',
+			decision: 'grant',
 		});
 
 		assert.equal(granted.statusCode, 200);
@@ -2323,9 +2323,9 @@ suite('deciding a grant request', () => {
 				decision: 'granted',
 				expiresAt: '2026-11-12T14:00:00.000Z',
 				grantId: GRANT_ID,
-				granteeId: 'subject-cy',
+				granteeSubject: 'subject-cy',
 				requestId: REQUEST_ID,
-				requestedById: 'subject-administrator',
+				requestedBySubject: 'subject-administrator',
 				resourceId: 'STUDY-A1',
 				result: 'succeeded',
 				role: 'viewer',
@@ -2339,7 +2339,7 @@ suite('deciding a grant request', () => {
 		const stand = standUp(context, { ...UNOWNED, grantRequest: ORPHANED_ASKED }, true);
 
 		const granted = await decide(stand, 'secondAdministrator', {
-			decision: 'granted',
+			decision: 'grant',
 		});
 
 		assert.equal(parsed(granted)['state'], 'accepted');
@@ -2361,28 +2361,28 @@ suite('deciding a grant request', () => {
 			grantRequest: {
 				...ORPHANED_ASKED,
 				decidedAt: new Date(NOW - 1000),
-				decision: 'refused' as const,
+				decision: 'declined' as const,
 			},
 		};
 
 		const answers = [
 			await decide(refusedStand, 'secondAdministrator', {
-				decision: 'granted',
+				decision: 'grant',
 			}),
 			await decide(standUp(context, decidedAlready), 'secondAdministrator', {
-				decision: 'granted',
+				decision: 'grant',
 			}),
 			await decide(standUp(context, owned), 'secondAdministrator', {
-				decision: 'refused',
+				decision: 'decline',
 			}),
-			await decide(standUp(context, owned), 'ana', { decision: 'granted' }),
+			await decide(standUp(context, owned), 'ana', { decision: 'grant' }),
 			await decide(
 				standUp(context, {
 					...owned,
 					countedOwners: ['person-ana', 'person-second-administrator'],
 				}),
 				'secondAdministrator',
-				{ decision: 'granted' },
+				{ decision: 'grant' },
 			),
 		];
 
@@ -2407,8 +2407,8 @@ suite('deciding a grant request', () => {
 		});
 
 		const answers = [
-			await decide(stand, 'administrator', { decision: 'granted' }),
-			await decide(stand, 'cy', { decision: 'granted' }),
+			await decide(stand, 'administrator', { decision: 'grant' }),
+			await decide(stand, 'cy', { decision: 'grant' }),
 		];
 
 		assert.deepEqual(answers.map(outcomeOf), [
@@ -2421,7 +2421,7 @@ suite('deciding a grant request', () => {
 		const stand = standUp(context);
 
 		const granted = await decide(stand, 'secondAdministrator', {
-			decision: 'granted',
+			decision: 'grant',
 		});
 
 		assert.equal(granted.statusCode, 200);
@@ -2432,7 +2432,7 @@ suite('deciding a grant request', () => {
 		const stand = standUp(context);
 
 		const refused = await decide(stand, 'administrator', {
-			decision: 'granted',
+			decision: 'grant',
 		});
 
 		assert.deepEqual(outcomeOf(refused), [403, 'ownRequest']);
@@ -2446,10 +2446,10 @@ suite('deciding a grant request', () => {
 		});
 
 		const answers = [
-			await decide(stand, 'cy', { decision: 'refused' }),
-			await decide(stand, 'ana', { decision: 'granted' }, UNKNOWN_GRANT_ID),
-			await decide(stand, 'ana', { decision: 'granted' }, 'not-a-uuid'),
-			await decide(retired, 'ana', { decision: 'granted' }),
+			await decide(stand, 'cy', { decision: 'decline' }),
+			await decide(stand, 'ana', { decision: 'grant' }, UNKNOWN_GRANT_ID),
+			await decide(stand, 'ana', { decision: 'grant' }, 'not-a-uuid'),
+			await decide(retired, 'ana', { decision: 'grant' }),
 		];
 
 		answers.forEach((answered) => {
@@ -2459,7 +2459,7 @@ suite('deciding a grant request', () => {
 		assert.deepEqual(
 			eventData(stand).map(({ decision, reason, requestId, type }) => [type, decision, requestId, reason]),
 			[
-				['grant.requestDecision', 'refused', REQUEST_ID, 'noAuthorityOnResource'],
+				['grant.requestDecision', 'declined', REQUEST_ID, 'noAuthorityOnResource'],
 				['grant.requestDecision', 'granted', undefined, 'requestNotFound'],
 				['grant.requestDecision', 'granted', undefined, 'requestNotFound'],
 			],
@@ -2471,7 +2471,7 @@ suite('deciding a grant request', () => {
 		const decided = {
 			...ASKED,
 			decidedAt: new Date(NOW - 1000),
-			decision: 'refused' as const,
+			decision: 'declined' as const,
 		};
 		const requests = [
 			decided,
@@ -2482,7 +2482,7 @@ suite('deciding a grant request', () => {
 		const answers = await Promise.all(
 			requests.map((grantRequest) =>
 				decide(standUp(context, { grantRequest }), 'ana', {
-					decision: 'granted',
+					decision: 'grant',
 				}),
 			),
 		);
@@ -2497,13 +2497,13 @@ suite('deciding a grant request', () => {
 	test('refuses to grant a request for a holder holding the grant live already 409 alreadyHolds, recording no decision', async (context) => {
 		const stand = standUp(context, { held: true });
 
-		const refused = await decide(stand, 'ana', { decision: 'granted' });
+		const refused = await decide(stand, 'ana', { decision: 'grant' });
 
 		assert.deepEqual(outcomeOf(refused), [409, 'alreadyHolds']);
 		assert.equal(methodsCalled(stand).includes('recordDecision'), false);
 	});
 
-	test('refuses a decision other than granted or refused 422 before any transaction, its event naming no decision', async (context) => {
+	test('refuses a decision other than grant or decline 422 before any transaction, its event naming no decision', async (context) => {
 		const stand = standUp(context);
 
 		const refused = await decide(stand, 'ana', { decision: 'accepted' });
@@ -2644,7 +2644,7 @@ suite('changing a grant', () => {
 				endAfter: '2026-11-14T12:00:00.000Z',
 				endBefore: '2026-11-13T12:00:00.000Z',
 				grantId: GRANT_ID,
-				granteeId: 'subject-cy',
+				granteeSubject: 'subject-cy',
 				resourceId: 'STUDY-A1',
 				result: 'succeeded',
 				sourceIp: '127.0.0.1',
@@ -2670,7 +2670,7 @@ suite('changing a grant', () => {
 				type === 'grant.roleChange' ? data['roleBefore'] : data['endBefore'],
 				type === 'grant.roleChange' ? data['roleAfter'] : data['endAfter'],
 				data['grantId'],
-				data['granteeId'],
+				data['granteeSubject'],
 			]),
 			[
 				[
@@ -2902,7 +2902,7 @@ suite('counting grant writes against the grant rate', () => {
 			await revoke(stand, 'ana'),
 			await selfGrant(stand, 'ana'),
 			await selfGrant(stand, 'administrator'),
-			await decide(stand, 'ana', { decision: 'granted' }),
+			await decide(stand, 'ana', { decision: 'grant' }),
 			await change(stand, 'ana', { role: 'viewer' }),
 			await listRequests(stand, 'ana'),
 			await change(ending, 'ana', {
@@ -2947,7 +2947,7 @@ suite('counting grant writes against the grant rate', () => {
 			await revoke(stand, 'ana', 'not-a-grant'),
 			await answer(stand, 'bo', ACCEPTING),
 			await selfGrant(stand, 'ana', { ...SELF_VIEWER, role: 'owner' }),
-			await decide(stand, 'administrator', { decision: 'granted' }),
+			await decide(stand, 'administrator', { decision: 'grant' }),
 			await change(stand, 'bo', { role: 'viewer' }),
 			await create(retiredFirst, 'ana'),
 			await create(unanswering, 'administrator', submitterAt('sub.bo@example.org')),

@@ -273,7 +273,7 @@ suite('relaying a back-channel logout', () => {
 				{
 					data: {
 						result: 'succeeded',
-						signedOutUserId: 'subject-ana',
+						signedOutUserSubject: 'subject-ana',
 						sourceIp: '127.0.0.1',
 					},
 					type: 'identity.signOut',

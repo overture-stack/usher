@@ -4,10 +4,11 @@ import { suite, test, type TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 
+import type { AccountReading } from '../directory/index.js';
 import type { AuditEvent } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import { createAdministratorRoutes } from './createAdministratorRoutes.js';
-import type { AdministratorStore, ListedNomination, StoredNomination } from './types.js';
+import type { AdministratorStore, ListedNomination, NominationRecord, StoredNomination } from './types.js';
 
 const NOW = Date.UTC(2026, 10, 16, 12, 0, 0);
 
@@ -19,14 +20,29 @@ const LATEST = '6b1f3c2e-8a4d-4f7b-9c1e-2d3a4b5c6d7e';
 
 const REPLACED = '0c2d4e6f-1a3b-4c5d-8e9f-0a1b2c3d4e5f';
 
+const DECLINED = '5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d';
+
+const REVOKED = '7d8e9f0a-1b2c-4d3e-9f4a-5b6c7d8e9f0a';
+
+const BY_ANOTHER = '2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b';
+
 const UNKNOWN = '9e8d7c6b-5a49-4382-b1a0-f9e8d7c6b5a4';
 
 const APPENDED = '3f2e1d0c-9b8a-4766-a554-433221100fed';
 
-/** What the fake store holds for one test. */
+/** What the directory answers, when configured. */
+type DirectoryState = 'answering' | 'unavailable' | 'unconfigured';
+
+/** What the fake store and the fake directory hold for one test. */
 interface World {
+	/** The accounts the directory holds, by subject, when it answers. */
+	accounts: Readonly<Record<string, AccountReading>>;
+
 	/** Whether an administrator has accepted. */
 	administratorExists: boolean;
+
+	/** Whether the directory answers, cannot answer, or is not configured. */
+	directory: DirectoryState;
 
 	/** The nominations, by id. */
 	nominations: Readonly<Record<string, StoredNomination>>;
@@ -43,6 +59,9 @@ interface Call {
 interface Stand {
 	calls: Call[];
 
+	/** Each subject the directory was asked for. */
+	lookups: string[];
+
 	/** The statements read outside a transaction, with their values. */
 	reads: { text: string; values: readonly unknown[] }[];
 
@@ -53,22 +72,62 @@ interface Stand {
 	transactions: { count: number };
 }
 
-// Ana is the first user and has met Usher; Bo and Cy have too. Bo holds the latest nomination, and
-// an earlier one, both Ana's.
+// Ana is the first user and has met Usher; Bo, Cy and Dee are subjects Ana may name. Bo holds the
+// latest nomination, and the others: one replaced, one declined, one revoked, and one Cy made.
+const BY_ANA = {
+	nominatorSubject: 'subject-ana',
+	nomineeSubject: 'subject-bo',
+	nomineeUserId: 'person-bo',
+};
+
 const WORLD: World = {
+	accounts: {
+		'subject-dee': { account: { email: 'dee@example.org', familyName: null, givenName: null }, kind: 'held' },
+	},
 	administratorExists: false,
+	directory: 'answering',
 	nominations: {
 		[LATEST]: {
 			id: LATEST,
-			latest: true,
-			nominatorSubject: 'subject-ana',
-			nomineeId: 'person-bo',
+			...BY_ANA,
+			decidedAt: null,
+			nominatedAt: new Date(NOW - 60_000),
+			revokedAt: null,
+			state: 'pending',
 		},
 		[REPLACED]: {
 			id: REPLACED,
-			latest: false,
-			nominatorSubject: 'subject-ana',
-			nomineeId: 'person-bo',
+			...BY_ANA,
+			decidedAt: null,
+			nominatedAt: new Date(NOW - 120_000),
+			revokedAt: null,
+			state: 'replaced',
+		},
+		[DECLINED]: {
+			id: DECLINED,
+			...BY_ANA,
+			decidedAt: new Date(NOW - 90_000),
+			nominatedAt: new Date(NOW - 100_000),
+			revokedAt: null,
+			state: 'declined',
+		},
+		[REVOKED]: {
+			id: REVOKED,
+			...BY_ANA,
+			decidedAt: null,
+			nominatedAt: new Date(NOW - 80_000),
+			revokedAt: new Date(NOW - 70_000),
+			state: 'revoked',
+		},
+		[BY_ANOTHER]: {
+			id: BY_ANOTHER,
+			decidedAt: null,
+			nominatedAt: new Date(NOW - 30_000),
+			nominatorSubject: 'subject-cy',
+			nomineeSubject: 'subject-bo',
+			nomineeUserId: 'person-bo',
+			revokedAt: null,
+			state: 'pending',
 		},
 	},
 	people: {
@@ -78,19 +137,50 @@ const WORLD: World = {
 	},
 };
 
-// The rows a listing reads: Bo's two nominations, the earlier first.
+// The rows a nominee's listing reads: Bo's nominations, the earlier first.
 const LISTED: readonly ListedNomination[] = [
 	{
 		id: REPLACED,
-		latest: false,
 		nominatedAt: new Date(NOW - 120_000),
 		nominatorSubject: 'subject-ana',
+		state: 'replaced',
 	},
 	{
 		id: LATEST,
-		latest: true,
 		nominatedAt: new Date(NOW - 60_000),
 		nominatorSubject: 'subject-ana',
+		state: 'pending',
+	},
+];
+
+// The rows the first user's listing reads: every nomination, the earlier first.
+const EVERY: readonly NominationRecord[] = [
+	{
+		decidedAt: null,
+		id: REPLACED,
+		nominatedAt: new Date(NOW - 120_000),
+		nominatorSubject: 'subject-ana',
+		nomineeSubject: 'subject-bo',
+		revokedAt: null,
+		state: 'replaced',
+	},
+	{
+		decidedAt: new Date(NOW - 90_000),
+		id: DECLINED,
+		nominatedAt: new Date(NOW - 100_000),
+		nominatorSubject: 'subject-ana',
+		nomineeSubject: 'subject-bo',
+		revokedAt: null,
+		state: 'declined',
+	},
+	{
+		decidedAt: null,
+		id: LATEST,
+		nominatedAt: new Date(NOW - 60_000),
+		nominatorSubject: 'subject-ana',
+		nomineeSubject: 'subject-bo',
+		revokedAt: null,
+		state: 'pending',
 	},
 ];
 
@@ -107,6 +197,9 @@ const fakeStore = (world: World, calls: Call[]): AdministratorStore => {
 		appendNomination: async (nomination) => {
 			called('appendNomination', nomination);
 			return { id: APPENDED, nominatedAt: nomination.now };
+		},
+		declineNomination: async (decline) => {
+			called('declineNomination', decline);
 		},
 		findOrRecordPerson: async (subject, now) => {
 			called('findOrRecordPerson', subject, now);
@@ -125,6 +218,9 @@ const fakeStore = (world: World, calls: Call[]): AdministratorStore => {
 		readNomination: async (id) => {
 			called('readNomination', id);
 			return world.nominations[id];
+		},
+		revokeNomination: async (revocation) => {
+			called('revokeNomination', revocation);
 		},
 	};
 };
@@ -161,6 +257,7 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 	const known: World = { ...WORLD, ...world };
 	const stand = {
 		calls: [] as Call[],
+		lookups: [] as string[],
 		reads: [] as Stand['reads'],
 		recorded: [] as AuditEvent[],
 		transactions: { count: 0 },
@@ -173,21 +270,36 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 	createAdministratorRoutes(
 		{
 			administratorStoreOf: () => fakeStore(known, stand.calls),
+			directory: {
+				accountOf: async (subject) => {
+					stand.lookups.push(subject);
+					return known.directory === 'answering'
+						? (known.accounts[subject] ?? { kind: 'absent' })
+						: { kind: known.directory };
+				},
+			},
 			settings: {
 				clock: { now: () => NOW },
 				databaseSchema: 'usher',
 				identityProviderIssuer: ISSUER,
 			},
 			store: {
-				// A refused acceptance's nomination, by whether one has the id, or a listing's rows.
+				// Each read by its alias: whether an administrator exists, whether a person is met, a refused
+				// answer's nomination by whether one has the id, the first user's listing, or a nominee's rows.
 				query: async <Row extends pg.QueryResultRow>(
 					text: string,
 					values: readonly unknown[] = [],
 				): Promise<pg.QueryResult<Row>> => {
 					stand.reads.push({ text, values });
-					const rows = text.includes('AS exists')
-						? [{ exists: Object.hasOwn(known.nominations, String(values[0])) }]
-						: LISTED.filter(() => values[1] === 'subject-bo');
+					const rows: readonly unknown[] = text.includes('AS "administratorExists"')
+						? [{ administratorExists: known.administratorExists }]
+						: text.includes('AS met')
+							? [{ met: Object.hasOwn(known.people, String(values[1])) }]
+							: text.includes('AS exists')
+								? [{ exists: Object.hasOwn(known.nominations, String(values[0])) }]
+								: text.includes('"nomineeSubject"')
+									? EVERY
+									: LISTED.filter(() => values[1] === 'subject-bo');
 					return { rows } as unknown as pg.QueryResult<Row>;
 				},
 			},
@@ -247,7 +359,7 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 const send = (
 	{ server }: Stand,
 	caller: string,
-	{ body, method, url }: { body?: unknown; method: 'GET' | 'POST'; url: string },
+	{ body, method, url }: { body?: unknown; method: 'DELETE' | 'GET' | 'POST'; url: string },
 ) =>
 	server.inject({
 		headers: {
@@ -266,10 +378,17 @@ const nominate = (stand: Stand, caller: string, subject: string) =>
 		url: '/admin/nominations',
 	});
 
-const accept = (stand: Stand, caller: string, id: string) =>
+const decide = (stand: Stand, caller: string, id: string, decision: unknown) =>
 	send(stand, caller, {
+		body: { decision },
 		method: 'POST',
-		url: `/admin/nominations/${id}/acceptance`,
+		url: `/admin/nominations/${id}/decisions`,
+	});
+
+const revoke = (stand: Stand, caller: string, id: string) =>
+	send(stand, caller, {
+		method: 'DELETE',
+		url: `/admin/nominations/${id}`,
 	});
 
 const outcomeOf = (answer: { body: string; statusCode: number }): readonly unknown[] => [
@@ -288,11 +407,15 @@ const eventsOf = (stand: Stand): readonly unknown[] =>
 
 const INSTANT = new Date(NOW).toISOString();
 
+const LATEST_AT = new Date(NOW - 60_000).toISOString();
+
+const REPLACED_AT = new Date(NOW - 120_000).toISOString();
+
+const DECLINED_AT = new Date(NOW - 100_000).toISOString();
+
 suite("nominating Usher's first administrator", () => {
-	test('nominates a person Usher has met, its nominator the first user, recorded on first meeting, answering 201 and recording admin.nomination at warning', async (context) => {
-		const stand = standUp(context, {
-			people: { 'subject-bo': 'person-bo' },
-		});
+	test('nominates a person Usher has met, its nominator the first user, recorded on first meeting, answering 201 pending and recording admin.nomination at warning', async (context) => {
+		const stand = standUp(context);
 
 		const answer = await nominate(stand, 'ana', 'subject-bo');
 
@@ -302,11 +425,15 @@ suite("nominating Usher's first administrator", () => {
 			nominatedAt: INSTANT,
 			nominatedBy: { subject: 'subject-ana' },
 			nominee: { subject: 'subject-bo' },
+			state: 'pending',
 		});
 		assert.deepEqual(stand.calls, [
 			{ method: 'lockNominations', values: [] },
 			{ method: 'administratorExists', values: [] },
-			{ method: 'findPerson', values: ['subject-bo'] },
+			{
+				method: 'findOrRecordPerson',
+				values: ['subject-bo', new Date(NOW)],
+			},
 			{
 				method: 'findOrRecordPerson',
 				values: ['subject-ana', new Date(NOW)],
@@ -315,18 +442,19 @@ suite("nominating Usher's first administrator", () => {
 				method: 'appendNomination',
 				values: [
 					{
-						nominatedBy: 'person-new-subject-ana',
-						nomineeId: 'person-bo',
+						nominatedBy: 'person-ana',
+						nomineeUserId: 'person-bo',
 						now: new Date(NOW),
 					},
 				],
 			},
 		]);
+		assert.deepEqual(stand.lookups, []);
 		assert.deepEqual(eventsOf(stand), [
 			{
 				data: {
 					nominationId: APPENDED,
-					nomineeId: 'subject-bo',
+					nomineeSubject: 'subject-bo',
 					result: 'succeeded',
 					sourceIp: '127.0.0.1',
 				},
@@ -336,7 +464,7 @@ suite("nominating Usher's first administrator", () => {
 		]);
 	});
 
-	test('nominates the first user themself, never met before, as nominee and nominator alike', async (context) => {
+	test('nominates the first user themself, never met before, as nominee and nominator alike, without asking the directory', async (context) => {
 		const stand = standUp(context, { people: {} });
 
 		const answer = await nominate(stand, 'ana', 'subject-ana');
@@ -351,10 +479,95 @@ suite("nominating Usher's first administrator", () => {
 		assert.deepEqual(stand.calls.at(-1)?.values, [
 			{
 				nominatedBy: 'person-new-subject-ana',
-				nomineeId: 'person-new-subject-ana',
+				nomineeUserId: 'person-new-subject-ana',
 				now: new Date(NOW),
 			},
 		]);
+		assert.deepEqual(stand.lookups, []);
+	});
+
+	test('nominates an account the directory finds in the trusted realm, recording the nominee on the finding, after the directory answers outside the lock', async (context) => {
+		const stand = standUp(context, { people: {} });
+
+		const answer = await nominate(stand, 'ana', 'subject-dee');
+
+		assert.equal(answer.statusCode, 201);
+		assert.deepEqual(stand.lookups, ['subject-dee']);
+		assert.deepEqual(methodsOf(stand), [
+			'lockNominations',
+			'administratorExists',
+			'findOrRecordPerson',
+			'findOrRecordPerson',
+			'appendNomination',
+		]);
+		assert.deepEqual(stand.calls.at(-1)?.values, [
+			{
+				nominatedBy: 'person-new-subject-ana',
+				nomineeUserId: 'person-new-subject-dee',
+				now: new Date(NOW),
+			},
+		]);
+	});
+
+	test('refuses a nominee the directory finds no account for 404 nomineeNotFound, its detail naming the trusted realm, appending nothing, and records the refusal', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await nominate(stand, 'ana', 'subject-unknown');
+
+		assert.deepEqual(outcomeOf(answer), [404, 'nomineeNotFound']);
+		assert.equal(
+			Reflect.get(Object(JSON.parse(answer.body)), 'detail'),
+			`No account in the realm Usher trusts, ${ISSUER}, has this subject. Name the nominee by their user ID in that realm.`,
+		);
+		assert.deepEqual(stand.lookups, ['subject-unknown']);
+		assert.equal(stand.transactions.count, 0);
+		assert.deepEqual(stand.recorded.at(-1)?.data, {
+			reason: 'nomineeNotFound',
+			result: 'denied',
+			sourceIp: '127.0.0.1',
+		});
+	});
+
+	test('refuses a nominee with no directory configured 404 nomineeNotFound, its detail saying only the first user or a person Usher has met can be nominated', async (context) => {
+		const stand = standUp(context, { directory: 'unconfigured' });
+
+		const answer = await nominate(stand, 'ana', 'subject-unknown');
+
+		assert.deepEqual(outcomeOf(answer), [404, 'nomineeNotFound']);
+		assert.equal(
+			Reflect.get(Object(JSON.parse(answer.body)), 'detail'),
+			'No directory is configured, so only the first user or a person Usher has met can be nominated until one is configured.',
+		);
+		assert.equal(stand.transactions.count, 0);
+	});
+
+	test('answers 503 directoryUnavailable while the directory cannot answer for a nominee not yet met, beginning no transaction and recording it failed at error', async (context) => {
+		const stand = standUp(context, { directory: 'unavailable' });
+
+		const answer = await nominate(stand, 'ana', 'subject-unknown');
+
+		assert.deepEqual(outcomeOf(answer), [503, 'directoryUnavailable']);
+		assert.equal(stand.transactions.count, 0);
+		assert.deepEqual(eventsOf(stand), [
+			{
+				data: {
+					reason: 'directoryUnavailable',
+					result: 'failed',
+					sourceIp: '127.0.0.1',
+				},
+				severity: 'error',
+				type: 'admin.nomination',
+			},
+		]);
+	});
+
+	test('answers a nominee already met without asking the directory, even while it cannot answer', async (context) => {
+		const stand = standUp(context, { directory: 'unavailable' });
+
+		const answer = await nominate(stand, 'ana', 'subject-bo');
+
+		assert.equal(answer.statusCode, 201);
+		assert.deepEqual(stand.lookups, []);
 	});
 
 	test('refuses a caller whose token lacks the first-user role 403 notFirstUser before reading the body or beginning a transaction, recording it denied', async (context) => {
@@ -383,30 +596,19 @@ suite("nominating Usher's first administrator", () => {
 		);
 	});
 
-	test('refuses an administrator already accepted 409 firstAdministratorAccepted before looking the nominee up', async (context) => {
+	test('refuses an administrator already accepted 409 firstAdministratorAccepted before looking the nominee up or beginning a transaction', async (context) => {
 		const stand = standUp(context, { administratorExists: true });
 
 		const answer = await nominate(stand, 'ana', 'subject-unknown');
 
 		assert.deepEqual(outcomeOf(answer), [409, 'firstAdministratorAccepted']);
-		assert.deepEqual(methodsOf(stand), ['lockNominations', 'administratorExists']);
+		assert.deepEqual(stand.lookups, []);
+		assert.equal(stand.transactions.count, 0);
 		assert.deepEqual(stand.recorded.at(-1)?.data, {
 			reason: 'firstAdministratorAccepted',
 			result: 'denied',
 			sourceIp: '127.0.0.1',
 		});
-	});
-
-	test('refuses a nominee who is neither the caller nor a person Usher has met 404 nomineeNotFound, appending nothing', async (context) => {
-		const stand = standUp(context);
-
-		const answers = [await nominate(stand, 'ana', 'subject-unknown'), await nominate(stand, 'ana', '')];
-
-		assert.deepEqual(answers.map(outcomeOf), [
-			[404, 'nomineeNotFound'],
-			[404, 'nomineeNotFound'],
-		]);
-		assert.equal(methodsOf(stand).includes('appendNomination'), false);
 	});
 
 	test('refuses a service account 403 serviceAccountNotPermitted, the first-user role notwithstanding', async (context) => {
@@ -432,22 +634,25 @@ suite("nominating Usher's first administrator", () => {
 	});
 });
 
-suite("accepting a nomination as Usher's first administrator", () => {
-	test('accepts the latest nomination naming the caller, writing them as the administrator, answering 200 and recording admin.acceptance at critical', async (context) => {
+suite('nominees answering their nomination', () => {
+	test('accepts the latest nomination naming the caller, writing them as the administrator, answering 200 with the nomination accepted and recording admin.nominationDecision at critical', async (context) => {
 		const stand = standUp(context);
 
-		const answer = await accept(stand, 'bo', LATEST);
+		const answer = await decide(stand, 'bo', LATEST, 'accept');
 
 		assert.equal(answer.statusCode, 200);
 		assert.deepEqual(JSON.parse(answer.body), {
-			acceptedAt: INSTANT,
-			administrator: { subject: 'subject-bo' },
-			nominationId: LATEST,
+			decidedAt: INSTANT,
+			id: LATEST,
+			nominatedAt: LATEST_AT,
+			nominatedBy: { subject: 'subject-ana' },
+			nominee: { subject: 'subject-bo' },
+			state: 'accepted',
 		});
 		assert.deepEqual(stand.calls, [
 			{ method: 'lockNominations', values: [] },
-			{ method: 'findPerson', values: ['subject-bo'] },
 			{ method: 'readNomination', values: [LATEST] },
+			{ method: 'findPerson', values: ['subject-bo'] },
 			{ method: 'administratorExists', values: [] },
 			{
 				method: 'insertAdministrator',
@@ -463,71 +668,334 @@ suite("accepting a nomination as Usher's first administrator", () => {
 		assert.deepEqual(eventsOf(stand), [
 			{
 				data: {
-					nominatedById: 'subject-ana',
+					decision: 'accepted',
+					nominatedBySubject: 'subject-ana',
 					nominationId: LATEST,
 					result: 'succeeded',
 					sourceIp: '127.0.0.1',
 				},
 				severity: 'critical',
-				type: 'admin.acceptance',
+				type: 'admin.nominationDecision',
 			},
 		]);
 	});
 
-	test('answers a malformed id, an id naming no nomination, a nomination naming someone else, and a caller never met 404 nominationNotFound alike, writing nothing', async (context) => {
+	test('declines the pending nomination naming the caller, recording the decline, answering 200 with the nomination declined and recording admin.nominationDecision at warning', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await decide(stand, 'bo', LATEST, 'decline');
+
+		assert.equal(answer.statusCode, 200);
+		assert.deepEqual(JSON.parse(answer.body), {
+			decidedAt: INSTANT,
+			id: LATEST,
+			nominatedAt: LATEST_AT,
+			nominatedBy: { subject: 'subject-ana' },
+			nominee: { subject: 'subject-bo' },
+			state: 'declined',
+		});
+		assert.deepEqual(stand.calls.at(-1), {
+			method: 'declineNomination',
+			values: [{ nominationId: LATEST, now: new Date(NOW) }],
+		});
+		assert.equal(methodsOf(stand).includes('insertAdministrator'), false);
+		assert.deepEqual(eventsOf(stand), [
+			{
+				data: {
+					decision: 'declined',
+					nominatedBySubject: 'subject-ana',
+					nominationId: LATEST,
+					result: 'succeeded',
+					sourceIp: '127.0.0.1',
+				},
+				severity: 'warning',
+				type: 'admin.nominationDecision',
+			},
+		]);
+	});
+
+	test('answers a malformed id 404 nominationNotFound with the reason malformedNominationId, beginning no transaction and recording no id', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await decide(stand, 'bo', 'not-a-nomination', 'accept');
+
+		assert.deepEqual(outcomeOf(answer), [404, 'nominationNotFound']);
+		assert.equal(stand.transactions.count, 0);
+		assert.deepEqual(
+			stand.recorded.map(({ data }) => data),
+			[
+				{
+					reason: 'malformedNominationId',
+					result: 'denied',
+					sourceIp: '127.0.0.1',
+				},
+			],
+		);
+	});
+
+	test('answers an id naming no nomination 404 nominationNotFound with the reason unknownNominationId, recording no id', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await decide(stand, 'bo', UNKNOWN, 'accept');
+
+		assert.deepEqual(outcomeOf(answer), [404, 'nominationNotFound']);
+		assert.deepEqual(
+			stand.recorded.map(({ data }) => data),
+			[
+				{
+					reason: 'unknownNominationId',
+					result: 'denied',
+					sourceIp: '127.0.0.1',
+				},
+			],
+		);
+	});
+
+	test('answers a nomination naming someone else, or a caller never met, 404 nominationNotFound with the reason nominationForSomeoneElse, recording the id it names', async (context) => {
+		const stand = standUp(context);
+
+		const answers = [await decide(stand, 'cy', LATEST, 'accept'), await decide(stand, 'dee', LATEST, 'accept')];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[404, 'nominationNotFound'],
+			[404, 'nominationNotFound'],
+		]);
+		assert.deepEqual(
+			stand.recorded.map(({ data }) => data),
+			[
+				{
+					nominationId: LATEST,
+					reason: 'nominationForSomeoneElse',
+					result: 'denied',
+					sourceIp: '127.0.0.1',
+				},
+				{
+					nominationId: LATEST,
+					reason: 'nominationForSomeoneElse',
+					result: 'denied',
+					sourceIp: '127.0.0.1',
+				},
+			],
+		);
+		assert.equal(methodsOf(stand).includes('insertAdministrator'), false);
+		assert.equal(methodsOf(stand).includes('declineNomination'), false);
+	});
+
+	test('refuses an answer once an administrator has accepted 409 firstAdministratorAccepted, ahead of the nomination state', async (context) => {
+		const stand = standUp(context, { administratorExists: true });
+
+		const answers = [await decide(stand, 'bo', LATEST, 'accept'), await decide(stand, 'bo', REPLACED, 'decline')];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[409, 'firstAdministratorAccepted'],
+			[409, 'firstAdministratorAccepted'],
+		]);
+		assert.equal(methodsOf(stand).includes('insertAdministrator'), false);
+		assert.equal(methodsOf(stand).includes('declineNomination'), false);
+	});
+
+	test('refuses an answer to a nomination a later one replaced 409 nominationReplaced, writing nothing', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await decide(stand, 'bo', REPLACED, 'accept');
+
+		assert.deepEqual(outcomeOf(answer), [409, 'nominationReplaced']);
+		assert.equal(methodsOf(stand).includes('insertAdministrator'), false);
+		assert.deepEqual(stand.recorded.at(-1)?.data, {
+			nominationId: REPLACED,
+			reason: 'nominationReplaced',
+			result: 'denied',
+			sourceIp: '127.0.0.1',
+		});
+	});
+
+	test('refuses an answer to a nomination already declined 409 nominationAlreadyDecided, and one revoked 409 nominationRevoked', async (context) => {
+		const stand = standUp(context);
+
+		const answers = [await decide(stand, 'bo', DECLINED, 'accept'), await decide(stand, 'bo', REVOKED, 'decline')];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[409, 'nominationAlreadyDecided'],
+			[409, 'nominationRevoked'],
+		]);
+		assert.deepEqual(
+			stand.recorded.map(({ data }) => data['reason']),
+			['nominationAlreadyDecided', 'nominationRevoked'],
+		);
+	});
+
+	test('refuses a decision other than accept or decline 422 unknownDecision, a body holding another member 400, and a body without one 400', async (context) => {
 		const stand = standUp(context);
 
 		const answers = [
-			await accept(stand, 'bo', 'not-a-nomination'),
-			await accept(stand, 'bo', UNKNOWN),
-			await accept(stand, 'cy', LATEST),
-			await accept(stand, 'dee', LATEST),
+			await decide(stand, 'bo', LATEST, 'approve'),
+			await send(stand, 'bo', {
+				body: { decision: 'accept', note: 'yes' },
+				method: 'POST',
+				url: `/admin/nominations/${LATEST}/decisions`,
+			}),
+			await send(stand, 'bo', { body: {}, method: 'POST', url: `/admin/nominations/${LATEST}/decisions` }),
+			await decide(stand, 'bo', LATEST, 1),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[422, 'unknownDecision'],
+			[400, 'unreadableBody'],
+			[400, 'unreadableBody'],
+			[400, 'unreadableBody'],
+		]);
+		assert.equal(answers[0]?.body.includes('decision is accept or decline.'), true);
+		assert.equal(stand.transactions.count, 0);
+	});
+});
+
+suite('revoking a nomination as the first user', () => {
+	test('revokes the pending nomination the first user made, answering 200 with the nomination revoked and recording admin.nominationRevocation at warning', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await revoke(stand, 'ana', LATEST);
+
+		assert.equal(answer.statusCode, 200);
+		assert.deepEqual(JSON.parse(answer.body), {
+			id: LATEST,
+			nominatedAt: LATEST_AT,
+			nominatedBy: { subject: 'subject-ana' },
+			nominee: { subject: 'subject-bo' },
+			revokedAt: INSTANT,
+			state: 'revoked',
+		});
+		assert.deepEqual(stand.calls.at(-1), {
+			method: 'revokeNomination',
+			values: [{ nominationId: LATEST, now: new Date(NOW) }],
+		});
+		assert.deepEqual(eventsOf(stand), [
+			{
+				data: {
+					nomineeSubject: 'subject-bo',
+					nominationId: LATEST,
+					result: 'succeeded',
+					sourceIp: '127.0.0.1',
+				},
+				severity: 'warning',
+				type: 'admin.nominationRevocation',
+			},
+		]);
+	});
+
+	test('refuses everyone but the first user 403 notFirstUser before any lookup, beginning no transaction', async (context) => {
+		const stand = standUp(context);
+
+		const answers = [await revoke(stand, 'bo', LATEST), await revoke(stand, 'service', LATEST)];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[403, 'notFirstUser'],
+			[403, 'serviceAccountNotPermitted'],
+		]);
+		assert.equal(stand.transactions.count, 0);
+	});
+
+	test('answers a malformed id and an id naming no nomination 404 nominationNotFound, recording each reason, and a nomination the first user did not make 404 with the reason nominationBySomeoneElse', async (context) => {
+		const stand = standUp(context);
+
+		const answers = [
+			await revoke(stand, 'ana', 'not-a-nomination'),
+			await revoke(stand, 'ana', UNKNOWN),
+			await revoke(stand, 'ana', BY_ANOTHER),
 		];
 
 		assert.deepEqual(answers.map(outcomeOf), [
 			[404, 'nominationNotFound'],
 			[404, 'nominationNotFound'],
 			[404, 'nominationNotFound'],
-			[404, 'nominationNotFound'],
 		]);
-		assert.equal(stand.transactions.count, 3);
-		assert.equal(methodsOf(stand).includes('insertAdministrator'), false);
 		assert.deepEqual(
-			stand.recorded.map(({ data }) => data['nominationId']),
-			[undefined, undefined, LATEST, LATEST],
+			stand.recorded.map(({ data }) => data),
+			[
+				{ reason: 'malformedNominationId', result: 'denied', sourceIp: '127.0.0.1' },
+				{ reason: 'unknownNominationId', result: 'denied', sourceIp: '127.0.0.1' },
+				{
+					nominationId: BY_ANOTHER,
+					reason: 'nominationBySomeoneElse',
+					result: 'denied',
+					sourceIp: '127.0.0.1',
+				},
+			],
 		);
+		assert.equal(methodsOf(stand).includes('revokeNomination'), false);
 	});
 
-	test('refuses an acceptance once an administrator has accepted 409 firstAdministratorAccepted, ahead of a nomination a later one replaced', async (context) => {
-		const stand = standUp(context, { administratorExists: true });
-
-		const answers = [await accept(stand, 'bo', LATEST), await accept(stand, 'bo', REPLACED)];
-
-		assert.deepEqual(answers.map(outcomeOf), [
-			[409, 'firstAdministratorAccepted'],
-			[409, 'firstAdministratorAccepted'],
-		]);
-		assert.equal(methodsOf(stand).includes('insertAdministrator'), false);
-	});
-
-	test('refuses a nomination a later one replaced 409 nominationSuperseded, only the latest being acceptable', async (context) => {
+	test('refuses a nomination no longer pending 409, its code naming its state: replaced, already decided, or revoked', async (context) => {
 		const stand = standUp(context);
 
-		const answer = await accept(stand, 'bo', REPLACED);
+		const answers = [
+			await revoke(stand, 'ana', REPLACED),
+			await revoke(stand, 'ana', DECLINED),
+			await revoke(stand, 'ana', REVOKED),
+		];
 
-		assert.deepEqual(outcomeOf(answer), [409, 'nominationSuperseded']);
-		assert.equal(methodsOf(stand).includes('insertAdministrator'), false);
-		assert.deepEqual(stand.recorded.at(-1)?.data, {
-			nominationId: REPLACED,
-			reason: 'nominationSuperseded',
-			result: 'denied',
-			sourceIp: '127.0.0.1',
+		assert.deepEqual(answers.map(outcomeOf), [
+			[409, 'nominationReplaced'],
+			[409, 'nominationAlreadyDecided'],
+			[409, 'nominationRevoked'],
+		]);
+		assert.equal(methodsOf(stand).includes('revokeNomination'), false);
+	});
+});
+
+suite('the first administrator nominations', () => {
+	test('lists every nomination to the first user, oldest first, each as the nomination now stands: nominee, nominator, state, and the instant it was answered or revoked where it was', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await send(stand, 'ana', { method: 'GET', url: '/admin/nominations' });
+
+		assert.equal(answer.statusCode, 200);
+		assert.deepEqual(JSON.parse(answer.body), {
+			nominations: [
+				{
+					id: REPLACED,
+					nominatedAt: REPLACED_AT,
+					nominatedBy: { subject: 'subject-ana' },
+					nominee: { subject: 'subject-bo' },
+					state: 'replaced',
+				},
+				{
+					decidedAt: new Date(NOW - 90_000).toISOString(),
+					id: DECLINED,
+					nominatedAt: DECLINED_AT,
+					nominatedBy: { subject: 'subject-ana' },
+					nominee: { subject: 'subject-bo' },
+					state: 'declined',
+				},
+				{
+					id: LATEST,
+					nominatedAt: LATEST_AT,
+					nominatedBy: { subject: 'subject-ana' },
+					nominee: { subject: 'subject-bo' },
+					state: 'pending',
+				},
+			],
 		});
+		assert.deepEqual(stand.recorded, []);
+	});
+
+	test('refuses everyone but the first user the listing 403, a service account included, before any lookup', async (context) => {
+		const stand = standUp(context);
+
+		const answers = [
+			await send(stand, 'bo', { method: 'GET', url: '/admin/nominations' }),
+			await send(stand, 'service', { method: 'GET', url: '/admin/nominations' }),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[403, 'notFirstUser'],
+			[403, 'serviceAccountNotPermitted'],
+		]);
+		assert.equal(stand.reads.length, 0);
 	});
 });
 
 suite("a nominee's own nominations", () => {
-	test('lists the nominations naming the caller, oldest first, each with its nominator by subject, its instant and whether it is the latest, recording nothing', async (context) => {
+	test('lists the nominations naming the caller, oldest first, each with its nominator by subject, its instant and its state, recording nothing', async (context) => {
 		const stand = standUp(context);
 
 		const answer = await send(stand, 'bo', {
@@ -540,15 +1008,15 @@ suite("a nominee's own nominations", () => {
 			nominations: [
 				{
 					id: REPLACED,
-					latest: false,
-					nominatedAt: new Date(NOW - 120_000).toISOString(),
+					nominatedAt: REPLACED_AT,
 					nominatedBy: { subject: 'subject-ana' },
+					state: 'replaced',
 				},
 				{
 					id: LATEST,
-					latest: true,
-					nominatedAt: new Date(NOW - 60_000).toISOString(),
+					nominatedAt: LATEST_AT,
 					nominatedBy: { subject: 'subject-ana' },
+					state: 'pending',
 				},
 			],
 		});

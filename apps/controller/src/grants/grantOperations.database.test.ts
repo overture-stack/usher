@@ -94,7 +94,7 @@ suite("a grant's creation in the store", () => {
 				.map(dataOf)
 				.filter((data) => data['grantId'] === grantId);
 			assert.equal(created.length, 1);
-			assert.equal(created[0]?.['granteeId'], CAST.newcomer.subject);
+			assert.equal(created[0]?.['granteeSubject'], CAST.newcomer.subject);
 		});
 	});
 
@@ -209,7 +209,7 @@ suite("a grant's answers and revocation in the store", () => {
 				const grantId = seededId(harness.seeded.grants, 'pending');
 				const recipient = await personCaller(harness, CAST.recipient);
 
-				const answers = await inTurn(['accepted', 'rejected', 'accepted'] as const, (decision) =>
+				const answers = await inTurn(['accept', 'decline', 'accept'] as const, (decision) =>
 					answerGrant(recipient, grantId, {
 						capabilities: SHOWN.viewer,
 						decision,

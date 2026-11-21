@@ -642,7 +642,7 @@ const createRuntime = ({
 				payloadVersion: payload.payloadVersion,
 				reason: 'notImplemented',
 				resourceId,
-				userId: payload.sub,
+				userSubject: payload.sub,
 			}),
 		);
 

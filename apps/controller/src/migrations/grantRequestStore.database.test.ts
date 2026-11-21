@@ -138,7 +138,7 @@ suite('grant requests in the store', () => {
 		assert.equal(forAnother, 'accepted');
 	});
 
-	test('records a decision whole, granted with its grant or refused without one, by someone other than the principal who asked', async (context) => {
+	test('records a decision whole, granted with its grant or declined without one, by someone other than the principal who asked', async (context) => {
 		const { owner, seeded } = await openSeededDatabase(context, BASE_FIXTURE);
 		const bo = seededId(seeded.users, 'bo');
 		const cy = seededId(seeded.users, 'cy');
@@ -147,17 +147,17 @@ suite('grant requests in the store', () => {
 
 		const refused = await inTurn(
 			[
-				{ values: { [grantRequests.columns.decision]: 'refused' } },
+				{ values: { [grantRequests.columns.decision]: 'declined' } },
 				{ values: decided('granted', bo) },
-				{ values: decided('refused', bo, grantId) },
-				{ values: decided('declined', bo) },
-				{ values: decided('refused', cy) },
+				{ values: decided('declined', bo, grantId) },
+				{ values: decided('refused', bo) },
+				{ values: decided('declined', cy) },
 			],
 			async ({ values }) => constraintOf(updating(owner, await fresh(), values)),
 		);
 		const granted = await fresh();
 		const granting = await writeOutcome(updating(owner, granted, decided('granted', bo, grantId)));
-		const refusal = await writeOutcome(updating(owner, await fresh(), decided('refused', bo)));
+		const refusal = await writeOutcome(updating(owner, await fresh(), decided('declined', bo)));
 
 		assert.deepEqual(refused, [
 			POLICY_CONSTRAINTS.grantRequestDecisionWhole,
@@ -176,7 +176,7 @@ suite('grant requests in the store', () => {
 		const controller = await database.connect('runtime');
 		const bo = seededId(seeded.users, 'bo');
 		const requestId = await insertedId(owner, grantRequests, cyAsking(seeded));
-		await updating(owner, requestId, decided('refused', bo));
+		await updating(owner, requestId, decided('declined', bo));
 		const before = await requestById(owner, requestId);
 		const undecided = await insertedId(owner, grantRequests, cyAsking(seeded));
 
@@ -223,7 +223,7 @@ suite('grant requests in the store', () => {
 			(values) => writeOutcome(updating(controller, requestId, values)),
 		);
 		const decision = await writeOutcome(
-			updating(controller, requestId, decided('refused', seededId(seeded.users, 'bo'))),
+			updating(controller, requestId, decided('declined', seededId(seeded.users, 'bo'))),
 		);
 
 		assert.deepEqual(
@@ -231,7 +231,7 @@ suite('grant requests in the store', () => {
 			otherChanges.map(() => INSUFFICIENT_PRIVILEGE),
 		);
 		assert.equal(decision, 'accepted');
-		assert.equal((await requestById(owner, requestId))?.[grantRequests.columns.decision], 'refused');
+		assert.equal((await requestById(owner, requestId))?.[grantRequests.columns.decision], 'declined');
 	});
 
 	test('records every change to a request, under the actor its transaction declared', async (context) => {
@@ -241,7 +241,7 @@ suite('grant requests in the store', () => {
 		const { changeRecords } = await committedChange(owner, () =>
 			owner.query(
 				`UPDATE ${qualified(grantRequests)}
-            SET ${grantRequests.columns.decision} = 'refused',
+            SET ${grantRequests.columns.decision} = 'declined',
                 ${grantRequests.columns.decidedAt} = now(),
                 ${grantRequests.columns.decidedBy} = $2
           WHERE ${grantRequests.columns.id} = $1`,

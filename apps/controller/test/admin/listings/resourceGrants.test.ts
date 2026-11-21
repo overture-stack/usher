@@ -49,7 +49,7 @@ const realm = fileRealm();
 const UNREVOKED_ON_A1: readonly (readonly [string, string])[] = Object.freeze([
 	['a1Bo', GRANT_STATES.accepted],
 	['a1Cy', GRANT_STATES.pending],
-	['a1Dee', GRANT_STATES.rejected],
+	['a1Dee', GRANT_STATES.declined],
 	['a1Fay', GRANT_STATES.expired],
 	['a1Gil', GRANT_STATES.accepted],
 	['a1Owner', GRANT_STATES.accepted],
@@ -106,8 +106,8 @@ suite('listing the grants on a resource', () => {
 			},
 			{
 				decidedAt: latestDecisionOf(given, 'a1Dee').decidedAt?.getTime(),
-				decision: GRANT_STATES.rejected,
-				state: GRANT_STATES.rejected,
+				decision: GRANT_STATES.declined,
+				state: GRANT_STATES.declined,
 			},
 		);
 	});
