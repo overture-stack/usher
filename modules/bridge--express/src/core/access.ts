@@ -16,16 +16,26 @@ export const deepFreeze = <Value>(value: Value): Value => {
 };
 
 /**
- * One request's access as the core attaches it to an outcome: the principal it is served as, and each
- * catalogue's result. The principal is copied, and the whole is deep-frozen.
+ * One request's access as the core attaches it to an outcome: the principal it is served as, each
+ * catalogue's artifact-creation result, and each catalogue's result. The principal is copied, and the whole
+ * is deep-frozen.
  *
  * @param principal who the request is served as.
- * @param results each catalogue's result, keyed by catalogue.
+ * @param maps `artifactCreate`, each catalogue's artifact-creation result, and `results`, each
+ *   catalogue's result, both keyed by catalogue. They are named rather than positional, since two maps
+ *   of one type passed in the wrong order would serve one rendering as the other.
  */
 export const accessOf = (
 	principal: UsherPrincipal,
-	results: Readonly<Record<string, Enforcement>>,
-): Readonly<UsherRequestAccess> => deepFreeze({ principal: { ...principal }, results, version: 1 as const });
+	{
+		artifactCreate,
+		results,
+	}: Readonly<{
+		artifactCreate: Readonly<Record<string, Enforcement>>;
+		results: Readonly<Record<string, Enforcement>>;
+	}>,
+): Readonly<UsherRequestAccess> =>
+	deepFreeze({ artifactCreate, principal: { ...principal }, results, version: 1 as const });
 
 /** The principal of a request presenting no credential: the open tier only, and not suspended. */
 export const anonymousPrincipal = (): UsherPrincipal => ({

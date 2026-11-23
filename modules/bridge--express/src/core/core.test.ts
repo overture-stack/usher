@@ -34,8 +34,9 @@ import {
 	type TokenReading,
 } from './core.js';
 import { defaultSeams } from './defaultSeams.js';
+import { filterClauseCount } from './guards.js';
 import { importApplicationKey, subjectTag } from './keys.js';
-import { compileKey, renderKey } from './rendering.js';
+import { compileKey, renderArtifactCreate, renderKey } from './rendering.js';
 import { mintUsherToken, readingAt, type StoredReading } from './testTokens.js';
 
 /** The subject of a principal whose grants hold, or `undefined` for a principal in any other state. */
@@ -294,6 +295,10 @@ const accessOf = async (core: BridgeCore, credential: string | null): Promise<Us
 
 const resultsFor = (payload: PermissionsPayload) => ({
 	files: renderKey(payload, compileKey(catalogue), CONFIGURATION_DEFAULTS.filterClauseLimit).enforcement,
+});
+
+const artifactCreateFor = (payload: PermissionsPayload) => ({
+	files: renderArtifactCreate(payload, compileKey(catalogue), CONFIGURATION_DEFAULTS.filterClauseLimit).enforcement,
 });
 
 suite('createBridgeCoreWithSeams', () => {
@@ -1688,6 +1693,7 @@ suite('createBridgeCoreWithSeams', () => {
 			const access = await accessOf(harness.core, null);
 
 			assert.deepEqual(access, {
+				artifactCreate: artifactCreateFor(ANONYMOUS),
 				principal: NO_CREDENTIAL,
 				results: resultsFor(ANONYMOUS),
 				version: 1,
@@ -1737,6 +1743,7 @@ suite('createBridgeCoreWithSeams', () => {
 			const second = await accessOf(harness.core, credential);
 
 			assert.deepEqual(first, {
+				artifactCreate: artifactCreateFor(payloadFor('05')),
 				principal: {
 					credential: 'confirmed',
 					openTierOnly: false,
@@ -2012,6 +2019,7 @@ suite('createBridgeCoreWithSeams', () => {
 			const second = await accessOf(harness.core, credential);
 
 			assert.deepEqual(first, {
+				artifactCreate: artifactCreateFor(ANONYMOUS),
 				principal: UNCONFIRMED,
 				results: resultsFor(ANONYMOUS),
 				version: 1,
@@ -2049,6 +2057,7 @@ suite('createBridgeCoreWithSeams', () => {
 
 			assert.deepEqual(second, first);
 			assert.deepEqual(first, {
+				artifactCreate: artifactCreateFor(ANONYMOUS),
 				principal: UNCONFIRMED,
 				results: resultsFor(ANONYMOUS),
 				version: 1,
@@ -2395,6 +2404,7 @@ suite('createBridgeCoreWithSeams', () => {
 					data: {
 						actorId: null,
 						actorType: 'system',
+						capability: 'record.view',
 						catalogue: catalogueKey,
 						filterClauseLimit: 13,
 					},
@@ -3527,6 +3537,7 @@ suite('createBridgeCoreWithSeams', () => {
 			assert.deepEqual(
 				[shed, during],
 				Array.from({ length: 2 }, () => ({
+					artifactCreate: artifactCreateFor(ANONYMOUS),
 					principal: UNCONFIRMED,
 					results: resultsFor(ANONYMOUS),
 					version: 1,
@@ -4021,9 +4032,10 @@ suite('createBridgeCoreWithSeams', () => {
 				sub: `subject-open-${index}`,
 			});
 
-			// With the anonymous results, interned at install, 4,095 distinct results fill the pool.
+			// With the anonymous results and their artifact-creation result, both interned at install, 4,094
+			// distinct results fill the pool.
 			const firstDistinct = await resultsOf('uak_distinct_1', distinct(1));
-			for (const index of Array.from({ length: 4_094 }, (_, offset) => offset + 2)) {
+			for (const index of Array.from({ length: 4_093 }, (_, offset) => offset + 2)) {
 				await resultsOf(`uak_distinct_${index}`, distinct(index));
 			}
 			const openTierAtBound = await resultsOf('uak_open_1', openTier(1));
@@ -4174,5 +4186,134 @@ suite('createBridgeCoreWithSeams', () => {
 			assert.equal(exchangesOf(harness, credential), 2);
 			await harness.core.stop();
 		});
+	});
+});
+
+suite('the artifact-creation result', () => {
+	/** A running core in uncertain mode, the anonymous payload no longer fresh. */
+	const uncertainHarness = async (): Promise<Harness> => {
+		const harness = await running();
+		harness.advanceMonotonic(60_001);
+		return harness;
+	};
+
+	/** Case 05 with HEART_STUDY held for artifact creation through global.controlled alone. */
+	const heldThroughControlled = (sub: string): PermissionsPayload => {
+		const payload = signedIn('05', sub);
+		return {
+			...payload,
+			permissions: {
+				...payload.permissions,
+				HEART_STUDY: {
+					'global.controlled': { artifact: ['create'], record: ['view'] },
+					'global.unmarked': { record: ['view'] },
+				},
+			},
+		};
+	};
+
+	test('carries artifactCreate beside results for an anonymous request, rendered from the anonymous payload', async () => {
+		const harness = await running();
+
+		const access = await accessOf(harness.core, null);
+
+		assert.deepEqual(access.artifactCreate, artifactCreateFor(ANONYMOUS));
+		assert.deepEqual(access.results, resultsFor(ANONYMOUS));
+		await harness.core.stop();
+	});
+
+	test('renders artifactCreate for a signed-in principal from its own payload, narrowing it apart from results', async () => {
+		const harness = await running();
+		const credential = signInToken({ sub: 'subject-ana' });
+		harness.issue(credential, heldThroughControlled('subject-ana'));
+
+		const access = await accessOf(harness.core, credential);
+
+		assert.deepEqual(narrowingIn(access.artifactCreate['files']).held, ['HEART_STUDY']);
+		assert.deepEqual(narrowingIn(access.results['files']).held, ['HEART_STUDY', 'LUNG_COHORT', 'REEF_ARCHIVE']);
+		await harness.core.stop();
+	});
+
+	test('serves a suspended principal the anonymous artifactCreate, naming its subject for attribution alone', async () => {
+		const harness = await running();
+		const credential = signInToken({ sub: 'subject-ana' });
+		harness.issue(credential, heldThroughControlled('subject-ana'));
+		await accessOf(harness.core, credential);
+		harness.advanceMonotonic(60_001);
+
+		const access = await accessOf(harness.core, credential);
+
+		assert.deepEqual(access.principal, ANA_SUSPENDED);
+		assert.deepEqual(access.artifactCreate, artifactCreateFor(ANONYMOUS));
+		await harness.core.stop();
+	});
+
+	test('serves an unconfirmed credential the anonymous artifactCreate, naming no subject', async () => {
+		const harness = await uncertainHarness();
+
+		const access = await accessOf(harness.core, signInToken({ sub: 'subject-new' }));
+
+		assert.deepEqual(access.principal, UNCONFIRMED);
+		assert.deepEqual(access.artifactCreate, artifactCreateFor(ANONYMOUS));
+		await harness.core.stop();
+	});
+
+	test('denies a catalogue whose artifact-creation narrowing passes the clause limit, and names the capability in catalogue.filterLimit', async () => {
+		const payload: PermissionsPayload = {
+			...signedIn('05', 'subject-ana'),
+			permissions: {
+				HEART_STUDY: {
+					'global.community-governed': { record: ['view'] },
+					'global.controlled': { record: ['view'] },
+					'global.unmarked': { artifact: ['create'], record: ['view'] },
+				},
+				LUNG_COHORT: {
+					'global.community-governed': { record: ['view'] },
+					'global.controlled': { record: ['view'] },
+					'global.unmarked': { record: ['view'] },
+				},
+				REEF_ARCHIVE: {
+					'global.community-governed': { record: ['view'] },
+					'global.controlled': { record: ['view'] },
+					'global.unmarked': { record: ['view'] },
+				},
+			},
+		};
+		const viewLimit = filterClauseCount(
+			(
+				renderKey(payload, compileKey(catalogue), CONFIGURATION_DEFAULTS.filterClauseLimit)
+					.enforcement as Extract<Enforcement, { kind: 'narrow' }>
+			).sqon,
+		);
+		const harness = await running({ files: catalogue }, (configuration) => ({
+			...configuration,
+			filterClauseLimit: viewLimit,
+		}));
+		const credential = signInToken({ sub: 'subject-ana' });
+		harness.issue(credential, payload);
+
+		const access = await accessOf(harness.core, credential);
+
+		assert.equal(access.results['files']?.kind, 'narrow');
+		assert.deepEqual(access.artifactCreate['files'], { kind: 'deny', reason: 'filter-limit' });
+		assert.deepEqual(
+			harness
+				.events('catalogue.filterLimit')
+				.filter(({ data }) => data['capability'] === 'artifact.create')
+				.map(({ data, severity }) => ({ data, severity })),
+			[
+				{
+					data: {
+						actorId: null,
+						actorType: 'system',
+						capability: 'artifact.create',
+						catalogue: 'files',
+						filterClauseLimit: viewLimit,
+					},
+					severity: 'error',
+				},
+			],
+		);
+		await harness.core.stop();
 	});
 });

@@ -93,6 +93,7 @@ const NOTICE_KINDS = ['baseline', 'category', 'global', 'principal', 'servedReso
 const OVERTAKEN_OUTCOMES = ['abandoned', 'exchangedAgain', 'servedOpenTier'] as const;
 const REFUSAL_ORIGINS = ['cachedRefusal', 'controller', 'localExpiry'] as const;
 const UNENFORCED_ENTRIES = ['fieldPartition'] as const;
+const RENDERED_CAPABILITIES = ['artifact.create', 'record.view'] as const;
 const MALFORMED_CHANNEL_REASONS = [
 	'answerUnreadable',
 	'cursorRepeated',
@@ -124,12 +125,18 @@ export interface BridgeEventData {
 	'bridge.internalError': { stage: OneOf<typeof INTERNAL_ERROR_STAGES> };
 	'bridge.startRefusal': { reason: OneOf<typeof START_REFUSAL_REASONS> };
 	'catalogue.filterLimit': {
+		/** The capability whose rendering was denied: `record.view`, or `artifact.create`. */
+		capability: OneOf<typeof RENDERED_CAPABILITIES>;
 		catalogue: string;
 
 		/** The configured limit, never a count of the principal's grants or categories. */
 		filterClauseLimit: number;
 	};
-	'catalogue.renderingMismatch': { catalogue: string };
+	'catalogue.renderingMismatch': {
+		/** The capability whose rendering was denied: `record.view`, or `artifact.create`. */
+		capability: OneOf<typeof RENDERED_CAPABILITIES>;
+		catalogue: string;
+	};
 
 	/**
 	 * Logged once for each record key registered with an empty resource list, which denies every
@@ -268,12 +275,12 @@ export const EVENT_CATALOGUE: Readonly<Record<BridgeEventName, EventDefinition>>
 	},
 	'catalogue.filterLimit': {
 		actorType: 'system',
-		fields: { catalogue: text, filterClauseLimit: count },
+		fields: { capability: oneOf(RENDERED_CAPABILITIES), catalogue: text, filterClauseLimit: count },
 		severity: 'error',
 	},
 	'catalogue.renderingMismatch': {
 		actorType: 'system',
-		fields: { catalogue: text },
+		fields: { capability: oneOf(RENDERED_CAPABILITIES), catalogue: text },
 		severity: 'critical',
 	},
 	'catalogue.resourceListMissing': {

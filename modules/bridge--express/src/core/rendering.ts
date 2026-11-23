@@ -13,7 +13,7 @@ import {
 	type ResourceIdentifier,
 } from '@overture-stack/usher-types';
 
-import { guardedNarrowing } from './guards.js';
+import { guardedNarrowing, type RenderedCapability } from './guards.js';
 
 /** A category's condition as compiled by {@link compileKey}. */
 export interface CompiledCondition {
@@ -107,6 +107,23 @@ const UNMAPPED_CATEGORY: Enforcement = {
  */
 const viewsWholeRecords = (entry: CategoryPermissions): boolean =>
 	!Object.hasOwn(entry, 'field') && (entry.record?.includes('view') ?? false);
+
+/**
+ * An entry counts when it grants creating an artifact from its records. An entry partitioned by field
+ * counts for nothing, as for view.
+ */
+const createsArtifacts = (entry: CategoryPermissions): boolean =>
+	!Object.hasOwn(entry, 'field') && (entry.artifact?.includes('create') ?? false);
+
+/** The capability one rendering enforces, and the permission entries that grant it. */
+interface Rendering {
+	capability: RenderedCapability;
+	counts: (entry: CategoryPermissions) => boolean;
+}
+
+const VIEW: Rendering = { capability: 'record.view', counts: viewsWholeRecords };
+
+const ARTIFACT_CREATE: Rendering = { capability: 'artifact.create', counts: createsArtifacts };
 
 /** A map's own entries, keyed as the map is: the keys of a validated value are its own names. */
 const ownEntries = <Key extends string, Value>(
@@ -212,19 +229,20 @@ const resourceGaps = (
 /**
  * What is held on one resource, or `undefined` when the resource is not held: it is held when its
  * unmarked records are, or when it holds a category applying to it, either a global one defined by
- * the key or one of its own.
+ * the key or one of its own, each counted by the rendering.
  */
 const heldResourceOf = (
 	payload: PermissionsPayload,
 	key: CompiledRecordKey,
 	resource: ResourceIdentifier,
+	rendering: Rendering,
 ): HeldResource | undefined => {
 	const own = ownValue(key.compiledCategories.resource, resource) ?? {};
-	const viewed = ownEntries(ownValue(payload.permissions, resource) ?? {})
-		.filter(([, entry]) => viewsWholeRecords(entry))
+	const counted = ownEntries(ownValue(payload.permissions, resource) ?? {})
+		.filter(([, entry]) => rendering.counts(entry))
 		.map(([category]) => category);
-	const heldCategories = viewed.filter((category) => category !== UNMARKED);
-	const unmarkedHeld = viewed.includes(UNMARKED);
+	const heldCategories = counted.filter((category) => category !== UNMARKED);
+	const unmarkedHeld = counted.includes(UNMARKED);
 	const applies = (category: CategoryName): boolean =>
 		Object.hasOwn(key.compiledCategories.global, category) || Object.hasOwn(own, category);
 
@@ -249,6 +267,7 @@ const renderRecordKey = (
 	payload: PermissionsPayload,
 	key: CompiledRecordKey,
 	filterClauseLimit: number,
+	rendering: Rendering,
 ): KeyRendering => {
 	const unknown = unknownCategories(payload, key);
 	const globalGaps = unmappedGlobals(payload, key);
@@ -273,11 +292,12 @@ const renderRecordKey = (
 	const withheld: ReadonlySet<ResourceIdentifier> = new Set(unmapped.map(({ resourceId }) => resourceId));
 	const [firstHeld, ...otherHeld] = candidates
 		.filter((resource) => !withheld.has(resource))
-		.flatMap((resource) => heldResourceOf(payload, key, resource) ?? []);
+		.flatMap((resource) => heldResourceOf(payload, key, resource, rendering) ?? []);
 
 	if (firstHeld) {
 		return {
 			enforcement: guardedNarrowing({
+				capability: rendering.capability,
 				filterClauseLimit,
 				key,
 				narrowing: canonicalRecordNarrowing({
@@ -330,7 +350,35 @@ export const renderKey = (payload: PermissionsPayload, key: CompiledKey, filterC
 		case 'open':
 			return { enforcement: { kind: 'allow' }, unknown: [], unmapped: [] };
 		case 'record':
-			return renderRecordKey(payload, key, filterClauseLimit);
+			return renderRecordKey(payload, key, filterClauseLimit, VIEW);
+	}
+};
+
+/**
+ * Renders one key's artifact-creation result from a validated payload and the key as compiled by
+ * {@link compileKey}, by the rules of {@link renderKey} with one difference: an entry counts when its
+ * `artifact` array holds `create`, rather than when its `record` array holds `view`. So a record is
+ * withheld from artifact creation unless the payload grants creating an artifact from it.
+ *
+ * - an open key gets `allow`;
+ * - a record key gets the same enforcement, for the same failure modes, as {@link renderKey} gives it,
+ *   with the narrowing built over the resources held for artifact creation.
+ *
+ * Its `unknown` and `unmapped` are the same as {@link renderKey}'s for the key, since both read one
+ * payload's categories against one key.
+ *
+ * @param filterClauseLimit the most clauses a record key's narrowing may hold.
+ */
+export const renderArtifactCreate = (
+	payload: PermissionsPayload,
+	key: CompiledKey,
+	filterClauseLimit: number,
+): KeyRendering => {
+	switch (key.kind) {
+		case 'open':
+			return { enforcement: { kind: 'allow' }, unknown: [], unmapped: [] };
+		case 'record':
+			return renderRecordKey(payload, key, filterClauseLimit, ARTIFACT_CREATE);
 	}
 };
 

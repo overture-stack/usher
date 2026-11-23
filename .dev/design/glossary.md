@@ -855,9 +855,12 @@ See [security-workflow.md § Permission computation pipeline](security-workflow.
 
 **Request access** _(`UsherRequestAccess`)_
 One request's access as a Bridge hands it to an adapter: the principal, with whether the results
-hold the open tier alone and whether the principal is **suspended**, and an **enforcement result** for
-each key the adapter registered. Plain data, the same from every Bridge, carried in each framework's
-own per-request store under the key `usher`. See [adapter-integration.md](adapter-integration.md).
+hold the open tier alone and whether the principal is **suspended**, and two maps of **enforcement
+results**, each holding one for each key the adapter registered. The first map, `results`, says what the
+principal may view. The second, `artifactCreate`, says which records the principal may create an
+**artifact** from, and so holds exactly the keys `results` holds. Plain data, the same from every Bridge,
+carried in each framework's own per-request store under the key `usher`. See
+[adapter-integration.md](adapter-integration.md).
 
 **Resource field**
 The field naming a record's resource, tested by every enforcement clause.

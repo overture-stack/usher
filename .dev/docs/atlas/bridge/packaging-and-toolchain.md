@@ -148,6 +148,26 @@ and the workspace's version is set below.
   adapter-integration.md states, and also for a member of any other shape.
 - `resultFor(access, key)` reads results by own member only.
 - The Bridge deep-freezes rendered results before caching them.
+- A published prerelease Bridge, `0.0.0-alpha.1` or `0.0.1-beta.1`, and a consumer on a `usher-types`
+  carrying `artifactCreate` must not be mixed. The validator refuses a value with a member it does not
+  list, so the consumer refuses the older Bridge's access, which carries no `artifactCreate`, and an
+  older `usher-types` refuses the newer Bridge's, which carries one.
+
+#### The Bridge's testing entry
+
+The Bridge's `./testing` entry builds access outcomes for a consumer's tests, each as the core answers
+the state, with no running core. Three functions take the two maps of results as one argument:
+
+| function                                                            | answers                                                                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `anonymousAccess({ artifactCreate, results })`                      | a request presenting no credential                                                                                 |
+| `signedInAccess(subject, { artifactCreate, results }, options?)`    | a confirmed principal served in normal mode; `options` sets `openTierOnly`                                         |
+| `openTierAccess(credential, { artifactCreate, results }, options?)` | a credential the core serves in uncertain mode, or whose exchange failed; `options` names `attributionOnlySubject` |
+
+Both maps are required, with no defaults: `artifactCreate` and `results` each hold one enforcement
+result for each key the adapter registers, and the same keys in each. The functions copy both maps,
+so the caller's objects stay as they were, and the outcome they return is frozen as the core freezes
+one.
 
 ### Errors and logs
 
@@ -595,8 +615,8 @@ After the first five attempts, the value read back was the original.
 - **The freeze must be deep, and its test must look deep.** `attachAccess` attaches the fresh
   snapshot returned by its validator rather than a cached object, and rendered results are deep-frozen
   before caching, so one request's change can never reach the shared anonymous entry. The "frozen"
-  assertion in [bridge-tests.md](../../bridge-tests.md#the-express-layer) must check `results` and
-  every SQON node.
+  assertion in [bridge-tests.md](../../bridge-tests.md#the-express-layer) must check `results`,
+  `artifactCreate` and every SQON node.
   A top-level `Object.isFrozen` check passes against a shallow freeze, and the inversion row that
   attaches the access unfrozen would then prove nothing about nested values.
 

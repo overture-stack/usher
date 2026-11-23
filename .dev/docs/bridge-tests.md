@@ -46,8 +46,9 @@ The case table's principal, Ana, has accepted a grant on HEART_STUDY's `controll
 6. For each key the adapter registered, it renders an enforcement result from the payload and that
    key's mapping, checks a record narrowing against that payload and the clause limit, and checks
    the result with the validator from `@overture-stack/usher-types`.
-7. It builds the request's access, her subject and those results, and attaches it with
-   `attachAccess` to `res.locals.usher`.
+7. It builds the request's access, her subject and two maps of results, `results` and `artifactCreate`,
+   the second holding the records she may create an artifact from, and attaches it with `attachAccess`
+   to `res.locals.usher`.
 8. Her next request inside the token's lifetime goes from step 1 to step 6 from the cache, with no
    call to the Controller.
 
@@ -119,9 +120,9 @@ table, since rendering is the Bridge's job and the adapter only passes results t
 | a resource listed by the key and not served by the payload                                                             | excluded through the complement, since a key knows its own list beside the resources served by the payload; never held, and nothing is logged                                                                  |
 | two keys defining one category name with different conditions                                                          | each key's narrowing holding its own condition                                                                                                                                                                 |
 | the anonymous payload fetched at startup meeting a category gap                                                        | the event logged at startup, before any request is served                                                                                                                                                      |
-| a record narrowing differing in any part from its payload and registration                                             | `deny`, `rendering-mismatch`, for this key alone, and one `catalogue.renderingMismatch`, critical, naming the catalogue, each time the key is rendered                                                         |
+| a record narrowing differing in any part from its payload and registration                                             | `deny`, `rendering-mismatch`, for this key alone, and one `catalogue.renderingMismatch`, critical, naming the catalogue and the capability denied, each time the key is rendered                               |
 | every record narrowing rendered from the corpus                                                                        | passes the rendering guard                                                                                                                                                                                     |
-| a record narrowing counting one clause more than `filterClauseLimit`                                                   | `deny`, `filter-limit`, and one `catalogue.filterLimit` per key and payload rendered, an error naming the catalogue and the configured limit; at exactly the limit, served                                     |
+| a record narrowing counting one clause more than `filterClauseLimit`                                                   | `deny`, `filter-limit`, and one `catalogue.filterLimit` per key and payload rendered, an error naming the catalogue, the capability denied and the configured limit; at exactly the limit, served              |
 | case 33, a revoked identity                                                                                            | refused at the exchange with `401`, before any query runs                                                                                                                                                      |
 | case 34, an expired sign-in token                                                                                      | refused with `401`, never served as anonymous: by the Bridge, with no exchange, once past its `exp` by the tolerance, and by the exchange before that                                                          |
 

@@ -1,0 +1,388 @@
+{
+	"about": {
+		"keyRegistration": "Each case's key as an adapter registers it, in the shape accepted by usher-types' validateRegistration.",
+		"payload": "Each case's payload, inline, in the shape accepted by usher-types' validatePayload. Unlike expectations.json, a case here does not name a principals.json entry, because the artifact-creation rule is tested with payloads that no principal of the corpus holds.",
+		"outcomes": "served: the key narrows the catalogue and the record is within the narrowing, or the key allows every record. withheld: the key narrows the catalogue and the record is outside it. denied: the key refuses the catalogue outright, so no record is judged; a denial never counts as withheld.",
+		"purpose": "Conformance expectations for artifact creation: which records a principal may create an artifact from, record by record, for one payload and one key.",
+		"readFirst": "README.md in this directory",
+		"records": "Each record judged: its values by field name, the key's resource field among them, its outcome, and the reason for it.",
+		"rule": "A record carries every category whose condition it matches, and lacking a field read by a condition counts as matching it. It is served when the principal holds artifact.create on its resource for each of its categories, or for global.unmarked when it carries none, on an entry not partitioned by field: permissions-model.md, Where artifact capabilities live."
+	},
+	"cases": [
+		{
+			"id": "two-resources",
+			"description": "HEART_STUDY grants artifact.create on its unmarked records; LUNG_COHORT grants view alone.",
+			"keyRegistration": {
+				"categories": {
+					"global": {
+						"global.community-governed": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["community-governed"]
+							},
+							"op": "in"
+						},
+						"global.controlled": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["controlled"]
+							},
+							"op": "in"
+						}
+					}
+				},
+				"kind": "record",
+				"resourceFieldName": "study_id"
+			},
+			"payload": {
+				"payloadVersion": 1,
+				"sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+				"iss": "https://usher.example.org",
+				"aud": "arranger-prod",
+				"iat": 1767225600,
+				"exp": 1767225900,
+				"generatedAt": 1767225600,
+				"permissions": {
+					"HEART_STUDY": {
+						"global.unmarked": {
+							"artifact": ["create"],
+							"record": ["view"]
+						}
+					},
+					"LUNG_COHORT": {
+						"global.unmarked": {
+							"record": ["view"]
+						}
+					}
+				},
+				"globalCategories": ["global.community-governed", "global.controlled"],
+				"resourceCategories": {
+					"HEART_STUDY": [],
+					"LUNG_COHORT": []
+				},
+				"servedResources": ["HEART_STUDY", "LUNG_COHORT", "REEF_ARCHIVE", "VOID_INDEX"]
+			},
+			"records": [
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "HEART_STUDY"
+					},
+					"outcome": "served",
+					"reason": "HEART_STUDY's unmarked records are held for artifact creation, and this record carries no category."
+				},
+				{
+					"fields": {
+						"data_category": ["controlled"],
+						"study_id": "HEART_STUDY"
+					},
+					"outcome": "withheld",
+					"reason": "HEART_STUDY holds no artifact creation under global.controlled, so a record carrying it is outside the narrowing."
+				},
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "LUNG_COHORT"
+					},
+					"outcome": "withheld",
+					"reason": "LUNG_COHORT grants view alone, which does not reach artifact creation."
+				},
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "REEF_ARCHIVE"
+					},
+					"outcome": "withheld",
+					"reason": "REEF_ARCHIVE is not held at all, so nothing in it can be used to create an artifact."
+				}
+			]
+		},
+		{
+			"id": "unmarked-only",
+			"description": "HEART_STUDY grants artifact.create on its unmarked records alone.",
+			"keyRegistration": {
+				"categories": {
+					"global": {
+						"global.community-governed": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["community-governed"]
+							},
+							"op": "in"
+						},
+						"global.controlled": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["controlled"]
+							},
+							"op": "in"
+						}
+					}
+				},
+				"kind": "record",
+				"resourceFieldName": "study_id"
+			},
+			"payload": {
+				"payloadVersion": 1,
+				"sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+				"iss": "https://usher.example.org",
+				"aud": "arranger-prod",
+				"iat": 1767225600,
+				"exp": 1767225900,
+				"generatedAt": 1767225600,
+				"permissions": {
+					"HEART_STUDY": {
+						"global.unmarked": {
+							"artifact": ["create"]
+						}
+					}
+				},
+				"globalCategories": ["global.community-governed", "global.controlled"],
+				"resourceCategories": {
+					"HEART_STUDY": []
+				},
+				"servedResources": ["HEART_STUDY", "LUNG_COHORT", "REEF_ARCHIVE", "VOID_INDEX"]
+			},
+			"records": [
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "HEART_STUDY"
+					},
+					"outcome": "served",
+					"reason": "The record carries no category, so it is among the unmarked records held for artifact creation."
+				},
+				{
+					"fields": {
+						"data_category": ["controlled"],
+						"study_id": "HEART_STUDY"
+					},
+					"outcome": "withheld",
+					"reason": "The record carries global.controlled, which HEART_STUDY does not hold for artifact creation."
+				}
+			]
+		},
+		{
+			"id": "category-under-one-resource",
+			"description": "global.controlled grants artifact.create on HEART_STUDY alone; LUNG_COHORT grants its unmarked records.",
+			"keyRegistration": {
+				"categories": {
+					"global": {
+						"global.community-governed": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["community-governed"]
+							},
+							"op": "in"
+						},
+						"global.controlled": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["controlled"]
+							},
+							"op": "in"
+						}
+					}
+				},
+				"kind": "record",
+				"resourceFieldName": "study_id"
+			},
+			"payload": {
+				"payloadVersion": 1,
+				"sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+				"iss": "https://usher.example.org",
+				"aud": "arranger-prod",
+				"iat": 1767225600,
+				"exp": 1767225900,
+				"generatedAt": 1767225600,
+				"permissions": {
+					"HEART_STUDY": {
+						"global.controlled": {
+							"artifact": ["create"]
+						}
+					},
+					"LUNG_COHORT": {
+						"global.unmarked": {
+							"artifact": ["create"]
+						}
+					}
+				},
+				"globalCategories": ["global.community-governed", "global.controlled"],
+				"resourceCategories": {
+					"HEART_STUDY": [],
+					"LUNG_COHORT": []
+				},
+				"servedResources": ["HEART_STUDY", "LUNG_COHORT", "REEF_ARCHIVE", "VOID_INDEX"]
+			},
+			"records": [
+				{
+					"fields": {
+						"data_category": ["controlled"],
+						"study_id": "HEART_STUDY"
+					},
+					"outcome": "served",
+					"reason": "HEART_STUDY holds global.controlled for artifact creation, so a record carrying it is held."
+				},
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "HEART_STUDY"
+					},
+					"outcome": "withheld",
+					"reason": "HEART_STUDY holds no unmarked records for artifact creation, and this record carries no category."
+				},
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "LUNG_COHORT"
+					},
+					"outcome": "served",
+					"reason": "LUNG_COHORT's unmarked records are held for artifact creation."
+				},
+				{
+					"fields": {
+						"data_category": ["controlled"],
+						"study_id": "LUNG_COHORT"
+					},
+					"outcome": "withheld",
+					"reason": "LUNG_COHORT does not hold global.controlled for artifact creation."
+				}
+			]
+		},
+		{
+			"id": "field-partitioned",
+			"description": "HEART_STUDY grants artifact.create on its unmarked records, partitioned by field, which counts for nothing.",
+			"keyRegistration": {
+				"categories": {
+					"global": {
+						"global.community-governed": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["community-governed"]
+							},
+							"op": "in"
+						},
+						"global.controlled": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["controlled"]
+							},
+							"op": "in"
+						}
+					}
+				},
+				"kind": "record",
+				"resourceFieldName": "study_id"
+			},
+			"payload": {
+				"payloadVersion": 1,
+				"sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+				"iss": "https://usher.example.org",
+				"aud": "arranger-prod",
+				"iat": 1767225600,
+				"exp": 1767225900,
+				"generatedAt": 1767225600,
+				"permissions": {
+					"HEART_STUDY": {
+						"global.unmarked": {
+							"artifact": ["create"],
+							"field": {
+								"global.basic": ["view"]
+							}
+						}
+					}
+				},
+				"globalCategories": ["global.community-governed", "global.controlled"],
+				"resourceCategories": {
+					"HEART_STUDY": []
+				},
+				"servedResources": ["HEART_STUDY", "LUNG_COHORT", "REEF_ARCHIVE", "VOID_INDEX"]
+			},
+			"records": [
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "HEART_STUDY"
+					},
+					"outcome": "denied",
+					"reason": "The only entry granting artifact creation is partitioned by field, so it is left unenforced and the key denies with no-grants."
+				}
+			]
+		},
+		{
+			"id": "held-nowhere",
+			"description": "Every resource grants record view and none grants artifact.create, so view must not stand for create.",
+			"keyRegistration": {
+				"categories": {
+					"global": {
+						"global.community-governed": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["community-governed"]
+							},
+							"op": "in"
+						},
+						"global.controlled": {
+							"content": {
+								"fieldName": "data_category",
+								"value": ["controlled"]
+							},
+							"op": "in"
+						}
+					}
+				},
+				"kind": "record",
+				"resourceFieldName": "study_id"
+			},
+			"payload": {
+				"payloadVersion": 1,
+				"sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
+				"iss": "https://usher.example.org",
+				"aud": "arranger-prod",
+				"iat": 1767225600,
+				"exp": 1767225900,
+				"generatedAt": 1767225600,
+				"permissions": {
+					"HEART_STUDY": {
+						"global.unmarked": {
+							"record": ["view"]
+						},
+						"global.controlled": {
+							"record": ["view"]
+						}
+					},
+					"LUNG_COHORT": {
+						"global.unmarked": {
+							"record": ["view"]
+						}
+					}
+				},
+				"globalCategories": ["global.community-governed", "global.controlled"],
+				"resourceCategories": {
+					"HEART_STUDY": [],
+					"LUNG_COHORT": []
+				},
+				"servedResources": ["HEART_STUDY", "LUNG_COHORT", "REEF_ARCHIVE", "VOID_INDEX"]
+			},
+			"records": [
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "HEART_STUDY"
+					},
+					"outcome": "denied",
+					"reason": "No entry grants artifact creation, so the key denies the whole catalogue with no-grants even though view is held."
+				},
+				{
+					"fields": {
+						"data_category": ["open"],
+						"study_id": "LUNG_COHORT"
+					},
+					"outcome": "denied",
+					"reason": "No entry grants artifact creation, so the key denies the whole catalogue with no-grants even though view is held."
+				}
+			]
+		}
+	],
+	"formatVersion": 1
+}

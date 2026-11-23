@@ -21,7 +21,7 @@ import { matchesSqon } from '../../../types/src/sqonEvaluator.js';
 
 import { CONFIGURATION_DEFAULTS } from './configuration.js';
 import { filterClauseCount, guardedNarrowing } from './guards.js';
-import { compileKey, type KeyRendering, renderKey, unenforcedEntries } from './rendering.js';
+import { compileKey, type KeyRendering, renderArtifactCreate, renderKey, unenforcedEntries } from './rendering.js';
 
 const corpus = JSON.parse(
 	readFileSync(new URL('../../../../.dev/design/conformance/principals.json', import.meta.url), 'utf8'),
@@ -775,6 +775,7 @@ suite('renderKey', () => {
 			for (const { key, narrowing, payload } of narrowings) {
 				assert.deepEqual(
 					guardedNarrowing({
+						capability: 'record.view',
 						filterClauseLimit: CONFIGURATION_DEFAULTS.filterClauseLimit,
 						key,
 						narrowing,
@@ -795,6 +796,176 @@ suite('renderKey', () => {
 			);
 
 			assert.ok(readBacks.length > 0);
+		});
+	});
+});
+
+/** The record keys of the tests below, each rendered for artifact creation from its payload. */
+suite('renderArtifactCreate', () => {
+	const createdFrom = (
+		payload: PermissionsPayload,
+		registration: KeyRegistration = catalogue,
+		filterClauseLimit = CONFIGURATION_DEFAULTS.filterClauseLimit,
+	): KeyRendering => {
+		const validated = validateRegistration(registration);
+
+		if (validated.success) {
+			return renderArtifactCreate(payload, compileKey(validated.registration), filterClauseLimit);
+		}
+
+		return assert.fail(`the test's registration is refused: ${JSON.stringify(validated.problems)}`);
+	};
+
+	/** The payload granting `artifact.create` on each resource named, and `record.view` on the rest. */
+	const createOn = (resources: readonly string[], unmarked: ResourcePermissions = UNMARKED_VIEWED) =>
+		Object.fromEntries(
+			ALL_THREE.map((resource): [string, ResourcePermissions] => [
+				resource,
+				resources.includes(resource)
+					? { 'global.unmarked': { artifact: ['create'], record: ['view'] } }
+					: unmarked,
+			]),
+		);
+
+	suite('the rule', () => {
+		test('holds the unmarked records of a resource granting artifact.create, and withholds those of a resource granting only view', () => {
+			const payload = withPermissions(payloadFor('05'), {
+				[HEART]: { 'global.unmarked': { artifact: ['create'] } },
+				[LUNG]: { 'global.unmarked': { record: ['view'] } },
+			});
+
+			const created = createdFrom(payload);
+			const viewed = rendered(payload, catalogue);
+
+			assert.deepEqual(readBack(created.enforcement).held, [HEART]);
+			assert.ok(readBack(created.enforcement).complement.includes(LUNG));
+			assert.deepEqual(readBack(viewed.enforcement).held, [LUNG]);
+		});
+
+		test('ignores an entry granting view alone, however widely it is held, so view does not stand for create', () => {
+			const payload = withPermissions(payloadFor('05'), everyCategoryViewed);
+
+			assert.deepEqual(createdFrom(payload), { enforcement: NO_GRANTS, unknown: [], unmapped: [] });
+		});
+
+		test('denies with no-grants when artifact.create is held nowhere, even though record view is held everywhere', () => {
+			const payload = withPermissions(payloadFor('05'), everyCategoryViewed);
+			const viewed = rendered(payload, catalogue);
+
+			assert.equal(readBack(viewed.enforcement).held.length, ALL_THREE.length);
+			assert.deepEqual(createdFrom(payload).enforcement, NO_GRANTS);
+		});
+
+		test('holds a category granting artifact.create under a global category applying to every resource it names', () => {
+			const payload = withPermissions(payloadFor('05'), {
+				[HEART]: { 'global.controlled': { artifact: ['create'] } },
+				[LUNG]: { 'global.controlled': { artifact: ['create'] } },
+			});
+
+			const created = createdFrom(payload);
+
+			assert.deepEqual(readBack(created.enforcement).held, [HEART, LUNG]);
+		});
+
+		test('holds a resource only for a category granting artifact.create on it, when the category is held under one resource alone', () => {
+			const payload = withPermissions(payloadFor('05'), {
+				[HEART]: { 'global.controlled': { artifact: ['create'] } },
+				[LUNG]: { 'global.controlled': { record: ['view'] } },
+			});
+
+			const created = createdFrom(payload);
+
+			assert.deepEqual(readBack(created.enforcement).held, [HEART]);
+			assert.ok(readBack(created.enforcement).complement.includes(LUNG));
+		});
+
+		test('ignores a field-partitioned entry granting artifact.create, since it counts for nothing', () => {
+			const payload = withPermissions(payloadFor('05'), {
+				[HEART]: {
+					'global.unmarked': {
+						artifact: ['create'],
+						field: { 'global.basic': ['view'] },
+					},
+				},
+			});
+
+			assert.deepEqual(createdFrom(payload), { enforcement: NO_GRANTS, unknown: [], unmapped: [] });
+		});
+
+		test('holds an unmarked entry granting artifact.create beside a category granting view on the same resource', () => {
+			const payload = withPermissions(payloadFor('05'), {
+				[HEART]: {
+					'global.controlled': { record: ['view'] },
+					'global.unmarked': { artifact: ['create'] },
+				},
+			});
+
+			assert.deepEqual(readBack(createdFrom(payload).enforcement).held, [HEART]);
+		});
+	});
+
+	suite('the two-resource case', () => {
+		test('narrows results to both resources unmarked records, and artifactCreate to HEART_STUDY alone, withholding every LUNG_COHORT record', () => {
+			const payload = withPermissions(payloadFor('05'), {
+				[HEART]: { 'global.unmarked': { artifact: ['create'], record: ['view'] } },
+				[LUNG]: { 'global.unmarked': { record: ['view'] } },
+			});
+
+			const viewed = rendered(payload, catalogue);
+			const created = createdFrom(payload);
+
+			assert.deepEqual(readBack(viewed.enforcement).held, [HEART, LUNG]);
+			assert.deepEqual(readBack(created.enforcement).held, [HEART]);
+			assert.ok(readBack(created.enforcement).complement.includes(LUNG));
+		});
+
+		test('gives each resource the same artifact-creation result when both grant it', () => {
+			const payload = withPermissions(payloadFor('05'), createOn(ALL_THREE));
+
+			assert.deepEqual(readBack(createdFrom(payload).enforcement).held, ALL_THREE);
+		});
+	});
+
+	suite('the deny reasons', () => {
+		test('denies with unmapped-category when the payload lists a global category the key neither defines nor declares absent', () => {
+			const payload = {
+				...withPermissions(payloadFor('05'), createOn([HEART])),
+				globalCategories: ['global.community-governed', 'global.controlled', 'global.unlisted'],
+			} as PermissionsPayload;
+
+			assert.deepEqual(createdFrom(payload).enforcement, UNMAPPED_CATEGORY);
+			assert.deepEqual(rendered(payload, catalogue).enforcement, UNMAPPED_CATEGORY);
+		});
+
+		test('denies with unknown-resource for a key registering an empty resource list, whatever is held', () => {
+			const payload = withPermissions(payloadFor('05'), createOn([HEART]));
+
+			assert.deepEqual(createdFrom(payload, { ...catalogue, resources: [] }), {
+				enforcement: UNKNOWN_RESOURCE,
+				unknown: [],
+				unmapped: [],
+			});
+		});
+
+		test('denies with filter-limit a narrowing past the clause limit it is given', () => {
+			const payload = withPermissions(payloadFor('05'), createOn(ALL_THREE));
+
+			assert.deepEqual(createdFrom(payload, catalogue, 1).enforcement, { kind: 'deny', reason: 'filter-limit' });
+		});
+
+		test('reports the same unknown and unmapped gaps as renderKey, so the gaps are not logged twice', () => {
+			const payload = withPermissions(payloadFor('05'), createOn([HEART]), { [HEART]: ['resource.pilot'] });
+
+			assert.deepEqual(createdFrom(payload, withPilot).unmapped, rendered(payload, withPilot).unmapped);
+			assert.deepEqual(createdFrom(payload, withPilot).unknown, rendered(payload, withPilot).unknown);
+		});
+	});
+
+	suite('an open key', () => {
+		test('gets allow for artifact creation, whatever the payload holds', () => {
+			const rendering = createdFrom(payloadFor('01'), { kind: 'open' });
+
+			assert.deepEqual(rendering, { enforcement: { kind: 'allow' }, unknown: [], unmapped: [] });
 		});
 	});
 });

@@ -15,6 +15,11 @@ import {
 } from './testSupport.js';
 
 const validAccess = (): UsherRequestAccess => ({
+	artifactCreate: {
+		analyses: { kind: 'deny', reason: 'no-grants' },
+		files: { kind: 'allow' },
+		reference: { kind: 'allow' },
+	},
 	principal: {
 		credential: 'confirmed',
 		openTierOnly: false,
@@ -212,6 +217,7 @@ suite('attachAccess', () => {
 			() =>
 				attachAccess(store, {
 					...validAccess(),
+					artifactCreate: { reference: { kind: 'allow' } },
 					results: { reference: { kind: 'allow' } },
 				}),
 			ACCESS_STORE_RULES.alreadyHeld,
@@ -406,6 +412,7 @@ suite('readAccess', () => {
 suite('what attachAccess and readAccess throw carries', () => {
 	/** The words fixed by the contract, carried unmarked by a leak input. */
 	const CONTRACT_WORDS: ReadonlySet<string> = new Set([
+		'artifactCreate',
 		'attributionOnlySubject',
 		'confirmed',
 		'content',
@@ -431,6 +438,7 @@ suite('what attachAccess and readAccess throw carries', () => {
 
 	/** A value refused by the validator, every identifier and value of it marked. */
 	const markedInvalidAccess = (): Record<string, unknown> => ({
+		artifactCreate: { [`${LEAK_MARKER}_key`]: { kind: 'deny', reason: 'no-grants' } },
 		principal: {
 			attributionOnlySubject: `${LEAK_MARKER}_subject`,
 			credential: 'confirmed',
@@ -453,6 +461,7 @@ suite('what attachAccess and readAccess throw carries', () => {
 	});
 
 	const markedValidAccess = (): Record<string, unknown> => ({
+		artifactCreate: { [`${LEAK_MARKER}_key`]: { kind: 'deny', reason: 'no-grants' } },
 		principal: {
 			credential: 'confirmed',
 			openTierOnly: false,

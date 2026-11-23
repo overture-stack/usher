@@ -16,6 +16,9 @@ import type { BridgeEventData } from './events.js';
 /** A narrowing's filter, as carried by an enforcement result. */
 type Filter = Extract<Enforcement, { kind: 'narrow' }>['sqon'];
 
+/** The capability a rendering enforces: viewing records, or creating an artifact from them. */
+export type RenderedCapability = 'artifact.create' | 'record.view';
+
 /** The event naming a guard's denial. */
 export type GuardEvent =
 	| {
@@ -138,18 +141,30 @@ const definedConditions = (
 const holdsWholeRecords = (entry: CategoryPermissions): boolean =>
 	!Object.hasOwn(entry, 'field') && entry.record?.includes('view') === true;
 
-const holdingsOf = (payload: PermissionsPayload, key: RecordKeyRegistration): readonly Holding[] => {
+const holdsArtifactCreate = (entry: CategoryPermissions): boolean =>
+	!Object.hasOwn(entry, 'field') && entry.artifact?.includes('create') === true;
+
+/** Which permission entries grant the capability a rendering enforces. */
+const grantsOf = (capability: RenderedCapability): ((entry: CategoryPermissions) => boolean) =>
+	capability === 'artifact.create' ? holdsArtifactCreate : holdsWholeRecords;
+
+const holdingsOf = (
+	payload: PermissionsPayload,
+	key: RecordKeyRegistration,
+	capability: RenderedCapability,
+): readonly Holding[] => {
 	const listed = key.resources === undefined ? undefined : new Set(key.resources);
 	const globals = key.categories.global;
+	const grants = grantsOf(capability);
 
 	return Object.entries(payload.permissions).flatMap(([resource, entries]) => {
 		const own: Readonly<Partial<Record<CategoryName, CategoryCondition>>> =
 			ownMemberOf(key.categories.resource, resource) ?? {};
-		const viewed = (Object.entries(entries) as [CategoryName, CategoryPermissions][])
-			.filter(([, entry]) => holdsWholeRecords(entry))
+		const granted = (Object.entries(entries) as [CategoryName, CategoryPermissions][])
+			.filter(([, entry]) => grants(entry))
 			.map(([category]) => category);
-		const categories: ReadonlySet<CategoryName> = new Set(viewed.filter((category) => category !== UNMARKED));
-		const unmarked = viewed.includes(UNMARKED);
+		const categories: ReadonlySet<CategoryName> = new Set(granted.filter((category) => category !== UNMARKED));
+		const unmarked = granted.includes(UNMARKED);
 		const isListed = listed?.has(resource) ?? true;
 		const definesEveryOffered = (ownMemberOf(payload.resourceCategories, resource) ?? []).every(
 			(category) => ownMemberOf(own, category) !== undefined,
@@ -169,8 +184,12 @@ const holdingsOf = (payload: PermissionsPayload, key: RecordKeyRegistration): re
  * alone. It shares no helper with rendering.ts, so a fault in either is caught by the other. Both
  * rely on usher-types' `normalizedCondition`, whose correctness therefore rests on its own tests.
  */
-const expectedStatement = (payload: PermissionsPayload, key: RecordKeyRegistration): Statement => {
-	const holdings = holdingsOf(payload, key);
+const expectedStatement = (
+	payload: PermissionsPayload,
+	key: RecordKeyRegistration,
+	capability: RenderedCapability,
+): Statement => {
+	const holdings = holdingsOf(payload, key, capability);
 	const held = holdings.map(({ resource }) => resource);
 	const heldNames: ReadonlySet<ResourceIdentifier> = new Set(held);
 	const known = [...payload.servedResources, ...(key.resources ?? [])];
@@ -267,11 +286,13 @@ const statementText = ({ complement, exclusions, held, resourceFieldName, unmark
  * - otherwise `narrow` with the filter as given.
  */
 export const guardedNarrowing = ({
+	capability,
 	filterClauseLimit,
 	key,
 	narrowing,
 	payload,
 }: {
+	capability: RenderedCapability;
 	filterClauseLimit: number;
 	key: RecordKeyRegistration;
 	narrowing: Filter;
@@ -281,7 +302,7 @@ export const guardedNarrowing = ({
 	const matches =
 		parsed.success &&
 		coversEveryGlobal(payload, key) &&
-		statementText(parsed.narrowing) === statementText(expectedStatement(payload, key));
+		statementText(parsed.narrowing) === statementText(expectedStatement(payload, key, capability));
 
 	if (matches) {
 		return filterClauseCount(narrowing) <= filterClauseLimit ? { kind: 'narrow', sqon: narrowing } : FILTER_LIMIT;
@@ -291,24 +312,26 @@ export const guardedNarrowing = ({
 };
 
 /**
- * The event naming a guard's denial: `catalogue.renderingMismatch` with the catalogue for
- * `rendering-mismatch`, or `catalogue.filterLimit` with the catalogue and `filterClauseLimit` for
- * `filter-limit`, never a count of grants. `undefined` for any other result.
+ * The event naming a guard's denial: `catalogue.renderingMismatch` with the catalogue and capability for
+ * `rendering-mismatch`, or `catalogue.filterLimit` with the catalogue, capability and `filterClauseLimit`
+ * for `filter-limit`, never a count of grants. `undefined` for any other result.
  *
  * @param catalogue the key the result is for.
+ * @param capability the capability the result renders, so each rendering's denial is told apart.
  */
 export const guardEventOf = (
 	catalogue: string,
 	enforcement: Enforcement,
 	filterClauseLimit: number,
+	capability: RenderedCapability,
 ): GuardEvent | undefined => {
 	if (enforcement.kind === 'deny' && enforcement.reason === 'rendering-mismatch') {
-		return { data: { catalogue }, name: 'catalogue.renderingMismatch' };
+		return { data: { capability, catalogue }, name: 'catalogue.renderingMismatch' };
 	}
 
 	if (enforcement.kind === 'deny' && enforcement.reason === 'filter-limit') {
 		return {
-			data: { catalogue, filterClauseLimit },
+			data: { capability, catalogue, filterClauseLimit },
 			name: 'catalogue.filterLimit',
 		};
 	}

@@ -182,8 +182,8 @@ suite('createEventLog', () => {
 			{ fromMode: 'normal', reason: 'anonymousPayloadMissing', toMode: 'cold' },
 			'error',
 		],
-		['catalogue.renderingMismatch', { catalogue: 'files' }, 'error'],
-		['catalogue.filterLimit', { catalogue: 'files', filterClauseLimit: 1_024 }, 'error'],
+		['catalogue.renderingMismatch', { capability: 'record.view', catalogue: 'files' }, 'error'],
+		['catalogue.filterLimit', { capability: 'record.view', catalogue: 'files', filterClauseLimit: 1_024 }, 'error'],
 	] as const) {
 		test(`logs ${name} at ${level}, the level its severity maps to`, () => {
 			const logger = recordingLogger();

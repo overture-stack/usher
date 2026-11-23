@@ -276,6 +276,10 @@ suite('the package root', () => {
 			suspended: false,
 		};
 		const access: UsherRequestAccess = {
+			artifactCreate: {
+				files: recordEnforcement,
+				samples: unmappedDenial,
+			},
 			principal,
 			results: {
 				files: recordEnforcement,

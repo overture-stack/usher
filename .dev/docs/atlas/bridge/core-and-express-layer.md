@@ -92,6 +92,9 @@ carry.
   answers before anything downstream runs.
 - The access value is attached deep-frozen as the data member `res.locals.usher`, non-writable,
   non-configurable and non-enumerable, declared to TypeScript as `readonly usher?: unknown`.
+- The access value holds two maps of enforcement results beside the principal: `results`, which the
+  view rendering produces, and `artifactCreate`, which the artifact-creation rendering produces from
+  the same payload. Both hold exactly the same keys, and the validator refuses a value where they differ.
 - `attachAccess` refuses a store that already holds `usher`, which is its contract.
 - `readAccess` accepts only a member shaped as `attachAccess` leaves it, never runs an accessor, and
   returns a fresh frozen copy it has validated, so a replaced value fails closed.
@@ -259,7 +262,12 @@ carry.
   normalized. The compiled conditions are held in that key's own
   compiled form, never in a table shared across keys, so two keys may give one category name
   different conditions.
-- Rendering runs once per exchange and interns its results. A record key's narrowing is usher-types'
+- Rendering runs once per exchange and interns its results. Each payload is rendered twice, once for
+  `results` by `renderKey` and once for `artifactCreate` by `renderArtifactCreate`, and each map is
+  interned on its own. The two renderings differ in one thing: an entry counts for a record when its
+  `record` array holds `view` in the first, and when its `artifact` array holds `create` in the second.
+  The category gaps are logged for the view rendering alone, since both meet the same gaps for a key.
+  A record key's narrowing is usher-types'
   `canonicalRecordNarrowing`, which excludes what is not held, one clause per category
   ([decisions.md](../../../design/decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches)).
 - A record key's narrowing is served only past the Bridge's two guards. The rendering guard reads it
@@ -360,7 +368,7 @@ carry.
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | credential              | what a request presents: a sign-in token, or an opaque API key                                                                                                                                      |
 | digest                  | the base64url SHA-256 of the whole credential, which keys the stores                                                                                                                                |
-| key                     | one entry an adapter registers and the request access value's `results` carries; in Arranger, one catalogue                                                                                         |
+| key                     | one entry an adapter registers and the request access value's `results` and `artifactCreate` carry; in Arranger, one catalogue                                                                      |
 | application key         | the 32-byte secret, one per application, from which every key the Bridge holds is derived, the token key among them; the configuration's `key` parameter carries it                                 |
 | entry                   | what a store holds for one digest, or the anonymous store's one slot, the anonymous entry                                                                                                           |
 | flight                  | one exchange in progress for one digest, shared by every request waiting on it                                                                                                                      |
@@ -1001,6 +1009,12 @@ nothing is.
 resource's own are compiled into that key's own form: each condition with the keys of every node
 sorted. An open key is kept as registered.
 
+`renderArtifactCreate(payload, key, filterClauseLimit)` is the same function for `artifactCreate`, with
+one rule changed: an entry counts for a record key when it is not partitioned by field and its
+`artifact` array holds `create`, where `renderKey` counts one whose `record` array holds `view`. A
+resource is held for artifact creation on the same terms, so the unmarked records and the categories
+it holds are its own. Every failure mode is shared, and an open key gets `allow` in both.
+
 `renderKey(payload, key, filterClauseLimit)` is pure:
 
 - A key open by configuration gets `allow`.
@@ -1089,7 +1103,9 @@ caught by the other:
 
 Lists compare as sets, and conditions by their JSON once `normalizedCondition` has normalized them.
 A filter the parse refuses, which includes one with a missing clause dropped, or any difference
-denies the key with `rendering-mismatch`, and `catalogue.renderingMismatch` is logged as critical.
+denies the key with `rendering-mismatch`, and `catalogue.renderingMismatch` is logged as critical. Each
+rendering runs its own guard, under the capability it enforces, `record.view` or `artifact.create`, and
+the event names it.
 The guard reads the registration's own conditions rather than their compiled form, so a fault in
 compiling a condition is caught as well (reasoned).
 
@@ -1198,7 +1214,7 @@ nothing found. The [test plan](../../bridge-tests.md#the-fixtures) carries both 
 
 ### Interning
 
-The interning key is the results serialized as JSON. Plain `JSON.stringify` is stable here only
+The interning key is each map of results serialized as JSON, `results` and `artifactCreate` alike. Plain `JSON.stringify` is stable here only
 because usher-types normalizes each condition and sorts every list, and the registration's order is
 fixed. Equal keys map to one frozen object, from a bounded pool of 4,096. The corpus's 35 payloads
 render to 10 distinct results for one record key defining both of the default configuration's global
@@ -1325,8 +1341,8 @@ Every event the Bridge emits, as registered in [audit-events.md](../../../design
 | `token.rejection`                 | an Usher token is rejected                                                                                                                                                                                                                                                                               | `reason`, one of the jose note's reason codes; a token whose `aud` does not name this application is `audienceRejected`                                                                         | `warning`                                                         |
 | `notice.applied`                  | a notice is applied                                                                                                                                                                                                                                                                                      | `kind`, `entriesDropped`                                                                                                                                                                        | `info`                                                            |
 | `token.overtaken`                 | an exchange answer is discarded because a notice affecting it arrived while it was in flight: the first time the Bridge exchanges again, the second it serves the open tier, marked suspended and naming its verified subject for attribution alone, or nothing when no usable anonymous payload is held | `outcome`: `exchangedAgain`, `servedOpenTier` or `abandoned`                                                                                                                                    | `info`                                                            |
-| `catalogue.renderingMismatch`     | the rendering guard finds a record key's filter saying something other than its payload and registration, or refused by the parse, and denies the key; once each time the key is rendered                                                                                                                | `catalogue`                                                                                                                                                                                     | `critical`                                                        |
-| `catalogue.filterLimit`           | the clause guard denies a record key whose filter counts more clauses than `filterClauseLimit`; once each time the key is rendered                                                                                                                                                                       | `catalogue`, `filterClauseLimit`, the configured limit and never a count                                                                                                                        | `error`                                                           |
+| `catalogue.renderingMismatch`     | the rendering guard finds a record key's filter saying something other than its payload and registration, or refused by the parse, and denies the key; once each time the key is rendered                                                                                                                | `capability`, `catalogue`                                                                                                                                                                       | `critical`                                                        |
+| `catalogue.filterLimit`           | the clause guard denies a record key whose filter counts more clauses than `filterClauseLimit`; once each time the key is rendered                                                                                                                                                                       | `capability`, `catalogue`, `filterClauseLimit`, the configured limit and never a count                                                                                                          | `error`                                                           |
 | `catalogue.resourceListMissing`   | a record key registers an empty resource list, which denies every request to it; once per key at start                                                                                                                                                                                                   | `catalogue`                                                                                                                                                                                     | `critical`                                                        |
 | `credential.malformed`            | no single credential can be read, or one arrives in the query                                                                                                                                                                                                                                            | `reason`: `multiple`, `scheme` or `query`                                                                                                                                                       | `info`                                                            |
 | `bridge.internalError`            | an unexpected failure inside the layer or the core                                                                                                                                                                                                                                                       | `stage` (`answer`, `attach`, `extract`, `refreshAnonymous` or `resolve`)                                                                                                                        | `critical`                                                        |
@@ -1370,7 +1386,8 @@ What the builders guarantee, and what they do not:
   fields is a convention of the call sites, not a property of the types.
 - No event carries any part of a sign-in token, its key identifier included.
 - `catalogue.filterLimit` carries the configured limit, never a count of the principal's grants or
-  categories, and neither guard's event carries a value from the payload or the filter.
+  categories, and neither guard's event carries a value from the payload or the filter. Both name the
+  `capability` whose rendering was denied, `record.view` or `artifact.create`.
 - `category.unenforced` and `category.unmapped` are the only events carrying values taken from the
   payload. `category.unmapped` carries no principal at all, and `category.unknown` carries only names
   from the registration: a category, and for a resource category its resource. `category.unenforced` is the one event allowed to carry a

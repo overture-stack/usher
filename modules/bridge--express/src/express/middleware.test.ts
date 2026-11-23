@@ -91,6 +91,7 @@ const accessFor = (subject: string | null): UsherRequestAccess => ({
 					subject,
 					suspended: false,
 				},
+	artifactCreate: { files: { kind: 'allow' } },
 	results: { files: { kind: 'allow' } },
 	version: 1,
 });
