@@ -2,7 +2,7 @@ import { eventInstant, type JsonValue } from '../eventLog/index.js';
 import type { ViewedGrantRequest } from './types.js';
 
 /** A grant request's state, as an answer names it. */
-export type GrantRequestState = 'granted' | 'lapsed' | 'pending' | 'refused';
+export type GrantRequestState = 'declined' | 'granted' | 'lapsed' | 'pending';
 
 /**
  * A grant request's state on the configured clock: its decision once decided, whatever its expiry;

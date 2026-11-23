@@ -45,12 +45,12 @@ suite('the grants a signed-in exchange reads from the store', () => {
 				},
 				{
 					decidedAt: decidedAt(1),
-					decision: 'rejected',
+					decision: 'declined',
 					grant: 'rejectedLast',
 				},
 				{
 					decidedAt: decidedAt(2),
-					decision: 'rejected',
+					decision: 'declined',
 					grant: 'acceptedLast',
 				},
 				{

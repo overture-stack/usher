@@ -88,7 +88,7 @@ suite('a grant request as an answer shows it', () => {
 				{
 					...PENDING,
 					decidedAt: at(-2),
-					decision: 'refused' as const,
+					decision: 'declined' as const,
 					expiresAt: at(-1),
 				},
 				{
@@ -99,7 +99,7 @@ suite('a grant request as an answer shows it', () => {
 					grantId: '6b1f3c2e-8a4d-4f7b-9c1e-2d3a4b5c6d7e',
 				},
 			].map((request) => grantRequestStateOf(request, NOW)),
-			['pending', 'lapsed', 'lapsed', 'refused', 'granted'],
+			['pending', 'lapsed', 'lapsed', 'declined', 'granted'],
 		);
 	});
 });

@@ -373,7 +373,7 @@ suite('the signed-in calculation', () => {
 				grant(),
 				grant({
 					externalId: 'REEF_ARCHIVE',
-					latestDecision: { capabilities: VIEWER, decision: 'rejected' },
+					latestDecision: { capabilities: VIEWER, decision: 'declined' },
 				}),
 				grant({ externalId: 'MEMBERS_ARCHIVE', latestDecision: null }),
 			]);
@@ -677,7 +677,7 @@ suite('the signed-in calculation', () => {
 				grant({
 					expiresAt: (ISSUED_AT + 10) * 1000,
 					externalId: 'MEMBERS_ARCHIVE',
-					latestDecision: { capabilities: VIEWER, decision: 'rejected' },
+					latestDecision: { capabilities: VIEWER, decision: 'declined' },
 				}),
 				grant({
 					expiresAt: (ISSUED_AT + 20) * 1000,

@@ -64,7 +64,7 @@ suite("the controller's database role", () => {
 				committedInsert(
 					controller,
 					grantDecisions,
-					decisionRow({ decision: 'rejected', grantId: anaViews, userId: ana }),
+					decisionRow({ decision: 'declined', grantId: anaViews, userId: ana }),
 					ANA_ACTING,
 				),
 			),

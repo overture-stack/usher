@@ -186,6 +186,7 @@ const tampered = (change: (narrowing: unknown) => unknown): Filter => filterOf(c
 
 const guarded = (narrowing: Filter, filterClauseLimit = NO_LIMIT): Enforcement =>
 	guardedNarrowing({
+		capability: 'record.view',
 		filterClauseLimit,
 		key: compiled,
 		narrowing,
@@ -323,6 +324,7 @@ suite('guardedNarrowing', () => {
 			// When the guard checks it, Then the key is denied
 			assert.deepEqual(
 				guardedNarrowing({
+					capability: 'record.view',
 					filterClauseLimit: NO_LIMIT,
 					key: compiled,
 					narrowing: narrowingFor(payload),
@@ -380,6 +382,7 @@ suite('guardedNarrowing', () => {
 
 			// When the guard checks that narrowing against it
 			const enforcement = guardedNarrowing({
+				capability: 'record.view',
 				filterClauseLimit: NO_LIMIT,
 				key: compiled,
 				narrowing: narrowingFor(payload),
@@ -403,6 +406,7 @@ suite('guardedNarrowing', () => {
 			// dropped from its complement
 			const results = [rendered, filterOf(replacedAt(rendered, COMPLEMENT_VALUES, [OTHER]))].map((narrowing) =>
 				guardedNarrowing({
+					capability: 'record.view',
 					filterClauseLimit: NO_LIMIT,
 					key: compiled,
 					narrowing,
@@ -492,20 +496,34 @@ suite('guardedNarrowing', () => {
 });
 
 suite('guardEventOf', () => {
-	test('names a rendering mismatch catalogue.renderingMismatch, carrying the catalogue alone', () => {
-		const event = guardEventOf('files', RENDERING_MISMATCH, 1_024);
+	test('names a rendering mismatch catalogue.renderingMismatch, carrying the catalogue and the capability denied', () => {
+		const event = guardEventOf('files', RENDERING_MISMATCH, 1_024, 'record.view');
 
 		assert.deepEqual(event, {
-			data: { catalogue: 'files' },
+			data: { capability: 'record.view', catalogue: 'files' },
 			name: 'catalogue.renderingMismatch',
 		});
 	});
 
 	test('names a filter limit catalogue.filterLimit, carrying the catalogue and the configured limit', () => {
-		const event = guardEventOf('files', FILTER_LIMIT, 1_024);
+		const event = guardEventOf('files', FILTER_LIMIT, 1_024, 'record.view');
 
 		assert.deepEqual(event, {
-			data: { catalogue: 'files', filterClauseLimit: 1_024 },
+			data: { capability: 'record.view', catalogue: 'files', filterClauseLimit: 1_024 },
+			name: 'catalogue.filterLimit',
+		});
+	});
+
+	test('names the artifact-creation rendering in the event of its own denial, so the two renderings are told apart', () => {
+		const mismatch = guardEventOf('files', RENDERING_MISMATCH, 1_024, 'artifact.create');
+		const limit = guardEventOf('files', FILTER_LIMIT, 1_024, 'artifact.create');
+
+		assert.deepEqual(mismatch, {
+			data: { capability: 'artifact.create', catalogue: 'files' },
+			name: 'catalogue.renderingMismatch',
+		});
+		assert.deepEqual(limit, {
+			data: { capability: 'artifact.create', catalogue: 'files', filterClauseLimit: 1_024 },
 			name: 'catalogue.filterLimit',
 		});
 	});
@@ -519,7 +537,7 @@ suite('guardEventOf', () => {
 			{ kind: 'narrow', sqon: narrowingFor(payload) },
 		];
 
-		const events = results.map((enforcement) => guardEventOf('files', enforcement, 1_024));
+		const events = results.map((enforcement) => guardEventOf('files', enforcement, 1_024, 'record.view'));
 
 		assert.deepEqual(events, [undefined, undefined, undefined, undefined, undefined]);
 	});

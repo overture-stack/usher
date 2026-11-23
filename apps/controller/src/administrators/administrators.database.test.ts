@@ -3,13 +3,14 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { suite, test } from 'node:test';
 
 import {
-	acceptNomination,
-	type AdminResponse,
 	assertRefused,
+	type AdminResponse,
 	assertSucceeded,
 	createGrant,
+	decideNomination,
 	firstUserCaller,
 	instantOf,
+	listNominations,
 	listOwnNominations,
 	nominate,
 	personCaller,
@@ -17,6 +18,7 @@ import {
 	readLiveness,
 	readReadiness,
 	registerResource,
+	revokeNomination,
 } from '../../testing/harness/admin.js';
 import { AUDIT_EVENT_TYPES, auditRows, dataOf, emittedType } from '../../testing/harness/auditEvents.js';
 import { captureLog } from '../../testing/harness/controller.js';
@@ -45,7 +47,7 @@ import {
 import { mintServiceAccountToken } from '../../testing/peripherals/identityProvider.js';
 import { inTurn, POLICY_TABLES, qualified, seededId, usersWithSubject } from '../../testing/harness/policy.js';
 
-const { administrators, grants, nominations } = POLICY_TABLES;
+const { administrators, grants, nominationDeclines, nominationRevocations, nominations } = POLICY_TABLES;
 
 // A store holding no administrator, as before the first user's nomination is accepted, its
 // Controller registering no application, which only an administrator may; Bo and Cy have met Usher.
@@ -85,7 +87,7 @@ const nominated = async (harness: Harness, nominee: Person): Promise<string> =>
 	);
 
 const accepted = async (harness: Harness, nominee: Person, nominationId: string): Promise<AdminResponse> =>
-	acceptNomination(await personCaller(harness, nominee), nominationId);
+	decideNomination(await personCaller(harness, nominee), nominationId, 'accept');
 
 const rowCount = async (harness: Harness, table: { name: string }): Promise<number> =>
 	(
@@ -130,11 +132,11 @@ suite("the store's administrators and their nominations", () => {
 		const steward = stewardOf(seeded);
 		const cy = seededId(seeded.users, 'cy');
 		const bo = seededId(seeded.users, 'bo');
-		const nominated = (nomineeId: string, at: Date): Promise<string> =>
+		const nominated = (nomineeUserId: string, at: Date): Promise<string> =>
 			committedInsert(
 				owner,
 				nominations,
-				nominationRow({ nominatedAt: at, nominatedBy: steward, nomineeId }),
+				nominationRow({ nominatedAt: at, nominatedBy: steward, nomineeId: nomineeUserId }),
 			).then((row) => String(row[nominations.columns.id]));
 		const cyFirst = await nominated(cy, new Date(Date.now() - 2000));
 		const cySecond = await nominated(cy, new Date(Date.now() - 1000));
@@ -327,7 +329,7 @@ suite("nominating and accepting Usher's first administrator", () => {
 				const nominationId = nominationOf(nomination, 'the nomination');
 				const met = await usersWithSubject(client, FIRST_USER.subject);
 				const grantsHeld = await rowCount(harness, grants);
-				const acceptance = await acceptNomination(first, nominationId);
+				const acceptance = await decideNomination(first, nominationId, 'accept');
 				const registered = await registerResource(first, study('STUDY-F1'));
 
 				assert.deepEqual([before, met, grantsHeld], [0, 1, 0]);
@@ -342,18 +344,23 @@ suite("nominating and accepting Usher's first administrator", () => {
 						nominatedAt: true,
 						nominatedBy: { subject: FIRST_USER.subject },
 						nominee: { subject: FIRST_USER.subject },
+						state: 'pending',
 					},
 				);
 				assert.equal(acceptance.status, 200);
 				assert.deepEqual(
 					{
 						...Object(acceptance.body),
-						acceptedAt: instantOf(Reflect.get(Object(acceptance.body), 'acceptedAt')) > 0,
+						decidedAt: instantOf(Reflect.get(Object(acceptance.body), 'decidedAt')) > 0,
+						nominatedAt: instantOf(Reflect.get(Object(acceptance.body), 'nominatedAt')) > 0,
 					},
 					{
-						acceptedAt: true,
-						administrator: { subject: FIRST_USER.subject },
-						nominationId,
+						decidedAt: true,
+						id: nominationId,
+						nominatedAt: true,
+						nominatedBy: { subject: FIRST_USER.subject },
+						nominee: { subject: FIRST_USER.subject },
+						state: 'accepted',
 					},
 				);
 				assert.equal(registered.status, 201);
@@ -363,18 +370,19 @@ suite("nominating and accepting Usher's first administrator", () => {
 						actorType: 'human',
 						instance: harness.configuration.instanceName,
 						nominationId,
-						nomineeId: FIRST_USER.subject,
+						nomineeSubject: FIRST_USER.subject,
 						result: 'succeeded',
 						severity: 'warning',
 						sourceIp: '127.0.0.1',
 					},
 				]);
-				assert.deepEqual(await eventsOfType(harness, AUDIT_EVENT_TYPES.adminAcceptance), [
+				assert.deepEqual(await eventsOfType(harness, AUDIT_EVENT_TYPES.adminNominationDecision), [
 					{
 						actorId: FIRST_USER.subject,
 						actorType: 'human',
+						decision: 'accepted',
 						instance: harness.configuration.instanceName,
-						nominatedById: FIRST_USER.subject,
+						nominatedBySubject: FIRST_USER.subject,
 						nominationId,
 						result: 'succeeded',
 						severity: 'critical',
@@ -395,7 +403,7 @@ suite("nominating and accepting Usher's first administrator", () => {
 				const nominationId = await nominated(harness, PEOPLE.bo);
 				const before = await registerResource(boEarly, study('STUDY-B1'));
 
-				assertSucceeded(await acceptNomination(boEarly, nominationId), 'the acceptance');
+				assertSucceeded(await decideNomination(boEarly, nominationId, 'accept'), 'the acceptance');
 
 				const after = await registerResource(boEarly, study('STUDY-B2'));
 				const byFirstUser = await registerResource(first, study('STUDY-B3'));
@@ -458,7 +466,7 @@ suite("nominating and accepting Usher's first administrator", () => {
 		);
 	});
 
-	test('lets the first user nominate again until one accepts, shows each nominee the nominations naming them and which is the latest, and accepts the latest alone', async (context) => {
+	test('lets the first user nominate again until one accepts, shows each nominee the nominations naming them with their states, and accepts the latest alone', async (context) => {
 		await withHarness(
 			BEFORE_THE_FIRST,
 			async (harness) => {
@@ -471,8 +479,8 @@ suite("nominating and accepting Usher's first administrator", () => {
 					return (Reflect.get(Object(answer.body), 'nominations') as readonly unknown[]).map(
 						(nomination) => ({
 							id: Reflect.get(Object(nomination), 'id'),
-							latest: Reflect.get(Object(nomination), 'latest'),
 							nominatedBy: Reflect.get(Object(nomination), 'nominatedBy'),
+							state: Reflect.get(Object(nomination), 'state'),
 						}),
 					);
 				};
@@ -489,27 +497,30 @@ suite("nominating and accepting Usher's first administrator", () => {
 				const boAfter = await listed(PEOPLE.bo);
 
 				assert.deepEqual(boBefore, [
-					{ id: toBo, latest: false, nominatedBy: byFirstUser },
-					{ id: toBoAgain, latest: true, nominatedBy: byFirstUser },
+					{ id: toBo, nominatedBy: byFirstUser, state: 'replaced' },
+					{ id: toBoAgain, nominatedBy: byFirstUser, state: 'pending' },
 				]);
-				assert.deepEqual(cyBefore, [{ id: toCy, latest: false, nominatedBy: byFirstUser }]);
+				assert.deepEqual(cyBefore, [{ id: toCy, nominatedBy: byFirstUser, state: 'replaced' }]);
 				assert.deepEqual(refusals.map(outcomeOf), [
-					[409, 'nominationSuperseded'],
-					[409, 'nominationSuperseded'],
+					[409, 'nominationReplaced'],
+					[409, 'nominationReplaced'],
 					[404, 'nominationNotFound'],
 				]);
 				assert.equal(acceptance.status, 200);
-				assert.deepEqual(boAfter, boBefore);
+				assert.deepEqual(boAfter, [
+					{ id: toBo, nominatedBy: byFirstUser, state: 'replaced' },
+					{ id: toBoAgain, nominatedBy: byFirstUser, state: 'accepted' },
+				]);
 				assert.deepEqual(
-					(await eventsOfType(harness, AUDIT_EVENT_TYPES.adminAcceptance)).map((data) => [
+					(await eventsOfType(harness, AUDIT_EVENT_TYPES.adminNominationDecision)).map((data) => [
 						data['result'],
 						data['reason'],
 						data['nominationId'],
 					]),
 					[
-						['denied', 'nominationSuperseded', toCy],
-						['denied', 'nominationSuperseded', toBo],
-						['denied', 'nominationNotFound', toBoAgain],
+						['denied', 'nominationReplaced', toCy],
+						['denied', 'nominationReplaced', toBo],
+						['denied', 'nominationForSomeoneElse', toBoAgain],
 						['succeeded', undefined, toBoAgain],
 					],
 				);
@@ -547,7 +558,7 @@ suite('nominations and acceptances, serialized', () => {
 		);
 	});
 
-	test('refuses an acceptance sent while a later nomination holds the order 409 nominationSuperseded, so no nomination replaced is ever accepted', async (context) => {
+	test('refuses an answer sent while a later nomination holds the order 409 nominationReplaced, so no nomination replaced is ever accepted', async (context) => {
 		await withHarness(
 			BEFORE_THE_FIRST,
 			async (harness) => {
@@ -564,7 +575,7 @@ suite('nominations and acceptances, serialized', () => {
 					[nomination, acceptance].map((answer) => answer?.status),
 					[201, 409],
 				);
-				assert.equal(acceptance?.problem?.code, PROBLEMS.nominationSuperseded.code);
+				assert.equal(acceptance?.problem?.code, PROBLEMS.nominationReplaced.code);
 				assert.equal(await rowCount(harness, administrators), 0);
 			},
 			context,
@@ -588,6 +599,140 @@ suite('nominations and acceptances, serialized', () => {
 					[409, 'firstAdministratorAccepted'],
 				]);
 				assert.equal(await rowCount(harness, administrators), 1);
+			},
+			context,
+		);
+	});
+});
+
+// The nominations of a listing answer, each as the first user's listing shows it.
+const listedOf = (answer: AdminResponse): readonly Readonly<Record<string, unknown>>[] => {
+	assertSucceeded(answer, 'the listing');
+	return Reflect.get(Object(answer.body), 'nominations') as readonly Readonly<Record<string, unknown>>[];
+};
+
+suite("a nominee's answer and the first user's revocation, as the store keeps them", () => {
+	test('lets the nominee decline a pending nomination once, keeping the decline as its own row, lists it declined with its instant, and refuses each later answer 409 nominationAlreadyDecided', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				const toBo = await nominated(harness, PEOPLE.bo);
+				const declined = await decideNomination(await personCaller(harness, PEOPLE.bo), toBo, 'decline');
+				const laterAccept = await accepted(harness, PEOPLE.bo, toBo);
+				const laterDecline = await decideNomination(await personCaller(harness, PEOPLE.bo), toBo, 'decline');
+				const listed = listedOf(await listNominations(await firstUserCaller(harness, FIRST_USER)));
+
+				assert.equal(declined.status, 200);
+				assert.deepEqual([laterAccept, laterDecline].map(outcomeOf), [
+					[409, 'nominationAlreadyDecided'],
+					[409, 'nominationAlreadyDecided'],
+				]);
+				assert.deepEqual(
+					[await rowCount(harness, nominationDeclines), await rowCount(harness, administrators)],
+					[1, 0],
+				);
+				assert.deepEqual(
+					listed.map(({ id, state, decidedAt, revokedAt }) => ({
+						decided: decidedAt !== undefined,
+						id,
+						revoked: revokedAt !== undefined,
+						state,
+					})),
+					[{ decided: true, id: toBo, revoked: false, state: 'declined' }],
+				);
+				assert.deepEqual(
+					(await eventsOfType(harness, AUDIT_EVENT_TYPES.adminNominationDecision)).map((data) => [
+						data['decision'],
+						data['result'],
+						data['reason'],
+						data['severity'],
+					]),
+					[
+						['declined', 'succeeded', undefined, 'warning'],
+						[undefined, 'denied', 'nominationAlreadyDecided', 'warning'],
+						[undefined, 'denied', 'nominationAlreadyDecided', 'warning'],
+					],
+				);
+			},
+			context,
+		);
+	});
+
+	test('lets the first user revoke a pending nomination, refuses its answer and a second revocation 409 nominationRevoked, refuses a revocation by anyone else 403 notFirstUser, and lists it revoked', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				const toBo = await nominated(harness, PEOPLE.bo);
+				const first = await firstUserCaller(harness, FIRST_USER);
+				const revoked = await revokeNomination(first, toBo);
+
+				const refusals = [
+					await accepted(harness, PEOPLE.bo, toBo),
+					await revokeNomination(first, toBo),
+					await revokeNomination(await personCaller(harness, PEOPLE.bo), toBo),
+				];
+				const listed = listedOf(await listNominations(first));
+
+				assert.equal(revoked.status, 200);
+				assert.deepEqual(refusals.map(outcomeOf), [
+					[409, 'nominationRevoked'],
+					[409, 'nominationRevoked'],
+					[403, 'notFirstUser'],
+				]);
+				assert.deepEqual(
+					[await rowCount(harness, nominationRevocations), await rowCount(harness, administrators)],
+					[1, 0],
+				);
+				assert.deepEqual(
+					listed.map(({ id, state, decidedAt, revokedAt }) => ({
+						decided: decidedAt !== undefined,
+						id,
+						revoked: revokedAt !== undefined,
+						state,
+					})),
+					[{ decided: false, id: toBo, revoked: true, state: 'revoked' }],
+				);
+				assert.deepEqual(
+					(await eventsOfType(harness, AUDIT_EVENT_TYPES.adminNominationRevocation)).map((data) => [
+						data['result'],
+						data['reason'],
+						data['severity'],
+					]),
+					[
+						['succeeded', undefined, 'warning'],
+						['denied', 'nominationRevoked', 'warning'],
+						['denied', 'notFirstUser', 'warning'],
+					],
+				);
+			},
+			context,
+		);
+	});
+
+	test("refuses a nominee's listing of every nomination 403 notFirstUser, and shows the first user each state every nomination holds", async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				const toBo = await nominated(harness, PEOPLE.bo);
+				const toCy = await nominated(harness, PEOPLE.cy);
+				const first = await firstUserCaller(harness, FIRST_USER);
+				await decideNomination(await personCaller(harness, PEOPLE.cy), toCy, 'decline');
+
+				const byNominee = await listNominations(await personCaller(harness, PEOPLE.bo));
+				const listed = listedOf(await listNominations(first));
+
+				assert.deepEqual(outcomeOf(byNominee), [403, 'notFirstUser']);
+				assert.deepEqual(
+					listed.map(({ id, nominee, state }) => ({
+						id,
+						nominee,
+						state,
+					})),
+					[
+						{ id: toBo, nominee: { subject: PEOPLE.bo.subject }, state: 'replaced' },
+						{ id: toCy, nominee: { subject: PEOPLE.cy.subject }, state: 'declined' },
+					],
+				);
 			},
 			context,
 		);

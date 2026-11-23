@@ -197,7 +197,7 @@
 		{
 			"id": "case-06",
 			"case": "06",
-			"description": "As case 04, rejected. Indistinguishable from case 04, which is intended: absence is the only signal an application receives.",
+			"description": "As case 04, declined. Indistinguishable from case 04, which is intended: absence is the only signal an application receives.",
 			"payload": {
 				"payloadVersion": 1,
 				"sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",
@@ -474,7 +474,7 @@
 		{
 			"id": "case-13",
 			"case": "13",
-			"description": "She rejected, then later accepted. The later decision stands and both rows are kept.",
+			"description": "She declined, then later accepted. The later decision stands and both rows are kept.",
 			"payload": {
 				"payloadVersion": 1,
 				"sub": "8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b",

@@ -16,7 +16,7 @@ const ALTERNATIVES: Readonly<
 	Record<DirectoryAlternative, { alternative: string; person: string; servesDuringOutage: boolean }>
 > = Object.freeze({
 	grantById: {
-		alternative: "revoke the submitter's grant by its id, through DELETE /admin/grants/{id}",
+		alternative: "revoke the submitter's grant by its id, through DELETE /admin/grants/{grantId}",
 		person: 'A submitter',
 		servesDuringOutage: true,
 	},

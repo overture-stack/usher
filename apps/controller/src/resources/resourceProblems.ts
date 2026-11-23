@@ -27,7 +27,7 @@ export const RESOURCE_PROBLEMS = Object.freeze({
 		'applicationNotFound',
 		404,
 		'Application not found',
-		'No registered application has the id named.',
+		'No registered application has the applicationId named.',
 	),
 	descriptionTooLong: problem(
 		'descriptionTooLong',

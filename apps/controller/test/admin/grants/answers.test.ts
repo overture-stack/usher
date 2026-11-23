@@ -88,7 +88,7 @@ suite('naming people and resources in answers', () => {
 					outcome: 'succeeded',
 					response: await answerGrant(await personCaller(harness, CAST.recipient), consumerId, {
 						capabilities: SHOWN.viewer,
-						decision: 'accepted',
+						decision: 'accept',
 					}),
 				},
 				{

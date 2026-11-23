@@ -21,6 +21,7 @@ import {
 	type ResolveOutcome,
 	type TokenReading,
 } from './core/core.js';
+import { readingAt, type StoredReading } from './core/testTokens.js';
 import { anonymousAccess, openTierAccess, signedInAccess } from './testing.js';
 
 const corpus = JSON.parse(
@@ -60,9 +61,14 @@ const segment = (value: unknown): string => Buffer.from(JSON.stringify(value)).t
 const signInToken = (claims: { sub: string }): string => `${segment({ alg: 'RS256' })}.${segment(claims)}.c2lnbmF0dXJl`;
 
 /** The results of an access outcome, failing the test when the outcome is not an access. */
-const resultsOf = (outcome: ResolveOutcome): Readonly<Record<string, Enforcement>> => {
+/** The two maps an outcome carries, as the testing entry takes them. */
+const mapsOf = (
+	outcome: ResolveOutcome,
+): { artifactCreate: Readonly<Record<string, Enforcement>>; results: Readonly<Record<string, Enforcement>> } => {
 	assert.equal(outcome.kind, 'access', `expected access, got ${outcome.kind}`);
-	return outcome.kind === 'access' ? outcome.access.results : assert.fail('unreachable');
+	return outcome.kind === 'access'
+		? { artifactCreate: outcome.access.artifactCreate, results: outcome.access.results }
+		: assert.fail('unreachable');
 };
 
 /**
@@ -72,7 +78,7 @@ const resultsOf = (outcome: ResolveOutcome): Readonly<Record<string, Enforcement
 const running = async () => {
 	const clocks = { monotonic: 0, wall: ISSUED_AT_MS };
 	const answers = new Map<string | null, ExchangeAnswer>([[null, { kind: 'token', token: 'token:anonymous' }]]);
-	const readings = new Map<string, TokenReading>([['token:anonymous', { kind: 'payload', payload: ANONYMOUS }]]);
+	const readings = new Map<string, StoredReading>([['token:anonymous', { kind: 'payload', payload: ANONYMOUS }]]);
 	const channel: { core: ChannelCore | undefined } = { core: undefined };
 
 	const configuration: BridgeConfiguration = {
@@ -97,8 +103,8 @@ const running = async () => {
 				Promise.resolve(answers.get(credential) ?? { kind: 'refused' }),
 		}),
 		createTokenReader: () => ({
-			read: (token: string): Promise<TokenReading> =>
-				Promise.resolve(readings.get(token) ?? { kind: 'rejected', reason: 'unexpected' }),
+			read: (token: string, { transitMs }: { transitMs: number }): Promise<TokenReading> =>
+				Promise.resolve(readingAt(readings.get(token), transitMs)),
 		}),
 		random: () => 0,
 	};
@@ -158,7 +164,7 @@ suite('the testing surface', () => {
 		const { core } = await running();
 		const outcome = await core.resolve(null);
 
-		assert.deepEqual(anonymousAccess(resultsOf(outcome)), outcome);
+		assert.deepEqual(anonymousAccess(mapsOf(outcome)), outcome);
 		await core.stop();
 	});
 
@@ -168,13 +174,13 @@ suite('the testing surface', () => {
 		harness.issue(credential, payloadFor('05', 'subject-ana'));
 		const outcome = await harness.core.resolve(credential);
 
-		assert.deepEqual(signedInAccess('subject-ana', resultsOf(outcome)), outcome);
+		assert.deepEqual(signedInAccess('subject-ana', mapsOf(outcome)), outcome);
 		await harness.core.stop();
 	});
 
 	test('openTierAccess answers a credential never exchanged as the core does in uncertain mode', async () => {
 		const harness = await uncertain();
-		const open = resultsOf(await harness.core.resolve(null));
+		const open = mapsOf(await harness.core.resolve(null));
 		const outcome = await harness.core.resolve(signInToken({ sub: 'subject-new' }));
 
 		assert.deepEqual(openTierAccess(signInToken({ sub: 'subject-new' }), open), outcome);
@@ -187,7 +193,7 @@ suite('the testing surface', () => {
 		harness.issue(credential, payloadFor('05', 'subject-ana'));
 		await harness.core.resolve(credential);
 		harness.advanceMonotonic(60_001);
-		const open = resultsOf(await harness.core.resolve(null));
+		const open = mapsOf(await harness.core.resolve(null));
 		const outcome = await harness.core.resolve(credential);
 
 		assert.deepEqual(openTierAccess(credential, open, { attributionOnlySubject: 'subject-ana' }), outcome);
@@ -198,7 +204,7 @@ suite('the testing surface', () => {
 		const harness = await running();
 		const credential = signInToken({ sub: 'subject-ana' });
 		harness.answers.set(credential, { cause: 'timeout', kind: 'failed' });
-		const open = resultsOf(await harness.core.resolve(null));
+		const open = mapsOf(await harness.core.resolve(null));
 		const outcome = await harness.core.resolve(credential);
 
 		assert.deepEqual(openTierAccess(credential, open), outcome);
@@ -209,38 +215,63 @@ suite('the testing surface', () => {
 		const harness = await uncertain();
 		const outcome = await harness.core.resolve(null);
 
-		assert.deepEqual(openTierAccess(null, resultsOf(outcome)), outcome);
-		assert.deepEqual(anonymousAccess(resultsOf(outcome)), outcome);
+		assert.deepEqual(openTierAccess(null, mapsOf(outcome)), outcome);
+		assert.deepEqual(anonymousAccess(mapsOf(outcome)), outcome);
 		await harness.core.stop();
 	});
 
 	test("freezes the access it answers and leaves the caller's results as they were", () => {
-		const results: Readonly<Record<string, Enforcement>> = {
-			records: { kind: 'deny', reason: 'no-grants' },
-		};
-		const given = structuredClone(results);
+		const maps = {
+			artifactCreate: { records: { kind: 'deny', reason: 'no-grants' } },
+			results: { records: { kind: 'deny', reason: 'no-grants' } },
+		} as const;
+		const given = structuredClone(maps);
 		const outcomes = [
 			anonymousAccess(given),
 			signedInAccess('subject-ana', given),
 			openTierAccess('credential', given),
 		];
 
-		assert.equal(Object.isFrozen(given), false);
-		assert.equal(Object.isFrozen(given.records), false);
-		assert.deepEqual(given, results);
+		assert.equal(Object.isFrozen(given.results), false);
+		assert.equal(Object.isFrozen(given.artifactCreate), false);
+		assert.equal(Object.isFrozen(given.results.records), false);
+		assert.deepEqual(given, maps);
 		outcomes.forEach((outcome) => {
-			assert.equal(outcome.kind === 'access' && Object.isFrozen(outcome.access.results), true);
+			assert.equal(
+				outcome.kind === 'access' &&
+					Object.isFrozen(outcome.access.results) &&
+					Object.isFrozen(outcome.access.artifactCreate),
+				true,
+			);
+		});
+	});
+
+	test('carries each map given into the access under its own name, artifactCreate beside results', () => {
+		const artifactCreate: Readonly<Record<string, Enforcement>> = { records: { kind: 'allow' } };
+		const results: Readonly<Record<string, Enforcement>> = { records: { kind: 'deny', reason: 'no-grants' } };
+
+		const outcome = signedInAccess('subject-ana', { artifactCreate, results });
+
+		assert.deepEqual(outcome, {
+			access: {
+				artifactCreate,
+				principal: { credential: 'confirmed', openTierOnly: false, subject: 'subject-ana', suspended: false },
+				results,
+				version: 1,
+			},
+			kind: 'access',
 		});
 	});
 
 	test("types each outcome as one carrying access, read with no narrowing, and standing wherever a core's outcome does", () => {
-		const results: Readonly<Record<string, Enforcement>> = {
-			records: { kind: 'deny', reason: 'no-grants' },
-		};
+		const maps = {
+			artifactCreate: { records: { kind: 'deny', reason: 'no-grants' } },
+			results: { records: { kind: 'deny', reason: 'no-grants' } },
+		} as const;
 		const outcomes = [
-			anonymousAccess(results),
-			signedInAccess('subject-ana', results),
-			openTierAccess('credential', results),
+			anonymousAccess(maps),
+			signedInAccess('subject-ana', maps),
+			openTierAccess('credential', maps),
 		];
 		// Each line compiles only if the function's result carries `access` without narrowing, and stands as a
 		// `ResolveOutcome`: the typecheck is the test, the values only confirm it at run time.

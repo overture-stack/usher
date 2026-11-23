@@ -30,8 +30,8 @@ and the workspace's version is set below.
 - The host creates the Bridge, mounts its middleware synchronously, and then awaits an asynchronous
   start.
 - Until the start completes, the middleware answers 503 as the cold mode, before any read path.
-- A CI step `require()`s and `import()`s the packed tarballs, to catch a dependency that later adds
-  top-level await.
+- `pnpm check:pack`, run as the `check:pack` stage of the Jenkins job, `require()`s and `import()`s
+  the packed tarballs, to catch a dependency that later adds top-level await.
 - Every cache and the revocation channel live in one instance created by the host, never in module
   state.
 - The Bridge refuses to start a second instance for the same audience in one process. A duplicate,
@@ -76,10 +76,10 @@ and the workspace's version is set below.
   into a build failure. Neither committed tsdown configuration sets it, so only the check on the
   packed JavaScript below catches an inlined dependency.
 - No public declaration names `CryptoKey` or a jose type.
-- A CI check confirms that the packed Bridge's JavaScript imports `jose` and
+- `pnpm check:pack` confirms that the packed Bridge's JavaScript imports `jose` and
   `@overture-stack/usher-types` and holds neither's code.
-- A CI check confirms that the packed Bridge's declarations mention neither `jose` nor `CryptoKey`,
-  and import only names they use.
+- `pnpm check:pack` confirms that the packed Bridge's declarations mention neither `jose` nor
+  `CryptoKey`, and import only names they use.
 - `usher-types` is a peer dependency of the Bridge, never a regular dependency, so the Bridge uses
   the copy provided by the host's install rather than a copy of its own. The peer keeps one copy of the
   contract and of `SqonSchema` in a host.
@@ -148,6 +148,26 @@ and the workspace's version is set below.
   adapter-integration.md states, and also for a member of any other shape.
 - `resultFor(access, key)` reads results by own member only.
 - The Bridge deep-freezes rendered results before caching them.
+- A published prerelease Bridge, `0.0.0-alpha.1` or `0.0.1-beta.1`, and a consumer on a `usher-types`
+  carrying `artifactCreate` must not be mixed. The validator refuses a value with a member it does not
+  list, so the consumer refuses the older Bridge's access, which carries no `artifactCreate`, and an
+  older `usher-types` refuses the newer Bridge's, which carries one.
+
+#### The Bridge's testing entry
+
+The Bridge's `./testing` entry builds access outcomes for a consumer's tests, each as the core answers
+the state, with no running core. Three functions take the two maps of results as one argument:
+
+| function                                                            | answers                                                                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `anonymousAccess({ artifactCreate, results })`                      | a request presenting no credential                                                                                 |
+| `signedInAccess(subject, { artifactCreate, results }, options?)`    | a confirmed principal served in normal mode; `options` sets `openTierOnly`                                         |
+| `openTierAccess(credential, { artifactCreate, results }, options?)` | a credential the core serves in uncertain mode, or whose exchange failed; `options` names `attributionOnlySubject` |
+
+Both maps are required, with no defaults: `artifactCreate` and `results` each hold one enforcement
+result for each key the adapter registers, and the same keys in each. The functions copy both maps,
+so the caller's objects stay as they were, and the outcome they return is frozen as the core freezes
+one.
 
 ### Errors and logs
 
@@ -174,7 +194,8 @@ and the workspace's version is set below.
 
 - The grace period and the poll deadline run on an injected monotonic clock alone, with no
   wall-clock comparison, as the [core note](core-and-express-layer.md#time) sets out. Comparisons
-  with `exp` keep the wall clock.
+  with a sign-in token's `exp` keep the wall clock; an Usher token's `exp` is read on the
+  Controller's clock, as the [jose note](jose-usher-token.md) sets out.
 - On Linux and macOS a monotonic clock does not advance while the host is suspended. After a resume
   the Bridge stays in normal mode although more than the grace period of wall time may have passed
   since its last check, and it honours grants until its next check or until the grace period has
@@ -380,7 +401,8 @@ above in four variants.
 - `onlyBundle` checks only packages under `node_modules`. A workspace package resolved through
   TypeScript `paths` lies outside it: with `usher-types` undeclared and mapped to its source, the build
   under `onlyBundle: []` inlined that source and exited 0. Declared as a regular dependency,
-  `usher-types` stayed an import. The CI check on the Bridge's JavaScript covers that gap.
+  `usher-types` stayed an import. The check on the Bridge's JavaScript in `pnpm check:pack` covers
+  that gap.
 
 ### What follows from it
 
@@ -593,8 +615,8 @@ After the first five attempts, the value read back was the original.
 - **The freeze must be deep, and its test must look deep.** `attachAccess` attaches the fresh
   snapshot returned by its validator rather than a cached object, and rendered results are deep-frozen
   before caching, so one request's change can never reach the shared anonymous entry. The "frozen"
-  assertion in [bridge-tests.md](../../bridge-tests.md#the-express-layer) must check `results` and
-  every SQON node.
+  assertion in [bridge-tests.md](../../bridge-tests.md#the-express-layer) must check `results`,
+  `artifactCreate` and every SQON node.
   A top-level `Object.isFrozen` check passes against a shallow freeze, and the inversion row that
   attaches the access unfrozen would then prove nothing about nested values.
 

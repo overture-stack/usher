@@ -335,16 +335,16 @@ GET    /admin/resources/{id}/grants  every grant on this resource: holder, categ
 # Grant management
 GET    /admin/audit                  audit log query interface
 POST   /admin/grants                 create a grant (resource, category, holder, role, expiry)
-DELETE /admin/grants/{id}            revoke grant
+DELETE /admin/grants/{grantId}            revoke grant
 POST   /admin/grants/self            self-grant endpoint (enforces TTL; sets self_grant flag)
-POST   /admin/grants/{id}/decisions  the recipient's own answer, appended (accept or decline)
+POST   /admin/grants/{grantId}/decisions  the recipient's own answer, appended (accept or decline)
 
 # Service accounts
 POST   /admin/service-accounts       register a service account
 PUT    /admin/service-accounts/{id}  update service account permissions
 ```
 
-**Grant acceptance.** `POST /admin/grants/{id}/decisions` is called by the recipient, never by an
+**Grant acceptance.** `POST /admin/grants/{grantId}/decisions` is called by the recipient, never by an
 admin, and appends a row to `grant_decisions` carrying their answer and the capabilities they were
 shown. It fires an Usher token refresh for that user. The endpoint validates that the principal
 asking is the grant's recipient. Nothing about the grant itself changes: a later answer is another

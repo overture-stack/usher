@@ -90,7 +90,7 @@ const FIXTURE: PolicyFixture = {
 		{
 			capabilities: ['record.view'],
 			decidedAt: new Date('2026-10-01T12:00:00Z'),
-			decision: 'rejected',
+			decision: 'declined',
 			grant: 'cyViewed',
 		},
 		{ decision: 'accepted', grant: 'readersView', person: 'bo' },
@@ -317,7 +317,7 @@ suite('seeding policy by SQL', () => {
 			[
 				{
 					capabilities: ['record.view'],
-					decision: 'rejected',
+					decision: 'declined',
 					grant_id: seeded.grants['cyViewed'],
 					user_id: seeded.users['cy'],
 				},
@@ -1189,7 +1189,7 @@ suite('fixtures combined', () => {
 				users: { ana: { subject: 'ana-1' } },
 			},
 			{
-				decisions: [{ decision: 'rejected', grant: 'second' }],
+				decisions: [{ decision: 'declined', grant: 'second' }],
 				resources: { 'STUDY-A1': { baseTier: 'grant', name: 'Second' } },
 				users: { bo: { subject: 'bo-1' } },
 			},

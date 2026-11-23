@@ -16,6 +16,12 @@ them with the Bridge's own type.
 in `expectations.json`. The split matters because the two answer different questions of different
 systems, and one file cannot hold both.
 
+`artifact-create-expectations.json` holds the same kind of expectations for the artifact-creation
+rule: which records a principal may create an artifact from, for one payload and one key. Its
+cases carry their payloads inline rather than naming an entry here, so `principals.json` and the
+suites that count its entries are unchanged. Its rule is stated in its `about` member, and
+`rendering.artifactCreate.conformance.test.ts` checks each record against it.
+
 ## Where the entries come from
 
 Every entry traces to a numbered case in

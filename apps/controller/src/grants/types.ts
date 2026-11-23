@@ -118,7 +118,7 @@ export type GrantChangeJudgement =
 
 /** A decision on a grant request, as read from its body. */
 export interface GrantRequestDecision {
-	decision: 'granted' | 'refused';
+	decision: 'granted' | 'declined';
 }
 
 /** The grant request listing's page, as read from its query. */
@@ -167,7 +167,7 @@ export interface GrantAnswer {
 	/** The capabilities shown to the holder, as sent. */
 	capabilities: readonly string[];
 
-	decision: 'accepted' | 'rejected';
+	decision: 'accepted' | 'declined';
 }
 
 /** A revocation as read from its body. */
@@ -228,7 +228,7 @@ export interface StoredDecision {
 	capabilities: readonly string[];
 
 	decidedAt: Date;
-	decision: 'accepted' | 'rejected';
+	decision: 'accepted' | 'declined';
 }
 
 /** A capability as the principal's own listing shows what a grant would let them use. */
@@ -290,7 +290,7 @@ export interface ViewedGrantRequest {
 	/** When it was decided; `null` while undecided. */
 	decidedAt: Date | null;
 
-	decision: 'granted' | 'refused' | null;
+	decision: 'granted' | 'declined' | null;
 
 	/** When the grant would end, and when the request lapses while undecided. */
 	expiresAt: Date;
@@ -358,9 +358,9 @@ export interface NewRequestDecision {
 	/** The person deciding. */
 	decidedBy: string;
 
-	decision: 'granted' | 'refused';
+	decision: 'granted' | 'declined';
 
-	/** The grant written by granting the request; `null` for a refusal. */
+	/** The grant written by granting the request; `null` for a decline. */
 	grantId: string | null;
 
 	requestId: string;
@@ -441,7 +441,7 @@ export interface NewDecision {
 	/** What the holder was shown, as `entity.action` names. */
 	capabilities: readonly string[];
 
-	decision: 'accepted' | 'rejected';
+	decision: 'accepted' | 'declined';
 	grantId: string;
 
 	/**

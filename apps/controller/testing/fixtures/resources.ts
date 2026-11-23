@@ -140,7 +140,7 @@ const BASE_FIXTURE = {
 	},
 	decisions: [
 		{ decision: 'accepted', grant: 'anaOwnsA1' },
-		{ decidedAt: daysAgo(2), decision: 'rejected', grant: 'cy2DeclinedA1' },
+		{ decidedAt: daysAgo(2), decision: 'declined', grant: 'cy2DeclinedA1' },
 		{ decision: 'accepted', grant: 'danaOwnsB2' },
 		{ decision: 'accepted', grant: 'eliViewsA1' },
 		{ decidedAt: daysAgo(2), decision: 'accepted', grant: 'emileViewedA1' },

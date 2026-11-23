@@ -39,10 +39,20 @@ erDiagram
     uuid nominated_by FK
     timestamptz nominated_at
   }
+  nomination_declines {
+    uuid nomination_id PK, FK
+    timestamptz declined_at
+  }
+  nomination_revocations {
+    uuid nomination_id PK, FK
+    timestamptz revoked_at
+  }
   nominations ||--o{ administrators : "nomination_id, user_id"
   users ||--o| administrators : "user_id"
   users ||--o{ nominations : "nominated_by"
   users ||--o{ nominations : "nominee_id"
+  nominations ||--o| nomination_declines : "nomination_id"
+  nominations ||--o| nomination_revocations : "nomination_id"
 ```
 
 ## Groups
@@ -196,6 +206,7 @@ erDiagram
     timestamptz revoked_at "nullable"
     uuid revoked_by FK "nullable"
     timestamptz ended_at "nullable"
+    uuid requested_by FK "nullable"
   }
   grant_decisions {
     uuid id PK
@@ -204,6 +215,29 @@ erDiagram
     text decision
     text_array capabilities
     timestamptz decided_at
+  }
+  grant_requests {
+    uuid id PK
+    text kind
+    uuid requested_by FK
+    uuid holder_user_id FK
+    uuid resource_id FK
+    uuid record_category_id FK "nullable"
+    uuid role_id FK
+    timestamptz expires_at
+    text_array capabilities
+    timestamptz requested_at
+    uuid decided_by FK "nullable"
+    timestamptz decided_at "nullable"
+    text decision "nullable"
+    uuid grant_id FK "nullable"
+  }
+  grant_operations {
+    uuid id PK
+    text idp_issuer
+    text idp_subject_id
+    timestamptz occurred_at
+    timestamptz expires_at
   }
   invitations {
     uuid id PK
@@ -222,11 +256,19 @@ erDiagram
   groups |o--o{ grants : "holder_group_id, resource_id"
   users |o--o{ grants : "holder_user_id"
   categories |o--o{ grants : "record_category_id"
+  users |o--o{ grants : "requested_by"
   resources ||--o{ grants : "resource_id"
   users |o--o{ grants : "revoked_by"
   roles ||--o{ grants : "role_id"
   grants ||--o{ grant_decisions : "grant_id"
   users ||--o{ grant_decisions : "user_id"
+  users |o--o{ grant_requests : "decided_by"
+  grants |o--o{ grant_requests : "grant_id"
+  users ||--o{ grant_requests : "holder_user_id"
+  categories |o--o{ grant_requests : "record_category_id"
+  users ||--o{ grant_requests : "requested_by"
+  resources ||--o{ grant_requests : "resource_id"
+  roles ||--o{ grant_requests : "role_id"
   categories |o--o{ invitations : "field_category_id"
   users ||--o{ invitations : "invited_by"
   categories |o--o{ invitations : "record_category_id"
@@ -302,14 +344,22 @@ erDiagram
   notification_outbox {
     uuid id PK
     text kind
-    uuid grant_id FK
+    uuid grant_id FK "nullable"
     uuid recipient_user_id FK
     timestamptz created_at
     timestamptz delivered_at "nullable"
+    uuid request_id FK "nullable"
+  }
+  used_channel_assertions {
+    uuid application_id PK, FK
+    text assertion_id PK
+    timestamptz accepted_until
   }
   applications |o--o{ notices : "audience"
-  grants ||--o{ notification_outbox : "grant_id"
+  grants |o--o{ notification_outbox : "grant_id"
   users ||--o{ notification_outbox : "recipient_user_id"
+  grant_requests |o--o{ notification_outbox : "request_id"
+  applications ||--o{ used_channel_assertions : "application_id"
 ```
 
 ## Audit and change records

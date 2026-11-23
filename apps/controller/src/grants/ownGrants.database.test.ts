@@ -41,7 +41,7 @@ const PAST = new Date(Date.now() - 2 * HOUR_MS);
 // a viewer grant from Ana on STUDY-A1, accepted, and one on STUDY-B2, revoked.
 const OWN_GRANTS = grantsFixture({
 	decisions: [
-		answeredInFixture('cyDeclined', 'rejected'),
+		answeredInFixture('cyDeclined', 'declined'),
 		answeredInFixture('cyCurates'),
 		answeredInFixture('cyRevoked'),
 		answeredInFixture('cyRetired'),
@@ -139,7 +139,7 @@ suite("a principal's own grants, in the store", () => {
 						id: grantIdOf(harness, 'cyDeclined'),
 						resource: STUDY_A1,
 						role: 'submitter',
-						state: GRANT_STATES.rejected,
+						state: GRANT_STATES.declined,
 					},
 					{
 						id: grantIdOf(harness, 'cyCurates'),

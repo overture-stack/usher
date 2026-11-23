@@ -50,7 +50,7 @@ export const PROBLEMS = Object.freeze({
 		'noAdministratorYet',
 		403,
 		'No administrator yet',
-		"Usher has no administrator yet, and answers only the first administrator's nomination and acceptance until one accepts: the first user nominates an administrator through POST /admin/nominations, and the nominee accepts through POST /admin/nominations/{id}/acceptance.",
+		"Usher has no administrator yet, and answers only the first administrator's nomination until one accepts: the first user nominates through POST /admin/nominations, lists every nomination through GET /admin/nominations and revokes one through DELETE /admin/nominations/{nominationId}; the nominee answers through POST /admin/nominations/{nominationId}/decisions, and lists the nominations naming them through GET /admin/me/nominations.",
 	),
 	notFirstUser: problem(
 		'notFirstUser',

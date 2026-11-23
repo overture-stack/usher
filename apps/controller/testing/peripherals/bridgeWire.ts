@@ -14,7 +14,7 @@ import {
 	validatePollAnswer,
 } from '@overture-stack/usher-types';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
-import { compactDecrypt, decodeProtectedHeader, jwtDecrypt, SignJWT } from 'jose';
+import { compactDecrypt, decodeProtectedHeader, type JWTDecryptOptions, jwtDecrypt, SignJWT } from 'jose';
 
 // Every export below reproduces the Bridge's side of the wire from its source,
 // under modules/bridge--express/src/core/, or modules/types/src/ for what usher-types keeps internal,
@@ -203,11 +203,12 @@ export const createChannelAssertion = ({
 
 /** What reading an Usher token resolves to. Follows `core.ts` `TokenReading`. */
 export type TokenReading =
-	{ kind: 'payload'; payload: PermissionsPayload } | { kind: 'rejected'; reason: TokenRejectionReason };
+	| { kind: 'payload'; payload: PermissionsPayload; remainingMs: number }
+	| { kind: 'rejected'; reason: TokenRejectionReason };
 
 /** Reads an Usher token, from its header to the payload validator. Follows `core.ts` `TokenReader`. */
 export interface TokenReader {
-	read(token: string): Promise<TokenReading>;
+	read(token: string, options: { transitMs: number }): Promise<TokenReading>;
 }
 
 /** What the token reader needs. Follows `tokenReader.ts` `TokenReaderOptions`. */
@@ -236,6 +237,16 @@ const REASONS_BY_CODE: ReadonlyMap<unknown, TokenRejectionReason> = new Map([
 	['ERR_JWT_INVALID', 'claimsNotObject'],
 ] as const);
 
+/** The checks both decryptions make, stated once. Follows `tokenReader.ts` `DECRYPTION_CHECKS`. */
+const DECRYPTION_CHECKS = {
+	contentEncryptionAlgorithms: ['A256GCM'],
+	keyManagementAlgorithms: ['dir'],
+	maxDecompressedLength: 0,
+} satisfies JWTDecryptOptions;
+
+/** The most a token's `iat` can trail the Controller's clock. Follows `tokenReader.ts` `IAT_FLOOR_MS`. */
+const IAT_FLOOR_MS = 1_000;
+
 const PAYLOAD_READERS: ReadonlyMap<unknown, typeof validatePayload> = new Map([[PAYLOAD_VERSION, validatePayload]]);
 
 const rejected = (reason: TokenRejectionReason): TokenReading => ({
@@ -262,23 +273,50 @@ const isAudienceRefusal = (error: unknown): boolean =>
 const reasonOf = (error: unknown): TokenRejectionReason =>
 	isAudienceRefusal(error) ? 'audienceRejected' : (REASONS_BY_CODE.get(ownValue(error, 'code')) ?? 'unexpected');
 
-const readPayload = (payload: Readonly<Record<string, unknown>>, payloadVersions: readonly number[]): TokenReading => {
+/** The latest the Controller's clock can be at receipt, in ms. Follows `tokenReader.ts`. */
+const controllerTimeAtReceiptMs = (iatSeconds: number, transitMs: number): number =>
+	iatSeconds * 1000 + IAT_FLOOR_MS + transitMs;
+
+/** The `iat`, in seconds, of a token whose plaintext is a JSON object with a finite numeric one. */
+const issuedAtOf = (plaintext: Uint8Array): number | undefined => {
+	try {
+		const claims: unknown = JSON.parse(new TextDecoder().decode(plaintext));
+		const iat = ownValue(claims, 'iat');
+		return typeof iat === 'number' && Number.isFinite(iat) ? iat : undefined;
+	} catch {
+		return undefined;
+	}
+};
+
+const readPayload = (
+	payload: Readonly<Record<string, unknown>>,
+	payloadVersions: readonly number[],
+	transitMs: number,
+): TokenReading => {
 	const version = payload['payloadVersion'];
 	const reader = payloadVersions.some((listed) => listed === version) ? PAYLOAD_READERS.get(version) : undefined;
 	if (reader === undefined) {
 		return rejected('payloadVersionUnlisted');
 	}
 	const result = reader(payload);
-	return result.success ? { kind: 'payload', payload: result.payload } : rejected('payloadMalformed');
+	return result.success
+		? {
+				kind: 'payload',
+				payload: result.payload,
+				remainingMs: result.payload.exp * 1000 - controllerTimeAtReceiptMs(result.payload.iat, transitMs),
+			}
+		: rejected('payloadMalformed');
 };
 
 /**
  * Creates a token reader that reads an Usher token as the Bridge does. Before jose reads anything,
  * `typ` must be exactly `usher+jwt` and the protected header may carry only `alg`, `enc` and `typ`.
- * `jwtDecrypt` then runs with `dir` and A256GCM alone, no decompression, every payload member
- * required, the audience and issuer pinned, and a clock tolerance of 0 against the wall clock; the
- * payload goes to usher-types' `validatePayload` when its `payloadVersion` is one listed. Every
- * failure becomes the reason code the Bridge logs. Follows `tokenReader.ts` `createTokenReader`.
+ * `compactDecrypt` and then `jwtDecrypt` run with `dir` and A256GCM alone, no decompression, every
+ * payload member required, the audience and issuer pinned, and a clock tolerance of 0 against the
+ * Controller's clock bound (iat, one second and transit). The wall clock stands in for the bound only
+ * when iat is absent. The payload goes to usher-types' `validatePayload` when its `payloadVersion` is
+ * one listed. Every failure becomes the reason code the Bridge logs. Follows `tokenReader.ts`
+ * `createTokenReader`.
  *
  * @param options the audience, issuer and payload versions, the token key, and the wall clock.
  */
@@ -289,7 +327,7 @@ export const createTokenReader = ({
 	tokenKey,
 	wallClock,
 }: TokenReaderOptions): TokenReader => ({
-	read: async (token) => {
+	read: async (token, { transitMs }) => {
 		const header = protectedHeaderOf(token);
 		if (header === undefined) {
 			return rejected('headerUnreadable');
@@ -301,18 +339,23 @@ export const createTokenReader = ({
 			return rejected('headerMember');
 		}
 		try {
+			// Both decryptions take `DECRYPTION_CHECKS`, the same algorithm allowlists and compression
+			// refusal. The first's result is used for nothing but its `iat`; the second is the checked read.
+			const { plaintext } = await compactDecrypt(token, tokenKey, DECRYPTION_CHECKS);
+			const issuedAt = issuedAtOf(plaintext);
+			const currentDate = new Date(
+				issuedAt === undefined ? wallClock.now() : controllerTimeAtReceiptMs(issuedAt, transitMs),
+			);
 			const { payload } = await jwtDecrypt(token, tokenKey, {
+				...DECRYPTION_CHECKS,
 				audience,
 				clockTolerance: 0,
-				contentEncryptionAlgorithms: ['A256GCM'],
-				currentDate: new Date(wallClock.now()),
+				currentDate,
 				issuer,
-				keyManagementAlgorithms: ['dir'],
-				maxDecompressedLength: 0,
 				requiredClaims: [...PAYLOAD_MEMBER_NAMES],
 				typ: USHER_TOKEN_TYPE,
 			});
-			return readPayload(payload, payloadVersions);
+			return readPayload(payload, payloadVersions, transitMs);
 		} catch (error) {
 			return rejected(reasonOf(error));
 		}

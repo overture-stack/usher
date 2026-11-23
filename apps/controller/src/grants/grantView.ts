@@ -4,7 +4,7 @@ import type { PeopleNaming } from './listedPeople.js';
 import type { ListedCapability, ViewedGrant } from './types.js';
 
 /** A grant's state, as an answer names it. */
-export type GrantState = 'accepted' | 'expired' | 'pending' | 'rejected' | 'revoked';
+export type GrantState = 'accepted' | 'declined' | 'expired' | 'pending' | 'revoked';
 
 const instantOrNull = (instant: Date | null): string | null =>
 	instant === null ? null : eventInstant(instant.getTime());
@@ -12,7 +12,7 @@ const instantOrNull = (instant: Date | null): string | null =>
 /**
  * A grant's state on the configured clock: `revoked` once revoked; `expired` once its expiry has
  * passed or a grant on its terms has replaced it; otherwise its holder's latest decision,
- * `accepted` or `rejected`, and `pending` while there is none.
+ * `accepted` or `declined`, and `pending` while there is none.
  *
  * @param grant the grant's ends and its latest decision.
  * @param now the configured clock's instant, in milliseconds since the Unix epoch.

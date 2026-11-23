@@ -61,7 +61,7 @@ export interface OrphanedResourceAsking {
  * its terms, and 409 `alreadyRequested` a request of the asker's for the holder on its terms
  * that is undecided and has not lapsed; writes the request undecided, keeping what the role confers
  * then as what was shown; and records `grant.request` at warning, naming the holder's subject as
- * `granteeId` and the request's kind. No owner is told of it, the resource having none. It answers
+ * `granteeSubject` and the request's kind. No owner is told of it, the resource having none. It answers
  * 202 with the request.
  *
  * @param grants the grant store, on the change's connection.
@@ -104,7 +104,7 @@ export const askForOrphanedResource = async (
 		data: {
 			category: category?.scopedName ?? null,
 			expiresAt: eventInstant(expiresAt.getTime()),
-			granteeId: holderSubject,
+			granteeSubject: holderSubject,
 			kind: 'orphanedResource',
 			requestId,
 			resourceId: resource.externalId,

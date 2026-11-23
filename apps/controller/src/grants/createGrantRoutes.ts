@@ -105,7 +105,7 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
  * held by no single account is answered as addressedAnswer decides, and a directory resolving
  * nothing as {@link unresolvedByDirectory} decides.
  *
- * Answering a grant, `POST /admin/grants/{id}/decisions`, reads its body with {@link
+ * Answering a grant, `POST /admin/grants/{grantId}/decisions`, reads its body with {@link
  * readGrantAnswer}. Only the grant's holder answers it, the person holding the caller's identity
  * under the trusted issuer: anyone else, and an id naming no grant held by a person, malformed or
  * not, is answered 404 `grantNotFound` alike. A grant no longer live is refused 409 `doesNotHold`;
@@ -115,7 +115,7 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
  * role's capabilities, each later than the holder's latest answer to the grant, and recorded as
  * `grant.decision`; the grant itself is left as it is, and the answer is 204.
  *
- * Revoking a grant, `DELETE /admin/grants/{id}`, reads its body with {@link readGrantRevocation}. A
+ * Revoking a grant, `DELETE /admin/grants/{grantId}`, reads its body with {@link readGrantRevocation}. A
  * platform administrator revokes any grant, and a counted owner of its resource any grant on it;
  * anyone else, and an id naming no grant held by a person, malformed or empty, is answered 404
  * `grantNotFound` alike. A grant revoked already is refused 409 `doesNotHold`, keeping its first
@@ -147,7 +147,7 @@ export const createGrantRoutes = (
 	const { clock, databaseSchema } = settings;
 	const recordedWith = countedWithRefusal(operations);
 	const namedGrant = async ({ params }: NamedByRequest): Promise<EventMembers> => {
-		const grantId = params['id'] ?? '';
+		const grantId = params['grantId'] ?? '';
 		if (!STORED_ID_FORM.test(grantId)) {
 			return {};
 		}
@@ -356,9 +356,9 @@ export const createGrantRoutes = (
 		event: { named: namedGrant, recordedWith, type: 'grant.decision' },
 		method: 'POST',
 		readInput: (body) => readGrantAnswer(body ?? {}),
-		route: '/admin/grants/{id}/decisions',
+		route: '/admin/grants/{grantId}/decisions',
 		run: async ({ input, params, principal, sourceIp }) => {
-			const grantId = params['id'] ?? '';
+			const grantId = params['grantId'] ?? '';
 			if (!STORED_ID_FORM.test(grantId)) {
 				return refused(GRANT_PROBLEMS.grantNotFound);
 			}
@@ -383,7 +383,7 @@ export const createGrantRoutes = (
 						refuseWithin(GRANT_PROBLEMS.capabilitiesDiffer);
 					}
 					if (
-						input.decision === 'rejected' &&
+						input.decision === 'declined' &&
 						isCountedOwnerGrant(grant, now.getTime()) &&
 						(await grants.countedOwnersBesides({
 							grantId,
@@ -427,9 +427,9 @@ export const createGrantRoutes = (
 		event: { named: namedGrant, recordedWith, type: 'grant.revocation' },
 		method: 'DELETE',
 		readInput: readGrantRevocation,
-		route: '/admin/grants/{id}',
+		route: '/admin/grants/{grantId}',
 		run: async ({ input, params, principal, sourceIp }) => {
-			const grantId = params['id'] ?? '';
+			const grantId = params['grantId'] ?? '';
 			if (!STORED_ID_FORM.test(grantId)) {
 				return refused(GRANT_PROBLEMS.grantNotFound);
 			}
@@ -473,7 +473,7 @@ export const createGrantRoutes = (
 						data: {
 							category: grant.category,
 							grantId,
-							granteeId: grant.holderSubject,
+							granteeSubject: grant.holderSubject,
 							reason: input.reason,
 							resourceId: grant.resource,
 							result: 'succeeded',

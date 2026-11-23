@@ -157,6 +157,7 @@ suite('createEventLog', () => {
 		['notice.applied', { entriesDropped: 2, kind: 'principal' }, 'info'],
 		['token.overtaken', { outcome: 'exchangedAgain' }, 'info'],
 		['token.exchangeFailure', { cause: 'timeout' }, 'warn'],
+		['token.exchangeFailure', { cause: 'defect' }, 'warn'],
 		[
 			'category.unmapped',
 			{
@@ -168,6 +169,7 @@ suite('createEventLog', () => {
 		],
 		['category.unmapped', { catalogue: 'files', category: 'global.controlled' }, 'error'],
 		['category.unknown', { catalogue: 'files', category: 'global.embargoed' }, 'warn'],
+		['bridge.internalError', { stage: 'answer' }, 'error'],
 		['bridge.internalError', { stage: 'resolve' }, 'error'],
 		['revocationChannel.modeChange', { fromMode: 'uncertain', reason: 'checkConfirmed', toMode: 'normal' }, 'info'],
 		[
@@ -180,8 +182,8 @@ suite('createEventLog', () => {
 			{ fromMode: 'normal', reason: 'anonymousPayloadMissing', toMode: 'cold' },
 			'error',
 		],
-		['catalogue.renderingMismatch', { catalogue: 'files' }, 'error'],
-		['catalogue.filterLimit', { catalogue: 'files', filterClauseLimit: 1_024 }, 'error'],
+		['catalogue.renderingMismatch', { capability: 'record.view', catalogue: 'files' }, 'error'],
+		['catalogue.filterLimit', { capability: 'record.view', catalogue: 'files', filterClauseLimit: 1_024 }, 'error'],
 	] as const) {
 		test(`logs ${name} at ${level}, the level its severity maps to`, () => {
 			const logger = recordingLogger();
@@ -443,7 +445,7 @@ suite('createEventLog', () => {
 		);
 	});
 
-	test('carries the principal of an unenforced grant as userId, a null subject included', () => {
+	test('carries the principal of an unenforced grant as userSubject, a null subject included', () => {
 		const logger = recordingLogger();
 		const events = createEventLog({
 			logger,
@@ -457,7 +459,7 @@ suite('createEventLog', () => {
 			payloadVersion: 1,
 			reason: 'notImplemented',
 			resourceId: 'HEART_STUDY',
-			userId: null,
+			userSubject: null,
 		});
 
 		assert.deepEqual(logger.lines[0]?.object['data'], {
@@ -468,7 +470,7 @@ suite('createEventLog', () => {
 			payloadVersion: 1,
 			reason: 'notImplemented',
 			resourceId: 'HEART_STUDY',
-			userId: null,
+			userSubject: null,
 		});
 	});
 

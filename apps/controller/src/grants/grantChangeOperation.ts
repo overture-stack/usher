@@ -30,7 +30,7 @@ const changeEvents = (
 		endAfter: instantOrNull(judgement.expiresAt),
 		endBefore: instantOrNull(grant.expiresAt),
 		grantId: grant.id,
-		granteeId: grant.holderSubject,
+		granteeSubject: grant.holderSubject,
 		resourceId: grant.resource,
 		result: 'succeeded',
 		sourceIp,
@@ -65,7 +65,7 @@ const changeEvents = (
 };
 
 /**
- * The operation changing a grant, `PATCH /admin/grants/{id}`, its body a JSON Merge Patch read with
+ * The operation changing a grant, `PATCH /admin/grants/{grantId}`, its body a JSON Merge Patch read with
  * {@link readGrantChange}; a service account is refused 403 `serviceAccountNotPermitted` before
  * anything is read. In one transaction, its resource's row locked against every other change's
  * first and then the grant's, it judges in turn: an id naming no grant held by a person, malformed
@@ -81,7 +81,7 @@ const changeEvents = (
  * were, so a widened role confers nothing more until they accept again, and its store writes a
  * principal notice naming the holder. It records `grant.extension` at info for an end moved later
  * or removed, and `grant.reduction` at warning for one moved earlier, each naming the grant as
- * `grantId`, the holder as `granteeId`, the resource, the category and both ends; and
+ * `grantId`, the holder as `granteeSubject`, the resource, the category and both ends; and
  * `grant.roleChange` for a role changed, naming the grant, at warning when it widens and at info
  * otherwise. A new role whose grant the holder holds on the same terms already is refused 409
  * `alreadyHolds`, and a change leaving a resource without its last owner 409
@@ -111,9 +111,9 @@ export const grantChangeOperation = (
 	},
 	method: 'PATCH',
 	readInput: (body) => readGrantChange(body ?? {}, settings.clock.now()),
-	route: '/admin/grants/{id}',
+	route: '/admin/grants/{grantId}',
 	run: async ({ input, params, principal, sourceIp }) => {
-		const grantId = params['id'] ?? '';
+		const grantId = params['grantId'] ?? '';
 		if (!STORED_ID_FORM.test(grantId)) {
 			return refused(GRANT_PROBLEMS.grantNotFound);
 		}

@@ -27,6 +27,10 @@ const PROTO = '__proto__';
 const SUBJECT = '8f14e45f-ceea-467a-9c1a-1b0e4d9c6f2b';
 
 const anonymousAccess = (): UsherRequestAccess => ({
+	artifactCreate: {
+		analyses: { kind: 'deny', reason: 'no-grants' },
+		files: { kind: 'allow' },
+	},
 	principal: { credential: 'none', openTierOnly: true, suspended: false },
 	results: {
 		analyses: { kind: 'deny', reason: 'no-grants' },
@@ -47,6 +51,11 @@ const anonymousAccess = (): UsherRequestAccess => ({
 });
 
 const signedInAccess = (): UsherRequestAccess => ({
+	artifactCreate: {
+		analyses: { kind: 'allow' },
+		files: { kind: 'allow' },
+		reference: { kind: 'allow' },
+	},
 	principal: {
 		credential: 'confirmed',
 		openTierOnly: false,
@@ -138,7 +147,10 @@ suite('validateRequestAccess', () => {
 
 		for (const key of ['constructor', 'toString', 'hasOwnProperty']) {
 			test(`accepts a result key named ${key}, since a key is the adapter's own name`, () => {
-				const access = withMembers({ results: { [key]: { kind: 'allow' } } });
+				const access = withMembers({
+					artifactCreate: { [key]: { kind: 'allow' } },
+					results: { [key]: { kind: 'allow' } },
+				});
 
 				const result = validateRequestAccess(access);
 
@@ -174,6 +186,14 @@ suite('validateRequestAccess', () => {
 			const result = validateRequestAccess(access);
 
 			assertRefusedFor(result, 'principal', REQUEST_ACCESS_RULES.principalIsMap);
+		});
+
+		test('refuses a value missing artifactCreate', () => {
+			const access = withoutMember('artifactCreate');
+
+			const result = validateRequestAccess(access);
+
+			assertRefusedFor(result, 'artifactCreate', REQUEST_ACCESS_RULES.artifactCreate);
 		});
 
 		test('refuses a value missing results', () => {
@@ -361,6 +381,70 @@ suite('validateRequestAccess', () => {
 		});
 	});
 
+	suite('the artifactCreate', () => {
+		test('refuses an empty artifactCreate map', () => {
+			const access = withMembers({ artifactCreate: {} });
+
+			const result = validateRequestAccess(access);
+
+			assertRefusedFor(result, 'artifactCreate', REQUEST_ACCESS_RULES.artifactCreate);
+		});
+
+		for (const [description, artifactCreate] of [
+			['a list', [{ kind: 'allow' }]],
+			['null', null],
+		] as const) {
+			test(`refuses artifactCreate that is ${description} rather than a map`, () => {
+				const access = withMembers({ artifactCreate });
+
+				const result = validateRequestAccess(access);
+
+				assertRefusedFor(result, 'artifactCreate', REQUEST_ACCESS_RULES.artifactCreate);
+			});
+		}
+
+		for (const key of ['', PROTO]) {
+			test(`refuses ${JSON.stringify(key)} as an artifactCreate key`, () => {
+				const access = throughJson(withMembers({ artifactCreate: { [key]: { kind: 'allow' } } }));
+
+				const result = validateRequestAccess(access);
+
+				assertRefusedFor(result, 'artifactCreate.<key>', REQUEST_ACCESS_RULES.resultKey);
+			});
+		}
+
+		test('refuses an artifactCreate holding a key results does not hold', () => {
+			const access = withMembers({
+				artifactCreate: { ...signedInAccess().artifactCreate, extra: { kind: 'allow' } },
+			});
+
+			const result = validateRequestAccess(access);
+
+			assertRefusedFor(result, 'artifactCreate', REQUEST_ACCESS_RULES.artifactCreateKeys);
+		});
+
+		test('refuses an artifactCreate missing a key results holds', () => {
+			const withoutReference = Object.fromEntries(
+				Object.entries(signedInAccess().artifactCreate).filter(([key]) => key !== 'reference'),
+			);
+			const access = withMembers({ artifactCreate: withoutReference });
+
+			const result = validateRequestAccess(access);
+
+			assertRefusedFor(result, 'artifactCreate', REQUEST_ACCESS_RULES.artifactCreateKeys);
+		});
+
+		test('refuses an artifactCreate result that is not an enforcement result', () => {
+			const access = withMembers({
+				artifactCreate: { ...signedInAccess().artifactCreate, files: { kind: 'deny' } },
+			});
+
+			const result = validateRequestAccess(access);
+
+			assertRefusedFor(result, 'artifactCreate.<key>.reason', ENFORCEMENT_RULES.denyReason);
+		});
+	});
+
 	suite('the results', () => {
 		test('refuses an empty results map', () => {
 			const access = withMembers({ results: {} });
@@ -461,6 +545,7 @@ suite('validateRequestAccess', () => {
 		const CONTRACT_WORDS: ReadonlySet<string> = new Set([
 			'',
 			PROTO,
+			'artifactCreate',
 			'attributionOnlySubject',
 			'confirmed',
 			'content',
@@ -498,6 +583,7 @@ suite('validateRequestAccess', () => {
 
 		/** A valid value in which every identifier and value carries the marker. */
 		const markedAccess = (): Record<string, unknown> => ({
+			artifactCreate: { [MARKED_KEY]: markedResult() },
 			principal: {
 				credential: 'confirmed',
 				openTierOnly: false,
@@ -644,6 +730,33 @@ suite('validateRequestAccess', () => {
 				}),
 				position: 'principal.suspended',
 				rule: REQUEST_ACCESS_RULES.suspendedServesOpenTier,
+			},
+			{
+				description: 'artifactCreate that is not a map',
+				input: markedWith({ artifactCreate: [markedResult()] }),
+				position: 'artifactCreate',
+				rule: REQUEST_ACCESS_RULES.artifactCreate,
+			},
+			{
+				description: 'an artifactCreate key results does not hold',
+				input: markedWith({
+					artifactCreate: {
+						[MARKED_KEY]: markedResult(),
+						[`${LEAK_MARKER}_other`]: markedResult(),
+					},
+				}),
+				position: 'artifactCreate',
+				rule: REQUEST_ACCESS_RULES.artifactCreateKeys,
+			},
+			{
+				description: 'an artifactCreate result holding a refused result',
+				input: markedWith({
+					artifactCreate: {
+						[MARKED_KEY]: { kind: 'deny', reason: `${LEAK_MARKER}_reason` },
+					},
+				}),
+				position: 'artifactCreate.<key>.reason',
+				rule: ENFORCEMENT_RULES.denyReason,
 			},
 			{
 				description: 'an empty result key',

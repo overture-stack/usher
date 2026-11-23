@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { suite, test } from 'node:test';
 
 import { type NonEmpty, type PermissionsPayload, validatePayload } from '@overture-stack/usher-types';
-import { SignJWT } from 'jose';
+import { CompactEncrypt, SignJWT } from 'jose';
 
 import { importApplicationKey, SUBKEY_LABELS } from './keys.js';
 import { mintUsherToken, subkeyBytes, TEST_KEY, TEST_KEY_BYTES } from './testTokens.js';
@@ -24,6 +24,9 @@ const ANA = { ...payloadFor('05'), sub: 'subject-ana' };
 const AUDIENCE = ANA.aud;
 const ISSUER = ANA.iss;
 
+/** The remaining life of ANA, read with no transit: its exp less its iat and one second. */
+const ANA_REMAINING_MS = (ANA.exp - ANA.iat) * 1000 - 1000;
+
 const readerAt = async (wallMs = ANA.iat * 1000, payloadVersions: NonEmpty<number> = [1]) =>
 	createTokenReader({
 		audience: AUDIENCE,
@@ -33,8 +36,12 @@ const readerAt = async (wallMs = ANA.iat * 1000, payloadVersions: NonEmpty<numbe
 		wallClock: { now: () => wallMs },
 	});
 
-const reasonFor = async (token: string, reader?: Awaited<ReturnType<typeof readerAt>>): Promise<unknown> => {
-	const reading = await (reader ?? (await readerAt())).read(token);
+const reasonFor = async (
+	token: string,
+	reader?: Awaited<ReturnType<typeof readerAt>>,
+	transitMs = 0,
+): Promise<unknown> => {
+	const reading = await (reader ?? (await readerAt())).read(token, { transitMs });
 	return reading.kind === 'rejected' ? reading.reason : 'accepted';
 };
 
@@ -42,27 +49,79 @@ suite('createTokenReader', () => {
 	test('reads a token the controller minted to the validated payload, sub included', async () => {
 		const reader = await readerAt();
 
-		const reading = await reader.read(await mintUsherToken(ANA));
+		const reading = await reader.read(await mintUsherToken(ANA), { transitMs: 0 });
 
-		assert.deepEqual(reading, { kind: 'payload', payload: ANA });
+		assert.deepEqual(reading, { kind: 'payload', payload: ANA, remainingMs: ANA_REMAINING_MS });
 	});
 
 	test('reads an anonymous token, keeping its null subject', async () => {
 		const reader = await readerAt();
 		const anonymous = payloadFor('02');
 
-		const reading = await reader.read(await mintUsherToken(anonymous));
+		const reading = await reader.read(await mintUsherToken(anonymous), { transitMs: 0 });
 
-		assert.deepEqual(reading, { kind: 'payload', payload: anonymous });
+		assert.deepEqual(reading, {
+			kind: 'payload',
+			payload: anonymous,
+			remainingMs: (anonymous.exp - anonymous.iat) * 1000 - 1000,
+		});
 	});
 
-	test('accepts a token 1 ms before its exp, and rejects it at that instant, with no tolerance', async () => {
+	test('measures expiry from iat plus one second plus transit, and rejects at that instant with no tolerance', async () => {
 		const token = await mintUsherToken(ANA);
+		const reader = await readerAt();
 
-		const before = await reasonFor(token, await readerAt(ANA.exp * 1000 - 1));
-		const at = await reasonFor(token, await readerAt(ANA.exp * 1000));
+		const before = await reasonFor(token, reader, ANA_REMAINING_MS - 1);
+		const at = await reasonFor(token, reader, ANA_REMAINING_MS);
 
 		assert.deepEqual([before, at], ['accepted', 'expired']);
+	});
+
+	test('reports the remaining life from the same bound the token is read against', async () => {
+		const reader = await readerAt();
+
+		const reading = await reader.read(await mintUsherToken(ANA), { transitMs: 1_500 });
+
+		assert.deepEqual(reading, { kind: 'payload', payload: ANA, remainingMs: ANA_REMAINING_MS - 1_500 });
+	});
+
+	test('reads a token whose exp is one second after its iat as expired at zero transit', async () => {
+		const token = await mintUsherToken({ ...ANA, exp: ANA.iat + 1 });
+
+		assert.equal(await reasonFor(token), 'expired');
+	});
+
+	test('takes transit into account: a token with two seconds of life is accepted at 999 ms of transit and expired at 1500 ms', async () => {
+		const token = await mintUsherToken({ ...ANA, exp: ANA.iat + 2 });
+		const reader = await readerAt();
+
+		const withSpareMs = await reasonFor(token, reader, 999);
+		const withoutSpare = await reasonFor(token, reader, 1_500);
+
+		assert.deepEqual([withSpareMs, withoutSpare], ['accepted', 'expired']);
+	});
+
+	test('does not read the bridge wall clock when the token carries an iat', async () => {
+		const reader = await readerAt(ANA.exp * 1000 + 600_000);
+
+		const reading = await reader.read(await mintUsherToken(ANA), { transitMs: 0 });
+
+		assert.deepEqual(reading, { kind: 'payload', payload: ANA, remainingMs: ANA_REMAINING_MS });
+	});
+
+	test('reads a token whose plaintext is not a JSON object as claimsNotObject', async () => {
+		const token = await new CompactEncrypt(new TextEncoder().encode('"not an object"'))
+			.setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ: 'usher+jwt' })
+			.encrypt(subkeyBytes(SUBKEY_LABELS.token));
+
+		assert.equal(await reasonFor(token), 'claimsNotObject');
+	});
+
+	test('reads a token whose plaintext carries no iat as claimRejected', async () => {
+		const { iat: _, ...withoutIat } = ANA;
+		const token = await mintUsherToken(withoutIat);
+
+		assert.equal(await reasonFor(token), 'claimRejected');
 	});
 
 	test('gives two mints of one payload different IV segments', async () => {
@@ -85,6 +144,7 @@ suite('createTokenReader', () => {
 		for (const [description, header] of [
 			['a cty', { cty: 'JWT' }],
 			['a kid, which joins only with rotation', { kid: 'k1' }],
+			['a zip, which is compression', { zip: 'DEF' }],
 		] as const) {
 			test(`rejects a header carrying ${description} as headerMember`, async () => {
 				assert.equal(await reasonFor(await mintUsherToken(ANA, { header })), 'headerMember');
@@ -205,7 +265,7 @@ suite('createTokenReader', () => {
 		const reader = await readerAt();
 		const token = await mintUsherToken({ ...ANA, aud: 'another-application' });
 
-		const reading = await reader.read(token);
+		const reading = await reader.read(token, { transitMs: 0 });
 
 		assert.deepEqual(Object.keys(reading).toSorted(), ['kind', 'reason']);
 		assert.equal(JSON.stringify(reading).includes('subject-ana'), false);

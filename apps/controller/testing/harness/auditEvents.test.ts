@@ -67,7 +67,7 @@ const FIXTURE = [
 	'| --- | --- | --- | --- | --- | --- |',
 	'| `token.exchange` | Usher token issued, or refused | User | Usher token | `result`; on success `tokenTtl` and `rules` (the names of the rules); on refusal `reason` | follows `result` |',
 	'| `grant.revocation` | Category grant revoked | Custodian, owner or admin | User + category | `actorId`, `grantId`, `reason`; `causedBy` when a retirement ended it | `info` |',
-	'| `resource.orphaned` | Resource has no owner | System | Resource | `resourceId`, `lastOwnerId` | `critical` |',
+	'| `resource.orphaned` | Resource has no owner | System | Resource | `resourceId`, `lastOwnerSubject` | `critical` |',
 	'| `grant.unguarded` | A grant took effect without a custodian |  |  |  |  |',
 	'| `applicationKey.revocation` | Application key revoked | Admin | Application key | `actorId`, `keyId`; `reason` (`rotated`, `compromised` or `retired`) when given | `warning` when refused; `critical` for `compromised`; else `info` |',
 	'| `import.run` | EGO import run | Admin | Resources and grants | `actorId`; on success, the counts listed below the table | follows `result` |',
@@ -350,7 +350,7 @@ suite("reading audit-events.md's Events table", () => {
 					actor: { kind: 'system' },
 					event: 'resource.orphaned',
 					fields: {
-						always: ['resourceId', 'lastOwnerId'],
+						always: ['resourceId', 'lastOwnerSubject'],
 						conditional: [],
 						onRefusal: [],
 						onSuccess: [],
@@ -670,7 +670,7 @@ suite("the controller's events, as the document registers them", () => {
 				actor: { kind: 'system' },
 				fields: {
 					always: ['result'],
-					conditional: ['signedOutUserId'],
+					conditional: ['signedOutUserSubject'],
 					onRefusal: [],
 					onSuccess: [],
 				},
@@ -688,12 +688,13 @@ suite("the controller's events, as the document registers them", () => {
 		assert.equal(fields.always.includes(CAUSED_BY_MEMBER), false);
 	});
 
-	test("reads the first administrator's nomination as the first user's at warning and its acceptance as the nominee's at critical, each refused at warning carrying reason, and what each carries on success alone", () => {
+	test("reads the first administrator's nomination as the first user's at warning, a nominee's decision as the nominee's at critical for an acceptance and warning for a decline, and a revocation as the first user's at warning, each refused at warning carrying reason, and what each carries on success alone", () => {
 		const nomination = registered(AUDIT_EVENT_TYPES.adminNomination);
-		const acceptance = registered(AUDIT_EVENT_TYPES.adminAcceptance);
+		const decision = registered(AUDIT_EVENT_TYPES.adminNominationDecision);
+		const revocation = registered(AUDIT_EVENT_TYPES.adminNominationRevocation);
 
 		assert.deepEqual(
-			[nomination, acceptance].map(({ actor, fields, owner, severity }) => ({
+			[nomination, decision, revocation].map(({ actor, fields, owner, severity }) => ({
 				actor,
 				fields,
 				owner,
@@ -706,7 +707,7 @@ suite("the controller's events, as the document registers them", () => {
 						always: ['actorId'],
 						conditional: [],
 						onRefusal: ['reason'],
-						onSuccess: ['nomineeId', 'nominationId'],
+						onSuccess: ['nomineeSubject', 'nominationId'],
 					},
 					owner: 'controller',
 					severity: {
@@ -721,19 +722,35 @@ suite("the controller's events, as the document registers them", () => {
 						always: ['actorId'],
 						conditional: ['nominationId'],
 						onRefusal: ['reason'],
-						onSuccess: ['nominatedById'],
+						onSuccess: ['decision', 'nominatedBySubject'],
+					},
+					owner: 'controller',
+					severity: {
+						byValue: { accepted: 'critical' },
+						field: 'decision',
+						kind: 'byValue',
+						otherwise: 'warning',
+						whenDenied: 'warning',
+					},
+				},
+				{
+					actor: { kind: 'roles', roles: ['first user'] },
+					fields: {
+						always: ['actorId'],
+						conditional: ['nominationId'],
+						onRefusal: ['reason'],
+						onSuccess: ['nomineeSubject'],
 					},
 					owner: 'controller',
 					severity: {
 						kind: 'fixed',
-						severity: 'critical',
+						severity: 'warning',
 						whenDenied: 'warning',
 					},
 				},
 			],
 		);
 	});
-
 	test("reads each event's severity as its row names it: a lift of an identity's revocation at warning, a revocation of the whole platform or of a resource at critical", () => {
 		const levels = (
 			[
@@ -813,7 +830,7 @@ suite("the controller's events, as the document registers them", () => {
 				type: emittedType(type),
 			});
 		const refusal = managementTokenRefusal(
-			{ method: 'DELETE', route: '/admin/grants/{id}' },
+			{ method: 'DELETE', route: '/admin/grants/{grantId}' },
 			'expiredToken',
 			'subject-of-the-refused-token',
 		);
@@ -840,7 +857,7 @@ suite("the controller's events, as the document registers them", () => {
 			reason: 'expiredToken',
 			refusedSubject: 'subject-of-the-refused-token',
 			result: 'denied',
-			route: '/admin/grants/{id}',
+			route: '/admin/grants/{grantId}',
 		});
 		assert.deepEqual(managementTokenRefusalsIn(events), [refusal]);
 		assert.deepEqual(refusalTalliesIn(events), [

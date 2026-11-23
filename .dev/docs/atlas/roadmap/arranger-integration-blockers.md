@@ -1,6 +1,6 @@
 # Arranger integration: blocking items
 
-Eleven items surfaced by preparing the first adapter integration. They belong here rather than in
+These items surfaced by preparing the first adapter integration. They belong here rather than in
 the integration's own repository because each one is a question about Usher's model, a decision for
 the developer alone, or an answer owed by an instance; none is waiting on adapter work. Per-instance
 specifics belong in that integration's own repository, following the same split as the import
@@ -80,39 +80,16 @@ So the open question is whether the Bridge-to-adapter result grows to give the a
 reason, and if so which reasons are safe to expose to a principal who may not hold the resource at
 all.
 
-### 4. An unconfigured resource value fails closed on records and open on artifacts
-
-**Resolved in the design.** The value is refused when data is assembled rather than filtered at query time, because a filter cannot ask whether a value is absent from a list it was never given. See "The two permissive failures are closed" in `.dev/design/decisions.md`. The analysis below is kept because the asymmetry it describes is what makes the resolution necessary.
-
-The sharpest hazard found, and it is a defect in the ceiling mechanism rather than in the adapter.
-
-One unconfigured value, two opposite outcomes:
-
-| Where the value appears            | Mechanism                                                                                                                                       | Direction        |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| In a record's resource field       | Excluded by the positive `in` clause, which lists only configured resources                                                                     | Fails **closed** |
-| In a derived artifact's provenance | Absent from the complement, which is computed as configured resources minus held resources, so the ceiling clause does not exclude the artifact | Fails **open**   |
-
-The design already states that over-inclusion of the complement is harmless and under-inclusion is
-not. An unconfigured value is precisely under-inclusion, arriving through the config rather than
-through a computation error, which is why the stated rule did not catch it.
-
-**Why this is dangerous beyond its severity:** an implementer who has verified that records
-carrying an unconfigured value are invisible has verified nothing about artifacts, and now has
-positive reason to believe the opposite of what is true. The adapter's fixture pins the ceiling
-clause's polarity; the unmapped case needs a conformance case, since a unit test written against
-the mechanism cannot see a value never given to the mechanism.
-
 ## Blocked on a developer decision
 
-### 5. Federation posture
+### 4. Federation posture
 
 Whether an instance holding grants should federate at all, given that a remote cannot be
 compelled to enforce. Federation forwards the filter; a remote that ignores it applies nothing,
 and does so indistinguishably from one that applied it and matched everything. Still described
 rather than steered.
 
-### 6. Nested-filter reconciliation
+### 5. Nested-filter reconciliation
 
 **Unreachable under the settled enforcement shape**, since the emitted filter is a single clause and
 a single clause has no siblings to compose. Recorded because it returns with record-level narrowing,
@@ -128,7 +105,7 @@ correctness dependency of the enforcement contract rather than someone else's bu
 
 ## Blocked on an instance's answer
 
-### 7. Authorization-field nesting depth
+### 6. Authorization-field nesting depth
 
 **Not triggered by the first instance**, whose resource fields are flat and at depth one in both
 catalogues. It stays a hard blocker for any instance whose key is deeper, which is what the
@@ -146,7 +123,7 @@ same reasoning as the `nested` mapping requirement for record-level narrowing. U
 require a mapping shape, so an instance that does not supply a conforming one is an instance
 where this narrowing is unavailable, not one where it silently degrades.
 
-### 8. IdP claim shape, and the version it depends on
+### 7. IdP claim shape, and the version it depends on
 
 The claim shape reaching the adapter's request context depends on the instance's target identity
 provider version, not the one it runs now. Where an instance is several major versions
@@ -156,26 +133,7 @@ that expires on upgrade.
 
 ## Open, with no owner yet
 
-### 9. Anonymous access and "no restriction configured" compile to the same value
-
-**Resolved in the design.** Neither state may render to an absent filter; both render to an explicit positive `in`, which is the only fail-closed encoding available. See "The two permissive failures are closed" in `.dev/design/decisions.md`.
-
-Two different states rendered identically, and the documented pattern for an
-unauthenticated request returns no filter at all. No filter is not a restrictive default: it is
-the allow-everything case, which is the same empty-combination hazard already recorded in
-`.dev/design/decisions.md` arriving through a different door.
-
-Whatever encoding is chosen, an unauthenticated request and a request against an unrestricted
-resource have to be distinguishable, and neither may render to an absent filter.
-
-### 10. Category-to-field mapping format
-
-Whatever shape is chosen must make the empty and missing cases either unrepresentable or loud. A
-field name plus a match value can be validated at startup against the live mapping; an arbitrary
-query fragment cannot, because validating it means evaluating it. This is a decision about what
-can be checked before serving traffic, not a preference about expressiveness.
-
-### 11. Where an adapter learns that a principal is an administrator
+### 8. Where an adapter learns that a principal is an administrator
 
 Whether administrator status comes from Usher's own role, from adapter-side configuration, or from
 the platform access model, and whether an administrator of the ushered application and an

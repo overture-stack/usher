@@ -117,6 +117,28 @@ suite('the contract the API documentation page serves', () => {
 		});
 	});
 
+	test("names the identity provider's end-session endpoint in its sign-in scheme where one is given, and nothing in its place where none is", async () => {
+		const committed = await committedSpec();
+		const endSessionEndpoint = 'https://auth.example.org/realms/usher/protocol/openid-connect/logout';
+
+		const schemes = [
+			servedSpec(committed, { ...ENDPOINTS, endSessionEndpoint }),
+			servedSpec(committed, ENDPOINTS),
+		].map(({ components }) => components.securitySchemes['identityProviderSignIn']);
+
+		assert.deepEqual(
+			schemes.map((scheme) => (isRecord(scheme) ? scheme['x-end-session-endpoint'] : 'no scheme')),
+			[endSessionEndpoint, undefined],
+		);
+		assert.deepEqual(
+			schemes.map((scheme) => (isRecord(scheme) ? Object.keys(scheme) : [])),
+			[
+				['flows', 'type', 'x-end-session-endpoint'],
+				['flows', 'type'],
+			],
+		);
+	});
+
 	test('names exactly one flow in its sign-in scheme, authorizationCode', async () => {
 		const served = servedSpec(await committedSpec(), ENDPOINTS);
 		const scheme = served.components.securitySchemes['identityProviderSignIn'];
@@ -137,7 +159,7 @@ suite('the contract the API documentation page serves', () => {
 			before.map(({ label }) => label),
 		);
 		const managed = before.filter(({ operation }) => (operation.security ?? []).some(namesManagementToken));
-		assert.equal(managed.length, 44);
+		assert.equal(managed.length, 46);
 		after.forEach(({ label, operation }, index) => {
 			const committedSecurity = before[index]?.operation.security;
 			assert.deepEqual(
@@ -158,7 +180,7 @@ suite('the contract the API documentation page serves', () => {
 		assert.deepEqual(withoutSignIn(served), committed);
 		assert.deepEqual(Object.keys(served), Object.keys(committed));
 		assert.equal(Object.hasOwn(served, 'servers'), false);
-		assert.equal(JSON.stringify(served).split('"identityProviderSignIn"').length - 1, 45);
+		assert.equal(JSON.stringify(served).split('"identityProviderSignIn"').length - 1, 47);
 	});
 
 	test('leaves the committed contract it is built from as it was', async () => {

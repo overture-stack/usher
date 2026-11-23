@@ -23,9 +23,9 @@
 		},
 		"parameters": {
 			"ApplicationId": {
-				"description": "The application's id.",
+				"description": "The application's id: the `id` in the answer to `POST /admin/applications`.",
 				"in": "path",
-				"name": "id",
+				"name": "applicationId",
 				"required": true,
 				"schema": {
 					"type": "string"
@@ -58,18 +58,18 @@
 				}
 			},
 			"GrantId": {
-				"description": "The grant's id.",
+				"description": "The grant's id: the `id` in the answer that created the grant, and in each grant a grant listing shows.",
 				"in": "path",
-				"name": "id",
+				"name": "grantId",
 				"required": true,
 				"schema": {
 					"type": "string"
 				}
 			},
 			"GrantRequestId": {
-				"description": "The grant request's id.",
+				"description": "The grant request's id: the `id` in the `202` answer that recorded the request, and in each request `GET /admin/grant-requests` lists.",
 				"in": "path",
-				"name": "id",
+				"name": "grantRequestId",
 				"required": true,
 				"schema": {
 					"type": "string"
@@ -100,9 +100,9 @@
 				}
 			},
 			"NominationId": {
-				"description": "The nomination's id.",
+				"description": "The nomination's id: the `id` in the answer to `POST /admin/nominations`, also listed by `GET /admin/nominations` and `GET /admin/me/nominations`.",
 				"in": "path",
-				"name": "id",
+				"name": "nominationId",
 				"required": true,
 				"schema": {
 					"type": "string"
@@ -129,7 +129,7 @@
 					}
 				},
 				"in": "path",
-				"name": "name",
+				"name": "roleName",
 				"required": true,
 				"schema": {
 					"type": "string"
@@ -701,7 +701,7 @@
 						"$ref": "#/components/schemas/Instant"
 					},
 					"decision": {
-						"enum": ["accepted", "rejected"],
+						"enum": ["accepted", "declined"],
 						"type": "string"
 					}
 				},
@@ -1082,7 +1082,7 @@
 						"type": "array"
 					},
 					"decision": {
-						"description": "`accepted` or `rejected`; any other string is refused with `422`.",
+						"description": "`accept` or `decline`; any other string is refused with `422`.",
 						"type": "string"
 					}
 				},
@@ -1123,7 +1123,7 @@
 								"type": "null"
 							}
 						],
-						"description": "When it was granted or refused; `null` while undecided."
+						"description": "When it was granted or declined; `null` while undecided."
 					},
 					"expiresAt": {
 						"$ref": "#/components/schemas/Instant",
@@ -1189,7 +1189,7 @@
 				"description": "A decision on a grant request. Members not listed here are refused with `400`.",
 				"properties": {
 					"decision": {
-						"description": "`granted` or `refused`; any other string is refused with `422`.",
+						"description": "`grant` or `decline`; any other string is refused with `422`.",
 						"type": "string"
 					}
 				},
@@ -1214,8 +1214,8 @@
 				"type": "object"
 			},
 			"GrantRequestState": {
-				"description": "A grant request's state: `pending` while undecided and before its expiry, `lapsed` once its expiry passes undecided, and `granted` or `refused` once decided.",
-				"enum": ["granted", "lapsed", "pending", "refused"],
+				"description": "A grant request's state: `pending` while undecided and before its expiry, `lapsed` once its expiry passes undecided, and `granted` or `declined` once decided.",
+				"enum": ["declined", "granted", "lapsed", "pending"],
 				"type": "string"
 			},
 			"GrantRevocation": {
@@ -1311,7 +1311,7 @@
 			},
 			"GrantState": {
 				"description": "A grant's state, from its expiry, its revocation and its latest decision.",
-				"enum": ["accepted", "expired", "pending", "rejected", "revoked"],
+				"enum": ["accepted", "declined", "expired", "pending", "revoked"],
 				"type": "string"
 			},
 			"Holder": {
@@ -1523,92 +1523,57 @@
 			},
 			"Nomination": {
 				"additionalProperties": false,
+				"description": "A nomination of Usher's first administrator, with its state.",
 				"properties": {
+					"decidedAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the nominee accepted or declined. Present only then."
+					},
 					"id": {
 						"format": "uuid",
-						"type": "string"
+						"type": "string",
+						"description": "The nomination's id. The nominee sends it as `nominationId` to answer, and the first user to revoke."
 					},
 					"nominatedAt": {
-						"$ref": "#/components/schemas/Instant"
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the first user made the nomination."
 					},
 					"nominatedBy": {
-						"$ref": "#/components/schemas/PrincipalBySubject"
+						"$ref": "#/components/schemas/PrincipalBySubject",
+						"description": "Who made the nomination: the first user, by subject."
 					},
 					"nominee": {
-						"$ref": "#/components/schemas/PrincipalBySubject"
+						"$ref": "#/components/schemas/PrincipalBySubject",
+						"description": "Who is nominated, by subject."
+					},
+					"revokedAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the first user revoked it. Present only then."
+					},
+					"state": {
+						"$ref": "#/components/schemas/NominationState"
 					}
 				},
-				"required": ["id", "nominatedAt", "nominatedBy", "nominee"],
-				"type": "object"
-			},
-			"NominationAcceptance": {
-				"additionalProperties": false,
-				"properties": {
-					"acceptedAt": {
-						"$ref": "#/components/schemas/Instant"
-					},
-					"administrator": {
-						"$ref": "#/components/schemas/PrincipalBySubject"
-					},
-					"nominationId": {
-						"format": "uuid",
-						"type": "string"
-					}
-				},
-				"required": ["acceptedAt", "administrator", "nominationId"],
+				"required": ["id", "nominatedAt", "nominatedBy", "nominee", "state"],
 				"type": "object"
 			},
 			"NominationRequest": {
 				"additionalProperties": false,
-				"description": "A nomination of Usher's first administrator. A member other than `nominee`, or a `nominee` holding anything but `subject`, is refused with `400`.",
+				"description": "Who you are nominating. Any member other than `nominee`, or a `nominee` holding anything but `subject`, is refused with `400`.",
 				"properties": {
 					"nominee": {
 						"$ref": "#/components/schemas/PrincipalBySubject",
-						"description": "The nominee: the first user themself, or a person Usher has met through the trusted identity provider, by subject."
+						"description": "The nominee, by subject: the `sub` claim in their access token, which in Keycloak is the user's ID in the realm Usher trusts."
 					}
 				},
 				"required": ["nominee"],
-				"type": "object"
-			},
-			"OwnNomination": {
-				"additionalProperties": false,
-				"properties": {
-					"id": {
-						"format": "uuid",
-						"type": "string"
-					},
-					"latest": {
-						"description": "Whether no later nomination has replaced it, so it is the one that may be accepted.",
-						"type": "boolean"
-					},
-					"nominatedAt": {
-						"$ref": "#/components/schemas/Instant"
-					},
-					"nominatedBy": {
-						"$ref": "#/components/schemas/PrincipalBySubject"
-					}
-				},
-				"required": ["id", "latest", "nominatedAt", "nominatedBy"],
-				"type": "object"
-			},
-			"OwnNominationList": {
-				"additionalProperties": false,
-				"properties": {
-					"nominations": {
-						"items": {
-							"$ref": "#/components/schemas/OwnNomination"
-						},
-						"type": "array"
-					}
-				},
-				"required": ["nominations"],
 				"type": "object"
 			},
 			"PrincipalBySubject": {
 				"additionalProperties": false,
 				"properties": {
 					"subject": {
-						"description": "The identity provider's subject, the `sub` claim.",
+						"description": "The person's subject: the `sub` claim in their access token, which in Keycloak is the user's ID in the realm Usher trusts.",
 						"type": "string"
 					}
 				},
@@ -2419,6 +2384,76 @@
 				},
 				"required": ["category", "email", "kind", "resource", "role"],
 				"type": "object"
+			},
+			"NominationState": {
+				"description": "Where a nomination stands. `pending`: its nominee can still answer it. `accepted` or `declined`: its nominee answered. `revoked`: the first user took it back. `replaced`: a later nomination was made before this one was answered or revoked.",
+				"enum": ["accepted", "declined", "pending", "replaced", "revoked"],
+				"type": "string"
+			},
+			"NominationDecision": {
+				"additionalProperties": false,
+				"description": "Your answer to a nomination naming you. Any member other than `decision` is refused with `400`.",
+				"properties": {
+					"decision": {
+						"enum": ["accept", "decline"],
+						"type": "string",
+						"description": "`accept` or `decline`. Any other word is refused with `422`."
+					}
+				},
+				"required": ["decision"],
+				"type": "object"
+			},
+			"NominationList": {
+				"additionalProperties": false,
+				"properties": {
+					"nominations": {
+						"items": {
+							"$ref": "#/components/schemas/Nomination"
+						},
+						"type": "array",
+						"description": "Every nomination, oldest first."
+					}
+				},
+				"required": ["nominations"],
+				"type": "object"
+			},
+			"OwnNomination": {
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"format": "uuid",
+						"type": "string",
+						"description": "The nomination's id: send it as `nominationId` to accept or decline."
+					},
+					"nominatedAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the first user made the nomination."
+					},
+					"nominatedBy": {
+						"$ref": "#/components/schemas/PrincipalBySubject",
+						"description": "Who made the nomination: the first user, by subject."
+					},
+					"state": {
+						"$ref": "#/components/schemas/NominationState"
+					}
+				},
+				"required": ["id", "nominatedAt", "nominatedBy", "state"],
+				"type": "object",
+				"description": "A nomination naming you, with its state."
+			},
+			"OwnNominationList": {
+				"additionalProperties": false,
+				"properties": {
+					"nominations": {
+						"items": {
+							"$ref": "#/components/schemas/OwnNomination"
+						},
+						"type": "array",
+						"description": "The nominations naming you, oldest first."
+					}
+				},
+				"required": ["nominations"],
+				"type": "object"
 			}
 		},
 		"securitySchemes": {
@@ -2504,7 +2539,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -2550,7 +2585,7 @@
 				"tags": ["Applications"]
 			}
 		},
-		"/admin/applications/{id}": {
+		"/admin/applications/{applicationId}": {
 			"get": {
 				"description": "Reads an application and every key it was issued, for platform administrators.\n\nKeys are listed in order of `issuedAt`. A time or a principal not set is `null`. No answer holds a key's value.",
 				"operationId": "readApplication",
@@ -2600,7 +2635,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -2640,7 +2675,7 @@
 				"tags": ["Applications"]
 			}
 		},
-		"/admin/applications/{id}/keys": {
+		"/admin/applications/{applicationId}/keys": {
 			"post": {
 				"description": "Issues another key for an application, for platform administrators, so the application's replicas can move to it while the key they hold stays live. The request carries no body.\n\nAn application holds at most two live keys. A third is refused with `applicationKeyLimit` until one of the two live keys is revoked. The key's `value` is in this answer alone.\n\nThe audit event `applicationKey.issuance` records the issue.",
 				"operationId": "issueApplicationKey",
@@ -2695,7 +2730,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -2763,7 +2798,7 @@
 				"tags": ["Applications"]
 			}
 		},
-		"/admin/applications/{id}/keys/{keyId}": {
+		"/admin/applications/{applicationId}/keys/{keyId}": {
 			"delete": {
 				"description": "Revokes one of an application's keys, for platform administrators. Once every controller instance has reloaded its keys, each refuses an exchange or a channel request whose channel assertion is verified only by that key.\n\nThe body is sent only with a reason: `rotated`, `compromised` or `retired`.\n\nA key revoked already keeps its first revocation, and a second is refused with `doesNotHold`.\n\nThe audit event `applicationKey.revocation` records the revocation, at `critical` for the reason `compromised` and at `info` otherwise.",
 				"operationId": "revokeApplicationKey",
@@ -2827,7 +2862,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -3031,7 +3066,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"503": {
 						"$ref": "#/components/responses/ReadUnavailable"
@@ -3081,7 +3116,7 @@
 								}
 							}
 						},
-						"description": "The principal neither administers the platform nor owns a resource; `ownersAndAdministratorsOnly`. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal neither administers the platform nor owns a resource; `ownersAndAdministratorsOnly`. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"503": {
 						"$ref": "#/components/responses/ReadUnavailable"
@@ -3150,7 +3185,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"409": {
 						"content": {
@@ -3264,7 +3299,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3372,9 +3407,9 @@
 				"tags": ["Grants"]
 			}
 		},
-		"/admin/grant-requests/{id}/decisions": {
+		"/admin/grant-requests/{grantRequestId}/decisions": {
 			"post": {
-				"description": "Grants or refuses a grant request. A request is decided once, by an owner of its resource, as `createGrant` defines one, or by any platform administrator, and never by the principal who asked for it or its holder. To anyone else a request is answered as one that does not exist, as is a request on a retired resource.\n\nGranting a request writes the grant it names, its holder the request's holder, `grantedAt` the instant it is granted and `expiresAt` the request's, and answers `200` with the `Grant`, `kind` `grant`. For a self-grant, the holder's acceptance is written with it, showing the capabilities they were shown when they asked. The holder of an orphaned resource's request asked for nothing, so its grant starts as one `createGrant` issues does: pending the holder's answer, or accepted at once, showing what the role confers then, when the instance accepts grants at creation. A refusal records the decision alone and answers `200` with the decided `GrantRequest`, `kind` `grantRequest`.\n\nWhile the resource of a request of kind `orphanedResource` has no counted owner, any platform administrator but the one who asked and its holder decides it. Once it has one, a platform administrator who is not an owner is refused granting it with `administratorGrantsNoConsumerAccess` but may still refuse it. Should the resource have no owner again before anyone decides, platform administrators may grant it again.\n\nA request decided already is refused with `requestDecided`, and one at or past its expiry with `requestLapsed`. Granting a request for a holder holding the grant live already is refused with `alreadyHolds`.",
+				"description": "Grants or declines a grant request. A request is decided once, by an owner of its resource, as `createGrant` defines one, or by any platform administrator, and never by the principal who asked for it or its holder. To anyone else a request is answered as one that does not exist, as is a request on a retired resource.\n\nGranting a request writes the grant it names, its holder the request's holder, `grantedAt` the instant it is granted and `expiresAt` the request's, and answers `200` with the `Grant`, `kind` `grant`. For a self-grant, the holder's acceptance is written with it, showing the capabilities they were shown when they asked. The holder of an orphaned resource's request asked for nothing, so its grant starts as one `createGrant` issues does: pending the holder's answer, or accepted at once, showing what the role confers then, when the instance accepts grants at creation. A refusal records the decision alone and answers `200` with the decided `GrantRequest`, `kind` `grantRequest`.\n\nWhile the resource of a request of kind `orphanedResource` has no counted owner, any platform administrator but the one who asked and its holder decides it. Once it has one, a platform administrator who is not an owner is refused granting it with `administratorGrantsNoConsumerAccess` but may still refuse it. Should the resource have no owner again before anyone decides, platform administrators may grant it again.\n\nA request decided already is refused with `requestDecided`, and one at or past its expiry with `requestLapsed`. Granting a request for a holder holding the grant live already is refused with `alreadyHolds`.",
 				"operationId": "decideGrantRequest",
 				"parameters": [
 					{
@@ -3408,7 +3443,7 @@
 								}
 							}
 						},
-						"description": "The request is decided: granted, answered with the grant written, `kind` `grant`; or refused, answered with the request, `kind` `grantRequest`."
+						"description": "The request is decided: granted, answered with the grant written, `kind` `grant`; or declined, answered with the request, `kind` `grantRequest`."
 					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
@@ -3484,7 +3519,7 @@
 								}
 							}
 						},
-						"description": "`requestDecided`: the request is granted or refused already, and keeps its decision. `requestLapsed`: its expiry has passed undecided. `alreadyHolds`: granting a request for a holder who holds the grant live already."
+						"description": "`requestDecided`: the request is granted or declined already, and keeps its decision. `requestLapsed`: its expiry has passed undecided. `alreadyHolds`: granting a request for a holder who holds the grant live already."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3500,7 +3535,7 @@
 								}
 							}
 						},
-						"description": "The decision is neither `granted` nor `refused`."
+						"description": "The decision is neither `grant` nor `decline`."
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
@@ -3517,7 +3552,7 @@
 		},
 		"/admin/grants": {
 			"post": {
-				"description": "Creates a grant: a role on a resource for a holder, named by subject or by address. A holder named by address is the one account in the identity provider's directory holding the address, matched exactly in any letter case, and verified; a disabled account counts. The address is never stored. A platform administrator naming the holder by address is answered `201` with the grant, and `404` `holderNotFound` when no single account holds the address. A counted owner naming the holder by address is answered `202` with a `GrantByAddress` whether or not an account holds the address, naming neither the grant nor its holder, and nothing is written when none does. An address resolving to the principal is refused as naming the principal's own subject is. A holder named by a subject the controller has never met is recorded with the grant, and answers it once signed in.\n\nA data-plane role names a record category offered by the resource: any global category, as `global.` and its name, or one of the resource's own, as `resource.` and its name. A control-plane role, such as `owner`, names none and takes the whole resource, and an owner grant takes no expiry. A `submitter` grant naming no category takes the instance's submitter category. A grant names its record category alone: the member naming a field category, `fieldCategory`, is refused with `422`, whatever it holds, and so is `grantedBy`, since the caller is the granter. A `holder.email` that is no string, such as a list of addresses, is refused with `400`.\n\nWho may see a resource: a platform administrator; a person holding a grant on it, an owner grant included, that is neither revoked nor expired and that they have not declined, pending or accepted; and, for a resource at the `open` or `registered` access level that is not suppressed, every signed-in principal. A retired resource is seen only by a platform administrator asking for it, and every grant operation answers it as one that does not exist. A principal who may not see a resource is answered exactly as for one that does not exist; one who may see it and holds no authority for what they ask is refused with `403` `noAuthorityOnResource`.\n\nA resource's owners grant any role on it, `owner` included. An owner is a person holding an owner grant on it that is neither revoked nor expired and that they have accepted. A platform administrator grants the `submitter` and `owner` roles on any resource and makes anyone but themself an owner. No one grants the administrator role, `admin`.\n\nA platform administrator's grant of any other role, for someone else, on a resource without an owner, a newly registered one whose named owners have not accepted included, is not issued: it is recorded as a request, `requestKind` `orphanedResource`, its requester the principal and its holder the person named, and answered `202` with the `GrantRequest`, `kind` `grantRequest`. It names an expiry, within the instance's longest self-grant life of the request. Nobody is told of it, since the resource has no owner: other platform administrators find it through `GET /admin/grant-requests` and decide it through `POST /admin/grant-requests/{id}/decisions`, and an owner the resource gains before then decides it instead. On a resource with an owner, such a grant is refused with `administratorGrantsNoConsumerAccess`.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; whether the instance defines the role, and whether the role names a category, `422`; a platform administrator naming themself an owner, `403` `administratorSelfOwnership`; a principal naming themself, `422`, the text naming `/admin/grants/self`; a platform administrator granting any role but `submitter` and `owner`, `403` `administratorGrantsNoConsumerAccess`, answered alike whether or not the resource exists, unless it exists, is not retired and has no owner, when the grant is asked for as a request; whether the principal may see the resource, `404`, and holds authority on it, `403`; the category, `422`; and, for a request, its expiry, `422`. A holder named by address is looked up only once all of these pass; an address resolving to the principal is then refused as the principal's own subject is, and a grant held already is judged last, `409`, as is, for a request, one by the principal for the holder on the same terms that is pending and has not lapsed.\n\nThe holder answers the grant through its decisions. When the instance accepts grants at creation, the controller records the holder's acceptance with the grant, showing the capabilities the grant's role confers then. A grant on the same terms that has expired does not stop the holder from being granted those terms again.",
+				"description": "Creates a grant: a role on a resource for a holder, named by subject or by address. A holder named by address is the one account in the identity provider's directory holding the address, matched exactly in any letter case, and verified; a disabled account counts. The address is never stored. A platform administrator naming the holder by address is answered `201` with the grant, and `404` `holderNotFound` when no single account holds the address. A counted owner naming the holder by address is answered `202` with a `GrantByAddress` whether or not an account holds the address, naming neither the grant nor its holder, and nothing is written when none does. An address resolving to the principal is refused as naming the principal's own subject is. A holder named by a subject the controller has never met is recorded with the grant, and answers it once signed in.\n\nA data-plane role names a record category offered by the resource: any global category, as `global.` and its name, or one of the resource's own, as `resource.` and its name. A control-plane role, such as `owner`, names none and takes the whole resource, and an owner grant takes no expiry. A `submitter` grant naming no category takes the instance's submitter category. A grant names its record category alone: the member naming a field category, `fieldCategory`, is refused with `422`, whatever it holds, and so is `grantedBy`, since the caller is the granter. A `holder.email` that is no string, such as a list of addresses, is refused with `400`.\n\nWho may see a resource: a platform administrator; a person holding a grant on it, an owner grant included, that is neither revoked nor expired and that they have not declined, pending or accepted; and, for a resource at the `open` or `registered` access level that is not suppressed, every signed-in principal. A retired resource is seen only by a platform administrator asking for it, and every grant operation answers it as one that does not exist. A principal who may not see a resource is answered exactly as for one that does not exist; one who may see it and holds no authority for what they ask is refused with `403` `noAuthorityOnResource`.\n\nA resource's owners grant any role on it, `owner` included. An owner is a person holding an owner grant on it that is neither revoked nor expired and that they have accepted. A platform administrator grants the `submitter` and `owner` roles on any resource and makes anyone but themself an owner. No one grants the administrator role, `admin`.\n\nA platform administrator's grant of any other role, for someone else, on a resource without an owner, a newly registered one whose named owners have not accepted included, is not issued: it is recorded as a request, `requestKind` `orphanedResource`, its requester the principal and its holder the person named, and answered `202` with the `GrantRequest`, `kind` `grantRequest`. It names an expiry, within the instance's longest self-grant life of the request. Nobody is told of it, since the resource has no owner: other platform administrators find it through `GET /admin/grant-requests` and decide it through `POST /admin/grant-requests/{grantRequestId}/decisions`, and an owner the resource gains before then decides it instead. On a resource with an owner, such a grant is refused with `administratorGrantsNoConsumerAccess`.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; whether the instance defines the role, and whether the role names a category, `422`; a platform administrator naming themself an owner, `403` `administratorSelfOwnership`; a principal naming themself, `422`, the text naming `/admin/grants/self`; a platform administrator granting any role but `submitter` and `owner`, `403` `administratorGrantsNoConsumerAccess`, answered alike whether or not the resource exists, unless it exists, is not retired and has no owner, when the grant is asked for as a request; whether the principal may see the resource, `404`, and holds authority on it, `403`; the category, `422`; and, for a request, its expiry, `422`. A holder named by address is looked up only once all of these pass; an address resolving to the principal is then refused as the principal's own subject is, and a grant held already is judged last, `409`, as is, for a request, one by the principal for the holder on the same terms that is pending and has not lapsed.\n\nThe holder answers the grant through its decisions. When the instance accepts grants at creation, the controller records the holder's acceptance with the grant, showing the capabilities the grant's role confers then. A grant on the same terms that has expired does not stop the holder from being granted those terms again.",
 				"operationId": "createGrant",
 				"requestBody": {
 					"content": {
@@ -3590,7 +3625,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorGrantsNoConsumerAccess`: a platform administrator grants access that is the owners' to grant, on a resource with a counted owner, or on one that does not exist or is retired, answered alike. `administratorSelfOwnership`: a platform administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorGrantsNoConsumerAccess`: a platform administrator grants access that is the owners' to grant, on a resource with a counted owner, or on one that does not exist or is retired, answered alike. `administratorSelfOwnership`: a platform administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -3698,7 +3733,7 @@
 		},
 		"/admin/grants/self": {
 			"post": {
-				"description": "Asks for the principal's own grant of a data-plane role on a resource, ending at an expiry in the future and within the instance's longest self-grant life of the request. The holder is always the principal, so a `holder` member is refused with `422`.\n\nAn owner of the resource, as `createGrant` defines one, is granted at once, with their acceptance showing what the role confers then, and is answered `201` with the `Grant`, `kind` `grant`. Each other owner of the resource is told of the self-grant.\n\nA platform administrator who is not an owner of the resource asks instead, and is answered `202` with a `GrantRequest`, `kind` `grantRequest`, pending. Each owner of the resource is told of the request, and no other platform administrator is. An owner of the resource or another platform administrator decides it through `POST /admin/grant-requests/{id}/decisions`, never the platform administrator who asked; one left undecided lapses at its expiry. A request on a resource without an owner is told to nobody, and only another platform administrator can grant it.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; a platform administrator naming the `owner` role, `403` `administratorSelfOwnership`; whether the instance defines the role, and whether it is a data-plane role, `422`; whether the principal may see the resource, `404`, and holds authority on it, `403`, as for `createGrant`: a platform administrator on any resource, an owner on their own; the category, `422`; a grant held live on the same terms, `409` `alreadyHolds`; and, for a request, one by the principal on the same terms that is pending and has not lapsed, `409` `alreadyRequested`.",
+				"description": "Asks for the principal's own grant of a data-plane role on a resource, ending at an expiry in the future and within the instance's longest self-grant life of the request. The holder is always the principal, so a `holder` member is refused with `422`.\n\nAn owner of the resource, as `createGrant` defines one, is granted at once, with their acceptance showing what the role confers then, and is answered `201` with the `Grant`, `kind` `grant`. Each other owner of the resource is told of the self-grant.\n\nA platform administrator who is not an owner of the resource asks instead, and is answered `202` with a `GrantRequest`, `kind` `grantRequest`, pending. Each owner of the resource is told of the request, and no other platform administrator is. An owner of the resource or another platform administrator decides it through `POST /admin/grant-requests/{grantRequestId}/decisions`, never the platform administrator who asked; one left undecided lapses at its expiry. A request on a resource without an owner is told to nobody, and only another platform administrator can grant it.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; a platform administrator naming the `owner` role, `403` `administratorSelfOwnership`; whether the instance defines the role, and whether it is a data-plane role, `422`; whether the principal may see the resource, `404`, and holds authority on it, `403`, as for `createGrant`: a platform administrator on any resource, an owner on their own; the category, `422`; a grant held live on the same terms, `409` `alreadyHolds`; and, for a request, one by the principal on the same terms that is pending and has not lapsed, `409` `alreadyRequested`.",
 				"operationId": "createSelfGrant",
 				"requestBody": {
 					"content": {
@@ -3763,7 +3798,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorSelfOwnership`: a platform administrator names the `owner` role. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to grant on it. `administratorSelfOwnership`: a platform administrator names the `owner` role. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -3838,7 +3873,7 @@
 				"tags": ["Grants"]
 			}
 		},
-		"/admin/grants/{id}": {
+		"/admin/grants/{grantId}": {
 			"delete": {
 				"description": "Revokes a grant, whether pending, accepted, declined or expired. A platform administrator revokes any grant, a peer's self-grant included, and a resource's owners revoke any grant on it. To anyone else a grant is answered as one that does not exist, as is a grant on a retired resource.\n\nThe body is sent only with a reason. Without one, the controller records `unspecified`, a reason it alone assigns and refuses from anyone else.\n\nA grant revoked already keeps its first revocation, and a second is refused with `doesNotHold`. A resource keeps at least one owner, so revoking its last accepted owner grant is refused with `resourceNeedsAnOwner`.\n\n`DELETE /admin/grants/`, naming no id, is answered `404` `grantNotFound` too.",
 				"operationId": "revokeGrant",
@@ -3885,7 +3920,7 @@
 								}
 							}
 						},
-						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -4030,7 +4065,7 @@
 								}
 							}
 						},
-						"description": "`administratorGrantsNoConsumerAccess`: a platform administrator who is not an owner of the grant's resource extends a grant someone else holds other than a `submitter` or an `owner` grant, or widens one beyond those two roles. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts. `selfWideningNotPermitted`: a platform administrator who is not an owner of the grant's resource extends or widens a grant they hold, whatever its role, the text saying to end it earlier, narrow its role, or ask for a self-grant instead. `serviceAccountNotPermitted`: a service account calls, before any lookup."
+						"description": "`administratorGrantsNoConsumerAccess`: a platform administrator who is not an owner of the grant's resource extends a grant someone else holds other than a `submitter` or an `owner` grant, or widens one beyond those two roles. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts. `selfWideningNotPermitted`: a platform administrator who is not an owner of the grant's resource extends or widens a grant they hold, whatever its role, the text saying to end it earlier, narrow its role, or ask for a self-grant instead. `serviceAccountNotPermitted`: a service account calls, before any lookup."
 					},
 					"404": {
 						"content": {
@@ -4110,9 +4145,9 @@
 				"tags": ["Grants"]
 			}
 		},
-		"/admin/grants/{id}/decisions": {
+		"/admin/grants/{grantId}/decisions": {
 			"post": {
-				"description": "Records the holder's answer to a grant, `accepted` or `rejected`, with the capabilities shown to them, which are those conferred by the grant's role as it stands. Answers are appended, and the latest is current. The grant itself is left unchanged.\n\nOnly the grant's holder answers it; anyone else receives `grantNotFound`, as does anyone for a grant on a retired resource. An owner declining their resource's last accepted owner grant is refused with `resourceNeedsAnOwner`.",
+				"description": "Records the holder's answer to a grant, `accept` or `decline`, with the capabilities shown to them, which are those conferred by the grant's role as it stands. Answers are appended, and the latest is current. The grant itself is left unchanged.\n\nOnly the grant's holder answers it; anyone else receives `grantNotFound`, as does anyone for a grant on a retired resource. An owner declining their resource's last accepted owner grant is refused with `resourceNeedsAnOwner`.",
 				"operationId": "answerGrant",
 				"parameters": [
 					{
@@ -4157,7 +4192,7 @@
 								}
 							}
 						},
-						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -4217,7 +4252,7 @@
 								}
 							}
 						},
-						"description": "The decision is neither `accepted` nor `rejected`, or the capabilities differ from those conferred by the role."
+						"description": "The decision is neither `accept` nor `decline`, or the capabilities differ from those conferred by the role."
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
@@ -4281,7 +4316,7 @@
 								}
 							}
 						},
-						"description": "`administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"422": {
 						"content": {
@@ -4347,7 +4382,7 @@
 		},
 		"/admin/me/nominations": {
 			"get": {
-				"description": "Lists the nominations naming the principal, oldest first, each with its nominator by subject, when it was made, and whether it is the latest, the one that may be accepted. A principal named by none receives an empty list. It is answered before and after an administrator has accepted, and records no event.",
+				"description": "Lists the nominations naming you, oldest first, each with who made it, when, and its state. The one you can answer is `pending`: send its `id` as `nominationId` to `POST /admin/nominations/{nominationId}/decisions`. Answered before and after an administrator accepts. Nothing is logged.",
 				"operationId": "listOwnNominations",
 				"responses": {
 					"200": {
@@ -4358,7 +4393,7 @@
 								}
 							}
 						},
-						"description": "The nominations naming the principal."
+						"description": "The nominations naming you, oldest first; an empty list when none do."
 					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
@@ -4386,7 +4421,7 @@
 								}
 							}
 						},
-						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+						"description": "`serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
 					},
 					"500": {
 						"$ref": "#/components/responses/InternalError"
@@ -4400,7 +4435,7 @@
 						"managementToken": []
 					}
 				],
-				"summary": "Lists my own nominations",
+				"summary": "Lists the nominations naming you",
 				"tags": ["Administrators"]
 			}
 		},
@@ -4460,7 +4495,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"409": {
 						"content": {
@@ -4566,7 +4601,7 @@
 		},
 		"/admin/nominations": {
 			"post": {
-				"description": "Nominates Usher's first administrator, for the first user alone: a principal whose token holds the configured first-user role. The nominee is the first user themself, or a person Usher has met through the trusted identity provider, named by subject. The first user is recorded on first meeting, as a base user holding no grant. They may nominate again while no administrator has accepted, and each nomination replaces every earlier one, so only the latest may be accepted.\n\nThe rules are judged in this order, so only the first user, before any administrator has accepted, reaches the nominee's lookup: a token lacking the first-user role, `403` `notFirstUser`, before the body is read; an administrator accepted already, `409` `firstAdministratorAccepted`; a nominee who is neither the caller nor a person Usher has met, `404` `nomineeNotFound`.\n\nThe audit event `admin.nomination` records the nomination, at `warning`.",
+				"description": "Names the person who becomes Usher's first administrator once they accept. Only the first user can nominate: the person the `firstUser` setting names, by realm role or by subject.\n\nName the nominee by their subject: the `sub` claim in their access token, which in Keycloak is the user's ID in the realm Usher trusts. The nominee can be you, someone Usher already knows from an earlier sign-in, or, where the identity provider's directory is configured, anyone with an account in that realm.\n\nNominating again replaces your earlier nomination, and only the latest can be accepted. The answer is the new nomination: give its `id` to the nominee, who sends it as `nominationId` to accept or decline.\n\nChecked in this order:\n\n1. You are not the first user: `403` `notFirstUser`, before the body is read.\n2. Usher already has its first administrator: `409` `firstAdministratorAccepted`.\n3. No account in the realm Usher trusts has the nominee's subject: `404` `nomineeNotFound`, its detail naming the realm. With no directory configured, only you or someone Usher already knows can be nominated, and the same `404` says so.\n4. The directory cannot be reached: `503` `directoryUnavailable`, and nothing is written.\n\nUsher logs the nomination as the audit event `admin.nomination`, at `warning`.",
 				"operationId": "nominateAdministrator",
 				"requestBody": {
 					"content": {
@@ -4576,7 +4611,7 @@
 							}
 						}
 					},
-					"description": "The nominee.",
+					"description": "Who you are nominating.",
 					"required": true
 				},
 				"responses": {
@@ -4588,7 +4623,7 @@
 								}
 							}
 						},
-						"description": "The nomination, naming the nominee and the nominator by subject."
+						"description": "The nomination, `pending`. Its `id` is what the nominee sends as `nominationId`."
 					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
@@ -4616,7 +4651,7 @@
 								}
 							}
 						},
-						"description": "`notFirstUser`: the principal's token lacks the first-user role, before the body is read. `serviceAccountNotPermitted`: a service account calls, before any lookup."
+						"description": "`notFirstUser`: you are not the first user. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
 					},
 					"404": {
 						"content": {
@@ -4638,7 +4673,7 @@
 								}
 							}
 						},
-						"description": "`nomineeNotFound`: the nominee is neither the caller nor a person Usher has met through the trusted identity provider."
+						"description": "`nomineeNotFound`: no account in the realm Usher trusts has this subject, or, with no directory configured, the nominee is neither you nor someone Usher already knows. The detail says which."
 					},
 					"409": {
 						"content": {
@@ -4660,7 +4695,7 @@
 								}
 							}
 						},
-						"description": "`firstAdministratorAccepted`: Usher's first administrator has accepted a nomination, and no first administrator is nominated after that."
+						"description": "`firstAdministratorAccepted`: Usher already has its first administrator, so it takes no more nominations."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -4672,7 +4707,26 @@
 						"$ref": "#/components/responses/InternalError"
 					},
 					"503": {
-						"$ref": "#/components/responses/ChangeUnavailable"
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["directoryUnavailable", "storeUnavailable"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`directoryUnavailable`: the identity provider's directory could not be reached to look up the nominee. Nothing was written; try again."
 					}
 				},
 				"security": [
@@ -4680,14 +4734,72 @@
 						"managementToken": []
 					}
 				],
-				"summary": "Nominates the first administrator",
+				"summary": "Nominates Usher's first administrator",
+				"tags": ["Administrators"]
+			},
+			"get": {
+				"description": "Lists every nomination of Usher's first administrator, oldest first, each with its state. Only the first user can list them, before and after an administrator accepts. Nothing is logged.",
+				"operationId": "listNominations",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NominationList"
+								}
+							}
+						},
+						"description": "Every nomination, oldest first."
+					},
+					"400": {
+						"$ref": "#/components/responses/Unreadable"
+					},
+					"401": {
+						"$ref": "#/components/responses/CredentialRefused"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["notFirstUser", "serviceAccountNotPermitted"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`notFirstUser`: you are not the first user. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ReadUnavailable"
+					}
+				},
+				"security": [
+					{
+						"managementToken": []
+					}
+				],
+				"summary": "Lists every nomination",
 				"tags": ["Administrators"]
 			}
 		},
-		"/admin/nominations/{id}/acceptance": {
-			"post": {
-				"description": "Accepts a nomination naming the principal, making them Usher's first administrator. Only the latest nomination may be accepted, and only while no administrator has accepted. Nominations and acceptances run one at a time across every instance, so no two first administrators are made and no nomination a later one replaced is accepted.\n\nA malformed id, an id naming no nomination, and a nomination naming someone other than the principal are answered `404` `nominationNotFound` alike. Then an administrator accepted already is refused with `409` `firstAdministratorAccepted`, and a nomination a later one has replaced with `409` `nominationSuperseded`.\n\nThe audit event `admin.acceptance` records the acceptance, at `critical`.",
-				"operationId": "acceptNomination",
+		"/admin/nominations/{nominationId}": {
+			"delete": {
+				"description": "Takes back a nomination you made, while its nominee has not answered it. Only the first user can revoke. The nominee can then no longer accept or decline it.\n\nChecked in this order:\n\n1. You are not the first user: `403` `notFirstUser`.\n2. The `nominationId` is not a nomination you made, because it is malformed, names no nomination, or names one made by someone else: `404` `nominationNotFound`, the same answer for all three.\n3. The nomination is no longer `pending`: `409` `nominationAlreadyDecided`, `nominationReplaced` or `nominationRevoked`.\n\nThe answer is the nomination, `revoked`, with `revokedAt`. Usher logs the revocation as the audit event `admin.nominationRevocation`, at `warning`.",
+				"operationId": "revokeNomination",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/NominationId"
@@ -4698,11 +4810,134 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/NominationAcceptance"
+									"$ref": "#/components/schemas/Nomination"
 								}
 							}
 						},
-						"description": "The new administrator, by subject, the nomination accepted, and when."
+						"description": "The nomination, `revoked`, with `revokedAt`."
+					},
+					"400": {
+						"$ref": "#/components/responses/Unreadable"
+					},
+					"401": {
+						"$ref": "#/components/responses/CredentialRefused"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["notFirstUser", "serviceAccountNotPermitted"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`notFirstUser`: you are not the first user. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["nominationNotFound"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`nominationNotFound`: the `nominationId` is malformed, names no nomination, or names one you did not make; the same answer for all three."
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": [
+														"nominationAlreadyDecided",
+														"nominationReplaced",
+														"nominationRevoked"
+													]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`nominationAlreadyDecided`: the nominee has already answered it. `nominationReplaced`: a later nomination replaced it. `nominationRevoked`: the first user took it back."
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ReadUnavailable"
+					}
+				},
+				"security": [
+					{
+						"managementToken": []
+					}
+				],
+				"summary": "Revokes a nomination",
+				"tags": ["Administrators"]
+			}
+		},
+		"/admin/nominations/{nominationId}/decisions": {
+			"post": {
+				"description": "Your answer to a nomination naming you. `{ \"decision\": \"accept\" }` makes you Usher's first administrator; `{ \"decision\": \"decline\" }` turns the nomination down. A nomination takes one answer.\n\n`nominationId` is the nomination's `id`. `GET /admin/me/nominations` lists the nominations naming you; the one you can answer is `pending`.\n\nChecked in this order:\n\n1. The body is anything but `{ \"decision\": \"accept\" }` or `{ \"decision\": \"decline\" }`: `400` for any other member, `422` `unknownDecision` for any other word.\n2. The `nominationId` is not a nomination naming you, because it is malformed, names no nomination, or names someone else's: `404` `nominationNotFound`. All three get the same answer, so it tells you nothing about other people's nominations; the audit event records which it was.\n3. Usher already has its first administrator: `409` `firstAdministratorAccepted`.\n4. The nomination is no longer `pending`: `409` `nominationAlreadyDecided`, `nominationReplaced` or `nominationRevoked`.\n\nThe answer is the nomination with its new state. Usher logs your answer as the audit event `admin.nominationDecision`, at `critical` for an acceptance and at `warning` otherwise.",
+				"operationId": "answerNomination",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/NominationId"
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NominationDecision"
+							}
+						}
+					},
+					"description": "Your answer: `accept` or `decline`.",
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Nomination"
+								}
+							}
+						},
+						"description": "The nomination, `accepted` or `declined`, with `decidedAt`. Once accepted, you are Usher's first administrator."
 					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
@@ -4730,7 +4965,7 @@
 								}
 							}
 						},
-						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup."
+						"description": "`serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
 					},
 					"404": {
 						"content": {
@@ -4752,7 +4987,7 @@
 								}
 							}
 						},
-						"description": "The id is malformed, names no nomination, or names a nomination of someone other than the principal; `nominationNotFound` for each."
+						"description": "`nominationNotFound`: the `nominationId` is malformed, names no nomination, or names a nomination of someone other than you; the same answer for all three."
 					},
 					"409": {
 						"content": {
@@ -4765,7 +5000,12 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["firstAdministratorAccepted", "nominationSuperseded"]
+													"enum": [
+														"firstAdministratorAccepted",
+														"nominationAlreadyDecided",
+														"nominationReplaced",
+														"nominationRevoked"
+													]
 												}
 											},
 											"type": "object"
@@ -4774,13 +5014,35 @@
 								}
 							}
 						},
-						"description": "`firstAdministratorAccepted`: Usher's first administrator has accepted a nomination already. `nominationSuperseded`: a later nomination has replaced this one, and only the latest may be accepted."
+						"description": "`firstAdministratorAccepted`: Usher already has its first administrator. `nominationAlreadyDecided`: the nominee has already answered it. `nominationReplaced`: a later nomination replaced it. `nominationRevoked`: the first user took it back."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
 					},
 					"415": {
 						"$ref": "#/components/responses/JsonOnly"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["unknownDecision"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`unknownDecision`: the decision is neither `accept` nor `decline`."
 					},
 					"500": {
 						"$ref": "#/components/responses/InternalError"
@@ -4794,7 +5056,7 @@
 						"managementToken": []
 					}
 				],
-				"summary": "Accepts a nomination",
+				"summary": "Accepts or declines a nomination",
 				"tags": ["Administrators"]
 			}
 		},
@@ -4855,7 +5117,7 @@
 								}
 							}
 						},
-						"description": "`administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -4994,7 +5256,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -5074,7 +5336,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -5129,7 +5391,7 @@
 								}
 							}
 						},
-						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"503": {
 						"$ref": "#/components/responses/ReadUnavailable"
@@ -5198,7 +5460,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -5268,7 +5530,7 @@
 								}
 							}
 						},
-						"description": "`administratorOnly`: a principal other than a platform administrator asks for retired resources. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`administratorOnly`: a principal other than a platform administrator asks for retired resources. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"422": {
 						"content": {
@@ -5377,7 +5639,7 @@
 								}
 							}
 						},
-						"description": "`administratorOnly`: the principal is no platform administrator. `administratorSelfOwnership`: the administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`administratorOnly`: the principal is no platform administrator. `administratorSelfOwnership`: the administrator names themself an owner, by subject or by an address resolving to them. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -5533,7 +5795,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -5629,7 +5891,7 @@
 								}
 							}
 						},
-						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -5753,7 +6015,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to update it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to update it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -5852,7 +6114,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -5933,7 +6195,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -6023,7 +6285,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority on its grants. `administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority on its grants. `administratorOnly`: a principal other than a platform administrator asks for revoked grants. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -6160,7 +6422,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to restore it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to restore it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -6256,7 +6518,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -6369,7 +6631,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -6479,7 +6741,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the study and holds no authority on its submitters. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the study and holds no authority on its submitters. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -6636,7 +6898,7 @@
 								}
 							}
 						},
-						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to suppress it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "`noAuthorityOnResource`: the principal may see the resource and holds no authority to suppress it. `serviceAccountNotPermitted`: a service account calls. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"404": {
 						"content": {
@@ -6738,7 +7000,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -6772,7 +7034,7 @@
 				"tags": ["Instance"]
 			}
 		},
-		"/admin/roles/{name}/capabilities": {
+		"/admin/roles/{roleName}/capabilities": {
 			"put": {
 				"description": "Replaces every capability carried by a role, for platform administrators. A principal notice names each holder of the role, and each Usher token issued afterwards confers the role's capabilities as they stand.",
 				"operationId": "changeRoleCapabilities",
@@ -6823,7 +7085,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -6899,7 +7161,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"500": {
 						"$ref": "#/components/responses/InternalError"
@@ -7000,7 +7262,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"409": {
 						"content": {
@@ -7118,7 +7380,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"500": {
 						"$ref": "#/components/responses/InternalError"
@@ -7219,7 +7481,7 @@
 								}
 							}
 						},
-						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but the first administrator's nomination, its acceptance and a nominee's listing until one accepts."
+						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not anything named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -7849,7 +8111,7 @@
 			"name": "Instance"
 		},
 		{
-			"description": "Usher's first administrator: the first user's nomination, its acceptance, and a nominee's own nominations.",
+			"description": "Usher's first administrator: the first user's nominations, their listing and revocation, a nominee's answer, and a nominee's own nominations.",
 			"name": "Administrators"
 		},
 		{

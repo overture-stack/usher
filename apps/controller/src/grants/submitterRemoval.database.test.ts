@@ -102,8 +102,8 @@ suite("a submitter's removal by address, in the store", () => {
 			);
 			assert.deepEqual(
 				(await revocationRows(harness.clients.migration)).map(
-					({ granteeId, reason, result, role, severity }) => ({
-						granteeId,
+					({ granteeSubject, reason, result, role, severity }) => ({
+						granteeSubject,
 						reason,
 						result,
 						role,
@@ -111,7 +111,7 @@ suite("a submitter's removal by address, in the store", () => {
 					}),
 				),
 				[1, 2].map(() => ({
-					granteeId: CAST.recipient.subject,
+					granteeSubject: CAST.recipient.subject,
 					reason: SYSTEM_ASSIGNED_REASONS.unspecified,
 					result: 'succeeded',
 					role: 'submitter',

@@ -9,16 +9,16 @@ const outcomeOf = (body: Readonly<Record<string, unknown>>): unknown => {
 };
 
 suite("reading a grant request's decision", () => {
-	test('reads granted and refused', () => {
-		assert.deepEqual([{ decision: 'granted' }, { decision: 'refused' }].map(outcomeOf), [
+	test('reads grant and decline as granted and declined', () => {
+		assert.deepEqual([{ decision: 'grant' }, { decision: 'decline' }].map(outcomeOf), [
 			{ decision: 'granted' },
-			{ decision: 'refused' },
+			{ decision: 'declined' },
 		]);
 	});
 
 	test('refuses a body by its shape 400: no decision, one that is no string, or a member not taken', () => {
 		assert.deepEqual(
-			[{}, { decision: null }, { decision: ['granted'] }, { decision: 'granted', reason: 'looks fine' }].map(
+			[{}, { decision: null }, { decision: ['grant'] }, { decision: 'grant', reason: 'looks fine' }].map(
 				outcomeOf,
 			),
 			[
@@ -30,9 +30,9 @@ suite("reading a grant request's decision", () => {
 		);
 	});
 
-	test('refuses any decision but granted and refused, exactly, 422 unknownDecision', () => {
+	test('refuses any decision but grant and decline, exactly, 422 unknownDecision', () => {
 		assert.deepEqual(
-			['Granted', 'accepted', 'rejected', 'granted ', ''].map((decision) => outcomeOf({ decision })),
+			['Grant', 'granted', 'refused', 'grant ', ''].map((decision) => outcomeOf({ decision })),
 			[
 				[422, 'unknownDecision'],
 				[422, 'unknownDecision'],

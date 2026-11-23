@@ -523,7 +523,7 @@ export const grantAndAccept = async (
 	assertSucceeded(
 		await answerGrant(recipient, grantId, {
 			capabilities,
-			decision: 'accepted',
+			decision: 'accept',
 		}),
 		'accepting the grant',
 	);

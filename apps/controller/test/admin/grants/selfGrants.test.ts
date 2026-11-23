@@ -64,7 +64,7 @@ const approvedByOwner = async (harness: Harness, request: AdminResponse): Promis
 		await decideGrantRequest(
 			await personCaller(harness, CAST.ownerOfA1),
 			createdId(request, 'the self-grant request'),
-			'granted',
+			'grant',
 		),
 		'the approved self-grant',
 	);

@@ -412,6 +412,7 @@ export const createController = (configuration: ControllerConfiguration): Contro
 						issuer: configuration.identityProviderIssuer,
 						schema: configuration.databaseSchema,
 					}),
+				directory,
 				settings,
 				store: reader,
 				trail: wakingTrail,

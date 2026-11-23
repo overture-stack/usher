@@ -114,7 +114,7 @@ suite('revoking a grant', () => {
 				fixture: grantsFixture({
 					decisions: [
 						answeredInFixture('accepted'),
-						answeredInFixture('declined', 'rejected'),
+						answeredInFixture('declined', 'declined'),
 						answeredInFixture('expired', 'accepted', new Date(now - 2 * HOUR_MS)),
 					],
 					grants: {
@@ -184,7 +184,7 @@ suite('revoking a grant', () => {
 					await answerGrant(
 						await personCaller(harness, CAST.recipient),
 						seededId(harness.seeded.grants, 'pendingOwner'),
-						{ capabilities: SHOWN.owner, decision: 'accepted' },
+						{ capabilities: SHOWN.owner, decision: 'accept' },
 					),
 					'the second owner accepting',
 				);

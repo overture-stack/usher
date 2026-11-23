@@ -95,6 +95,13 @@ non-zero on any failure:
   one copy of a peer for every package sharing it;
 - `private`: names a package marked private, which cannot be published.
 
+The Bridge's packed tarball gets three more checks. Its declarations name neither `jose` nor
+`CryptoKey`, and import only names they use. Its JavaScript imports `jose` and
+`@overture-stack/usher-types` by bare specifier and holds neither's own source. Installed with the
+packed `usher-types`, it loads through `require()` and `import()` at its root and at `./testing`.
+The install goes into a temporary directory that is removed afterwards, and runs `npm` with
+`--prefer-offline`, so it needs the npm registry for any of the Bridge's dependencies not cached.
+
 `no-pinned-peer` reads two forms as admitting one version: an exact version, bare or after `=`, and
 a caret on a `0.0.z` release, as in `^0.0.0`, which admits only `0.0.0`. A tilde on `0.0.z` admits
 every later `0.0` release, so it is not one of them.

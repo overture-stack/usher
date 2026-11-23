@@ -1,7 +1,9 @@
 import { hkdfSync } from 'node:crypto';
 
+import type { PermissionsPayload } from '@overture-stack/usher-types';
 import { CompactEncrypt, EncryptJWT, type JWEHeaderParameters, type JWTPayload } from 'jose';
 
+import type { TokenReading } from './core.js';
 import { SUBKEY_LABELS } from './keys.js';
 
 /** The application key shared by the tests and their Controller mock, as bytes. */
@@ -72,3 +74,26 @@ export const mintNotice = (notice: object | Uint8Array, options: MintOptions = {
  */
 export const mintPollAnswer = (answer: object | Uint8Array, options: MintOptions = {}): Promise<string> =>
 	mintChannelJwe(answer, 'usher-poll+jwt', SUBKEY_LABELS.pollAnswer, options);
+
+/** A token a test's reader holds: its payload, read against the transit it is given, or a rejection. */
+export type StoredReading =
+	| { kind: 'payload'; payload: PermissionsPayload }
+	| { kind: 'rejected'; reason: Extract<TokenReading, { kind: 'rejected' }>['reason'] };
+
+/**
+ * The reading the token reader gives a stored token after `transitMs` in transit, as the reader
+ * measures it: expiry at its exp, measured from iat plus one second plus transit. A stored token
+ * that is no payload is read as its rejection, and a token with no stored reading as `unexpected`.
+ */
+export const readingAt = (stored: StoredReading | undefined, transitMs: number): TokenReading => {
+	if (stored === undefined) {
+		return { kind: 'rejected', reason: 'unexpected' };
+	}
+	if (stored.kind === 'rejected') {
+		return stored;
+	}
+	const remainingMs = stored.payload.exp * 1000 - (stored.payload.iat * 1000 + 1000 + transitMs);
+	return remainingMs > 0
+		? { kind: 'payload', payload: stored.payload, remainingMs }
+		: { kind: 'rejected', reason: 'expired' };
+};

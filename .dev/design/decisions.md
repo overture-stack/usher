@@ -1733,6 +1733,30 @@ it. Decided 2026-11-02; who reaches which is in [adapter-integration.md](adapter
 
 ---
 
+### A saved set is reached as a record is: by its owners, or through a base grant where it has none
+
+A saved set is an artifact, and it is reached the way a record is. An owned set, like a categorized
+record, is reached by its owners and by whoever they share it with. A set with no owner, saved
+anonymously or unattributed, is reached as an unmarked record is, through a base grant the instance
+sets: everyone, anyone signed in, or no one. The base grant governs reaching an unowned set by naming
+it. Whether unowned sets are listed is a separate setting of the instance, defaulting to what the
+earlier decision set: unattributed sets listed, anonymous sets listed to no one. A set the reader
+cannot reach answers exactly as a missing one, in the listing and in every filter naming it, so
+naming a set never confirms that it exists. Every read still narrows a set's records to the reader's
+own access, so reaching a set never reaches a record. Saving a set needs `artifact.create` on the
+resources it draws on, so whether anonymous requesters may save sets is whether the anonymous
+baseline confers it. Decided 2026-11-23, tightening the defaults decided 2026-11-02; how a set is
+shared, and where that is recorded, are open in the roadmap.
+
+| Alternative                                                     | Why not                                                                                                                                         |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| reach an owned set by naming it                                 | holding a set's identifier would stand in for a grant, so access to it would rest on the identifier staying secret                              |
+| refuse a set in filters but serve it when named                 | the listing and the filters would disagree about the same set                                                                                   |
+| one base grant governing both reaching and listing unowned sets | anyone not signed in could write into a list every grantee reads, and each visitor's saved search would be shown to all, as 2026-11-02 rejected |
+| a flag of its own for anonymous saving                          | a setting outside the capability model, when `artifact.create` in the anonymous baseline already says it                                        |
+
+---
+
 ### A client compares against exported values, and no header names the layer that answered
 
 `@overture-stack/usher-types` exports the suspended header's name and value and the challenge's
@@ -3648,7 +3672,7 @@ ungrantable: a resource carrying no concrete category holds all its records ther
 A grant is the granter's act. Whether the recipient takes it up is theirs, and it is a separate row:
 
     Ana | HEART_STUDY | controlled | as curator | CRUD | accepted | 2026-09-18T14:32:07Z
-    Bo  | REEF_ARCHIVE | controlled | as viewer | read | rejected | 2026-09-18T15:04:51Z
+    Bo  | REEF_ARCHIVE | controlled | as viewer | read | declined | 2026-09-18T15:04:51Z
 
     Ana's token carries HEART_STUDY/controlled. Bo's carries nothing for REEF_ARCHIVE.
     Neither grant is changed by the answer to it.
@@ -3666,7 +3690,7 @@ member, and they answer independently:
     a grant to G1 on HEART_STUDY / controlled, G1 holding curator
 
     Ana | through G1 | as curator | CRUD | accepted | 2026-09-18T14:32:07Z
-    Bo  | through G1 | as curator | CRUD | rejected | 2026-09-18T15:04:51Z
+    Bo  | through G1 | as curator | CRUD | declined | 2026-09-18T15:04:51Z
 
     Ana's token carries it, Bo's does not, and the group's grant is unchanged by either.
 

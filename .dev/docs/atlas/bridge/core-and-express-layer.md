@@ -92,6 +92,9 @@ carry.
   answers before anything downstream runs.
 - The access value is attached deep-frozen as the data member `res.locals.usher`, non-writable,
   non-configurable and non-enumerable, declared to TypeScript as `readonly usher?: unknown`.
+- The access value holds two maps of enforcement results beside the principal: `results`, which the
+  view rendering produces, and `artifactCreate`, which the artifact-creation rendering produces from
+  the same payload. Both hold exactly the same keys, and the validator refuses a value where they differ.
 - `attachAccess` refuses a store that already holds `usher`, which is its contract.
 - `readAccess` accepts only a member shaped as `attachAccess` leaves it, never runs an accessor, and
   returns a fresh frozen copy it has validated, so a replaced value fails closed.
@@ -124,6 +127,8 @@ carry.
 - A Controller's 403 is a refused identity. Its 401 refuses the channel assertion, not the identity,
   so it is unavailable and never cached as a refusal. A timeout, a network failure, a 408, and a 5xx
   are a failure, except a 503 naming `admissionShareExceeded` or carrying a valid `Retry-After`.
+- A throw while signing the channel assertion is a `failed` answer with cause `defect`, and no request is
+  sent.
 - A `503 admissionShareExceeded` opens one back-off window for the whole Bridge. It lasts the
   answer's `Retry-After`, or 1 s without a valid one, capped at 5 s, plus jitter drawn uniformly from
   0 to half of that. A later one extends the window, and none shortens it. Until it ends no exchange
@@ -185,8 +190,9 @@ carry.
   request, so a stream of such tokens cannot push the Controller's refusals out.
 - No store keeps a decrypted payload.
 - The anonymous slot keeps the set of grants named in its payload, for `openTierOnly`.
-- A positive entry ends at the earliest of its Usher token's `exp`, its receipt plus the TTL timed on
-  the monotonic clock, and its sign-in token's `exp`.
+- A positive entry ends at the earliest of its Usher token's remaining life, read from the Bridge's
+  wall clock at receipt, its receipt plus the TTL timed on the monotonic clock, and its sign-in
+  token's `exp`. The [jose note](jose-usher-token.md) sets out how the remaining life is measured.
   [decisions.md](../../../design/decisions.md#the-bridges-cache-is-keyed-by-the-sign-in-token-never-by-a-claim-inside-it)
   records the two `exp` bounds, and the receipt bound holds even if a Controller defect issues a long
   `exp`.
@@ -240,8 +246,10 @@ carry.
   deadline D is aborted at D, and any abort counts as no check.
 - The channel layer calls `confirmChannel(checkStartedAt)` only after applying every notice of a
   check, in the same tick, with the check's start read from the injected monotonic clock.
-- A wall clock, `Date.now()` by default, serves every comparison with an `exp`, jose's `currentDate`
-  and event times.
+- A wall clock, `Date.now()` by default, serves each sign-in token's `exp`, the local expiry of an
+  Usher token's remaining life, and event times. An Usher token's `exp` is read against the
+  Controller's clock, as a bound, so the wall clock never decides whether an Usher token has
+  expired.
 - A monotonic clock, `performance.now()` by default and injected in tests, times the grace period,
   the poll deadline and each entry's TTL.
 - The core reads the monotonic clock on every request, and a timer only logs a lapse when no request
@@ -254,7 +262,12 @@ carry.
   normalized. The compiled conditions are held in that key's own
   compiled form, never in a table shared across keys, so two keys may give one category name
   different conditions.
-- Rendering runs once per exchange and interns its results. A record key's narrowing is usher-types'
+- Rendering runs once per exchange and interns its results. Each payload is rendered twice, once for
+  `results` by `renderKey` and once for `artifactCreate` by `renderArtifactCreate`, and each map is
+  interned on its own. The two renderings differ in one thing: an entry counts for a record when its
+  `record` array holds `view` in the first, and when its `artifact` array holds `create` in the second.
+  The category gaps are logged for the view rendering alone, since both meet the same gaps for a key.
+  A record key's narrowing is usher-types'
   `canonicalRecordNarrowing`, which excludes what is not held, one clause per category
   ([decisions.md](../../../design/decisions.md#a-category-is-a-condition-over-records-and-a-record-needs-every-category-it-matches)).
 - A record key's narrowing is served only past the Bridge's two guards. The rendering guard reads it
@@ -355,16 +368,16 @@ carry.
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | credential              | what a request presents: a sign-in token, or an opaque API key                                                                                                                                      |
 | digest                  | the base64url SHA-256 of the whole credential, which keys the stores                                                                                                                                |
-| key                     | one entry an adapter registers and the request access value's `results` carries; in Arranger, one catalogue                                                                                         |
+| key                     | one entry an adapter registers and the request access value's `results` and `artifactCreate` carry; in Arranger, one catalogue                                                                      |
 | application key         | the 32-byte secret, one per application, from which every key the Bridge holds is derived, the token key among them; the configuration's `key` parameter carries it                                 |
 | entry                   | what a store holds for one digest, or the anonymous store's one slot, the anonymous entry                                                                                                           |
 | flight                  | one exchange in progress for one digest, shared by every request waiting on it                                                                                                                      |
 | check                   | an event that renews the grace period; the notice stream defines it                                                                                                                                 |
-| wall clock              | the clock that tells the time of day; `exp` and event times are read against it, and it can step backward                                                                                           |
+| wall clock              | the clock that tells the time of day; a sign-in token's `exp` and event times are read against it, and it can step backward                                                                         |
 | monotonic clock         | a clock that only moves forward, used to measure elapsed time                                                                                                                                       |
 | refused                 | the Controller refused the identity, or the credential is a signed token past its own `exp`; the request gets 401                                                                                   |
 | malformed               | the Controller answered, and the Bridge rejected the Usher token in it; treated as not received, so the request gets 503                                                                            |
-| failed                  | the Controller gave no usable answer: a timeout, a network failure, a server error or a 408                                                                                                         |
+| failed                  | the Controller gave no usable answer: a timeout, a network failure, a server error or a 408; or a throw while signing, which sends nothing                                                          |
 | unavailable             | the outcome answered with 503                                                                                                                                                                       |
 | anonymous               | a principal presenting no credential: its credential `none`, never suspended                                                                                                                        |
 | suspended               | a principal whose grants are on hold, served the open tier: `unconfirmed`, or `confirmed` naming its subject for attribution alone                                                                  |
@@ -422,7 +435,7 @@ interface BridgeConfiguration {
 		refusalMax?: number; // default 10000
 	};
 	tokenTtlMs?: number; // default 300000
-	wallClock?: Clock; // default Date.now(): exp comparisons and event times
+	wallClock?: Clock; // default Date.now(): sign-in token exp, Usher token local expiry, event times
 }
 
 // KeyRegistration: imported from usher-types, which validates it, and re-exported by the bridge.
@@ -719,16 +732,18 @@ string put a resource name into its message (run). Some kinds of parse error giv
 Any path that lets an error reach Express can therefore put payload fragments into a response or a
 log.
 
-The layer returns nothing to Express. It chains `.then(onOutcome, fail)` on the outcome, and runs
-the work before that promise exists, a host's `extract` included, inside a `try` whose `catch` also
-calls `fail`. Synchronous throws and asynchronous rejections then both reach `fail`, as
-[Packaging the Bridge](packaging-and-toolchain.md) requires. `fail` logs `bridge.internalError`
-carrying only `{ stage }` and answers 503 with fixed text, unless headers have already been sent. A
-`.catch` after the chain does the same for a throw while settling the outcome, such as one from
-`next`, logging the stage `attach`. A throw while answering is caught in both: from the `try` it
-would reach Express, which would answer with its own error page, and from the `.catch` it would
-become an unhandled rejection, which would end the process. The layer's tests cover, on both
-versions:
+The layer returns nothing to Express. A host's `extract` runs inside a `try` whose `catch` calls
+`fail` with the stage `extract`. The core's `resolve` runs inside a promise chain, so a synchronous
+throw from it becomes a rejection, and the chain is `.then(onOutcome, onRejection)`, where
+`onRejection` calls `fail` with the stage `resolve`. These meet the requirement of
+[Packaging the Bridge](packaging-and-toolchain.md) that synchronous throws and asynchronous
+rejections both reach `fail`. `fail` logs `bridge.internalError` carrying only `{ stage }` and
+answers 503 with fixed text, unless headers have already been sent. `attach` names an access that
+`attachAccess` refuses. A throw while answering, from the 400, the 401, an outcome's 503 or `next`,
+calls `fail` with the stage `answer`. A throw from the 503 that `fail` itself sends is swallowed,
+since the failure is already logged: it would otherwise reach Express, which would answer with its
+own error page, or become an unhandled rejection, which would end the process. The layer's tests
+cover, on both versions:
 
 1. an anonymous request attached, with the value frozen and not replaceable;
 2. two concurrent principals, each seeing only its own access;
@@ -936,6 +951,7 @@ every request URL is built relative to it.
 | 403                                                                                                                                | refused                       | refusal store                                      | 401                                                                                                                                   |
 | 401, the channel assertion refused                                                                                                 | unavailable                   | no                                                 | 503, logged as `token.exchangeFailure` with cause `assertionRefused`; at startup, a probable key mismatch                             |
 | timeout, network failure, 408, or a 5xx other than a 503 naming `admissionShareExceeded` or carrying a valid `Retry-After`         | failed                        | failure store                                      | the anonymous results, `openTierOnly` and `suspended`, credential `unconfirmed` with no subject; 503 with no usable anonymous payload |
+| a throw while signing the channel assertion                                                                                        | failed                        | failure store                                      | as for a failed exchange, with no request sent                                                                                        |
 | 503 `admissionShareExceeded`                                                                                                       | backed off                    | no; the back-off window opens for the whole Bridge | as for a failed exchange; counted in the aggregated `token.exchangeFailure` event with cause `admissionShareExceeded`                 |
 | any other 503 carrying a valid `Retry-After`                                                                                       | held                          | failure store, for that `Retry-After` plus jitter  | as for a failed exchange; counted in the aggregated `token.exchangeFailure` event with cause `retryAfter`                             |
 | 429, or any other status                                                                                                           | unavailable                   | no                                                 | 503, logged as `token.exchangeFailure` with cause `status`                                                                            |
@@ -992,6 +1008,12 @@ nothing is.
 `compileKey(registration)` runs once per key, at `register`. A record key's global categories and each
 resource's own are compiled into that key's own form: each condition with the keys of every node
 sorted. An open key is kept as registered.
+
+`renderArtifactCreate(payload, key, filterClauseLimit)` is the same function for `artifactCreate`, with
+one rule changed: an entry counts for a record key when it is not partitioned by field and its
+`artifact` array holds `create`, where `renderKey` counts one whose `record` array holds `view`. A
+resource is held for artifact creation on the same terms, so the unmarked records and the categories
+it holds are its own. Every failure mode is shared, and an open key gets `allow` in both.
 
 `renderKey(payload, key, filterClauseLimit)` is pure:
 
@@ -1081,7 +1103,9 @@ caught by the other:
 
 Lists compare as sets, and conditions by their JSON once `normalizedCondition` has normalized them.
 A filter the parse refuses, which includes one with a missing clause dropped, or any difference
-denies the key with `rendering-mismatch`, and `catalogue.renderingMismatch` is logged as critical.
+denies the key with `rendering-mismatch`, and `catalogue.renderingMismatch` is logged as critical. Each
+rendering runs its own guard, under the capability it enforces, `record.view` or `artifact.create`, and
+the event names it.
 The guard reads the registration's own conditions rather than their compiled form, so a fault in
 compiling a condition is caught as well (reasoned).
 
@@ -1190,7 +1214,7 @@ nothing found. The [test plan](../../bridge-tests.md#the-fixtures) carries both 
 
 ### Interning
 
-The interning key is the results serialized as JSON. Plain `JSON.stringify` is stable here only
+The interning key is each map of results serialized as JSON, `results` and `artifactCreate` alike. Plain `JSON.stringify` is stable here only
 because usher-types normalizes each condition and sorts every list, and the registration's order is
 fixed. Equal keys map to one frozen object, from a bounded pool of 4,096. The corpus's 35 payloads
 render to 10 distinct results for one record key defining both of the default configuration's global
@@ -1239,10 +1263,11 @@ cost in memory per entry. A's cost per exchange was not measured.
 
 ## Time
 
-| Clock           | Default             | Read for                                                                                                                  | Why this clock                                             |
-| --------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| wall clock      | `Date.now()`        | the expiry of entries and refusals against `exp`; jose's `currentDate`; event times                                       | `exp` is wall time                                         |
-| monotonic clock | `performance.now()` | the grace period, on every request; the poll deadline; the start of a check, passed to `confirmChannel`; each entry's TTL | a step in the wall clock must not open or close the window |
+| Clock            | Default                                  | Read for                                                                                                                             | Why this clock                                                 |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| wall clock       | `Date.now()`                             | the expiry of entries and refusals against a sign-in token's `exp`; the local expiry of an Usher token's remaining life; event times | `exp` is wall time                                             |
+| Controller clock | none; the bound is `iat` + 1 s + transit | an Usher token's `exp`, as a bound on the Controller's time at receipt                                                               | the Controller sets `iat`, so its clock is the one `exp` is in |
+| monotonic clock  | `performance.now()`                      | the grace period, on every request; the poll deadline; the start of a check, passed to `confirmChannel`; each entry's TTL            | a step in the wall clock must not open or close the window     |
 
 **Why the grace period needs a monotonic clock.** With the grace period written as `Date.now()`
 arithmetic, a 30 s backward step of the wall clock, taken 30 s after a check, left the elapsed time
@@ -1275,10 +1300,11 @@ exchange timeout runs on the global `setTimeout`, and so does the timer that log
 after each firing rather than run by `setInterval`, so mocking `setTimeout` alone drives both
 (reasoned).
 
-jose takes the wall clock as `currentDate`. It floors the current time to whole seconds, so with a
-tolerance of 0 it accepts a token until 1 ms before its `exp` in milliseconds and expires it from
-that instant on, the instant at which the stores drop its entry (read from source, then run). Its
-options belong to [jose for the Usher token](jose-usher-token.md).
+jose takes a `currentDate` for each Usher token from the Controller's bound, not the wall clock. It
+floors the date to whole seconds, so with a tolerance of 0 it accepts a token until 1 ms before its
+`exp` in milliseconds and expires it from that instant on, the instant at which the stores drop its
+entry (read from source, then run). Its options belong to
+[jose for the Usher token](jose-usher-token.md).
 
 ## Logging
 
@@ -1311,18 +1337,18 @@ Every event the Bridge emits, as registered in [audit-events.md](../../../design
 | `category.unknown`                | a key defines a category the payload does not list, global or for a resource it names, so its records are always excluded there; once per catalogue and category, and per resource for a resource category                                                                                               | `catalogue`, `category`, `resourceId` for a resource category                                                                                                                                   | `warning`                                                         |
 | `category.unmapped`               | a key is denied for a global category it neither defines nor declares absent, once per catalogue and category; or a resource is withheld from a key for a resource category the key does not define, once per catalogue, category and resource                                                           | `catalogue`, `category`; `resourceId` for a resource category only                                                                                                                              | `critical` for a global category, `error` for a resource category |
 | `credential.refusal`              | an identity is refused                                                                                                                                                                                                                                                                                   | `origin`: `controller`, `localExpiry` or `cachedRefusal`                                                                                                                                        | `info`                                                            |
-| `token.exchangeFailure`           | an exchange cannot complete, whether failed or unavailable, once for each; or, counted with one event per cause per interval, requests overloaded, exchanges shed for the admission share, requests answered without an exchange while the Bridge backs off, and holds for `Retry-After`                 | `cause`: `timeout`, `network`, `status` or `assertionRefused`; or a counted cause, `overloaded`, `admissionShareExceeded`, `backedOff` or `retryAfter`, which adds `count`                      | `warning`                                                         |
+| `token.exchangeFailure`           | an exchange cannot complete, whether failed or unavailable, once for each; or, counted with one event per cause per interval, requests overloaded, exchanges shed for the admission share, requests answered without an exchange while the Bridge backs off, and holds for `Retry-After`                 | `cause`: `timeout`, `network`, `defect`, `status` or `assertionRefused`; or a counted cause, `overloaded`, `admissionShareExceeded`, `backedOff` or `retryAfter`, which adds `count`            | `warning`                                                         |
 | `token.rejection`                 | an Usher token is rejected                                                                                                                                                                                                                                                                               | `reason`, one of the jose note's reason codes; a token whose `aud` does not name this application is `audienceRejected`                                                                         | `warning`                                                         |
 | `notice.applied`                  | a notice is applied                                                                                                                                                                                                                                                                                      | `kind`, `entriesDropped`                                                                                                                                                                        | `info`                                                            |
 | `token.overtaken`                 | an exchange answer is discarded because a notice affecting it arrived while it was in flight: the first time the Bridge exchanges again, the second it serves the open tier, marked suspended and naming its verified subject for attribution alone, or nothing when no usable anonymous payload is held | `outcome`: `exchangedAgain`, `servedOpenTier` or `abandoned`                                                                                                                                    | `info`                                                            |
-| `catalogue.renderingMismatch`     | the rendering guard finds a record key's filter saying something other than its payload and registration, or refused by the parse, and denies the key; once each time the key is rendered                                                                                                                | `catalogue`                                                                                                                                                                                     | `critical`                                                        |
-| `catalogue.filterLimit`           | the clause guard denies a record key whose filter counts more clauses than `filterClauseLimit`; once each time the key is rendered                                                                                                                                                                       | `catalogue`, `filterClauseLimit`, the configured limit and never a count                                                                                                                        | `error`                                                           |
+| `catalogue.renderingMismatch`     | the rendering guard finds a record key's filter saying something other than its payload and registration, or refused by the parse, and denies the key; once each time the key is rendered                                                                                                                | `capability`, `catalogue`                                                                                                                                                                       | `critical`                                                        |
+| `catalogue.filterLimit`           | the clause guard denies a record key whose filter counts more clauses than `filterClauseLimit`; once each time the key is rendered                                                                                                                                                                       | `capability`, `catalogue`, `filterClauseLimit`, the configured limit and never a count                                                                                                          | `error`                                                           |
 | `catalogue.resourceListMissing`   | a record key registers an empty resource list, which denies every request to it; once per key at start                                                                                                                                                                                                   | `catalogue`                                                                                                                                                                                     | `critical`                                                        |
 | `credential.malformed`            | no single credential can be read, or one arrives in the query                                                                                                                                                                                                                                            | `reason`: `multiple`, `scheme` or `query`                                                                                                                                                       | `info`                                                            |
-| `bridge.internalError`            | an unexpected failure inside the layer or the core                                                                                                                                                                                                                                                       | `stage`                                                                                                                                                                                         | `critical`                                                        |
+| `bridge.internalError`            | an unexpected failure inside the layer or the core                                                                                                                                                                                                                                                       | `stage` (`answer`, `attach`, `extract`, `refreshAnonymous` or `resolve`)                                                                                                                        | `critical`                                                        |
 | `bridge.startRefusal`             | the Bridge refuses to start, and stays cold                                                                                                                                                                                                                                                              | `reason`, a fixed code naming the rule, never a configured value                                                                                                                                | `critical`                                                        |
 | `bridge.exchangeTimeoutShort`     | the Bridge starts with an exchange timeout below the Controller's exchange deadline plus the margin, so it may give up on an exchange the Controller answers in time; once at start                                                                                                                      | `exchangeTimeoutMs`, `minimumMs`                                                                                                                                                                | `warning`                                                         |
-| `revocationChannel.failure`       | a poll fails, answered with a status other than 200, 406 or 410, unable to reach the Controller or aborted at its deadline, or a defect is thrown while polling, applying a pushed notice, or handing a 410 to the channel; counted by the channel layer, one event per cause per interval               | `cause`: `status`, `network`, `timeout` or `defect`; `count`, the failures of that cause counted                                                                                                | `warning`                                                         |
+| `revocationChannel.failure`       | a poll fails, answered with a status other than 200, 406 or 410, unable to reach the Controller or aborted at its deadline, or a defect is thrown while polling, signing or applying a pushed notice, or handing a 410 to the channel; counted by the channel layer, one event per cause per interval    | `cause`: `status`, `network`, `timeout` or `defect`; `count`, the failures of that cause counted                                                                                                | `warning`                                                         |
 | `revocationChannel.pushReconnect` | the push is silent past its idle timer and reconnects                                                                                                                                                                                                                                                    | `reason`                                                                                                                                                                                        | `info`                                                            |
 | `revocationChannel.reset`         | the stream answers 410, and every positive entry and the anonymous entry are dropped                                                                                                                                                                                                                     | none                                                                                                                                                                                            | `warning`                                                         |
 | `revocationChannel.malformed`     | a notice or a poll answer fails to read, a poll page asks for more from a cursor its check already asked after, the Controller refuses the notice versions listed, or the push is answered with a 200 that is not an event stream                                                                        | `reason`, a fixed code                                                                                                                                                                          | `warning`                                                         |
@@ -1360,7 +1386,8 @@ What the builders guarantee, and what they do not:
   fields is a convention of the call sites, not a property of the types.
 - No event carries any part of a sign-in token, its key identifier included.
 - `catalogue.filterLimit` carries the configured limit, never a count of the principal's grants or
-  categories, and neither guard's event carries a value from the payload or the filter.
+  categories, and neither guard's event carries a value from the payload or the filter. Both name the
+  `capability` whose rendering was denied, `record.view` or `artifact.create`.
 - `category.unenforced` and `category.unmapped` are the only events carrying values taken from the
   payload. `category.unmapped` carries no principal at all, and `category.unknown` carries only names
   from the registration: a category, and for a resource category its resource. `category.unenforced` is the one event allowed to carry a

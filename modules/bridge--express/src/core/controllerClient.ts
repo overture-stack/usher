@@ -53,6 +53,10 @@ const FAILED_BY_STATUS: ExchangeAnswer = Object.freeze({
 	cause: 'status',
 	kind: 'failed',
 });
+const SIGNING_FAILED: ExchangeAnswer = Object.freeze({
+	cause: 'defect',
+	kind: 'failed',
+});
 
 /** The most bytes of a 503's body read for its problem code: 2 KiB. */
 const PROBLEM_READ_CAP_BYTES = 2_048;
@@ -142,8 +146,9 @@ const tokenOf = async (response: FetchResponse, cap: number): Promise<ExchangeAn
  * - for a 408 or any other 5xx, `failed` with cause `status`;
  * - for any other status, `unavailable` with cause `status`;
  * - for a failure once the exchange's signal has aborted, `failed` with cause `timeout`;
- * - for any other failure, a redirect, a throw while signing and a failure reading a 503's body
- *   included, `failed` with cause `network`.
+ * - for a throw while signing, `failed` with cause `defect`, and no request sent;
+ * - for any other failure, a redirect and a failure reading a 503's body included, `failed` with
+ *   cause `network`.
  *
  * A valid `Retry-After` is the whole header, 1 to 6 ASCII digits naming at least one second, as
  * {@link retryAfterSecondsOf} reads it.
@@ -154,30 +159,45 @@ export const createFetchControllerClient = ({
 	fetch = globalThis.fetch,
 	payloadVersions,
 	responseCapBytes,
-}: FetchControllerClientOptions): ControllerClient => ({
-	exchange: async ({ credential, signal }) => {
+}: FetchControllerClientOptions): ControllerClient => {
+	/** Signs the channel assertion, or `undefined` when signing throws. */
+	const signed = async (): Promise<string | undefined> => {
 		try {
-			const response = await fetch(new URL('exchange', controllerUrl), {
-				body: JSON.stringify(credential === null ? { payloadVersions } : { credential, payloadVersions }),
-				headers: {
-					accept: 'application/jwt',
-					authorization: `Bearer ${await assertion()}`,
-					'content-type': 'application/json',
-				},
-				method: 'POST',
-				redirect: 'error',
-				signal,
-			});
-			if (response.status === 200) {
-				return await tokenOf(response, responseCapBytes);
-			}
-			if (response.status === 503) {
-				return await answerFor503(response, responseCapBytes);
-			}
-			void response.body?.cancel().catch(() => undefined);
-			return answerForStatus(response.status);
+			return await assertion();
 		} catch {
-			return signal.aborted ? TIMED_OUT : NETWORK_FAILED;
+			return undefined;
 		}
-	},
-});
+	};
+
+	return {
+		exchange: async ({ credential, signal }) => {
+			const channelAssertion = await signed();
+			if (channelAssertion === undefined) {
+				return SIGNING_FAILED;
+			}
+			try {
+				const response = await fetch(new URL('exchange', controllerUrl), {
+					body: JSON.stringify(credential === null ? { payloadVersions } : { credential, payloadVersions }),
+					headers: {
+						accept: 'application/jwt',
+						authorization: `Bearer ${channelAssertion}`,
+						'content-type': 'application/json',
+					},
+					method: 'POST',
+					redirect: 'error',
+					signal,
+				});
+				if (response.status === 200) {
+					return await tokenOf(response, responseCapBytes);
+				}
+				if (response.status === 503) {
+					return await answerFor503(response, responseCapBytes);
+				}
+				void response.body?.cancel().catch(() => undefined);
+				return answerForStatus(response.status);
+			} catch {
+				return signal.aborted ? TIMED_OUT : NETWORK_FAILED;
+			}
+		},
+	};
+};

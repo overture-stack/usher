@@ -3,7 +3,14 @@ import type { OpenApiDocument } from './types.js';
 
 const MANAGEMENT_SCHEME = 'managementToken';
 
-const SIGN_IN_SCHEME = 'identityProviderSignIn';
+/** The security scheme the API documentation page signs people in through. */
+export const SIGN_IN_SCHEME = 'identityProviderSignIn';
+
+/**
+ * The sign-in scheme's member naming the identity provider's end-session endpoint, read by the page to
+ * end the provider's session on a sign-out. An OpenAPI extension, so every other reader ignores it.
+ */
+export const END_SESSION_MEMBER = 'x-end-session-endpoint';
 
 const OPENID_SCOPE_DESCRIPTION = 'Sign in through the identity provider.';
 
@@ -37,16 +44,18 @@ const withSignInAlternatives = (operation: unknown): unknown =>
 /**
  * The contract the API documentation page serves: the committed one, plus an OAuth 2.0 security
  * scheme, `identityProviderSignIn`, naming one flow, `authorizationCode`, at the authorization and
- * token endpoints given, with the `openid` scope alone, and, right after every security requirement
- * naming `managementToken`, the alternative `{ "identityProviderSignIn": [] }`. Nothing else is added,
- * and the committed contract is left as it was.
+ * token endpoints given, with the `openid` scope alone, carrying the end-session endpoint as
+ * {@link END_SESSION_MEMBER} where one is given, and, right after every security requirement naming
+ * `managementToken`, the alternative `{ "identityProviderSignIn": [] }`. Nothing else is added, and the
+ * committed contract is left as it was.
  *
  * @param committed the committed contract.
- * @param endpoints the identity provider's authorization and token endpoints.
+ * @param endpoints the identity provider's authorization and token endpoints, and its end-session
+ *   endpoint where it names one.
  */
 export const servedSpec = (
 	committed: OpenApiDocument,
-	{ authorizationEndpoint, tokenEndpoint }: SignInEndpoints,
+	{ authorizationEndpoint, endSessionEndpoint, tokenEndpoint }: SignInEndpoints,
 ): OpenApiDocument => ({
 	...committed,
 	components: {
@@ -62,6 +71,7 @@ export const servedSpec = (
 					},
 				},
 				type: 'oauth2',
+				...(endSessionEndpoint === undefined ? {} : { [END_SESSION_MEMBER]: endSessionEndpoint }),
 			},
 		},
 	},

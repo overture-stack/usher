@@ -89,7 +89,7 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'Field category not taken',
 		'A grant names its record category alone: leave fieldCategory out.',
 	),
-	grantNotFound: problem('grantNotFound', 404, 'Grant not found', 'No grant you may act on has the id named.'),
+	grantNotFound: problem('grantNotFound', 404, 'Grant not found', 'No grant you may act on has the grantId named.'),
 	grantReplaced: problem(
 		'grantReplaced',
 		409,
@@ -161,7 +161,7 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'requestDecided',
 		409,
 		'Grant request decided',
-		'The grant request is granted or refused already, and keeps its decision.',
+		'The grant request is granted or declined already, and keeps its decision.',
 	),
 	requestLapsed: problem(
 		'requestLapsed',
@@ -173,7 +173,7 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'requestNotFound',
 		404,
 		'Grant request not found',
-		'No grant request you may decide has the id named.',
+		'No grant request you may decide has the grantRequestId named.',
 	),
 	resourceNeedsAnOwner: problem(
 		'resourceNeedsAnOwner',
@@ -230,8 +230,8 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'Submitter category not offered',
 		"The grant names no category, and the instance's submitter category is not one the store holds: name the category in category.",
 	),
-	unknownDecision: problem('unknownDecision', 422, 'Unknown decision', 'decision is accepted or rejected.'),
-	unknownRequestDecision: problem('unknownDecision', 422, 'Unknown decision', 'decision is granted or refused.'),
+	unknownDecision: problem('unknownDecision', 422, 'Unknown decision', 'decision is accept or decline.'),
+	unknownRequestDecision: problem('unknownDecision', 422, 'Unknown decision', 'decision is grant or decline.'),
 	unknownRevocationReason: problem(
 		'unknownRevocationReason',
 		422,

@@ -73,6 +73,8 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  * - `nominations` and `administrators`: each nomination of a person to be an administrator, kept as
  *   written, its `nominated_at` later than every nomination's before it, and each administrator, by
  *   the nomination they accepted (ruled).
+ * - `nomination_declines` and `nomination_revocations`: each nomination its nominee declined, and each
+ *   the first user revoked, by the nomination, with the instant each was recorded, kept as written.
  * - `schema_migrations`: each applied migration's name, a checksum of its content, and when it was
  *   applied.
  * - `change_records`: `old_row` and `new_row` hold a row's values as a JSON object keyed by column
@@ -92,7 +94,7 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  *   `selfGrant`, asked for by its holder, or `orphanedResource`, asked for by a platform administrator
  *   for another person on a resource with no counted owner, the principal asking in `requested_by`
  *   and the holder in `holder_user_id`; the grant's terms as `grants` names them, the requested end in `expires_at`, and what the principal asking was
- *   shown in `capabilities`; its decision, `granted` or `refused`, with who decided and when, all
+ *   shown in `capabilities`; its decision, `granted` or `declined`, with who decided and when, all
  *   three empty while undecided, the decider being neither the principal who asked nor its holder;
  *   and the grant written by granting it, in `grant_id`, set exactly when granted. A decision is
  *   kept once written, and a request is never deleted.
@@ -291,6 +293,20 @@ export const POLICY_TABLES = {
 		},
 		name: 'key_fingerprints',
 	},
+	nominationDeclines: {
+		columns: {
+			declinedAt: 'declined_at',
+			nominationId: 'nomination_id',
+		},
+		name: 'nomination_declines',
+	},
+	nominationRevocations: {
+		columns: {
+			nominationId: 'nomination_id',
+			revokedAt: 'revoked_at',
+		},
+		name: 'nomination_revocations',
+	},
 	nominations: {
 		columns: {
 			id: 'id',
@@ -472,7 +488,7 @@ export const POLICY_TABLES = {
  * (`grantRequestKind`), a self-grant asked for by its holder (`grantRequestSelfHeld`), an orphaned
  * resource's request held by someone other than the principal asking
  * (`grantRequestOrphanedHeldByAnother`), its decision recorded whole or not at all
- * (`grantRequestDecisionWhole`) and only as `granted` or `refused` (`grantRequestDecision`), its
+ * (`grantRequestDecisionWhole`) and only as `granted` or `declined` (`grantRequestDecision`), its
  * grant named exactly when granted (`grantRequestGrantWhenGranted`), its decider neither the
  * principal who asked nor its holder (`grantRequestDecidedByAnother`), its decision kept once written
  * (`grantRequestDecisionKept`) and the request never deleted (`grantRequestKept`); the principal
@@ -875,7 +891,7 @@ export interface FixtureDecision {
 	/** The transaction's clock when it is written, by default, so answers written in turn are ordered. */
 	decidedAt?: Date;
 
-	decision: 'accepted' | 'rejected';
+	decision: 'accepted' | 'declined';
 
 	/** The fixture grant answered. */
 	grant: string;
@@ -1005,6 +1021,8 @@ const {
 	groupUsers,
 	groups,
 	invitations,
+	nominationDeclines,
+	nominationRevocations,
 	nominations,
 	principalRevocations,
 	resourceCategories,

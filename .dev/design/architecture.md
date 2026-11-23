@@ -37,7 +37,7 @@ reach which study. All of its operations are absorbed by Usher:
 | ------------------------------------ | ---------------------------------------------------- |
 | Create study group in EGO            | `POST /admin/resources`                              |
 | Add user to study group              | `POST /admin/grants`                                 |
-| Remove user from study group         | `DELETE /admin/grants/{id}`                          |
+| Remove user from study group         | `DELETE /admin/grants/{grantId}`                     |
 | List users in a study                | `GET /admin/resources/{id}/grants`                   |
 | Create EGO policy for study          | Implicit: resource creation creates the access scope |
 

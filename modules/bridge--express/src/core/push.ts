@@ -109,6 +109,8 @@ const endingForStatus = (status: number): Ending => {
  *   last applied position.
  * - A throw while applying a notice is handed to the sink as a defect, and the push reconnects from
  *   the last applied position too.
+ * - A throw while signing an attempt's channel assertion is handed to the sink as a defect, and that
+ *   attempt is ended without any request, so the push reconnects on its usual backoff.
  * - A push silent past its idle timer is replaced, logged as `revocationChannel.pushReconnect`, and
  *   reported to the sink as silent.
  * - A 410 drops the push position and hands the loss of history to the sink, and the push reconnects
@@ -244,6 +246,15 @@ export const createPush = ({
 		}
 	};
 
+	/** Signs the channel assertion, or `undefined` when signing throws. */
+	const signed = async (): Promise<string | undefined> => {
+		try {
+			return await assertion();
+		} catch {
+			return undefined;
+		}
+	};
+
 	/**
 	 * One connection attempt, from opening the request to the stream's end. The idle timer runs from
 	 * the attempt's start, so a path that never answers, headers included, is replaced like a silent
@@ -272,12 +283,17 @@ export const createPush = ({
 		};
 		armIdle();
 		try {
+			const channelAssertion = await signed();
+			if (channelAssertion === undefined) {
+				sink.defect();
+				return 'closed';
+			}
 			const response = await untilAborted(
 				connection.signal,
 				fetch(new URL('notices/stream', controllerUrl), {
 					headers: {
 						accept: 'text/event-stream',
-						authorization: `Bearer ${await assertion()}`,
+						authorization: `Bearer ${channelAssertion}`,
 						'last-event-id': from,
 						[NOTICE_VERSIONS_HEADER]: NOTICE_VERSIONS.join(','),
 					},

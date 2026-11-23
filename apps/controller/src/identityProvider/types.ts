@@ -71,9 +71,15 @@ export type IssuerEndpointsLog = Pick<EventLog, 'error'>;
 export type IssuerEndpointsFailure =
 	'discoveryIssuer' | 'endpointLocation' | 'endpointOrigin' | 'status' | 'unreachable';
 
-/** The trusted issuer's authorization and token endpoints, each at the issuer's origin, as URLs. */
+/**
+ * The trusted issuer's authorization and token endpoints, and its end-session endpoint where its
+ * discovery names one, each at the issuer's origin, as URLs.
+ */
 export interface SignInEndpoints {
 	authorizationEndpoint: string;
+
+	/** Where the issuer ends a session it holds, for a sign-out started by the API documentation page. */
+	endSessionEndpoint?: string;
 	tokenEndpoint: string;
 }
 

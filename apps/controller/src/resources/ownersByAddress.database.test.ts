@@ -20,7 +20,7 @@ import { cleanupFor } from '../../testing/harness/waiting.js';
 const OWNERS = [CAST.newcomer, CAST.spare];
 
 suite("a registration's owners named by address, in the store", () => {
-	test('commits an owner grant for each address under the subject of the account holding it, in the order named, the first its initialOwnerId, storing no address', async (context) => {
+	test('commits an owner grant for each address under the subject of the account holding it, in the order named, the first its initialOwnerSubject, storing no address', async (context) => {
 		const directory = await startDirectory({
 			accounts: OWNERS.map(({ email, subject }) => ({ email, id: subject })),
 		});
@@ -58,13 +58,13 @@ suite("a registration's owners named by address, in the store", () => {
 				assert.deepEqual(
 					events
 						.filter(({ type }) => type === emittedType(AUDIT_EVENT_TYPES.resourceRegistration))
-						.map((event) => dataOf(event)['initialOwnerId']),
+						.map((event) => dataOf(event)['initialOwnerSubject']),
 					[OWNERS[0]?.subject],
 				);
 				assert.deepEqual(
 					events
 						.filter(({ type }) => type === emittedType(AUDIT_EVENT_TYPES.grantCreation))
-						.map((event) => dataOf(event)['granteeId']),
+						.map((event) => dataOf(event)['granteeSubject']),
 					OWNERS.map(({ subject }) => subject),
 				);
 				const texts = await auditRowTexts(migration);

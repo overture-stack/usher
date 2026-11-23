@@ -43,7 +43,7 @@ const LISTED = grantsFixture({
 	decisions: [
 		answeredInFixture('anaOwnsE5'),
 		answeredInFixture('anaOwnsF6'),
-		answeredInFixture('cyDeclinesC3', 'rejected'),
+		answeredInFixture('cyDeclinesC3', 'declined'),
 		answeredInFixture('lookalikeViews'),
 		answeredInFixture('spareRevoked'),
 	],
@@ -231,7 +231,7 @@ suite('the resource listing for an administrator, in the store', () => {
 			);
 			assert.deepEqual(
 				(listedResource(listing, OPEN_STUDY).grants ?? []).map(({ state }) => state),
-				[GRANT_STATES.rejected],
+				[GRANT_STATES.declined],
 			);
 			assert.ok(!listing.text.includes(CAST.lookalike.email));
 		});

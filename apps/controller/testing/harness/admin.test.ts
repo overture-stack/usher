@@ -7,7 +7,7 @@ import { suite, type TestContext, test } from 'node:test';
 import { decodeJwt, decodeProtectedHeader } from 'jose';
 
 import {
-	acceptNomination,
+	decideNomination,
 	addSubmitter,
 	type AdminCaller,
 	administratorCaller,
@@ -58,6 +58,7 @@ import {
 	listGrantRequests,
 	listedResources,
 	listOwnGrants,
+	listNominations,
 	listOwnNominations,
 	MANAGEMENT_ROUTES,
 	managementRouteOf,
@@ -74,6 +75,7 @@ import {
 	pageMembersBeside,
 	nominate,
 	personCaller,
+	revokeNomination,
 	PLATFORM_REVOCATION_REASONS,
 	postBackChannelLogout,
 	type ProblemDetails,
@@ -356,8 +358,8 @@ const OPERATIONS: readonly Expected[] = [
 		target: '/admin/grants/self',
 	},
 	{
-		body: { decision: 'granted' },
-		call: (caller) => decideGrantRequest(caller, GRANT, 'granted'),
+		body: { decision: 'grant' },
+		call: (caller) => decideGrantRequest(caller, GRANT, 'grant'),
 		method: 'POST',
 		name: 'decideGrantRequest',
 		target: `/admin/grant-requests/${GRANT}/decisions`,
@@ -384,12 +386,12 @@ const OPERATIONS: readonly Expected[] = [
 	{
 		body: {
 			capabilities: ['record.count', 'record.view'],
-			decision: 'accepted',
+			decision: 'accept',
 		},
 		call: (caller) =>
 			answerGrant(caller, GRANT, {
 				capabilities: ['record.count', 'record.view'],
-				decision: 'accepted',
+				decision: 'accept',
 			}),
 		method: 'POST',
 		name: 'answerGrant',
@@ -444,10 +446,23 @@ const OPERATIONS: readonly Expected[] = [
 		target: '/admin/nominations',
 	},
 	{
-		call: (caller) => acceptNomination(caller, GRANT),
+		call: (caller) => listNominations(caller),
+		method: 'GET',
+		name: 'listNominations',
+		target: '/admin/nominations',
+	},
+	{
+		body: { decision: 'accept' },
+		call: (caller) => decideNomination(caller, GRANT, 'accept'),
 		method: 'POST',
-		name: 'acceptNomination',
-		target: `/admin/nominations/${GRANT}/acceptance`,
+		name: 'decideNomination',
+		target: `/admin/nominations/${GRANT}/decisions`,
+	},
+	{
+		call: (caller) => revokeNomination(caller, GRANT),
+		method: 'DELETE',
+		name: 'revokeNomination',
+		target: `/admin/nominations/${GRANT}`,
 	},
 	{
 		body: { reason: 'compromised account', subject: 'auth0|bo+test/=' },
@@ -644,7 +659,7 @@ suite("the Management API's routes", () => {
 			].map(([method = '', target = '']) => managementRouteOf(method, target)),
 			[
 				{ method: 'POST', route: '/admin/grants/self' },
-				{ method: 'DELETE', route: '/admin/grants/{id}' },
+				{ method: 'DELETE', route: '/admin/grants/{grantId}' },
 				{ method: 'GET', route: '/admin/resources/{externalId}/grants' },
 				{
 					method: 'PUT',
@@ -663,7 +678,7 @@ suite("the Management API's routes", () => {
 	test("reads an operation's route from the request it sends, reaching no controller", async () => {
 		assert.deepEqual(await managementRouteOfOperation((caller) => revokeGrant(caller, GRANT)), {
 			method: 'DELETE',
-			route: '/admin/grants/{id}',
+			route: '/admin/grants/{grantId}',
 		});
 		assert.deepEqual(
 			await managementRouteOfOperation((caller) =>
@@ -926,7 +941,9 @@ suite('the problem codes and reason vocabularies', () => {
 				'grantReplaced',
 				'grantsOrInvitationsRemain',
 				'importInProgress',
-				'nominationSuperseded',
+				'nominationAlreadyDecided',
+				'nominationReplaced',
+				'nominationRevoked',
 				'requestDecided',
 				'requestLapsed',
 				'resourceNeedsAnOwner',
@@ -942,6 +959,7 @@ suite('the problem codes and reason vocabularies', () => {
 				'selfGrantExpiryRequired',
 				'selfGrantTooLong',
 				'unknownApplication',
+				'unknownDecision',
 			],
 			503: ['directoryNotConfigured', 'directoryUnavailable', 'importNotConfigured', 'storeUnavailable'],
 		});

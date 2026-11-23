@@ -55,7 +55,7 @@ suite('acceptance decisions', () => {
 				)
 			)[grants.columns.id],
 		);
-		const decisions = ['accepted', 'rejected', 'declined', 'pending', 'Accepted', ''];
+		const decisions = ['accepted', 'declined', 'rejected', 'pending', 'Accepted', ''];
 
 		const outcomes = await inTurn(
 			decisions.map((decision, index) => ({ decision, index })),
@@ -84,7 +84,7 @@ suite('acceptance decisions', () => {
 		]);
 		assert.deepEqual(
 			(await answersAbout(owner, grantId)).map(({ decision }) => decision),
-			['accepted', 'rejected'],
+			['accepted', 'declined'],
 		);
 	});
 
@@ -97,7 +97,7 @@ suite('acceptance decisions', () => {
 			grantDecisions,
 			decisionRow({
 				decidedAt: new Date('2026-10-01T12:00:00Z'),
-				decision: 'rejected',
+				decision: 'declined',
 				grantId,
 				userId,
 			}),
@@ -116,7 +116,7 @@ suite('acceptance decisions', () => {
 
 		assert.deepEqual(
 			(await answersAbout(owner, grantId)).map(({ decision }) => decision),
-			['rejected', 'accepted'],
+			['declined', 'accepted'],
 		);
 	});
 
@@ -161,7 +161,7 @@ suite('acceptance decisions', () => {
 
 		await assert.rejects(
 			inTransactionAs(owner, SYSTEM_ACTOR, async () => {
-				await answerNow('rejected');
+				await answerNow('declined');
 				await answerNow('accepted');
 			}),
 			violation(INTEGRITY.unique, POLICY_CONSTRAINTS.decisionOrder),

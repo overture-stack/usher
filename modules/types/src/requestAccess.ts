@@ -69,6 +69,12 @@ export type UsherPrincipal = ConfirmedPrincipal | NoCredentialPrincipal | Suspen
  * never the token, the payload or the grants behind them.
  */
 export interface UsherRequestAccess {
+	/**
+	 * One enforcement result for each key registered by the adapter, for the records the principal may
+	 * create an artifact from. It holds exactly the keys `results` holds.
+	 */
+	artifactCreate: Record<string, Enforcement>;
+
 	principal: UsherPrincipal;
 
 	/** One enforcement result for each key registered by the adapter. */
@@ -87,11 +93,13 @@ export type RequestAccessValidationResult =
 
 /** The wording of every rule held by {@link validateRequestAccess}, keyed by a stable name. */
 export const REQUEST_ACCESS_RULES = {
+	artifactCreate: 'artifactCreate is a map holding at least one enforcement result',
+	artifactCreateKeys: 'artifactCreate holds a result for exactly the keys results holds, no more and no fewer',
 	attributionOnlySubject:
 		'attributionOnlySubject is a non-empty string, naming a suspended confirmed principal for attribution alone',
 	credential: 'credential is none, unconfirmed or confirmed',
-	isMap: 'request access is a map of principal, results and version',
-	members: 'request access carries only principal, results and version',
+	isMap: 'request access is a map of artifactCreate, principal, results and version',
+	members: 'request access carries only artifactCreate, principal, results and version',
 	noCredentialNeverSuspended: 'a principal presenting no credential is never suspended',
 	openTierOnlyIsBoolean: 'openTierOnly is a boolean',
 	principalIsMap: "principal is a map of credential, openTierOnly and suspended, and a confirmed principal's subject",
@@ -110,6 +118,7 @@ export const REQUEST_ACCESS_RULES = {
 
 const ACCESS_MEMBERS: ReadonlySet<string> = new Set(
 	Object.keys({
+		artifactCreate: true,
 		principal: true,
 		results: true,
 		version: true,
@@ -145,7 +154,13 @@ const subjectMemberOf = (credential: unknown, suspended: unknown): string | unde
 	return undefined;
 };
 
-const RESULT_POSITION = 'results.<key>';
+/** The two maps of enforcement results a request access carries, each under its own name. */
+type ResultMember = 'artifactCreate' | 'results';
+
+const RESULT_RULES: Readonly<Record<ResultMember, string>> = {
+	artifactCreate: REQUEST_ACCESS_RULES.artifactCreate,
+	results: REQUEST_ACCESS_RULES.results,
+};
 
 const principalProblems = (principal: unknown): readonly ValidationProblem[] => {
 	if (isPlainRecord(principal)) {
@@ -197,20 +212,38 @@ const principalProblems = (principal: unknown): readonly ValidationProblem[] => 
 	return [{ position: 'principal', rule: REQUEST_ACCESS_RULES.principalIsMap }];
 };
 
-const resultsProblems = (results: unknown): readonly ValidationProblem[] => {
-	const entries = ownEntries(results);
+const resultMapProblems = (member: ResultMember, map: unknown): readonly ValidationProblem[] => {
+	const entries = ownEntries(map);
+	const keyPosition = `${member}.<key>`;
 
 	if (entries !== undefined && entries.length > 0) {
 		return entries.flatMap(([key, result]) => [
-			...brokenRules(RESULT_POSITION, [[isUsableKey(key), REQUEST_ACCESS_RULES.resultKey]]),
+			...brokenRules(keyPosition, [[isUsableKey(key), REQUEST_ACCESS_RULES.resultKey]]),
 			...enforcementProblems(result).map(({ position, rule }) => ({
-				position: nestedPosition(RESULT_POSITION, position),
+				position: nestedPosition(keyPosition, position),
 				rule,
 			})),
 		]);
 	}
 
-	return [{ position: 'results', rule: REQUEST_ACCESS_RULES.results }];
+	return [{ position: member, rule: RESULT_RULES[member] }];
+};
+
+/**
+ * The two maps must name the same keys: a key `results` holds and `artifactCreate` lacks, or the reverse,
+ * is a problem with the value as a whole. A map that is not a map is already reported under its own name.
+ */
+const sameKeysProblems = (value: Readonly<Record<string, unknown>>): readonly ValidationProblem[] => {
+	const artifactCreate = ownEntries(ownMember(value, 'artifactCreate'));
+	const results = ownEntries(ownMember(value, 'results'));
+	const keysOf = (entries: NonNullable<typeof results>): string =>
+		JSON.stringify(entries.map(([key]) => key).toSorted());
+
+	return artifactCreate === undefined || results === undefined
+		? []
+		: brokenRules('artifactCreate', [
+				[keysOf(artifactCreate) === keysOf(results), REQUEST_ACCESS_RULES.artifactCreateKeys],
+			]);
 };
 
 const requestAccessProblems = (value: unknown): readonly ValidationProblem[] => {
@@ -222,7 +255,9 @@ const requestAccessProblems = (value: unknown): readonly ValidationProblem[] => 
 						[hasOnlyMembers(value, ACCESS_MEMBERS), REQUEST_ACCESS_RULES.members],
 					]),
 					...principalProblems(ownMember(value, 'principal')),
-					...resultsProblems(ownMember(value, 'results')),
+					...resultMapProblems('artifactCreate', ownMember(value, 'artifactCreate')),
+					...resultMapProblems('results', ownMember(value, 'results')),
+					...sameKeysProblems(value),
 				]
 			: [{ position: 'version', rule: REQUEST_ACCESS_RULES.version }];
 	}
@@ -234,15 +269,16 @@ const requestAccessProblems = (value: unknown): readonly ValidationProblem[] => 
  * Validates a request's access against version 1, never throwing, whatever `value` is. A value of
  * any other version is refused for its version alone and read no further. A value of version 1 is
  * accepted only when:
- * - the root carries `principal`, `results` and `version` and nothing else;
+ * - the root carries `artifactCreate`, `principal`, `results` and `version` and nothing else;
  * - the principal carries `credential`, `openTierOnly` and `suspended` and nothing else, besides a
  *   non-empty `subject` when confirmed and not suspended, or a non-empty `attributionOnlySubject`
  *   when confirmed and suspended;
  * - a principal presenting no credential is never suspended, an unconfirmed one is always
  *   suspended, and both are marked open-tier only;
  * - a suspended principal is marked open-tier only;
- * - `results` is a non-empty map whose every key is neither empty nor `__proto__` and whose every
- *   entry passes `validateEnforcement`.
+ * - `results` and `artifactCreate` are each a non-empty map whose every key is neither empty nor
+ *   `__proto__` and whose every entry passes `validateEnforcement`, and the two hold exactly the same
+ *   keys.
  *
  * @param value a request's access, untrusted.
  * @returns a copy of the value's own data, typed, which is exactly what was checked, or every

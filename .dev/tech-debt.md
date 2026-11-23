@@ -8,14 +8,6 @@ Open design questions are tracked in `.dev/design/` and the OWASP gap analysis i
 
 ---
 
-The packaging checks the Bridge's packaging note requires run by hand only: that the packed
-declarations name neither `jose` nor `CryptoKey` and import only names they use, that the
-packed JavaScript imports `jose` and `@overture-stack/usher-types` rather than inlining them, and
-that the tarballs load through both `require()` and `import()`, the root and the `./testing`
-subpath beside it.
-fix: add them to `scripts/check-pack.ts`, which the Jenkins job runs as its `check:pack` stage.
-standalone: yes
-
 With a custom `extract`, a host reading credentials from cookies or service headers still answers
 with Bearer challenges: the 400 says `Bearer error="invalid_request"`, and its fixed text asks for a
 Bearer token in the Authorization header.
@@ -25,19 +17,6 @@ the refused credential was a bearer token (RFC 6750 § 3.1); the 400's text name
 credential source.
 standalone: no
 context: waits on the first host with its own credential source adopting the Bridge.
-
-The Express layer logs a synchronous throw from `core.resolve`, and a throw while answering, under
-`bridge.internalError` stages naming other steps, `extract` or `resolve`.
-fix: call `core.resolve` through a promise so its throw reaches the `resolve` handler, and add an
-`answer` stage for throws while answering, to `INTERNAL_ERROR_STAGES` and to the event table.
-standalone: yes
-
-A throw while signing the channel assertion is reported as a network failure on the exchange and as
-a close on the push, but as a defect on the poll.
-fix: sign before each request's `try` in `controllerClient.ts` and `push.ts`, as the poll does, and
-report the throw as a defect, adding that cause to the exchange's failure causes and to the Bridge's
-list of events.
-standalone: yes
 
 `pnpm-workspace.yaml` overrides the glob archiver-utils resolves to `^14.0.3`, outside the
 `glob ^10` range archiver-utils requires, since that range carries GHSA-3g3m-2fjr-6pw4 and, through
@@ -139,17 +118,6 @@ fix: on each run, find any setting that no `settings.seeding` event names and re
 marked as recovered.
 standalone: yes
 
-The Bridge reads an Usher token's expiry against its own wall clock, with no tolerance and no
-correction for skew from the Controller (`tokenReader.ts`, `clockTolerance: 0`). A Bridge whose clock
-runs ahead reads a fresh token as expired whenever the token has less life left than the skew, and
-the Controller floors a token's expiry to the earliest grant expiry it carries. So within the skew
-before each grant's expiry, both the exchange and its single retry read expired, and the
-person's requests are answered 503 for the failure hold.
-fix: the Bridge measures its offset from the Controller on each exchange, from the token's issuedAt
-against its own clock at receipt, and reads expiry against the clock so corrected, never with a
-tolerance that stretches a token's life.
-standalone: yes
-
 A platform administrator's `GET /admin/resources` carries every unrevoked grant of each resource on
 the page (`grantsOnResources` in `apps/controller/src/grants/grantListingOperations.ts`), with no
 bound on how many, and reads each holder from the directory, eight at a time. The page's `limit`
@@ -159,3 +127,17 @@ fix: cap the number of grants carried by each entry, and have an entry over the 
 it left out, pointing at `GET /admin/resources/{externalId}/grants`, which pages them.
 standalone: no
 context: changes the listing's contract, so it lands before a stable release.
+
+Eight Controller test cases are placeholders with no assertions, named for refusals of tokens and
+channel assertions that verify under no live key, of unreadable sign-in tokens, and of a forged
+token's subject reaching the audit trail. One is a `test.todo` in
+`createChannelAssertionVerifier.test.ts` (one assertion presented in two encodings). Seven are empty
+suites marked `todo`: one each in `createChannelAssertionVerifier.test.ts`,
+`createTokenVerifier.test.ts`, `test/exchange/issuance/channelAssertion.test.ts` and
+`conformanceGaps.test.ts`, and three in `test/audit/tokenExchange.test.ts`. The test runner counts a
+todo suite as a suite, so a run's todo total shows one where eight exist.
+fix: write each case from its source (tickets #209, #214 and #215, and the refused-subject ruling),
+the forged-subject case first, and decide whether the two-encodings case is written or removed.
+Until then, a placeholder stays a `todo`, so it never reads as a passing test.
+standalone: no
+context: the cases forge tokens and signatures, which the developer writes by hand.

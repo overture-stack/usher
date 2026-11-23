@@ -7,7 +7,10 @@ import type { DiagramArea } from './diagram.js';
  */
 export const SCHEMA_AREAS: readonly DiagramArea[] = Object.freeze([
 	{ tables: ['users', 'user_identities'], title: 'Principals' },
-	{ tables: ['administrators', 'nominations'], title: 'Administrators' },
+	{
+		tables: ['administrators', 'nominations', 'nomination_declines', 'nomination_revocations'],
+		title: 'Administrators',
+	},
 	{ tables: ['groups', 'group_users'], title: 'Groups' },
 	{
 		tables: ['resources', 'resource_fields', 'resource_field_values', 'categories', 'resource_categories'],
@@ -22,7 +25,7 @@ export const SCHEMA_AREAS: readonly DiagramArea[] = Object.freeze([
 		title: 'Capabilities, roles and permissions',
 	},
 	{
-		tables: ['grants', 'grant_decisions', 'invitations'],
+		tables: ['grants', 'grant_decisions', 'grant_requests', 'grant_operations', 'invitations'],
 		title: 'Grants and invitations',
 	},
 	{
@@ -30,7 +33,7 @@ export const SCHEMA_AREAS: readonly DiagramArea[] = Object.freeze([
 		title: 'Revocations and sign-outs',
 	},
 	{
-		tables: ['notices', 'notice_stream', 'notice_retention', 'notification_outbox'],
+		tables: ['notices', 'notice_stream', 'notice_retention', 'notification_outbox', 'used_channel_assertions'],
 		title: 'The notice stream',
 	},
 	{

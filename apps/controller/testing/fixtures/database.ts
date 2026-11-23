@@ -55,6 +55,8 @@ const {
 	groupUsers,
 	groups,
 	invitations,
+	nominationDeclines,
+	nominationRevocations,
 	nominations,
 	noticeStream,
 	notices,
@@ -1210,6 +1212,8 @@ export const HISTORY_KEPT: Readonly<Record<string, readonly LaterOperation[]>> =
 	[applicationKeys.name]: ['delete'],
 	[grantDecisions.name]: ['delete', 'update'],
 	[grants.name]: ['delete'],
+	[nominationDeclines.name]: ['delete', 'update'],
+	[nominationRevocations.name]: ['delete', 'update'],
 	[nominations.name]: ['delete', 'update'],
 	[principalRevocations.name]: ['delete'],
 });
@@ -1263,6 +1267,8 @@ export const CHANGE_RECORDED_TABLES: readonly NamedTable[] = Object.freeze([
 	grants,
 	groupUsers,
 	groups,
+	nominationDeclines,
+	nominationRevocations,
 	nominations,
 	principalRevocations,
 	resourceCategories,
@@ -1303,6 +1309,8 @@ export const recordedChangeKits = (seeded: SeededPolicy): readonly RecordedChang
 	const lyricKeyId = randomUUID();
 	const anaNominated = randomUUID();
 	const cyNominated = randomUUID();
+	const declinedNomination = randomUUID();
+	const revokedNomination = randomUUID();
 	return [
 		{
 			delete: statement(`DELETE FROM ${qualified(administrators)} WHERE ${administrators.columns.userId} = $1`, [
@@ -1402,17 +1410,17 @@ export const recordedChangeKits = (seeded: SeededPolicy): readonly RecordedChang
 		},
 		{
 			delete: statement(
-				`DELETE FROM ${qualified(grantDecisions)} WHERE ${grantDecisions.columns.userId} = $1 AND ${grantDecisions.columns.decision} = 'rejected'`,
+				`DELETE FROM ${qualified(grantDecisions)} WHERE ${grantDecisions.columns.userId} = $1 AND ${grantDecisions.columns.decision} = 'declined'`,
 				[user('ana')],
 			),
 			insert: statement(
-				`INSERT INTO ${qualified(grantDecisions)} (${grantDecisions.columns.capabilities}, ${grantDecisions.columns.decidedAt}, ${grantDecisions.columns.decision}, ${grantDecisions.columns.grantId}, ${grantDecisions.columns.userId}) VALUES ('{record.count,record.export,record.view}', now(), 'rejected', $1, $2)`,
+				`INSERT INTO ${qualified(grantDecisions)} (${grantDecisions.columns.capabilities}, ${grantDecisions.columns.decidedAt}, ${grantDecisions.columns.decision}, ${grantDecisions.columns.grantId}, ${grantDecisions.columns.userId}) VALUES ('{record.count,record.export,record.view}', now(), 'declined', $1, $2)`,
 				[seededId(seeded.grants, 'anaViews'), user('ana')],
 			),
 			prepare: [],
 			table: grantDecisions,
 			update: statement(
-				`UPDATE ${qualified(grantDecisions)} SET ${grantDecisions.columns.capabilities} = '{record.view}' WHERE ${grantDecisions.columns.userId} = $1 AND ${grantDecisions.columns.decision} = 'rejected'`,
+				`UPDATE ${qualified(grantDecisions)} SET ${grantDecisions.columns.capabilities} = '{record.view}' WHERE ${grantDecisions.columns.userId} = $1 AND ${grantDecisions.columns.decision} = 'declined'`,
 				[user('ana')],
 			),
 			updateMovesKey: false,
@@ -1466,6 +1474,50 @@ export const recordedChangeKits = (seeded: SeededPolicy): readonly RecordedChang
 			table: groups,
 			update: statement(
 				`UPDATE ${qualified(groups)} SET ${groups.columns.description} = 'Readers of the whole cohort' WHERE ${groups.columns.name} = 'readers'`,
+			),
+			updateMovesKey: false,
+		},
+		{
+			delete: statement(
+				`DELETE FROM ${qualified(nominationDeclines)} WHERE ${nominationDeclines.columns.nominationId} = $1`,
+				[declinedNomination],
+			),
+			insert: statement(
+				`INSERT INTO ${qualified(nominationDeclines)} (${nominationDeclines.columns.declinedAt}, ${nominationDeclines.columns.nominationId}) VALUES (now(), $1)`,
+				[declinedNomination],
+			),
+			prepare: [
+				statement(
+					`INSERT INTO ${qualified(nominations)} (${nominations.columns.id}, ${nominations.columns.nominatedAt}, ${nominations.columns.nominatedBy}, ${nominations.columns.nomineeId}) VALUES ($1, now(), $2, $3)`,
+					[declinedNomination, steward, user('bo')],
+				),
+			],
+			table: nominationDeclines,
+			update: statement(
+				`UPDATE ${qualified(nominationDeclines)} SET ${nominationDeclines.columns.declinedAt} = ${nominationDeclines.columns.declinedAt} + interval '1 second' WHERE ${nominationDeclines.columns.nominationId} = $1`,
+				[declinedNomination],
+			),
+			updateMovesKey: false,
+		},
+		{
+			delete: statement(
+				`DELETE FROM ${qualified(nominationRevocations)} WHERE ${nominationRevocations.columns.nominationId} = $1`,
+				[revokedNomination],
+			),
+			insert: statement(
+				`INSERT INTO ${qualified(nominationRevocations)} (${nominationRevocations.columns.nominationId}, ${nominationRevocations.columns.revokedAt}) VALUES ($1, now())`,
+				[revokedNomination],
+			),
+			prepare: [
+				statement(
+					`INSERT INTO ${qualified(nominations)} (${nominations.columns.id}, ${nominations.columns.nominatedAt}, ${nominations.columns.nominatedBy}, ${nominations.columns.nomineeId}) VALUES ($1, now(), $2, $3)`,
+					[revokedNomination, steward, user('bo')],
+				),
+			],
+			table: nominationRevocations,
+			update: statement(
+				`UPDATE ${qualified(nominationRevocations)} SET ${nominationRevocations.columns.revokedAt} = ${nominationRevocations.columns.revokedAt} + interval '1 second' WHERE ${nominationRevocations.columns.nominationId} = $1`,
+				[revokedNomination],
 			),
 			updateMovesKey: false,
 		},

@@ -901,6 +901,23 @@ suite('reportOf', () => {
 		});
 	});
 
+	test('prints each pass as a PASS line, which fails nothing and is not counted as a note', () => {
+		const passing: PackageReport = {
+			files: SHIPPED_FILES,
+			findings: [{ level: 'pass', message: 'the declarations hold', rule: 'declaration-names-internals' }],
+			packageName: '@overture-stack/usher-bridge--express',
+		};
+
+		assert.deepEqual(reportOf([passing]), {
+			failed: false,
+			lines: [
+				'ok    @overture-stack/usher-bridge--express  ships README.md, dist/index.d.ts, dist/index.js, package.json',
+				'PASS  @overture-stack/usher-bridge--express  declaration-names-internals: the declarations hold',
+				'checked 1 package: 0 failures, 0 notes',
+			],
+		});
+	});
+
 	test('fails when no package was packed, rather than pass with nothing checked', () => {
 		assert.deepEqual(reportOf([]), {
 			failed: true,

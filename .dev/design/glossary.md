@@ -254,8 +254,10 @@ Something assembled by a person from records and kept, carrying provenance that 
 it drew on.
 
 Its own entity on the data plane, because reaching an artifact is not reaching its records: every
-read of one is checked against the reader's own grants, which is why handing someone an artifact
-confers nothing and no capability governs doing so. A saved set is the first kind of one.
+read of one is checked against the reader's own grants, so sharing an artifact confers none of its
+records. Reaching the artifact itself is governed as reaching a record is: an owned artifact by its
+owners and whoever they share it with, and one with no owner through the instance's base grant. A
+saved set is the first kind of one.
 
 **Authorization**
 Holding permission, created by a grant and standing whether or not anyone acts on it.
@@ -853,9 +855,12 @@ See [security-workflow.md § Permission computation pipeline](security-workflow.
 
 **Request access** _(`UsherRequestAccess`)_
 One request's access as a Bridge hands it to an adapter: the principal, with whether the results
-hold the open tier alone and whether the principal is **suspended**, and an **enforcement result** for
-each key the adapter registered. Plain data, the same from every Bridge, carried in each framework's
-own per-request store under the key `usher`. See [adapter-integration.md](adapter-integration.md).
+hold the open tier alone and whether the principal is **suspended**, and two maps of **enforcement
+results**, each holding one for each key the adapter registered. The first map, `results`, says what the
+principal may view. The second, `artifactCreate`, says which records the principal may create an
+**artifact** from, and so holds exactly the keys `results` holds. Plain data, the same from every Bridge,
+carried in each framework's own per-request store under the key `usher`. See
+[adapter-integration.md](adapter-integration.md).
 
 **Resource field**
 The field naming a record's resource, tested by every enforcement clause.

@@ -158,10 +158,10 @@ suite('the grant rate against the store', () => {
 					await changeGrantExpiry(ana, created, ending),
 					await revokeGrant(ana, created),
 					await createSelfGrant(ana, selfGrantUntil(instantFromNow(HOUR_MS))),
-					await decideGrantRequest(ana, askedOfAna, 'granted'),
+					await decideGrantRequest(ana, askedOfAna, 'grant'),
 					await answerGrant(ana, offeredToAna, {
 						capabilities: SHOWN.viewer,
-						decision: 'accepted',
+						decision: 'accept',
 					}),
 					await createSelfGrant(
 						anaAsAdministrator,

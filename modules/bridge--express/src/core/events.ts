@@ -25,7 +25,7 @@ export interface BridgeLogger {
 export type BridgeMode = 'cold' | 'normal' | 'uncertain';
 
 /** Where inside the Bridge an unexpected failure happened. */
-export const INTERNAL_ERROR_STAGES = ['attach', 'extract', 'refreshAnonymous', 'resolve'] as const;
+export const INTERNAL_ERROR_STAGES = ['answer', 'attach', 'extract', 'refreshAnonymous', 'resolve'] as const;
 
 /** Each rule named by a refusal to start, as a fixed code rather than a configured value. */
 export const START_REFUSAL_REASONS = [
@@ -83,7 +83,7 @@ const BRIDGE_MODES = ['cold', 'normal', 'uncertain'] as const;
 const CHANNEL_FAILURE_CAUSES = ['defect', 'network', 'status', 'timeout'] as const;
 
 /** The causes of `token.exchangeFailure` logged once for each exchange. */
-const EXCHANGE_FAILURE_CAUSES = ['assertionRefused', 'network', 'status', 'timeout'] as const;
+const EXCHANGE_FAILURE_CAUSES = ['assertionRefused', 'defect', 'network', 'status', 'timeout'] as const;
 
 /** The causes of `token.exchangeFailure` counted, each logged once per interval with its count. */
 const TALLIED_EXCHANGE_FAILURE_CAUSES = ['admissionShareExceeded', 'backedOff', 'overloaded', 'retryAfter'] as const;
@@ -93,6 +93,7 @@ const NOTICE_KINDS = ['baseline', 'category', 'global', 'principal', 'servedReso
 const OVERTAKEN_OUTCOMES = ['abandoned', 'exchangedAgain', 'servedOpenTier'] as const;
 const REFUSAL_ORIGINS = ['cachedRefusal', 'controller', 'localExpiry'] as const;
 const UNENFORCED_ENTRIES = ['fieldPartition'] as const;
+const RENDERED_CAPABILITIES = ['artifact.create', 'record.view'] as const;
 const MALFORMED_CHANNEL_REASONS = [
 	'answerUnreadable',
 	'cursorRepeated',
@@ -124,12 +125,18 @@ export interface BridgeEventData {
 	'bridge.internalError': { stage: OneOf<typeof INTERNAL_ERROR_STAGES> };
 	'bridge.startRefusal': { reason: OneOf<typeof START_REFUSAL_REASONS> };
 	'catalogue.filterLimit': {
+		/** The capability whose rendering was denied: `record.view`, or `artifact.create`. */
+		capability: OneOf<typeof RENDERED_CAPABILITIES>;
 		catalogue: string;
 
 		/** The configured limit, never a count of the principal's grants or categories. */
 		filterClauseLimit: number;
 	};
-	'catalogue.renderingMismatch': { catalogue: string };
+	'catalogue.renderingMismatch': {
+		/** The capability whose rendering was denied: `record.view`, or `artifact.create`. */
+		capability: OneOf<typeof RENDERED_CAPABILITIES>;
+		catalogue: string;
+	};
 
 	/**
 	 * Logged once for each record key registered with an empty resource list, which denies every
@@ -142,7 +149,7 @@ export interface BridgeEventData {
 		payloadVersion: number;
 		reason: 'notImplemented';
 		resourceId: ResourceIdentifier;
-		userId: string | null;
+		userSubject: string | null;
 	};
 	'category.unknown': {
 		catalogue: string;
@@ -268,12 +275,12 @@ export const EVENT_CATALOGUE: Readonly<Record<BridgeEventName, EventDefinition>>
 	},
 	'catalogue.filterLimit': {
 		actorType: 'system',
-		fields: { catalogue: text, filterClauseLimit: count },
+		fields: { capability: oneOf(RENDERED_CAPABILITIES), catalogue: text, filterClauseLimit: count },
 		severity: 'error',
 	},
 	'catalogue.renderingMismatch': {
 		actorType: 'system',
-		fields: { catalogue: text },
+		fields: { capability: oneOf(RENDERED_CAPABILITIES), catalogue: text },
 		severity: 'critical',
 	},
 	'catalogue.resourceListMissing': {
@@ -289,7 +296,7 @@ export const EVENT_CATALOGUE: Readonly<Record<BridgeEventName, EventDefinition>>
 			payloadVersion: count,
 			reason: oneOf(['notImplemented']),
 			resourceId: text,
-			userId: { kind: 'text', nullable: true },
+			userSubject: { kind: 'text', nullable: true },
 		},
 		severity: 'warning',
 	},

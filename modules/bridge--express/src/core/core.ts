@@ -42,13 +42,15 @@ import {
 	type EventLog,
 } from './events.js';
 import { grantSet, holdsOnlyOpenTier } from './grants.js';
-import { guardEventOf } from './guards.js';
+import { guardEventOf, type RenderedCapability } from './guards.js';
 import { type ApplicationKeys, credentialDigest, importApplicationKey, subjectTag } from './keys.js';
 import { createModeMachine } from './modes.js';
 import { createPositiveStore } from './positiveStore.js';
 import {
 	type CompiledKey,
 	compileKey,
+	type KeyRendering,
+	renderArtifactCreate,
 	renderKey,
 	unenforcedEntries,
 	type UnknownCategory,
@@ -69,7 +71,7 @@ type TokenRejectionReason = BridgeEventData['token.rejection']['reason'];
  */
 export type ExchangeAnswer =
 	| { kind: 'admissionShareExceeded'; retryAfterSeconds: number | undefined }
-	| { cause: 'network' | 'status' | 'timeout'; kind: 'failed' }
+	| { cause: 'defect' | 'network' | 'status' | 'timeout'; kind: 'failed' }
 	| { cause: 'assertionRefused' | 'status'; kind: 'unavailable' }
 	| { kind: 'refused' }
 	| { kind: 'retryAfter'; retryAfterSeconds: number }
@@ -85,13 +87,21 @@ export interface ControllerClient {
 	exchange(request: { credential: string | null; signal: AbortSignal }): Promise<ExchangeAnswer>;
 }
 
-/** An Usher token read: its validated payload, or the fixed reason it was rejected. */
+/**
+ * An Usher token read: its validated payload and the time left on it, measured on the Controller's
+ * clock at receipt, or the fixed reason it was rejected.
+ */
 export type TokenReading =
-	{ kind: 'payload'; payload: PermissionsPayload } | { kind: 'rejected'; reason: TokenRejectionReason };
+	| { kind: 'payload'; payload: PermissionsPayload; remainingMs: number }
+	| { kind: 'rejected'; reason: TokenRejectionReason };
 
 /** Reads an Usher token into its validated payload, or the fixed reason it was rejected. */
 export interface TokenReader {
-	read(token: string): Promise<TokenReading>;
+	/**
+	 * Reads `token`, which took `transitMs` to arrive: the monotonic time from the start of the one
+	 * request that produced it to its answer.
+	 */
+	read(token: string, options: { transitMs: number }): Promise<TokenReading>;
 }
 
 /** What each seam is built from. */
@@ -642,7 +652,7 @@ const createRuntime = ({
 				payloadVersion: payload.payloadVersion,
 				reason: 'notImplemented',
 				resourceId,
-				userId: payload.sub,
+				userSubject: payload.sub,
 			}),
 		);
 
@@ -672,30 +682,18 @@ const createRuntime = ({
 	const logUnknown = logGapsOnce(unknownSeen, 'category.unknown');
 	const logUnmapped = logGapsOnce(unmappedSeen, 'category.unmapped');
 
-	/** Records a guard's denial of a key, once for each time the key is rendered. */
-	const logGuard = (key: string, enforcement: Enforcement): void => {
-		const event = guardEventOf(key, enforcement, configuration.filterClauseLimit);
+	/** Records a guard's denial of a key under the capability rendered, once for each time it is rendered. */
+	const logGuard = (key: string, enforcement: Enforcement, capability: RenderedCapability): void => {
+		const event = guardEventOf(key, enforcement, configuration.filterClauseLimit, capability);
 		if (event !== undefined) {
 			events.emit(event.name, event.data);
 		}
 	};
 
-	/** Renders every key once per payload received, sharing one frozen object among equal results. */
-	const resultsFor = (payload: PermissionsPayload): Readonly<Record<string, Enforcement>> => {
-		logUnenforced(payload);
-		const rendered = Object.fromEntries(
-			Object.entries(registrations).map(([key, compiled]) => {
-				const { enforcement, unknown, unmapped } = renderKey(
-					payload,
-					compiled,
-					configuration.filterClauseLimit,
-				);
-				logUnmapped(key, unmapped);
-				logUnknown(key, unknown);
-				logGuard(key, enforcement);
-				return [key, enforcement] as const;
-			}),
-		);
+	/** Shares one frozen object among equal maps of enforcement results. */
+	const internedResults = (
+		rendered: Readonly<Record<string, Enforcement>>,
+	): Readonly<Record<string, Enforcement>> => {
 		const internKey = JSON.stringify(rendered);
 		const held = interned.get(internKey);
 		if (held !== undefined) {
@@ -704,6 +702,30 @@ const createRuntime = ({
 		const frozen = deepFreeze(rendered);
 		interned.set(internKey, frozen, FOREVER);
 		return frozen;
+	};
+
+	/**
+	 * Renders every key under both renderings once per payload received, sharing one frozen object among
+	 * equal results. The gaps are logged for the view rendering alone, since both renderings meet the same
+	 * gaps for a key.
+	 */
+	const resultsFor = (
+		payload: PermissionsPayload,
+	): { artifactCreate: Readonly<Record<string, Enforcement>>; results: Readonly<Record<string, Enforcement>> } => {
+		logUnenforced(payload);
+		const rendered = Object.entries(registrations).map(([key, compiled]) => {
+			const view: KeyRendering = renderKey(payload, compiled, configuration.filterClauseLimit);
+			const created: KeyRendering = renderArtifactCreate(payload, compiled, configuration.filterClauseLimit);
+			logUnmapped(key, view.unmapped);
+			logUnknown(key, view.unknown);
+			logGuard(key, view.enforcement, 'record.view');
+			logGuard(key, created.enforcement, 'artifact.create');
+			return { artifactCreate: [key, created.enforcement] as const, results: [key, view.enforcement] as const };
+		});
+		return {
+			artifactCreate: internedResults(Object.fromEntries(rendered.map(({ artifactCreate }) => artifactCreate))),
+			results: internedResults(Object.fromEntries(rendered.map(({ results }) => results))),
+		};
 	};
 
 	const usableAnonymous = (mode: BridgeMode): AnonymousEntry | undefined => {
@@ -787,20 +809,24 @@ const createRuntime = ({
 		}
 	};
 
-	const install = (payload: PermissionsPayload): void => {
-		const results = resultsFor(payload);
-		const receivedAt = clocks.wall.now();
+	/**
+	 * Installs an anonymous payload received at `receivedAt` on the wall clock, with `remainingMs` of
+	 * life left on it by the Controller's clock, so it expires at the same moment on the Bridge's.
+	 */
+	const install = (payload: PermissionsPayload, receivedAt: number, remainingMs: number): void => {
+		const { artifactCreate, results } = resultsFor(payload);
+		const localExpiryMs = receivedAt + remainingMs;
 		anonymous.entry = {
-			access: accessOf(anonymousPrincipal(), results),
-			expiry: { monotonicMs: ttlFromNow(), wallMs: payload.exp * 1000 },
+			access: accessOf(anonymousPrincipal(), { artifactCreate, results }),
+			expiry: { monotonicMs: ttlFromNow(), wallMs: localExpiryMs },
 			grants: grantSet(payload.permissions),
 			resources: new Set(Object.keys(payload.permissions)),
-			suspended: accessOf(unconfirmedSuspendedPrincipal(), results),
+			suspended: accessOf(unconfirmedSuspendedPrincipal(), { artifactCreate, results }),
 		};
 		anonymous.installedOnce = true;
 		anonymous.retries = 0;
 		modes.anonymousAccepted();
-		const endsAt = Math.min(payload.exp * 1000, receivedAt + configuration.tokenTtlMs);
+		const endsAt = Math.min(localExpiryMs, receivedAt + configuration.tokenTtlMs);
 		scheduleRefresh(Math.max(0, (endsAt - receivedAt) * 0.8));
 	};
 
@@ -839,12 +865,15 @@ const createRuntime = ({
 		expiryRetried: boolean,
 	): Promise<AnonymousFetch> => {
 		const since = notices.epoch();
+		const requestStart = clocks.monotonic.now();
 		const answer = await answeredBy(signal, client.exchange({ credential: null, signal }));
+		const transitMs = clocks.monotonic.now() - requestStart;
+		const receivedAt = clocks.wall.now();
 		if (answer.kind !== 'token') {
 			anonymousFailure(answer);
 			return failedRefresh();
 		}
-		const reading = await reader.read(answer.token);
+		const reading = await reader.read(answer.token, { transitMs });
 		if (reading.kind === 'rejected') {
 			// As for a signed-in exchange: one more fetch, at once, when the token just fetched reads expired.
 			if (reading.reason === 'expired' && !expiryRetried && !lifecycle.stopped && !anonymousWaits()) {
@@ -879,7 +908,7 @@ const createRuntime = ({
 			return fetchAnonymous(signal, start, true, expiryRetried);
 		}
 		if (start.afterCheck) {
-			install(reading.payload);
+			install(reading.payload, receivedAt, reading.remainingMs);
 			return 'installed';
 		}
 		return 'selfTest';
@@ -934,11 +963,14 @@ const createRuntime = ({
 		const since = notices.epoch();
 		const start = flightStart();
 		const anonymousGrants = anonymous.entry?.grants;
+		const requestStart = clocks.monotonic.now();
 		const answer = await answeredBy(signal, client.exchange({ credential, signal }));
+		const transitMs = clocks.monotonic.now() - requestStart;
+		const receivedAt = clocks.wall.now();
 		if (answer.kind !== 'token') {
 			return settleAnswer(answer, digest, claims);
 		}
-		const reading = await reader.read(answer.token);
+		const reading = await reader.read(answer.token, { transitMs });
 		if (reading.kind === 'rejected') {
 			// A token the Controller minted in the last second of a grant's life can read expired by the
 			// time it is read: one exchange more is made, and the first reading is still logged.
@@ -948,7 +980,7 @@ const createRuntime = ({
 			}
 			return rejected(digest, reading.reason);
 		}
-		const { payload } = reading;
+		const { payload, remainingMs } = reading;
 		const subject = payload.sub;
 		if (subject === null || (claims?.subject !== undefined && claims.subject !== subject)) {
 			return rejected(digest, 'subjectMismatch');
@@ -963,8 +995,11 @@ const createRuntime = ({
 				? { kind: 'degraded', subject }
 				: exchange(credential, digest, claims, signal, true, expiryRetried);
 		}
-		const results = resultsFor(payload);
-		const access = accessOf(confirmedPrincipal(subject, holdsOnlyOpenTier(payload, anonymousGrants)), results);
+		const { artifactCreate, results } = resultsFor(payload);
+		const access = accessOf(confirmedPrincipal(subject, holdsOnlyOpenTier(payload, anonymousGrants)), {
+			artifactCreate,
+			results,
+		});
 		if (start.afterCheck) {
 			positive.set(
 				digest,
@@ -975,7 +1010,7 @@ const createRuntime = ({
 				},
 				{
 					monotonicMs: ttlFromNow(),
-					wallMs: Math.min(payload.exp * 1000, credentialExpiry(claims)),
+					wallMs: Math.min(receivedAt + remainingMs, credentialExpiry(claims)),
 				},
 			);
 		}
@@ -989,7 +1024,10 @@ const createRuntime = ({
 	const suspendedFor = (mode: BridgeMode, subject: string | null): ResolveOutcome =>
 		servedFrom(mode, (entry) =>
 			isNonEmptyString(subject)
-				? accessOf(attributionOnlyPrincipal(subject), entry.access.results)
+				? accessOf(attributionOnlyPrincipal(subject), {
+						artifactCreate: entry.access.artifactCreate,
+						results: entry.access.results,
+					})
 				: entry.suspended,
 		);
 

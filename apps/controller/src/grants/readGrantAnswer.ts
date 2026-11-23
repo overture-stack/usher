@@ -2,14 +2,19 @@ import { type InputReading, unreadableBody } from '../managementApi/index.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import type { GrantAnswer } from './types.js';
 
-const isDecision = (word: string): word is GrantAnswer['decision'] => word === 'accepted' || word === 'rejected';
+// The word a holder sends for each answer, and the word stored, answered and shown for it.
+const STORED_DECISION_OF_SENT = new Map<string, GrantAnswer['decision']>([
+	['accept', 'accepted'],
+	['decline', 'declined'],
+]);
 
 /**
  * Reads a holder's answer to a grant from its body: `decision` and `capabilities`, each required. A
  * body holding another member, lacking either, or holding a decision that is no string or
- * capabilities that are no list of strings, is refused 400; a decision other than `accepted` or
- * `rejected`, exactly, is refused 422 `unknownDecision`. Whether the capabilities are the role's is
- * judged once the grant is read.
+ * capabilities that are no list of strings, is refused 400; a decision other than `accept` or
+ * `decline`, exactly, is refused 422 `unknownDecision`. The decision read is the stored word for the
+ * one sent, `accepted` or `declined`. Whether the capabilities are the role's is judged once the grant
+ * is read.
  *
  * @param body the body's object.
  */
@@ -43,7 +48,8 @@ export const readGrantAnswer = (body: Readonly<Record<string, unknown>>): InputR
 			),
 		};
 	}
-	return isDecision(decision)
-		? { input: { capabilities, decision }, kind: 'read' }
-		: { kind: 'refused', problem: GRANT_PROBLEMS.unknownDecision };
+	const stored = STORED_DECISION_OF_SENT.get(decision);
+	return stored === undefined
+		? { kind: 'refused', problem: GRANT_PROBLEMS.unknownDecision }
+		: { input: { capabilities, decision: stored }, kind: 'read' };
 };

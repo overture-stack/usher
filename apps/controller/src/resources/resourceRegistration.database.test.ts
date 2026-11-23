@@ -291,9 +291,9 @@ suite("a resource's registration in the store", () => {
 				});
 				assert.deepEqual(
 					(await eventsNaming(migration, resourceRegistration, 'STUDY-N1')).map(
-						({ initialOwnerId, result }) => ({ initialOwnerId, result }),
+						({ initialOwnerSubject, result }) => ({ initialOwnerSubject, result }),
 					),
-					[{ initialOwnerId: null, result: 'succeeded' }],
+					[{ initialOwnerSubject: null, result: 'succeeded' }],
 				);
 				assert.deepEqual(
 					(await eventsNaming(migration, applicationServedResourcesChange, 'STUDY-N1'))
@@ -374,7 +374,7 @@ suite("a resource's registration in the store", () => {
 });
 
 suite("a registration's owners in the store", () => {
-	test('commits an owner grant for each owner named with the registration, each holder met first, each with its grant.creation and, under auto-accept, its acceptance, the first named its initialOwnerId', async (context) => {
+	test('commits an owner grant for each owner named with the registration, each holder met first, each with its grant.creation and, under auto-accept, its acceptance, the first named its initialOwnerSubject', async (context) => {
 		const owners = ['subject-first-owner', 'subject-second-owner'];
 		await withHarness(
 			{ configuration: { autoAccept: true }, fixture: FIXTURE },
@@ -415,7 +415,7 @@ suite("a registration's owners in the store", () => {
 				assert.deepEqual(
 					events
 						.filter(({ type }) => type === emittedType(resourceRegistration))
-						.map((event) => dataOf(event)['initialOwnerId']),
+						.map((event) => dataOf(event)['initialOwnerSubject']),
 					[owners[0]],
 				);
 				assert.deepEqual(
@@ -423,7 +423,7 @@ suite("a registration's owners in the store", () => {
 						.filter(({ type }) => type === emittedType(AUDIT_EVENT_TYPES.grantCreation))
 						.map((event) => {
 							const data = dataOf(event);
-							return [data['granteeId'], data['role'], data['category']];
+							return [data['granteeSubject'], data['role'], data['category']];
 						}),
 					owners.map((subject) => [subject, 'owner', null]),
 				);

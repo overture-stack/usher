@@ -147,7 +147,7 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 				[],
 			);
 			assert.deepEqual(
-				asked.map((events) => events.map((data) => [data['kind'], data['granteeId']])),
+				asked.map((events) => events.map((data) => [data['kind'], data['granteeSubject']])),
 				[
 					[[ORPHANED_RESOURCE_REQUEST, CAST.recipient.subject]],
 					[[ORPHANED_RESOURCE_REQUEST, CAST.recipient.subject]],
@@ -203,7 +203,7 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 						person: CAST.secondAdministrator,
 					}),
 					requestId,
-					'granted',
+					'grant',
 				),
 				'the grant',
 			);
@@ -231,7 +231,7 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 				['granted', CAST.secondAdministrator.subject, grantId],
 			);
 			assert.deepEqual(
-				decisions.map((data) => data['granteeId']),
+				decisions.map((data) => data['granteeSubject']),
 				[CAST.recipient.subject],
 			);
 		});
@@ -247,7 +247,7 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 						person: CAST.secondAdministrator,
 					}),
 					requestId,
-					'granted',
+					'grant',
 				),
 				'the grant',
 			);
@@ -275,14 +275,14 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 			assertSucceeded(
 				await answerGrant(owner, seededId(harness.seeded.grants, PENDING_OWNER), {
 					capabilities: [...SHOWN.owner],
-					decision: 'accepted',
+					decision: 'accept',
 				}),
 				"the owner's acceptance",
 			);
 
-			const byPeer = await decideGrantRequest(peer, grantedId, 'granted');
-			const byOwner = await decideGrantRequest(owner, grantedId, 'granted');
-			const refusedByPeer = await decideGrantRequest(peer, refusedId, 'refused');
+			const byPeer = await decideGrantRequest(peer, grantedId, 'grant');
+			const byOwner = await decideGrantRequest(owner, grantedId, 'grant');
+			const refusedByPeer = await decideGrantRequest(peer, refusedId, 'decline');
 			const onOwned = await createGrant(administrator, viewerOn(REGISTERED_STUDY, UNMARKED));
 
 			assertRefused(
@@ -295,7 +295,7 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 				CAST.spare.subject,
 			);
 			assertSucceeded(refusedByPeer, "an administrator's refusal");
-			assert.equal((await storedGrantRequest(harness, refusedId)).decision, 'refused');
+			assert.equal((await storedGrantRequest(harness, refusedId)).decision, 'declined');
 			assertRefused(
 				onOwned,
 				PROBLEMS.administratorGrantsNoConsumerAccess,

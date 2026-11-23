@@ -89,7 +89,7 @@ const everyStatePolicy = (): PolicyFixture => {
 		decisions: [
 			decided('anaA1'),
 			decided('anaB2'),
-			decided('anaA1Declined', 'rejected'),
+			decided('anaA1Declined', 'declined'),
 			{ ...decided('anaB2Revoked'), decidedAt: new Date(now - 2 * HOUR_MS) },
 			{
 				...decided('anaA1Expired'),
@@ -448,36 +448,32 @@ suite('token.exchange', () => {
 		);
 	});
 
-	test('records a reissue from the cached payload as it records a computed exchange', async () => {
+	test('records a repeated exchange as it records the first', async () => {
 		const { harness, log } = await shared();
 		const credential = await harness.tokens.signIn(PEOPLE.cy, {
 			application: SEARCH_PORTAL,
 		});
 
-		const recorded = await inTurn(['computed', 'reissued'], async () => {
+		const recorded = await inTurn(['first', 'repeated'], async () => {
 			const since = markOf(log);
 			const answer = await exchangeBy(harness, PEOPLE.cy, { credential });
 			const event = await awaitOneEvent(log, 'token.exchange', { since });
 			return { answer, data: dataOf(event) };
 		});
 
-		const [computed, reissued] = recorded;
-		assert.ok(computed);
-		assert.ok(reissued);
-		assert.equal(computed.answer.status, 200);
-		assert.equal(reissued.answer.status, 200);
+		const [first, repeated] = recorded;
+		assert.ok(first);
+		assert.ok(repeated);
+		assert.equal(first.answer.status, 200);
+		assert.equal(repeated.answer.status, 200);
 		recorded.forEach(({ data }) => {
 			['generatedAt', 'grantCount', 'rules'].forEach((member) => {
 				assert.equal(Object.hasOwn(data, member), true, member);
 			});
 		});
-		assert.deepEqual(Object.keys(reissued.data).toSorted(), Object.keys(computed.data).toSorted());
-		assert.equal(reissued.data['grantCount'], computed.data['grantCount']);
-		assert.deepEqual(reissued.data['rules'], computed.data['rules']);
-		assert.equal(
-			Date.parse(String(reissued.data['generatedAt'])),
-			Date.parse(String(computed.data['generatedAt'])),
-		);
+		assert.deepEqual(Object.keys(repeated.data).toSorted(), Object.keys(first.data).toSorted());
+		assert.equal(repeated.data['grantCount'], first.data['grantCount']);
+		assert.deepEqual(repeated.data['rules'], first.data['rules']);
 	});
 
 	test('records each exchange at the severity its result gives', async (context) => {

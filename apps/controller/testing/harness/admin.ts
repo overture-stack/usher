@@ -180,7 +180,7 @@ export interface GrantDecision {
 	/** As `entity.action` names. */
 	capabilities: readonly string[];
 
-	decision: 'accepted' | 'rejected';
+	decision: 'accept' | 'decline';
 }
 
 /** The audit log's query parameters (#214 Q13), each optional. */
@@ -253,9 +253,10 @@ const segment = (value: string): string => encodeURIComponent(value);
 const PATHS = {
 	apiDocs: 'api-docs',
 	apiDocsContract: 'api-docs/openapi.json',
-	application: (id: string): string => `admin/applications/${segment(id)}`,
-	applicationKey: (id: string, keyId: string): string => `admin/applications/${segment(id)}/keys/${segment(keyId)}`,
-	applicationKeys: (id: string): string => `admin/applications/${segment(id)}/keys`,
+	application: (applicationId: string): string => `admin/applications/${segment(applicationId)}`,
+	applicationKey: (applicationId: string, keyId: string): string =>
+		`admin/applications/${segment(applicationId)}/keys/${segment(keyId)}`,
+	applicationKeys: (applicationId: string): string => `admin/applications/${segment(applicationId)}/keys`,
 	applications: 'admin/applications',
 	audit: 'admin/audit',
 	backChannelLogout: 'backchannel-logout',
@@ -263,13 +264,15 @@ const PATHS = {
 	category: (scopedName: string): string => `admin/categories/${segment(scopedName)}`,
 	egoImport: 'admin/imports/ego',
 	globalRevocation: 'admin/revocations/global',
-	grant: (id: string): string => `admin/grants/${segment(id)}`,
-	grantDecisions: (id: string): string => `admin/grants/${segment(id)}/decisions`,
-	grantRequestDecisions: (id: string): string => `admin/grant-requests/${segment(id)}/decisions`,
+	grant: (grantId: string): string => `admin/grants/${segment(grantId)}`,
+	grantDecisions: (grantId: string): string => `admin/grants/${segment(grantId)}/decisions`,
+	grantRequestDecisions: (grantRequestId: string): string =>
+		`admin/grant-requests/${segment(grantRequestId)}/decisions`,
 	grantRequests: 'admin/grant-requests',
 	grants: 'admin/grants',
 	liveness: 'health/live',
-	nominationAcceptance: (id: string): string => `admin/nominations/${segment(id)}/acceptance`,
+	nomination: (nominationId: string): string => `admin/nominations/${segment(nominationId)}`,
+	nominationDecisions: (nominationId: string): string => `admin/nominations/${segment(nominationId)}/decisions`,
 	nominations: 'admin/nominations',
 	identityRevocationLifts: 'admin/people/revocations/lifts',
 	identityRevocations: 'admin/people/revocations',
@@ -285,7 +288,7 @@ const PATHS = {
 	resources: 'admin/resources',
 	settings: 'admin/settings',
 	grantRules: 'admin/settings/grant-rules',
-	roleCapabilities: (role: string): string => `admin/roles/${segment(role)}/capabilities`,
+	roleCapabilities: (roleName: string): string => `admin/roles/${segment(roleName)}/capabilities`,
 	selfGrants: 'admin/grants/self',
 } as const;
 
@@ -293,7 +296,7 @@ const PATHS = {
 export interface ManagementRoute {
 	method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
-	/** The template, its parameters in braces, as the contract writes it: `/admin/grants/{id}`. */
+	/** The template, its parameters in braces, as the contract writes it: `/admin/grants/{grantId}`. */
 	route: string;
 }
 
@@ -307,23 +310,24 @@ const routes = (route: string, methods: readonly ManagementRoute['method'][]): r
  */
 export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
 	...routes('/admin/applications', ['POST']),
-	...routes('/admin/applications/{id}', ['GET']),
-	...routes('/admin/applications/{id}/keys', ['POST']),
-	...routes('/admin/applications/{id}/keys/{keyId}', ['DELETE']),
+	...routes('/admin/applications/{applicationId}', ['GET']),
+	...routes('/admin/applications/{applicationId}/keys', ['POST']),
+	...routes('/admin/applications/{applicationId}/keys/{keyId}', ['DELETE']),
 	...routes('/admin/audit', ['GET']),
 	...routes('/admin/categories', ['GET', 'POST']),
 	...routes('/admin/categories/{scopedName}', ['PATCH']),
 	...routes('/admin/grant-requests', ['GET']),
-	...routes('/admin/grant-requests/{id}/decisions', ['POST']),
+	...routes('/admin/grant-requests/{grantRequestId}/decisions', ['POST']),
 	...routes('/admin/grants', ['POST']),
 	...routes('/admin/grants/self', ['POST']),
-	...routes('/admin/grants/{id}', ['DELETE', 'PATCH']),
-	...routes('/admin/grants/{id}/decisions', ['POST']),
+	...routes('/admin/grants/{grantId}', ['DELETE', 'PATCH']),
+	...routes('/admin/grants/{grantId}/decisions', ['POST']),
 	...routes('/admin/me/grants', ['GET']),
 	...routes('/admin/me/nominations', ['GET']),
 	...routes('/admin/imports/ego', ['POST']),
-	...routes('/admin/nominations', ['POST']),
-	...routes('/admin/nominations/{id}/acceptance', ['POST']),
+	...routes('/admin/nominations', ['GET', 'POST']),
+	...routes('/admin/nominations/{nominationId}', ['DELETE']),
+	...routes('/admin/nominations/{nominationId}/decisions', ['POST']),
 	...routes('/admin/people/grants', ['POST']),
 	...routes('/admin/people/revocations', ['POST']),
 	...routes('/admin/people/revocations/lifts', ['POST']),
@@ -338,7 +342,7 @@ export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
 	...routes('/admin/resources/{externalId}/submitters/removal', ['POST']),
 	...routes('/admin/resources/{externalId}/suppression', ['POST']),
 	...routes('/admin/revocations/global', ['POST']),
-	...routes('/admin/roles/{name}/capabilities', ['PUT']),
+	...routes('/admin/roles/{roleName}/capabilities', ['PUT']),
 	...routes('/admin/settings', ['GET', 'PATCH']),
 	...routes('/admin/settings/grant-rules', ['GET', 'PUT']),
 ]);
@@ -348,7 +352,7 @@ const isParameter = (segment: string): boolean => segment.startsWith('{') && seg
 /**
  * The Management API route a request reaches, matched as a router matches one: segment by segment, a
  * parameter matching any one segment and a literal segment preferred over a parameter, as
- * `/admin/grants/self` is over `/admin/grants/{id}`; `undefined` for a request matching none.
+ * `/admin/grants/self` is over `/admin/grants/{grantId}`; `undefined` for a request matching none.
  *
  * @param method the request's method.
  * @param target the request's path, from the Controller's root, with or without a query.
@@ -524,7 +528,7 @@ export const registerApplication = (
 
 /**
  * Issues another key for an application, for platform administrators, sending no body:
- * `POST /admin/applications/{id}/keys`, the id percent-encoded, answered 201 with `{ id, value }` and
+ * `POST /admin/applications/{applicationId}/keys`, the id percent-encoded, answered 201 with `{ id, value }` and
  * `Cache-Control: no-store`. An application holds at most {@link APPLICATION_LIVE_KEY_LIMIT} live keys.
  *
  * @param caller the Controller and the principal's token.
@@ -539,7 +543,7 @@ export const issueApplicationKey = (
 
 /**
  * Revokes one of an application's keys, for platform administrators:
- * `DELETE /admin/applications/{id}/keys/{keyId}`, each id percent-encoded, carrying a body only when a
+ * `DELETE /admin/applications/{applicationId}/keys/{keyId}`, each id percent-encoded, carrying a body only when a
  * reason is given. Answered 200 naming the key's id, the revoker and the time, never the key's value.
  *
  * @param caller the Controller and the principal's token.
@@ -567,7 +571,7 @@ export const revokeApplicationKey = (
 
 /**
  * Reads an application and every key it was issued, for platform administrators:
- * `GET /admin/applications/{id}`, the id percent-encoded. No answer holds a key's value;
+ * `GET /admin/applications/{applicationId}`, the id percent-encoded. No answer holds a key's value;
  * {@link applicationViewOf} reads it.
  *
  * @param caller the Controller and the principal's token.
@@ -912,18 +916,18 @@ export const createSelfGrant = async (
 
 /**
  * Decides a grant request, granting or refusing it (ruled): `POST
- * /admin/grant-requests/{id}/decisions`, its body `{ decision }`. A request granted answers with
+ * /admin/grant-requests/{grantRequestId}/decisions`, its body `{ decision }`. A request granted answers with
  * the grant written, whose id is read from its body's `id` as `grantId`.
  *
  * @param caller the controller and the decider's token.
  * @param requestId the request's id.
- * @param decision `granted` or `refused`.
+ * @param decision `grant` or `decline`.
  * @param overrides departures from the request.
  */
 export const decideGrantRequest = async (
 	caller: AdminCaller,
 	requestId: string,
-	decision: 'granted' | 'refused',
+	decision: 'grant' | 'decline',
 	overrides?: AdminOverrides,
 ): Promise<GrantCreated> =>
 	withGrantId(
@@ -949,7 +953,7 @@ export const listGrantRequests = (caller: AdminCaller, overrides?: AdminOverride
 	send(caller, { method: 'GET', path: PATHS.grantRequests }, overrides);
 
 /**
- * Revokes a grant: `DELETE /admin/grants/{id}`, carrying a body only when a reason is given.
+ * Revokes a grant: `DELETE /admin/grants/{grantId}`, carrying a body only when a reason is given.
  *
  * @param caller the Controller and the caller's token.
  * @param grantId the grant's id.
@@ -973,7 +977,7 @@ export const revokeGrant = (
 	);
 
 /**
- * Answers a grant as its recipient: `POST /admin/grants/{id}/decisions`.
+ * Answers a grant as its recipient: `POST /admin/grants/{grantId}/decisions`.
  *
  * @param caller the Controller and the recipient's token.
  * @param grantId the grant's id.
@@ -997,7 +1001,7 @@ export const answerGrant = (
 	);
 
 /**
- * Changes a grant's expiry, or removes it with `null`: `PATCH /admin/grants/{id}` as a JSON Merge
+ * Changes a grant's expiry, or removes it with `null`: `PATCH /admin/grants/{grantId}` as a JSON Merge
  * Patch.
  *
  * @param caller the Controller and the caller's token.
@@ -1023,7 +1027,7 @@ export const changeGrantExpiry = (
 	);
 
 /**
- * Changes a grant's role: `PATCH /admin/grants/{id}` as a JSON Merge Patch.
+ * Changes a grant's role: `PATCH /admin/grants/{grantId}` as a JSON Merge Patch.
  *
  * @param caller the Controller and the caller's token.
  * @param grantId the grant's id.
@@ -1100,19 +1104,43 @@ export const nominate = (
 	send(caller, { json: { ...nomination }, method: 'POST', path: PATHS.nominations }, overrides);
 
 /**
- * Accepts a nomination naming the caller: `POST /admin/nominations/{id}/acceptance`, taking no
- * body.
+ * Answers a nomination naming the caller: `POST /admin/nominations/{nominationId}/decisions`, taking
+ * `{ decision }`, `accept` or `decline`.
+ *
+ * @param caller the Controller and the caller's token.
+ * @param nominationId the nomination's id.
+ * @param decision the nominee's answer, as sent.
+ * @param overrides departures from the request.
+ */
+export const decideNomination = (
+	caller: AdminCaller,
+	nominationId: string,
+	decision: 'accept' | 'decline',
+	overrides?: AdminOverrides,
+): Promise<AdminResponse> =>
+	send(caller, { json: { decision }, method: 'POST', path: PATHS.nominationDecisions(nominationId) }, overrides);
+
+/**
+ * Revokes a nomination the first user made: `DELETE /admin/nominations/{nominationId}`, taking no body.
  *
  * @param caller the Controller and the caller's token.
  * @param nominationId the nomination's id.
  * @param overrides departures from the request.
  */
-export const acceptNomination = (
+export const revokeNomination = (
 	caller: AdminCaller,
 	nominationId: string,
 	overrides?: AdminOverrides,
-): Promise<AdminResponse> =>
-	send(caller, { method: 'POST', path: PATHS.nominationAcceptance(nominationId) }, overrides);
+): Promise<AdminResponse> => send(caller, { method: 'DELETE', path: PATHS.nomination(nominationId) }, overrides);
+
+/**
+ * Lists every nomination, as the first user: `GET /admin/nominations`.
+ *
+ * @param caller the Controller and the caller's token.
+ * @param overrides departures from the request.
+ */
+export const listNominations = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.nominations }, overrides);
 
 /**
  * Lists the nominations naming the caller: `GET /admin/me/nominations`.
@@ -1208,7 +1236,7 @@ export const revokeGlobally = (
 	);
 
 /**
- * Replaces the capabilities a role carries: `PUT /admin/roles/{name}/capabilities`.
+ * Replaces the capabilities a role carries: `PUT /admin/roles/{roleName}/capabilities`.
  *
  * @param caller the Controller and the caller's token.
  * @param role the role's name.
@@ -1544,16 +1572,20 @@ const problem = <Code extends string, Status extends number>(
  *   application in a path, its id unknown or malformed, after the 403 for a non-administrator;
  *   `applicationKeyNotFound`, a key id in a revocation's path that is unknown, malformed or names
  *   another application's key, one answer for all three; `nomineeNotFound`, a nominee who is
- *   neither the caller nor a person Usher has met; `nominationNotFound`, a nomination id that is
- *   malformed, unknown or names someone other than the caller, one answer for all three.
+ *   neither the caller, a person Usher has met, nor an account the directory finds in the trusted realm;
+ *   `nominationNotFound`, a nomination id that is malformed, unknown or names someone other than the
+ *   caller, one answer for all three; `unknownDecision`, a nominee's decision other than `accept` or
+ *   `decline`.
  * - 409: `alreadyExists`; `alreadyHolds`; `doesNotHold`, a key revoked already among them;
  *   `grantsOrInvitationsRemain`, retiring while a non-owner live grant or a pending invitation
  *   remains, its text saying to revoke them first; `resourceNeedsAnOwner`, revoking or declining a
  *   resource's last owner grant; `importInProgress`, a run of the EGO import while another holds
  *   its lock; `applicationKeyLimit`, an issue for an application holding
  *   {@link APPLICATION_LIVE_KEY_LIMIT} live keys already; `firstAdministratorAccepted`, a
- *   nomination or an acceptance once Usher's first administrator has accepted;
- *   `nominationSuperseded`, an acceptance of a nomination a later one replaced.
+ *   nomination or an answer once Usher's first administrator has accepted; `nominationAlreadyDecided`,
+ *   an answer to a nomination already answered; `nominationReplaced`, an answer to or a revocation of a
+ *   nomination a later one replaced; `nominationRevoked`, an answer to a nomination the first user
+ *   revoked.
  * - 413: `bodyTooLarge`, a body over its endpoint's limit ({@link BODY_LIMIT_BYTES}), the detail
  *   naming the limit and holding nothing of the body (ruled, "#216: faults mid-run, 401 and 413"
  *   4).
@@ -1596,8 +1628,10 @@ export const PROBLEMS = Object.freeze({
 	importNotConfigured: problem('importNotConfigured', 503),
 	noAdministratorYet: problem('noAdministratorYet', 403),
 	noAuthorityOnResource: problem('noAuthorityOnResource', 403),
+	nominationAlreadyDecided: problem('nominationAlreadyDecided', 409),
 	nominationNotFound: problem('nominationNotFound', 404),
-	nominationSuperseded: problem('nominationSuperseded', 409),
+	nominationReplaced: problem('nominationReplaced', 409),
+	nominationRevoked: problem('nominationRevoked', 409),
 	nomineeNotFound: problem('nomineeNotFound', 404),
 	notFirstUser: problem('notFirstUser', 403),
 	orphanedResourceExpiryRequired: problem('orphanedResourceExpiryRequired', 422),
@@ -1617,6 +1651,7 @@ export const PROBLEMS = Object.freeze({
 	serviceAccountNotPermitted: problem('serviceAccountNotPermitted', 403),
 	storeUnavailable: problem('storeUnavailable', 503),
 	unknownApplication: problem('unknownApplication', 422),
+	unknownDecision: problem('unknownDecision', 422),
 	unsupportedMediaType: problem('unsupportedMediaType', 415),
 });
 
@@ -1773,12 +1808,12 @@ export const INCLUDING_RETIRED: AdminOverrides = Object.freeze({
 	query: { [LISTING_QUERY.includeRetired]: 'true' },
 });
 
-/** A grant's state as a listing names it (#213 Q4); `accepted` and `rejected` as decisions name them (#212 Q15). */
+/** A grant's state as a listing names it (#213 Q4); `accepted` and `declined` as decisions name them (#212 Q15). */
 export const GRANT_STATES = Object.freeze({
 	accepted: 'accepted',
+	declined: 'declined',
 	expired: 'expired',
 	pending: 'pending',
-	rejected: 'rejected',
 	revoked: 'revoked',
 } as const);
 
