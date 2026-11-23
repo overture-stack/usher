@@ -2476,6 +2476,64 @@ suite('createBridgeCoreWithSeams', () => {
 			});
 		}
 
+		/**
+		 * A harness whose Bridge clock is `skewMs` off the Controller's, its anonymous payload installed at
+		 * `RECEIVED_AT_MS` on the Controller's clock, with no transit.
+		 */
+		const runningWithSkew = async (skewMs: number): Promise<Harness> => {
+			const parts = harnessParts();
+			parts.advanceWall(RECEIVED_AT_MS + skewMs - ISSUED_AT_MS);
+			const core = createBridgeCoreWithSeams(parts.configuration, parts.seams);
+			core.register({ files: catalogue });
+			await core.start();
+			parts.confirm(0);
+			await core.refreshAnonymous();
+			assert.equal(core.mode(), 'normal');
+			return { ...parts, core };
+		};
+
+		for (const [description, skewMs] of [
+			['ahead by ten minutes', 600_000],
+			['behind by ten minutes', -600_000],
+		] as const) {
+			test(`with its clock ${description}, serves the anonymous entry until a second before the Controller's exp and not at it`, async () => {
+				const harness = await runningWithSkew(skewMs);
+				harness.answers.set(null, { cause: 'network', kind: 'failed' });
+				const controllerExpInBridgeTime = ANONYMOUS.exp * 1000 + skewMs;
+
+				harness.advanceWall(controllerExpInBridgeTime - 1_000 - (RECEIVED_AT_MS + skewMs));
+				const beforeExp = await harness.core.resolve(null);
+				harness.advanceWall(1_000);
+				const atExp = await harness.core.resolve(null);
+
+				assert.equal(beforeExp.kind, 'access');
+				assert.deepEqual(atExp, { kind: 'unavailable' });
+				await harness.core.stop();
+			});
+
+			test(`with its clock ${description}, fetches the anonymous payload again at 80% of the life it read from receipt`, async (context) => {
+				context.mock.timers.enable({ apis: ['setTimeout'] });
+				const harness = await runningWithSkew(skewMs);
+				const anonymousExchanges = (): number => harness.exchanges.filter((sent) => sent === null).length;
+				const settled = (): Promise<void> =>
+					new Promise((resolve) => {
+						setImmediate(resolve);
+					});
+
+				// The life read is the Controller's exp less its latest possible time at receipt, iat plus one second.
+				const readLifeMs = LIFETIME_MS - 1_000;
+				context.mock.timers.tick(readLifeMs * 0.8 - 1);
+				await settled();
+				const before = anonymousExchanges();
+				context.mock.timers.tick(1);
+				await settled();
+
+				assert.equal(before, 2);
+				assert.equal(anonymousExchanges(), 3);
+				await harness.core.stop();
+			});
+		}
+
 		test('counts the transit of the attempt that produced the token, so a token with 3 s of life that took 2 s to arrive reads expired', async () => {
 			const harness = await running();
 			const credential = signInToken({ sub: 'subject-ana' });
