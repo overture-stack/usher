@@ -7,9 +7,18 @@ export type PackedPackage = {
 	manifest: Readonly<Record<string, unknown>>;
 };
 
-/** One result of checking a packed package. A `fail` fails the check; a `note` is only reported. */
+/** A file of a packed package: its path relative to the package root, and its text. */
+export type PackedFile = {
+	path: string;
+	text: string;
+};
+
+/**
+ * One result of checking a packed package. A `fail` fails the check; a `note` is only reported; a
+ * `pass` reports a check that held.
+ */
 export type Finding = {
-	level: 'fail' | 'note';
+	level: 'fail' | 'note' | 'pass';
 	message: string;
 	rule: string;
 };
@@ -421,6 +430,26 @@ const parsedRecord = (content: Buffer): Readonly<Record<string, unknown>> | unde
 };
 
 /**
+ * The text of each file under `dist` in a gzipped tarball as written by `pnpm pack`, each with its
+ * path relative to the package root. An unreadable tarball holds no such files; {@link inspectTarball}
+ * reports why.
+ */
+export const distFilesOf = (gzipped: Uint8Array): readonly PackedFile[] => {
+	const read = readTarball(gzipped);
+
+	if ('problem' in read) {
+		return [];
+	}
+
+	return read.entries
+		.map(({ content, path }) => ({
+			path: path.startsWith(PACKAGE_ROOT) ? path.slice(PACKAGE_ROOT.length) : path,
+			text: content.toString('utf8'),
+		}))
+		.filter(({ path }) => path.startsWith('dist/'));
+};
+
+/**
  * Reads a gzipped tarball as written by `pnpm pack` and checks the package inside under
  * {@link checkPackedPackage}. The report lists each file's path with the leading `package/`
  * removed, sorted by code unit. Instead of those findings, the report holds a single `fail`
@@ -470,7 +499,7 @@ export const inspectTarball = (tarballName: string, gzipped: Uint8Array): Packag
 	};
 };
 
-const LEVEL_LABELS = { fail: 'FAIL', note: 'NOTE' } as const;
+const LEVEL_LABELS = { fail: 'FAIL', note: 'NOTE', pass: 'PASS' } as const;
 
 const findingLine = (packageName: string, { level, message, rule }: Finding): string =>
 	`${LEVEL_LABELS[level]}  ${packageName}  ${rule}: ${message}`;
@@ -479,18 +508,24 @@ const counted = (count: number, noun: string): string => `${count} ${noun}${coun
 
 const packageLines = ({ files, findings, packageName }: PackageReport): readonly string[] => {
 	const failures = findings.filter(({ level }) => level === 'fail');
+	const passes = findings.filter(({ level }) => level === 'pass');
 	const notes = findings.filter(({ level }) => level === 'note');
 	const verdict =
 		failures.length === 0
 			? [`ok    ${packageName}  ships ${files.join(', ')}`]
 			: failures.map((finding) => findingLine(packageName, finding));
 
-	return [...verdict, ...notes.map((finding) => findingLine(packageName, finding))];
+	return [
+		...verdict,
+		...passes.map((finding) => findingLine(packageName, finding)),
+		...notes.map((finding) => findingLine(packageName, finding)),
+	];
 };
 
 /**
  * The lines a run prints: per package, `ok` with the files it ships or one line per failure, then
- * its notes, each naming the package and the rule; then a count. A run that packed nothing fails.
+ * its passes and notes, each naming the package and the rule; then a count of failures and notes.
+ * A run that packed nothing fails.
  */
 export const reportOf = (reports: readonly PackageReport[]): Report => {
 	if (reports.length === 0) {
@@ -499,7 +534,7 @@ export const reportOf = (reports: readonly PackageReport[]): Report => {
 
 	const findings = reports.flatMap((report) => report.findings);
 	const failureCount = findings.filter(({ level }) => level === 'fail').length;
-	const noteCount = findings.length - failureCount;
+	const noteCount = findings.filter(({ level }) => level === 'note').length;
 
 	return {
 		failed: failureCount > 0,

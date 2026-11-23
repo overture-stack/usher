@@ -30,8 +30,8 @@ and the workspace's version is set below.
 - The host creates the Bridge, mounts its middleware synchronously, and then awaits an asynchronous
   start.
 - Until the start completes, the middleware answers 503 as the cold mode, before any read path.
-- A CI step `require()`s and `import()`s the packed tarballs, to catch a dependency that later adds
-  top-level await.
+- `pnpm check:pack`, run as the `check:pack` stage of the Jenkins job, `require()`s and `import()`s
+  the packed tarballs, to catch a dependency that later adds top-level await.
 - Every cache and the revocation channel live in one instance created by the host, never in module
   state.
 - The Bridge refuses to start a second instance for the same audience in one process. A duplicate,
@@ -76,10 +76,10 @@ and the workspace's version is set below.
   into a build failure. Neither committed tsdown configuration sets it, so only the check on the
   packed JavaScript below catches an inlined dependency.
 - No public declaration names `CryptoKey` or a jose type.
-- A CI check confirms that the packed Bridge's JavaScript imports `jose` and
+- `pnpm check:pack` confirms that the packed Bridge's JavaScript imports `jose` and
   `@overture-stack/usher-types` and holds neither's code.
-- A CI check confirms that the packed Bridge's declarations mention neither `jose` nor `CryptoKey`,
-  and import only names they use.
+- `pnpm check:pack` confirms that the packed Bridge's declarations mention neither `jose` nor
+  `CryptoKey`, and import only names they use.
 - `usher-types` is a peer dependency of the Bridge, never a regular dependency, so the Bridge uses
   the copy provided by the host's install rather than a copy of its own. The peer keeps one copy of the
   contract and of `SqonSchema` in a host.
@@ -381,7 +381,8 @@ above in four variants.
 - `onlyBundle` checks only packages under `node_modules`. A workspace package resolved through
   TypeScript `paths` lies outside it: with `usher-types` undeclared and mapped to its source, the build
   under `onlyBundle: []` inlined that source and exited 0. Declared as a regular dependency,
-  `usher-types` stayed an import. The CI check on the Bridge's JavaScript covers that gap.
+  `usher-types` stayed an import. The check on the Bridge's JavaScript in `pnpm check:pack` covers
+  that gap.
 
 ### What follows from it
 
