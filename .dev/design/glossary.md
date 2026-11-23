@@ -254,8 +254,10 @@ Something assembled by a person from records and kept, carrying provenance that 
 it drew on.
 
 Its own entity on the data plane, because reaching an artifact is not reaching its records: every
-read of one is checked against the reader's own grants, which is why handing someone an artifact
-confers nothing and no capability governs doing so. A saved set is the first kind of one.
+read of one is checked against the reader's own grants, so sharing an artifact confers none of its
+records. Reaching the artifact itself is governed as reaching a record is: an owned artifact by its
+owners and whoever they share it with, and one with no owner through the instance's base grant. A
+saved set is the first kind of one.
 
 **Authorization**
 Holding permission, created by a grant and standing whether or not anyone acts on it.

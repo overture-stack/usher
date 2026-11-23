@@ -159,16 +159,17 @@ while `@overture-stack/usher-types` stays free of any framework.
 
 **A saved set records how it was saved, as a state, and its creator's identity never leaves the
 server.** A saved set is the first artifact an application keeps (see
-[permissions-model.md](permissions-model.md)), and these are its defaults, which artifact grants can
-tighten later. They apply where the application is told who is asking; an application that is not
-told keeps its earlier sharing rules, apart from the creator's identity, which no deployment serves.
+[permissions-model.md](permissions-model.md)), reached as a record is, per
+[decisions.md](decisions.md) § A saved set is reached as a record is. These rules apply where the
+application is told who is asking; an application that is not told keeps its earlier sharing rules,
+apart from the creator's identity, which no deployment serves.
 
-| Saved by                               | Recorded as                                        | Reached by                                               |
-| -------------------------------------- | -------------------------------------------------- | -------------------------------------------------------- |
-| A confirmed principal, grants in force | `principal`, with its subject                      | its creator, listed; and anyone naming the set by its id |
-| A principal presenting no credential   | `anonymous`                                        | anyone naming the set by its id; listed to no one        |
-| A suspended principal                  | nothing: the save is refused                       | no set exists                                            |
-| An application not told who is asking  | `unattributed`, keeping the client's value as data | everyone, listed                                         |
+| Saved by                               | Recorded as                                        | Reached by                                                                                     |
+| -------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| A confirmed principal, grants in force | `principal`, with its subject                      | its creator, listed, and whoever it is shared with; to anyone else it answers as a missing set |
+| A principal presenting no credential   | `anonymous`                                        | whoever the base grant for unowned sets admits, by naming it; listed to no one by default      |
+| A suspended principal                  | nothing: the save is refused                       | no set exists                                                                                  |
+| An application not told who is asking  | `unattributed`, keeping the client's value as data | everyone, listed                                                                               |
 
 - **Every read of a set narrows its records to the reader's own access**, under any server-side
   filter, Usher's or the application's own. Handing someone a set confers nothing.
