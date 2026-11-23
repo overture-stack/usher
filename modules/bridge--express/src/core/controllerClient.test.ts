@@ -271,6 +271,25 @@ suite('createFetchControllerClient', () => {
 		assert.equal(received.length, 1);
 	});
 
+	test('reads a throw while signing as a defect, never reaching fetch', async () => {
+		const calls: string[] = [];
+		const client = createFetchControllerClient({
+			assertion: () => Promise.reject(new Error('signing key unavailable')),
+			controllerUrl: new URL('http://127.0.0.1:1/api/'),
+			fetch: () => {
+				calls.push('fetch');
+				return Promise.reject(new Error('fetch must not run'));
+			},
+			payloadVersions: [1],
+			responseCapBytes: 1_048_576,
+		});
+
+		const answer = await client.exchange({ credential: 'token', signal: AbortSignal.timeout(5_000) });
+
+		assert.deepEqual(answer, { cause: 'defect', kind: 'failed' });
+		assert.deepEqual(calls, []);
+	});
+
 	suite('a 503', () => {
 		test("reads the controller's admissionShareExceeded and signingKeyUnconfirmed, header and body, as the controller sends them", async () => {
 			const shed = await exchange(controllerRefusal(ADMISSION_SHARE_EXCEEDED, 1));

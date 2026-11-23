@@ -83,8 +83,9 @@ proposed. The sections after them give the evidence.
   other than 200, 406 or 410, `network` when the request cannot reach the Controller, `timeout` when
   the deadline aborts it, and `defect` for a throw while signing, reading or applying a page. A
   malformed answer is logged as `revocationChannel.malformed` instead, and a 410 resets.
-- A defect thrown while applying a pushed notice, or while handing a 410 to the channel, is logged the
-  same way, with cause `defect`.
+- A defect thrown while signing a push connection's channel assertion, applying a pushed notice, or
+  handing a 410 to the channel, is logged the same way, with cause `defect`. A throw while signing sends
+  no request, and the push reconnects on its backoff.
 - Failures are counted rather than logged one by one: the first starts an interval of 60 s, at whose
   end one event for each cause carries that cause's count, and a stop logs whatever is still
   counted. A poll abandoned by a stop or a reset counts as no failure.
@@ -1006,7 +1007,8 @@ is here" is not valid JSON`.
   `revocationChannel.modeChange`. [audit-events.md](../../../design/audit-events.md) registers every
   event the Bridge emits, with its fields and severity, and
   [Core and Express layer](core-and-express-layer.md) builds them.
-- A failed poll, or a defect thrown while applying a pushed notice or handing a 410 to the channel,
+- A failed poll, or a defect thrown while signing or applying a pushed notice or handing a 410 to the
+  channel,
   is logged as `revocationChannel.failure`, whose fields are `cause` and `count`: one event for each
   cause per interval, never one per failure, so a Controller failing every poll cannot flood the log.
 

@@ -25,7 +25,7 @@ export interface BridgeLogger {
 export type BridgeMode = 'cold' | 'normal' | 'uncertain';
 
 /** Where inside the Bridge an unexpected failure happened. */
-export const INTERNAL_ERROR_STAGES = ['attach', 'extract', 'refreshAnonymous', 'resolve'] as const;
+export const INTERNAL_ERROR_STAGES = ['answer', 'attach', 'extract', 'refreshAnonymous', 'resolve'] as const;
 
 /** Each rule named by a refusal to start, as a fixed code rather than a configured value. */
 export const START_REFUSAL_REASONS = [
@@ -83,7 +83,7 @@ const BRIDGE_MODES = ['cold', 'normal', 'uncertain'] as const;
 const CHANNEL_FAILURE_CAUSES = ['defect', 'network', 'status', 'timeout'] as const;
 
 /** The causes of `token.exchangeFailure` logged once for each exchange. */
-const EXCHANGE_FAILURE_CAUSES = ['assertionRefused', 'network', 'status', 'timeout'] as const;
+const EXCHANGE_FAILURE_CAUSES = ['assertionRefused', 'defect', 'network', 'status', 'timeout'] as const;
 
 /** The causes of `token.exchangeFailure` counted, each logged once per interval with its count. */
 const TALLIED_EXCHANGE_FAILURE_CAUSES = ['admissionShareExceeded', 'backedOff', 'overloaded', 'retryAfter'] as const;

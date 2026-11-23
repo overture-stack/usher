@@ -480,6 +480,33 @@ suite('createPush', () => {
 		}
 	});
 
+	suite('a throw while signing', () => {
+		test('reports a defect, never fetches for that attempt, and tries again on the usual backoff', async (context) => {
+			const controller = fakeController();
+			const signing = { attempts: 0 };
+			const { push, recorded } = await pushWith(context, controller.fetch, {
+				assertion: async () => {
+					signing.attempts += 1;
+					if (signing.attempts === 1) {
+						throw new Error('a defect in the signing key');
+					}
+					return `assertion-${signing.attempts}`;
+				},
+			});
+
+			push.start();
+			await until(() => recorded.defects === 1);
+			await settle();
+			assert.equal(controller.connections.length, 0);
+			context.mock.timers.tick(500);
+			await until(() => controller.connections.length === 1);
+			await push.stop();
+
+			assert.equal(recorded.defects, 1);
+			assert.equal(controller.connections[0]?.init.headers.authorization, 'Bearer assertion-2');
+		});
+	});
+
 	suite('an answer other than a stream', () => {
 		test('hands a 410 to the channel, drops its position, and opens next from the head the poll reads', async (context) => {
 			const controller = fakeController((index) => (index === 1 ? { status: 410 } : 'stream'));

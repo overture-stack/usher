@@ -147,9 +147,27 @@ export const createUsherMiddleware = (
 			'Retry-After': String(RETRY_AFTER_SECONDS),
 		});
 
+	/**
+	 * Logs the stage, then answers 503 with nothing named but the stage. A throw from that 503 is
+	 * swallowed: the failure is already logged once, and it must never reach Express's error handler or
+	 * leave a rejection unhandled.
+	 */
 	const fail = (response: Response, stage: BridgeEventData['bridge.internalError']['stage']): void => {
 		report('bridge.internalError', { stage });
-		unavailable(response);
+		try {
+			unavailable(response);
+		} catch {
+			// Nothing more can be answered on a response that throws as it answers.
+		}
+	};
+
+	/** Runs an answer, failing the request with a 503 and logging `answer` when the answer throws. */
+	const answering = (response: Response, write: () => void): void => {
+		try {
+			write();
+		} catch {
+			fail(response, 'answer');
+		}
 	};
 
 	const attached = (response: Response, access: Readonly<UsherRequestAccess>): boolean => {
@@ -189,38 +207,39 @@ export const createUsherMiddleware = (
 		}
 	};
 
-	return (request, response, next) => {
+	/** Reads the credential, or answers 503 and returns `undefined` when the host's extract throws. */
+	const readOrFail = (request: Request, response: Response): CredentialRead | undefined => {
 		try {
-			const read = extract(request);
-			if (read.kind === 'malformed') {
-				report('credential.malformed', { reason: read.reason });
+			return extract(request);
+		} catch {
+			fail(response, 'extract');
+			return undefined;
+		}
+	};
+
+	return (request, response, next) => {
+		const read = readOrFail(request, response);
+		if (read === undefined) {
+			return;
+		}
+		if (read.kind === 'malformed') {
+			report('credential.malformed', { reason: read.reason });
+			answering(response, () =>
 				answer(response, 400, ANSWERS.invalidRequest, {
 					'Cache-Control': 'no-store',
 					'WWW-Authenticate': `Bearer error="${CHALLENGE_ERRORS.invalidRequest}"`,
-				});
-				return;
-			}
-			core.resolve(read.kind === 'credential' ? read.credential : null)
-				.then(
-					(outcome) => settle(outcome, response, next),
-					() => fail(response, 'resolve'),
-				)
-				.catch(() => {
-					report('bridge.internalError', { stage: 'attach' });
-					try {
-						unavailable(response);
-					} catch {
-						// A response that throws as it answers must leave no rejection unhandled, since Node ends
-						// the process on one.
-					}
-				});
-		} catch {
-			try {
-				fail(response, 'extract');
-			} catch {
-				// A throw while answering must never reach Express's error handler, whose page is not one
-				// of the fixed answers.
-			}
+				}),
+			);
+			return;
 		}
+		// Resolving through a promise turns a synchronous throw from the core into a rejection, handled
+		// as a failed resolve.
+		Promise.resolve()
+			.then(() => core.resolve(read.kind === 'credential' ? read.credential : null))
+			.then(
+				(outcome) => settle(outcome, response, next),
+				() => fail(response, 'resolve'),
+			)
+			.catch(() => fail(response, 'answer'));
 	};
 };

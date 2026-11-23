@@ -26,19 +26,6 @@ credential source.
 standalone: no
 context: waits on the first host with its own credential source adopting the Bridge.
 
-The Express layer logs a synchronous throw from `core.resolve`, and a throw while answering, under
-`bridge.internalError` stages naming other steps, `extract` or `resolve`.
-fix: call `core.resolve` through a promise so its throw reaches the `resolve` handler, and add an
-`answer` stage for throws while answering, to `INTERNAL_ERROR_STAGES` and to the event table.
-standalone: yes
-
-A throw while signing the channel assertion is reported as a network failure on the exchange and as
-a close on the push, but as a defect on the poll.
-fix: sign before each request's `try` in `controllerClient.ts` and `push.ts`, as the poll does, and
-report the throw as a defect, adding that cause to the exchange's failure causes and to the Bridge's
-list of events.
-standalone: yes
-
 `pnpm-workspace.yaml` overrides the glob archiver-utils resolves to `^14.0.3`, outside the
 `glob ^10` range archiver-utils requires, since that range carries GHSA-3g3m-2fjr-6pw4 and, through
 its minimatch, GHSA-g3hv-75wg-m249. archiver-utils reaches the workspace only under testcontainers'

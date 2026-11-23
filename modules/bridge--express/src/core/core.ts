@@ -69,7 +69,7 @@ type TokenRejectionReason = BridgeEventData['token.rejection']['reason'];
  */
 export type ExchangeAnswer =
 	| { kind: 'admissionShareExceeded'; retryAfterSeconds: number | undefined }
-	| { cause: 'network' | 'status' | 'timeout'; kind: 'failed' }
+	| { cause: 'defect' | 'network' | 'status' | 'timeout'; kind: 'failed' }
 	| { cause: 'assertionRefused' | 'status'; kind: 'unavailable' }
 	| { kind: 'refused' }
 	| { kind: 'retryAfter'; retryAfterSeconds: number }

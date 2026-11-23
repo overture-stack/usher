@@ -157,6 +157,7 @@ suite('createEventLog', () => {
 		['notice.applied', { entriesDropped: 2, kind: 'principal' }, 'info'],
 		['token.overtaken', { outcome: 'exchangedAgain' }, 'info'],
 		['token.exchangeFailure', { cause: 'timeout' }, 'warn'],
+		['token.exchangeFailure', { cause: 'defect' }, 'warn'],
 		[
 			'category.unmapped',
 			{
@@ -168,6 +169,7 @@ suite('createEventLog', () => {
 		],
 		['category.unmapped', { catalogue: 'files', category: 'global.controlled' }, 'error'],
 		['category.unknown', { catalogue: 'files', category: 'global.embargoed' }, 'warn'],
+		['bridge.internalError', { stage: 'answer' }, 'error'],
 		['bridge.internalError', { stage: 'resolve' }, 'error'],
 		['revocationChannel.modeChange', { fromMode: 'uncertain', reason: 'checkConfirmed', toMode: 'normal' }, 'info'],
 		[

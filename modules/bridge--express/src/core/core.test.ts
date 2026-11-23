@@ -2025,6 +2025,42 @@ suite('createBridgeCoreWithSeams', () => {
 			await harness.core.stop();
 		});
 
+		test('logs an anonymous exchange whose signing threw as a failure with cause defect', async () => {
+			const harness = await running();
+			harness.answers.set(null, { cause: 'defect', kind: 'failed' });
+
+			const refreshed = await harness.core.refreshAnonymous();
+
+			assert.equal(refreshed, false);
+			assert.deepEqual(
+				harness.events('token.exchangeFailure').map(({ data }) => data['cause']),
+				['defect'],
+			);
+			await harness.core.stop();
+		});
+
+		test('serves a principal whose signing threw the open tier, and holds the failure with cause defect', async () => {
+			const harness = await running();
+			const credential = signInToken({ sub: 'subject-ana' });
+			harness.answers.set(credential, { cause: 'defect', kind: 'failed' });
+
+			const first = await accessOf(harness.core, credential);
+			const second = await accessOf(harness.core, credential);
+
+			assert.deepEqual(second, first);
+			assert.deepEqual(first, {
+				principal: UNCONFIRMED,
+				results: resultsFor(ANONYMOUS),
+				version: 1,
+			});
+			assert.equal(harness.exchanges.filter((sent) => sent === credential).length, 1);
+			assert.deepEqual(
+				harness.events('token.exchangeFailure').map(({ data }) => data['cause']),
+				['defect'],
+			);
+			await harness.core.stop();
+		});
+
 		test('answers unavailable when an exchange fails and no usable anonymous payload is held', async () => {
 			const harness = await running();
 			const credential = signInToken({ sub: 'subject-ana' });

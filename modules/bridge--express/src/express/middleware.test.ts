@@ -485,6 +485,25 @@ for (const [major, createApp] of majors) {
 			assert.equal(reached.count, 0);
 		});
 
+		test('answers 503 when the core throws synchronously from resolve, logging resolve, never what the error said', async () => {
+			const scripted = scriptedCore(granting);
+			const core: LayerCore = {
+				...scripted.core,
+				resolve: () => {
+					throw new Error('payload for subject-ana could not be read');
+				},
+			};
+			const { app, reached } = appWith(core);
+
+			const answer = await answering(app, (port) => send(port, '/data'));
+
+			assert.equal(answer.status, 503);
+			assert.equal(answer.body, ANSWERS.unavailable);
+			assert.equal(answer.body.includes('subject-ana'), false);
+			assert.deepEqual(scripted.reported, [{ data: { stage: 'resolve' }, name: 'bridge.internalError' }]);
+			assert.equal(reached.count, 0);
+		});
+
 		test("answers 503 when the host's extract throws synchronously, logging the stage", async () => {
 			const scripted = scriptedCore(granting);
 			const { app, reached } = appWith(scripted.core, {
@@ -535,7 +554,7 @@ for (const [major, createApp] of majors) {
 
 			assert.equal(answer.status, 503);
 			assert.equal(answer.body, ANSWERS.unavailable);
-			assert.deepEqual(scripted.reported, [{ data: { stage: 'attach' }, name: 'bridge.internalError' }]);
+			assert.deepEqual(scripted.reported, [{ data: { stage: 'answer' }, name: 'bridge.internalError' }]);
 			assert.equal(reached.count, 0);
 		});
 	});
@@ -572,7 +591,7 @@ suite('createUsherMiddleware, when answering throws', () => {
 
 		assert.deepEqual(statuses, [401, 503]);
 		assert.deepEqual(rejections, []);
-		assert.deepEqual(scripted.reported, [{ data: { stage: 'attach' }, name: 'bridge.internalError' }]);
+		assert.deepEqual(scripted.reported, [{ data: { stage: 'answer' }, name: 'bridge.internalError' }]);
 	});
 
 	for (const [description, extract, triedStatuses, reported] of [
@@ -590,7 +609,7 @@ suite('createUsherMiddleware, when answering throws', () => {
 			[400, 503],
 			[
 				{ data: { reason: 'scheme' }, name: 'credential.malformed' },
-				{ data: { stage: 'extract' }, name: 'bridge.internalError' },
+				{ data: { stage: 'answer' }, name: 'bridge.internalError' },
 			],
 		],
 	] as const) {
