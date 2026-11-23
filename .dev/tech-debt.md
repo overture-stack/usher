@@ -159,3 +159,17 @@ fix: cap the number of grants carried by each entry, and have an entry over the 
 it left out, pointing at `GET /admin/resources/{externalId}/grants`, which pages them.
 standalone: no
 context: changes the listing's contract, so it lands before a stable release.
+
+Eight Controller test cases are placeholders with no assertions, named for refusals of tokens and
+channel assertions that verify under no live key, of unreadable sign-in tokens, and of a forged
+token's subject reaching the audit trail. One is a `test.todo` in
+`createChannelAssertionVerifier.test.ts` (one assertion presented in two encodings). Seven are empty
+suites marked `todo`: one each in `createChannelAssertionVerifier.test.ts`,
+`createTokenVerifier.test.ts`, `test/exchange/issuance/channelAssertion.test.ts` and
+`conformanceGaps.test.ts`, and three in `test/audit/tokenExchange.test.ts`. The test runner counts a
+todo suite as a suite, so a run's todo total shows one where eight exist.
+fix: write each case from its source (tickets #209, #214 and #215, and the refused-subject ruling),
+the forged-subject case first, and decide whether the two-encodings case is written or removed.
+Until then, a placeholder stays a `todo`, so it never reads as a passing test.
+standalone: no
+context: the cases forge tokens and signatures, which the developer writes by hand.
