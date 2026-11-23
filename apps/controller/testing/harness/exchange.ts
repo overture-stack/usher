@@ -293,7 +293,7 @@ export const readUsherToken = async (
 		payloadVersions,
 		tokenKey,
 		wallClock,
-	}).read(body.trim());
+	}).read(body.trim(), { transitMs: 0 });
 };
 
 /**
@@ -364,4 +364,4 @@ export const readUnderKey = (
 		payloadVersions: [PAYLOAD_VERSION],
 		tokenKey,
 		wallClock: SYSTEM_CLOCK,
-	}).read(body.trim());
+	}).read(body.trim(), { transitMs: 0 });

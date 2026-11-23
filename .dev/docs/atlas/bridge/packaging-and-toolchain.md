@@ -174,7 +174,8 @@ and the workspace's version is set below.
 
 - The grace period and the poll deadline run on an injected monotonic clock alone, with no
   wall-clock comparison, as the [core note](core-and-express-layer.md#time) sets out. Comparisons
-  with `exp` keep the wall clock.
+  with a sign-in token's `exp` keep the wall clock; an Usher token's `exp` is read on the
+  Controller's clock, as the [jose note](jose-usher-token.md) sets out.
 - On Linux and macOS a monotonic clock does not advance while the host is suspended. After a resume
   the Bridge stays in normal mode although more than the grace period of wall time may have passed
   since its last check, and it honours grants until its next check or until the grace period has

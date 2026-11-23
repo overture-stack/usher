@@ -176,7 +176,7 @@ suite('the exchange client', () => {
 			issuer: ISSUER,
 		});
 
-		assert.deepEqual(reading, { kind: 'payload', payload });
+		assert.deepEqual(reading, { kind: 'payload', payload, remainingMs: 299_000 });
 		assert.deepEqual(elsewhere, {
 			kind: 'rejected',
 			reason: 'audienceRejected',

@@ -21,6 +21,7 @@ import {
 	type ResolveOutcome,
 	type TokenReading,
 } from './core/core.js';
+import { readingAt, type StoredReading } from './core/testTokens.js';
 import { anonymousAccess, openTierAccess, signedInAccess } from './testing.js';
 
 const corpus = JSON.parse(
@@ -72,7 +73,7 @@ const resultsOf = (outcome: ResolveOutcome): Readonly<Record<string, Enforcement
 const running = async () => {
 	const clocks = { monotonic: 0, wall: ISSUED_AT_MS };
 	const answers = new Map<string | null, ExchangeAnswer>([[null, { kind: 'token', token: 'token:anonymous' }]]);
-	const readings = new Map<string, TokenReading>([['token:anonymous', { kind: 'payload', payload: ANONYMOUS }]]);
+	const readings = new Map<string, StoredReading>([['token:anonymous', { kind: 'payload', payload: ANONYMOUS }]]);
 	const channel: { core: ChannelCore | undefined } = { core: undefined };
 
 	const configuration: BridgeConfiguration = {
@@ -97,8 +98,8 @@ const running = async () => {
 				Promise.resolve(answers.get(credential) ?? { kind: 'refused' }),
 		}),
 		createTokenReader: () => ({
-			read: (token: string): Promise<TokenReading> =>
-				Promise.resolve(readings.get(token) ?? { kind: 'rejected', reason: 'unexpected' }),
+			read: (token: string, { transitMs }: { transitMs: number }): Promise<TokenReading> =>
+				Promise.resolve(readingAt(readings.get(token), transitMs)),
 		}),
 		random: () => 0,
 	};

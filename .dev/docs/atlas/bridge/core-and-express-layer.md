@@ -185,8 +185,9 @@ carry.
   request, so a stream of such tokens cannot push the Controller's refusals out.
 - No store keeps a decrypted payload.
 - The anonymous slot keeps the set of grants named in its payload, for `openTierOnly`.
-- A positive entry ends at the earliest of its Usher token's `exp`, its receipt plus the TTL timed on
-  the monotonic clock, and its sign-in token's `exp`.
+- A positive entry ends at the earliest of its Usher token's remaining life, read from the Bridge's
+  wall clock at receipt, its receipt plus the TTL timed on the monotonic clock, and its sign-in
+  token's `exp`. The [jose note](jose-usher-token.md) sets out how the remaining life is measured.
   [decisions.md](../../../design/decisions.md#the-bridges-cache-is-keyed-by-the-sign-in-token-never-by-a-claim-inside-it)
   records the two `exp` bounds, and the receipt bound holds even if a Controller defect issues a long
   `exp`.
@@ -240,8 +241,10 @@ carry.
   deadline D is aborted at D, and any abort counts as no check.
 - The channel layer calls `confirmChannel(checkStartedAt)` only after applying every notice of a
   check, in the same tick, with the check's start read from the injected monotonic clock.
-- A wall clock, `Date.now()` by default, serves every comparison with an `exp`, jose's `currentDate`
-  and event times.
+- A wall clock, `Date.now()` by default, serves each sign-in token's `exp`, the local expiry of an
+  Usher token's remaining life, and event times. An Usher token's `exp` is read against the
+  Controller's clock, as a bound, so the wall clock never decides whether an Usher token has
+  expired.
 - A monotonic clock, `performance.now()` by default and injected in tests, times the grace period,
   the poll deadline and each entry's TTL.
 - The core reads the monotonic clock on every request, and a timer only logs a lapse when no request
@@ -360,7 +363,7 @@ carry.
 | entry                   | what a store holds for one digest, or the anonymous store's one slot, the anonymous entry                                                                                                           |
 | flight                  | one exchange in progress for one digest, shared by every request waiting on it                                                                                                                      |
 | check                   | an event that renews the grace period; the notice stream defines it                                                                                                                                 |
-| wall clock              | the clock that tells the time of day; `exp` and event times are read against it, and it can step backward                                                                                           |
+| wall clock              | the clock that tells the time of day; a sign-in token's `exp` and event times are read against it, and it can step backward                                                                         |
 | monotonic clock         | a clock that only moves forward, used to measure elapsed time                                                                                                                                       |
 | refused                 | the Controller refused the identity, or the credential is a signed token past its own `exp`; the request gets 401                                                                                   |
 | malformed               | the Controller answered, and the Bridge rejected the Usher token in it; treated as not received, so the request gets 503                                                                            |
@@ -422,7 +425,7 @@ interface BridgeConfiguration {
 		refusalMax?: number; // default 10000
 	};
 	tokenTtlMs?: number; // default 300000
-	wallClock?: Clock; // default Date.now(): exp comparisons and event times
+	wallClock?: Clock; // default Date.now(): sign-in token exp, Usher token local expiry, event times
 }
 
 // KeyRegistration: imported from usher-types, which validates it, and re-exported by the bridge.
@@ -1239,10 +1242,11 @@ cost in memory per entry. A's cost per exchange was not measured.
 
 ## Time
 
-| Clock           | Default             | Read for                                                                                                                  | Why this clock                                             |
-| --------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| wall clock      | `Date.now()`        | the expiry of entries and refusals against `exp`; jose's `currentDate`; event times                                       | `exp` is wall time                                         |
-| monotonic clock | `performance.now()` | the grace period, on every request; the poll deadline; the start of a check, passed to `confirmChannel`; each entry's TTL | a step in the wall clock must not open or close the window |
+| Clock            | Default                                  | Read for                                                                                                                             | Why this clock                                                 |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| wall clock       | `Date.now()`                             | the expiry of entries and refusals against a sign-in token's `exp`; the local expiry of an Usher token's remaining life; event times | `exp` is wall time                                             |
+| Controller clock | none; the bound is `iat` + 1 s + transit | an Usher token's `exp`, as a bound on the Controller's time at receipt                                                               | the Controller sets `iat`, so its clock is the one `exp` is in |
+| monotonic clock  | `performance.now()`                      | the grace period, on every request; the poll deadline; the start of a check, passed to `confirmChannel`; each entry's TTL            | a step in the wall clock must not open or close the window     |
 
 **Why the grace period needs a monotonic clock.** With the grace period written as `Date.now()`
 arithmetic, a 30 s backward step of the wall clock, taken 30 s after a check, left the elapsed time
@@ -1275,10 +1279,11 @@ exchange timeout runs on the global `setTimeout`, and so does the timer that log
 after each firing rather than run by `setInterval`, so mocking `setTimeout` alone drives both
 (reasoned).
 
-jose takes the wall clock as `currentDate`. It floors the current time to whole seconds, so with a
-tolerance of 0 it accepts a token until 1 ms before its `exp` in milliseconds and expires it from
-that instant on, the instant at which the stores drop its entry (read from source, then run). Its
-options belong to [jose for the Usher token](jose-usher-token.md).
+jose takes a `currentDate` for each Usher token from the Controller's bound, not the wall clock. It
+floors the date to whole seconds, so with a tolerance of 0 it accepts a token until 1 ms before its
+`exp` in milliseconds and expires it from that instant on, the instant at which the stores drop its
+entry (read from source, then run). Its options belong to
+[jose for the Usher token](jose-usher-token.md).
 
 ## Logging
 

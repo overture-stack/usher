@@ -36,7 +36,7 @@ import {
 import { defaultSeams } from './defaultSeams.js';
 import { importApplicationKey, subjectTag } from './keys.js';
 import { compileKey, renderKey } from './rendering.js';
-import { mintUsherToken } from './testTokens.js';
+import { mintUsherToken, readingAt, type StoredReading } from './testTokens.js';
 
 /** The subject of a principal whose grants hold, or `undefined` for a principal in any other state. */
 const subjectInForce = (principal: UsherPrincipal): string | undefined =>
@@ -158,7 +158,7 @@ const harnessParts = () => {
 	};
 	const answers = new Map<string | null, Scripted>([[null, { kind: 'token', token: 'token:anonymous' }]]);
 	const exchanges: (string | null)[] = [];
-	const readings = new Map<string, TokenReading>([['token:anonymous', { kind: 'payload', payload: ANONYMOUS }]]);
+	const readings = new Map<string, StoredReading>([['token:anonymous', { kind: 'payload', payload: ANONYMOUS }]]);
 
 	const configuration: BridgeConfiguration = {
 		audience: `audience-${Math.random()}`,
@@ -194,8 +194,8 @@ const harnessParts = () => {
 			},
 		}),
 		createTokenReader: () => ({
-			read: (token: string): Promise<TokenReading> =>
-				Promise.resolve(readings.get(token) ?? { kind: 'rejected', reason: 'unexpected' }),
+			read: (token: string, { transitMs }: { transitMs: number }): Promise<TokenReading> =>
+				Promise.resolve(readingAt(readings.get(token), transitMs)),
 		}),
 		random: () => 0,
 	};
@@ -2407,6 +2407,112 @@ suite('createBridgeCoreWithSeams', () => {
 		});
 	});
 
+	suite('the token clock, measured against the Controller', () => {
+		/** The Controller's clock when a token is received: 400 ms into the second its iat names. */
+		const RECEIVED_AT_MS = ISSUED_AT_MS + 400;
+
+		/** A signed-in payload minted at `ISSUED_AT_MS`, with `lifetimeSeconds` of life from its iat. */
+		const mintedWith = (lifetimeSeconds: number): PermissionsPayload => ({
+			...signedIn('05', 'subject-ana'),
+			exp: ISSUED_AT_MS / 1000 + lifetimeSeconds,
+			iat: ISSUED_AT_MS / 1000,
+		});
+
+		for (const [description, skewMs] of [
+			['ahead by ten minutes', 600_000],
+			['behind by ten minutes', -600_000],
+		] as const) {
+			test(`with its clock ${description}, reads a fresh token as a payload and holds its entry no later than the Controller's exp`, async () => {
+				const harness = await running();
+				const credential = signInToken({ sub: 'subject-ana' });
+				harness.issue(credential, mintedWith(300));
+				harness.advanceWall(RECEIVED_AT_MS + skewMs - ISSUED_AT_MS);
+
+				const first = await harness.core.resolve(credential);
+				assert.equal(first.kind, 'access');
+
+				const controllerExpInBridgeTime = (ISSUED_AT_MS / 1000 + 300) * 1000 + skewMs;
+				harness.advanceWall(controllerExpInBridgeTime - (RECEIVED_AT_MS + skewMs));
+				await harness.core.resolve(credential);
+
+				assert.equal(exchangesOf(harness, credential), 2);
+				await harness.core.stop();
+			});
+		}
+
+		test('counts the transit of the attempt that produced the token, so a token with 3 s of life that took 2 s to arrive reads expired', async () => {
+			const harness = await running();
+			const credential = signInToken({ sub: 'subject-ana' });
+			let attempts = 0;
+			harness.answers.set(credential, () => {
+				attempts += 1;
+				if (attempts === 1) {
+					harness.advanceMonotonic(2_000);
+				}
+				return Promise.resolve({ kind: 'token', token: attempts === 1 ? 'token:slow' : 'token:fresh' });
+			});
+			harness.readings.set('token:slow', { kind: 'payload', payload: mintedWith(3) });
+			harness.readings.set('token:fresh', { kind: 'payload', payload: mintedWith(30) });
+
+			const outcome = await harness.core.resolve(credential);
+
+			assert.equal(outcome.kind, 'access');
+			assert.equal(exchangesOf(harness, credential), 2);
+			assert.deepEqual(
+				harness.events('token.rejection').map(({ data }) => data['reason']),
+				['expired'],
+			);
+			await harness.core.stop();
+		});
+
+		test('times the attempt that answered after a hold, not the time since the hold began', async () => {
+			const harness = await running();
+			const credential = signInToken({ sub: 'subject-ana' });
+			let attempts = 0;
+			harness.answers.set(credential, () => {
+				attempts += 1;
+				if (attempts === 1) {
+					return Promise.resolve({ kind: 'retryAfter', retryAfterSeconds: 1 });
+				}
+				harness.advanceMonotonic(200);
+				return Promise.resolve({ kind: 'token', token: 'token:fresh' });
+			});
+			harness.readings.set('token:fresh', { kind: 'payload', payload: mintedWith(30) });
+
+			await harness.core.resolve(credential);
+			harness.advanceMonotonic(60_000);
+			const outcome = await harness.core.resolve(credential);
+
+			assert.equal(outcome.kind, 'access');
+			assert.equal(attempts, 2);
+			assert.deepEqual(harness.events('token.rejection'), []);
+			await harness.core.stop();
+		});
+
+		test('times each attempt of the expired retry on its own, so the retry is not charged the first attempt', async () => {
+			const harness = await running();
+			const credential = signInToken({ sub: 'subject-ana' });
+			let attempts = 0;
+			harness.answers.set(credential, () => {
+				attempts += 1;
+				harness.advanceMonotonic(attempts === 1 ? 5_000 : 100);
+				return Promise.resolve({ kind: 'token', token: attempts === 1 ? 'token:stale' : 'token:fresh' });
+			});
+			harness.readings.set('token:stale', { kind: 'payload', payload: mintedWith(6) });
+			harness.readings.set('token:fresh', { kind: 'payload', payload: mintedWith(6) });
+
+			const outcome = await harness.core.resolve(credential);
+
+			assert.equal(outcome.kind, 'access');
+			assert.equal(attempts, 2);
+			assert.deepEqual(
+				harness.events('token.rejection').map(({ data }) => data['reason']),
+				['expired'],
+			);
+			await harness.core.stop();
+		});
+	});
+
 	suite('notices', () => {
 		test('drops every entry of the principal a notice names, so their next request exchanges again', async () => {
 			const harness = await running();
@@ -3206,7 +3312,9 @@ suite('createBridgeCoreWithSeams', () => {
 			context.mock.timers.enable({ apis: ['setTimeout'] });
 			const harness = await running();
 
-			context.mock.timers.tick(LIFETIME_MS * 0.8 - 1);
+			// The Bridge reads the token's life from its receipt, less the second the Controller may floor away.
+			const readLifeMs = LIFETIME_MS - 1_000;
+			context.mock.timers.tick(readLifeMs * 0.8 - 1);
 			await settled();
 			const before = anonymousExchanges(harness);
 			context.mock.timers.tick(1);

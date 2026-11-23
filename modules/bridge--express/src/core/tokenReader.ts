@@ -1,5 +1,5 @@
 import { type NonEmpty, PAYLOAD_MEMBER_NAMES, PAYLOAD_VERSION, validatePayload } from '@overture-stack/usher-types';
-import { decodeProtectedHeader, jwtDecrypt } from 'jose';
+import { compactDecrypt, decodeProtectedHeader, type JWTDecryptOptions, jwtDecrypt } from 'jose';
 
 import type { Clock } from './clocks.js';
 import type { TokenReader, TokenReading } from './core.js';
@@ -12,6 +12,22 @@ const USHER_TOKEN_TYPE = 'usher+jwt';
 
 /** The only protected header members allowed in an Usher token. */
 const HEADER_MEMBERS: ReadonlySet<string> = new Set(['alg', 'enc', 'typ']);
+
+/**
+ * The most a token's `iat` can trail the Controller's clock when it is read: the Controller floors
+ * its clock to whole seconds before it sets `iat`.
+ */
+const IAT_FLOOR_MS = 1_000;
+
+/**
+ * The checks both decryptions make, stated once: the key-management and content-encryption
+ * algorithms allowed, and no decompression, which refuses a compressed token.
+ */
+const DECRYPTION_CHECKS = {
+	contentEncryptionAlgorithms: ['A256GCM'],
+	keyManagementAlgorithms: ['dir'],
+	maxDecompressedLength: 0,
+} satisfies JWTDecryptOptions;
 
 /** jose's error codes, each mapped to a fixed reason code so no part of the error is passed on. */
 const REASONS_BY_CODE: ReadonlyMap<unknown, TokenRejectionReason> = new Map([
@@ -84,35 +100,85 @@ export interface TokenReaderOptions {
 	/** The application key's token subkey, derived for decryption alone. */
 	tokenKey: CryptoKey;
 
-	/** The clock for checking a token's time claims. */
+	/**
+	 * The clock for a token whose plaintext carries no finite numeric `iat`, which is then checked
+	 * against the wall clock as before. A token that carries one is never read against this clock.
+	 */
 	wallClock: Clock;
 }
 
-const readPayload = (payload: Readonly<Record<string, unknown>>, payloadVersions: readonly number[]): TokenReading => {
+/**
+ * The latest the Controller's clock can be when a token is received, in milliseconds: its `iat`
+ * plus the floor the Controller applied to it, plus the transit the token took to arrive.
+ */
+const controllerTimeAtReceiptMs = (iatSeconds: number, transitMs: number): number =>
+	iatSeconds * 1000 + IAT_FLOOR_MS + transitMs;
+
+/** The `iat`, in seconds, of a token whose plaintext is a JSON object with a finite numeric one. */
+const issuedAtOf = (plaintext: Uint8Array): number | undefined => {
+	try {
+		const claims: unknown = JSON.parse(new TextDecoder().decode(plaintext));
+		const iat = ownValue(claims, 'iat');
+		return typeof iat === 'number' && Number.isFinite(iat) ? iat : undefined;
+	} catch {
+		return undefined;
+	}
+};
+
+const readPayload = (
+	payload: Readonly<Record<string, unknown>>,
+	payloadVersions: readonly number[],
+	transitMs: number,
+): TokenReading => {
 	const version = payload['payloadVersion'];
 	const reader = payloadVersions.some((listed) => listed === version) ? READERS.get(version) : undefined;
 	if (reader === undefined) {
 		return rejected('payloadVersionUnlisted');
 	}
 	const result = reader(payload);
-	return result.success ? { kind: 'payload', payload: result.payload } : rejected('payloadMalformed');
+	return result.success
+		? {
+				kind: 'payload',
+				payload: result.payload,
+				remainingMs: result.payload.exp * 1000 - controllerTimeAtReceiptMs(result.payload.iat, transitMs),
+			}
+		: rejected('payloadMalformed');
 };
 
 /**
  * Creates the default token reader. Its `read` decrypts an Usher token with `tokenKey` and returns
- * the validated payload, or a rejection carrying a fixed reason code and nothing else: no error,
- * message or payload content. `read` never throws. A token is rejected with:
+ * the validated payload, with the time left on it, or a rejection carrying a fixed reason code and
+ * nothing else: no error, message or payload content. `read` never throws.
+ *
+ * A token's `exp` is measured against the Controller's clock, not the Bridge's. The Controller sets
+ * `iat` to its clock floored to whole seconds, so at receipt its clock is at most `iat` plus one
+ * second plus the `transitMs` the token took to arrive. The reader takes that bound as the time, and
+ * never a later one, so a token is never read as living longer than it does on the Controller's
+ * clock. The Bridge's own clock can run ahead of or behind the Controller's, and the reader does
+ * not read it: the bound is the only time the token is read against.
+ *
+ * Decryption runs twice. The bound needs `iat`, which is known only once the token is decrypted,
+ * while jose decrypts and checks `exp` in one call against a `currentDate` given before it starts.
+ * So the first decryption, with the same algorithms and no decompression as the second, is used for
+ * nothing but the plaintext's `iat`, and the second checks the token against the bound. A plaintext with no
+ * finite numeric `iat` is checked against the wall clock instead, so it is rejected with the reason
+ * it always was. The `expired` reason means `exp` is at or before the bound, and the sign-in token's
+ * own `exp` is the identity provider's clock, which the core reads against the Bridge's wall clock
+ * with its local tolerance, outside this measurement.
+ *
+ * A token is rejected with:
  *
  * - `headerUnreadable` when its protected header cannot be read;
  * - `headerType` when its `typ` is not exactly `usher+jwt`;
- * - `headerMember` when its protected header carries a member other than `alg`, `enc` and `typ`;
+ * - `headerMember` when its protected header carries a member other than `alg`, `enc` and `typ`,
+ *   which includes `zip`, so a compressed token is refused before decryption;
  * - `algorithmNotAllowed` when it is not `dir` with A256GCM;
  * - `headerUnsupported` when it uses a feature unsupported by jose;
  * - `tokenMalformed` when it is not a well-formed compact JWE;
  * - `decryptionFailed` when it does not decrypt under `tokenKey`;
  * - `claimsNotObject` when its plaintext is not a JSON object;
  * - `audienceRejected` when its `aud` is not `audience`;
- * - `expired` when its `exp` is at or before the wall clock's reading, with no tolerance;
+ * - `expired` when its `exp` is at or before the Controller's latest possible time at receipt;
  * - `claimRejected` for any other claim failure, such as an `iss` other than `issuer`, an `nbf` in
  *   the future or a missing payload member;
  * - `payloadVersionUnlisted` when its `payloadVersion` is not in `payloadVersions`, or has no
@@ -127,31 +193,34 @@ export const createTokenReader = ({
 	tokenKey,
 	wallClock,
 }: TokenReaderOptions): TokenReader => {
-	const decrypted = async (token: string): Promise<TokenReading> => {
+	const decrypted = async (token: string, transitMs: number): Promise<TokenReading> => {
 		try {
-			// Every check is stated rather than left to a jose default; `maxDecompressedLength: 0`
-			// refuses a compressed token.
+			// Both decryptions take `DECRYPTION_CHECKS`, the same algorithm allowlists and compression
+			// refusal. The first's result is used for nothing but its `iat`; the second is the checked read.
+			const { plaintext } = await compactDecrypt(token, tokenKey, DECRYPTION_CHECKS);
+			const issuedAt = issuedAtOf(plaintext);
+			const currentDate = new Date(
+				issuedAt === undefined ? wallClock.now() : controllerTimeAtReceiptMs(issuedAt, transitMs),
+			);
 			const { payload } = await jwtDecrypt(token, tokenKey, {
+				...DECRYPTION_CHECKS,
 				audience,
 				clockTolerance: 0,
-				contentEncryptionAlgorithms: ['A256GCM'],
-				currentDate: new Date(wallClock.now()),
+				currentDate,
 				issuer,
-				keyManagementAlgorithms: ['dir'],
-				maxDecompressedLength: 0,
 				requiredClaims: [...PAYLOAD_MEMBER_NAMES],
 				typ: USHER_TOKEN_TYPE,
 			});
-			return readPayload(payload, payloadVersions);
+			return readPayload(payload, payloadVersions, transitMs);
 		} catch (error) {
 			return rejected(reasonOf(error));
 		}
 	};
 
 	return {
-		read: async (token) => {
+		read: async (token, { transitMs }) => {
 			const refusal = headerRefusal(protectedHeaderOf(token));
-			return refusal === undefined ? decrypted(token) : rejected(refusal);
+			return refusal === undefined ? decrypted(token, transitMs) : rejected(refusal);
 		},
 	};
 };

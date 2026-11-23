@@ -112,11 +112,12 @@ decrypted payload, and its type parameter erases a null subject. Each rule below
 
 **Caching**
 
-- Decryption and validation run once per exchange, never per request; where rendering runs is set out
+- Decryption and validation run on each exchange, never per request; where rendering runs is set out
   in [Bridge core and Express layer](core-and-express-layer.md).
-- An entry ends at the earliest of its Usher token's `exp`, its receipt plus the TTL timed on the
-  monotonic clock, and its sign-in token's `exp`. The receipt bound holds even if a Controller defect
-  issues a long `exp`.
+- An entry ends at the earliest of its Usher token's remaining life from receipt, its receipt plus
+  the TTL timed on the monotonic clock, and its sign-in token's `exp`. The receipt bound holds even
+  if a Controller defect issues a long `exp`. The remaining life is set out in
+  [the clock the token is read against](#the-clock-the-token-is-read-against).
 - No store keeps the Usher token or a decrypted payload; the [core note](core-and-express-layer.md)
   lists what each store holds.
 
@@ -210,12 +211,10 @@ reaches `jwtDecrypt`. A `NaN` tolerance makes every call throw a `TypeError`, so
 one would reject every token. The Usher token's tolerance is 0, so the unit matters only where a
 nonzero tolerance reaches jose.
 
-**A tolerance of 0 makes acceptance and the per-request drop use the same rule.** Skew can then only
-shorten an entry. A Bridge clock ahead of the Controller's by more than a token's life rejects every
-token, which fails closed and visibly. The local refusal of an expired three-part sign-in token
-takes its tolerance from a separate setting in configuration, `localRefusalClockToleranceMs`,
-60000 ms by default. It must never be set below the Controller's own tolerance, or the Bridge would
-refuse what the Controller accepts
+**A tolerance of 0 makes acceptance and the per-request drop use the same rule.** The local refusal
+of an expired three-part sign-in token takes its tolerance from a separate setting in
+configuration, `localRefusalClockToleranceMs`, 60000 ms by default. It must never be set below the
+Controller's own tolerance, or the Bridge would refuse what the Controller accepts
 ([Bridge core and Express layer](core-and-express-layer.md), "Configuration").
 
 **The key's usage restriction does not pin the algorithm.** Without `keyManagementAlgorithms`, jose
@@ -230,6 +229,49 @@ recommends.
 exchange, so `maxTokenAge` checks age only at receipt. A token whose `exp` was a day out was accepted
 under a `maxTokenAge` of 300 seconds. `maxTokenAge` would also reject an `iat` in the future, which
 turns skew into a hard failure.
+
+### The clock the token is read against
+
+An Usher token's `exp` is read on the Controller's clock, never the Bridge's. The Controller sets
+`iat` to its clock floored to whole seconds, so when a token arrives its clock is at most `iat` plus
+one second plus the transit. The transit is the monotonic time from the start of the one request
+that produced the token to its answer, so a back-off, a `Retry-After` hold or an earlier attempt is
+never counted. The reader takes that bound as the time, and never reads a token as living longer
+than it does on the Controller's clock.
+
+| Quantity                   | Formula                                | Used for                                                           |
+| -------------------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| Controller time at receipt | `iat` x 1000 + 1000 + transit          | the `currentDate` of the checked decryption                        |
+| remaining life             | `exp` x 1000 - that bound              | the Usher token's life left, from receipt                          |
+| local expiry               | wall clock at receipt + remaining life | the anonymous entry and each positive entry, on the Bridge's clock |
+
+A trace with the Bridge's clock 600 s ahead of the Controller's:
+
+1. The Controller mints a token at its clock 1767225600.400 s, with `iat` 1767225600 and
+   `exp` 1767225900.
+2. The token takes 200 ms to arrive, so the Controller's clock reads 1767225600.600 s at receipt.
+3. The Bridge's wall clock reads 1767226200.600 s at receipt.
+4. The bound is 1767225600000 + 1000 + 200 = 1767225601200 ms.
+5. The remaining life is 1767225900000 - 1767225601200 = 298800 ms.
+6. The local expiry is 1767226200600 + 298800 = 1767226499400 ms on the Bridge's clock.
+7. The Controller's `exp` on the Bridge's clock is 1767225900000 + 600000 = 1767226500000 ms.
+8. The entry ends 600 ms before the Controller's `exp`, so skew shortens an entry and never
+   stretches it.
+
+**Two decryptions.** The bound needs the token's `iat`, which is known only once the token is
+decrypted, while jose's `jwtDecrypt` decrypts and checks `exp` in one call, against a `currentDate`
+given before it starts. So the reader decrypts once, with the same algorithms and no decompression,
+and uses that result for nothing but the plaintext's `iat`; then it decrypts again with every check,
+`clockTolerance` 0, and `currentDate` at the bound. A plaintext with no finite numeric `iat` is
+checked against the wall clock, so it is rejected with the reason it always was. One decryption with
+a tolerance wide enough to switch off jose's `exp` check, followed by the reader's own check against
+the bound, would hold to the same rule, but it would read as a tolerance stretching a token's life,
+and a later reader would remove it as one.
+
+**The identity provider's clock is outside this.** A sign-in token's `exp` is set by the identity
+provider, not the Controller, so the core reads it against the Bridge's wall clock with its local
+tolerance, as [Bridge core and Express layer](core-and-express-layer.md) sets out. Nothing in this
+section changes that.
 
 ### The shape
 
@@ -633,9 +675,10 @@ const usherToken = await new EncryptJWT(payload) // the whole corpus payload, su
   payload have different IV segments. Left to itself, jose gives each mint a fresh 12-byte IV, a
   different ciphertext, an empty encrypted-key segment and a 16-byte tag.
 - **Pin time with `currentDate`, not fake timers.** With the corpus instants (`iat` 1767225600,
-  `exp` 1767225900) and `clockTolerance` 0, a `currentDate` of `iat` plus 299 seconds is accepted,
-  and one equal to `exp` is expired. jose treats `exp` at or before the current time, less the
-  tolerance, as expired.
+  `exp` 1767225900) and `clockTolerance` 0, a `currentDate` of 1 ms before `exp` is accepted, and
+  one equal to `exp` is expired. jose treats `exp` at or before the current time, less the
+  tolerance, as expired. The reader's `currentDate` is `iat` plus one second plus the transit, so
+  its tests pin the transit, not the clock.
 - One mint costs 48 to 52 µs.
 
 ## Not verified

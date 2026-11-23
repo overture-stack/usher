@@ -85,13 +85,21 @@ export interface ControllerClient {
 	exchange(request: { credential: string | null; signal: AbortSignal }): Promise<ExchangeAnswer>;
 }
 
-/** An Usher token read: its validated payload, or the fixed reason it was rejected. */
+/**
+ * An Usher token read: its validated payload and the time left on it, measured on the Controller's
+ * clock at receipt, or the fixed reason it was rejected.
+ */
 export type TokenReading =
-	{ kind: 'payload'; payload: PermissionsPayload } | { kind: 'rejected'; reason: TokenRejectionReason };
+	| { kind: 'payload'; payload: PermissionsPayload; remainingMs: number }
+	| { kind: 'rejected'; reason: TokenRejectionReason };
 
 /** Reads an Usher token into its validated payload, or the fixed reason it was rejected. */
 export interface TokenReader {
-	read(token: string): Promise<TokenReading>;
+	/**
+	 * Reads `token`, which took `transitMs` to arrive: the monotonic time from the start of the one
+	 * request that produced it to its answer.
+	 */
+	read(token: string, options: { transitMs: number }): Promise<TokenReading>;
 }
 
 /** What each seam is built from. */
@@ -787,12 +795,16 @@ const createRuntime = ({
 		}
 	};
 
-	const install = (payload: PermissionsPayload): void => {
+	/**
+	 * Installs an anonymous payload received at `receivedAt` on the wall clock, with `remainingMs` of
+	 * life left on it by the Controller's clock, so it expires at the same moment on the Bridge's.
+	 */
+	const install = (payload: PermissionsPayload, receivedAt: number, remainingMs: number): void => {
 		const results = resultsFor(payload);
-		const receivedAt = clocks.wall.now();
+		const localExpiryMs = receivedAt + remainingMs;
 		anonymous.entry = {
 			access: accessOf(anonymousPrincipal(), results),
-			expiry: { monotonicMs: ttlFromNow(), wallMs: payload.exp * 1000 },
+			expiry: { monotonicMs: ttlFromNow(), wallMs: localExpiryMs },
 			grants: grantSet(payload.permissions),
 			resources: new Set(Object.keys(payload.permissions)),
 			suspended: accessOf(unconfirmedSuspendedPrincipal(), results),
@@ -800,7 +812,7 @@ const createRuntime = ({
 		anonymous.installedOnce = true;
 		anonymous.retries = 0;
 		modes.anonymousAccepted();
-		const endsAt = Math.min(payload.exp * 1000, receivedAt + configuration.tokenTtlMs);
+		const endsAt = Math.min(localExpiryMs, receivedAt + configuration.tokenTtlMs);
 		scheduleRefresh(Math.max(0, (endsAt - receivedAt) * 0.8));
 	};
 
@@ -839,12 +851,15 @@ const createRuntime = ({
 		expiryRetried: boolean,
 	): Promise<AnonymousFetch> => {
 		const since = notices.epoch();
+		const requestStart = clocks.monotonic.now();
 		const answer = await answeredBy(signal, client.exchange({ credential: null, signal }));
+		const transitMs = clocks.monotonic.now() - requestStart;
+		const receivedAt = clocks.wall.now();
 		if (answer.kind !== 'token') {
 			anonymousFailure(answer);
 			return failedRefresh();
 		}
-		const reading = await reader.read(answer.token);
+		const reading = await reader.read(answer.token, { transitMs });
 		if (reading.kind === 'rejected') {
 			// As for a signed-in exchange: one more fetch, at once, when the token just fetched reads expired.
 			if (reading.reason === 'expired' && !expiryRetried && !lifecycle.stopped && !anonymousWaits()) {
@@ -879,7 +894,7 @@ const createRuntime = ({
 			return fetchAnonymous(signal, start, true, expiryRetried);
 		}
 		if (start.afterCheck) {
-			install(reading.payload);
+			install(reading.payload, receivedAt, reading.remainingMs);
 			return 'installed';
 		}
 		return 'selfTest';
@@ -934,11 +949,14 @@ const createRuntime = ({
 		const since = notices.epoch();
 		const start = flightStart();
 		const anonymousGrants = anonymous.entry?.grants;
+		const requestStart = clocks.monotonic.now();
 		const answer = await answeredBy(signal, client.exchange({ credential, signal }));
+		const transitMs = clocks.monotonic.now() - requestStart;
+		const receivedAt = clocks.wall.now();
 		if (answer.kind !== 'token') {
 			return settleAnswer(answer, digest, claims);
 		}
-		const reading = await reader.read(answer.token);
+		const reading = await reader.read(answer.token, { transitMs });
 		if (reading.kind === 'rejected') {
 			// A token the Controller minted in the last second of a grant's life can read expired by the
 			// time it is read: one exchange more is made, and the first reading is still logged.
@@ -948,7 +966,7 @@ const createRuntime = ({
 			}
 			return rejected(digest, reading.reason);
 		}
-		const { payload } = reading;
+		const { payload, remainingMs } = reading;
 		const subject = payload.sub;
 		if (subject === null || (claims?.subject !== undefined && claims.subject !== subject)) {
 			return rejected(digest, 'subjectMismatch');
@@ -975,7 +993,7 @@ const createRuntime = ({
 				},
 				{
 					monotonicMs: ttlFromNow(),
-					wallMs: Math.min(payload.exp * 1000, credentialExpiry(claims)),
+					wallMs: Math.min(receivedAt + remainingMs, credentialExpiry(claims)),
 				},
 			);
 		}
