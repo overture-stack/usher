@@ -91,6 +91,7 @@ export type AuditEventType =
 	| 'admin.nominationDecision'
 	| 'admin.nominationRevocation'
 	| 'admin.override'
+	| 'admin.removal'
 	| 'admission.shareExceededTally'
 	| 'application.registration'
 	| 'application.servedResourcesChange'
@@ -231,6 +232,12 @@ export interface TransactionOptions {
 	 * none runs within the store timeout.
 	 */
 	timeoutMilliseconds?: number;
+
+	/**
+	 * Whether the change alters who is an administrator, so the transaction holds the administrators'
+	 * lock exclusively, where it holds it shared. A transaction naming none holds it shared.
+	 */
+	exclusiveAuthority?: boolean;
 }
 
 /** The audit trail: each event's row written in the transaction of the change it records. */
@@ -291,6 +298,14 @@ export interface AuditTrail<Connection> {
 
 /** What the audit trail is created from. */
 export interface AuditTrailSettings<Connection extends TrailConnection> {
+	/**
+	 * Confirms, on the transaction's connection, the authority the change runs under: run in every
+	 * change's transaction right after its actor is declared and before its work, so whatever it throws
+	 * fails the transaction, committing nothing. `exclusive` is the transaction's
+	 * {@link TransactionOptions.exclusiveAuthority}. Not run for an event recorded on its own.
+	 */
+	confirmAuthority?: (connection: Connection, options: { exclusive: boolean }) => Promise<void>;
+
 	/** Where each committed event's line is written, and the line naming an event whose row was not. */
 	eventLog: Pick<EventLog, 'error' | 'writeEvent'>;
 

@@ -73,6 +73,8 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  * - `nominations` and `administrators`: each nomination of a person to be an administrator, kept as
  *   written, its `nominated_at` later than every nomination's before it, and each administrator, by
  *   the nomination they accepted (ruled).
+ * - `administrator_removals`: each removal of an administrator, by the nomination that accepted them,
+ *   with the instant and the person it was made by, kept as written.
  * - `nomination_declines` and `nomination_revocations`: each nomination its nominee declined, and each
  *   the first user revoked, by the nomination, with the instant each was recorded, kept as written.
  * - `schema_migrations`: each applied migration's name, a checksum of its content, and when it was
@@ -112,6 +114,14 @@ export const POLICY_TABLES = {
 			userId: 'user_id',
 		},
 		name: 'administrators',
+	},
+	administratorRemovals: {
+		columns: {
+			nominationId: 'nomination_id',
+			removedAt: 'removed_at',
+			removedBy: 'removed_by',
+		},
+		name: 'administrator_removals',
 	},
 	applicationKeys: {
 		columns: {
@@ -1012,6 +1022,7 @@ type Row = Readonly<Record<string, Cell>>;
 
 const {
 	administrators,
+	administratorRemovals,
 	applicationResources,
 	applications,
 	capabilities,
@@ -1735,7 +1746,7 @@ export const usersWithSubject = async (client: pg.ClientBase, subject: string): 
  * Seeds a person as one of Usher's administrators by SQL, under the system actor, in a transaction
  * of its own: the person holding the identity, written with it where none holds it yet, a
  * nomination naming them, by themself, later than every nomination before it, and their acceptance
- * of it. A person who is an administrator already is left as they are.
+ * of it. A person who is a live administrator already is left as they are.
  *
  * @param client a connection under the migration role, holding no transaction.
  * @param identity the issuer and the subject of the person's identity.
@@ -1752,7 +1763,10 @@ export const seedAdministrator = (
 			`WITH nominated AS (
          INSERT INTO ${qualified(nominations)} (${column(nominations.columns.nominatedAt)}, ${column(nominations.columns.nominatedBy)}, ${column(nominations.columns.nomineeId)})
          SELECT greatest(clock_timestamp(), (SELECT max(${column(nominations.columns.nominatedAt)}) + interval '1 millisecond' FROM ${qualified(nominations)})), $1, $1
-          WHERE NOT EXISTS (SELECT 1 FROM ${qualified(administrators)} WHERE ${column(administrators.columns.userId)} = $1)
+          WHERE NOT EXISTS (SELECT 1 FROM ${qualified(administrators)} held
+                          WHERE held.${column(administrators.columns.userId)} = $1
+                            AND NOT EXISTS (SELECT 1 FROM ${qualified(administratorRemovals)} removal
+                                             WHERE removal.${column(administratorRemovals.columns.nominationId)} = held.${column(administrators.columns.nominationId)}))
          RETURNING ${column(nominations.columns.id)} AS id
        )
        INSERT INTO ${qualified(administrators)} (${column(administrators.columns.acceptedAt)}, ${column(administrators.columns.nominationId)}, ${column(administrators.columns.userId)})

@@ -129,6 +129,7 @@ This replacement must be planned and coordinated before any EGO infrastructure i
 - Query data applications without a filter, but only where an instance has enabled the adapter-level
   bypass, which is off by default for health-data instances. This is the one route that is not a
   grant, and the section below states what it costs
+- Nominate other admins, and remove them, but never the last one (see the Further admins section)
 
 ### Cannot
 
@@ -137,8 +138,6 @@ This replacement must be planned and coordinated before any EGO infrastructure i
 - Delete or modify audit log entries
 - Bypass the Usher token path to access data; the separation of admin permission from data
   access is a hard design requirement, not a policy convention
-- Create or revoke other admins; that is an identity provider operation, outside
-  Usher's scope (see the Bootstrap section)
 
 ### How Usher determines admin status
 
@@ -147,6 +146,10 @@ Management API. The identity provider's role confers nothing once the first admi
 every act that makes an admin is Usher's own and recorded in its audit log, whoever administers the
 identity provider. Usher never caches admin status between requests, so a change to the list holds
 from the next request.
+
+Admin status is read inside each change's own transaction as well, so a change by a removed admin
+never commits. A change that alters who is an admin holds the admins lock exclusively, and every other
+change by an admin holds it shared, so the two never interleave.
 
 **Adversarial framing:** if an admin account is compromised, the attacker gains grant
 management power. But every action they take is logged, and they do not gain silent unlogged data
@@ -175,9 +178,9 @@ usual: nothing is registered yet, so a token reaches nothing.
 **Each step is recorded:** the nomination, and its acceptance, which makes the first admin and is
 recorded at `critical`.
 
-**Built after the first release, each as a forward migration:** admins nominating and removing
-admins, recovery when no admin can sign in, an admin owning a resource they registered, and adding
-grants from a list of email addresses. Recovery is a command in the Controller's image, run once the
+**Built after the first release, each as a forward migration:** recovery when no admin can sign in,
+an admin owning a resource they registered, and adding grants from a list of email addresses.
+Recovery is a command in the Controller's image, run once the
 way the schema migration command is, so it needs no particular pipeline, and its procedure in
 docs/deployment.md § Break-glass access serves any platform.
 
@@ -189,6 +192,23 @@ in a secrets manager, scope it tightly, and log its use at the instance platform
 Usher's audit log records application-layer policy changes, the making of admins among them;
 Keycloak's own audit logs record IdP-level admin operations. Both are needed for a complete audit
 trail (see the Non-obvious constraints section).
+
+---
+
+## Further admins
+
+An admin nominates another the way the first admin was nominated: by subject, through the same nomination
+route, and the nominee accepts or declines. Accepting makes the nominee an admin. These rules hold once an
+admin exists:
+
+- Any admin may nominate, and any admin may revoke a nomination still pending, whoever made it.
+- A nominee who is already an admin is refused, and so is a nominee whom a pending nomination already names.
+  The pending nomination must be withdrawn first.
+- Every admin is kept. Removing an admin writes a removal row of their own and never deletes the admin's
+  row, so the nomination that made them stays on record.
+- An admin removes another admin, or themself, and the last admin is never removed.
+- A removal revokes each nomination the removed admin made that is still pending.
+- A person removed may be nominated and accepted again, and then holds a new admin row of their own.
 
 ---
 

@@ -19,3 +19,9 @@ export type {
 	StoreReader,
 	UnverifiedCredentialReason,
 } from './types.js';
+export {
+	type AdmittedIdentity,
+	admittedAdministrator,
+	AdministratorStatusWithdrawn,
+	withAdministratorAuthority,
+} from './administratorAuthority.js';

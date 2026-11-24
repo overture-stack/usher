@@ -92,10 +92,15 @@ const rowValues = ({
  * by it as well, as `withinStoreTimeout` bounds a unit by one, and sets both limits the store applies
  * to a session to its bound inside the transaction alone.
  *
+ * Each transaction run by {@link AuditTrail.inTransaction} confirms the authority its change runs under,
+ * where `confirmAuthority` is given, after declaring its actor and before its work. A transaction
+ * recording an event on its own runs no confirmation, so a refusal is recorded whoever the actor is.
+ *
  * @param options the store, the log stream, and the settings naming the schema, the event source,
- *   the instance and the store timeout.
+ *   the instance and the store timeout, and the confirmation each change runs first.
  */
 export const createAuditTrail = <Connection extends TrailConnection>({
+	confirmAuthority,
 	eventLog,
 	settings,
 	store,
@@ -125,10 +130,13 @@ export const createAuditTrail = <Connection extends TrailConnection>({
 		};
 	};
 
-	const inTransaction = async <Result>(
+	// The transaction behind both members of the trail. Only a change confirms its authority, so the
+	// event a refusal records runs without one.
+	const transactionOf = async <Result>(
 		actor: Actor,
 		work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
-		{ deadline, failureEvent, timeoutMilliseconds }: TransactionOptions = {},
+		{ deadline, exclusiveAuthority, failureEvent, timeoutMilliseconds }: TransactionOptions,
+		confirmsAuthority: boolean,
 	): Promise<Result> => {
 		if (actorIdOf(actor) === '') {
 			throw new TypeError('an actor who is a person or a service account names their subject');
@@ -203,6 +211,9 @@ export const createAuditTrail = <Connection extends TrailConnection>({
 			try {
 				await connection.query(failureEvent === undefined ? 'BEGIN' : BEGIN_UNDER_SAVEPOINT);
 				await declareActor();
+				if (confirmsAuthority) {
+					await confirmAuthority?.(connection, { exclusive: exclusiveAuthority === true });
+				}
 				const outcome = await outcomeOfWork();
 				// A transaction in which a statement failed rolls back when told to commit, and says so only
 				// in its answer, so a failure the work caught still leaves nothing committed and no line.
@@ -249,17 +260,28 @@ export const createAuditTrail = <Connection extends TrailConnection>({
 		throw outcome.failure;
 	};
 
+	const inTransaction = <Result>(
+		actor: Actor,
+		work: (transaction: AuditTransaction<Connection>) => Promise<Result>,
+		options: TransactionOptions = {},
+	): Promise<Result> => transactionOf(actor, work, options, true);
+
 	const recordEvent = async (
 		actor: Actor,
 		event: AuditEvent,
 		work?: (transaction: AuditTransaction<Connection>) => Promise<void>,
 	): Promise<string | undefined> => {
 		try {
-			return await inTransaction(actor, async (transaction) => {
-				const id = await transaction.record(event);
-				await work?.(transaction);
-				return id;
-			});
+			return await transactionOf(
+				actor,
+				async (transaction) => {
+					const id = await transaction.record(event);
+					await work?.(transaction);
+					return id;
+				},
+				{},
+				false,
+			);
 		} catch (failure) {
 			// An event whose commit went unconfirmed may be recorded, and its line already names it.
 			if (failure instanceof CommitUnconfirmed) {

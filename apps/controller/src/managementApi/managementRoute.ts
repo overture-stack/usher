@@ -6,6 +6,7 @@ import type { UnverifiedReason } from '../identityProvider/index.js';
 import { tokenDigestOf } from '../refusalWindows/index.js';
 import { holdsUnstorableText, isStorableText } from '../store/index.js';
 import { CommitUnconfirmed } from '../storeTimeout/index.js';
+import { AdministratorStatusWithdrawn, withAdministratorAuthority } from './administratorAuthority.js';
 import { queryNamesOf, queryParametersOf, readCredential } from './credential.js';
 import { BODY_LIMIT_BYTES, PROBLEMS, sendProblem, unreadableBody } from './problems.js';
 import { readManagementClaims } from './readManagementClaims.js';
@@ -125,7 +126,10 @@ const codeOf = (failure: unknown): Readonly<Record<string, string>> => {
  * for an operation taking none, and the body are read, and the operation run. What the operation
  * answers is sent once the steps it names to run after its commit have run, as is the answer to a
  * change whose `COMMIT` went unconfirmed; a refusal or any other failure runs none. A success
- * carrying no content is answered with no body.
+ * carrying no content is answered with no body. An operation run for an administrator runs with that
+ * administrator in scope, so each change it makes confirms, in its own transaction, that the
+ * administrator is still a live one; a change whose transaction finds otherwise is answered 403
+ * `administratorOnly` and records the refusal, committing nothing.
  *
  * A refusal from admission on records the operation's own event, `denied`, at warning. Its reason
  * is the code answered, or the reason the operation gives in its place, as where a `404` stands in
@@ -342,6 +346,12 @@ export const managementRoute = <Input>(
 		if (operation.administratorOnly && !principal.administrator) {
 			return PROBLEMS.administratorOnly;
 		}
+		if (operation.firstUserUntilAdministrator === true) {
+			if (anyAdministrator) {
+				return principal.administrator ? undefined : PROBLEMS.administratorOnly;
+			}
+			return principal.firstUser ? undefined : PROBLEMS.notFirstUser;
+		}
 		return operation.firstUserOnly === true && !principal.firstUser ? PROBLEMS.notFirstUser : undefined;
 	};
 
@@ -405,6 +415,9 @@ export const managementRoute = <Input>(
 		principal: Principal,
 		{ body, failure }: { body: Body; failure: unknown },
 	): Promise<FastifyReply> => {
+		if (failure instanceof AdministratorStatusWithdrawn) {
+			return refuse(request, reply, principal, { body, problem: PROBLEMS.administratorOnly });
+		}
 		if (failure instanceof CommitUnconfirmed) {
 			await runAfterCommit(operation.afterCommit ?? []);
 			return sendProblem(reply, PROBLEMS.outcomeUnknown);
@@ -454,14 +467,20 @@ export const managementRoute = <Input>(
 					problem: reading.problem,
 				});
 			}
-			const outcome = await operation
-				.run({
+			const run = (): ReturnType<typeof operation.run> =>
+				operation.run({
 					input: reading.input,
 					params: paramsOf(request),
 					principal,
 					sourceIp: request.ip,
-				})
-				.catch((failure: unknown) => ({ failure, kind: 'failed' as const }));
+				});
+			const running = principal.administrator
+				? withAdministratorAuthority(
+						{ issuer: settings.identityProviderIssuer, subject: principal.subject },
+						run,
+					)
+				: run();
+			const outcome = await running.catch((failure: unknown) => ({ failure, kind: 'failed' as const }));
 			if (outcome.kind === 'failed') {
 				return failed(request, reply, principal, {
 					body,

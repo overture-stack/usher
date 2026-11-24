@@ -6,7 +6,15 @@ import type { Clock } from '../configuration/index.js';
 import { COMMIT_WINDOW_MILLISECONDS, CommitUnconfirmed, type Deadline, StoreTimeout } from '../storeTimeout/index.js';
 import { createAuditTrail } from './createAuditTrail.js';
 import { createEventLog } from './createEventLog.js';
-import type { Actor, AuditEvent, AuditTrail, AuditTransaction, EventLog, TrailConnection } from './types.js';
+import type {
+	Actor,
+	AuditEvent,
+	AuditTrail,
+	AuditTrailSettings,
+	AuditTransaction,
+	EventLog,
+	TrailConnection,
+} from './types.js';
 
 const NOW = Date.UTC(2026, 10, 4, 12, 30, 5, 120);
 
@@ -1496,5 +1504,94 @@ suite('an event recorded alone', () => {
 				},
 			],
 		);
+	});
+});
+
+suite("the authority each change's transaction confirms before its work", () => {
+	const confirmingOver = (
+		store: FakeStore,
+		confirmAuthority: NonNullable<AuditTrailSettings<TrailConnection>['confirmAuthority']>,
+	): AuditTrail<TrailConnection> => {
+		const { stream } = capture();
+		const eventLog = createEventLog({ clock: FIXED_CLOCK, logStream: stream });
+		return createAuditTrail({ confirmAuthority, eventLog, settings: SETTINGS, store });
+	};
+
+	test("runs the confirmation after the actor's declaration and before the work, shared for an ordinary change", async () => {
+		const store = fakeStore();
+		const order: string[] = [];
+		const trail = confirmingOver(store, async (connection, { exclusive }) => {
+			order.push(`confirm exclusive=${exclusive} after ${store.statements.length} statements`);
+			await connection.query('SELECT confirmed');
+		});
+
+		await trail.inTransaction(ANA, async ({ connection }) => {
+			order.push(`work after ${store.statements.length} statements`);
+			await connection.query('UPDATE grants SET revoked_at = now()');
+		});
+
+		assert.deepEqual(order, ['confirm exclusive=false after 2 statements', 'work after 3 statements']);
+		assert.deepEqual(
+			store.statements.map(({ text }) => text.split(' ')[0]),
+			['BEGIN', 'SELECT', 'SELECT', 'UPDATE', 'COMMIT'],
+		);
+		assert.match(store.statements[1]?.text ?? '', /set_config\('usher\.actor_type'/u);
+	});
+
+	test('holds the authority exclusively under exclusiveAuthority, and passes it to the confirmation', async () => {
+		const store = fakeStore();
+		const exclusivity: boolean[] = [];
+		const trail = confirmingOver(store, async (_connection, { exclusive }) => {
+			exclusivity.push(exclusive);
+		});
+
+		await trail.inTransaction(ANA, async () => 'changed', { exclusiveAuthority: true });
+
+		assert.deepEqual(exclusivity, [true]);
+	});
+
+	test("fails the transaction with the confirmation's failure, running no work and committing nothing", async () => {
+		const store = fakeStore();
+		const { stream } = capture();
+		const eventLog = createEventLog({ clock: FIXED_CLOCK, logStream: stream });
+		const failure = new Error('the actor is no administrator');
+		const trail = createAuditTrail({
+			confirmAuthority: async () => {
+				throw failure;
+			},
+			eventLog,
+			settings: SETTINGS,
+			store,
+		});
+		let ran = false;
+
+		await assert.rejects(
+			trail.inTransaction(ANA, async () => {
+				ran = true;
+				return 'changed';
+			}),
+			(thrown) => thrown === failure,
+		);
+
+		assert.equal(ran, false);
+		assert.equal(
+			store.statements.some(({ text }) => text === 'COMMIT'),
+			false,
+		);
+		assert.equal(store.statements.at(-1)?.text, 'ROLLBACK');
+		assert.deepEqual(rowInserts(store.statements), []);
+	});
+
+	test('runs no confirmation for an event recorded on its own, such as a refusal, which records whatever the actor is', async () => {
+		const store = fakeStore();
+		let confirmations = 0;
+		const trail = confirmingOver(store, async () => {
+			confirmations += 1;
+		});
+
+		await trail.recordEvent(ANA, GRANT_CREATION);
+
+		assert.equal(confirmations, 0);
+		assert.equal(rowInserts(store.statements).length, 1);
 	});
 });

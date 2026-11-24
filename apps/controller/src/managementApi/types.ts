@@ -260,6 +260,14 @@ export interface ManagementOperation<Input> {
 	 */
 	firstUserOnly?: boolean;
 
+	/**
+	 * Whether it is for the first user while no administrator has accepted, and for an administrator from
+	 * then on: the first user alone until then, refusing any other principal 403 `notFirstUser`, and an
+	 * administrator alone after, refusing any other 403 `administratorOnly`. A service account is refused
+	 * before either.
+	 */
+	firstUserUntilAdministrator?: boolean;
+
 	/** Its method: a `PATCH` takes its body as a JSON Merge Patch, any other as JSON. */
 	method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 

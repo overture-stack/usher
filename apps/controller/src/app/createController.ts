@@ -4,7 +4,12 @@ import { performance } from 'node:perf_hooks';
 import type { CONTROLLER_EXCHANGE_DEADLINE_MILLISECONDS } from '@overture-stack/usher-types';
 import type pg from 'pg';
 
-import { createAdministratorRoutes, readAdministratorStatus, sqlAdministratorStore } from '../administrators/index.js';
+import {
+	confirmAdministratorAuthority,
+	createAdministratorRoutes,
+	readAdministratorStatus,
+	sqlAdministratorStore,
+} from '../administrators/index.js';
 import {
 	createAdmission,
 	SHARE_EXCEEDED_TALLY_INTERVAL_MILLISECONDS,
@@ -201,7 +206,10 @@ export const createController = (configuration: ControllerConfiguration): Contro
 		schema: configuration.databaseSchema,
 	});
 	const settings = liveSettingsOf(configuration, settingsSource);
+	// The control pool's changes confirm the administrator their request was admitted as; the exchange
+	// runs no request of an administrator, so its trail confirms nothing.
 	const trail = createAuditTrail<pg.PoolClient>({
+		confirmAuthority: confirmAdministratorAuthority({ schema: configuration.databaseSchema }),
 		eventLog,
 		settings,
 		store: controlStore,

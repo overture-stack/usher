@@ -688,7 +688,7 @@ suite("the controller's events, as the document registers them", () => {
 		assert.equal(fields.always.includes(CAUSED_BY_MEMBER), false);
 	});
 
-	test("reads the first administrator's nomination as the first user's at warning, a nominee's decision as the nominee's at critical for an acceptance and warning for a decline, and a revocation as the first user's at warning, each refused at warning carrying reason, and what each carries on success alone", () => {
+	test("reads an administrator's nomination as an administrator's or the first user's at warning, a nominee's decision as the nominee's at critical for an acceptance and warning for a decline, and a revocation as the first user's or an administrator's at warning, each refused at warning carrying reason, and what each carries on success alone", () => {
 		const nomination = registered(AUDIT_EVENT_TYPES.adminNomination);
 		const decision = registered(AUDIT_EVENT_TYPES.adminNominationDecision);
 		const revocation = registered(AUDIT_EVENT_TYPES.adminNominationRevocation);
@@ -702,12 +702,12 @@ suite("the controller's events, as the document registers them", () => {
 			})),
 			[
 				{
-					actor: { kind: 'roles', roles: ['first user'] },
+					actor: { kind: 'roles', roles: ['administrator', 'first user'] },
 					fields: {
-						always: ['actorId'],
+						always: ['actorId', 'nomineeSubject'],
 						conditional: [],
 						onRefusal: ['reason'],
-						onSuccess: ['nomineeSubject', 'nominationId'],
+						onSuccess: ['nominationId'],
 					},
 					owner: 'controller',
 					severity: {
@@ -734,7 +734,7 @@ suite("the controller's events, as the document registers them", () => {
 					},
 				},
 				{
-					actor: { kind: 'roles', roles: ['first user'] },
+					actor: { kind: 'roles', roles: ['first user', 'administrator'] },
 					fields: {
 						always: ['actorId'],
 						conditional: ['nominationId'],

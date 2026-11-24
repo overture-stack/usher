@@ -7,6 +7,7 @@ suite('the administrators module', () => {
 	test('exports at run time exactly the values its surface names', () => {
 		assert.deepEqual(Object.keys(administrators).toSorted(), [
 			'ADMINISTRATOR_PROBLEMS',
+			'confirmAdministratorAuthority',
 			'createAdministratorRoutes',
 			'readAdministratorStatus',
 			'sqlAdministratorStore',

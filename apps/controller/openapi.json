@@ -157,6 +157,15 @@
 				"schema": {
 					"type": "string"
 				}
+			},
+			"AdministratorSubject": {
+				"description": "The administrator's subject under the trusted issuer: the `sub` claim in their access token.",
+				"in": "path",
+				"name": "subject",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
 			}
 		},
 		"responses": {
@@ -1523,7 +1532,7 @@
 			},
 			"Nomination": {
 				"additionalProperties": false,
-				"description": "A nomination of Usher's first administrator, with its state.",
+				"description": "A nomination of a person to be an administrator of Usher, with its state.",
 				"properties": {
 					"decidedAt": {
 						"$ref": "#/components/schemas/Instant",
@@ -1532,15 +1541,15 @@
 					"id": {
 						"format": "uuid",
 						"type": "string",
-						"description": "The nomination's id. The nominee sends it as `nominationId` to answer, and the first user to revoke."
+						"description": "The nomination's id. The nominee sends it as `nominationId` to answer, and an administrator to revoke."
 					},
 					"nominatedAt": {
 						"$ref": "#/components/schemas/Instant",
-						"description": "When the first user made the nomination."
+						"description": "When the nomination was made."
 					},
 					"nominatedBy": {
 						"$ref": "#/components/schemas/PrincipalBySubject",
-						"description": "Who made the nomination: the first user, by subject."
+						"description": "Who made the nomination, by subject."
 					},
 					"nominee": {
 						"$ref": "#/components/schemas/PrincipalBySubject",
@@ -1548,7 +1557,7 @@
 					},
 					"revokedAt": {
 						"$ref": "#/components/schemas/Instant",
-						"description": "When the first user revoked it. Present only then."
+						"description": "When it was revoked. Present only then."
 					},
 					"state": {
 						"$ref": "#/components/schemas/NominationState"
@@ -2386,7 +2395,7 @@
 				"type": "object"
 			},
 			"NominationState": {
-				"description": "Where a nomination stands. `pending`: its nominee can still answer it. `accepted` or `declined`: its nominee answered. `revoked`: the first user took it back. `replaced`: a later nomination was made before this one was answered or revoked.",
+				"description": "Where a nomination stands. `pending`: its nominee can still answer it. `accepted` or `declined`: its nominee answered. `revoked`: it was taken back. `replaced`: before any administrator had accepted, a later nomination was made.",
 				"enum": ["accepted", "declined", "pending", "replaced", "revoked"],
 				"type": "string"
 			},
@@ -2427,11 +2436,11 @@
 					},
 					"nominatedAt": {
 						"$ref": "#/components/schemas/Instant",
-						"description": "When the first user made the nomination."
+						"description": "When the nomination was made."
 					},
 					"nominatedBy": {
 						"$ref": "#/components/schemas/PrincipalBySubject",
-						"description": "Who made the nomination: the first user, by subject."
+						"description": "Who made the nomination, by subject."
 					},
 					"state": {
 						"$ref": "#/components/schemas/NominationState"
@@ -2453,6 +2462,62 @@
 					}
 				},
 				"required": ["nominations"],
+				"type": "object"
+			},
+			"Administrator": {
+				"additionalProperties": false,
+				"description": "A live administrator of Usher.",
+				"properties": {
+					"acceptedAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the administrator accepted the nomination that made them one."
+					},
+					"nominationId": {
+						"format": "uuid",
+						"type": "string",
+						"description": "The nomination the administrator accepted."
+					},
+					"subject": {
+						"type": "string",
+						"description": "The administrator's subject under the trusted issuer."
+					}
+				},
+				"required": ["acceptedAt", "nominationId", "subject"],
+				"type": "object"
+			},
+			"AdministratorList": {
+				"additionalProperties": false,
+				"properties": {
+					"administrators": {
+						"description": "Every live administrator, the oldest acceptance first.",
+						"items": {
+							"$ref": "#/components/schemas/Administrator"
+						},
+						"type": "array"
+					}
+				},
+				"required": ["administrators"],
+				"type": "object"
+			},
+			"AdministratorRemoval": {
+				"additionalProperties": false,
+				"description": "The removal of an administrator of Usher.",
+				"properties": {
+					"removedAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the administrator was removed."
+					},
+					"revokedNominations": {
+						"minimum": 0,
+						"type": "integer",
+						"description": "How many pending nominations the removed administrator made were revoked with them."
+					},
+					"subject": {
+						"type": "string",
+						"description": "The removed administrator's subject under the trusted issuer."
+					}
+				},
+				"required": ["removedAt", "revokedNominations", "subject"],
 				"type": "object"
 			}
 		},
@@ -2478,6 +2543,181 @@
 	},
 	"openapi": "3.1.1",
 	"paths": {
+		"/admin/administrators": {
+			"get": {
+				"description": "Lists Usher's live administrators, the oldest acceptance first, each by subject, the instant it was accepted and the nomination accepted. Only an administrator can list them. Nothing is logged.",
+				"operationId": "listAdministrators",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AdministratorList"
+								}
+							}
+						},
+						"description": "Every live administrator, the oldest acceptance first."
+					},
+					"400": {
+						"$ref": "#/components/responses/Unreadable"
+					},
+					"401": {
+						"$ref": "#/components/responses/CredentialRefused"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": [
+														"administratorOnly",
+														"noAdministratorYet",
+														"serviceAccountNotPermitted"
+													]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`administratorOnly`: you are not an administrator. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person. `noAdministratorYet`: no administrator has accepted yet."
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ReadUnavailable"
+					}
+				},
+				"security": [
+					{
+						"managementToken": []
+					}
+				],
+				"summary": "Lists the administrators",
+				"tags": ["Administrators"]
+			}
+		},
+		"/admin/administrators/{subject}": {
+			"delete": {
+				"description": "Removes an administrator of Usher, by their subject. You can remove yourself while another administrator remains. The administrator's row is kept, and the removal recorded beside it; a person removed may be nominated and accepted again.\n\nEach pending nomination the removed administrator made is revoked with them, each recorded as the audit event `admin.nominationRevocation`.\n\nChecked in this order:\n\n1. You are not an administrator: `403` `administratorOnly`, before the subject is read.\n2. No live administrator has the subject: `404` `administratorNotFound`.\n3. It is the only administrator: `409` `lastAdministrator`. Usher keeps at least one.\n\nThe answer is the subject, the instant of removal and how many nominations were revoked with it. Usher logs the removal as the audit event `admin.removal`, at `critical`.",
+				"operationId": "removeAdministrator",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/AdministratorSubject"
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AdministratorRemoval"
+								}
+							}
+						},
+						"description": "The administrator removed, with the instant of removal and the count of nominations revoked with them."
+					},
+					"400": {
+						"$ref": "#/components/responses/Unreadable"
+					},
+					"401": {
+						"$ref": "#/components/responses/CredentialRefused"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": [
+														"administratorOnly",
+														"noAdministratorYet",
+														"serviceAccountNotPermitted"
+													]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`administratorOnly`: you are not an administrator. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person. `noAdministratorYet`: no administrator has accepted yet."
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["administratorNotFound"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`administratorNotFound`: no live administrator has the subject named, whether the subject is one Usher has never met or one who is not an administrator."
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["lastAdministrator"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`lastAdministrator`: Usher keeps at least one administrator, and this is the only one."
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ReadUnavailable"
+					}
+				},
+				"security": [
+					{
+						"managementToken": []
+					}
+				],
+				"summary": "Removes an administrator",
+				"tags": ["Administrators"]
+			}
+		},
 		"/admin/applications": {
 			"post": {
 				"description": "Registers an application and issues its first key, for platform administrators.\n\nThe application's `id` is a generated uuid and is its audience: the `aud` carried by its Usher tokens, and the `iss` of its bridge's channel assertions.\n\n`displayName` is stored trimmed and normalized to NFC, the form whose length is counted. `description` is stored trimmed, and a description that is empty once trimmed is stored as `null`. `displayName` is the label shown to people. It is never matched against anything, so two applications may share one.\n\nThe key's `value` is in this answer alone. The controller stores it encrypted and never shows it again.\n\nThe audit events `application.registration` and then `applicationKey.issuance` record the registration.",
@@ -4601,7 +4841,7 @@
 		},
 		"/admin/nominations": {
 			"post": {
-				"description": "Names the person who becomes Usher's first administrator once they accept. Only the first user can nominate: the person the `firstUser` setting names, by realm role or by subject.\n\nName the nominee by their subject: the `sub` claim in their access token, which in Keycloak is the user's ID in the realm Usher trusts. The nominee can be you, someone Usher already knows from an earlier sign-in, or, where the identity provider's directory is configured, anyone with an account in that realm.\n\nNominating again replaces your earlier nomination, and only the latest can be accepted. The answer is the new nomination: give its `id` to the nominee, who sends it as `nominationId` to accept or decline.\n\nChecked in this order:\n\n1. You are not the first user: `403` `notFirstUser`, before the body is read.\n2. Usher already has its first administrator: `409` `firstAdministratorAccepted`.\n3. No account in the realm Usher trusts has the nominee's subject: `404` `nomineeNotFound`, its detail naming the realm. With no directory configured, only you or someone Usher already knows can be nominated, and the same `404` says so.\n4. The directory cannot be reached: `503` `directoryUnavailable`, and nothing is written.\n\nUsher logs the nomination as the audit event `admin.nomination`, at `warning`.",
+				"description": "Names a person to be an administrator of Usher. Until an administrator has accepted, only the first user can nominate: the person the `firstUser` setting names, by realm role or by subject. From then on, only an administrator can.\n\nName the nominee by their subject: the `sub` claim in their access token, which in Keycloak is the user's ID in the realm Usher trusts. The nominee can be you, someone Usher already knows from an earlier sign-in, or, where the identity provider's directory is configured, anyone with an account in that realm.\n\nUntil an administrator has accepted, nominating again replaces your earlier nomination, and only the latest can be accepted. From then on a nomination stays `pending` until its nominee answers it or it is revoked, so several can be pending at once. The answer is the new nomination: give its `id` to the nominee, who sends it as `nominationId` to accept or decline.\n\nChecked in this order:\n\n1. You are not the first user while no administrator has accepted, or you are not an administrator: `403` `notFirstUser` or `administratorOnly`, before the body is read.\n2. No account in the realm Usher trusts has the nominee's subject: `404` `nomineeNotFound`, its detail naming the realm. With no directory configured, only you or someone Usher already knows can be nominated, and the same `404` says so.\n3. The directory cannot be reached: `503` `directoryUnavailable`, and nothing is written.\n4. The nominee is already an administrator: `409` `nomineeAlreadyAdministrator`.\n5. A pending nomination already names the nominee: `409` `nomineeAlreadyNominated`, its detail naming that nomination. Withdraw it with `DELETE /admin/nominations/{nominationId}` first.\n\nUsher logs the nomination as the audit event `admin.nomination`, at `warning`. A refusal made after the body is read records the nominee's subject.",
 				"operationId": "nominateAdministrator",
 				"requestBody": {
 					"content": {
@@ -4642,7 +4882,11 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["notFirstUser", "serviceAccountNotPermitted"]
+													"enum": [
+														"administratorOnly",
+														"notFirstUser",
+														"serviceAccountNotPermitted"
+													]
 												}
 											},
 											"type": "object"
@@ -4651,7 +4895,7 @@
 								}
 							}
 						},
-						"description": "`notFirstUser`: you are not the first user. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
+						"description": "`notFirstUser`: you are not the first user, and no administrator has accepted. `administratorOnly`: an administrator has accepted, and you are not one. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
 					},
 					"404": {
 						"content": {
@@ -4686,7 +4930,7 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["firstAdministratorAccepted"]
+													"enum": ["nomineeAlreadyAdministrator", "nomineeAlreadyNominated"]
 												}
 											},
 											"type": "object"
@@ -4695,7 +4939,7 @@
 								}
 							}
 						},
-						"description": "`firstAdministratorAccepted`: Usher already has its first administrator, so it takes no more nominations."
+						"description": "`nomineeAlreadyAdministrator`: the nominee is already an administrator. `nomineeAlreadyNominated`: a pending nomination already names the nominee; the detail names its `id`, and `DELETE /admin/nominations/{nominationId}` withdraws it."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -4734,11 +4978,11 @@
 						"managementToken": []
 					}
 				],
-				"summary": "Nominates Usher's first administrator",
+				"summary": "Nominates a person to be an administrator",
 				"tags": ["Administrators"]
 			},
 			"get": {
-				"description": "Lists every nomination of Usher's first administrator, oldest first, each with its state. Only the first user can list them, before and after an administrator accepts. Nothing is logged.",
+				"description": "Lists every nomination of Usher's administrators, oldest first, each with its state. Until an administrator has accepted, only the first user can list them; from then on, only an administrator can. Nothing is logged.",
 				"operationId": "listNominations",
 				"parameters": [],
 				"responses": {
@@ -4778,7 +5022,7 @@
 								}
 							}
 						},
-						"description": "`notFirstUser`: you are not the first user. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
+						"description": "`notFirstUser`: you are not the first user, and no administrator has accepted. `administratorOnly`: an administrator has accepted, and you are not one. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
 					},
 					"500": {
 						"$ref": "#/components/responses/InternalError"
@@ -4798,7 +5042,7 @@
 		},
 		"/admin/nominations/{nominationId}": {
 			"delete": {
-				"description": "Takes back a nomination you made, while its nominee has not answered it. Only the first user can revoke. The nominee can then no longer accept or decline it.\n\nChecked in this order:\n\n1. You are not the first user: `403` `notFirstUser`.\n2. The `nominationId` is not a nomination you made, because it is malformed, names no nomination, or names one made by someone else: `404` `nominationNotFound`, the same answer for all three.\n3. The nomination is no longer `pending`: `409` `nominationAlreadyDecided`, `nominationReplaced` or `nominationRevoked`.\n\nThe answer is the nomination, `revoked`, with `revokedAt`. Usher logs the revocation as the audit event `admin.nominationRevocation`, at `warning`.",
+				"description": "Takes back a nomination, while its nominee has not answered it. Until an administrator has accepted, only the first user can revoke, and only a nomination they made. From then on, any administrator can revoke any nomination still pending. The nominee can then no longer accept or decline it.\n\nChecked in this order:\n\n1. You are not the first user, while no administrator has accepted, or you are not an administrator: `403` `notFirstUser` or `administratorOnly`.\n2. The `nominationId` is malformed, names no nomination, or, while no administrator has accepted, names one made by someone else: `404` `nominationNotFound`, the same answer for each.\n3. The nomination is no longer `pending`: `409` `nominationAlreadyDecided`, `nominationReplaced` or `nominationRevoked`.\n\nThe answer is the nomination, `revoked`, with `revokedAt`. Usher logs the revocation as the audit event `admin.nominationRevocation`, at `warning`.",
 				"operationId": "revokeNomination",
 				"parameters": [
 					{
@@ -4833,7 +5077,11 @@
 										{
 											"properties": {
 												"code": {
-													"enum": ["notFirstUser", "serviceAccountNotPermitted"]
+													"enum": [
+														"administratorOnly",
+														"notFirstUser",
+														"serviceAccountNotPermitted"
+													]
 												}
 											},
 											"type": "object"
@@ -4842,7 +5090,7 @@
 								}
 							}
 						},
-						"description": "`notFirstUser`: you are not the first user. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
+						"description": "`notFirstUser`: you are not the first user, and no administrator has accepted. `administratorOnly`: an administrator has accepted, and you are not one. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person."
 					},
 					"404": {
 						"content": {
@@ -4910,7 +5158,7 @@
 		},
 		"/admin/nominations/{nominationId}/decisions": {
 			"post": {
-				"description": "Your answer to a nomination naming you. `{ \"decision\": \"accept\" }` makes you Usher's first administrator; `{ \"decision\": \"decline\" }` turns the nomination down. A nomination takes one answer.\n\n`nominationId` is the nomination's `id`. `GET /admin/me/nominations` lists the nominations naming you; the one you can answer is `pending`.\n\nChecked in this order:\n\n1. The body is anything but `{ \"decision\": \"accept\" }` or `{ \"decision\": \"decline\" }`: `400` for any other member, `422` `unknownDecision` for any other word.\n2. The `nominationId` is not a nomination naming you, because it is malformed, names no nomination, or names someone else's: `404` `nominationNotFound`. All three get the same answer, so it tells you nothing about other people's nominations; the audit event records which it was.\n3. Usher already has its first administrator: `409` `firstAdministratorAccepted`.\n4. The nomination is no longer `pending`: `409` `nominationAlreadyDecided`, `nominationReplaced` or `nominationRevoked`.\n\nThe answer is the nomination with its new state. Usher logs your answer as the audit event `admin.nominationDecision`, at `critical` for an acceptance and at `warning` otherwise.",
+				"description": "Your answer to a nomination naming you. `{ \"decision\": \"accept\" }` makes you an administrator of Usher; `{ \"decision\": \"decline\" }` turns the nomination down. A nomination takes one answer.\n\n`nominationId` is the nomination's `id`. `GET /admin/me/nominations` lists the nominations naming you; the one you can answer is `pending`.\n\nChecked in this order:\n\n1. The body is anything but `{ \"decision\": \"accept\" }` or `{ \"decision\": \"decline\" }`: `400` for any other member, `422` `unknownDecision` for any other word.\n2. The `nominationId` is not a nomination naming you, because it is malformed, names no nomination, or names someone else's: `404` `nominationNotFound`. All three get the same answer, so it tells you nothing about other people's nominations; the audit event records which it was.\n3. The nomination is no longer `pending`: `409` `nominationAlreadyDecided`, `nominationReplaced` or `nominationRevoked`.\n\nThe answer is the nomination with its new state. Usher logs your answer as the audit event `admin.nominationDecision`, at `critical` for an acceptance and at `warning` otherwise.",
 				"operationId": "answerNomination",
 				"parameters": [
 					{
@@ -4937,7 +5185,7 @@
 								}
 							}
 						},
-						"description": "The nomination, `accepted` or `declined`, with `decidedAt`. Once accepted, you are Usher's first administrator."
+						"description": "The nomination, `accepted` or `declined`, with `decidedAt`. Once accepted, you are an administrator of Usher."
 					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
@@ -5001,7 +5249,6 @@
 											"properties": {
 												"code": {
 													"enum": [
-														"firstAdministratorAccepted",
 														"nominationAlreadyDecided",
 														"nominationReplaced",
 														"nominationRevoked"
@@ -5014,7 +5261,7 @@
 								}
 							}
 						},
-						"description": "`firstAdministratorAccepted`: Usher already has its first administrator. `nominationAlreadyDecided`: the nominee has already answered it. `nominationReplaced`: a later nomination replaced it. `nominationRevoked`: the first user took it back."
+						"description": "`nominationAlreadyDecided`: the nominee has already answered it. `nominationReplaced`: a later nomination replaced it. `nominationRevoked`: it was taken back."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -8111,7 +8358,7 @@
 			"name": "Instance"
 		},
 		{
-			"description": "Usher's first administrator: the first user's nominations, their listing and revocation, a nominee's answer, and a nominee's own nominations.",
+			"description": "Usher's administrators: nominating them, answering a nomination, listing and removing administrators, and a nominee's own nominations.",
 			"name": "Administrators"
 		},
 		{

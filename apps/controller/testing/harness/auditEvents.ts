@@ -23,6 +23,7 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 	adminNominationDecision: 'admin.nominationDecision',
 	adminNominationRevocation: 'admin.nominationRevocation',
 	adminOverride: 'admin.override',
+	adminRemoval: 'admin.removal',
 	admissionShareExceededTally: 'admission.shareExceededTally',
 	applicationKeyConfirmation: 'applicationKey.confirmation',
 	applicationKeyIssuance: 'applicationKey.issuance',

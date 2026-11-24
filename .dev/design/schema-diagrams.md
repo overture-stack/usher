@@ -29,9 +29,14 @@ erDiagram
 ```mermaid
 erDiagram
   administrators {
-    uuid user_id PK, FK
-    uuid nomination_id FK
+    uuid user_id FK
+    uuid nomination_id PK, FK
     timestamptz accepted_at
+  }
+  administrator_removals {
+    uuid nomination_id PK, FK
+    timestamptz removed_at
+    uuid removed_by FK
   }
   nominations {
     uuid id PK
@@ -48,7 +53,9 @@ erDiagram
     timestamptz revoked_at
   }
   nominations ||--o{ administrators : "nomination_id, user_id"
-  users ||--o| administrators : "user_id"
+  users ||--o{ administrators : "user_id"
+  administrators ||--o| administrator_removals : "nomination_id"
+  users ||--o{ administrator_removals : "removed_by"
   users ||--o{ nominations : "nominated_by"
   users ||--o{ nominations : "nominee_id"
   nominations ||--o| nomination_declines : "nomination_id"

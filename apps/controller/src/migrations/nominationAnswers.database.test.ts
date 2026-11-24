@@ -215,7 +215,7 @@ suite("the nomination answers' tables, from migration 0014", () => {
 		);
 	});
 
-	test('refuses a second administrator for one nomination by the administrators key, since a nomination names one nominee and a person holds one administrator row', async (context) => {
+	test('refuses a second administrator for one nomination by the constraint administrator_held_once, since a person holds one administrator at a time', async (context) => {
 		const { owner, seeded } = await openSeededDatabase(context);
 		const cy = seededId(seeded.users, 'cy');
 		const nominated = randomUUID();
@@ -228,6 +228,6 @@ suite("the nomination answers' tables, from migration 0014", () => {
 		const [text, params] = ANSWER_INSERTS['administrators']?.(nominated, cy) ?? assert.fail('administrators');
 		await committedQuery(owner, text, params);
 
-		await assert.rejects(committedQuery(owner, text, params), violation(INTEGRITY.unique, 'administrators_pkey'));
+		await assert.rejects(committedQuery(owner, text, params), violation('23000', 'administrator_held_once'));
 	});
 });

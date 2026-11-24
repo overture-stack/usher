@@ -44,6 +44,7 @@ import {
 
 const {
 	administrators,
+	administratorRemovals,
 	applicationKeys,
 	applications,
 	auditLog,
@@ -298,6 +299,7 @@ suite("the schema's shape", () => {
 		const timed = (columns: readonly (readonly [string, number])[]): Readonly<Record<string, string>> =>
 			Object.fromEntries(columns.map(([column, minute]) => [column, inRepeatedHour(minute)]));
 		const times = {
+			administratorRemovals: [[administratorRemovals.columns.removedAt, 16]],
 			administrators: [[administrators.columns.acceptedAt, 13]],
 			applicationKeys: [
 				[applicationKeys.columns.confirmedAt, 8],
@@ -382,6 +384,11 @@ suite("the schema's shape", () => {
 					userId,
 				}),
 				...timed(times.administrators),
+			});
+			await insertRow(toronto, administratorRemovals, {
+				[administratorRemovals.columns.nominationId]: String(nomination[nominations.columns.id]),
+				[administratorRemovals.columns.removedBy]: steward,
+				...timed(times.administratorRemovals),
 			});
 			const declined = String(
 				(await insertRow(toronto, nominations, nominationRow({ nominatedBy: steward, nomineeId: userId })))[
@@ -675,9 +682,15 @@ suite("the schema's shape", () => {
 				},
 				{
 					columns: times.administrators,
-					key: administrators.columns.userId,
-					keyValue: userId,
+					key: administrators.columns.nominationId,
+					keyValue: nomination[nominations.columns.id],
 					table: administrators,
+				},
+				{
+					columns: times.administratorRemovals,
+					key: administratorRemovals.columns.nominationId,
+					keyValue: nomination[nominations.columns.id],
+					table: administratorRemovals,
 				},
 				{
 					columns: times.nominationDeclines,

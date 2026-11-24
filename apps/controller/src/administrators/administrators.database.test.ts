@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { suite, test } from 'node:test';
 
+import type pg from 'pg';
+
 import {
 	assertRefused,
 	type AdminResponse,
@@ -10,6 +12,7 @@ import {
 	decideNomination,
 	firstUserCaller,
 	instantOf,
+	listAdministrators,
 	listNominations,
 	listOwnNominations,
 	nominate,
@@ -18,12 +21,13 @@ import {
 	readLiveness,
 	readReadiness,
 	registerResource,
+	removeAdministrator,
 	revokeNomination,
 } from '../../testing/harness/admin.js';
 import { AUDIT_EVENT_TYPES, auditRows, dataOf, emittedType } from '../../testing/harness/auditEvents.js';
 import { captureLog } from '../../testing/harness/controller.js';
 import { holdTable, untilBlocked } from '../../testing/harness/database.js';
-import { exchange, PEOPLE, type Person } from '../../testing/harness/exchange.js';
+import { exchange, PEOPLE, type Person, SYSTEM_CLOCK } from '../../testing/harness/exchange.js';
 import {
 	administratorRow,
 	ANA_ACTING,
@@ -46,8 +50,13 @@ import {
 } from '../../testing/harness/harness.js';
 import { mintServiceAccountToken } from '../../testing/peripherals/identityProvider.js';
 import { inTurn, POLICY_TABLES, qualified, seededId, usersWithSubject } from '../../testing/harness/policy.js';
+import { type Actor, type AuditEvent, type AuditTrail, createAuditTrail } from '../eventLog/index.js';
+import { AdministratorStatusWithdrawn, withAdministratorAuthority } from '../managementApi/index.js';
+import { sqlAdministratorStore } from './administratorStore.js';
+import { confirmAdministratorAuthority } from './confirmAdministratorAuthority.js';
 
-const { administrators, grants, nominationDeclines, nominationRevocations, nominations } = POLICY_TABLES;
+const { administratorRemovals, administrators, grants, nominationDeclines, nominationRevocations, nominations } =
+	POLICY_TABLES;
 
 // A store holding no administrator, as before the first user's nomination is accepted, its
 // Controller registering no application, which only an administrator may; Bo and Cy have met Usher.
@@ -65,6 +74,19 @@ const BEFORE_THE_FIRST: HarnessOptions = {
 };
 
 const FIRST_USER = PEOPLE.ana;
+
+// The same store, with Dana and Eli met by Usher as well, so each can be nominated.
+const NOMINEES_MET_BY_USHER: HarnessOptions = {
+	...BEFORE_THE_FIRST,
+	fixture: {
+		users: {
+			bo: { subject: PEOPLE.bo.subject },
+			cy: { subject: PEOPLE.cy.subject },
+			dana: { subject: PEOPLE.dana.subject },
+			eli: { subject: PEOPLE.eli.subject },
+		},
+	},
+};
 
 const study = (externalId: string) => ({
 	accessLevel: 'grant' as const,
@@ -151,7 +173,9 @@ suite("the store's administrators and their nominations", () => {
 			(row) => writeOutcome(committedInsert(owner, administrators, row)),
 		);
 
-		assert.deepEqual(outcomes, [INTEGRITY.foreignKey, 'accepted', INTEGRITY.unique, INTEGRITY.unique]);
+		// A second live row for a person is refused by the trigger administrator_held_once, which raises in the
+		// integrity class, before the key is checked.
+		assert.deepEqual(outcomes, [INTEGRITY.foreignKey, 'accepted', HISTORY_KEPT_CODE, HISTORY_KEPT_CODE]);
 	});
 
 	test('gives no two nominations one instant, so one of them is always the latest', async (context) => {
@@ -416,8 +440,8 @@ suite("nominating and accepting Usher's first administrator", () => {
 				assertRefused(byFirstUser, PROBLEMS.administratorOnly, 'first user');
 				assertRefused(
 					nominatingAgain,
-					PROBLEMS.firstAdministratorAccepted,
-					'a nomination after the acceptance',
+					PROBLEMS.administratorOnly,
+					'a nomination by the first user after the acceptance',
 				);
 			},
 			context,
@@ -531,7 +555,7 @@ suite("nominating and accepting Usher's first administrator", () => {
 });
 
 suite('nominations and acceptances, serialized', () => {
-	test('refuses a nomination sent while an acceptance holds the order 409 firstAdministratorAccepted, so the nomination accepted was the latest', async (context) => {
+	test("refuses a first user's nomination sent behind an acceptance 403 administratorOnly, so the nomination accepted was the latest", async (context) => {
 		await withHarness(
 			BEFORE_THE_FIRST,
 			async (harness) => {
@@ -546,9 +570,9 @@ suite('nominations and acceptances, serialized', () => {
 
 				assert.deepEqual(
 					[acceptance, nomination].map((answer) => answer?.status),
-					[200, 409],
+					[200, 403],
 				);
-				assert.equal(nomination?.problem?.code, PROBLEMS.firstAdministratorAccepted.code);
+				assert.equal(nomination?.problem?.code, PROBLEMS.administratorOnly.code);
 				assert.deepEqual(
 					[await rowCount(harness, administrators), await rowCount(harness, nominations)],
 					[1, 1],
@@ -582,7 +606,7 @@ suite('nominations and acceptances, serialized', () => {
 		);
 	});
 
-	test('makes one first administrator of two acceptances sent at once, refusing the second 409 firstAdministratorAccepted', async (context) => {
+	test('makes one administrator of two acceptances of one nomination sent at once, refusing the second 409 nominationAlreadyDecided', async (context) => {
 		await withHarness(
 			BEFORE_THE_FIRST,
 			async (harness) => {
@@ -596,7 +620,7 @@ suite('nominations and acceptances, serialized', () => {
 
 				assert.deepEqual(answers.map(outcomeOf), [
 					[200, undefined],
-					[409, 'firstAdministratorAccepted'],
+					[409, 'nominationAlreadyDecided'],
 				]);
 				assert.equal(await rowCount(harness, administrators), 1);
 			},
@@ -749,6 +773,406 @@ suite("the controller's start, with the administrators' tables", () => {
 					log.lines().filter((line) => line.includes('store.grantBeyondUse')),
 					[],
 				);
+			},
+			context,
+		);
+	});
+});
+
+// The administrators of a listing answer, each by subject.
+const listedSubjectsOf = (answer: AdminResponse): readonly string[] => {
+	assertSucceeded(answer, 'the listing of administrators');
+	const administratorsListed = Reflect.get(Object(answer.body), 'administrators') as readonly Readonly<
+		Record<string, unknown>
+	>[];
+	return administratorsListed.map(({ subject }) => String(subject));
+};
+
+// An administrator accepted by the first administrator, Bo, who nominates Cy and sees Cy accept.
+const acceptedCyByBo = async (harness: Harness): Promise<void> => {
+	const toBo = await nominated(harness, PEOPLE.bo);
+	assertSucceeded(await accepted(harness, PEOPLE.bo, toBo), 'the first acceptance');
+	const toCy = await nominate(await personCaller(harness, PEOPLE.bo), { nominee: { subject: PEOPLE.cy.subject } });
+	assertSucceeded(
+		await accepted(harness, PEOPLE.cy, nominationOf(toCy, 'Bo nominating Cy')),
+		'the second acceptance',
+	);
+};
+
+suite('further administrators, nominated and removed by administrators', () => {
+	test('lets an administrator nominate a further administrator, who accepts, and lists both to an administrator alone', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				await acceptedCyByBo(harness);
+
+				const listing = await listAdministrators(await personCaller(harness, PEOPLE.bo));
+
+				assert.deepEqual(listedSubjectsOf(listing), [PEOPLE.bo.subject, PEOPLE.cy.subject]);
+				assertRefused(
+					await listAdministrators(await firstUserCaller(harness, FIRST_USER)),
+					PROBLEMS.administratorOnly,
+					'the first user, no administrator now',
+				);
+				assert.equal(await rowCount(harness, administrators), 2);
+			},
+			context,
+		);
+	});
+
+	test('keeps each of two nominations an administrator makes after the first acceptance pending, and lets the first of them be accepted', async (context) => {
+		await withHarness(
+			NOMINEES_MET_BY_USHER,
+			async (harness) => {
+				const toBo = await nominated(harness, PEOPLE.bo);
+				assertSucceeded(await accepted(harness, PEOPLE.bo, toBo), 'the first acceptance');
+				const bo = await personCaller(harness, PEOPLE.bo);
+				const toDana = nominationOf(
+					await nominate(bo, { nominee: { subject: PEOPLE.dana.subject } }),
+					'Bo nominating Dana',
+				);
+				const toEli = nominationOf(
+					await nominate(bo, { nominee: { subject: PEOPLE.eli.subject } }),
+					'Bo nominating Eli',
+				);
+
+				const states = listedOf(await listNominations(bo))
+					.filter(({ id }) => id === toDana || id === toEli)
+					.map(({ id, state }) => [id, state]);
+				assert.deepEqual(states, [
+					[toDana, 'pending'],
+					[toEli, 'pending'],
+				]);
+				assertSucceeded(await accepted(harness, PEOPLE.dana, toDana), 'Dana accepting');
+				assert.deepEqual(listedSubjectsOf(await listAdministrators(bo)), [
+					PEOPLE.bo.subject,
+					PEOPLE.dana.subject,
+				]);
+			},
+			context,
+		);
+	});
+
+	test('refuses an administrator nominating a person who is one, or one a pending nomination already names, 409, naming the pending nomination', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				const toBo = await nominated(harness, PEOPLE.bo);
+				assertSucceeded(await accepted(harness, PEOPLE.bo, toBo), 'the first acceptance');
+				const bo = await personCaller(harness, PEOPLE.bo);
+				const pending = nominationOf(
+					await nominate(bo, { nominee: { subject: PEOPLE.cy.subject } }),
+					'Bo nominating Cy',
+				);
+
+				const answers = [
+					await nominate(bo, { nominee: { subject: PEOPLE.bo.subject } }),
+					await nominate(bo, { nominee: { subject: PEOPLE.cy.subject } }),
+				];
+
+				assert.deepEqual(answers.map(outcomeOf), [
+					[409, 'nomineeAlreadyAdministrator'],
+					[409, 'nomineeAlreadyNominated'],
+				]);
+				assert.match(String(answers[1]?.problem?.detail), new RegExp(pending));
+			},
+			context,
+		);
+	});
+
+	test('removes an administrator, keeping their row, revoking the nomination they made that is pending, and refuses the removed one 403 after', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				await acceptedCyByBo(harness);
+				const cy = await personCaller(harness, PEOPLE.cy);
+				const toFirstUser = nominationOf(
+					await nominate(cy, { nominee: { subject: FIRST_USER.subject } }),
+					'Cy nominating the first user',
+				);
+				const bo = await personCaller(harness, PEOPLE.bo);
+
+				const removal = await removeAdministrator(bo, PEOPLE.cy.subject);
+
+				assertSucceeded(removal, 'the removal');
+				assert.deepEqual(Reflect.get(Object(removal.body), 'revokedNominations'), 1);
+				assertRefused(await listAdministrators(cy), PROBLEMS.administratorOnly, 'the removed administrator');
+				assert.equal(
+					listedOf(await listNominations(bo)).find(({ id }) => id === toFirstUser)?.['state'],
+					'revoked',
+				);
+				assert.deepEqual(
+					[await rowCount(harness, administrators), await rowCount(harness, administratorRemovals)],
+					[2, 1],
+				);
+				assert.deepEqual(
+					(await eventsOfType(harness, AUDIT_EVENT_TYPES.adminRemoval)).map(
+						({ severity, revokedNominations }) => [severity, revokedNominations],
+					),
+					[['critical', 1]],
+				);
+			},
+			context,
+		);
+	});
+
+	test('refuses removing the last administrator 409 lastAdministrator, writing no removal', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				const toBo = await nominated(harness, PEOPLE.bo);
+				assertSucceeded(await accepted(harness, PEOPLE.bo, toBo), 'the first acceptance');
+
+				const answer = await removeAdministrator(await personCaller(harness, PEOPLE.bo), PEOPLE.bo.subject);
+
+				assert.deepEqual(outcomeOf(answer), [409, 'lastAdministrator']);
+				assert.equal(await rowCount(harness, administratorRemovals), 0);
+			},
+			context,
+		);
+	});
+
+	test('lets a person removed be nominated and accepted again, holding a row of their own from the new acceptance', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				await acceptedCyByBo(harness);
+				assertSucceeded(
+					await removeAdministrator(await personCaller(harness, PEOPLE.bo), PEOPLE.cy.subject),
+					'the removal',
+				);
+
+				const again = nominationOf(
+					await nominate(await personCaller(harness, PEOPLE.bo), { nominee: { subject: PEOPLE.cy.subject } }),
+					'Bo nominating Cy again',
+				);
+				assertSucceeded(await accepted(harness, PEOPLE.cy, again), 'the second acceptance of Cy');
+
+				assert.deepEqual(listedSubjectsOf(await listAdministrators(await personCaller(harness, PEOPLE.bo))), [
+					PEOPLE.bo.subject,
+					PEOPLE.cy.subject,
+				]);
+				assert.equal(await rowCount(harness, administrators), 3);
+			},
+			context,
+		);
+	});
+});
+
+// A settings event a change records in its transaction, the change's only write in these tests.
+const SETTING_CHANGE: AuditEvent = Object.freeze({
+	data: { setting: 'test' },
+	severity: 'info',
+	type: 'settings.change',
+});
+
+const actorOf = (person: Person): Actor => ({ id: person.subject, type: 'human' });
+
+// A connection the trail takes from the harness's database, released when the test's database closes.
+type TrailClient = pg.Client & { release(destroy?: boolean): void };
+
+// A trail over the harness's database, its connections taken as the runtime role, with the real
+// confirmation of the administrator each change runs under.
+const trailOver = (harness: Harness): AuditTrail<TrailClient> => {
+	const store = {
+		connect: async (): Promise<TrailClient> =>
+			Object.assign(await harness.database.connect('runtime'), { release: () => undefined }),
+	};
+	return createAuditTrail({
+		confirmAuthority: confirmAdministratorAuthority({ schema: harness.database.schema }),
+		eventLog: { error: () => undefined, writeEvent: () => undefined },
+		settings: {
+			clock: SYSTEM_CLOCK,
+			databaseSchema: harness.database.schema,
+			eventSource: 'https://usher.example.org/controller',
+			instanceName: 'usher-admin-test',
+			storeTimeoutMilliseconds: 15_000,
+		},
+		store,
+	});
+};
+
+// A change by a person, run for the administrator they were admitted as.
+const changeBy = (
+	harness: Harness,
+	trail: AuditTrail<TrailClient>,
+	person: Person,
+	work: (connection: pg.Client) => Promise<string>,
+): Promise<string> =>
+	withAdministratorAuthority({ issuer: harness.configuration.identityProviderIssuer, subject: person.subject }, () =>
+		trail.inTransaction(actorOf(person), async ({ connection, record }) => {
+			await record(SETTING_CHANGE);
+			return work(connection);
+		}),
+	);
+
+// A latch a test opens once the work it holds has started, and a promise the work awaits.
+const gateOf = (): { open: () => void; promise: Promise<void> } => {
+	let release: () => void = () => undefined;
+	const promise = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	return { open: () => release(), promise };
+};
+
+suite("the administrator a change runs under, confirmed in the change's own transaction", () => {
+	test('lets a change by an administrator commit while they are one, and refuses the same change once a removal of them has committed AdministratorStatusWithdrawn, recording nothing', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				await acceptedCyByBo(harness);
+				const trail = trailOver(harness);
+
+				assert.equal(await changeBy(harness, trail, PEOPLE.cy, async () => 'changed'), 'changed');
+				assertSucceeded(
+					await removeAdministrator(await personCaller(harness, PEOPLE.bo), PEOPLE.cy.subject),
+					'the removal',
+				);
+				await assert.rejects(
+					changeBy(harness, trail, PEOPLE.cy, async () => 'changed'),
+					AdministratorStatusWithdrawn,
+				);
+				assert.equal((await eventsOfType(harness, 'settings.change')).length, 1);
+			},
+			context,
+		);
+	});
+
+	test('holds a change by an administrator behind a removal holding the administrators lock exclusively, then refuses it AdministratorStatusWithdrawn once the removal commits', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				await acceptedCyByBo(harness);
+				const trail = trailOver(harness);
+				const issuer = harness.configuration.identityProviderIssuer;
+				const schema = harness.database.schema;
+				const entered = gateOf();
+				const holding = gateOf();
+				const removing = withAdministratorAuthority({ issuer, subject: PEOPLE.bo.subject }, () =>
+					trail.inTransaction(
+						actorOf(PEOPLE.bo),
+						async ({ connection }) => {
+							entered.open();
+							await holding.promise;
+							const administrators = sqlAdministratorStore(connection, { issuer, schema });
+							const removed = await administrators.readAdministrator(PEOPLE.cy.subject);
+							const removedBy = await administrators.findPerson(PEOPLE.bo.subject);
+							await administrators.removeAdministrator({
+								nominationId: removed?.nominationId ?? '',
+								now: new Date(),
+								removedBy: removedBy ?? '',
+							});
+						},
+						{ exclusiveAuthority: true },
+					),
+				).then(
+					() => 'removed',
+					(failure: unknown) => failure,
+				);
+				await entered.promise;
+				const changing = changeBy(harness, trail, PEOPLE.cy, async () => 'changed').then(
+					() => 'changed',
+					(failure: unknown) => failure,
+				);
+				try {
+					assert.equal(await untilBlocked(harness.clients.migration, changing), true);
+				} finally {
+					holding.open();
+				}
+				assert.equal(await removing, 'removed');
+				assert.ok((await changing) instanceof AdministratorStatusWithdrawn);
+				assert.equal((await eventsOfType(harness, 'settings.change')).length, 0);
+			},
+			context,
+		);
+	});
+
+	test('refuses a grant an administrator sends through the controller 403 administratorOnly once a removal of them commits behind the gate, recording the refusal and writing no grant', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				await acceptedCyByBo(harness);
+				assertSucceeded(
+					await registerResource(await personCaller(harness, PEOPLE.bo), study('STUDY-E1')),
+					'the registration',
+				);
+				const trail = trailOver(harness);
+				const issuer = harness.configuration.identityProviderIssuer;
+				const schema = harness.database.schema;
+				const entered = gateOf();
+				const holding = gateOf();
+				const removing = withAdministratorAuthority({ issuer, subject: PEOPLE.bo.subject }, () =>
+					trail.inTransaction(
+						actorOf(PEOPLE.bo),
+						async ({ connection }) => {
+							entered.open();
+							await holding.promise;
+							const administrators = sqlAdministratorStore(connection, { issuer, schema });
+							const removed = await administrators.readAdministrator(PEOPLE.cy.subject);
+							const removedBy = await administrators.findPerson(PEOPLE.bo.subject);
+							await administrators.removeAdministrator({
+								nominationId: removed?.nominationId ?? '',
+								now: new Date(),
+								removedBy: removedBy ?? '',
+							});
+						},
+						{ exclusiveAuthority: true },
+					),
+				).then(
+					() => 'removed',
+					(failure: unknown) => failure,
+				);
+				await entered.promise;
+				const granting = createGrant(await personCaller(harness, PEOPLE.cy), {
+					holder: { subject: FIRST_USER.subject },
+					resource: 'STUDY-E1',
+					role: 'viewer',
+				});
+				try {
+					assert.equal(await untilBlocked(harness.clients.migration, granting), true);
+				} finally {
+					holding.open();
+				}
+				assert.equal(await removing, 'removed');
+
+				assert.deepEqual(outcomeOf(await granting), [403, 'administratorOnly']);
+				assert.equal(await rowCount(harness, grants), 0);
+				assert.deepEqual(
+					(await auditRows(harness.clients.migration))
+						.map(dataOf)
+						.filter(
+							({ actorId, reason }) => actorId === PEOPLE.cy.subject && reason === 'administratorOnly',
+						)
+						.map(({ result }) => result),
+					['denied'],
+				);
+			},
+			context,
+		);
+	});
+
+	test('runs changes by two administrators at once, sharing the administrators lock, neither waiting on the other', async (context) => {
+		await withHarness(
+			BEFORE_THE_FIRST,
+			async (harness) => {
+				await acceptedCyByBo(harness);
+				const trail = trailOver(harness);
+				const entered = gateOf();
+				const holding = gateOf();
+				const first = changeBy(harness, trail, PEOPLE.bo, async () => {
+					entered.open();
+					await holding.promise;
+					return 'bo';
+				});
+				await entered.promise;
+				const second = changeBy(harness, trail, PEOPLE.cy, async () => 'cy');
+				try {
+					assert.equal(await untilBlocked(harness.clients.migration, second), false);
+					assert.equal(await second, 'cy');
+				} finally {
+					holding.open();
+				}
+				assert.equal(await first, 'bo');
 			},
 			context,
 		);

@@ -11,15 +11,18 @@ import {
 	managementRoute,
 	type NamedByRequest,
 	type OperationOutcome,
+	PROBLEMS,
 	type Principal,
 } from '../managementApi/index.js';
 import {
 	ADMINISTRATOR_PROBLEMS,
+	ADMINISTRATOR_REFUSAL_REASONS,
 	NOMINATION_REFUSAL_REASONS,
 	NOMINEE_WITHOUT_DIRECTORY,
+	nomineeAlreadyNominated,
 	nomineeNotInRealm,
 } from './administratorProblems.js';
-import { administratorExistsOn, isPersonMet, listEveryNomination, listNominations } from './administratorStore.js';
+import { isPersonMet, listAdministrators, listEveryNomination, listNominations } from './administratorStore.js';
 import { readNominationDecision } from './readNominationDecision.js';
 import { readNominationRequest } from './readNominationRequest.js';
 import type {
@@ -94,6 +97,15 @@ const noInput = (): InputReading<undefined> => ({
 	kind: 'read',
 });
 
+// The nominee a nomination's body names, by the subject sent, when the body names one as a string.
+const namedNominee = async ({ body }: NamedByRequest): Promise<EventMembers> => {
+	const nominee = body?.['nominee'];
+	if (typeof nominee !== 'object' || nominee === null || !('subject' in nominee)) {
+		return {};
+	}
+	return typeof nominee.subject === 'string' ? { nomineeSubject: nominee.subject } : {};
+};
+
 // A nomination as every answer and listing shows it: its nominator and nominee by subject, its state,
 // and the instant of its answer or of its revocation where it holds one.
 const nominationView = ({
@@ -115,48 +127,66 @@ const nominationView = ({
 });
 
 /**
- * Creates the routes of the Management API's administrator operations, each answered before Usher
- * has an administrator, and each refusing a service account 403 `serviceAccountNotPermitted` before
- * anything is read. The first user nominates, lists every nomination and revokes one while it is
- * pending; the nominee answers a nomination naming them, and lists the nominations naming them.
+ * Creates the routes of the Management API's administrator operations, each refusing a service account
+ * 403 `serviceAccountNotPermitted` before anything is read. Until an administrator has accepted, the first
+ * user nominates, lists every nomination and revokes a nomination they made while it is pending. From then
+ * on an administrator does so, and lists and removes administrators; the nominee answers a nomination naming
+ * them, and lists the nominations naming them, as before.
  *
  * The nominee of a nomination is resolved before any transaction begins: the first user themself, a
  * person Usher has met, or else an account the directory finds in the trusted realm. A directory call
- * never runs while the nominations lock is held. Then each nomination and answer takes that lock in
- * its transaction, so they run one at a time across every instance: no two first administrators are
- * ever made, and a nomination replaced or revoked is never accepted. The store also refuses a second
- * answer to one nomination, whatever the code does. Every instant is read from the configured clock,
- * and a person is found by the identity of a subject under the trusted issuer.
+ * never runs while the administrators lock is held. Then each change to an administrator or a nomination
+ * takes that lock in its transaction, so they run one at a time across every instance: no two first
+ * administrators are ever made, a nomination replaced or revoked is never accepted, and an administrator
+ * removed is not one at the moment another change reads them. The store also refuses a second answer to one
+ * nomination, whatever the code does. Every instant is read from the configured clock, and a person is
+ * found by the identity of a subject under the trusted issuer.
  *
- * Nominating, `POST /admin/nominations`, is for the first user alone: a caller who is not the first
- * user is refused 403 `notFirstUser` before the body is read. Its body names the nominee, read with
- * {@link readNominationRequest}. An administrator already accepted is refused 409
- * `firstAdministratorAccepted`; then a nominee who is neither the caller nor a person Usher has met,
- * nor an account the directory finds, is refused 404 `nomineeNotFound`, its detail naming the realm,
- * or saying that no directory is configured; a directory that cannot answer is 503
- * `directoryUnavailable`. The nominee found is recorded on the finding, and the nomination appended,
- * later than every nomination before it. It is recorded as `admin.nomination` at warning and answered
- * 201 with the nomination, its state `pending`.
+ * Nominating, `POST /admin/nominations`, is for the first user until an administrator has accepted, and for
+ * an administrator from then on: a caller of neither is refused 403 `notFirstUser` or `administratorOnly`
+ * before the body is read. Its body names the nominee, read with {@link readNominationRequest}. Once an
+ * administrator has accepted, the caller is checked inside the transaction, and a nominee who is already an
+ * administrator is refused 409 `nomineeAlreadyAdministrator`, and one a pending nomination already names 409
+ * `nomineeAlreadyNominated`, its detail naming that nomination. Before any administrator has accepted neither
+ * check runs, so a first user's later nomination replaces the earlier one. A nominee who is neither the caller
+ * nor a person Usher has met, nor an account the directory finds, is refused 404 `nomineeNotFound`, its detail
+ * naming the realm, or saying that no directory is configured; a directory that cannot answer is 503
+ * `directoryUnavailable`. The nomination is appended, later than every nomination before it, and recorded as
+ * `admin.nomination` at warning, answered 201 with the nomination, its state `pending`. A refusal after the
+ * body is read records the nominee's subject.
  *
- * Answering, `POST /admin/nominations/{nominationId}/decisions`, is for the nominee alone, its body
- * read with {@link readNominationDecision}. A malformed id is refused 404 `nominationNotFound` with the
- * reason `malformedNominationId`; an id naming no nomination, `unknownNominationId`; a nomination naming
- * someone other than the caller, or a caller never met, `nominationForSomeoneElse`, each recorded with
- * its reason. Then an administrator already accepted is refused 409 `firstAdministratorAccepted`, and a
- * nomination no longer pending 409, its code naming its state: `nominationAlreadyDecided`,
- * `nominationRevoked` or `nominationReplaced`. Accepting writes the nominee as an administrator; declining
- * records the decline. Either is recorded as `admin.nominationDecision`, at critical for an acceptance and
- * warning otherwise, and answered 200 with the nomination as it now stands.
+ * Answering, `POST /admin/nominations/{nominationId}/decisions`, is for the nominee alone, its body read with
+ * {@link readNominationDecision}. A malformed id is refused 404 `nominationNotFound` with the reason
+ * `malformedNominationId`; an id naming no nomination, `unknownNominationId`; a nomination naming someone other
+ * than the caller, or a caller never met, `nominationForSomeoneElse`, each recorded with its reason. Then a
+ * nomination no longer pending 409, its code naming its state: `nominationAlreadyDecided`, `nominationRevoked`
+ * or `nominationReplaced`. Accepting writes the nominee as an administrator; declining records the decline.
+ * Either is recorded as `admin.nominationDecision`, at critical for an acceptance and warning otherwise, and
+ * answered 200 with the nomination as it now stands.
  *
- * Revoking, `DELETE /admin/nominations/{nominationId}`, is for the first user alone. A malformed id, one
- * naming no nomination, and one the first user did not make are refused 404 `nominationNotFound` with the
- * reasons `malformedNominationId`, `unknownNominationId` and `nominationBySomeoneElse`; a nomination no
- * longer pending 409 as above. It is recorded as `admin.nominationRevocation` at warning and answered 200
- * with the nomination as it now stands.
+ * Revoking, `DELETE /admin/nominations/{nominationId}`, is for the first user until an administrator has
+ * accepted, and for an administrator from then on. Once one has, any administrator may revoke any pending
+ * nomination; until then only the first user may revoke one they made. A malformed id, one naming no nomination,
+ * and one the first user did not make while no administrator has accepted are refused 404 `nominationNotFound`
+ * with the reasons `malformedNominationId`, `unknownNominationId` and `nominationBySomeoneElse`; a nomination no
+ * longer pending 409 as above. It is recorded as `admin.nominationRevocation` at warning and answered 200 with
+ * the nomination as it now stands.
  *
- * The listing of every nomination, `GET /admin/nominations`, is for the first user alone, oldest first.
- * The listing of the caller's own, `GET /admin/me/nominations`, answers the nominations naming the caller,
- * oldest first, each with its state; none for a caller Usher has never met. Neither records an event.
+ * Removing, `DELETE /admin/administrators/{subject}`, is for an administrator alone, and may name the caller
+ * themself. The administrator named is one live administrator, else 404 `administratorNotFound` with the reason
+ * `notAdministrator`, whether the subject is one never met or one met who is not an administrator. Usher keeps
+ * at least one administrator, so removing the last is refused 409 `lastAdministrator`. The removal is written
+ * as a row of its own, the administrator's row kept, and each pending nomination the removed administrator made
+ * is revoked, each recorded as `admin.nominationRevocation` at warning. The removal is recorded as `admin.removal`
+ * at critical, with the count of nominations revoked, and answered 200 with the subject, the instant and the count.
+ * A person removed may be nominated and accepted again.
+ *
+ * The listing of administrators, `GET /admin/administrators`, is for an administrator alone, oldest acceptance
+ * first, each by subject, instant of acceptance and nomination. The listing of every nomination,
+ * `GET /admin/nominations`, is for the first user until an administrator has accepted, and for an administrator
+ * from then on, oldest first. The listing of the caller's own, `GET /admin/me/nominations`, answers the
+ * nominations naming the caller, oldest first, each with its state; none for a caller Usher has never met. None
+ * of the listings records an event.
  *
  * @param operations the administrator store over a transaction's connection, the directory, the
  *   settings, the store reader and the trail, each on the control pool.
@@ -212,60 +242,74 @@ export const createAdministratorRoutes = (
 		administratorOnly: false,
 		beforeFirstAdministrator: true,
 		body: 'required',
-		event: { named: async () => ({}), type: 'admin.nomination' },
-		firstUserOnly: true,
+		event: { named: namedNominee, type: 'admin.nomination' },
+		firstUserUntilAdministrator: true,
 		method: 'POST',
 		readInput: (body) => readNominationRequest(body ?? {}),
 		route: '/admin/nominations',
 		run: async ({ input: { nomineeSubject }, principal, sourceIp }) => {
-			if (await administratorExistsOn(store, databaseSchema)) {
-				return refused(ADMINISTRATOR_PROBLEMS.firstAdministratorAccepted);
-			}
 			const refusal = await nomineeRefusalOf(nomineeSubject, principal.subject);
 			if (refusal !== undefined) {
 				return refusal;
 			}
 			const now = new Date(clock.now());
 			return changeOutcome(
-				trail.inTransaction(actorOf(principal), async ({ connection, record }): Promise<OperationOutcome> => {
-					const administrators = administratorStoreOf(connection);
-					await administrators.lockNominations();
-					if (await administrators.administratorExists()) {
-						refuseWithin(ADMINISTRATOR_PROBLEMS.firstAdministratorAccepted);
-					}
-					const nomineeUserId =
-						nomineeSubject === principal.subject
-							? undefined
-							: await administrators.findOrRecordPerson(nomineeSubject, now);
-					const nominatedBy = await administrators.findOrRecordPerson(principal.subject, now);
-					const written = await administrators.appendNomination({
-						nominatedBy,
-						nomineeUserId: nomineeUserId ?? nominatedBy,
-						now,
-					});
-					await record({
-						data: {
-							nominationId: written.id,
-							nomineeSubject,
-							result: 'succeeded',
-							sourceIp,
-						},
-						severity: 'warning',
-						type: 'admin.nomination',
-					});
-					return answered(
-						201,
-						nominationView({
-							decidedAt: null,
-							id: written.id,
-							nominatedAt: written.nominatedAt,
-							nominatorSubject: principal.subject,
-							nomineeSubject,
-							revokedAt: null,
-							state: 'pending',
-						}),
-					);
-				}),
+				trail.inTransaction(
+					actorOf(principal),
+					async ({ connection, record }): Promise<OperationOutcome> => {
+						const administrators = administratorStoreOf(connection);
+						await administrators.lockAdministrators();
+						if (await administrators.administratorExists()) {
+							if (!(await administrators.isAdministrator(principal.subject))) {
+								refuseWithin(PROBLEMS.administratorOnly);
+							}
+							if (await administrators.isAdministrator(nomineeSubject)) {
+								refuseWithin(ADMINISTRATOR_PROBLEMS.nomineeAlreadyAdministrator);
+							}
+							const existingUserId = await administrators.findPerson(nomineeSubject);
+							const pendingId =
+								existingUserId === undefined
+									? undefined
+									: await administrators.pendingNominationOf(existingUserId);
+							if (pendingId !== undefined) {
+								refuseWithin(nomineeAlreadyNominated(pendingId));
+							}
+						}
+						const nomineeUserId =
+							nomineeSubject === principal.subject
+								? undefined
+								: await administrators.findOrRecordPerson(nomineeSubject, now);
+						const nominatedBy = await administrators.findOrRecordPerson(principal.subject, now);
+						const written = await administrators.appendNomination({
+							nominatedBy,
+							nomineeUserId: nomineeUserId ?? nominatedBy,
+							now,
+						});
+						await record({
+							data: {
+								nominationId: written.id,
+								nomineeSubject,
+								result: 'succeeded',
+								sourceIp,
+							},
+							severity: 'warning',
+							type: 'admin.nomination',
+						});
+						return answered(
+							201,
+							nominationView({
+								decidedAt: null,
+								id: written.id,
+								nominatedAt: written.nominatedAt,
+								nominatorSubject: principal.subject,
+								nomineeSubject,
+								revokedAt: null,
+								state: 'pending',
+							}),
+						);
+					},
+					{ exclusiveAuthority: true },
+				),
 			);
 		},
 	};
@@ -288,63 +332,64 @@ export const createAdministratorRoutes = (
 			}
 			const now = new Date(clock.now());
 			return changeOutcome(
-				trail.inTransaction(actorOf(principal), async ({ connection, record }): Promise<OperationOutcome> => {
-					const administrators = administratorStoreOf(connection);
-					await administrators.lockNominations();
-					const nominated =
-						(await administrators.readNomination(nominationId)) ??
-						refuseWithin(
-							ADMINISTRATOR_PROBLEMS.nominationNotFound,
-							NOMINATION_REFUSAL_REASONS.unknownNominationId,
-						);
-					const caller =
-						(await administrators.findPerson(principal.subject)) ??
-						refuseWithin(
-							ADMINISTRATOR_PROBLEMS.nominationNotFound,
-							NOMINATION_REFUSAL_REASONS.nominationForSomeoneElse,
-						);
-					if (nominated.nomineeUserId !== caller) {
-						refuseWithin(
-							ADMINISTRATOR_PROBLEMS.nominationNotFound,
-							NOMINATION_REFUSAL_REASONS.nominationForSomeoneElse,
-						);
-					}
-					if (await administrators.administratorExists()) {
-						refuseWithin(ADMINISTRATOR_PROBLEMS.firstAdministratorAccepted);
-					}
-					const unanswerable = UNANSWERABLE[nominated.state];
-					if (unanswerable !== undefined) {
-						refuseWithin(unanswerable);
-					}
-					if (answer === 'accepted') {
-						await administrators.insertAdministrator({
-							acceptedAt: now,
-							nominationId,
-							userId: caller,
+				trail.inTransaction(
+					actorOf(principal),
+					async ({ connection, record }): Promise<OperationOutcome> => {
+						const administrators = administratorStoreOf(connection);
+						await administrators.lockAdministrators();
+						const nominated =
+							(await administrators.readNomination(nominationId)) ??
+							refuseWithin(
+								ADMINISTRATOR_PROBLEMS.nominationNotFound,
+								NOMINATION_REFUSAL_REASONS.unknownNominationId,
+							);
+						const caller =
+							(await administrators.findPerson(principal.subject)) ??
+							refuseWithin(
+								ADMINISTRATOR_PROBLEMS.nominationNotFound,
+								NOMINATION_REFUSAL_REASONS.nominationForSomeoneElse,
+							);
+						if (nominated.nomineeUserId !== caller) {
+							refuseWithin(
+								ADMINISTRATOR_PROBLEMS.nominationNotFound,
+								NOMINATION_REFUSAL_REASONS.nominationForSomeoneElse,
+							);
+						}
+						const unanswerable = UNANSWERABLE[nominated.state];
+						if (unanswerable !== undefined) {
+							refuseWithin(unanswerable);
+						}
+						if (answer === 'accepted') {
+							await administrators.insertAdministrator({
+								acceptedAt: now,
+								nominationId,
+								userId: caller,
+							});
+						} else {
+							await administrators.declineNomination({ nominationId, now });
+						}
+						await record({
+							data: {
+								decision: answer,
+								nominatedBySubject: nominated.nominatorSubject,
+								nominationId,
+								result: 'succeeded',
+								sourceIp,
+							},
+							severity: answer === 'accepted' ? 'critical' : 'warning',
+							type: 'admin.nominationDecision',
 						});
-					} else {
-						await administrators.declineNomination({ nominationId, now });
-					}
-					await record({
-						data: {
-							decision: answer,
-							nominatedBySubject: nominated.nominatorSubject,
-							nominationId,
-							result: 'succeeded',
-							sourceIp,
-						},
-						severity: answer === 'accepted' ? 'critical' : 'warning',
-						type: 'admin.nominationDecision',
-					});
-					return answered(
-						200,
-						nominationView({
-							...nominated,
-							decidedAt: now,
-							state: answer,
-						}),
-					);
-				}),
+						return answered(
+							200,
+							nominationView({
+								...nominated,
+								decidedAt: now,
+								state: answer,
+							}),
+						);
+					},
+					{ exclusiveAuthority: true },
+				),
 			);
 		},
 	};
@@ -354,7 +399,7 @@ export const createAdministratorRoutes = (
 		beforeFirstAdministrator: true,
 		body: 'none',
 		event: { named: namedNomination, type: 'admin.nominationRevocation' },
-		firstUserOnly: true,
+		firstUserUntilAdministrator: true,
 		method: 'DELETE',
 		readInput: noInput,
 		route: '/admin/nominations/{nominationId}',
@@ -368,38 +413,46 @@ export const createAdministratorRoutes = (
 			}
 			const now = new Date(clock.now());
 			return changeOutcome(
-				trail.inTransaction(actorOf(principal), async ({ connection, record }): Promise<OperationOutcome> => {
-					const administrators = administratorStoreOf(connection);
-					await administrators.lockNominations();
-					const nominated =
-						(await administrators.readNomination(nominationId)) ??
-						refuseWithin(
-							ADMINISTRATOR_PROBLEMS.nominationNotFound,
-							NOMINATION_REFUSAL_REASONS.unknownNominationId,
-						);
-					if (nominated.nominatorSubject !== principal.subject) {
-						refuseWithin(
-							ADMINISTRATOR_PROBLEMS.nominationNotFound,
-							NOMINATION_REFUSAL_REASONS.nominationBySomeoneElse,
-						);
-					}
-					const unanswerable = UNANSWERABLE[nominated.state];
-					if (unanswerable !== undefined) {
-						refuseWithin(unanswerable);
-					}
-					await administrators.revokeNomination({ nominationId, now });
-					await record({
-						data: {
-							nomineeSubject: nominated.nomineeSubject,
-							nominationId,
-							result: 'succeeded',
-							sourceIp,
-						},
-						severity: 'warning',
-						type: 'admin.nominationRevocation',
-					});
-					return answered(200, nominationView({ ...nominated, revokedAt: now, state: 'revoked' }));
-				}),
+				trail.inTransaction(
+					actorOf(principal),
+					async ({ connection, record }): Promise<OperationOutcome> => {
+						const administrators = administratorStoreOf(connection);
+						await administrators.lockAdministrators();
+						const nominated =
+							(await administrators.readNomination(nominationId)) ??
+							refuseWithin(
+								ADMINISTRATOR_PROBLEMS.nominationNotFound,
+								NOMINATION_REFUSAL_REASONS.unknownNominationId,
+							);
+						if (await administrators.administratorExists()) {
+							if (!(await administrators.isAdministrator(principal.subject))) {
+								refuseWithin(PROBLEMS.administratorOnly);
+							}
+						} else if (nominated.nominatorSubject !== principal.subject) {
+							refuseWithin(
+								ADMINISTRATOR_PROBLEMS.nominationNotFound,
+								NOMINATION_REFUSAL_REASONS.nominationBySomeoneElse,
+							);
+						}
+						const unanswerable = UNANSWERABLE[nominated.state];
+						if (unanswerable !== undefined) {
+							refuseWithin(unanswerable);
+						}
+						await administrators.revokeNomination({ nominationId, now });
+						await record({
+							data: {
+								nomineeSubject: nominated.nomineeSubject,
+								nominationId,
+								result: 'succeeded',
+								sourceIp,
+							},
+							severity: 'warning',
+							type: 'admin.nominationRevocation',
+						});
+						return answered(200, nominationView({ ...nominated, revokedAt: now, state: 'revoked' }));
+					},
+					{ exclusiveAuthority: true },
+				),
 			);
 		},
 	};
@@ -408,7 +461,7 @@ export const createAdministratorRoutes = (
 		administratorOnly: false,
 		beforeFirstAdministrator: true,
 		body: 'none',
-		firstUserOnly: true,
+		firstUserUntilAdministrator: true,
 		method: 'GET',
 		readInput: noInput,
 		route: '/admin/nominations',
@@ -441,11 +494,109 @@ export const createAdministratorRoutes = (
 		},
 	};
 
+	const administratorListing: ManagementOperation<undefined> = {
+		administratorOnly: true,
+		body: 'none',
+		method: 'GET',
+		readInput: noInput,
+		route: '/admin/administrators',
+		run: async () => {
+			const administrators = await listAdministrators(store, databaseSchema, identityProviderIssuer);
+			return answered(200, {
+				administrators: administrators.map(({ acceptedAt, nominationId, subject }) => ({
+					acceptedAt: eventInstant(acceptedAt.getTime()),
+					nominationId,
+					subject,
+				})),
+			});
+		},
+	};
+
+	const removal: ManagementOperation<undefined> = {
+		administratorOnly: true,
+		body: 'none',
+		event: {
+			named: async ({ params }) => {
+				const subject = params['subject'];
+				return subject === undefined ? {} : { administratorSubject: subject };
+			},
+			type: 'admin.removal',
+		},
+		method: 'DELETE',
+		readInput: noInput,
+		route: '/admin/administrators/{subject}',
+		run: async ({ params, principal, sourceIp }) => {
+			const subject = params['subject'] ?? '';
+			const now = new Date(clock.now());
+			return changeOutcome(
+				trail.inTransaction(
+					actorOf(principal),
+					async ({ connection, record }): Promise<OperationOutcome> => {
+						const administrators = administratorStoreOf(connection);
+						await administrators.lockAdministrators();
+						if (!(await administrators.isAdministrator(principal.subject))) {
+							refuseWithin(PROBLEMS.administratorOnly);
+						}
+						const removed =
+							(await administrators.readAdministrator(subject)) ??
+							refuseWithin(
+								ADMINISTRATOR_PROBLEMS.administratorNotFound,
+								ADMINISTRATOR_REFUSAL_REASONS.notAdministrator,
+							);
+						if ((await administrators.countAdministrators()) <= 1) {
+							refuseWithin(ADMINISTRATOR_PROBLEMS.lastAdministrator);
+						}
+						const removedBy =
+							(await administrators.findPerson(principal.subject)) ??
+							refuseWithin(PROBLEMS.administratorOnly);
+						await administrators.removeAdministrator({
+							nominationId: removed.nominationId,
+							removedBy,
+							now,
+						});
+						const pending = await administrators.pendingNominationsBy(removed.userId);
+						for (const { id, nomineeSubject } of pending) {
+							await administrators.revokeNomination({ nominationId: id, now });
+							await record({
+								data: {
+									nomineeSubject,
+									nominationId: id,
+									result: 'succeeded',
+									sourceIp,
+								},
+								severity: 'warning',
+								type: 'admin.nominationRevocation',
+							});
+						}
+						await record({
+							data: {
+								administratorSubject: subject,
+								result: 'succeeded',
+								revokedNominations: pending.length,
+								sourceIp,
+							},
+							severity: 'critical',
+							type: 'admin.removal',
+						});
+						return answered(200, {
+							removedAt: eventInstant(now.getTime()),
+							revokedNominations: pending.length,
+							subject,
+						});
+					},
+					{ exclusiveAuthority: true },
+				),
+			);
+		},
+	};
+
 	return [
 		managementRoute(nomination, dependencies),
 		managementRoute(decision, dependencies),
 		managementRoute(revocation, dependencies),
 		managementRoute(everyListing, dependencies),
 		managementRoute(listing, dependencies),
+		managementRoute(administratorListing, dependencies),
+		managementRoute(removal, dependencies),
 	];
 };

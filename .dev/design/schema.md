@@ -113,10 +113,15 @@ changes to what a principal holds, where this one records that the principal is 
       nominated_at       timestamptz  not null  unique
 
     administrators
-      user_id            uuid         primary key references users
-      nomination_id      uuid         not null  unique
+      nomination_id      uuid         primary key
+      user_id            uuid         not null  references users
       accepted_at        timestamptz  not null
       foreign key (nomination_id, user_id) references nominations (id, nominee_id)
+
+    administrator_removals
+      nomination_id      uuid         primary key references administrators
+      removed_at         timestamptz  not null
+      removed_by         uuid         not null  references users
 
     nomination_declines
       nomination_id      uuid         primary key references nominations
@@ -128,16 +133,25 @@ changes to what a principal holds, where this one records that the principal is 
 
 A nomination is kept as written and is never updated or deleted. Its state is derived from the rows
 naming it, in this order: `accepted` when an administrator row names it, `declined` when a decline
-row does, `revoked` when a revocation row does, `replaced` when a later nomination exists, and
-otherwise `pending`.
+row does, `revoked` when a revocation row does, `replaced` when a later nomination exists and the
+nomination was made before the first acceptance, and otherwise `pending`. A nomination made once an
+administrator has accepted is never `replaced`, so several nominations may be pending together.
+
+**An administrator is keyed by the nomination accepted, and removed by a row of its own.** The
+administrator row is never deleted: a removal is a row in `administrator_removals` naming the
+administrator's nomination, with the instant and the person who removed them. An administrator is live
+while no removal names their nomination. A person removed may be nominated and accepted again, so a
+person can hold more than one administrator row over time, but at most one live row at a time: a
+`BEFORE INSERT` trigger on `administrators` refuses a row for a person whose live row exists, with the
+constraint `administrator_held_once`.
 
 **Each nomination is answered once, and the schema holds that as well as the store.** A
 `BEFORE INSERT` trigger on each of `administrators`, `nomination_declines` and
 `nomination_revocations` refuses an insert whose nomination already has a row in either of the other
 two, with the constraint `nomination_answered_once`. A table's own duplicate is refused by its own
-key, so the trigger on `administrators` leaves a second administrator for one nomination to its
-unique key. The store takes the nominations lock before any answer, which is what keeps the two
-inserts from racing; the trigger is what refuses one that gets through anyway.
+key, and the held-once rule above refuses a second administrator for one nomination first. The store
+takes the administrators lock before any change, which is what keeps the two inserts from racing; the
+triggers are what refuse one that gets through anyway.
 
 **The answers are rows of their own, not columns of `nominations`.** The nominations table
 refuses updates, so a decline or a revocation cannot be written onto the row it answers. Each answer
@@ -629,8 +643,8 @@ writes every table or reaches the server itself: `pg_write_all_data`, `pg_execut
 `pg_read_server_files` and `pg_write_server_files`. It also refuses ownership of anything in the
 schema, `CREATE` on the schema or the database, any grant option, `TRUNCATE`, `TRIGGER`, and any
 write on an append-only table beyond what the migrations grant, `INSERT` included. The append-only
-tables are `audit_log`, `change_records`, `grant_decisions`, `key_fingerprints`, `nomination_declines`,
-`nomination_revocations`, `nominations` and `notices`. `change_records` is written only by its trigger, so a role able to insert
+tables are `administrator_removals`, `audit_log`, `change_records`, `grant_decisions`, `key_fingerprints`,
+`nomination_declines`, `nomination_revocations`, `nominations` and `notices`. `change_records` is written only by its trigger, so a role able to insert
 into it could forge history. Any other grant the release does not use, `pg_read_all_data` among
 them, is tolerated and logged at `warning`, naming the privilege and the table. So an instance of one
 release keeps running after the next release's migration adds a grant. A role that may write

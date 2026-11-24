@@ -251,6 +251,8 @@ const ACCESS_TOKEN_ONLY_CLAIMS = Object.freeze({
 const segment = (value: string): string => encodeURIComponent(value);
 
 const PATHS = {
+	administrator: (subject: string): string => `admin/administrators/${segment(subject)}`,
+	administrators: 'admin/administrators',
 	apiDocs: 'api-docs',
 	apiDocsContract: 'api-docs/openapi.json',
 	application: (applicationId: string): string => `admin/applications/${segment(applicationId)}`,
@@ -309,6 +311,8 @@ const routes = (route: string, methods: readonly ManagementRoute['method'][]): r
  * matched (ruled), never anything taken from the request line.
  */
 export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
+	...routes('/admin/administrators', ['GET']),
+	...routes('/admin/administrators/{subject}', ['DELETE']),
 	...routes('/admin/applications', ['POST']),
 	...routes('/admin/applications/{applicationId}', ['GET']),
 	...routes('/admin/applications/{applicationId}/keys', ['POST']),
@@ -1152,6 +1156,28 @@ export const listOwnNominations = (caller: AdminCaller, overrides?: AdminOverrid
 	send(caller, { method: 'GET', path: PATHS.ownNominations }, overrides);
 
 /**
+ * Lists the live administrators, to an administrator: `GET /admin/administrators`.
+ *
+ * @param caller the Controller and the caller's token.
+ * @param overrides departures from the request.
+ */
+export const listAdministrators = (caller: AdminCaller, overrides?: AdminOverrides): Promise<AdminResponse> =>
+	send(caller, { method: 'GET', path: PATHS.administrators }, overrides);
+
+/**
+ * Removes an administrator, to an administrator: `DELETE /admin/administrators/{subject}`, taking no body.
+ *
+ * @param caller the Controller and the caller's token.
+ * @param subject the administrator's subject.
+ * @param overrides departures from the request.
+ */
+export const removeAdministrator = (
+	caller: AdminCaller,
+	subject: string,
+	overrides?: AdminOverrides,
+): Promise<AdminResponse> => send(caller, { method: 'DELETE', path: PATHS.administrator(subject) }, overrides);
+
+/**
  * Revokes a principal's identity entirely (#210 Q1, #212): `POST /admin/people/revocations`, the
  * subject in the body.
  *
@@ -1581,8 +1607,9 @@ const problem = <Code extends string, Status extends number>(
  *   remains, its text saying to revoke them first; `resourceNeedsAnOwner`, revoking or declining a
  *   resource's last owner grant; `importInProgress`, a run of the EGO import while another holds
  *   its lock; `applicationKeyLimit`, an issue for an application holding
- *   {@link APPLICATION_LIVE_KEY_LIMIT} live keys already; `firstAdministratorAccepted`, a
- *   nomination or an answer once Usher's first administrator has accepted; `nominationAlreadyDecided`,
+ *   {@link APPLICATION_LIVE_KEY_LIMIT} live keys already; `nomineeAlreadyAdministrator` and
+ *   `nomineeAlreadyNominated`, a nomination of someone who is one, or whom a pending nomination already
+ *   names; `lastAdministrator`, a removal of the only administrator; `nominationAlreadyDecided`,
  *   an answer to a nomination already answered; `nominationReplaced`, an answer to or a revocation of a
  *   nomination a later one replaced; `nominationRevoked`, an answer to a nomination the first user
  *   revoked.
@@ -1606,6 +1633,7 @@ const problem = <Code extends string, Status extends number>(
  */
 export const PROBLEMS = Object.freeze({
 	administratorGrantsNoConsumerAccess: problem('administratorGrantsNoConsumerAccess', 403),
+	administratorNotFound: problem('administratorNotFound', 404),
 	administratorOnly: problem('administratorOnly', 403),
 	administratorSelfOwnership: problem('administratorSelfOwnership', 403),
 	alreadyExists: problem('alreadyExists', 409),
@@ -1618,7 +1646,6 @@ export const PROBLEMS = Object.freeze({
 	directoryNotConfigured: problem('directoryNotConfigured', 503),
 	directoryUnavailable: problem('directoryUnavailable', 503),
 	doesNotHold: problem('doesNotHold', 409),
-	firstAdministratorAccepted: problem('firstAdministratorAccepted', 409),
 	grantNotFound: problem('grantNotFound', 404),
 	grantReplaced: problem('grantReplaced', 409),
 	grantsOrInvitationsRemain: problem('grantsOrInvitationsRemain', 409),
@@ -1628,10 +1655,13 @@ export const PROBLEMS = Object.freeze({
 	importNotConfigured: problem('importNotConfigured', 503),
 	noAdministratorYet: problem('noAdministratorYet', 403),
 	noAuthorityOnResource: problem('noAuthorityOnResource', 403),
+	lastAdministrator: problem('lastAdministrator', 409),
 	nominationAlreadyDecided: problem('nominationAlreadyDecided', 409),
 	nominationNotFound: problem('nominationNotFound', 404),
 	nominationReplaced: problem('nominationReplaced', 409),
 	nominationRevoked: problem('nominationRevoked', 409),
+	nomineeAlreadyAdministrator: problem('nomineeAlreadyAdministrator', 409),
+	nomineeAlreadyNominated: problem('nomineeAlreadyNominated', 409),
 	nomineeNotFound: problem('nomineeNotFound', 404),
 	notFirstUser: problem('notFirstUser', 403),
 	orphanedResourceExpiryRequired: problem('orphanedResourceExpiryRequired', 422),

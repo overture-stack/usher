@@ -114,8 +114,26 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 				insertAdministrator: async () => {
 					throw new Error('not called by settings');
 				},
-				lockNominations: async () => undefined,
+				lockAdministrators: async () => undefined,
+				countAdministrators: async () => {
+					throw new Error('not called by settings');
+				},
+				isAdministrator: async () => {
+					throw new Error('not called by settings');
+				},
+				pendingNominationOf: async () => {
+					throw new Error('not called by settings');
+				},
+				pendingNominationsBy: async () => {
+					throw new Error('not called by settings');
+				},
+				readAdministrator: async () => {
+					throw new Error('not called by settings');
+				},
 				readNomination: async () => undefined,
+				removeAdministrator: async () => {
+					throw new Error('not called by settings');
+				},
 				revokeNomination: async () => {
 					throw new Error('not called by settings');
 				},

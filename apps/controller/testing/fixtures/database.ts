@@ -43,6 +43,7 @@ import {
 
 const {
 	administrators,
+	administratorRemovals,
 	applicationKeys,
 	applicationResources,
 	applications,
@@ -1204,11 +1205,12 @@ export type LaterOperation = 'delete' | 'update';
  * The operations on a table the store may refuse even to its owner, because the design keeps that
  * history: grants are revoked, never deleted; decisions and nominations are append-only; a
  * revocation is lifted, never deleted; an application key may be kept once revoked, as its issue
- * and revocation are; and an administrator is never deleted. Every other operation a kit makes must
+ * and revocation are; an administrator is never deleted, and a removal of one is kept as written. Every other operation a kit makes must
  * be accepted.
  */
 export const HISTORY_KEPT: Readonly<Record<string, readonly LaterOperation[]>> = Object.freeze({
 	[administrators.name]: ['delete'],
+	[administratorRemovals.name]: ['delete', 'update'],
 	[applicationKeys.name]: ['delete'],
 	[grantDecisions.name]: ['delete', 'update'],
 	[grants.name]: ['delete'],
@@ -1258,6 +1260,7 @@ export const POLICY_GENERATION_TABLES: readonly NamedTable[] = Object.freeze([
  */
 export const CHANGE_RECORDED_TABLES: readonly NamedTable[] = Object.freeze([
 	administrators,
+	administratorRemovals,
 	applicationKeys,
 	applicationResources,
 	applications,
@@ -1311,7 +1314,34 @@ export const recordedChangeKits = (seeded: SeededPolicy): readonly RecordedChang
 	const cyNominated = randomUUID();
 	const declinedNomination = randomUUID();
 	const revokedNomination = randomUUID();
+	const removedNomination = randomUUID();
 	return [
+		{
+			delete: statement(
+				`DELETE FROM ${qualified(administratorRemovals)} WHERE ${administratorRemovals.columns.nominationId} = $1`,
+				[removedNomination],
+			),
+			insert: statement(
+				`INSERT INTO ${qualified(administratorRemovals)} (${administratorRemovals.columns.nominationId}, ${administratorRemovals.columns.removedAt}, ${administratorRemovals.columns.removedBy}) VALUES ($1, now(), $2)`,
+				[removedNomination, user('ana')],
+			),
+			prepare: [
+				statement(
+					`INSERT INTO ${qualified(nominations)} (${nominations.columns.id}, ${nominations.columns.nominatedAt}, ${nominations.columns.nominatedBy}, ${nominations.columns.nomineeId}) VALUES ($1, now(), $2, $3)`,
+					[removedNomination, steward, user('cy')],
+				),
+				statement(
+					`INSERT INTO ${qualified(administrators)} (${administrators.columns.acceptedAt}, ${administrators.columns.nominationId}, ${administrators.columns.userId}) VALUES (now(), $1, $2)`,
+					[removedNomination, user('cy')],
+				),
+			],
+			table: administratorRemovals,
+			update: statement(
+				`UPDATE ${qualified(administratorRemovals)} SET ${administratorRemovals.columns.removedAt} = ${administratorRemovals.columns.removedAt} + interval '1 second' WHERE ${administratorRemovals.columns.nominationId} = $1`,
+				[removedNomination],
+			),
+			updateMovesKey: false,
+		},
 		{
 			delete: statement(`DELETE FROM ${qualified(administrators)} WHERE ${administrators.columns.userId} = $1`, [
 				user('ana'),
@@ -1705,6 +1735,11 @@ export const DESIGNED_COLUMNS: {
 		acceptedAt: required(INSTANT),
 		nominationId: required(UUID),
 		userId: required(UUID),
+	},
+	administratorRemovals: {
+		nominationId: required(UUID),
+		removedAt: required(INSTANT),
+		removedBy: required(UUID),
 	},
 	applicationKeys: {
 		applicationId: required(UUID),

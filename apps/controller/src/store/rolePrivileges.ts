@@ -24,6 +24,7 @@ export interface PermittedWrites {
  */
 export const RUNTIME_WRITES: ReadonlyMap<string, PermittedWrites> = new Map(
 	Object.entries({
+		administrator_removals: { deletes: false, inserts: true, updates: [] },
 		administrators: { deletes: false, inserts: true, updates: [] },
 		application_keys: {
 			deletes: false,
@@ -128,6 +129,7 @@ const AUDIT_LOG = 'audit_log';
 // key-encryption key's would let a start under another key pass.
 const APPEND_ONLY_TABLES: ReadonlySet<string> = new Set([
 	AUDIT_LOG,
+	'administrator_removals',
 	'change_records',
 	'grant_decisions',
 	'key_fingerprints',

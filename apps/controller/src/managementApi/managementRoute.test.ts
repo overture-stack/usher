@@ -11,6 +11,7 @@ import { CommitUnconfirmed } from '../storeTimeout/index.js';
 import type { TokenClaims, TokenVerification } from '../identityProvider/index.js';
 import { EXCESSIVE_LIFETIME, MISSING_ISSUED_AT, type StoredRefusal } from '../signInTokens/index.js';
 import { createWindowedRefusals, type WindowedRefusals } from '../windowedRefusals/index.js';
+import { admittedAdministrator, AdministratorStatusWithdrawn } from './administratorAuthority.js';
 import { managementRoute, STORE_FAILED } from './managementRoute.js';
 import { BODY_LIMIT_BYTES } from './problems.js';
 import { refusalTallyEvent } from './refusalTallyEvent.js';
@@ -107,6 +108,7 @@ type OperationDepartures = Partial<
 		| 'body'
 		| 'event'
 		| 'firstUserOnly'
+		| 'firstUserUntilAdministrator'
 		| 'method'
 		| 'readInput'
 		| 'takesQuery'
@@ -1442,6 +1444,43 @@ suite("a management operation's admin status and its first administrator", () =>
 		]);
 	});
 
+	test('admits the first user alone while no administrator has accepted, and an administrator alone once one has, for an operation taking firstUserUntilAdministrator', async (context) => {
+		const ADMINISTRATOR_NOT_FIRST = async (): Promise<AdministratorStatus> => ({
+			administrator: false,
+			anyAdministrator: true,
+		});
+		const departures = {
+			administratorOnly: false,
+			beforeFirstAdministrator: true,
+			firstUserUntilAdministrator: true,
+		};
+		const verifications = {
+			...ADMIN,
+			first: verified({ realm_access: { roles: ['usher-first-user'] } }),
+		};
+		const answers = await Promise.all(
+			[
+				{ administrators: NO_ADMINISTRATOR, token: 'first' },
+				{ administrators: NO_ADMINISTRATOR, token: 'admin' },
+				{ administrators: ANA_ADMINISTERS, token: 'admin' },
+				{ administrators: ADMINISTRATOR_NOT_FIRST, token: 'first' },
+			].map(async ({ administrators, token }) => {
+				const stand = await standUp(context, { administrators, departures, verifications });
+				return post(stand, { token });
+			}),
+		);
+
+		assert.deepEqual(
+			answers.map((answer) => [answer.statusCode, codeOf(answer)]),
+			[
+				[201, undefined],
+				[403, 'notFirstUser'],
+				[201, undefined],
+				[403, 'administratorOnly'],
+			],
+		);
+	});
+
 	test('answers a store that cannot read admin status 503 storeUnavailable with a line naming its code, recording nothing and running nothing', async (context) => {
 		const stand = await standUp(context, {
 			administrators: async () => {
@@ -1463,6 +1502,53 @@ suite("a management operation's admin status and its first administrator", () =>
 		]);
 		assert.deepEqual(stand.recorded, []);
 		assert.deepEqual(stand.ran, []);
+	});
+});
+
+// A store reader that records each statement sent to it, answering the administrator status reading
+// with whether the identity is an administrator, and every other statement with no rows.
+
+suite("a management operation's change under the administrator its request was admitted as", () => {
+	test('answers 403 administratorOnly and records the refusal, for an administrator whose status its change finds withdrawn, running the change with the identity admitted in scope', async (context) => {
+		const seen: unknown[] = [];
+		const stand = await standUp(context, {
+			outcome: async () => {
+				seen.push(admittedAdministrator());
+				throw new AdministratorStatusWithdrawn();
+			},
+			verifications: ADMIN,
+		});
+
+		const answer = await post(stand);
+
+		assert.deepEqual([answer.statusCode, codeOf(answer)], [403, 'administratorOnly']);
+		assert.deepEqual(seen, [{ issuer: ISSUER, subject: 'subject-ana' }]);
+		assert.deepEqual(
+			stand.recorded.map(({ event }) => [event.data['reason'], event.data['result']]),
+			[['administratorOnly', 'denied']],
+		);
+		assert.deepEqual(stand.lines, []);
+	});
+
+	test('runs a change for a principal who is no administrator with no identity in scope', async (context) => {
+		const seen: unknown[] = [];
+		const stand = await standUp(context, {
+			administrators: async ({ subject }) => ({
+				administrator: subject === 'subject-ana',
+				anyAdministrator: true,
+			}),
+			departures: { administratorOnly: false },
+			outcome: async () => {
+				seen.push(admittedAdministrator());
+				return { body: { shelved: true }, forbidsStoring: false, kind: 'answered', status: 201 };
+			},
+			verifications: { reader: verified({ sub: 'subject-bo' }) },
+		});
+
+		const answer = await post(stand, { token: 'reader' });
+
+		assert.equal(answer.statusCode, 201);
+		assert.deepEqual(seen, [undefined]);
 	});
 });
 

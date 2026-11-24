@@ -8,7 +8,13 @@ import type { DiagramArea } from './diagram.js';
 export const SCHEMA_AREAS: readonly DiagramArea[] = Object.freeze([
 	{ tables: ['users', 'user_identities'], title: 'Principals' },
 	{
-		tables: ['administrators', 'nominations', 'nomination_declines', 'nomination_revocations'],
+		tables: [
+			'administrators',
+			'administrator_removals',
+			'nominations',
+			'nomination_declines',
+			'nomination_revocations',
+		],
 		title: 'Administrators',
 	},
 	{ tables: ['groups', 'group_users'], title: 'Groups' },

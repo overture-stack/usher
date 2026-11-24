@@ -3,13 +3,21 @@ import pg from 'pg';
 import { ControllerError } from '../failures/index.js';
 import { findOrRecordPerson, type PersonIdentity } from '../findOrRecordPerson.js';
 import type { AdministratorStatus, StoreReader } from '../managementApi/index.js';
-import type { AdministratorStore, ListedNomination, NominationRecord, StoredNomination } from './types.js';
+import type {
+	AdministratorRecord,
+	AdministratorStore,
+	ListedAdministrator,
+	ListedNomination,
+	NominationRecord,
+	PendingNomination,
+	StoredNomination,
+} from './types.js';
 
 /**
- * The key of the transaction-scoped advisory lock every nomination and answer takes first, so they
- * run one at a time across the instances sharing a store.
+ * The key of the transaction-scoped advisory lock every change to an administrator or a nomination
+ * takes first, exclusively, so they run one at a time across the instances sharing a store.
  */
-export const NOMINATIONS_LOCK = 8_617_207_005;
+export const ADMINISTRATORS_LOCK = 8_617_207_005;
 
 const tableIn =
 	(schema: string) =>
@@ -31,14 +39,24 @@ const answersOf = (schema: string): string => {
        LEFT JOIN ${table('nomination_revocations')} revoked ON revoked.nomination_id = nomination.id`;
 };
 
+// An administrator whose row holds no removal of its own: a live administrator, as `alias` names the row.
+const notRemoved = (schema: string, alias: string): string =>
+	`NOT EXISTS (SELECT 1 FROM ${tableIn(schema)('administrator_removals')} removal
+                  WHERE removal.nomination_id = ${alias}.nomination_id)`;
+
 // A nomination's state, as the answers joined by answersOf and the later nominations give it, in the
-// order the state is derived.
+// order the state is derived. A later nomination replaces one only when the nomination was made before
+// the first acceptance, so a nomination made once an administrator has accepted stays pending.
 const stateOf = (schema: string): string =>
 	`CASE
        WHEN held.nomination_id IS NOT NULL THEN 'accepted'
        WHEN declined.nomination_id IS NOT NULL THEN 'declined'
        WHEN revoked.nomination_id IS NOT NULL THEN 'revoked'
-       WHEN EXISTS (SELECT 1 FROM ${tableIn(schema)('nominations')} later
+       WHEN nomination.nominated_at < coalesce((SELECT min(n.nominated_at)
+                                                  FROM ${tableIn(schema)('administrators')} a
+                                                  JOIN ${tableIn(schema)('nominations')} n ON n.id = a.nomination_id),
+                                               'infinity')
+        AND EXISTS (SELECT 1 FROM ${tableIn(schema)('nominations')} later
                      WHERE later.nominated_at > nomination.nominated_at) THEN 'replaced'
        ELSE 'pending'
      END`;
@@ -66,8 +84,9 @@ export const readAdministratorStatus = async (
               SELECT 1 FROM ${table('administrators')} held
                 JOIN ${table('user_identities')} identity ON identity.user_id = held.user_id
                WHERE identity.idp_issuer = $1 AND identity.idp_subject_id = $2
+                 AND ${notRemoved(schema, 'held')}
             ) AS administrator,
-            EXISTS (SELECT 1 FROM ${table('administrators')}) AS "anyAdministrator"`,
+            EXISTS (SELECT 1 FROM ${table('administrators')} held WHERE ${notRemoved(schema, 'held')}) AS "anyAdministrator"`,
 		[issuer, subject],
 	);
 	return {
@@ -106,17 +125,28 @@ export const listNominations = async (
 };
 
 /**
- * Whether any administrator has accepted, read from the store outside any transaction: the first
- * check of a nomination, which the transaction holding the nominations lock repeats.
+ * Lists the live administrators, the oldest acceptance first, each by subject, its instant of acceptance
+ * and the nomination accepted.
  *
  * @param store the store reader.
  * @param schema the Controller's schema.
+ * @param issuer the trusted issuer the subjects are read under.
  */
-export const administratorExistsOn = async (store: StoreReader, schema: string): Promise<boolean> => {
-	const { rows } = await store.query<{ administratorExists: boolean }>(
-		`SELECT EXISTS (SELECT 1 FROM ${tableIn(schema)('administrators')}) AS "administratorExists"`,
+export const listAdministrators = async (
+	store: StoreReader,
+	schema: string,
+	issuer: string,
+): Promise<readonly ListedAdministrator[]> => {
+	const { rows } = await store.query<ListedAdministrator>(
+		`SELECT ${subjectOf(schema, 'held.user_id')} AS subject,
+            held.accepted_at AS "acceptedAt",
+            held.nomination_id::text AS "nominationId"
+       FROM ${tableIn(schema)('administrators')} held
+      WHERE ${notRemoved(schema, 'held')}
+      ORDER BY held.accepted_at, held.nomination_id`,
+		[issuer],
 	);
-	return rows[0]?.administratorExists === true;
+	return rows;
 };
 
 /**
@@ -185,7 +215,8 @@ export const sqlAdministratorStore = (
 		administratorExists: async () =>
 			(
 				await connection.query<{ exists: boolean }>(
-					`SELECT EXISTS (SELECT 1 FROM ${table('administrators')}) AS exists`,
+					`SELECT EXISTS (SELECT 1 FROM ${table('administrators')} held
+                     WHERE ${notRemoved(schema, 'held')}) AS exists`,
 				)
 			).rows[0]?.exists === true,
 		appendNomination: async ({ nominatedBy, nomineeUserId, now }) => {
@@ -204,6 +235,13 @@ export const sqlAdministratorStore = (
 			}
 			return written;
 		},
+		countAdministrators: async () =>
+			(
+				await connection.query<{ count: number }>(
+					`SELECT count(*)::int AS count FROM ${table('administrators')} held
+                    WHERE ${notRemoved(schema, 'held')}`,
+				)
+			).rows[0]?.count ?? 0,
 		declineNomination: async ({ nominationId, now }) => {
 			await connection.query(
 				`INSERT INTO ${table('nomination_declines')} (nomination_id, declined_at) VALUES ($1, $2)`,
@@ -226,8 +264,53 @@ export const sqlAdministratorStore = (
 				[userId, nominationId, acceptedAt],
 			);
 		},
-		lockNominations: async () => {
-			await connection.query('SELECT pg_advisory_xact_lock($1)', [NOMINATIONS_LOCK]);
+		isAdministrator: async (subject) =>
+			(
+				await connection.query<{ isAdministrator: boolean }>(
+					`SELECT EXISTS (SELECT 1 FROM ${table('administrators')} held
+                      JOIN ${table('user_identities')} identity ON identity.user_id = held.user_id
+                     WHERE identity.idp_issuer = $1 AND identity.idp_subject_id = $2
+                       AND ${notRemoved(schema, 'held')}) AS "isAdministrator"`,
+					[issuer, subject],
+				)
+			).rows[0]?.isAdministrator === true,
+		lockAdministrators: async () => {
+			await connection.query('SELECT pg_advisory_xact_lock($1)', [ADMINISTRATORS_LOCK]);
+		},
+		pendingNominationOf: async (nomineeUserId) => {
+			const { rows } = await connection.query<IdRow>(
+				`SELECT nomination.id::text AS id
+           FROM ${table('nominations')} nomination
+           ${answersOf(schema)}
+          WHERE nomination.nominee_id = $1::uuid AND (${stateOf(schema)}) = 'pending'
+          ORDER BY nomination.nominated_at
+          LIMIT 1`,
+				[nomineeUserId],
+			);
+			return rows[0]?.id;
+		},
+		pendingNominationsBy: async (userId) => {
+			const { rows } = await connection.query<PendingNomination>(
+				`SELECT nomination.id::text AS id,
+                  ${subjectOf(schema, 'nomination.nominee_id')} AS "nomineeSubject"
+             FROM ${table('nominations')} nomination
+             ${answersOf(schema)}
+            WHERE nomination.nominated_by = $2::uuid AND (${stateOf(schema)}) = 'pending'
+            ORDER BY nomination.nominated_at`,
+				[issuer, userId],
+			);
+			return rows;
+		},
+		readAdministrator: async (subject) => {
+			const { rows } = await connection.query<AdministratorRecord>(
+				`SELECT held.nomination_id::text AS "nominationId", held.user_id::text AS "userId"
+           FROM ${table('administrators')} held
+           JOIN ${table('user_identities')} identity ON identity.user_id = held.user_id
+          WHERE identity.idp_issuer = $1 AND identity.idp_subject_id = $2
+            AND ${notRemoved(schema, 'held')}`,
+				[issuer, subject],
+			);
+			return rows[0];
 		},
 		readNomination: async (id) =>
 			(
@@ -246,6 +329,13 @@ export const sqlAdministratorStore = (
 					[issuer, id],
 				)
 			).rows[0],
+		removeAdministrator: async ({ nominationId, removedBy, now }) => {
+			await connection.query(
+				`INSERT INTO ${table('administrator_removals')} (nomination_id, removed_at, removed_by)
+         VALUES ($1, $2, $3)`,
+				[nominationId, now, removedBy],
+			);
+		},
 		revokeNomination: async ({ nominationId, now }) => {
 			await connection.query(
 				`INSERT INTO ${table('nomination_revocations')} (nomination_id, revoked_at) VALUES ($1, $2)`,

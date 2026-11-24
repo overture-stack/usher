@@ -50,6 +50,7 @@ import {
 
 const {
 	administrators,
+	administratorRemovals,
 	applicationKeys,
 	applicationResources,
 	applications,
@@ -98,6 +99,16 @@ const DESIGNED_FOREIGN_KEYS: readonly {
 		columns: [administrators.columns.userId],
 		referenced: users,
 		table: administrators,
+	},
+	{
+		columns: [administratorRemovals.columns.nominationId],
+		referenced: administrators,
+		table: administratorRemovals,
+	},
+	{
+		columns: [administratorRemovals.columns.removedBy],
+		referenced: users,
+		table: administratorRemovals,
 	},
 	{
 		columns: [applicationKeys.columns.applicationId],

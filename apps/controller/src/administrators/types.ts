@@ -56,6 +56,33 @@ export interface StoredNomination extends NominationRecord {
 	nomineeUserId: string;
 }
 
+/** A live administrator, as the administrators listing shows one. */
+export interface ListedAdministrator {
+	/** When the administrator accepted the nomination that made them one. */
+	acceptedAt: Date;
+
+	/** The nomination the administrator accepted. */
+	nominationId: string;
+
+	/** The administrator's subject under the trusted issuer. */
+	subject: string;
+}
+
+/** A live administrator, as the store reads one by subject: the nomination accepted and the person's `users.id`. */
+export interface AdministratorRecord {
+	nominationId: string;
+
+	userId: string;
+}
+
+/** A pending nomination, as the store lists the ones a person made: its id and its nominee's subject. */
+export interface PendingNomination {
+	id: string;
+
+	/** The nominee's subject under the trusted issuer, or their first identity's under another. */
+	nomineeSubject: string;
+}
+
 /** A nomination naming the caller, as their listing shows it. */
 export interface ListedNomination {
 	id: string;
@@ -73,7 +100,7 @@ export interface ListedNomination {
  * is found by the identity of a subject under the trusted issuer.
  */
 export interface AdministratorStore {
-	/** Whether any administrator has accepted. */
+	/** Whether any live administrator exists: one who has accepted and has not been removed. */
 	administratorExists(): Promise<boolean>;
 
 	/**
@@ -87,6 +114,9 @@ export interface AdministratorStore {
 		nomineeUserId: string;
 		now: Date;
 	}): Promise<{ id: string; nominatedAt: Date }>;
+
+	/** The number of live administrators. */
+	countAdministrators(): Promise<number>;
 
 	/**
 	 * Records a nominee's decline of a nomination, at the instant given.
@@ -104,14 +134,45 @@ export interface AdministratorStore {
 	/** Writes an administrator: the nominee of the nomination accepted. */
 	insertAdministrator(administrator: { acceptedAt: Date; nominationId: string; userId: string }): Promise<void>;
 
-	/**
-	 * Waits until no other nomination or answer is in progress on any instance, and holds every later
-	 * one off until this transaction ends.
-	 */
-	lockNominations(): Promise<void>;
+	/** Whether the subject names a live administrator under the trusted issuer. */
+	isAdministrator(subject: string): Promise<boolean>;
 
-	/** Reads a nomination by its id, or none for an id naming no nomination. */
+	/**
+	 * Waits until no other change to an administrator or a nomination is in progress on any instance,
+	 * and holds every later one off until this transaction ends. Every change to administrators or
+	 * nominations takes it, exclusively.
+	 */
+	lockAdministrators(): Promise<void>;
+
+	/**
+	 * Finds the id of a pending nomination naming a nominee, by the nominee's `users.id`, or none when
+	 * no pending nomination names them.
+	 */
+	pendingNominationOf(nomineeUserId: string): Promise<string | undefined>;
+
+	/**
+	 * Lists the pending nominations a person made, by their `users.id`, each with its nominee's subject.
+	 */
+	pendingNominationsBy(userId: string): Promise<readonly PendingNomination[]>;
+
+	/**
+	 * Finds the live administrator under the trusted issuer holding the subject, or none for a subject
+	 * no live administrator holds.
+	 */
+	readAdministrator(subject: string): Promise<AdministratorRecord | undefined>;
+
+	/**
+	 * Reads a nomination by its id, or none for an id naming no nomination.
+	 */
 	readNomination(id: string): Promise<StoredNomination | undefined>;
+
+	/**
+	 * Records the removal of a live administrator, at the instant given, by the person removing them.
+	 * The administrator's row is kept.
+	 *
+	 * @param removal the administrator's nomination, the `users.id` of the person removing them, and when.
+	 */
+	removeAdministrator(removal: { nominationId: string; removedBy: string; now: Date }): Promise<void>;
 
 	/**
 	 * Records the first user's revocation of a nomination, at the instant given.

@@ -444,11 +444,22 @@ The Controller trusts one realm of one identity provider. Its requirements, in K
 Until an administrator has accepted, the Controller refuses every Management API operation with `403` `noAdministratorYet`, except the five below; the health routes and the token exchange answer as usual. Each request carries the caller's access token. The API documentation page at `/api-docs` signs people in and sends it, where it is configured, so no other client is needed.
 
 1. **The first user finds the nominee's subject.** It is the `sub` claim in the nominee's access token; in Keycloak, the user's ID in the realm Usher trusts, shown on that realm's Users page. A person with an account in two realms, such as an administrator brought in from another realm, has a different ID in each: use the one in the realm Usher trusts. The first user may nominate themself.
-2. **The first user nominates** with `POST /admin/nominations`, sending `{ "nominee": { "subject": "<the subject>" } }`. The answer is the nomination, `pending`, and its `id` is the `nominationId` the nominee answers with. The nominee must be the first user, someone Usher already knows from an earlier sign-in, or, where [the directory](#the-directory) is configured, anyone with an account in the realm. Before the first administrator, nobody but the first user has signed in through Usher, so nominating anyone else needs the directory. Otherwise the answer is `404` `nomineeNotFound`, naming the realm.
+2. **The first user nominates**, until an administrator has accepted, with `POST /admin/nominations`, sending `{ "nominee": { "subject": "<the subject>" } }`. The answer is the nomination, `pending`, and its `id` is the `nominationId` the nominee answers with. The nominee must be the first user, someone Usher already knows from an earlier sign-in, or, where [the directory](#the-directory) is configured, anyone with an account in the realm. Before the first administrator, nobody but the first user has signed in through Usher, so nominating anyone else needs the directory. Otherwise the answer is `404` `nomineeNotFound`, naming the realm.
 3. **The nominee finds the nomination** with `GET /admin/me/nominations`, which lists the nominations naming them, each with its `id` and state.
-4. **The nominee answers** with `POST /admin/nominations/{nominationId}/decisions`, sending `{ "decision": "accept" }` or `{ "decision": "decline" }`. Accepting makes them Usher's first administrator.
+4. **The nominee answers** with `POST /admin/nominations/{nominationId}/decisions`, sending `{ "decision": "accept" }` or `{ "decision": "decline" }`. Accepting makes them an administrator of Usher.
 
-The first user can follow every nomination with `GET /admin/nominations`, and take back one still `pending` with `DELETE /admin/nominations/{nominationId}`. Nominating again replaces the earlier nomination, and only the latest can be accepted. Each step is recorded in the audit log: `admin.nomination`, `admin.nominationDecision`, at `critical` for an acceptance, and `admin.nominationRevocation`.
+Until an administrator has accepted, the first user can follow every nomination with `GET /admin/nominations`, and take back one still `pending` with `DELETE /admin/nominations/{nominationId}`. Nominating again replaces the earlier nomination, and only the latest can be accepted. Each step is recorded in the audit log: `admin.nomination`, `admin.nominationDecision`, at `critical` for an acceptance, and `admin.nominationRevocation`.
+
+### Further administrators
+
+Once an administrator has accepted, the first-user role confers nothing, and any administrator makes the next one the same way:
+
+1. **An administrator nominates** a person by subject, with the same `POST /admin/nominations`. A nominee who is already an administrator is refused `409` `nomineeAlreadyAdministrator`, and one whom a pending nomination already names `409` `nomineeAlreadyNominated`, its detail naming that nomination, which an administrator withdraws with `DELETE /admin/nominations/{nominationId}` before nominating again.
+2. **The nominee answers** as in steps 3 and 4 above.
+3. **An administrator lists the administrators** with `GET /admin/administrators`: each by subject, when they accepted, and the nomination they accepted.
+4. **An administrator removes one** with `DELETE /admin/administrators/{subject}`, which may name the administrator themself. Usher never removes its last administrator, so `409` `lastAdministrator` refuses it. Removing an administrator revokes the nominations they made that are still pending, and the removed person may be nominated and accepted again.
+
+A removal is recorded as `admin.removal`, at `critical`, and each nomination it revokes as `admin.nominationRevocation`.
 
 ## Registering resources
 

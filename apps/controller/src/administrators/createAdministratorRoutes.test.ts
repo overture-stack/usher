@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 
 import type { AccountReading } from '../directory/index.js';
-import type { AuditEvent } from '../eventLog/index.js';
+import type { AuditEvent, TransactionOptions } from '../eventLog/index.js';
 import { createServer } from '../http/index.js';
 import { createAdministratorRoutes } from './createAdministratorRoutes.js';
 import type { AdministratorStore, ListedNomination, NominationRecord, StoredNomination } from './types.js';
@@ -30,16 +30,46 @@ const UNKNOWN = '9e8d7c6b-5a49-4382-b1a0-f9e8d7c6b5a4';
 
 const APPENDED = '3f2e1d0c-9b8a-4766-a554-433221100fed';
 
+const ACCEPTED_BY_ANA = '4c5d6e7f-8a9b-4c0d-9e1f-2a3b4c5d6e7f';
+
+const ACCEPTED_BY_CY = '8b9c0d1e-2f3a-4b5c-8d6e-7f8a9b0c1d2e';
+
+// Ana accepted first, long before Cy; each is a live administrator unless a test removes them.
+const ANA_ADMINISTERS_SINCE: AdministratorEntry = {
+	acceptedAt: new Date(Date.UTC(2026, 9, 1, 12, 0, 0)),
+	nominationId: ACCEPTED_BY_ANA,
+	userId: 'person-ana',
+};
+
+const CY_ADMINISTERS_SINCE: AdministratorEntry = {
+	acceptedAt: new Date(Date.UTC(2026, 10, 1, 12, 0, 0)),
+	nominationId: ACCEPTED_BY_CY,
+	userId: 'person-cy',
+};
+
 /** What the directory answers, when configured. */
 type DirectoryState = 'answering' | 'unavailable' | 'unconfigured';
+
+/** An administrator as the fake store holds one: the nomination accepted, the person, and when. */
+interface AdministratorEntry {
+	acceptedAt: Date;
+	nominationId: string;
+	userId: string;
+}
 
 /** What the fake store and the fake directory hold for one test. */
 interface World {
 	/** The accounts the directory holds, by subject, when it answers. */
 	accounts: Readonly<Record<string, AccountReading>>;
 
-	/** Whether an administrator has accepted. */
-	administratorExists: boolean;
+	/** The live administrators, by subject: a removed administrator is not among them. */
+	administrators: Record<string, AdministratorEntry>;
+
+	/**
+	 * Subjects the gate admitted as administrators whose status the store no longer holds by the time a
+	 * change runs in its transaction, as a removal committed between the two would leave them.
+	 */
+	withdrawn: readonly string[];
 
 	/** Whether the directory answers, cannot answer, or is not configured. */
 	directory: DirectoryState;
@@ -68,8 +98,8 @@ interface Stand {
 	recorded: AuditEvent[];
 	server: FastifyInstance;
 
-	/** How many transactions the operations began. */
-	transactions: { count: number };
+	/** How many transactions the operations began, and the options each was begun with. */
+	transactions: { count: number; options: (TransactionOptions | undefined)[] };
 }
 
 // Ana is the first user and has met Usher; Bo, Cy and Dee are subjects Ana may name. Bo holds the
@@ -84,8 +114,9 @@ const WORLD: World = {
 	accounts: {
 		'subject-dee': { account: { email: 'dee@example.org', familyName: null, givenName: null }, kind: 'held' },
 	},
-	administratorExists: false,
+	administrators: {},
 	directory: 'answering',
+	withdrawn: [],
 	nominations: {
 		[LATEST]: {
 			id: LATEST,
@@ -192,7 +223,43 @@ const fakeStore = (world: World, calls: Call[]): AdministratorStore => {
 	return {
 		administratorExists: async () => {
 			called('administratorExists');
-			return world.administratorExists;
+			return Object.keys(world.administrators).length > 0;
+		},
+		countAdministrators: async () => {
+			called('countAdministrators');
+			return Object.keys(world.administrators).length;
+		},
+		isAdministrator: async (subject) => {
+			called('isAdministrator', subject);
+			return Object.hasOwn(world.administrators, subject) && !world.withdrawn.includes(subject);
+		},
+		pendingNominationOf: async (nomineeUserId) => {
+			called('pendingNominationOf', nomineeUserId);
+			return Object.values(world.nominations).find(
+				(nomination) => nomination.nomineeUserId === nomineeUserId && nomination.state === 'pending',
+			)?.id;
+		},
+		pendingNominationsBy: async (userId) => {
+			called('pendingNominationsBy', userId);
+			return Object.values(world.nominations)
+				.filter(
+					(nomination) =>
+						nomination.state === 'pending' && world.people[nomination.nominatorSubject] === userId,
+				)
+				.map(({ id, nomineeSubject }) => ({ id, nomineeSubject }));
+		},
+		readAdministrator: async (subject) => {
+			called('readAdministrator', subject);
+			const entry = world.administrators[subject];
+			return entry === undefined ? undefined : { nominationId: entry.nominationId, userId: entry.userId };
+		},
+		removeAdministrator: async (removal) => {
+			called('removeAdministrator', removal);
+			for (const [subject, entry] of Object.entries(world.administrators)) {
+				if (entry.nominationId === removal.nominationId) {
+					delete world.administrators[subject];
+				}
+			}
 		},
 		appendNomination: async (nomination) => {
 			called('appendNomination', nomination);
@@ -212,8 +279,8 @@ const fakeStore = (world: World, calls: Call[]): AdministratorStore => {
 		insertAdministrator: async (administrator) => {
 			called('insertAdministrator', administrator);
 		},
-		lockNominations: async () => {
-			called('lockNominations');
+		lockAdministrators: async () => {
+			called('lockAdministrators');
 		},
 		readNomination: async (id) => {
 			called('readNomination', id);
@@ -254,13 +321,13 @@ const TOKENS: Readonly<Record<string, ReturnType<typeof tokenOf>>> = {
 };
 
 const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
-	const known: World = { ...WORLD, ...world };
+	const known: World = { ...WORLD, ...world, administrators: { ...(world.administrators ?? WORLD.administrators) } };
 	const stand = {
 		calls: [] as Call[],
 		lookups: [] as string[],
 		reads: [] as Stand['reads'],
 		recorded: [] as AuditEvent[],
-		transactions: { count: 0 },
+		transactions: { count: 0, options: [] as (TransactionOptions | undefined)[] },
 	};
 	const server = createServer({
 		isLive: () => true,
@@ -291,21 +358,30 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 					values: readonly unknown[] = [],
 				): Promise<pg.QueryResult<Row>> => {
 					stand.reads.push({ text, values });
-					const rows: readonly unknown[] = text.includes('AS "administratorExists"')
-						? [{ administratorExists: known.administratorExists }]
-						: text.includes('AS met')
-							? [{ met: Object.hasOwn(known.people, String(values[1])) }]
-							: text.includes('AS exists')
-								? [{ exists: Object.hasOwn(known.nominations, String(values[0])) }]
-								: text.includes('"nomineeSubject"')
-									? EVERY
-									: LISTED.filter(() => values[1] === 'subject-bo');
+					const rows: readonly unknown[] = text.includes('AS "acceptedAt"')
+						? Object.entries(known.administrators)
+								.map(([subject, entry]) => ({
+									acceptedAt: entry.acceptedAt,
+									nominationId: entry.nominationId,
+									subject,
+								}))
+								.sort((earlier, later) => earlier.acceptedAt.getTime() - later.acceptedAt.getTime())
+						: text.includes('AS "administratorExists"')
+							? [{ administratorExists: Object.keys(known.administrators).length > 0 }]
+							: text.includes('AS met')
+								? [{ met: Object.hasOwn(known.people, String(values[1])) }]
+								: text.includes('AS exists')
+									? [{ exists: Object.hasOwn(known.nominations, String(values[0])) }]
+									: text.includes('"nomineeSubject"')
+										? EVERY
+										: LISTED.filter(() => values[1] === 'subject-bo');
 					return { rows } as unknown as pg.QueryResult<Row>;
 				},
 			},
 			trail: {
-				inTransaction: async (_actor, work) => {
+				inTransaction: async (_actor, work, options?: TransactionOptions) => {
 					stand.transactions.count += 1;
+					stand.transactions.options.push(options);
 					const recorded: AuditEvent[] = [];
 					const result = await work({
 						connection: Object.assign(new pg.Client(), {
@@ -322,9 +398,9 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 			},
 		},
 		{
-			administratorStatus: async () => ({
-				administrator: false,
-				anyAdministrator: known.administratorExists,
+			administratorStatus: async ({ subject }) => ({
+				administrator: Object.hasOwn(known.administrators, subject),
+				anyAdministrator: Object.keys(known.administrators).length > 0,
 			}),
 			eventLog: { error: () => undefined },
 			refusals: { refuse: async () => ({ kind: 'counted' }) },
@@ -428,7 +504,7 @@ suite("nominating Usher's first administrator", () => {
 			state: 'pending',
 		});
 		assert.deepEqual(stand.calls, [
-			{ method: 'lockNominations', values: [] },
+			{ method: 'lockAdministrators', values: [] },
 			{ method: 'administratorExists', values: [] },
 			{
 				method: 'findOrRecordPerson',
@@ -471,7 +547,7 @@ suite("nominating Usher's first administrator", () => {
 
 		assert.equal(answer.statusCode, 201);
 		assert.deepEqual(methodsOf(stand), [
-			'lockNominations',
+			'lockAdministrators',
 			'administratorExists',
 			'findOrRecordPerson',
 			'appendNomination',
@@ -494,7 +570,7 @@ suite("nominating Usher's first administrator", () => {
 		assert.equal(answer.statusCode, 201);
 		assert.deepEqual(stand.lookups, ['subject-dee']);
 		assert.deepEqual(methodsOf(stand), [
-			'lockNominations',
+			'lockAdministrators',
 			'administratorExists',
 			'findOrRecordPerson',
 			'findOrRecordPerson',
@@ -522,6 +598,7 @@ suite("nominating Usher's first administrator", () => {
 		assert.deepEqual(stand.lookups, ['subject-unknown']);
 		assert.equal(stand.transactions.count, 0);
 		assert.deepEqual(stand.recorded.at(-1)?.data, {
+			nomineeSubject: 'subject-unknown',
 			reason: 'nomineeNotFound',
 			result: 'denied',
 			sourceIp: '127.0.0.1',
@@ -551,6 +628,7 @@ suite("nominating Usher's first administrator", () => {
 		assert.deepEqual(eventsOf(stand), [
 			{
 				data: {
+					nomineeSubject: 'subject-unknown',
 					reason: 'directoryUnavailable',
 					result: 'failed',
 					sourceIp: '127.0.0.1',
@@ -596,16 +674,16 @@ suite("nominating Usher's first administrator", () => {
 		);
 	});
 
-	test('refuses an administrator already accepted 409 firstAdministratorAccepted before looking the nominee up or beginning a transaction', async (context) => {
-		const stand = standUp(context, { administratorExists: true });
+	test('refuses a first user who is no administrator once one has accepted 403 administratorOnly, before looking the nominee up or beginning a transaction', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-cy': CY_ADMINISTERS_SINCE } });
 
 		const answer = await nominate(stand, 'ana', 'subject-unknown');
 
-		assert.deepEqual(outcomeOf(answer), [409, 'firstAdministratorAccepted']);
+		assert.deepEqual(outcomeOf(answer), [403, 'administratorOnly']);
 		assert.deepEqual(stand.lookups, []);
 		assert.equal(stand.transactions.count, 0);
 		assert.deepEqual(stand.recorded.at(-1)?.data, {
-			reason: 'firstAdministratorAccepted',
+			reason: 'administratorOnly',
 			result: 'denied',
 			sourceIp: '127.0.0.1',
 		});
@@ -650,10 +728,9 @@ suite('nominees answering their nomination', () => {
 			state: 'accepted',
 		});
 		assert.deepEqual(stand.calls, [
-			{ method: 'lockNominations', values: [] },
+			{ method: 'lockAdministrators', values: [] },
 			{ method: 'readNomination', values: [LATEST] },
 			{ method: 'findPerson', values: ['subject-bo'] },
-			{ method: 'administratorExists', values: [] },
 			{
 				method: 'insertAdministrator',
 				values: [
@@ -781,17 +858,13 @@ suite('nominees answering their nomination', () => {
 		assert.equal(methodsOf(stand).includes('declineNomination'), false);
 	});
 
-	test('refuses an answer once an administrator has accepted 409 firstAdministratorAccepted, ahead of the nomination state', async (context) => {
-		const stand = standUp(context, { administratorExists: true });
+	test('answers a pending nomination after an administrator has accepted, the nominee accepting it as before', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-cy': CY_ADMINISTERS_SINCE } });
 
-		const answers = [await decide(stand, 'bo', LATEST, 'accept'), await decide(stand, 'bo', REPLACED, 'decline')];
+		const answer = await decide(stand, 'bo', LATEST, 'accept');
 
-		assert.deepEqual(answers.map(outcomeOf), [
-			[409, 'firstAdministratorAccepted'],
-			[409, 'firstAdministratorAccepted'],
-		]);
-		assert.equal(methodsOf(stand).includes('insertAdministrator'), false);
-		assert.equal(methodsOf(stand).includes('declineNomination'), false);
+		assert.deepEqual(outcomeOf(answer), [200, undefined]);
+		assert.equal(methodsOf(stand).includes('insertAdministrator'), true);
 	});
 
 	test('refuses an answer to a nomination a later one replaced 409 nominationReplaced, writing nothing', async (context) => {
@@ -1030,7 +1103,7 @@ suite("a nominee's own nominations", () => {
 
 	test('answers a caller named by no nomination an empty list, before and after an administrator has accepted', async (context) => {
 		const before = standUp(context);
-		const after = standUp(context, { administratorExists: true });
+		const after = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
 
 		const answers = [
 			await send(before, 'cy', { method: 'GET', url: '/admin/me/nominations' }),
@@ -1042,6 +1115,365 @@ suite("a nominee's own nominations", () => {
 			[
 				[200, { nominations: [] }],
 				[200, { nominations: [] }],
+			],
+		);
+	});
+});
+
+suite('nominating and revoking once an administrator has accepted', () => {
+	test('lets an administrator nominate a person Usher has met, the nominee checked for being an administrator and for a pending nomination before the nomination is appended', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
+
+		const answer = await nominate(stand, 'ana', 'subject-dee');
+
+		assert.equal(answer.statusCode, 201);
+		assert.deepEqual(methodsOf(stand), [
+			'lockAdministrators',
+			'administratorExists',
+			'isAdministrator',
+			'isAdministrator',
+			'findPerson',
+			'findOrRecordPerson',
+			'findOrRecordPerson',
+			'appendNomination',
+		]);
+		assert.deepEqual(stand.calls[2]?.values, ['subject-ana']);
+		assert.deepEqual(stand.calls[3]?.values, ['subject-dee']);
+	});
+
+	test('refuses an administrator the gate admitted whose status the store withdrew before the transaction 403 administratorOnly, appending no nomination', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+			withdrawn: ['subject-cy'],
+		});
+
+		const answer = await nominate(stand, 'cy', 'subject-dee');
+
+		assert.deepEqual(outcomeOf(answer), [403, 'administratorOnly']);
+		assert.equal(methodsOf(stand).includes('appendNomination'), false);
+	});
+
+	test('refuses an administrator nominating a person who is one already 409 nomineeAlreadyAdministrator, recording the nominee read', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+		});
+
+		const answer = await nominate(stand, 'ana', 'subject-cy');
+
+		assert.deepEqual(outcomeOf(answer), [409, 'nomineeAlreadyAdministrator']);
+		assert.equal(methodsOf(stand).includes('appendNomination'), false);
+		assert.deepEqual(stand.recorded.at(-1)?.data, {
+			nomineeSubject: 'subject-cy',
+			reason: 'nomineeAlreadyAdministrator',
+			result: 'denied',
+			sourceIp: '127.0.0.1',
+		});
+	});
+
+	test('refuses a nominee a pending nomination already names 409 nomineeAlreadyNominated, its detail naming that nomination, and records the nominee read', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
+
+		const answer = await nominate(stand, 'ana', 'subject-bo');
+
+		assert.deepEqual(outcomeOf(answer), [409, 'nomineeAlreadyNominated']);
+		assert.match(Reflect.get(Object(JSON.parse(answer.body)), 'detail') as string, new RegExp(LATEST));
+		assert.match(Reflect.get(Object(JSON.parse(answer.body)), 'detail') as string, /DELETE \/admin\/nominations\//);
+		assert.equal(methodsOf(stand).includes('appendNomination'), false);
+		assert.deepEqual(stand.recorded.at(-1)?.data, {
+			nomineeSubject: 'subject-bo',
+			reason: 'nomineeAlreadyNominated',
+			result: 'denied',
+			sourceIp: '127.0.0.1',
+		});
+	});
+
+	test('keeps a first user nominating again before any administrator has accepted, the earlier nomination replaced, with no check for a pending nomination', async (context) => {
+		const stand = standUp(context);
+
+		const answer = await nominate(stand, 'ana', 'subject-bo');
+
+		assert.equal(answer.statusCode, 201);
+		assert.equal(methodsOf(stand).includes('pendingNominationOf'), false);
+		assert.equal(methodsOf(stand).includes('isAdministrator'), false);
+	});
+
+	test('refuses a first user who is not an administrator nominating 403 administratorOnly once one has accepted, and a service account too', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-cy': CY_ADMINISTERS_SINCE } });
+
+		const answers = [await nominate(stand, 'ana', 'subject-dee'), await nominate(stand, 'service', 'subject-dee')];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[403, 'administratorOnly'],
+			[403, 'serviceAccountNotPermitted'],
+		]);
+		assert.equal(stand.transactions.count, 0);
+	});
+
+	test('lets an administrator revoke a pending nomination another administrator made, recording admin.nominationRevocation at warning', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+		});
+
+		const answer = await revoke(stand, 'cy', LATEST);
+
+		assert.equal(answer.statusCode, 200);
+		assert.deepEqual(stand.calls.at(-1), {
+			method: 'revokeNomination',
+			values: [{ nominationId: LATEST, now: new Date(NOW) }],
+		});
+		assert.deepEqual(eventsOf(stand), [
+			{
+				data: {
+					nomineeSubject: 'subject-bo',
+					nominationId: LATEST,
+					result: 'succeeded',
+					sourceIp: '127.0.0.1',
+				},
+				severity: 'warning',
+				type: 'admin.nominationRevocation',
+			},
+		]);
+	});
+
+	test('refuses an administrator the gate admitted whose status the store withdrew before the transaction 403 administratorOnly, revoking nothing', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+			withdrawn: ['subject-cy'],
+		});
+
+		const answer = await revoke(stand, 'cy', LATEST);
+
+		assert.deepEqual(outcomeOf(answer), [403, 'administratorOnly']);
+		assert.equal(methodsOf(stand).includes('revokeNomination'), false);
+	});
+
+	test('refuses a caller who is not an administrator revoking once one has accepted 403 administratorOnly', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
+
+		const answer = await revoke(stand, 'cy', LATEST);
+
+		assert.deepEqual(outcomeOf(answer), [403, 'administratorOnly']);
+		assert.equal(methodsOf(stand).includes('revokeNomination'), false);
+	});
+
+	test('lets an administrator list every nomination once one has accepted', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
+
+		const answer = await send(stand, 'ana', { method: 'GET', url: '/admin/nominations' });
+
+		assert.equal(answer.statusCode, 200);
+		assert.equal(JSON.parse(answer.body).nominations.length, 3);
+	});
+});
+
+suite('the administrators, listed and removed', () => {
+	test('lists the live administrators to an administrator alone, the oldest acceptance first, each by subject, instant and nomination', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-cy': CY_ADMINISTERS_SINCE, 'subject-ana': ANA_ADMINISTERS_SINCE },
+		});
+
+		const answer = await send(stand, 'ana', { method: 'GET', url: '/admin/administrators' });
+
+		assert.equal(answer.statusCode, 200);
+		assert.deepEqual(JSON.parse(answer.body), {
+			administrators: [
+				{
+					acceptedAt: ANA_ADMINISTERS_SINCE.acceptedAt.toISOString(),
+					nominationId: ACCEPTED_BY_ANA,
+					subject: 'subject-ana',
+				},
+				{
+					acceptedAt: CY_ADMINISTERS_SINCE.acceptedAt.toISOString(),
+					nominationId: ACCEPTED_BY_CY,
+					subject: 'subject-cy',
+				},
+			],
+		});
+		assert.deepEqual(stand.recorded, []);
+	});
+
+	test('refuses the listing to anyone but an administrator 403 administratorOnly, a service account 403 serviceAccountNotPermitted, and before any administrator 403 noAdministratorYet', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
+		const none = standUp(context);
+
+		const answers = [
+			await send(stand, 'bo', { method: 'GET', url: '/admin/administrators' }),
+			await send(stand, 'service', { method: 'GET', url: '/admin/administrators' }),
+			await send(none, 'ana', { method: 'GET', url: '/admin/administrators' }),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[403, 'administratorOnly'],
+			[403, 'serviceAccountNotPermitted'],
+			[403, 'noAdministratorYet'],
+		]);
+	});
+
+	test('removes another administrator, answering 200, writing the removal by the caller, revoking the nominations the removed one made, and recording each revocation then admin.removal at critical', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+		});
+
+		const answer = await send(stand, 'ana', { method: 'DELETE', url: '/admin/administrators/subject-cy' });
+
+		assert.equal(answer.statusCode, 200);
+		assert.deepEqual(JSON.parse(answer.body), {
+			removedAt: INSTANT,
+			revokedNominations: 1,
+			subject: 'subject-cy',
+		});
+		assert.deepEqual(
+			stand.calls.filter(({ method }) => method === 'removeAdministrator'),
+			[
+				{
+					method: 'removeAdministrator',
+					values: [{ nominationId: ACCEPTED_BY_CY, removedBy: 'person-ana', now: new Date(NOW) }],
+				},
+			],
+		);
+		assert.deepEqual(
+			stand.calls.filter(({ method }) => method === 'revokeNomination'),
+			[
+				{
+					method: 'revokeNomination',
+					values: [{ nominationId: BY_ANOTHER, now: new Date(NOW) }],
+				},
+			],
+		);
+		assert.deepEqual(eventsOf(stand), [
+			{
+				data: {
+					nomineeSubject: 'subject-bo',
+					nominationId: BY_ANOTHER,
+					result: 'succeeded',
+					sourceIp: '127.0.0.1',
+				},
+				severity: 'warning',
+				type: 'admin.nominationRevocation',
+			},
+			{
+				data: {
+					administratorSubject: 'subject-cy',
+					result: 'succeeded',
+					revokedNominations: 1,
+					sourceIp: '127.0.0.1',
+				},
+				severity: 'critical',
+				type: 'admin.removal',
+			},
+		]);
+	});
+
+	test('lets an administrator remove themself while not the last, and their next request then refused 403 administratorOnly', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+		});
+
+		const removal = await send(stand, 'cy', { method: 'DELETE', url: '/admin/administrators/subject-cy' });
+		const next = await send(stand, 'cy', { method: 'GET', url: '/admin/administrators' });
+
+		assert.deepEqual([removal.statusCode, next.statusCode], [200, 403]);
+		assert.equal(Reflect.get(Object(JSON.parse(next.body)), 'code'), 'administratorOnly');
+	});
+
+	test('refuses removing the last administrator 409 lastAdministrator, writing no removal', async (context) => {
+		const stand = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
+
+		const answer = await send(stand, 'ana', { method: 'DELETE', url: '/admin/administrators/subject-ana' });
+
+		assert.deepEqual(outcomeOf(answer), [409, 'lastAdministrator']);
+		assert.equal(methodsOf(stand).includes('removeAdministrator'), false);
+		assert.deepEqual(stand.recorded.at(-1)?.data, {
+			administratorSubject: 'subject-ana',
+			reason: 'lastAdministrator',
+			result: 'denied',
+			sourceIp: '127.0.0.1',
+		});
+	});
+
+	test('answers a subject no live administrator holds 404 administratorNotFound, recording the reason notAdministrator, whether met or not', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+		});
+
+		const answers = [
+			await send(stand, 'ana', { method: 'DELETE', url: '/admin/administrators/subject-bo' }),
+			await send(stand, 'ana', { method: 'DELETE', url: '/admin/administrators/subject-unknown' }),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[404, 'administratorNotFound'],
+			[404, 'administratorNotFound'],
+		]);
+		assert.deepEqual(
+			stand.recorded.map(({ data }) => data),
+			[
+				{
+					administratorSubject: 'subject-bo',
+					reason: 'notAdministrator',
+					result: 'denied',
+					sourceIp: '127.0.0.1',
+				},
+				{
+					administratorSubject: 'subject-unknown',
+					reason: 'notAdministrator',
+					result: 'denied',
+					sourceIp: '127.0.0.1',
+				},
+			],
+		);
+		assert.equal(methodsOf(stand).includes('removeAdministrator'), false);
+	});
+
+	test('refuses an administrator the gate admitted whose status the store withdrew before the transaction 403 administratorOnly, removing no one', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+			withdrawn: ['subject-ana'],
+		});
+
+		const answer = await send(stand, 'ana', { method: 'DELETE', url: '/admin/administrators/subject-cy' });
+
+		assert.deepEqual(outcomeOf(answer), [403, 'administratorOnly']);
+		assert.equal(methodsOf(stand).includes('removeAdministrator'), false);
+	});
+
+	test('refuses removal to anyone but an administrator 403 administratorOnly, before any lookup', async (context) => {
+		const stand = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+		});
+
+		const answer = await send(stand, 'bo', { method: 'DELETE', url: '/admin/administrators/subject-cy' });
+
+		assert.deepEqual(outcomeOf(answer), [403, 'administratorOnly']);
+		assert.equal(stand.transactions.count, 0);
+	});
+});
+
+suite('the transactions that alter who is an administrator', () => {
+	test('begins each change of who is an administrator, nominating, accepting, revoking and removing, holding the administrators lock exclusively', async (context) => {
+		const nominating = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
+		assert.equal((await nominate(nominating, 'ana', 'subject-dee')).statusCode, 201);
+		const accepting = standUp(context, { administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE } });
+		assert.equal((await decide(accepting, 'bo', LATEST, 'accept')).statusCode, 200);
+		const revoking = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+		});
+		assert.equal((await revoke(revoking, 'cy', LATEST)).statusCode, 200);
+		const removing = standUp(context, {
+			administrators: { 'subject-ana': ANA_ADMINISTERS_SINCE, 'subject-cy': CY_ADMINISTERS_SINCE },
+		});
+		assert.equal(
+			(await send(removing, 'ana', { method: 'DELETE', url: '/admin/administrators/subject-cy' })).statusCode,
+			200,
+		);
+
+		assert.deepEqual(
+			[nominating, accepting, revoking, removing].map(({ transactions }) => transactions.options),
+			[
+				[{ exclusiveAuthority: true }],
+				[{ exclusiveAuthority: true }],
+				[{ exclusiveAuthority: true }],
+				[{ exclusiveAuthority: true }],
 			],
 		);
 	});
