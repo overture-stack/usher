@@ -122,7 +122,7 @@ What remains true is that a permission and a category answer different questions
 hold a permission on a resource's open portion while reaching none of its restricted records. That
 is preserved by pairing, since unmarked content is itself a category: holding `export` on `unmarked`
 and only `view` on `controlled` says exactly that. No resource-level slot is needed, and adding one
-would reintroduce a baseline, and additive rendering exists to do without one.
+would reintroduce a resource-wide default, and additive rendering exists to do without one.
 
 Whether the originating role name travels alongside the permissions is a separate and smaller
 question. It is not needed for enforcement, and audit events are emitted by the Controller, which

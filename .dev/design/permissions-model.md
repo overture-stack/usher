@@ -970,9 +970,9 @@ than their omission reading as oversight:
   timestamp was rejected earlier because a principal-scoped marker cannot see a resource gaining a
   category. See the fast-path decision in [decisions.md](decisions.md).
 
-**Every resource carries at least one category, so `resource_categories` is never empty for a
-live resource.** A resource's unrestricted portion is a category like any other, which is what
-removes the need for a baseline outside the category system. The consequence is that a resource
+**Every resource carries at least one category, so `resource_categories` is never empty for a live
+resource.** A resource's unrestricted portion is a category like any other, which is what removes
+the need for a resource-wide default outside the category system. The consequence is that a resource
 with no categories is ungrantable, since a grant would have nothing to name.
 
 **`base_tier` and `suppressed` on `resources`.** The base tier is the least access to a resource's

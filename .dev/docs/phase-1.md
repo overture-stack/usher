@@ -435,9 +435,9 @@ Three things follow for the payload:
   full category set into the token was first set aside because additive rendering does not need it.
   Exclusionary rendering does, so the payload carries `globalCategories` and `resourceCategories`
   (decided 2026-10-05, revised 2026-10-20, in [`decisions.md`](../design/decisions.md)).
-- **A role in a resource becomes an explicit positive grant.** There is no implicit baseline for untagged
-  records any more, so a role must render to a predicate of its own. The exact shape is open
-  and is tracked in `roadmap.md`.
+- **A role in a resource becomes an explicit positive grant.** There is no implicit resource-wide
+  default for untagged records any more, so a role must render to a predicate of its own. The exact
+  shape is open and is tracked in `roadmap.md`.
 - **Zero grants never becomes a filter.** The Bridge returns the `Enforcement` discriminated
   result; see the zero-grant decision in `decisions.md`.
 

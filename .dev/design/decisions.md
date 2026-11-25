@@ -1229,12 +1229,12 @@ person see this record" always resolves to a specific grant. Under subtractive i
 exclusion matched," which is an absence, and absences are considerably harder to review or
 reproduce.
 
-**Consequence: a role in a resource becomes an explicit positive grant.** Subtractive rendering gave access
-to untagged records as a side effect, since nothing excluded them. Additive rendering has no implicit
-baseline, so a role must render to a predicate of its own (scoping to the resource, for
-example `resource_id in [...]`), with category grants adding branches on top. This is treated as
-an improvement rather than a cost: it makes the baseline an auditable grant like any other instead
-of an unstated default.
+**Consequence: a role in a resource becomes an explicit positive grant.** Subtractive rendering gave
+access to untagged records as a side effect, since nothing excluded them. Additive rendering has no
+implicit resource-wide default, so a role must render to a predicate of its own (scoping to the
+resource, for example `resource_id in [...]`), with category grants adding branches on top. This is
+treated as an improvement rather than a cost: it makes that default an auditable grant like any
+other instead of an unstated one.
 
 **Consequence: the Usher token carries held grants only.** Moving the resource's full configured
 category set into the token was considered, as a way to make subtractive rendering fail closed on
@@ -2353,11 +2353,11 @@ holding several means holding several grants.
                  "global.controlled": { "record": ["view"] } }
 
 **Every permission is category-scoped, and open content is a category, `unmarked`.** There is no
-separate resource-level permission list and no baseline outside the category system, because a
-baseline is what the superseded subtractive model required. A detached permission list would have
-reintroduced it, and was rejected for that reason rather than for shape. It also could not express a
-real tier difference: an anonymous principal holding `view` on `unmarked` where a registered one
-holds `view` and `download`, same resource, same category.
+separate resource-level permission list and no resource-wide default outside the category system,
+because a resource-wide default is what the superseded subtractive model required. A detached
+permission list would have reintroduced it, and was rejected for that reason rather than for shape.
+It also could not express a real tier difference: an anonymous principal holding `view` on
+`unmarked` where a registered one holds `view` and `download`, same resource, same category.
 
 **No role name and no ownership travel in the token.** A role is how access is authored; the
 Controller resolves it to permissions at issuance, so no adapter learns what an instance means by

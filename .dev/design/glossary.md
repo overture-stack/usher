@@ -604,6 +604,11 @@ permissions it carries, such as `{ "global.controlled": { "record": ["view"] } }
 The list never appears empty: holding no grant on a resource means what the resource being absent
 already means, which is no access.
 
+**Resource-wide default**
+The resource-wide permission set the superseded subtractive model subtracted from.
+
+It is kept apart from the baseline, which is a grant rule, and additive rendering has none.
+
 **Revision**
 A prior state of a record, where the service keeps them, and an entity on the data plane.
 

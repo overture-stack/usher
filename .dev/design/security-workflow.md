@@ -331,9 +331,9 @@ revocation acts on the grant in the store rather than on anything visible here.
 
 **Every permission is category-scoped, including on unrestricted data.** A resource's open portion
 is a category like any other, named in a grant like any other. There is no separate resource-level
-permission list, and no baseline sitting outside the category system, because a baseline is what the
-superseded subtractive model needed and additive rendering does not. Every record reached by a
-principal is reached through a grant that names why.
+permission list, and no resource-wide default sitting outside the category system, because a
+resource-wide default is what the superseded subtractive model needed and additive rendering does
+not. Every record reached by a principal is reached through a grant that names why.
 
 This is also what makes tier differences expressible: an anonymous principal may hold
 `{ "global.unmarked": { "record": ["view"] } }` where a registered one holds `{ "global.unmarked": { "record": ["view", "update"] } }`, on the same

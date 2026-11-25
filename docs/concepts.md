@@ -559,7 +559,7 @@ Three things about the shape are decisions rather than details.
 
 **A resource's unmarked records are a category like any other.** `unmarked` is named in a grant just
 as `controlled` is. Nothing is reachable because a grant declined to exclude it, so there is no
-baseline outside the category system, and a reader has nothing to infer.
+resource-wide default outside the category system, and a reader has nothing to infer.
 
 **Permissions attach to a category, not to the resource.** That is what lets this user update unmarked
 records while only reading controlled ones. Two independent grants, and holding both reaches what
