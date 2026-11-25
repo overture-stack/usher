@@ -43,7 +43,7 @@ export const EXCHANGE_PROBLEMS = Object.freeze({
 		'internalError',
 		500,
 		'Internal error',
-		'The controller failed to answer this request, and issued no token.',
+		'The Controller failed to answer this request, and issued no token.',
 	),
 	outcomeUnknown: problem(
 		'outcomeUnknown',

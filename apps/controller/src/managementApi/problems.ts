@@ -38,7 +38,7 @@ export const PROBLEMS = Object.freeze({
 		'internalError',
 		500,
 		'Internal error',
-		'The controller failed to answer this request, and nothing of it was written.',
+		'The Controller failed to answer this request, and nothing of it was written.',
 	),
 	malformedCredential: problem(
 		'malformedCredential',

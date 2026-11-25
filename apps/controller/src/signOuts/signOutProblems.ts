@@ -28,7 +28,7 @@ export const SIGN_OUT_PROBLEMS = Object.freeze({
 		'internalError',
 		400,
 		'Internal error',
-		'The controller failed to answer this request, and nothing of it was written.',
+		'The Controller failed to answer this request, and nothing of it was written.',
 	),
 	logoutTokenRefused: problem(
 		'logoutTokenRefused',

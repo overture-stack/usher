@@ -28,7 +28,7 @@ export const CHANNEL_PROBLEMS = Object.freeze({
 		'internalError',
 		500,
 		'Internal error',
-		'The controller failed to answer this request, and nothing of it was written.',
+		'The Controller failed to answer this request, and nothing of it was written.',
 	),
 	noticeVersionUnserved: problem(
 		'noticeVersionUnserved',
