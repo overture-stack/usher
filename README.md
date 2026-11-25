@@ -9,10 +9,11 @@ asking: enforcement happens inside the application at its own query layer, with 
 back to Usher.
 
 Two things separate it from a conventional authorization service. It governs **who may grant**, not
-only who may read, so a category's custodian holds authority over that category across every dataset
-while holding no access to any of it. And it **fails closed**: an application that loses contact with
-Usher past a short grace period suspends every grant rather than coasting on its cache, and serves
-only what is open to everyone, as it last held it.
+only who may read: a resource's owner decides who reaches it, and the design adds a category's
+custodian, holding authority over that category across every dataset while holding no access to any
+of it, a role Usher does not provide in this release. And it **fails closed**: an application that
+loses contact with Usher past a short grace period suspends every grant rather than coasting on its
+cache, and serves only what is open to everyone, as it last held it.
 
 Usher is not an authentication service. Authentication is delegated to the configured identity
 provider (Keycloak, Microsoft Entra ID, or any OIDC-compatible provider).

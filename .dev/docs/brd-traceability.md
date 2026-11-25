@@ -80,7 +80,8 @@ Four were raised and all four are resolved. Recorded in full in
 so record-level narrowing stays post-MVP with no route quietly depending on it.
 
 **Admin authority: the persona name was the confusion.** "Data Admin" in the flows means system
-administrator. The roles administering access to data are the Owner and the Custodian. A system
+administrator. The roles administering access to data are the Owner, and the Custodian the design
+names, which Usher does not provide in this release. A system
 administrator sees users, their grants, resource metadata and audit logs, and does not read records.
 One sub-question stays open: whether a system administrator may grant data access as an override.
 

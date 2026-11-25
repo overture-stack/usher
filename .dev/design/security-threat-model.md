@@ -29,14 +29,15 @@ For each category: how it applies to Usher, which design choices address it, and
 **Why this is Usher's primary concern.** Usher exists to prevent broken access control. Every
 architectural decision in this system is, directly or indirectly, a response to A01.
 
-| Design choice                                                                            | Addresses                                                                   |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Deny by default: reaching a record requires a grant naming the category it carries       | Prevents implicit allow                                                     |
-| Server-side enforcement (PEP adapters apply filters before queries reach the data layer) | Prevents client-side bypass                                                 |
-| JWE tokens are opaque to the token holder                                                | Prevents a user reading their own restrictions and crafting bypass queries  |
-| Emergency revocation by notice naming the principal                                      | Prevents continued access after authorization is withdrawn                  |
-| Fail-secure on revocation channel disruption                                             | Prevents an adversary from sustaining access by blocking revocation signals |
-| Usher tokens are short-lived (5-minute TTL)                                              | Limits exposure window of a stolen or leaked token                          |
+| Design choice                                                                                                    | Addresses                                                                                                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deny by default: reaching a record requires a grant naming the category it carries                               | Prevents implicit allow                                                                                                                                                                                                 |
+| Server-side enforcement (PEP adapters apply filters before queries reach the data layer)                         | Prevents client-side bypass                                                                                                                                                                                             |
+| JWE tokens are opaque to the token holder                                                                        | Prevents a user reading their own restrictions and crafting bypass queries                                                                                                                                              |
+| Emergency revocation by notice naming the principal                                                              | Prevents continued access after authorization is withdrawn                                                                                                                                                              |
+| A sign-out of everyone refuses every sign-in token issued before it, at every application, and keeps every grant | Bounds an incident where sign-in tokens may have leaked; it does not stop a stolen refresh token, a hijacked identity provider session or a stolen signing key, since a fresh sign-in token issued after it is accepted |
+| Fail-secure on revocation channel disruption                                                                     | Prevents an adversary from sustaining access by blocking revocation signals                                                                                                                                             |
+| Usher tokens are short-lived (5-minute TTL)                                                                      | Limits exposure window of a stolen or leaked token                                                                                                                                                                      |
 
 **Gaps and open questions:**
 
@@ -264,12 +265,12 @@ The full list of auditable events, required fields per event, and severity level
 
 ### A10: Mishandling of Exceptional Conditions
 
-| Design choice                                                                                                             | Addresses                                                                                             |
-| ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Fail-secure: if revocation status cannot be confirmed, sessions are suspended for granted access (not silently permitted) | Errors in the revocation channel result in safe failure, not continued unauthorized access            |
-| Revocation-uncertain mode returns 503 (unavailable), not 401 (unauthenticated) or 200 (permitted)                         | Error response does not reveal internal state; does not grant access; allows recovery without re-auth |
-| JWE decryption failure must reject the token cleanly, not partially process it                                            | A corrupt or tampered token is rejected at the boundary                                               |
-| Adapter errors during permissions payload application must fail the request, not apply a partial permissions payload      | A half-applied permissions payload could produce a result set that is more permissive than intended   |
+| Design choice                                                                                                                          | Addresses                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Fail-secure: if revocation status cannot be confirmed, sessions are suspended for granted access (not silently permitted)              | Errors in the revocation channel result in safe failure, not continued unauthorized access            |
+| In revocation-uncertain mode, what the open tier cannot settle answers 503 (unavailable), not 401 (unauthenticated) or 200 (permitted) | Error response does not reveal internal state; does not grant access; allows recovery without re-auth |
+| JWE decryption failure must reject the token cleanly, not partially process it                                                         | A corrupt or tampered token is rejected at the boundary                                               |
+| Adapter errors during permissions payload application must fail the request, not apply a partial permissions payload                   | A half-applied permissions payload could produce a result set that is more permissive than intended   |
 
 **Gaps:**
 

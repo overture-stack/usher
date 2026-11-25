@@ -1911,6 +1911,12 @@ every granted permission until connectivity is restored: anything a grant alone 
 (service unavailable), while the open tier, which needs no grant, is still served. An adversary who
 silences the channel gains no access; they only cause a service disruption.
 
+**Superseded in mechanism, not in principle: the open tier settles what it can.** Past the grace
+period the Bridge renders each signed-in principal from the last anonymous payload, marked
+suspended, and the application answers 503 only to what the open tier cannot settle: an export, a
+fetch only a grant could answer, or a write. Decided 2026-10-04, in § A suspended principal is
+answered by what the open tier can settle.
+
 **Tradeoffs accepted.** A revocation channel outage becomes a data access outage. This is the
 correct behaviour for a system handling sensitive or health-adjacent data, and is a deliberate
 design choice rather than an oversight. For the failure behaviour and grace period design, see
@@ -2956,6 +2962,11 @@ by the number of grants and is not a load consideration.
 the Controller and an adapter shifts the moment by that skew. That is the ordinary JWT concern rather
 than anything specific here, and it wants a stated tolerance during implementation rather than a
 mechanism.
+
+**Superseded: the Bridge reads an Usher token's expiry on the Controller's clock.** It takes the
+Controller's time at receipt as the latest it can be, so skew between the Controller and a Bridge
+can only shorten a token's life, never stretch it, and the Bridge's wall clock decides no Usher
+token's expiry. Changed by the commit "fix: read an Usher token's expiry on the Controller's clock".
 
 **Rejected: accepting a window instead.** Leaving the shortened lifetime available and unbuilt is
 defensible where a few minutes past a scheduled date harms nobody. It is not where the date is a

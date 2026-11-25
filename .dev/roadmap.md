@@ -15,7 +15,7 @@ Architectural diagram showing Usher's connections to Overture services and infra
 
 ### Admin model: open questions
 
-Four items gate the admin API: self-grant compensating controls, self-grant peer revocability, the break-glass procedure, and where an adapter learns that a principal is an administrator (Usher's own role, adapter-side config, or the platform access model, and whether an administrator of an ushered application is the same principal as an administrator of Usher). The last one also gates the bypass audit requirement, since a bypass cannot be logged as such until its source is defined. Lower-priority follow-ups (step-up auth, audit schema, multi-tenancy) can trail v1. See [admin model open questions](docs/atlas/roadmap/admin-model-open-questions.md).
+Four items stay open: self-grant compensating controls, self-grant peer revocability, the break-glass procedure, and where an adapter learns that a principal is an administrator (Usher's own role, adapter-side config, or the platform access model, and whether an administrator of an ushered application is the same principal as an administrator of Usher). The last one also gates the bypass audit requirement, since a bypass cannot be logged as such until its source is defined. Lower-priority follow-ups (step-up auth, audit schema, multi-tenancy) can trail v1. See [admin model open questions](docs/atlas/roadmap/admin-model-open-questions.md).
 
 **Self-grant is confirmed as a real path, and its approval requirement is scheduled to change.** It
 needs no approval in MVP and will need one once community custodianship is implemented. Build it as
@@ -361,11 +361,11 @@ predefined column of the uploaded data. Where the submitted data already holds a
 column, the value is read from the data instead, so one CSV can mix records of different categories.
 Whether consumers see that column is Arranger's concern.
 
-### Deployment runbook has no home, and two procedures now want one
+### Two procedures still want a standard operating procedure
 
-Two sequences are recorded in design documents and nowhere an operator reads, which means each is a responsibility with no owner. They are not related to each other beyond that, and the absence of a destination is what they have in common.
+Standard operating procedures (SOPs) live in `docs/sops/`, one file per procedure. Two sequences are recorded in design documents and in no SOP, which means each is a responsibility with no owner. They are not related to each other beyond that.
 
-- **Break-glass access.** If every platform administrator is unavailable, recovery is an IdP operation. Overture's own deployment documents it beside its Keycloak configuration: who may run it, and the events it relies on as its audit trail. A deployment of Usher elsewhere has nothing of Usher's to start from. See [admin-model.md](design/admin-model.md).
+- **Break-glass access.** If every platform administrator is unavailable, no role assignment at the identity provider recovers access, since administrator status is Usher's own record and no identity provider role grants it. How an administrator is restored is still open; once the design settles it, its SOP names who may restore one, and how. See [admin-model.md](design/admin-model.md).
 - **Establishing a category.** Define the category, appoint whoever governs it, and only then accept data carrying it. The decision to treat a custodian vacancy as a governance failure rather than a system state depends on this sequence being followed. See [decisions.md](design/decisions.md) § Granting is one function.
 
 A design document that says an operator must do something, without an operator-facing document, has moved the responsibility rather than discharged it.
@@ -375,10 +375,6 @@ A design document that says an operator must do something, without an operator-f
 Adapter configuration maps each category to a predicate over its own schema's fields, and the list of categories lives in Usher, so every instance transcribes it into each adapter's configuration by hand. The proposal is an introspection endpoint on the Controller returning the list, reachable only by a Bridge and encrypted to that application's key like an Usher token, so configuration is generated rather than copied. Post-MVP: a convenience only, since the check protecting `unmarked` from an unmapped category runs in the Bridge from the offered categories carried in the payload, from the first release. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
 It carries names only, since what a category selects is defined per schema and Usher never learns it, so it does not weaken data-agnosticism, and it must not become a route to enumerate resources, grants or principals.
-
-### Adapter integration design
-
-API contract, request/response shapes, and error codes for token exchange, revocation poll, and push subscription. Also: JWE key distribution and payload schema versioning. See `.dev/design/adapter-integration.md`.
 
 ### How an adapter maps resources to an application's data
 
@@ -402,7 +398,7 @@ layer, where the recommendation is Kysely.
 
 High-availability design for stateless Usher instances sharing a policy database as source of truth: replica configuration, and how many push connections a surviving instance must absorb when another fails.
 
-**Container strategy decided (developer, 2026-11-06).** One image on distroless Node 26 with two commands: serving, and the migrate command, which runs before each rollout under the schema migration role, so the Controller's pods never hold that role's password. Local development runs on docker compose, with Keycloak importing a committed dev realm. Health endpoints exist: `/health/live` and `/health/ready`. Built in the Controller's deployability units, whose operator page gives "Deployment runbook has no home" its home. The first deployment target is overture-dev, reached by Arranger once the exchange exists.
+**Container strategy decided (developer, 2026-11-06).** One image on distroless Node 26 with two commands: serving, and the migrate command, which runs before each rollout under the schema migration role, so the Controller's pods never hold that role's password. Local development runs on docker compose, with Keycloak importing a committed dev realm. Health endpoints exist: `/health/live` and `/health/ready`. Built in the Controller's deployability units, with an operator page, `docs/deployment.md`, and standard operating procedures in `docs/sops/`. The first deployment target is overture-dev, reached by Arranger once the exchange exists.
 
 **Asked of the Jenkins pipeline library: build the Controller's image and run its schema migration before each rollout.** The build and runtime contract:
 

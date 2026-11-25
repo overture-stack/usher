@@ -1187,7 +1187,7 @@ export const takeSnapshot = (harness: Harness): Promise<StoreSnapshot> =>
 	takeStoreSnapshot(harness.clients.migration, harness.database.schema);
 
 /**
- * Restores a snapshot as a restore's runbook does (#215 Q12, #217 Q3): the harness's Controller
+ * Restores a snapshot as a restore's standard operating procedure (SOP) does (#215 Q12, #217 Q3): the harness's Controller
  * stopped, the snapshot restored over the store, a new `notice_stream.epoch` written unless the test
  * keeps the snapshot's, and a Controller started again on the same configuration and port. Every
  * instance a test started beside the harness must be stopped first. A start refused is thrown, the
@@ -1196,7 +1196,7 @@ export const takeSnapshot = (harness: Harness): Promise<StoreSnapshot> =>
  * @param harness the harness.
  * @param snapshot what {@link takeSnapshot} took.
  * @param options `epoch: 'kept'` to restore behind issued cursors with the epoch unchanged;
- *   `replaced`, the runbook's step, by default.
+ *   `replaced`, the SOP's step, by default.
  */
 export const restoreSnapshot = async (
 	harness: Harness,

@@ -188,9 +188,10 @@ refuses or drops startup parameters it does not track, in any mode.
 **Role:** Shared authorization library embedded in applications. Connects the application to the
 Controller: token exchange, Usher token caching, decryption, and revocation channel maintenance.
 Think of it as a drawbridge: when the connection to the Controller is healthy, the Bridge is open
-and requests flow. When the Controller is unreachable past the grace period, the Bridge raises and
-blocks every request needing a granted permission (fail-secure, 503), while the open tier keeps
-being served, until connectivity is restored.
+and requests flow. When the Controller is unreachable past the grace period, the Bridge raises: it
+renders every signed-in principal from the last anonymous payload, marked suspended, so the open tier
+keeps being served and no grant is honoured, until connectivity is restored. The application answers
+503 to whatever the open tier cannot settle (fail-secure).
 
 **Owns:**
 
@@ -208,8 +209,9 @@ being served, until connectivity is restored.
 - Dropping a person's cached token when the identity provider's back-channel logout reaches the
   application
 - Entering revocation-uncertain mode after the grace period (default: 60 seconds without a
-  successful revocation check): suspending sessions and returning 503 for anything needing a
-  granted permission, while the open tier is still served, until connectivity is restored
+  successful revocation check): rendering each signed-in principal from the last anonymous payload,
+  marked suspended, so the open tier is still served and no grant is honoured, until connectivity is
+  restored
 
 **Its logic does not depend on the web framework.** Everything above lives in a core that knows
 nothing of Express, and the Express layer only wires it into middleware and routes, so a Bridge for
@@ -253,7 +255,9 @@ and the Lyric adapter after it.
     - The Arranger adapter: SQON filter object injected as a server-side filter in Arranger's GraphQL
       layer
     - The Lyric adapter: query conditions injected into Lyric's data access layer
-- Returning 401 or 503 to the principal when the Bridge signals an invalid or uncertain session
+- Returning 401 when the Bridge signals an invalid session, and, for a suspended principal, serving
+  what the open tier settles and answering 503 to an export, a fetch only a grant could answer, or a
+  write
 
 **Does not own:**
 

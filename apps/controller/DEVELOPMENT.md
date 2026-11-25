@@ -6,14 +6,12 @@ The Controller's boundary tests check it from the outside: through its HTTP API 
 `/admin`, and the Bridge-facing `POST /exchange`, `GET /notices` and `GET /notices/stream`), and through the token and
 notices the Bridge reads. They live in `test/`, one folder per boundary:
 
-| Folder              | What its tests go through                                                  |
-| ------------------- | -------------------------------------------------------------------------- |
-| `test/exchange/`    | `POST /exchange`: sign-in token validation and the Usher token issued      |
-| `test/channel/`     | `GET /notices`, `GET /notices/stream` and the back-channel logout endpoint |
-| `test/admin/`       | the Policy Management API                                                  |
-| `test/audit/`       | the audit log, the log stream and `GET /admin/audit`                       |
-| `test/conformance/` | the conformance corpus, replayed against the Controller                    |
-| `test/import/`      | the import of EGO's study groups                                           |
+| Folder           | What its tests go through                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `test/exchange/` | `POST /exchange`: sign-in token validation, the Usher token issued, and the conformance corpus replayed against it |
+| `test/channel/`  | `GET /notices`, `GET /notices/stream` and the back-channel logout endpoint                                         |
+| `test/admin/`    | the Policy Management API                                                                                          |
+| `test/audit/`    | the audit log and the log stream; `GET /admin/audit` is planned and answers `501`                                  |
 
 This is a deliberate exception to the rule that a test sits beside the source it tests. These tests pin a contract at
 a boundary, not a file, so the drift that rule guards against does not arise, and placing them under `src/` would

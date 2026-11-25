@@ -52,8 +52,8 @@ log or by a proxy, being replayed directly at an application it was not meant fo
 **Addresses are set per client, not per sign-in.** An identity provider cannot know at sign-in what
 a person will go on to do. So each client's tokens name every application that client is built to
 call, set once when the client is registered, which Keycloak does with an audience mapper on the
-client. A portal's tokens name each application the portal calls, and the deployment runbook says
-so.
+client. A portal's tokens name each application the portal calls, and the deployment's standard
+operating procedures (SOPs) say so.
 
 **What it protects, and what it does not:**
 

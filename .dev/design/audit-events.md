@@ -382,17 +382,19 @@ under one id points either at that application's Bridge or at someone sending it
 held by no registration is text from whoever sent the request, and stays out of the trail.
 
 **An exchange refused over its application's admission share is counted, never recorded one by one.**
-Each instance admits an application's exchanges within a share of its exchange connections, and
-lends past the share any connection the instance's exchanges in flight leave free. Once they number
-as many as those connections, it answers an exchange over its share, but for one anonymous exchange
-per application, `503 admissionShareExceeded` with `Retry-After` at once, before any work on the
-store, so it writes no `token.exchange`. Each instance counts those refusals per application and
-records one `admission.shareExceededTally` for each every 60 seconds, its actor the system, none for
-a zero count, flushing the counts it holds when it stops. A run of counts names an application whose
+Each instance admits an application's exchanges within a share of its exchange connections, the
+connections divided by the registered applications, rounded down and never below one, so with more
+applications than connections the shares together exceed them; it lends past the share any
+connection the instance's exchanges in flight leave free. Once they number as many as those
+connections, it answers an exchange over its share, but for one anonymous exchange per application,
+`503 admissionShareExceeded` with `Retry-After` at once, before any work on the store, so it writes
+no `token.exchange`. Each instance counts those refusals per application and records one
+`admission.shareExceededTally` for each every 60 seconds, its actor the system, none for a zero
+count, flushing the counts it holds when it stops. A run of counts names an application whose
 exchanges keep overrunning its share while the connections are contended, through a flood sent
-through its Bridge or a Bridge ignoring its own bound. The Controller bans nothing on it, since a ban
-it imposed would let a flood lock an application out, and a rule over the tallies, such as a count in
-several intervals in a row, belongs downstream with the other rules over the stream.
+through its Bridge or a Bridge ignoring its own bound. The Controller bans nothing on it, since a
+ban it imposed would let a flood lock an application out, and a rule over the tallies, such as a
+count in several intervals in a row, belongs downstream with the other rules over the stream.
 
 **A refused credential is counted in a window, and a window records its opening and its closing
 alone.** A **window** is the time over which one Controller instance counts the refusals under one
@@ -497,10 +499,12 @@ because the identity provider cannot be reached is `failed` at `error`, as
 An exchange whose work on the store fails, anonymous, refused or signed in, is `failed` at `error`
 too, as `storeUnavailable`, its actor anonymous, recorded in that work's place with nothing it wrote
 kept, wherever the store still takes the record, and answered `503` whether or not the record commits.
-An exchange whose token would be larger than the Bridge's default response cap is `failed` at `error`
-too, as `tokenOverResponseCap`, in its issuance's place, its actor the exchange's (the person, for a
+An exchange whose token would be larger than 1 MiB, the Bridge's default response cap and a limit
+the Controller fixes rather than reading any Bridge's setting, is `failed` at `error` too, as
+`tokenOverResponseCap`, in its issuance's place, its actor the exchange's (the person, for a
 signed-in exchange), the resources its payload holds an entry for as `heldResourceCount` and the
-token's size in bytes as `tokenBytes`, and no subject, resource, grant count or rule; it is answered `503` with no `Retry-After`.
+token's size in bytes as `tokenBytes`, and no subject, resource, grant count or rule; it is answered
+`503` with no `Retry-After`.
 
 **`import.run` records each real run, and a dry run only when it is refused for authority.** A
 real run that succeeds records it at `warning`, since it writes grants in bulk from an

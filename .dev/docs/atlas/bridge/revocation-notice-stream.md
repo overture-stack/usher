@@ -1133,9 +1133,9 @@ with the Controller's tests, and the Bridge's mock models only the first.
 
 ## Open questions
 
-1. **How does a restore change the epoch?** [schema.md](../../../design/schema.md) leaves it as a step
-   for the deployment runbook. The Bridge needs only that every restore or history reset produces a
-   new epoch, so that a cursor from before it gets 410.
+1. **How does a restore change the epoch?** [schema.md](../../../design/schema.md) leaves it as a
+   step for the deployment's standard operating procedures (SOPs). The Bridge needs only that every
+   restore or history reset produces a new epoch, so that a cursor from before it gets 410.
 2. **What does a refused channel assertion log?** The poll and the push answer 401, and the Bridge
    records no check. On the poll, the refusal is logged as `revocationChannel.failure` with
    cause `status`, counted with every other status the poll fails on, so no field names the 401 as its

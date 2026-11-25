@@ -90,8 +90,9 @@ matches.
 | How does an admin see restricted data? | A configured view-all permission; visibility is platform-level, not grant-based (5.5) | No standing access. Self-grant, explicit, time-limited, logged |
 
 **Resolved, and the persona name is the source of the confusion.** "Data Admin" in the flows means
-**system administrator**. The roles that administer access to data are the Owner and the Custodian,
-so those are the data administrators, and the flows' persona is not one of them.
+**system administrator**. The roles that administer access to data are the Owner and the Custodian
+the design names, which Usher does not provide in this release, so those are the data
+administrators, and the flows' persona is not one of them.
 
 A system administrator sees users and the grants they hold, resource metadata, and audit logs, and
 does not read the records inside a resource. Open data is the only thing they read, and they read it

@@ -171,7 +171,8 @@ provider, and the first user nominates the first admin. Usher has no admin until
    default. Where the seed file names Kim's subject instead, nothing is configured in Keycloak.
 2. Kim signs in. Usher records Kim as a base user, so the audit log can name who nominated the first
    admin.
-3. Kim nominates the first admin: themself, or a user who has signed in at least once.
+3. Kim nominates the first admin: themself, a user who has signed in at least once, or, where a
+   directory is configured, any account it finds in the trusted realm.
 4. The nominee accepts, and Usher records its first admin.
 5. From then on the first-user role confers nothing, whoever holds it. Kim is a base user unless
    Kim was the nominee.
@@ -263,8 +264,8 @@ revoke a legitimate admin's active self-grant (e.g. an ongoing incident investig
 audit trail records the revocation and identifies the actor.
 
 A policy option that restricts self-grant revocation to the creator only is possible but not
-decided. See the open questions section; this must be resolved before the admin API is
-implemented.
+decided. See the open questions section; the admin API is built on the current default, any admin
+revoking any grant.
 
 ### Compensating controls and their dependency
 
@@ -598,22 +599,22 @@ should the resource owner receive an out-of-band notification? This is the prima
 control when step-up auth is deferred. Requires notification infrastructure design. If step-up
 is deferred to v1+, this is required for v1. Both cannot be deferred simultaneously.
 
-**Self-grant peer revocability (decision needed before admin API ships):** self-grants are
+**Self-grant peer revocability (open; the admin API is built on option (a)):** self-grants are
 standard grants; any admin can revoke any grant, including a peer's self-grant. A
 compromised account could revoke a legitimate admin's active self-grant. Policy options: (a)
 any admin can revoke any grant including self-grants (simplest; current default); (b)
 self-grants are revocable only by their creator or by a super-admin tier (requires additional
-model complexity). A decision is needed before the admin API grant management endpoints are
-implemented.
+model complexity). The grant management endpoints are built on (a), so choosing (b) changes them.
 
 **"List all users" permission:** a global user directory endpoint is not implemented (see Admin
 API section). If a specific use case arises that requires listing users beyond resource-scoped
 user lookup, it must be evaluated for PHI implications before design begins.
 
-**Break-glass emergency access:** if all admins are unavailable (accounts locked, staff
-unavailable), recovery requires assigning the admin role in the identity provider.
-This is an IdP administration operation. The instance runbook must document who is authorized
-to perform this operation and what audit trail is expected at the IdP layer.
+**Break-glass emergency access (open):** if all admins are unavailable (accounts locked, staff
+unavailable), no role assignment at the identity provider recovers access, since administrator
+status is Usher's own record and no identity provider role grants it. Once the design settles how an
+administrator is restored, a standard operating procedure (SOP) must name who may restore one, and
+how. See docs/deployment.md § Break-glass access.
 
 **Multi-tenancy admin scope (out of v1):** in a multi-tenant instance, it is unclear whether
 an admin is scoped to a tenant or is truly platform-wide. Not designed; do not

@@ -465,17 +465,12 @@ is found by the Bridge", and the fixtures move to them with the Bridge's code.
 
 **What it gates:** the Bridge and all adapter implementations.
 
-Concrete HTTP shapes are still missing: token exchange request/response bodies, error codes,
-the notice stream's poll endpoint (the notices after a position) and its deadline, push subscription
-handshake. The design
-intent is in `adapter-integration.md`; it needs to become a spec with exact field names and types.
+The Controller's contract, `apps/controller/openapi.json`, gives the concrete HTTP shapes: the token
+exchange's request and response bodies and error codes, `POST /exchange`, the notice stream's poll,
+`GET /notices`, with its deadline, and the push stream, `GET /notices/stream`. The design intent
+stays in `adapter-integration.md`.
 
-**Action:** one focused pass to turn the design doc into a typed API spec, once item 3 settles the
-payload it carries.
-
-**Status:** open, and not a design blocker. This is implementation work: the design intent exists
-in `adapter-integration.md` and this transcribes it into exact field names and types. Needed for
-Nov 15, not before implementation starts.
+**Status:** resolved by the contract, which gives each shape its exact field names and types.
 
 ---
 
@@ -637,7 +632,8 @@ schema change. See the fast-path decision in [decisions.md](../design/decisions.
 
 ## What remains open but does not block Nov 15
 
-- Admin model open questions (self-grant controls, break-glass): gates admin API, not enforcement
+- Admin model open questions (self-grant controls, break-glass): open, with the admin API built on
+  the current defaults; they do not block enforcement
 - Per-catalogue access posture, including whether a given catalogue is open by configuration: gates
   that catalogue's adapter config, not the core service. Recorded per instance on the integration
   side. Usher's side of it is the `Enforcement` `allow` arm, which is decided.

@@ -511,9 +511,10 @@ captured in the component description.
 - Cache the Usher token; validate locally within the TTL window
 - Maintain the revocation channel: SSE or WebSocket push with reconnection logic, and poll
   fallback at a configurable interval
-- Enter revocation-uncertain mode after the grace period: 503 for anything needing a granted
-  permission, while continuing to serve the open tier, which needs no grant and so has nothing to
-  be uncertain about
+- Enter revocation-uncertain mode after the grace period: render each signed-in principal from the
+  last anonymous payload, marked suspended, so the open tier, which needs no grant and so has nothing
+  to be uncertain about, is still served; the application answers 503 to what the open tier cannot
+  settle
 - Signal to the adapter that a result is open-tier only, so the interface can say so rather than
   showing a silently reduced set. The signal describes the principal (anonymous, or holding nothing
   beyond the open tier), never whether anything was withheld from a result, since a signal that

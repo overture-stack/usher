@@ -564,9 +564,10 @@ One vocabulary, reached two ways. A **role** bundles permissions and is how acce
 **grant entry** names the ones held on one category and is how access is enforced. The Controller
 resolves the first into the second at issuance, which is why no role name reaches an adapter.
 
-**Which permissions each role carries is an open design item**, so the resolution above describes a
-mechanism with nothing behind it today: roles are currently names carrying no verbs, and so far
-permissions are recorded only in a grant's `permissions` column. See
+**Each role Usher seeds carries a fixed set of permissions.** In the data plane, `viewer` reads,
+`editor` also creates and updates, `curator` also deletes, and `submitter` creates and updates and
+reads nothing. In the control plane, `owner` administers access to one resource, and `admin` holds
+an owner's permissions and the platform-wide ones beside them. See
 [RABAC alignment](../docs/atlas/roadmap/rabac-alignment.md).
 
 **Policy**
@@ -728,8 +729,12 @@ role, though a single person can hold both.
 The data-plane role every other data-plane role is defined against: read on the records reached by
 its grant, and no authority over anyone else's access.
 
+**Editor**
+The data-plane role carrying read, create and update on the records reached by its grant.
+
 **Curator**
-The data-plane role carrying create, read, update and delete on the records reached by its grant.
+The data-plane role carrying create, read, update and delete on the records reached by its grant:
+everything an editor carries, and delete.
 
 _It sits beside Owner rather than under it, and the pairing is the clearest statement of the two
 planes._ Both carry the same four acts and they act on different objects: a curator creates, updates
@@ -738,10 +743,10 @@ a rung above the other, and no role is a point on a scale running from viewer to
 hold one, the other, both, or each on a different category of the same resource.
 
 **Admin (PAP admin)**
-A user identified by an OIDC token claim (`usher_roles: platform_admin`) who can manage all
-grants platform-wide. Does not have implicit data access; must explicitly self-grant access to any
-resource they want to read, with a mandatory TTL and a logged audit event. See
-[admin-model.md](admin-model.md).
+A user Usher records as an administrator: nominated by an existing admin, or the first one by the
+first user, and accepting the nomination. Can manage all grants platform-wide. Does not have
+implicit data access; must explicitly self-grant access to any resource they want to read, with a
+mandatory TTL and a logged audit event. See [admin-model.md](admin-model.md).
 
 ---
 
@@ -791,7 +796,9 @@ at the application and none is an absent filter, so an omission never reads as c
 
 **Exchange connections** and **control connections** _(two of a Controller instance's store pools)_
 **Exchange connections** serve the token exchange alone: its own transactions, its key confirmations
-and its recordings of refused channel assertions. Each application's admission share divides them.
+and its recordings of refused channel assertions. Each application's admission share is them
+divided by the registered applications, rounded down and never below one, so with more applications
+than connections the shares together exceed them.
 **Control connections** serve everything else: the Management API, the back-channel logout, the
 notice channel, the key reloads, the tallies and the start. Readiness holds one connection of its own
 beside both. See [deployment.md](../../docs/deployment.md) § Connections and poolers.
@@ -928,8 +935,14 @@ before it, and announces it on the revocation channel as a principal notice.
 issued before it, for every principal, keeping every grant. Its own notice makes every Bridge drop
 every Usher token it holds. It answers sign-in tokens that may have leaked, and not a stolen refresh
 token, a hijacked provider session or a stolen signing key. It is meant to follow an operator ending
-every session at the identity provider. See [security-workflow.md](security-workflow.md) §
-Revocation scope.
+every session at the identity provider, as the standard operating procedure (SOP)
+[Signing everyone out](../../docs/sops/signing-everyone-out.md) sets out. See
+[security-workflow.md](security-workflow.md) § Revocation scope.
+
+**SOP (standard operating procedure)**
+A sequence of steps an operator follows for one task on any instance of Usher, naming the identity
+provider's features and the Controller's operations it uses. Each SOP is one file in `docs/sops/`;
+see [Standard operating procedures](../../docs/sops/README.md).
 
 **SQON (Structured Query Object Notation)** _(Arranger-specific)_
 Arranger's filter expression format, and the wire format emitted by the Bridge. The Bridge builds the

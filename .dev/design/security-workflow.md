@@ -15,8 +15,9 @@ used here. See [security-threat-model.md](security-threat-model.md) for the full
   no sensitive claims in logs.
 - **A07 Authentication Failures:** strict IdP token validation (`aud`, `iss`, `exp`, scope),
   delegation to established IdP infrastructure.
-- **A10 Exceptional Conditions:** fail-secure failure mode; 503 (unavailable) on uncertain
-  revocation state, not 200 or 401.
+- **A10 Exceptional Conditions:** fail-secure failure mode; on uncertain revocation state a
+  principal is suspended to the open tier, and the application answers 503 (unavailable), not 200
+  or 401, to what that tier cannot settle.
 
 ---
 

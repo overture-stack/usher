@@ -263,11 +263,11 @@ for honouring them and never evidence of having done so. Usher has not been stud
 them, and that study belongs with the communities concerned rather than in a design document.
 
 **Admin** holds platform-wide authorization management rights: registering resources, granting the
-`submitter` and `owner` roles, revoking any grant, and performing emergency revocations. An Admin does not
-have implicit data access. To read a resource, an Admin must ask for a self-grant, with a mandatory
-time limit. An owner of the resource or another Admin decides the request, never the Admin who
-asked, and the request and the decision are logged. The full Admin model, covering bootstrap, self-grant flow, and
-audit integrity design, is in
+`submitter` and `owner` roles, revoking any grant, revoking a person outright, and signing out
+everyone. An Admin does not have implicit data access. To read a resource, an Admin must ask for a
+self-grant, with a mandatory time limit. An owner of the resource or another Admin decides the
+request, never the Admin who asked, and the request and the decision are logged. The full Admin
+model, covering bootstrap, self-grant flow, and audit integrity design, is in
 [admin-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/admin-model.md).
 
 ---
@@ -386,8 +386,10 @@ Usher combines a short TTL with local validation. The Bridge validates and cache
 call to Usher happens on each request. That gives a short exposure window without per-request
 overhead.
 
-The lifetime is five minutes by default, and it is configurable. For comparison, the EGO access token
-replaced by Usher on the iMS platform lives three hours, so this closes a large window.
+The lifetime is at most five minutes by default, and the bound is configurable. A token ends sooner
+when the sign-in token it was exchanged for ends sooner, or when a grant it draws on expires sooner,
+so no token outlives either. For comparison, the EGO access token replaced by Usher on the iMS
+platform lives three hours, so this closes a large window.
 
 ---
 

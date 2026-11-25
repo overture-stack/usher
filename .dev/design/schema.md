@@ -427,10 +427,10 @@ may lag and still act on them: the token lifetime plus the grace period, with a 
 records how far it reached, so the answer is judged against that watermark rather than against the
 oldest notice left, and the epoch changes whenever history restarts, as after a restore, so restored
 positions are never read as the old ones. A cursor also carries the creation time of the notice at
-its position, so a position a restore gave to another notice answers `410` even where a runbook
-kept the epoch. A `410` drops every cached entry, which fails closed: the
-Bridge exchanges again for everyone, and nothing revoked survives. How a restore changes the epoch is
-a step for the deployment runbook.
+its position, so a position a restore gave to another notice answers `410` even where a standard
+operating procedure (SOP) kept the epoch. A `410` drops every cached entry, which fails closed: the
+Bridge exchanges again for everyone, and nothing revoked survives. How a restore changes the epoch
+is a step for the deployment's SOPs.
 
     notice_stream
       singleton          boolean      primary key  default true  check (singleton)

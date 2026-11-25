@@ -2215,7 +2215,7 @@ export const simulateTrim = async (client: pg.ClientBase, throughPosition: bigin
 };
 
 /**
- * Sets the stream's epoch, as a restore's runbook does.
+ * Sets the stream's epoch, as a restore's standard operating procedure (SOP) does.
  *
  * @param client a connection under the migration role, holding no transaction.
  * @param epoch the epoch: a fresh one by default.
@@ -2231,7 +2231,7 @@ export const setEpoch = async (client: pg.ClientBase, epoch?: string): Promise<v
 
 /**
  * Stands in for restoring a dump taken when the newest notice was at a position: every later notice
- * goes, new notices take its positions again, and the epoch is kept or replaced as the runbook says.
+ * goes, new notices take its positions again, and the epoch is kept or replaced as the SOP says.
  *
  * @param client a connection under the migration role, holding no transaction.
  * @param restore the newest position the dump held, and what became of the epoch.
@@ -2383,7 +2383,7 @@ const TRIGGER_ENABLING: Readonly<Record<string, string>> = Object.freeze({
  * change of policy and no guard judges history being put back, every table is emptied, every row
  * goes back in an order its foreign keys allow, generated columns left to compute themselves, every
  * sequence takes its state again, and each trigger is enabled as it was. The epoch is the snapshot's;
- * a restore's runbook replaces it after, through {@link setEpoch}. Every Controller using the store
+ * a restore's SOP replaces it after, through {@link setEpoch}. Every Controller using the store
  * must be stopped first.
  *
  * @param client a connection under the migration role, which owns every table, holding no transaction.

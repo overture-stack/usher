@@ -809,7 +809,7 @@ Keycloak is lost, so it deserves an end-to-end test of its own.
 | **An operating rule**: accounts are disabled rather than deleted, except to carry out an erasure request, which goes through Usher first                                                       | keeps every subject resolvable                                 | a rule for operators, enforced by review rather than software                                                  |
 
 Recommended: the first and third together, the poll for timeliness and the nightly check as its
-backstop, with the operating rule written into the runbook.
+backstop, with the operating rule written into a standard operating procedure (SOP).
 
 **How identities relate: a direction for after the first release.** A person can hold more than one
 identity over time: accounts at a second identity provider, or a new account in a provider that can't

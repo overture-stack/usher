@@ -17,8 +17,9 @@ provider (Keycloak, Microsoft Entra ID, or any OIDC-compatible provider).
 
 ## The specification
 
-The design documents in `.dev/design/` are the primary specification, and the packages under
-`modules/`, usher-types and the Express Bridge, implement it.
+The design documents in `.dev/design/` are the primary specification. The Controller under
+`apps/controller/` implements it, and so do the packages under `modules/`, usher-types and the
+Express Bridge.
 
 ## Repository structure
 
@@ -30,8 +31,11 @@ The design documents in `.dev/design/` are the primary specification, and the pa
         sessions/        (session log, one file per contributor per day)
         docs/            (phase and traceability documents, and the atlas)
       AGENTS.md          (instructions for Codex and general AI agents)
+      apps/
+        controller/      (@overture-stack/usher-controller, the Controller; see its DEVELOPMENT.md)
       CLAUDE.md          (instructions for Claude)
       DEVELOPMENT.md     (this file)
+      docs/              (the documentation for readers outside the team: concepts, deployment, onboarding)
       modules/
         bridge--express/ (@overture-stack/usher-bridge--express, the bridge for Express applications)
         types/           (@overture-stack/usher-types, the types and schemas the packages share)
@@ -50,7 +54,8 @@ from 24.11 or Node 26 and later, the versions the build tooling supports. A pnpm
     pnpm install      (installs from the lockfile; dependency install scripts stay blocked)
     pnpm build        (builds every package into its dist/)
     pnpm check:pack   (packs every built package as publishing would and checks what it ships)
-    pnpm test         (runs every package's tests, going on past a package that fails)
+    pnpm test         (runs every package's tests but the Controller's, going on past a package that fails)
+    pnpm test:controller (runs the Controller's tests, which need Docker)
     pnpm test:scripts (runs the tests of the scripts in scripts/, which pnpm test leaves out)
     pnpm typecheck    (type-checks every package, going on past a package that fails)
     pnpm typecheck:scripts (type-checks the scripts in scripts/, which pnpm typecheck leaves out)

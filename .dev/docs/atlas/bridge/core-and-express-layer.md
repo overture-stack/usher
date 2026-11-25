@@ -627,14 +627,14 @@ refuses a `pushIdleMs` above `pollIntervalMs`. The stream note holds the push's 
 most T, so that a dead push is replaced within one poll interval. I defaults to 25 s whatever T is:
 derived from T, it could fall below what the Controller's heartbeat needs, at least twice the
 heartbeat plus jitter, and a healthy push would be replaced as silent. So a host lowering
-`pollIntervalMs` below 25000 lowers `pushIdleMs` with it, keeping it at least twice the Controller's
-heartbeat plus jitter. The same check refuses a `pollRecoveryIntervalMs` above `pollIntervalMs` as
-well. The stream note times the poll at the recovery interval R in place of T while checks are
-failing, and R at most T keeps that a shortening
-of the wait between failing polls, never a lengthening. G still bounds how long cached answers are
-served, whatever R is. A host that sets no `pollRecoveryIntervalMs` gets the smaller of 10000 and
-`pollIntervalMs` as R, so lowering `pollIntervalMs` needs no R set with it. An R set above T is
-still refused.
+`pollIntervalMs` below 25000 sets `pushIdleMs` no higher, or start refuses the configuration as
+`intervalsOutOfOrder`, and keeps it at least twice the Controller's heartbeat plus jitter. The same
+check refuses a `pollRecoveryIntervalMs` above `pollIntervalMs` as well. The stream note times the
+poll at the recovery interval R in place of T while checks are failing, and R at most T keeps that a
+shortening of the wait between failing polls, never a lengthening. G still bounds how long cached
+answers are served, whatever R is. A host that sets no `pollRecoveryIntervalMs` gets the smaller of
+10000 and `pollIntervalMs` as R, so lowering `pollIntervalMs` needs no R set with it. An R set above
+T is still refused.
 
 ## The Express layer
 

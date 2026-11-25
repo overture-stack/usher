@@ -113,6 +113,37 @@ receives the answer. A shorter timeout is accepted, since the Bridge cannot see 
 deadline, but the Bridge may then give up on an exchange the Controller answers in time, and its
 start logs `bridge.exchangeTimeoutShort` at warning, naming the timeout and the minimum.
 
+## Bounds and defaults
+
+The Bridge reads no environment variable, so each of these is set in its configuration or keeps
+its default.
+
+| Option                         | Default                                       | What it bounds                                                                                  |
+| ------------------------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `graceMs`                      | 60 s                                          | how long after the latest recorded check the Bridge still honours grants                        |
+| `pollIntervalMs`               | 30 s                                          | the time between polls of the revocation channel, jittered by 10% either way                    |
+| `pollRecoveryIntervalMs`       | 10 s, or `pollIntervalMs` if smaller          | the time between polls while checks are failing                                                 |
+| `pollDeadlineMs`               | 10 s                                          | how long one check may run                                                                      |
+| `pushIdleMs`                   | 25 s, whatever the poll interval              | how long the push may stay silent before it is replaced; at most `pollIntervalMs`               |
+| `localRefusalClockToleranceMs` | 60 s                                          | how long past its `exp` a sign-in token is still passed on rather than refused locally          |
+| `tokenTtlMs`                   | 5 min                                         | the longest an exchange's outcome is held, ending sooner at its token's expiry                  |
+| `responseCapBytes`             | 1 MiB                                         | the most bytes read from the Controller's answer to an exchange or a poll                       |
+| `stores`                       | 10,000 accepted, 10,000 refused, 1,000 failed | the credentials each store holds, the least recently used evicted first; a failure is held 10 s |
+
+**An evicted credential is exchanged again.** A live credential evicted from a full store costs
+another exchange at the Controller on its next request, so a store sized below an application's
+active credentials turns into exchange load.
+
+**The response cap is the Bridge's, and the Controller does not read it.** The Controller refuses
+to issue a token over a fixed 1 MiB, as `tokenOverResponseCap`. A Bridge whose cap is set lower
+reads a larger token the Controller issued as unreadable, `tokenTooLarge`, and the Controller records
+nothing about it, so lower the cap only knowing that a principal holding many resources may then be
+refused.
+
+**The exchanges in flight are bounded, not configured.** The Bridge holds at most 64 new exchanges
+in flight at once. It honours a `Retry-After` of up to 5 s for its back-off window and up to 60 s
+for one hold, counting a longer one as that.
+
 ## Design
 
 - [Architecture: the Bridge](https://github.com/overture-stack/usher/blob/main/.dev/design/architecture.md#bridge-overture-stackusher-bridge--express):

@@ -142,7 +142,7 @@ run inside an application, which is why enforcing there does not put policy ther
 
 |                                   | control plane                                        | data plane                                        |
 | --------------------------------- | ---------------------------------------------------- | ------------------------------------------------- |
-| roles                             | admin, custodian, owner                              | submitter, curator, viewer                        |
+| roles                             | admin, owner                                         | curator, editor, submitter, viewer                |
 | operates on                       | who may do what                                      | the records                                       |
 | permissions                       | `grant.create`, `grant.revoke`, `ownership.transfer` | `record.view`, `record.download`, `record.create` |
 | exercised against                 | Usher's own store                                    | an application's records                          |

@@ -1330,13 +1330,17 @@ residual means.
 {
 	"payloadVersion": 1,
 	"sub": "user-a",
+	"iss": "usher.example.org",
 	"aud": "example-service",
 	"iat": 1720000000,
 	"exp": 1720000300,
 	"generatedAt": 1720000000,
 	"permissions": {
 		"RESOURCE_X": { "global.unmarked": { "record": ["view"] } }
-	}
+	},
+	"globalCategories": ["global.indigenous_data"],
+	"resourceCategories": { "RESOURCE_X": [] },
+	"servedResources": ["RESOURCE_X", "RESOURCE_Y"]
 }
 ```
 
@@ -1355,6 +1359,7 @@ results, counts and aggregations rather than filtered out of them.
 {
 	"payloadVersion": 1,
 	"sub": "user-b",
+	"iss": "usher.example.org",
 	"aud": "example-service",
 	"iat": 1720000000,
 	"exp": 1720000300,
@@ -1363,7 +1368,10 @@ results, counts and aggregations rather than filtered out of them.
 		"RESOURCE_X": { "global.unmarked": { "record": ["view"] },
 		                "global.indigenous_data": { "record": ["view"] } },
 		"RESOURCE_Y": { "global.unmarked": { "record": ["view"] } }
-	}
+	},
+	"globalCategories": ["global.indigenous_data"],
+	"resourceCategories": { "RESOURCE_X": [], "RESOURCE_Y": [] },
+	"servedResources": ["RESOURCE_X", "RESOURCE_Y"]
 }
 ```
 
@@ -1380,8 +1388,8 @@ unreachable because no clause selects it, which is what additive rendering means
 the rule. There is no full category set to subtract from, and a permission list is never read as an
 exemption from a default.
 
-The token examples above use the canonical `permissions` map structure. For the full token schema,
-standard JWT claims, and anonymous token form, see
+The token examples above are whole payloads, every member present. For the token schema and the
+anonymous token form, see
 [security-workflow.md: Token structure](security-workflow.md#token-structure).
 
 ### Composition across categories
