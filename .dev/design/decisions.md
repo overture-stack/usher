@@ -14,6 +14,11 @@ code and the contract, says so where it begins.
 
 ### Cerbos
 
+Recorded so that adopting Cerbos is weighed against the three requirements an engine would have to
+meet. Adopted untested, it would leave Usher's maintainers writing the revocation channel and a SQON
+adapter anyway, and leave a custodian with no authority scoped to one category, which is what
+Indigenous data governance asks of the design.
+
 Cerbos is a standalone PDP (Policy Decision Point) service. Applications send a request containing
 user context and a resource; policies are defined in YAML or JSON files.
 
@@ -58,6 +63,9 @@ documentation rather than from running it, checked on 2026-09-28 against v0.55.0
 ---
 
 ### OPA as the decision engine
+
+Without this ruling, an instance's operators would keep the grants store and OPA's data store in
+step and maintain Rego that only reads the grants back, adding operational work and no function.
 
 OPA (Open Policy Agent) is a CNCF-graduated general-purpose policy engine. Policies are written in
 Rego and evaluated against input data. OPA is widely adopted for Kubernetes admission control and
@@ -114,6 +122,10 @@ GA4GH Passport item in `.dev/roadmap.md`.
 
 ### OPA at the enforcement layer
 
+Mandating OPA would put a pulled model under a pushed one, leaving a staleness window in which a
+principal whose grant was withdrawn keeps reaching the data, and an application's developers would
+still write the revocation handling themselves.
+
 Separate from its role as a decision engine, OPA was considered as a component within enforcement
 adapters: the per-application code that receives the Usher token and translates it into
 data-layer query filters.
@@ -149,6 +161,10 @@ implementation. The adapter interface is designed to accommodate this without re
 
 ### Cerbos Hub
 
+Requiring it would make every instance's operators depend on a vendor and a commercial licence to
+run an open, self-hosted platform. What it showed is that without a management interface, the
+non-technical administrators who manage grants and answer governance inquiries cannot do so.
+
 Cerbos Hub is a commercial product that adds a management UI and policy distribution on top of the
 open-source Cerbos PDP. It began as SaaS only; since 22 January 2026 it is also available on premises
 and air-gapped, at the enterprise tier. It is not open source.
@@ -169,6 +185,10 @@ governance inquiries. This is not a nice-to-have. Usher's design includes the ma
 ---
 
 ### Keycloak Authorization Services
+
+Building authorization into the identity provider would tie every instance to Keycloak, make one
+service a single point of failure for both accounts and grants, and hand anyone administering access
+the controls for the whole identity system.
 
 **Status: closed. Keycloak is not the replacement, and Usher is not built inside it.** It was the
 candidate most likely to make part of this project redundant, and it is already deployed in the
@@ -232,6 +252,9 @@ reasons recorded for building rather than adopting. The fourth is the one that d
 ---
 
 ### The wider landscape: "what can this principal access" is now a standard feature
+
+Without it, Usher's maintainers would keep building parts that one of these projects now supplies,
+on reasons written against an older field.
 
 Recorded because the reasons for building were written against a narrower field than currently
 exists, and any of these could displace part of this design. Checked against each project's
@@ -327,6 +350,10 @@ a proof.
 
 ### The case for building, stated against this landscape
 
+Adopting any one engine leaves a custodian's authority over one kind of data across datasets
+unenforced, and no engine suspends an application whose revocation channel goes quiet; this section
+names what is left to Usher so that the decision to build rests on those gaps.
+
 Four requirements carry it, and the check above sharpens each:
 
 | Requirement                                    | What exists                                                                                                                                             | What is left to Usher                                     |
@@ -382,6 +409,10 @@ evaluation has been run.
 
 ### Usher token over binary allow/deny
 
+Without it, a researcher permitted some of a resource's records would be served all of them or none,
+since a broad allow or deny cannot express partial access, or every application would call the
+decision service on every query.
+
 A binary response from the PDP (allowed/denied) requires every application to call back to the
 decision service on every data access, or to cache a broad allow/deny that cannot express partial
 access. Neither fits a platform where a user may be permitted to see some records and not others.
@@ -398,6 +429,10 @@ application's query language and schema, and Usher cannot have it.
 ---
 
 ### Decrypted permissions never leave the service that decrypted them
+
+Without it, the decrypted list of a principal's grants, including the categories they do not hold,
+would reach browsers, logs and other services, a wider audience than the one application key that
+can read the token.
 
 **Decision.** A Bridge decrypts an Usher token inside the service it belongs to, and the payload goes
 no further. It is not forwarded to another service, not returned to a browser, and not logged. Where
@@ -538,6 +573,10 @@ and fails open. Tolerance is safe exactly where ignorance narrows.
 
 ### A category change is announced to the applications that serve the resource
 
+Without it, a principal who lost access when an administrator added a category to a resource's
+records would keep reading them for up to a token lifetime, against the decision of whoever narrowed
+it.
+
 **Their Bridges drop every cached token naming that resource**, signed in or not, and each affected
 principal's next request exchanges for a token computed under the new categories. No list of
 sessions is needed in Usher, since a Bridge's token cache is the set of live tokens for its
@@ -571,6 +610,11 @@ correctness.
 only and dropped the claim that losing access is immediate, trading a guarantee for a fan-out.
 
 ### The Usher token is not an OAuth access token, and three separate tests say so
+
+This defends nothing: it records why the payload is not reshaped to a standard, since RAR's flat
+form would fold the entity axis back into action strings and could not express two categories held
+with different capabilities, and carrying `roles` would tell every adapter what an instance means by
+`viewer`.
 
 Each of the three has been asked as "why not just use the standard one?", and each answers the same
 way, which is why they are recorded together rather than in three places.
@@ -642,6 +686,10 @@ from the key separation. The parameter is one header member and becomes load-bea
 kind exists.
 
 ### `generatedAt` follows an established pattern and is not an invention
+
+This defends nothing: reusing a registered name such as `updated_at` would tell a developer reading
+the payload that it records when a person's profile changed, which is the misuse BCP 225 warns
+against.
 
 No registered claim carries its meaning, and two carry its shape: `toe`, the time of event in a
 Security Event Token (RFC 8417 §2.2), and `auth_time` in OpenID Connect Core §2. Both are a second
@@ -955,6 +1003,11 @@ field before using it.
 
 ### A catalogue's category gap is found by the Bridge, from the categories each resource offers
 
+Without it, records of a category a catalogue never mapped would count as `unmarked` there and reach
+everyone the resource's unmarked records reach, anonymous visitors included where the resource is
+open, against the custodian who placed them in that category. Checking per resource, from the
+payload, withholds only the resource with the gap, so a researcher keeps the rest of the catalogue.
+
 **Decided 2026-10-05; revised 2026-10-20, when categories became conditions.** The adapter's job is
 unchanged: it turns its application's configuration, whatever its shape, into the one registration
 the Bridge reads, and the Bridge compares that registration with the payload, the same way for every
@@ -1020,6 +1073,11 @@ know which resources offer a category, not only that it exists. See
 ---
 
 ### Category names carry their scope from the first release
+
+The prefix itself defends nothing: adding it later would change every token, every adapter mapping
+and every recorded audit event at once, a migration falling on every application's developers and
+every operator. The scope it names is also what keeps a resource's owner from creating a category
+that reaches the whole platform.
 
 **Every category name is prefixed by its scope: `global.` for a category shared by the whole
 platform, `resource.` for one that exists only in the resource it is listed under.** The first
@@ -1203,6 +1261,11 @@ has to be decided explicitly rather than inherited, which is the point.
 
 ### A self-scoping predicate is not an access decision
 
+Without it, an application's developers route ownership questions through Usher and wait on post-MVP
+features they never needed, and a self-scoped read answered from a request parameter shows anyone's
+saved sets. Its carve-out defends the people a saved cohort selects, whose shared clinical or
+genomic property would otherwise be disclosed to whoever the cohort is shared with.
+
 Some access questions are answered by the record together with the authenticated identity, with no
 reference to any grant. Whether a saved query belongs to the person asking, whether a profile is
 their own, whether a draft submission is theirs. **Usher is not involved in those, and routing them
@@ -1349,6 +1412,10 @@ that belongs in the admin API rather than in a read-path filter.
 ---
 
 ### Catalogue-level denial is an empty `in`, and never a negation
+
+Without it, a denial written as a negation can be collapsed into a filter that restricts nothing,
+serving a catalogue's records to a principal holding no grants on it; denying the whole request
+instead would withhold catalogues a researcher may read.
 
 Request-level denials (no valid token, revoked, Bridge unreachable) are decided in middleware before
 the resolver runs, as the 503 case already is. Catalogue-level denials cannot be, because the
@@ -1690,6 +1757,11 @@ possible improvement, since it would only help where a portal reads the marker.
 
 ### A principal states its credential, and a suspended one keeps a confirmed identity for attribution alone
 
+Without it, an ownership check such as a submitter editing their own submission would act for a
+principal whose grants are on hold, and anyone could pass as anyone by writing a `sub` into an
+unconfirmed sign-in token. Keeping the suspended identity for attribution alone is what lets an
+auditor attribute activity during an outage.
+
 The Bridge hands an adapter one of four principals: no credential, an unconfirmed credential, a
 confirmed one whose grants hold, and a confirmed one suspended by an outage. The last carries its
 identity as `attributionOnlySubject`, never as `subject`, so an ownership check cannot act on a
@@ -1707,6 +1779,10 @@ principal whose grants are on hold. Decided 2026-11-02; the shape is in
 
 ### An application's own filtering stays its own, whatever its enforcement switch says
 
+Without it, turning enforcement on could drop a filter the application applies for its own reasons
+and serve records it meant to withhold, or the application's filter could displace Usher's and turn
+enforcement off while the operator's switch says on.
+
 Every application's switch, named `ENABLE_ACCESS_ENFORCEMENT`, turns on Usher's enforcement over
 principals. A filter the application applies for its own reasons, such as serving a subset of its
 data, applies with the switch off as well, and off behaves exactly as unset. With the switch on, an
@@ -1722,6 +1798,10 @@ application unable to apply both filters refuses to start. Decided 2026-11-02.
 ---
 
 ### A saved set's creator is a recorded state, and its identity never leaves the server
+
+Without it, a suspended or misattributed save would read as anonymous and become reachable by
+everyone, each visitor's saved query would be shown to every reader, and a client could write
+someone else's identifier in as a set's creator.
 
 A set records how it was saved: by a confirmed principal, anonymously, or unattributed where the
 application is not told who is asking. A suspended principal cannot save one. No reader is served a
@@ -1739,6 +1819,9 @@ it. Decided 2026-11-02; who reaches which is in [adapter-integration.md](adapter
 ---
 
 ### A saved set is reached as a record is: by its owners, or through a base grant where it has none
+
+Without it, holding a set's identifier would stand in for a grant, so an owner's set would be only
+as private as its identifier is secret, and naming a set could confirm that it exists.
 
 A saved set is an artifact, and it is reached the way a record is. An owned set, like a categorized
 record, is reached by its owners and by whoever they share it with. A set with no owner, saved
@@ -1764,6 +1847,10 @@ shared, and where that is recorded, are open in the roadmap.
 
 ### A client compares against exported values, and no header names the layer that answered
 
+This defends nothing: it keeps a client application's developers comparing against the values the
+Bridge sends rather than a second copy of them, and a header naming the answering layer would point
+them at the Bridge when the application refused a suspended principal's read.
+
 `@overture-stack/usher-types` exports the suspended header's name and value and the challenge's
 error values, so a client and the Bridge compare against one source. Statuses and `Retry-After` are
 standard HTTP and are not exported. Decided 2026-10-30; what a client does with each answer is in
@@ -1777,6 +1864,11 @@ standard HTTP and are not exported. Decided 2026-10-30; what a client does with 
 ---
 
 ### A denial is named at catalogue level, and never at record level
+
+Without it, a denial message or a narrowing notice becomes an existence oracle, telling someone
+without access whether records with a rare attribute exist, at the expense of the people those
+records describe; and a former holder would learn from an error that their grant was withdrawn
+before anyone chose to tell them.
 
 A `deny` result asserts that the data layer is not queried. What the person making the request is
 told is a separate question, and the answer is whatever cannot be turned into an existence oracle:
@@ -1834,6 +1926,9 @@ records.
 
 ### Adapter enforcement over gateway/proxy enforcement
 
+Without it, enforcement at a gateway could only allow or block a whole request, so a researcher
+permitted some of a resource's records would be served all of them or none.
+
 A gateway (API proxy, sidecar) can allow or block requests. It cannot reshape queries. Usher's
 enforcement model requires query shaping: the adapter must inject grant-based predicates into every
 data query before it reaches the data layer. A gateway operating at the HTTP level cannot do this
@@ -1849,6 +1944,9 @@ enforcement: there is no backstop at the network layer.
 ---
 
 ### Token lifetime never bounds how long an operation may take
+
+Without it, a token lengthened so a submitter's long upload survives would give every principal, for
+reads as well as writes, that long a window after revocation, as EGO's three-hour tokens did.
 
 **The precedent is in the system being replaced.** EGO's access tokens last three hours. The reason
 is that submitters run large uploads, which outlive a short token and fail partway. Lengthening the
@@ -1992,6 +2090,11 @@ without its migration step, so the runner keeps refusing a record ahead of its o
 
 ### Usher is data-agnostic
 
+Without it, adopting Usher would mean rewriting the data it protects, and an access level written
+into the records would hold each decision in a second place with nothing binding the two, so the
+index could disagree with a grant that had changed. That cost would fall on an instance's operators
+and on whoever's access had been narrowed.
+
 Usher does not know the schema of the data it protects. It does not query the data store, rewrite
 its records, or write to any data table. It holds grants (user, resource, category) and issues
 Usher tokens. What those categories mean in terms of actual records or fields is
@@ -2027,6 +2130,10 @@ silent. Validation is the responsibility of the management UI and the adapter co
 
 ### Sharing at study level needs no snapshot machinery
 
+This defends nothing: it spares Usher's developers point-in-time snapshot machinery that study-level
+sharing never needs, since the grant already records which resource was shared and when, and covers
+records added later as intended.
+
 The unit of sharing is a study, meaning all records in it including future ones, so the "dataset
 definition" captured by a share is simply the study identifier. A category grant scoped to that
 resource is the snapshot: it records which resource was shared and when.
@@ -2048,6 +2155,9 @@ grants extension and is explicitly out of scope for the initial implementation.
 ---
 
 ### Accept/decline invitation flow is the default; auto-accept is configurable
+
+Without it, a researcher could be made to hold access to health data, with the legal and ethical
+obligations it carries in many jurisdictions, without ever deciding to accept it.
 
 When a grant is created for a registered user, the default behaviour is that it reaches nothing until
 its recipient answers: they must explicitly accept data-sharing responsibility before the grant
@@ -2077,6 +2187,11 @@ option; instances handling PHI should leave auto-accept off.
 ---
 
 ### EGO is replaced, not integrated
+
+Running both would double what can fail and leave operators keeping two grant models in step
+indefinitely. The import rule defends each resource's owner: without it, an administrator, or anyone
+holding their session, could grant themselves every study in one run, recorded at `info` and outside
+the grant-rate alert.
 
 Usher is the full replacement for EGO (Overture's previous authorization service). The
 integration strategy considered (running Usher alongside EGO and having both manage grants)
@@ -2139,6 +2254,10 @@ display. This is a deliberate separation: Usher is an access enforcement system,
 
 ### The baseline is instance configuration, not a role, and it may be empty
 
+This defends nothing: calling the baseline a role sends a developer or administrator looking for a
+role row that cannot exist, since an unauthenticated request has no holder, and the synthetic role
+it replaces filled tokens with a value held by nobody.
+
 An instance configures a **baseline** whose grants are the floor for every principal, applied
 whether or not a principal is authenticated. Open access is what that role ordinarily grants, and an
 authenticated principal's grants are this baseline together with their own rather than an alternative
@@ -2177,6 +2296,10 @@ already was.
 
 ### Who holds a grant can follow a rule, and the Controller evaluates it
 
+Without it, a rule over an attribute a person can edit would let them grant themselves access, the
+same rule evaluated in each Bridge would drift between applications, and an auditor could not say
+who could reach what, and when, since a rule's grant has no row.
+
 **Some grants are conferred by a rule rather than recorded one per holder.** The baseline is the
 first: it gives every principal the `unmarked` grant on each resource whose unmarked records are
 open. The second, in the first release, gives every signed-in user the `unmarked` grant on each
@@ -2214,6 +2337,11 @@ Rules beyond these two, and conditions bounded in time such as embargo, are reco
 ---
 
 ### Category grants are a list of independent grants, and resource names are never manufactured
+
+Without it, separately governed data, such as an Indigenous community's, would be split off under a
+manufactured resource name that no field in the data holds, so a grant on it could select nothing,
+and that data would live as a label inside someone else's study rather than with a custodian of its
+own.
 
 A resource's entry in the token is a list of grants, each naming one category and the permissions
 held on it. Each entry corresponds to one row in the grant store and one act of granting, and
@@ -2263,6 +2391,10 @@ categories became conditions, it matches both.
 
 ### The Bridge emits SQON; adapters translate it into their own enforcement
 
+Without it, every application would construct its own predicate, and construction is where every
+fail-open defect in this design has been found; the rule moves that risk off the custodians whose
+records would leak and onto an application's developers as mechanical translation.
+
 The Bridge builds the predicate, so every application must be able to receive it in one form. That
 form is SQON, the shared Overture query language, and the consequence is accepted rather than avoided:
 **an application whose enforcement is not SQON-shaped has to translate.**
@@ -2289,6 +2421,10 @@ Pushing the mechanical work outward to keep construction central is the delibera
 ---
 
 ### The adapter supplies the field name, and the Bridge builds the predicate
+
+Without it, each adapter would build its own predicate, reimplementing once per application the
+class of defect behind every fail-open finding so far, and letting enforcement drift between
+applications serving the same data.
 
 **Being told a field name for one query is not holding schema knowledge.** One Bridge serves an
 application, an application serves several catalogues, and the resource field name differs between
@@ -2336,6 +2472,11 @@ predicate's meaning depends on the backend, that reasoning belongs in the one co
 vary or refuse on a declared capability.
 
 ### The Bridge's filters carry no empty group, no empty exclusion and no pivot
+
+An empty group or an empty exclusion in an access filter matches every document searched, so a
+principal entitled to nothing would be shown every record in the catalogue, and the people whose
+data sits behind a restriction would carry the exposure. These rules, and the check on both sides of
+the wire, keep a defect in either the Bridge or Arranger failing closed.
 
 What a SQON means is defined once, in Arranger's reference: an empty group adds no condition and so
 matches every document searched, while an empty `in` matches nothing. See
@@ -2389,6 +2530,10 @@ then, since a grant's own filter may want what the Bridge's never does.
 
 ### The enforcement component is an adapter, and the Bridge ships from Usher's repository
 
+This defends nothing. Without it, "plugin" would read as an extension of Usher rather than of an
+application, and a Bridge kept with its first application or tied to Express would leave the
+developers of the next application with a rewrite rather than a thin layer.
+
 **Adapter rather than plugin.** An Usher plugin reads as something that extends Usher itself. Usher
 may genuinely have such a thing one day, but it is not what is being built: the component extends an
 application, applying the Bridge's enforcement result at that application's own hook. The identity
@@ -2415,6 +2560,11 @@ and Usher, and the documents call them the Bridge and the Arranger adapter.
 
 ### Usher reuses the identity provider through the connector, and every reused feature has a fallback
 
+An operator running an identity provider other than Keycloak would otherwise meet a missing feature
+as an unexplained gap, and the people whose data Usher protects could lose confidentiality to it.
+Every fallback either does the work in Usher or refuses, so another provider can cost features and
+never confidentiality.
+
 **Keycloak is the first identity provider, and what Usher takes from it goes through one
 component.** The connector is already the only part of Usher that knows which provider it is talking
 to. Each reused feature is listed there with whether it is a standard or Keycloak's own, and
@@ -2425,6 +2575,9 @@ or refuses what depended on it, so supporting another provider can cost features
 confidentiality. The list is in [admin-model.md](admin-model.md), under the connector design.
 
 ### Admin self-grant is approved by the data's owner or custodian, from a later release
+
+A system administrator granting themselves a resource's data would otherwise reach it with nobody
+who governs that data deciding, and the community whose data it is would have no say.
 
 **The approvers are the data-plane authorities.** A system administrator is control-plane only, so a
 self-grant reaching a resource's data needs the approval of that resource's owner or of a custodian
@@ -2447,6 +2600,10 @@ approvers and is not carried forward.
 ---
 
 ### Granting is one function, and the data's restrictions are the last gate
+
+An administrator's broad authority to issue grants would otherwise be a route around what the data
+itself requires, and the owners, custodians and communities who set those requirements would carry
+it.
 
 An administrator may grant permissions, to themselves or to anyone else. Permissions here means more
 than reading data: assigning a role, making someone an owner, giving a permission. What an
@@ -2557,6 +2714,10 @@ than who holds them. Worth confirming with the author.
 
 ### An owner governs the whole resource, and a custodian governs their category
 
+Making either authority wait on the other would let assigning a custodian silently take authority
+from an owner, while who may assign custodians is still unsettled. The one exception defends the
+data: an administrator who could make themselves owner would reach data with nobody else deciding.
+
 **Both act without the other.** An owner may grant and revoke access to every category of their own
 resource, a custodian-governed one included. A custodian may grant and revoke access to their
 category in every resource carrying it. Neither needs the other's approval. An administrator's
@@ -2583,6 +2744,11 @@ there, because an owner needs no approval to grant themselves data and the assig
 data with nobody else deciding. It follows from a system administrator being control-plane only.
 
 ### One account, several addresses, and only verified ones bind
+
+An unverified address would let anyone who claims it collect grants meant for whoever really holds
+it, and the person a steward meant to share with, and the data shared, would carry that theft.
+Showing the contact address also keeps a sharer's personal address, the one identifying their
+account, from every recipient.
 
 A principal's account has a single identity in the identity provider and may be reachable at more
 than one address: a personal one serving as the username, and one for each of the principal's
@@ -2618,6 +2784,9 @@ identifies their account.
 
 ### An invitation binds only to an account holding the invited address, verified
 
+Binding to whichever account follows the link would make the link a bearer credential, so a
+forwarded message would hand access to controlled data to someone the data steward never chose.
+
 An invitation is held against an email address until an account holding that address, verified,
 claims it. The link in the invitation brings the recipient to sign in or register, and the grant
 attaches to their account only if the invited address is one of its verified addresses. The claim
@@ -2648,6 +2817,10 @@ different address than the one invited.
 
 ### An instance designates which of its existing fields identifies a resource
 
+This defends nothing. If Usher recognized a resource field of its own, an instance changing the
+shape of its catalogue would change what Usher needs from it, where under the designation only the
+adapter's configured field name has to follow.
+
 Confirmed for the first instance and generalized: a catalogue's resource field is chosen from fields
 already carried by the data, and which field plays that role is the instance's designation rather
 than a property recognized by Usher. The environmental catalogue's shape is taken as given for MVP
@@ -2657,6 +2830,10 @@ carries the instance's collection and that the adapter is configured with its na
 ---
 
 ### The admin role governs who may reach what, and reaches data only by granting it to themselves
+
+A standing administrator view of the data would produce no grant record, so administrative access to
+data would escape an audit trail built on grants, and the owners, custodians and communities relying
+on that trail would not see it.
 
 "Admin" is short for **system administrator**. The authorities that administer access _to data_ are
 the Owner and the Custodian, and calling those data administrators is the clearer reading of the
@@ -2741,6 +2918,11 @@ threat above.
 
 ### An instance's settings live in its store, and change through the Controller
 
+A setting changed by deployment reaches Usher's audit trail at best at the next start and with no
+actor, so a change to policy, such as who reaches what through the grant rules, escapes the alerts
+the administrators and reviewers of an instance rely on. Keeping the identity provider's identifiers
+out of the store keeps a change made through the Controller from locking every admin out.
+
 **The need: live traceability.** Each change to a setting is recorded in Usher's own audit log at
 the moment it happens, naming the admin who made it, so an alert can act on it as on any other
 change to policy. A setting changed by a deployment could at best be noticed at the next start, with
@@ -2791,6 +2973,9 @@ read its own copy, a change took a deployment, and Usher's audit log recorded no
 
 ### Ownership assignment is instance policy, not Usher behaviour
 
+This defends nothing. Built into Usher, the first instance's rule that a submitter owns what they
+submit would be imposed on every other instance, whose own organizational rules may differ.
+
 A submitter becoming the owner of what they submit is a **rule chosen by the instance**, not
 Usher's own behaviour. It is true of the first instance and should not be hardcoded from
 that.
@@ -2808,6 +2993,9 @@ what changes is who decides.
 ---
 
 ### Usher is the resource lifecycle management layer
+
+This defends nothing. Without it, each instance's operators run a separate studies management
+service to orchestrate resources, and downstream services keep resource registries of their own.
 
 Usher's scope extends beyond access decisions to owning the full lifecycle of the resources it
 protects: creation, metadata management, assigning roles, category association, base tier,
@@ -2831,6 +3019,9 @@ instance topology.
 
 ### SONG is file metadata only; Usher owns resource metadata
 
+This defends nothing. With SONG as the record of which resources exist, access decisions depended on
+SONG, and an instance that does not run SONG could not adopt Usher.
+
 SONG's role in Usher-adopting instances is narrowed to file-level manifest data: file
 checksums, donor/sample links, and file object identifiers. SONG is not a source of truth for
 resource metadata (cohort names, category assignments, ownership, or who holds roles).
@@ -2848,6 +3039,10 @@ no SONG dependency.
 ---
 
 ### "Study" and other domain terms are instance vocabulary
+
+This defends nothing. A domain term in the model would make serving an instance with different
+vocabulary a code change for Usher's developers, and one instance's field name stated here would be
+read as every instance's default.
 
 Usher's model uses generic terms: resource, role, category grant. Domain-specific vocabulary
 (study, cohort, dataset, project, program) appears only in instance configuration and management
@@ -2868,6 +3063,10 @@ generic means Usher can serve instances with different domain vocabulary without
 ---
 
 ### A refusal carries no exception, and expiry is announced rather than inferred
+
+A marker for a lapsed grant in the token would let an application that misreads it as a grant admit
+access to data the researcher no longer holds. Announcing expiry instead spares a researcher whose
+grant lapses a refusal that tells them nothing.
 
 **No application can implement what the onboarding document promised, and this resolves it.**
 It said the existence-denying refusal could be relaxed "for someone already known to hold a lapsed
@@ -2926,6 +3125,10 @@ designed yet.
 ---
 
 ### A grant's expiry is resolved before the token is written, and enforced by the token's own lifetime
+
+A token outliving a grant's expiry would let access continue past a date that may be a legal
+boundary, such as a lapsed ethics approval, where access recorded after it is a finding whatever its
+duration; the researcher holding the grant and whoever governs the data would carry that finding.
 
 A category grant carries an expiry. The Controller applies it when computing a permissions payload, so a
 grant past its date is absent from the next token. No per-grant expiry travels on the wire, the
@@ -2996,6 +3199,10 @@ is only ever a scheduled subtraction.
 ---
 
 ### Additive grant pipeline with anonymous Usher token for open data
+
+Handling anonymous requests outside the authorization system leaves open access unlogged and puts
+two code paths in every application, so the operators and reviewers of an instance cannot see what
+anonymous visitors reached.
 
 A common alternative for open data is to handle unauthenticated requests outside the
 authorization system: the adapter applies an exclusion filter for all sensitive categories, no
@@ -3122,6 +3329,10 @@ real question with real discoverability value, and it is a separate one.
 
 ### The two permissive failures are closed, and neither needed a new mechanism
 
+Left open, an unauthenticated request could render to an absent filter that matches every record,
+and a derived record whose provenance names an unconfigured resource could escape the ceiling,
+either way exposing restricted data to anyone.
+
 Both were recorded as blocking items rather than resolved, on the reasoning that they were
 enforcement defects found while preparing the first integration. Both close from facts already in
 this file, and leaving them open cost more than deciding them: a design document that discloses
@@ -3164,6 +3375,10 @@ refusal is where the conformance case belongs.
 ---
 
 ### Records not covered by any category are `unmarked`, and open is who reaches them
+
+This defends nothing. Without a grantable name for the records not covered by any category, a
+resource taken off open held records no grant named, so no researcher, not even an administrator
+through a self-grant, could reach them.
 
 **Every resource has one implicit category, `global.unmarked`, covering the records not covered by
 its other categories.** Every other category is concrete: it is defined by a condition in the
@@ -3208,6 +3423,10 @@ the only thing standing between a submitter's choice of open and an accidental p
 ---
 
 ### The shipped capability vocabulary is CRUD, and nothing else ships
+
+Splitting `create` from `update` keeps a submitter from altering other submitters' records, which
+`edit` could not express. Seeding `export` with the viewing roles keeps a viewer grant from implying
+a restriction nothing applies.
 
 **`create`, `read`, `update`, `delete`.** Four names, taken from a convention already familiar to
 every implementer, rather than invented here. `view` becomes `read` and `edit` is retired: it
@@ -3259,6 +3478,10 @@ report that as a fact rather than a silence.
 
 ### `read` is a group of three, `count` counts only, and aggregation is not a capability
 
+Without narrowing `count`, an owner granting a counting role would also give away a sensitive
+numeric field's extreme values, and an `aggregate` group would let a role meant for summary
+statistics see every record; the data's owners and community would carry either.
+
 **`read` became a capability group, and `view` came back to name seeing a record.** On a record, a
 field or an artifact the group is `count`, `view` and `export`; on a revision it is `view` and
 `export`; on a control-plane entity it is `view` alone. It is expanded when a role is written, so no
@@ -3300,6 +3523,10 @@ role it will mean.
 ---
 
 ### A category either partitions or overlays, and only the first decides what `unmarked` covers
+
+A partitioning category configured as an overlay leaves its records inside `unmarked`, so every
+principal holding the open grant reaches controlled data and nothing downstream can notice; the
+community whose controlled data it is carries the exposure.
 
 **A fixed category selects the same records for everyone.** `controlled` names records marked
 as controlled in an instance, and the set is the same whoever asks.
@@ -3364,6 +3591,10 @@ sentence needs narrowing at that point rather than now.
 ---
 
 ### Schema naming, and the three rules behind it
+
+This defends nothing. Unwritten naming rules made the schema read as inconsistent, so developers
+reading it misread entities as relations and were invited to rename and resort tables that were
+already right.
 
 **Three renames, each from a defect rather than a preference.**
 
@@ -3443,6 +3674,10 @@ everything except that.
 
 ### A known-future item stays in the design, because its shape constrains the present one
 
+This is a design rule, not a control. Without it, the present model drifts into a shape the
+known-future item cannot fit, and the item arrives as a migration of an access-control schema, where
+access is silently widened or dropped for the people it governs.
+
 Scope decides what gets built. It does not decide what gets designed. Where something is already
 known to be coming, its design stays in the corpus with enough shape to be checked against, marked as
 not in the release rather than removed.
@@ -3466,6 +3701,10 @@ shipping when it is not, a claim contradicted by the requirements, a rule supers
 Incompleteness is not falsehood, and "not yet" is not "not".
 
 ### An unimplemented capability fails closed only where the action has no path
+
+Where a capability exists only to withhold, an application that has not implemented it withholds
+nothing, so an owner's or custodian's restriction reads as applied while every column, or for
+`unmarked` every principal, still reaches the data.
 
 The vocabulary is deliberately wider than any one service implements, on the reasoning that an
 adapter never tests a capability it does not understand, and so nothing opens. That is true of most of
@@ -3507,6 +3746,9 @@ principal.
 
 ### Every defect found in the model has been one axis collapsed into another
 
+This defends nothing; it is a test for Usher's designers. Without it, each collapse reads as a
+simplification when made and is found only afterwards as a defect.
+
 Recorded as a test rather than as history, because it predicts where the next one is.
 
 | What was collapsed                 | How it showed up                                                                         |
@@ -3533,6 +3775,11 @@ vocabulary, the role vocabulary surfaced the capability vocabulary, and the capa
 surfaced three entities that had been folded into `record`.
 
 ### The entity decides the plane, and a relation earns a segment by having a lifecycle
+
+Handing someone an artifact confers no reach, because every read is checked against the reader's own
+grants; otherwise a person given an artifact could read records not covered by their own grants.
+Keeping the entity list in code also keeps the type and a table from drifting apart for Usher's
+developers.
 
 A capability is `entity.action`. The plane is a property of the entity, not of the action:
 `record.update` is data plane and `resource.update` is control plane, and both are "update". So the
@@ -3572,6 +3819,10 @@ the empty cell is a statement rather than an omission.
 
 ### A resource is registered, not created
 
+This defends nothing. Calling it creation would suggest Usher makes the resource, and would leave
+every reader of a role or an audit record, an administrator or an auditor, to tell `resource.create`
+from `record.create` by their entity alone.
+
 The capability is `resource.register`, and the word is chosen for three reasons.
 
 **A resource is pointed at, not made.** It is a field and a value already carried by the platform's
@@ -3589,6 +3840,10 @@ study before its records arrive reads as naturally as registering a company befo
 The reader-facing documents use the same word: an administrator registers a dataset.
 
 ### The two planes are the same four acts on different objects, which is why `curator` came back
+
+This defends nothing; it is vocabulary. Without a name for the data-plane write role, documents
+reached for `owner` instead, crossing the plane boundary and leaving readers to take a records role
+for an access role.
 
 `curator` is the data-plane role: create, read, update and delete on **records**. `owner` is the
 control-plane role: create, read, update and delete on **access** to one resource. Both carry the
@@ -3620,6 +3875,11 @@ glossary carries `Viewer` and `Curator` entries, the second stating the pairing 
 role against which every other role was defined had no entry at all.
 
 ### The grant carries the role, and nothing states separately what a person is trusted with
+
+Resolving a grant to its holder's whole ceiling would land every grant at their widest role, so
+someone an owner meant only to view open records would reach them at curator. A role held per
+resource or per group would also leave an owner unable to make one person a curator on one category
+and a viewer on another.
 
 A grant says: in this resource, on this category, this holder acts in this role. Being trusted as a
 curator is a decision made about a resource and a category rather than a standing property of a
@@ -3684,6 +3944,10 @@ rendering and `unmarked` decisions carry the detail. Every resource has `unmarke
 ungrantable: a resource carrying no concrete category holds all its records there.
 
 ### Acceptance is the recipient's decision and is recorded apart from the grant
+
+Folding acceptance into the grant would let a grant to a group take every member past acceptance,
+binding them to what for controlled data is usually an obligation they never agreed to, and would
+leave a steward unable to see who declined.
 
 A grant is the granter's act. Whether the recipient takes it up is theirs, and it is a separate row:
 
@@ -3782,6 +4046,10 @@ by two times. Production passes the system clock, and tests pass a fixed or an a
 expiry is tested by moving the clock, never by waiting.
 
 ### An Usher token carries about a thousand held resources within its 1 MiB cap
+
+This is a limit, not a control. Without the cap, a researcher holding grants on more resources than
+the Bridge can read would be issued a token the Bridge cannot read, where the cap refuses them at
+issuance instead, though without saying which grants put them over.
 
 _Reconstructed on 2026-11-25 from the tests and the contract; the ruling that made it is not on
 record._
