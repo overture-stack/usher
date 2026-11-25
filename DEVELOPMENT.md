@@ -118,6 +118,24 @@ under Node's own type stripping, with no build step. `pnpm test:scripts` runs th
 `pnpm typecheck:scripts` type-checks them under `scripts/tsconfig.json`, which extends the base
 settings.
 
+## Releasing
+
+**Before the release branch is cut, run a whole-system scan, not only the reviews each change had.**
+A diff review sees what one change touched. A release ships the sum, and a defect can sit between
+changes that each looked right. The scan covers:
+
+- the contract against the code: every operation served, planned or removed as `openapi.json` says;
+- the documents against the code: every claim in `docs/` and `.dev/design/` that names a value, a
+  name or a behaviour;
+- security across every component, by the OWASP Top 10 categories in
+  `.dev/design/security-threat-model.md`;
+- the dependencies, with `pnpm audit` and each package's licence;
+- the migrations since the last release, each read forward and against a rollback;
+- every open item in `.dev/tech-debt.md` and `.dev/design/to-discuss.md`, each either fixed,
+  accepted for this release with its reason, or holding the release.
+
+What the scan finds is fixed, or recorded with its decision, before the branch is cut.
+
 ## Working documents
 
 The `.dev/` directory is the shared working memory for this project across sessions and
