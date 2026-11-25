@@ -12,6 +12,7 @@
 	"scripts": {
 		"build": "pnpm -r build",
 		"check:pack": "node scripts/check-pack.ts",
+		"check:traceability": "node scripts/check-design-traceability.ts",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"test": "pnpm -r --no-bail --no-sort --filter '!@overture-stack/usher-controller' test",
