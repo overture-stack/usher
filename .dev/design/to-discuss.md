@@ -243,6 +243,11 @@ or a rule otherwise invented at the keyboard.
 
 ## Adapter contract
 
+**How an instance verifies its authorization unit chain.** A resource's id has to trace from the
+submission unit through the data service and the index to the field an adapter filters on, and how
+an instance checks that chain is not settled. See [adapter-integration.md](adapter-integration.md) §
+Authorization unit chain.
+
 **[HIGH] The reindex-lag dissolution covers a grant changing, not the data changing, and consent
 withdrawal is the case that falls through.**
 
@@ -507,6 +512,10 @@ configuration.
 
 ## Security model
 
+**How far the grace period is configurable.** Globally, per Bridge, or per resource: a resource
+holding highly sensitive data may warrant a shorter one. See
+[security-workflow.md](security-workflow.md) § Grace period configurability scope.
+
 **[HIGH] A payload computed before a change can be written to the cache after the change cleared
 it.**
 The fast path's promise, that a revoked grant is never reissued, holds only if a computation cannot
@@ -597,6 +606,10 @@ of each migration checks it, so it belongs beside the migrations, where a review
 ---
 
 ## Permissions and roles
+
+**Who holds authority over which relations.** A relation gets an entity of its own when it has its
+own identity and lifecycle, and who may act on `resource_categories`, which has none, is not settled.
+See [permissions-model.md](permissions-model.md) § Which relations earn an entity of their own.
 
 **[INFO] Overlapping cohort access is moot where records cannot overlap, and open otherwise.**
 An instance whose data model gives each record exactly one resource makes overlap structurally
@@ -793,7 +806,7 @@ creation is different, because nothing tells Usher that an account changed.
 | a realm exported and imported, or a person moved to another realm or provider                     | their subject can change, with the same effect as a recreated account                                                                    |
 
 **Access already has a bound; Usher's records don't.** A sign-in token lives about five minutes, the
-portal renews it before it expires and ends the session when renewal fails (#182), and an Usher token
+portal renews it before it expires and ends the session when renewal fails ([#182](https://github.com/imicroseq/roadmap/issues/182)), and an Usher token
 expires no later than the sign-in token it came from. So whatever happens in Keycloak, a person who can
 no longer sign in loses access within one token lifetime, with nothing sent to Usher. What the bound
 does not reach is what Usher records: grants, owners, group members and the audit trail keep describing
@@ -836,7 +849,7 @@ which is what lets the EGO import resolve a member by subject first. The directi
   is confirmed, and invitations' seven-day lapse as the outer bound.
 - Who may link identities, what evidence a link needs, and whether a link can be undone.
 
-**Realm settings this depends on**, for the deployment standard (#193): admin events stored with enough
+**Realm settings this depends on**, for the deployment standard ([#193](https://github.com/imicroseq/roadmap/issues/193)): admin events stored with enough
 retention; brokered sign-ins linked to an existing account rather than creating a second one; a
 back-channel logout address on every client whose sign-ins reach Usher, with that client's front-channel
 logout off, since Keycloak sends no back-channel logout to a client with front-channel logout on; and the

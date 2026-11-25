@@ -127,6 +127,8 @@ changes that each looked right. The scan covers:
 - the contract against the code: every operation served, planned or removed as `openapi.json` says;
 - the documents against the code: every claim in `docs/` and `.dev/design/` that names a value, a
   name or a behaviour;
+- the design traceability check, `pnpm check:traceability`, which passes: every design section has a
+  row in `.dev/docs/design-traceability.md`, and every row stands;
 - security across every component, by the OWASP Top 10 categories in
   `.dev/design/security-threat-model.md`;
 - the dependencies, with `pnpm audit` and each package's licence;
@@ -152,7 +154,8 @@ contributors, human and AI.
   requirement and user-flow traceability, and the atlas of longer-form roadmap detail.
 - **`design/`**: design documents covering security workflow, permissions model, adapter
   integration, and the management UI. Start at `design/README.md`.
-  A ruling goes into `design/decisions.md` when it is made, as that file's opening says.
+  A ruling is written, when it is made, into every place it changes, and into `design/decisions.md`
+  when its reasons need keeping, as that file's opening says.
 
 ## AI tooling
 

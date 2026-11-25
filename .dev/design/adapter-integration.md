@@ -218,6 +218,50 @@ appropriate to its target service. Examples:
 Usher's adapter-integration.md does not prescribe a shared config format across adapters.
 Each adapter's design document (co-located in that service's repo) owns its config schema.
 
+---
+
+## Decided, by topic
+
+### Decryption key distribution
+
+Settled: the key is symmetric, one per Controller-and-application pair. The Controller generates it
+when the application is registered and keeps it encrypted, and the application receives it once,
+through its own secrets; see [schema.md](schema.md) § Applications. Adapters hold none. A key is
+rotated by issuing a second one: an application holds at most two live keys, so its replicas move to
+the new key while tokens sealed under the old one stay readable, and the old key is revoked once
+every replica has restarted. Who triggers a rotation, the key-encryption key's included, how often,
+and how an admin sees that an old key has stopped being used, are tracked in the roadmap.
+`confirmed_at` cannot say the last of these, since it marks the first replica to use the new key,
+never the last.
+
+The application reads its key from the environment at start, as `USHER_KEY`, so a new
+key reaches an application only when it restarts. A rotation keeps the old key live until every
+replica has restarted, which is why an application can hold two live keys. How the key reaches that
+variable belongs to each deployment: the design names the variable and leaves delivery to the
+deployment's own secrets.
+
+Options considered and not taken:
+
+- Prescribing one delivery for every deployment, such as a variable set by hand at deploy time:
+  deployments already keep secrets in their own ways, and one prescribed route would bind them all
+  to it
+- Issued by the Controller itself via a key-exchange endpoint requiring mutual TLS or a bootstrap
+  token
+
+### API contract
+
+The contract is `apps/controller/openapi.json`, served with the API documentation page at
+`/api-docs/openapi.json`. It defines every endpoint, request and answer shape, problem code and
+authentication scheme: the Management API, the token exchange at `/exchange`, and the revocation
+channel's poll at `/notices` and push at `/notices/stream`.
+
+### Per-app translation design
+
+The Bridge translates the permissions payload; the adapter applies the result. For each catalogue an
+adapter serves, it gives the Bridge the field names its mapping uses, and the Bridge returns one
+enforcement result: `deny` with a reason, `narrow` with a filter, or `allow`. The adapter applies it
+at its own service's hook, so the translation is tested once, in the Bridge, for every application.
+
 ## Writing an adapter design document
 
 An adapter's own design document is what someone builds from, so its failure modes are enforcement
@@ -700,39 +744,6 @@ held, so a category the mapping does not define is one it cannot exclude, and it
 served. That is what makes the check load-bearing rather than tidy, and the table above calls that
 fault "the leak".
 
-### Decryption key distribution
-
-Settled: the key is symmetric, one per Controller-and-application pair. The Controller generates it
-when the application is registered and keeps it encrypted, and the application receives it once,
-through its own secrets; see [schema.md](schema.md) § Applications. Adapters hold none. What remains
-open is rotation, the key-encryption key's included: how often, how a Bridge picks up a new key
-without dropping in-flight tokens, and how an admin sees that an old key has stopped being used.
-`confirmed_at` cannot say so, since it marks the first replica to use the new key, never the last.
-
-The application reads its key from the environment at start, as `USHER_KEY`, so a new
-key reaches an application only when it restarts. A rotation keeps the old key live until every
-replica has restarted, which is why an application can hold two live keys. How the key reaches that
-variable belongs to each deployment: the design names the variable and leaves delivery to the
-deployment's own secrets.
-
-Options considered and not taken:
-
-- Prescribing one delivery for every deployment, such as a variable set by hand at deploy time:
-  deployments already keep secrets in their own ways, and one prescribed route would bind them all
-  to it
-- Issued by the Controller itself via a key-exchange endpoint requiring mutual TLS or a bootstrap
-  token
-
-Key rotation strategy (frequency, how the Bridge picks up a new key without downtime) is also
-open. A rotation scheme must allow the old key to remain valid for in-flight tokens during the
-switchover window.
-
-### API contract
-
-The specific endpoints, request/response shapes, error codes, and authentication scheme for the
-Usher REST API are not yet defined. The Usher token exchange, revocation poll, and push
-subscription endpoints all need a formal contract before adapters can be built.
-
 ### Permissions payload schema
 
 **Closed.** The payload is written as a type, member by member, in
@@ -819,13 +830,6 @@ which discloses both that it exists and that they may not have it, and makes int
 principal. Returning nothing for it discloses neither. **That is only representable while the field is
 nullable**, so a generator that marks a field non-nullable turns a prune into an error and the error
 into an oracle. Whoever owns schema generation owns that constraint.
-
-### Per-app translation design
-
-How should the translation layer (permissions payload to app-native filter) be structured? Should
-the Bridge provide a translation interface implemented by each app adapter, or is
-the translation entirely the adapter's concern with no shared abstraction? The answer affects how
-testable and consistent constraint enforcement is across apps.
 
 ### Per-adapter filter shape
 

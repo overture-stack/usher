@@ -3,9 +3,11 @@
 Key architectural choices and the reasoning behind them, including tools reviewed and not adopted.
 Where a reviewed tool influenced the design, that contribution is noted.
 
-**A ruling is written into this file when it is made**, and code and documents cite the section
-that holds it, never the conversation or the round that made it. A reader can open a section; a
-round number means nothing to someone who was not there. An entry written after the fact, from the
+**A ruling is written down when it is made, in every place it changes**: the design document,
+contract, SOP or atlas note describing what it rules on, and here when it is a design decision whose
+reasons need keeping. Code and documents cite the section that states the rule, never the
+conversation or round that made it. A reader can open a section; a round number means nothing to
+someone who was not there. An entry written after the fact, from the
 code and the contract, says so where it begins.
 
 ---
@@ -2628,7 +2630,11 @@ its event is marked `soleAdministrator`; that mark, found by an audit, is the co
 **A resource with no counted owner keeps its grants as they are until one is assigned.** Existing
 grants are untouched, and a system administrator assigns a new owner, who accepts the ownership
 grant as anyone accepts a grant. Until then an administrator's self-grant on it is decided by
-another administrator, or is granted at once under the fourth case when there is none.
+another administrator, or is granted at once under the fourth case when there is none. An
+administrator's grant of a data-plane role to someone else on it is a request, `orphanedResource`,
+decided by another administrator or by an owner the resource gains: without it, data whose owner
+left is either unreachable or open to one administrator acting alone. Ruled by the developer
+2026-11-25.
 
 ---
 
@@ -3956,6 +3962,9 @@ because the grant already says.
 
 ### Roles resolve at issuance, so no role travels in the token
 
+Without it, every application would have to know the instance's roles, and changing a role would
+mean changing every application. Ruled by the developer 2026-11-25.
+
 **Once enforcement holds no policy, a role is an authoring convenience.** In the source model a role
 does two jobs: a compact way to assign many permissions, and the first stage of a check evaluated
 when access is attempted. This design moves the second job to issuance so that adapters hold no
@@ -4077,10 +4086,11 @@ record._
 The Controller reads time from a clock it is given, never from the environment and never from the
 system directly. The durations it measures run on that clock, among them a token's lifetime and its
 clock tolerance, and the identity provider's key set, trusted for 10 minutes and fetched at most
-once in 30 seconds. Without it, a test of anything that expires would wait in real time or not test
-it at all, and a production instance whose durations ran on different clocks could judge one token
-by two times. Production passes the system clock, and tests pass a fixed or an adjustable one, so an
-expiry is tested by moving the clock, never by waiting.
+once in 30 seconds. Without it, a test needing a known instant could not be written, and a
+production instance whose durations ran on different clocks could judge one token by two times.
+Production passes the system clock. Tests run on real time, with margins, wherever a margin works,
+and pass a fixed or an adjustable clock only where an expiry needs a known instant: expiry at the
+instant of issuance, rounding to the second, and a grant lapsing within the second.
 
 ### An Usher token carries about a thousand held resources within its 1 MiB cap
 
@@ -4092,8 +4102,9 @@ _Reconstructed on 2026-11-25 from the tests and the contract; the ruling that ma
 record._
 
 The Controller refuses to issue a token over 1 MiB, as `tokenOverResponseCap`, the Bridge's default
-response cap. Version 1 of the payload is designed to hold about 1,000 held resources where an
-application serves 1,000, and 200 held where it serves 10,000. Past that, the principal is refused
+response cap. iMicroSeq's public portal held about 23 studies on 2026-11-25, 14 clinical and 9
+environmental. Version 1 of the payload holds about 1,000 held resources where an application
+serves 1,000, and 200 held where it serves 10,000, well past a tenfold margin over that scale. Past that, the principal is refused
 rather than given a token the Bridge cannot read, and a principal holding grants on that many
 resources is told nothing about which. A more compact payload, carrying more, is after the first
 release. The token size bound in [to-discuss.md](to-discuss.md) is the open question of what to do

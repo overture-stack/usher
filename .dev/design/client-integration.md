@@ -100,14 +100,14 @@ comes back. Both halves have rules.
 
 ### What the person sees
 
-| Answer                                | The portal shows                                                                                                                                                                                |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Usher-Suspended: true`               | The results, with a notice that only the data available to everyone is shown for now                                                                                                            |
-| `401` that persists after the renewal | The refusal, in place of the view, with Try again. The person stays signed in, and the only account action offered is Log out, which the person chooses. The portal never signs them out itself |
-| `403`                                 | The refusal for what was asked                                                                                                                                                                  |
-| `503` from the service                | A notice that access could not be confirmed, and to try again later                                                                                                                             |
-| The portal's own sign-in outage       | The portal's own notice, told apart from the service's `503` by the portal's own response code                                                                                                  |
-| The portal's own session ended        | Sign-out, through the portal's own session handling                                                                                                                                             |
+| Answer                                                    | The portal shows                                                                                                                                                                                |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Usher-Suspended: true`                                   | The results, with a notice that only the data available to everyone is shown for now                                                                                                            |
+| `401` that persists after a renewal that succeeded        | The refusal, in place of the view, with Try again. The person stays signed in, and the only account action offered is Log out, which the person chooses. The portal never signs them out itself |
+| `403`                                                     | The refusal for what was asked                                                                                                                                                                  |
+| `503` from the service                                    | A notice that access could not be confirmed, and to try again later                                                                                                                             |
+| The portal's own sign-in outage                           | The portal's own notice, told apart from the service's `503` by the portal's own response code                                                                                                  |
+| The portal's own session ended, a failed renewal included | Sign-out, through the portal's own session handling                                                                                                                                             |
 
 **After a final answer, nothing is sent until something changes.** A refused identity or a `403` stops
 the page's requests until the token changes, the person changes, or the person chooses Try again.

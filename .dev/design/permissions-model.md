@@ -1425,6 +1425,28 @@ grant was approved by the relevant governance body for that specific resource, s
 sufficient. SQON-scoped grants (post-MVP) can narrow further within a category if compound-access
 governance requires it. See the resolved question in Open questions.
 
+### Multi-category intersection access
+
+**A record needs a grant for every category it carries.** Per-resource scoping dissolves the
+primary concern: a `controlled` grant for COHORT_A and an `indigenous` grant
+for COHORT_A are distinct entity records, each approved by the relevant governance body for that
+specific resource. Holding both within the same resource means both bodies have approved access to
+their respective category within that resource. No special intersection grant is needed.
+
+Categories attach to resources rather than to individual records, so a resource carrying both
+categories requires both grants and the question does not reach record level at all.
+
+The community-governance concern (was each governance body's grant intended to cover the
+intersection?) is addressed by the per-resource scoping: each grant is scoped to the resource, not
+to a category in isolation. A record in that resource tagged with multiple categories requires all
+corresponding grants.
+
+**Post-MVP extension: SQON-scoped grants.** If a governance body needs to approve access to a
+specific subset of their category (e.g. "indigenous records from community X only"), a grant can
+optionally carry a SQON filter expression that further narrows the records it covers within the
+category. This is a data model extension (an optional `sqon` field on `grants`); it
+requires SQON evaluation permission in the Bridge and is deferred to post-MVP.
+
 ---
 
 ## Category-to-field mapping
@@ -2003,28 +2025,6 @@ Where private data sharing is the primary access gate, the any rule may be accep
 are the real enforcement mechanism. The question needs a deliberate answer before the first
 instance where overlap is structurally possible, and confirming that a given instance's records
 cannot overlap is part of onboarding it rather than something to assume.
-
-### Multi-category intersection access
-
-**Resolved for MVP, re-checked against the resource-level decision.** Per-resource
-scoping dissolves the primary concern: a `controlled` grant for COHORT_A and an `indigenous` grant
-for COHORT_A are distinct entity records, each approved by the relevant governance body for that
-specific resource. Holding both within the same resource means both bodies have approved access to
-their respective category within that resource. No special intersection grant is needed.
-
-Categories attach to resources rather than to individual records, so a resource carrying both
-categories requires both grants and the question does not reach record level at all.
-
-The community-governance concern (was each governance body's grant intended to cover the
-intersection?) is addressed by the per-resource scoping: each grant is scoped to the resource, not
-to a category in isolation. A record in that resource tagged with multiple categories requires all
-corresponding grants.
-
-**Post-MVP extension: SQON-scoped grants.** If a governance body needs to approve access to a
-specific subset of their category (e.g. "indigenous records from community X only"), a grant can
-optionally carry a SQON filter expression that further narrows the records it covers within the
-category. This is a data model extension (an optional `sqon` field on `grants`); it
-requires SQON evaluation permission in the Bridge and is deferred to post-MVP.
 
 ### Role permissions
 

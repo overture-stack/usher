@@ -116,6 +116,15 @@ additional authenticated data (RFC 7516). So `typ` and, once key rotation lands,
 anyone holding the token. Neither says anything about grants, which is why they can sit there. Nothing
 that does may be added to the header.
 
+### Decryption key distribution
+
+The Controller generates the key when the application is registered and keeps it, and the
+application receives it once, through its own secrets. A key is rotated by issuing a second one: an
+application holds at most two live keys, so its replicas move to the new key while tokens sealed
+under the old one stay readable, and the old key is revoked once every replica has restarted. Who
+triggers a rotation, and how often, is tracked in the roadmap. See
+[adapter-integration.md](adapter-integration.md).
+
 ---
 
 ## The token exchange
@@ -717,6 +726,14 @@ provided a computation that began before the revocation cannot write its payload
 the revocation cleared it. That guard is not yet specified; see the payload cache item in
 [to-discuss.md](to-discuss.md).
 
+### Audit logging of revocation events
+
+Every revocation is recorded as an audit event naming who made it, whom it applies to, when, and its
+scope: `grant.revocation` for one grant, `identity.revocation` for one principal entirely,
+`resource.revocation` for every user of a resource, and `identity.signOutEveryone` for everyone. The
+events are listed in [audit-events.md](audit-events.md). Reading the audit log through the
+Management API, `GET /admin/audit`, is a planned operation.
+
 ---
 
 ## Revocation channel integrity and fail-secure behaviour
@@ -833,20 +850,8 @@ integration built to work there would be building against an artifact that is go
 
 ## Open questions
 
-### Decryption key distribution
-
-Receiving it is settled: the Controller generates the key when the application is registered and
-keeps it, and the application receives it once, through its own secrets. Rotation is not: how often, and how a Bridge picks up a new key without dropping tokens still in flight. See
-[adapter-integration.md](adapter-integration.md).
-
 ### Grace period configurability scope
 
 Should the grace period (default 60s) be configurable globally, per-Bridge, or per-resource? A
 resource containing highly sensitive data may warrant a shorter grace period than one with
 lower-sensitivity data.
-
-### Audit logging of revocation events
-
-Every revocation (who triggered it, for which user, at what timestamp, and via which scope:
-single user, resource, or global) should be logged. Where this log lives and how it is
-queryable are not yet designed. See [management-ui.md](management-ui.md).

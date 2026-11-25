@@ -547,6 +547,41 @@ Requirements that surfaced while earlier units were reviewed, held here so each 
 
 ---
 
+### Who triggers an application key rotation, and how often
+
+A key is rotated by issuing a second one while the first stays live. What is not settled is who
+triggers a rotation, the key-encryption key's included, how often, and how an administrator sees that
+an old key has stopped being used: `confirmed_at` marks the first replica to use a key, never the
+last. The answer probably belongs in an SOP once ruled. See
+[adapter-integration.md](design/adapter-integration.md) § Decryption key distribution.
+
+### Unbuilt parts of partly built design sections
+
+Each section here is built and tested for its main rule, and carries a part still to build:
+
+- An invitation for an address no account holds yet, kept until an account claims it:
+  [decisions.md](design/decisions.md) § An invitation binds only to an account holding the invited
+  address, verified.
+- Recording the client, `azp`, as the actor of a delegated request, and the section's two "Decide"
+  items: [delegated-access.md](design/delegated-access.md) § The rules.
+- A runtime assertion that effective access never exceeds what a role confers:
+  [decisions.md](design/decisions.md) § Effective access is a ceiling narrowed by grants.
+
+Once Arranger's `feat/usher-adapter` is squash-merged, the `external` rows of the
+[design traceability list](docs/design-traceability.md), pinned to its commit `fa6a01cd`, are
+repointed to the same tests on Arranger's `main`.
+
+### Who may read a grant's governance side
+
+A grant's governance side, who granted it and when, is itself an access decision, and no mechanism
+decides it yet; it waits on custodian scoping. See [permissions-model.md](design/permissions-model.md).
+
+### Profile view
+
+A researcher's own view of their access: the profile page, what is in it for the MVP, what is left out
+deliberately, and its open questions. The Controller's read, `GET /admin/me/grants`, exists. See
+[profile-view.md](design/profile-view.md).
+
 ## Implementation: Integration
 
 ### `@overture-stack/usher-types`
@@ -630,6 +665,21 @@ rather than discovered in integration testing.
 
 ---
 
+### Tests for built sections without one
+
+Each design section here is built and has no test yet. Each needs one, or a ruling that it states a
+principle no test can check, which makes it `context` in the
+[design traceability list](docs/design-traceability.md).
+
+- [decisions.md](design/decisions.md) § Decrypted permissions never leave the service that
+  decrypted them
+- [decisions.md](design/decisions.md) § Usher is data-agnostic
+- [decisions.md](design/decisions.md) § "Study" and other domain terms are instance vocabulary
+- [security-workflow.md](design/security-workflow.md) § What the receiving service must not do with
+  it
+- [audit-events.md](design/audit-events.md) § Events and the permissions that produce them
+- [security-threat-model.md](design/security-threat-model.md) § A03: Software Supply Chain Failures
+
 ## Documentation
 
 ### Docs-tier gaps (blocked on prior design)
@@ -651,6 +701,18 @@ Consumer-facing companion to `admin-model.md` and `management-ui.md`; must cover
 ---
 
 ## Future scope
+
+### Overlay and principal-relative categories (post-MVP)
+
+A category that overlays rather than partitions, leaving `unmarked` as it is, and a
+principal-relative category such as `own`, whose records differ for each principal asking. See
+[decisions.md](design/decisions.md) § A category either partitions or overlays, and only the first
+decides what `unmarked` covers.
+
+### Tamper-evident audit storage (post-MVP)
+
+A write-once store and hash chaining for the audit log, recommended and not required for the first
+release. See [admin-model.md](design/admin-model.md).
 
 ### DACO-style access approval workflows
 
