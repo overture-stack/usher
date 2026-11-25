@@ -81,7 +81,12 @@ export const RESOURCES = Object.freeze({
 export const CONTROLLED = 'global.controlled';
 
 /** What a person accepting a `viewer` grant is shown, as `entity.action` names (the batch 1 addendum). */
-export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze(['record.count', 'record.export', 'record.view']);
+export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze([
+	'artifact.create',
+	'record.count',
+	'record.export',
+	'record.view',
+]);
 
 /**
  * The grant rate threshold the rate tests run under: more than 3 operations by one actor within 30 s

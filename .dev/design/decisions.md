@@ -1845,6 +1845,21 @@ shared, and where that is recorded, are open in the roadmap.
 | one base grant governing both reaching and listing unowned sets | anyone not signed in could write into a list every grantee reads, and each visitor's saved search would be shown to all, as 2026-11-02 rejected |
 | a flag of its own for anonymous saving                          | a setting outside the capability model, when `artifact.create` in the anonymous baseline already says it                                        |
 
+### Whoever may read a category may make sets from it
+
+Without it, a grant at any seeded role confers no `artifact.create`, so under enforcement no reader
+can save a set from what their grant lets them read.
+
+Whoever can read data in a category can, by default, create sets from it, since sets are how they
+will later share access. So the seeded roles that read, `viewer`, `editor` and `curator`, carry
+`artifact.create` beside `read`. `submitter` reads nothing and does not, and the control plane's
+roles are unchanged. Sharing a set still reaches none of its records, since each person reaches them
+through their own grants, and saving one needs `artifact.create` on everything it draws on, so a
+reader saves only from what a grant lets them read; reading through a grant rule alone lets a person
+read without saving. A store whose roles an earlier start seeded gains the capability through
+migration 0018, and a store no start has seeded gets it with the seeded roles at its first start.
+Ruled by the developer 2026-11-25.
+
 ---
 
 ### A client compares against exported values, and no header names the layer that answered

@@ -105,7 +105,12 @@ export const UNMARKED = 'global.unmarked';
 export const READ_ACTIONS: readonly RecordAction[] = Object.freeze(['count', 'view', 'export']);
 
 /** The capabilities `viewer` carries, as `entity.action` names (permissions-model.md). */
-export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze(['record.count', 'record.export', 'record.view']);
+export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze([
+	'artifact.create',
+	'record.count',
+	'record.export',
+	'record.view',
+]);
 
 /**
  * The longest externalId allowed (`docs/deployment.md` § Registering resources, as recommended: 128

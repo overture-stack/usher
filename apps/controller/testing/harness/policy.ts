@@ -662,7 +662,7 @@ export const OWNER_ROLE = 'owner';
 /** A role the Controller seeds, as permissions-model.md's seeded matrix names it. */
 export type SeededRole = 'admin' | 'curator' | 'editor' | 'owner' | 'submitter' | 'viewer';
 
-const VIEWER_CAPABILITIES = ['record.count', 'record.export', 'record.view'];
+const VIEWER_CAPABILITIES = ['artifact.create', 'record.count', 'record.export', 'record.view'];
 
 const EDITOR_CAPABILITIES = [...VIEWER_CAPABILITIES, 'record.create', 'record.update'];
 
@@ -691,9 +691,10 @@ const seededRole = (plane: FixtureRole['plane'], capabilities: readonly string[]
  * permissions-model.md ("The seeded roles, as a matrix"), the authority, and the one place the tests
  * read it from, so what a person answering a grant is shown is this list for its role.
  *
- * - The data plane's staircase, `read` being count, view and export: `viewer` reads; `editor` reads,
- *   creates and updates; `curator` does all that and deletes. `submitter`, off the staircase, creates
- *   and updates and reads nothing.
+ * - The data plane's staircase, `read` being count, view and export: `viewer` reads, and makes sets
+ *   from what it reads (`artifact.create`); `editor` does that, creates and updates; `curator` does all
+ *   that and deletes. `submitter`, off the staircase, creates and updates, and reads nothing and makes
+ *   no set.
  * - The control plane's checklist: `owner` holds `grant.*` (create, view, extend, reduce, revoke),
  *   `invitation.create`, `resource.view`, `update`, `suppress` and `restore`, and
  *   `ownership.transfer`; `admin` holds all of an owner's and the four platform-wide ones beside

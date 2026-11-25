@@ -316,7 +316,7 @@ suite('answering a grant', () => {
 			});
 			const afterRefusals = await storedDecisions(harness, pendingId(harness));
 			const asNow = await answerGrant(recipient, pendingId(harness), {
-				capabilities: ['record.view', 'record.count'],
+				capabilities: ['record.view', 'record.count', 'artifact.create'],
 				decision: 'accept',
 			});
 
@@ -328,7 +328,7 @@ suite('answering a grant', () => {
 			assertSucceeded(asNow, 'what the role carries now, in another order');
 			assert.deepEqual(
 				(await storedDecisions(harness, pendingId(harness))).map(({ capabilities }) => capabilities),
-				[['record.count', 'record.view']],
+				[['artifact.create', 'record.count', 'record.view']],
 			);
 		});
 	});

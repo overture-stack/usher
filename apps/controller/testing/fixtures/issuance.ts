@@ -92,15 +92,22 @@ export const CURATOR_ACTIONS: readonly string[] = Object.freeze([
 ]);
 
 /** What a person accepting a `viewer` grant is shown, as `entity.action` names. */
-export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze(READ.map((action) => `record.${action}`));
+export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze([
+	'artifact.create',
+	...READ.map((action) => `record.${action}`),
+]);
 
 /** What a person accepting an `editor` grant is shown, as `entity.action` names. */
-export const EDITOR_CAPABILITIES: readonly string[] = Object.freeze(EDITOR_ACTIONS.map((action) => `record.${action}`));
+export const EDITOR_CAPABILITIES: readonly string[] = Object.freeze([
+	'artifact.create',
+	...EDITOR_ACTIONS.map((action) => `record.${action}`),
+]);
 
 /** What a person accepting a `curator` grant is shown, as `entity.action` names. */
-export const CURATOR_CAPABILITIES: readonly string[] = Object.freeze(
-	CURATOR_ACTIONS.map((action) => `record.${action}`),
-);
+export const CURATOR_CAPABILITIES: readonly string[] = Object.freeze([
+	'artifact.create',
+	...CURATOR_ACTIONS.map((action) => `record.${action}`),
+]);
 
 /** The test-defined `assembler` role's capabilities, as `entity.action` names. */
 export const ASSEMBLER_CAPABILITIES: readonly string[] = Object.freeze([

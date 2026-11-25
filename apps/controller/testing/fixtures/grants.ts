@@ -139,6 +139,7 @@ export const MINUTE_MS = 60_000;
  */
 export const SHOWN = Object.freeze({
 	curator: Object.freeze([
+		'artifact.create',
 		'record.count',
 		'record.create',
 		'record.delete',
@@ -146,7 +147,14 @@ export const SHOWN = Object.freeze({
 		'record.update',
 		'record.view',
 	]),
-	editor: Object.freeze(['record.count', 'record.create', 'record.export', 'record.update', 'record.view']),
+	editor: Object.freeze([
+		'artifact.create',
+		'record.count',
+		'record.create',
+		'record.export',
+		'record.update',
+		'record.view',
+	]),
 	owner: Object.freeze([
 		'grant.create',
 		'grant.extend',
@@ -161,7 +169,7 @@ export const SHOWN = Object.freeze({
 		'resource.view',
 	]),
 	submitter: Object.freeze(['record.create', 'record.update']),
-	viewer: Object.freeze(['record.count', 'record.export', 'record.view']),
+	viewer: Object.freeze(['artifact.create', 'record.count', 'record.export', 'record.view']),
 });
 
 /**

@@ -6,6 +6,9 @@ import { SEEDED_ROLES } from './seededRoles.js';
 
 const READ = ['record.count', 'record.export', 'record.view'];
 
+// Whoever may read a category's records may make sets from them by default.
+const SETS = ['artifact.create'];
+
 const OWNER = [
 	'grant.create',
 	'grant.extend',
@@ -24,22 +27,22 @@ const planeOf = (name: string): string | undefined =>
 	CAPABILITY_VOCABULARY.find((capability) => capability.name === name)?.plane;
 
 suite('the seeded roles', () => {
-	test('climb the data plane: viewer reads, editor also creates and updates, curator also deletes', () => {
+	test('climb the data plane: viewer reads and makes sets, editor also creates and updates, curator also deletes', () => {
 		assert.deepEqual(SEEDED_ROLES.viewer, {
-			capabilities: READ,
+			capabilities: [...SETS, ...READ].toSorted(),
 			plane: 'data',
 		});
 		assert.deepEqual(SEEDED_ROLES.editor, {
-			capabilities: [...READ, 'record.create', 'record.update'].toSorted(),
+			capabilities: [...SETS, ...READ, 'record.create', 'record.update'].toSorted(),
 			plane: 'data',
 		});
 		assert.deepEqual(SEEDED_ROLES.curator, {
-			capabilities: [...READ, 'record.create', 'record.delete', 'record.update'].toSorted(),
+			capabilities: [...SETS, ...READ, 'record.create', 'record.delete', 'record.update'].toSorted(),
 			plane: 'data',
 		});
 	});
 
-	test('let a submitter create and update records and read none', () => {
+	test('let a submitter create and update records, and read none or make sets from them', () => {
 		assert.deepEqual(SEEDED_ROLES.submitter, {
 			capabilities: ['record.create', 'record.update'],
 			plane: 'data',

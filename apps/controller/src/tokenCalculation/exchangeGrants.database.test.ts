@@ -19,6 +19,10 @@ const MINUTE_MS = 60_000;
 
 const LONG_SIGN_IN = Object.freeze({ lifetimeSeconds: 3600 });
 
+// What a `viewer` grant confers on its category: reading its records, and making sets from them. The
+// rules confer reading alone.
+const VIEWED = Object.freeze({ artifact: ['create'], record: READ });
+
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -116,17 +120,17 @@ suite('the grants a signed-in exchange reads from the store', () => {
 
 		assert.deepEqual(heldEntries(ana), {
 			'STUDY-A1': {
-				[CATEGORY.communityGoverned]: { record: READ },
-				[CATEGORY.controlled]: { record: READ },
+				[CATEGORY.communityGoverned]: VIEWED,
+				[CATEGORY.controlled]: VIEWED,
 				[CATEGORY.unmarked]: { record: READ },
 			},
 			'STUDY-B2': {
-				[CATEGORY.controlled]: { record: READ },
+				[CATEGORY.controlled]: VIEWED,
 				[CATEGORY.unmarked]: { record: READ },
 			},
 			'STUDY-C3': { [CATEGORY.unmarked]: { record: READ } },
 			'STUDY-D4': {
-				[CATEGORY.controlled]: { record: READ },
+				[CATEGORY.controlled]: VIEWED,
 				[CATEGORY.unmarked]: { record: ['view'] },
 			},
 		});
@@ -177,7 +181,7 @@ suite('the grants a signed-in exchange reads from the store', () => {
 		});
 
 		assert.deepEqual(heldEntries(throughLyric)['STUDY-E5'], {
-			[CATEGORY.controlled]: { record: READ },
+			[CATEGORY.controlled]: VIEWED,
 			[CATEGORY.unmarked]: { record: READ },
 		});
 	});

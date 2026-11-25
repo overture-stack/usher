@@ -322,13 +322,13 @@ suite('seeding policy by SQL', () => {
 					user_id: seeded.users['cy'],
 				},
 				{
-					capabilities: ['record.count', 'record.export', 'record.view'],
+					capabilities: ['artifact.create', 'record.count', 'record.export', 'record.view'],
 					decision: 'accepted',
 					grant_id: seeded.grants['anaViews'],
 					user_id: seeded.users['ana'],
 				},
 				{
-					capabilities: ['record.count', 'record.export', 'record.view'],
+					capabilities: ['artifact.create', 'record.count', 'record.export', 'record.view'],
 					decision: 'accepted',
 					grant_id: seeded.grants['readersView'],
 					user_id: seeded.users['bo'],
@@ -1569,6 +1569,7 @@ suite("the started store's template", () => {
 			},
 			curator: {
 				capabilities: [
+					'artifact.create',
 					'record.count',
 					'record.create',
 					'record.delete',
@@ -1579,7 +1580,14 @@ suite("the started store's template", () => {
 				plane: 'data',
 			},
 			editor: {
-				capabilities: ['record.count', 'record.create', 'record.export', 'record.update', 'record.view'],
+				capabilities: [
+					'artifact.create',
+					'record.count',
+					'record.create',
+					'record.export',
+					'record.update',
+					'record.view',
+				],
 				plane: 'data',
 			},
 			owner: {
@@ -1603,7 +1611,7 @@ suite("the started store's template", () => {
 				plane: 'data',
 			},
 			viewer: {
-				capabilities: ['record.count', 'record.export', 'record.view'],
+				capabilities: ['artifact.create', 'record.count', 'record.export', 'record.view'],
 				plane: 'data',
 			},
 		});

@@ -564,9 +564,9 @@ One vocabulary, reached two ways. A **role** bundles permissions and is how acce
 **grant entry** names the ones held on one category and is how access is enforced. The Controller
 resolves the first into the second at issuance, which is why no role name reaches an adapter.
 
-**Each role Usher seeds carries a fixed set of permissions.** In the data plane, `viewer` reads,
-`editor` also creates and updates, `curator` also deletes, and `submitter` creates and updates and
-reads nothing. In the control plane, `owner` administers access to one resource, and `admin` holds
+**Each role Usher seeds carries a fixed set of permissions.** In the data plane, `viewer` reads
+and makes sets from what it reads, `editor` also creates and updates, `curator` also deletes, and
+`submitter` creates and updates, and reads nothing and makes no set. In the control plane, `owner` administers access to one resource, and `admin` holds
 an owner's permissions and the platform-wide ones beside them. See
 [RABAC alignment](../docs/atlas/roadmap/rabac-alignment.md).
 
@@ -732,14 +732,16 @@ role, though a single person can hold both.
 
 **Viewer**
 The data-plane role every other data-plane role is defined against: read on the records reached by
-its grant, and no authority over anyone else's access.
+its grant, making saved sets from them (`artifact.create`), and no authority over anyone else's
+access.
 
 **Editor**
-The data-plane role carrying read, create and update on the records reached by its grant.
+The data-plane role carrying read, create and update on the records reached by its grant, and
+making saved sets from them.
 
 **Curator**
-The data-plane role carrying create, read, update and delete on the records reached by its grant:
-everything an editor carries, and delete.
+The data-plane role carrying create, read, update and delete on the records reached by its grant,
+and making saved sets from them: everything an editor carries, and delete.
 
 _It sits beside Owner rather than under it, and the pairing is the clearest statement of the two
 planes._ Both carry the same four acts and they act on different objects: a curator creates, updates

@@ -5,8 +5,9 @@ import type { Plane, SeededRole, SeededRoleName } from './types.js';
 const everyActionOf = (entity: string): readonly string[] =>
 	CAPABILITY_VOCABULARY.filter((capability) => capability.entity === entity).map(({ name }) => name);
 
-// The `read` group on a record, expanded as a role naming it is written.
-const READ = ['record.count', 'record.export', 'record.view'];
+// The `read` group on a record, expanded as a role naming it is written, with making sets from what is
+// read, since sets are how a reader later shares access.
+const READ = ['artifact.create', 'record.count', 'record.export', 'record.view'];
 
 const EDITOR = [...READ, 'record.create', 'record.update'];
 
@@ -28,8 +29,9 @@ const seeded = (plane: Plane, capabilities: readonly string[]): Readonly<SeededR
 
 /**
  * The roles the Controller seeds, as the seeded matrix gives them. In the data plane, a staircase that
- * nothing walks: `viewer` reads, `editor` also creates and updates, `curator` also deletes, and
- * `submitter`, off the staircase, creates and updates and reads nothing. In the control plane, a
+ * nothing walks: `viewer` reads and makes sets from what it reads, `editor` also creates and updates,
+ * `curator` also deletes, and `submitter`, off the staircase, creates and updates, and reads nothing
+ * and makes no set. In the control plane, a
  * checklist: `owner` administers access to one resource, and `admin` holds all of an owner's
  * capabilities and the four platform-wide ones beside them. Neither plane's roles carry the other's
  * capabilities, and no seeded role carries a custodianship capability, since nothing in this release

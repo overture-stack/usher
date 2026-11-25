@@ -575,14 +575,21 @@ recorded, which asks for authority over every one of an artifact's sources rathe
 A list of role names says nothing about who can do what. The matrix does, and it is the canonical
 view: a role is a row, a capability is a column, and the columns run in order of increasing reach.
 
-| Role        | `count` | `view` | `export` | `create` | `update` | `delete` |
-| ----------- | ------- | ------ | -------- | -------- | -------- | -------- |
-| `viewer`    | ●       | ●      | ●        |          |          |          |
-| `editor`    | ●       | ●      | ●        | ●        | ●        |          |
-| `curator`   | ●       | ●      | ●        | ●        | ●        | ●        |
-| `submitter` |         |        |          | ●        | ●        |          |
+| Role        | `count` | `view` | `export` | `create` | `update` | `delete` | `artifact.create` |
+| ----------- | ------- | ------ | -------- | -------- | -------- | -------- | ----------------- |
+| `viewer`    | ●       | ●      | ●        |          |          |          | ●                 |
+| `editor`    | ●       | ●      | ●        | ●        | ●        |          | ●                 |
+| `curator`   | ●       | ●      | ●        | ●        | ●        | ●        | ●                 |
+| `submitter` |         |        |          | ●        | ●        |          |                   |
 
-The first three columns are `read`, and every seeded role holding any of them holds all three.
+The first six columns are record actions, and the first three are `read`: every seeded role holding
+any of them holds all three.
+
+**Every seeded role that reads makes sets from what it reads.** `artifact.create` sits beside `read`
+in `viewer`, `editor` and `curator`, so whoever reads a category's records may save a set from them,
+since a saved set is how a reader later shares what they found; each person it is shared with still
+reaches its records through their own grants. `submitter` reads nothing, and makes no set. See the
+decision in [decisions.md](decisions.md), § Whoever may read a category may make sets from it.
 
 **The containment is a staircase and it is not a hierarchy.** `viewer`, `editor` and `curator`
 each add to the one before, which is what makes the table readable at a glance, and the
