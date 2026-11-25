@@ -37,17 +37,17 @@ put here and the case belongs to Usher's own schema tests.
 
 **Roles expand against the seeded matrix, not the case table's local configuration.** That table
 declares `curator carries create, view, update, delete` and `viewer carries view`, which is a
-reduction that keeps the table readable. The seeded roles in
-[permissions-model.md](../permissions-model.md#the-seeded-roles-as-a-matrix) carry more. The baseline
-and the signed-in rule grant what a viewer holds, so the `unmarked` entry each contributes carries
-the same three actions:
+reduction that keeps the table readable.
+[Seeded roles](../permissions-model.md#the-seeded-roles-as-a-matrix) carry more, `artifact.create`
+included. The baseline and the signed-in rule grant only a viewer's three record actions, so their
+entries carry no `artifact`:
 
-| Role or rule   | Case table                           | Corpus                                                  |
-| -------------- | ------------------------------------ | ------------------------------------------------------- |
-| `viewer`       | `view`                               | `count`, `view`, `export`                               |
-| `curator`      | `create`, `view`, `update`, `delete` | `count`, `view`, `export`, `create`, `update`, `delete` |
-| baseline       | `{unmarked: [view]}`                 | `count`, `view`, `export`                               |
-| signed-in rule | `{unmarked: [view]}`                 | `count`, `view`, `export`                               |
+| Role or rule   | Case table                           | Corpus                                                                     |
+| -------------- | ------------------------------------ | -------------------------------------------------------------------------- |
+| `viewer`       | `view`                               | `count`, `view`, `export`; `artifact.create`                               |
+| `curator`      | `create`, `view`, `update`, `delete` | `count`, `view`, `export`, `create`, `update`, `delete`; `artifact.create` |
+| baseline       | `{unmarked: [view]}`                 | `count`, `view`, `export`                                                  |
+| signed-in rule | `{unmarked: [view]}`                 | `count`, `view`, `export`                                                  |
 
 A fixture claiming to hold real tokens has to hold the real role. The case table's reduction stays
 correct for what it is teaching, and the two should not be reconciled by widening the table, which
@@ -67,8 +67,8 @@ Every payload's `aud` is `arranger-prod`, the application's label, where an issu
 the identifier generated when that application was registered. A test comparing an issued payload
 with the corpus reads the label as the registered application's identifier.
 
-        curator   count, view, export, create, update, delete
-    viewer    count, view, export
+        curator   count, view, export, create, update, delete; artifact create
+    viewer    count, view, export; artifact create
 
     G1 "cardiology" and G2 "study readers" are named sets of people. A role is
     named on each grant, never on the group.
@@ -89,7 +89,7 @@ with the corpus reads the label as the registered application's identifier.
 Cases 28 to 35 were computed against a second configuration, and each carries
 `"configuration": "signed-in rule"`, so an entry without that field belongs to the one above:
 
-    viewer    count, view, export
+    viewer    count, view, export; artifact create
 
     OPEN_ATLAS       offers   no concrete category; unmarked records open
     MEMBERS_ARCHIVE  offers   no concrete category; unmarked records registered

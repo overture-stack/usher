@@ -171,7 +171,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export", "create", "update", "delete"]
+							"record": ["count", "view", "export", "create", "update", "delete"],
+							"artifact": ["create"]
 						}
 					},
 					"LUNG_COHORT": {
@@ -247,10 +248,12 @@
 				"permissions": {
 					"HEART_STUDY": {
 						"global.unmarked": {
-							"record": ["count", "view", "export"]
+							"record": ["count", "view", "export"],
+							"artifact": ["create"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export", "create", "update", "delete"]
+							"record": ["count", "view", "export", "create", "update", "delete"],
+							"artifact": ["create"]
 						}
 					},
 					"LUNG_COHORT": {
@@ -291,7 +294,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export", "create", "update", "delete"]
+							"record": ["count", "view", "export", "create", "update", "delete"],
+							"artifact": ["create"]
 						}
 					},
 					"LUNG_COHORT": {
@@ -343,7 +347,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export", "create", "update", "delete"]
+							"record": ["count", "view", "export", "create", "update", "delete"],
+							"artifact": ["create"]
 						}
 					}
 				},
@@ -489,7 +494,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export", "create", "update", "delete"]
+							"record": ["count", "view", "export", "create", "update", "delete"],
+							"artifact": ["create"]
 						}
 					},
 					"LUNG_COHORT": {
@@ -530,7 +536,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export"]
+							"record": ["count", "view", "export"],
+							"artifact": ["create"]
 						}
 					},
 					"LUNG_COHORT": {
@@ -571,7 +578,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export"]
+							"record": ["count", "view", "export"],
+							"artifact": ["create"]
 						}
 					},
 					"LUNG_COHORT": {
@@ -765,7 +773,8 @@
 					},
 					"HEART_STUDY": {
 						"global.unmarked": {
-							"record": ["count", "view", "export"]
+							"record": ["count", "view", "export"],
+							"artifact": ["create"]
 						}
 					}
 				},
@@ -796,7 +805,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export", "create", "update", "delete"]
+							"record": ["count", "view", "export", "create", "update", "delete"],
+							"artifact": ["create"]
 						}
 					},
 					"LUNG_COHORT": {
@@ -839,7 +849,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export", "create", "update", "delete"]
+							"record": ["count", "view", "export", "create", "update", "delete"],
+							"artifact": ["create"]
 						}
 					},
 					"LUNG_COHORT": {
@@ -891,7 +902,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export", "create", "update", "delete"]
+							"record": ["count", "view", "export", "create", "update", "delete"],
+							"artifact": ["create"]
 						}
 					}
 				},
@@ -1291,7 +1303,8 @@
 							"record": ["count", "view", "export"]
 						},
 						"global.controlled": {
-							"record": ["count", "view", "export"]
+							"record": ["count", "view", "export"],
+							"artifact": ["create"]
 						}
 					}
 				},
@@ -1335,7 +1348,8 @@
 					},
 					"SEALED_ARCHIVE": {
 						"global.unmarked": {
-							"record": ["count", "view", "export"]
+							"record": ["count", "view", "export"],
+							"artifact": ["create"]
 						}
 					}
 				},
