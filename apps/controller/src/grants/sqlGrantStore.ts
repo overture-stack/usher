@@ -148,6 +148,7 @@ export const sqlGrantStore = (
 				)
 			).rowCount !== 0,
 		insertGrant: ({
+			creationId,
 			expiresAt,
 			grantedAt,
 			grantedBy,
@@ -160,13 +161,24 @@ export const sqlGrantStore = (
 			idOf(
 				`INSERT INTO ${table('grants')}
            (resource_id, record_category_id, holder_user_id, role_id, granted_by, granted_at,
-            expires_at, requested_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            expires_at, requested_by, creation_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT DO NOTHING RETURNING id::text AS id`,
-				[resourceId, recordCategoryId, holderUserId, roleId, grantedBy, grantedAt, expiresAt, requestedBy],
+				[
+					resourceId,
+					recordCategoryId,
+					holderUserId,
+					roleId,
+					grantedBy,
+					grantedAt,
+					expiresAt,
+					requestedBy,
+					creationId,
+				],
 			),
 		insertGrantRequest: async ({
 			capabilities,
+			creationId,
 			expiresAt,
 			holderUserId,
 			kind,
@@ -179,8 +191,8 @@ export const sqlGrantStore = (
 			const id = await idOf(
 				`INSERT INTO ${table('grant_requests')}
            (kind, requested_by, holder_user_id, resource_id, record_category_id, role_id,
-            expires_at, capabilities, requested_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9)
+            expires_at, capabilities, requested_at, creation_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10)
          RETURNING id::text AS id`,
 				[
 					kind,
@@ -192,6 +204,7 @@ export const sqlGrantStore = (
 					expiresAt,
 					[...capabilities],
 					requestedAt,
+					creationId,
 				],
 			);
 			return id ?? requestUnwritten();

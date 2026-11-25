@@ -1,3 +1,4 @@
+import type { CategoryNaming } from './grantCategory.js';
 import type pg from 'pg';
 
 import type { Directory } from '../directory/index.js';
@@ -21,8 +22,8 @@ export interface AddressLookup {
 
 /** A grant's creation as read from its body, every rule of its form kept. */
 export interface GrantCreation {
-	/** The scoped record category named, as sent; none when left out. */
-	category: string | undefined;
+	/** The scoped record categories named, as sent and in order; none when left out. */
+	categories: readonly string[] | undefined;
 
 	/** None for a grant that never expires. */
 	expiresAt: Date | undefined;
@@ -38,8 +39,8 @@ export interface GrantCreation {
 
 /** A self-grant's creation as read from its body, every rule of its form kept. */
 export interface SelfGrantCreation {
-	/** The scoped record category named, as sent; none when left out. */
-	category: string | undefined;
+	/** The scoped record categories named, as sent and in order; none when left out. */
+	categories: readonly string[] | undefined;
 
 	/** When the self-grant ends, in the future and within the longest self-grant life. */
 	expiresAt: Date;
@@ -341,6 +342,9 @@ export interface NewGrantRequest extends GrantTerms {
 	/** What the principal asking was shown of the role's capabilities, as `entity.action` names. */
 	capabilities: readonly string[];
 
+	/** Shared by every grant and request one call writes. */
+	creationId: string;
+
 	/** When the grant would end, and when the request lapses while undecided. */
 	expiresAt: Date;
 
@@ -424,6 +428,9 @@ export interface GrantTerms {
 
 /** A grant to write. */
 export interface NewGrant extends GrantTerms {
+	/** Shared by every grant and request one call writes; none for a grant written by deciding a request. */
+	creationId: string | null;
+
 	/** None for a grant that never expires. */
 	expiresAt: Date | null;
 
@@ -612,8 +619,11 @@ export interface JudgedCreation {
 	 */
 	authority: { expiresAt: Date; kind: 'request' } | { kind: 'issue' };
 
-	/** Its record category, by id and as a payload names it; `null` for the whole resource. */
-	category: { id: string; scopedName: string } | null;
+	/**
+	 * Each grant's record category, by id and as a payload names it, `null` for the whole resource, in
+	 * the order the request named them, with the naming each came from.
+	 */
+	categories: readonly JudgedCategory[];
 
 	kind: 'judged';
 
@@ -621,6 +631,14 @@ export interface JudgedCreation {
 	resource: ResourceStanding;
 
 	role: StoredRole;
+}
+
+/** One grant's record category, once the resource is read, with the naming it came from. */
+export interface JudgedCategory {
+	/** By id and as a payload names it; `null` for the whole resource. */
+	category: { id: string; scopedName: string } | null;
+
+	naming: CategoryNaming;
 }
 
 /** What the grant operations are created from. */

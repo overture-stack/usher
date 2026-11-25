@@ -47,7 +47,7 @@ import { GRANT_REQUEST_NOTIFICATION, inTurn } from '../../../testing/harness/pol
 const twoHoursAhead = (): string => instantFromNow(2 * HOUR_MS);
 
 const withoutExpiry: Omit<SelfGrantCreation, 'expiresAt'> = {
-	category: CONTROLLED,
+	categories: [CONTROLLED],
 	resource: STUDY_A1,
 	role: 'viewer',
 };

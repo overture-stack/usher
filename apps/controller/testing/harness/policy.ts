@@ -234,6 +234,7 @@ export const POLICY_TABLES = {
 	grantRequests: {
 		columns: {
 			capabilities: 'capabilities',
+			creationId: 'creation_id',
 			decidedAt: 'decided_at',
 			decidedBy: 'decided_by',
 			decision: 'decision',
@@ -252,6 +253,7 @@ export const POLICY_TABLES = {
 	},
 	grants: {
 		columns: {
+			creationId: 'creation_id',
 			endedAt: 'ended_at',
 			expiresAt: 'expires_at',
 			fieldCategoryId: 'field_category_id',

@@ -239,7 +239,8 @@ A platform administrator's grant of a role other than `submitter` and `owner` on
 **The grant rate reports and never blocks.** Every grant write by a person or a service account is
 counted by its actor across every instance sharing the store: a creation, an answer, a change, a
 revocation, a self-grant or its request, a request's decision and a submitter's removal, a refused
-or failed one included, and a listing never. The write that carries one actor's count within the
+or failed one included, and a listing never. A creation naming several categories counts once for
+each grant or request it writes, so a call cannot hide many writes from the count. The write that carries one actor's count within the
 last `windowSeconds` past `operationCount` completes as any other write does, and records
 `grant.rateExceeded` at warning, naming the actor, the count and the window. Later writes record
 nothing more until the count has fallen back to `operationCount` and crosses it again. The counts

@@ -518,7 +518,7 @@ export const grantAndAccept = async (
 ): Promise<string> => {
 	const owner = harness.caller(await harness.tokens.management(PEOPLE.dana));
 	const created = await createGrant(owner, {
-		category: `global.${category}`,
+		categories: [`global.${category}`],
 		...(expiresAt === undefined ? {} : { expiresAt }),
 		holder: { subject: PEOPLE[holder].subject },
 		resource,

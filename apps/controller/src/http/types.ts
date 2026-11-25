@@ -1,5 +1,8 @@
 /** RFC 9457 problem details as the Controller answers a refusal, carrying a code. */
 export interface Problem {
+	/** The place in the request's `categories`, counted from 0, of the category a refusal names. */
+	categoryIndex?: number;
+
 	/** Names the refusal, for a caller to act on. */
 	code: string;
 

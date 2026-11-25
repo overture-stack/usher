@@ -7,8 +7,8 @@ import type { ViewedGrant } from './types.js';
 
 /** The terms of a grant whose holder is named by address, as its creation names them. */
 export interface AddressedTerms {
-	/** The scoped record category the grant takes; `null` for the whole resource. */
-	category: string | null;
+	/** The scoped record categories the grants take, in order; none for the whole resource. */
+	categories: readonly string[] | undefined;
 
 	/** The address, exactly as given. */
 	email: string;
@@ -32,12 +32,18 @@ export interface AddressedAnswer {
 
 // The answer a counted owner is given, whether or not an account holds the address: the terms and
 // the address as given, naming no grant and no holder.
-const ownersAnswer = ({ category, email, resource, role }: AddressedTerms): OperationOutcome =>
-	answered(202, { category, email, kind: 'grantByAddress', resource, role });
+const ownersAnswer = ({ categories, email, resource, role }: AddressedTerms): OperationOutcome =>
+	answered(202, {
+		...(categories === undefined ? {} : { categories: [...categories] }),
+		email,
+		kind: 'grantByAddress',
+		resource,
+		role,
+	});
 
 /**
  * How a creation naming its holder by address is answered, decided here alone. A platform
- * administrator is answered 201 with the grant written for the account holding the address, and is
+ * administrator is answered 201 with the grants written for the account holding the address, and is
  * refused 404 `holderNotFound` for an address held by no single account. A counted owner is
  * answered 202 alike in both cases, naming the terms and the address as given, never the grant's id
  * nor the holder's subject; nothing is written for an address held by no single account, and the
@@ -52,13 +58,15 @@ const ownersAnswer = ({ category, email, resource, role }: AddressedTerms): Oper
 export const addressedAnswer = (
 	{ administrator }: { administrator: boolean },
 	terms: AddressedTerms,
-	written: ViewedGrant | undefined,
+	written: readonly ViewedGrant[] | undefined,
 	now: number,
 ): AddressedAnswer => {
 	if (administrator) {
 		return {
 			outcome:
-				written === undefined ? refused(GRANT_PROBLEMS.holderNotFound) : answered(201, grantView(written, now)),
+				written === undefined
+					? refused(GRANT_PROBLEMS.holderNotFound)
+					: answered(201, { grants: written.map((grant) => grantView(grant, now)) }),
 		};
 	}
 	return written === undefined

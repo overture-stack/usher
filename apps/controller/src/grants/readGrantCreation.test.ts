@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
+import { GRANT_PROBLEMS } from './grantProblems.js';
 import { readGrantCreation } from './readGrantCreation.js';
 
 const NOW = Date.UTC(2026, 10, 12, 12, 0, 0);
 
 const VIEWER = {
-	category: 'global.controlled',
+	categories: ['global.controlled'],
 	holder: { subject: 'subject-cy' },
 	resource: 'STUDY-A1',
 	role: 'viewer',
@@ -20,14 +21,14 @@ const outcomeOf = (body: Readonly<Record<string, unknown>>): unknown => {
 const codesOf = (bodies: readonly Readonly<Record<string, unknown>>[]): unknown[] => bodies.map(outcomeOf);
 
 suite("reading a grant's creation", () => {
-	test('reads a grant naming its holder by subject, its category, and its expiry as an instant', () => {
+	test('reads a grant naming its holder by subject, its categories, and its expiry as an instant', () => {
 		const read = outcomeOf({
 			...VIEWER,
 			expiresAt: '2026-12-01T07:00:00-05:00',
 		});
 
 		assert.deepEqual(read, {
-			category: 'global.controlled',
+			categories: ['global.controlled'],
 			expiresAt: new Date(Date.UTC(2026, 11, 1, 12, 0, 0)),
 			holder: { kind: 'subject', subject: 'subject-cy' },
 			resource: 'STUDY-A1',
@@ -35,7 +36,7 @@ suite("reading a grant's creation", () => {
 		});
 	});
 
-	test('reads a grant naming no category and no expiry, and one naming its holder by address', () => {
+	test('reads a grant naming no categories and no expiry, and one naming its holder by address', () => {
 		assert.deepEqual(
 			codesOf([
 				{
@@ -51,14 +52,14 @@ suite("reading a grant's creation", () => {
 			]),
 			[
 				{
-					category: undefined,
+					categories: undefined,
 					expiresAt: undefined,
 					holder: { kind: 'subject', subject: 'subject-cy' },
 					resource: 'STUDY-A1',
 					role: 'owner',
 				},
 				{
-					category: undefined,
+					categories: undefined,
 					expiresAt: undefined,
 					holder: { email: 'sub.bo@example.org', kind: 'address' },
 					resource: 'STUDY-A1',
@@ -73,10 +74,14 @@ suite("reading a grant's creation", () => {
 			{ ...VIEWER, startsAt: '2026-12-01T00:00:00Z' },
 			{ ...VIEWER, actorId: 'subject-fen' },
 			{ holder: VIEWER.holder, resource: 'STUDY-A1' },
-			{ category: 'global.controlled', resource: 'STUDY-A1', role: 'viewer' },
+			{ categories: ['global.controlled'], resource: 'STUDY-A1', role: 'viewer' },
 			{ holder: VIEWER.holder, role: 'viewer' },
 			{ ...VIEWER, expiresAt: 1_796_000_000 },
-			{ ...VIEWER, category: null },
+			{ ...VIEWER, categories: null },
+			{ ...VIEWER, categories: 'global.controlled' },
+			{ ...VIEWER, categories: [] },
+			{ ...VIEWER, categories: ['global.controlled', 7] },
+			{ ...VIEWER, category: 'global.controlled' },
 			{ ...VIEWER, resource: ['STUDY-A1'] },
 			{ ...VIEWER, role: 7 },
 			{ ...VIEWER, holder: 'subject-cy' },
@@ -117,6 +122,24 @@ suite("reading a grant's creation", () => {
 		);
 	});
 
+	test('refuses 422 a category named twice, in any letter case, naming the first repeat by its place', () => {
+		const reading = readGrantCreation(
+			{ ...VIEWER, categories: ['global.controlled', 'global.unmarked', 'GLOBAL.Controlled'] },
+			NOW,
+		);
+
+		assert.deepEqual(reading.kind === 'refused' && reading.problem, {
+			...GRANT_PROBLEMS.duplicateCategory,
+			categoryIndex: 2,
+		});
+	});
+
+	test('reads several categories in the order given, each as sent', () => {
+		const read = outcomeOf({ ...VIEWER, categories: ['global.unmarked', 'global.Controlled'] });
+
+		assert.deepEqual((read as { categories: unknown }).categories, ['global.unmarked', 'global.Controlled']);
+	});
+
 	test('refuses 422 the administrator role, which nobody grants', () => {
 		assert.deepEqual(outcomeOf({ holder: VIEWER.holder, resource: 'STUDY-A1', role: 'admin' }), [
 			422,
@@ -124,7 +147,7 @@ suite("reading a grant's creation", () => {
 		]);
 	});
 
-	test('refuses 422 an owner grant naming a category, and one given an expiry, whatever its form', () => {
+	test('refuses 422 an owner grant naming categories, and one given an expiry, whatever its form', () => {
 		const owner = {
 			holder: VIEWER.holder,
 			resource: 'STUDY-A1',
@@ -133,7 +156,7 @@ suite("reading a grant's creation", () => {
 
 		assert.deepEqual(
 			codesOf([
-				{ ...owner, category: 'global.controlled' },
+				{ ...owner, categories: ['global.controlled'] },
 				{ ...owner, expiresAt: '2026-12-01T00:00:00Z' },
 				{ ...owner, expiresAt: 'tomorrow' },
 			]),

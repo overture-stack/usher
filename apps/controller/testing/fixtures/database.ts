@@ -1800,6 +1800,7 @@ export const DESIGNED_COLUMNS: {
 	},
 	grantRequests: {
 		capabilities: required(TEXTS),
+		creationId: optional(UUID),
 		decidedAt: optional(INSTANT),
 		decidedBy: optional(UUID),
 		decision: optional(TEXT),
@@ -1815,6 +1816,7 @@ export const DESIGNED_COLUMNS: {
 		roleId: required(UUID),
 	},
 	grants: {
+		creationId: optional(UUID),
 		endedAt: optional(INSTANT),
 		expiresAt: optional(INSTANT),
 		fieldCategoryId: optional(UUID),

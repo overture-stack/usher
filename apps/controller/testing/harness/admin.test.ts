@@ -305,7 +305,7 @@ const OPERATIONS: readonly Expected[] = [
 	},
 	{
 		body: {
-			category: 'global.controlled',
+			categories: ['global.controlled'],
 			expiresAt: '2027-01-01T00:00:00-05:00',
 			holder: { email: 'gil@example.org' },
 			resource: 'STUDY-A1',
@@ -313,7 +313,7 @@ const OPERATIONS: readonly Expected[] = [
 		},
 		call: (caller) =>
 			createGrant(caller, {
-				category: 'global.controlled',
+				categories: ['global.controlled'],
 				expiresAt: '2027-01-01T00:00:00-05:00',
 				holder: { email: 'gil@example.org' },
 				resource: 'STUDY-A1',
@@ -683,7 +683,7 @@ suite("the Management API's routes", () => {
 		assert.deepEqual(
 			await managementRouteOfOperation((caller) =>
 				createSelfGrant(caller, {
-					category: 'global.controlled',
+					categories: ['global.controlled'],
 					expiresAt: '2026-11-04T12:00:00Z',
 					resource: 'STUDY-A1',
 					role: 'viewer',
@@ -773,10 +773,10 @@ suite('management tokens', () => {
 });
 
 suite('reading what an operation answered', () => {
-	test("carries a created grant's id from the answer's body, and none when the body names none", async (context) => {
+	test("carries the first created grant's id from the answer's body, and none when the body names none", async (context) => {
 		const answers: ScriptedAnswer[] = [
 			{
-				body: JSON.stringify({ id: GRANT, role: 'viewer' }),
+				body: JSON.stringify({ grants: [{ id: GRANT, role: 'viewer' }] }),
 				headers: { 'content-type': 'application/json' },
 				status: 201,
 			},
@@ -789,7 +789,7 @@ suite('reading what an operation answered', () => {
 		const server = await recording(context, () => answers.shift() ?? { status: 500 });
 		const caller: AdminCaller = { token: 'management-token', url: server.url };
 		const creation = {
-			category: 'global.controlled',
+			categories: ['global.controlled'],
 			holder: { subject: 'gil' },
 			resource: 'STUDY-A1',
 			role: 'viewer',

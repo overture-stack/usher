@@ -380,7 +380,7 @@ export const grantFor = (
 	holder: Pick<Person, 'subject'>,
 	{ category = CONTROLLED, expiresAt, resource = STUDY_A1, role = 'viewer' }: GrantTerms = {},
 ): GrantCreation => ({
-	category,
+	categories: [category],
 	...(expiresAt === undefined ? {} : { expiresAt }),
 	holder: { subject: holder.subject },
 	resource,
@@ -410,10 +410,11 @@ export const uncategorizedGrantFor = (
 export const selfGrantUntil = (
 	expiresAt: string,
 	{ category = CONTROLLED, resource = STUDY_A1, role = 'viewer' }: Omit<GrantTerms, 'expiresAt'> = {},
-): SelfGrantCreation => ({ category, expiresAt, resource, role });
+): SelfGrantCreation => ({ categories: [category], expiresAt, resource, role });
 
 /**
- * Fails unless a grant's creation succeeded and named the new grant's id, and gives the id.
+ * Fails unless a grant's creation succeeded and named the new grant's id, and gives the id: the first
+ * grant's or request's of those it wrote, or the body's own.
  *
  * @param response the creation's answer.
  * @param what what the test asked for, for the failure's message.
@@ -423,8 +424,12 @@ export const createdId = (response: AdminResponse, what: string): string => {
 		response.status >= 200 && response.status < 300,
 		`${what} was answered ${response.status}${response.problem === undefined ? '' : ` ${response.problem.code}`}`,
 	);
-	const id: unknown =
-		typeof response.body === 'object' && response.body !== null ? Reflect.get(response.body, 'id') : undefined;
+	const written: unknown =
+		typeof response.body === 'object' && response.body !== null
+			? (Reflect.get(response.body, 'grants') ?? Reflect.get(response.body, 'requests'))
+			: undefined;
+	const first: unknown = Array.isArray(written) ? written[0] : response.body;
+	const id: unknown = typeof first === 'object' && first !== null ? Reflect.get(first, 'id') : undefined;
 	if (typeof id === 'string') {
 		return id;
 	}

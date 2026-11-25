@@ -359,6 +359,7 @@ to an existing seeded role's matrix reaches it only through a migration.
       revoked_by         uuid                   references users
       ended_at           timestamptz
       requested_by       uuid                   references users
+      creation_id        uuid
       check (num_nonnulls(holder_user_id, holder_group_id) = 1)
       check ((revoked_at is null) = (revoked_by is null))
       check (field_category_id is null or record_category_id is not null)
@@ -371,7 +372,8 @@ to an existing seeded role's matrix reaches it only through a migration.
 A holder holds one live grant on the same resource, category and role: the partial unique index,
 `grants_live_unique`, counts a grant until it is revoked or ended. `ended_at` records a grant on the
 same terms replacing it once it had expired, and `requested_by` names the principal who asked for a
-grant written by granting their request.
+grant written by granting their request. `creation_id` is shared by every grant one call writes, so they can be
+answered together; a grant written by deciding a request holds none.
 
 **Decide C: the holder is two columns rather than a type and an id.** The logical model's
 `holder_type` and `holder_id` fail closed either way, as it argues, but a polymorphic id cannot carry

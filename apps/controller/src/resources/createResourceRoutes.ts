@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { RouteOptions } from 'fastify';
 
 import { findApplication } from '../applications/index.js';
@@ -58,7 +60,8 @@ const ownerGrantUnwritten = (): never => {
 };
 
 // Writes an owner grant on a resource being registered for each person named, in turn, each with
-// its `grant.creation`, and with its holder's acceptance under auto-accept.
+// its `grant.creation`, and with its holder's acceptance under auto-accept; the grants share one
+// creation id, as the registration's.
 const writeOwnerGrants = async ({
 	autoAccept,
 	grants,
@@ -78,6 +81,7 @@ const writeOwnerGrants = async ({
 		return;
 	}
 	const role = (await grants.findRole('owner')) ?? ownerRoleMissing();
+	const creationId = randomUUID();
 	await holderSubjects.reduce<Promise<unknown>>(
 		(earlier, holderSubject) =>
 			earlier.then(
@@ -85,6 +89,7 @@ const writeOwnerGrants = async ({
 					(await writeGrant(grants, record, {
 						autoAccept,
 						category: null,
+						creationId,
 						expiresAt: null,
 						grantedAt: now,
 						granter,

@@ -59,7 +59,7 @@ const viewerGrant = async (
 	expiresAt?: string,
 ): Promise<GrantCreated> =>
 	createGrant(caller, {
-		category: CONTROLLED,
+		categories: [CONTROLLED],
 		holder: { subject: person.subject },
 		resource,
 		role: 'viewer',
@@ -259,7 +259,7 @@ suite('grant events', () => {
 
 		const requestId = createdId(
 			await createSelfGrant(await administratorCaller(harness), {
-				category: CONTROLLED,
+				categories: [CONTROLLED],
 				expiresAt: instantIn(2 * HOUR_MS),
 				resource: RESOURCES.a1,
 				role: 'viewer',
@@ -303,7 +303,7 @@ suite('grant events', () => {
 
 		const grantId = createdId(
 			await createSelfGrant(await personCaller(harness, PEOPLE.owner), {
-				category: CONTROLLED,
+				categories: [CONTROLLED],
 				expiresAt: instantIn(2 * HOUR_MS),
 				resource: RESOURCES.b2,
 				role: 'viewer',

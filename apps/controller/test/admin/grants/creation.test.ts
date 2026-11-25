@@ -263,7 +263,7 @@ suite('creating a grant', () => {
 
 			const naming = await createGrant(administrator, {
 				...uncategorizedGrantFor(CAST.recipient, 'owner'),
-				category: CONTROLLED,
+				categories: [CONTROLLED],
 			});
 			const after = await rowCounts(harness);
 			const whole = await createGrant(administrator, uncategorizedGrantFor(CAST.recipient, 'owner'));

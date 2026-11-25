@@ -65,6 +65,13 @@ const requestIdOf = (answer: AdminResponse): string => {
 const member = (answer: AdminResponse, name: string): unknown =>
 	typeof answer.body === 'object' && answer.body !== null ? Reflect.get(answer.body, name) : undefined;
 
+// A member of the first request a creation's answer holds.
+const requestMember = (answer: AdminResponse, name: string): unknown => {
+	const requests = member(answer, 'requests');
+	const first: unknown = Array.isArray(requests) ? requests[0] : undefined;
+	return typeof first === 'object' && first !== null ? Reflect.get(first, name) : undefined;
+};
+
 const eventsNaming = async (
 	harness: Harness,
 	type: string,
@@ -102,7 +109,7 @@ suite("an administrator's grant of access to records on an orphaned resource, as
 			);
 
 			assert.deepEqual(
-				answers.map((answer) => [member(answer, 'kind'), member(answer, 'requestKind')]),
+				answers.map((answer) => [requestMember(answer, 'kind'), requestMember(answer, 'requestKind')]),
 				[
 					['grantRequest', ORPHANED_RESOURCE_REQUEST],
 					['grantRequest', ORPHANED_RESOURCE_REQUEST],

@@ -1,9 +1,11 @@
-import { type AuditEvent, eventInstant } from '../eventLog/index.js';
+import { randomUUID } from 'node:crypto';
+
+import { type AuditEvent, eventInstant, type JsonValue } from '../eventLog/index.js';
 import type { EventMembers, ManagementOperation, NamedByRequest, OperationOutcome } from '../managementApi/index.js';
 import type { ResourceStanding } from '../resourceStanding/index.js';
 import { selfGrantAuthority } from './grantAuthority.js';
 import { countedWithRefusal } from './countedWithRefusal.js';
-import { categoryNamingOf, offeredCategory } from './grantCategory.js';
+import { type CategoryNaming, categoryNamingsOf, forCategory, offeredCategory } from './grantCategory.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import { grantRequestView } from './grantRequestView.js';
 import { grantView } from './grantView.js';
@@ -20,7 +22,13 @@ interface JudgedSelfGrant {
 	/** The caller: their person and their subject. */
 	caller: { subject: string; userId: string };
 
+	/** Shared by every grant and request the call writes. */
+	creationId: string;
+
 	expiresAt: Date;
+
+	/** The category as the request named it, so a refusal names its place. */
+	naming: CategoryNaming;
 
 	/** The configured clock's instant. */
 	now: Date;
@@ -69,17 +77,18 @@ const tellOwners = async (
 // A counted owner's self-grant, issued at once with their acceptance.
 const issue = async (
 	grants: GrantStore,
-	{ caller, category, expiresAt, now, record, resource, role, sourceIp, terms }: JudgedSelfGrant,
-): Promise<OperationOutcome> => {
+	{ caller, category, creationId, expiresAt, naming, now, record, resource, role, sourceIp, terms }: JudgedSelfGrant,
+): Promise<JsonValue> => {
 	const placed =
 		(await placeGrant(grants, {
 			acceptance: role.capabilities,
+			creationId,
 			expiresAt,
 			grantedAt: now,
 			grantedBy: caller.userId,
 			requestedBy: null,
 			terms,
-		})) ?? refuseWithin(GRANT_PROBLEMS.alreadyHolds);
+		})) ?? refuseWithin(forCategory(GRANT_PROBLEMS.alreadyHolds, naming));
 	await record({
 		data: {
 			category: category?.scopedName ?? null,
@@ -100,36 +109,33 @@ const issue = async (
 		reference: placed.id,
 		resourceId: resource.id,
 	});
-	return answered(
-		201,
-		grantView(
-			{
-				category: category?.scopedName ?? null,
-				decision: placed.decision,
-				endedAt: null,
-				expiresAt,
-				grantedAt: now,
-				granterSubject: caller.subject,
-				holderSubject: caller.subject,
-				id: placed.id,
-				resource: resource.externalId,
-				revokedAt: null,
-				revokerSubject: null,
-				role: role.name,
-				selfGrant: true,
-			},
-			now.getTime(),
-		),
+	return grantView(
+		{
+			category: category?.scopedName ?? null,
+			decision: placed.decision,
+			endedAt: null,
+			expiresAt,
+			grantedAt: now,
+			granterSubject: caller.subject,
+			holderSubject: caller.subject,
+			id: placed.id,
+			resource: resource.externalId,
+			revokedAt: null,
+			revokerSubject: null,
+			role: role.name,
+			selfGrant: true,
+		},
+		now.getTime(),
 	);
 };
 
 // A platform administrator's self-grant, asked for as a request someone else decides.
 const request = async (
 	grants: GrantStore,
-	{ caller, category, expiresAt, now, record, resource, role, sourceIp, terms }: JudgedSelfGrant,
-): Promise<OperationOutcome> => {
+	{ caller, category, creationId, expiresAt, naming, now, record, resource, role, sourceIp, terms }: JudgedSelfGrant,
+): Promise<JsonValue> => {
 	if (await grants.holdsLiveGrant(terms, now)) {
-		refuseWithin(GRANT_PROBLEMS.alreadyHolds);
+		refuseWithin(forCategory(GRANT_PROBLEMS.alreadyHolds, naming));
 	}
 	if (
 		await grants.holdsPendingRequest({
@@ -139,11 +145,12 @@ const request = async (
 			requestedBy: caller.userId,
 		})
 	) {
-		refuseWithin(GRANT_PROBLEMS.alreadyRequested);
+		refuseWithin(forCategory(GRANT_PROBLEMS.alreadyRequested, naming));
 	}
 	const requestId = await grants.insertGrantRequest({
 		...terms,
 		capabilities: role.capabilities,
+		creationId,
 		expiresAt,
 		kind: 'selfGrant',
 		requestedAt: now,
@@ -171,25 +178,22 @@ const request = async (
 		reference: requestId,
 		resourceId: resource.id,
 	});
-	return answered(
-		202,
-		grantRequestView(
-			{
-				category: category?.scopedName ?? null,
-				decidedAt: null,
-				decision: null,
-				expiresAt,
-				grantId: null,
-				holderSubject: caller.subject,
-				id: requestId,
-				kind: 'selfGrant',
-				requestedAt: now,
-				requestedBySubject: caller.subject,
-				resource: resource.externalId,
-				role: role.name,
-			},
-			now.getTime(),
-		),
+	return grantRequestView(
+		{
+			category: category?.scopedName ?? null,
+			decidedAt: null,
+			decision: null,
+			expiresAt,
+			grantId: null,
+			holderSubject: caller.subject,
+			id: requestId,
+			kind: 'selfGrant',
+			requestedAt: now,
+			requestedBySubject: caller.subject,
+			resource: resource.externalId,
+			role: role.name,
+		},
+		now.getTime(),
 	);
 };
 
@@ -200,26 +204,28 @@ const request = async (
  * in its exact letter case, 422 `unknownRole`; a control-plane role 422 `controlPlaneSelfGrant`; a
  * data-plane role naming no category 422 `categoryRequired`, except `submitter`, which takes the
  * instance's submitter category; the caller's authority on the resource, its row locked against
- * every other change's, as {@link selfGrantAuthority} decides it; and a category the resource does
- * not offer 422 `categoryNotOffered`. The caller is recorded on first meeting them.
+ * every other change's, as {@link selfGrantAuthority} decides it; and each category named, in order,
+ * that the resource does not offer 422 `categoryNotOffered`. The caller is recorded on first meeting
+ * them. One self-grant, or one request, is then written per category, in order, sharing one
+ * creation id; a refusal of any writes none and names the category's place in `categories`.
  *
  * A counted owner of the resource is issued the grant at once, its granter and its holder the
  * caller, with their acceptance showing what the role confers then, unless they hold one on its
  * terms that is neither revoked nor ended, refused 409 `alreadyHolds`; it is recorded as
  * `grant.selfCreation` at warning, each other counted owner of the resource is written an outbox
- * row of kind `selfGrant`, and it answers 201 with the grant, `kind` `grant`.
+ * row of kind `selfGrant` for each, and it answers 201 with the grants, each `kind` `grant`.
  *
  * Any other platform administrator asks for it: a live grant held on its terms is refused 409
  * `alreadyHolds`, and a request of theirs on its terms that is undecided and has not lapsed 409
  * `alreadyRequested`. The request is written undecided, keeping what the role confers then as what
  * they were shown, recorded as `grant.request` at warning, and each counted owner of the resource
  * is written an outbox row of kind `grantRequest`, no other platform administrator one, none on a
- * resource without an owner; it answers 202 with the request, `kind` `grantRequest`.
+ * resource without an owner, for each; it answers 202 with the requests, each `kind` `grantRequest`.
  *
  * Every instant is the configured clock's. A refusal records `grant.selfCreation`, denied, naming
- * the resource the body names. Each request is counted against the grant rate by its caller, as
- * the last step of the transaction committing it, or in the transaction recording its refusal or
- * failure.
+ * the resource the body names. Each grant or request written is counted against the grant rate by
+ * its caller, in the transaction committing it, and a refused or failed call once, in the transaction
+ * recording its refusal or failure.
  *
  * @param operations the grant rate, the grant store over a transaction's connection, the settings
  *   and the trail.
@@ -254,7 +260,7 @@ export const selfGrantOperation = ({
 				if (role.plane === 'control') {
 					refuseWithin(GRANT_PROBLEMS.controlPlaneSelfGrant);
 				}
-				const naming = categoryNamingOf(role, input.category, settings.submitterCategory);
+				const namings = categoryNamingsOf(role, input.categories, settings.submitterCategory);
 				const standing = await grants.readStanding({
 					externalId: input.resource,
 					lock: 'noKeyUpdate',
@@ -269,28 +275,47 @@ export const selfGrantOperation = ({
 					refuseWithin(authority.problem, authority.recordedReason);
 				}
 				const resource = standing ?? refuseWithin(GRANT_PROBLEMS.resourceNotFound);
-				const category = await offeredCategory(grants, naming, resource.id);
+				const judgedCategories = await namings.reduce<
+					Promise<readonly { category: JudgedSelfGrant['category']; naming: CategoryNaming }[]>
+				>(
+					async (earlier, naming) => [
+						...(await earlier),
+						{ category: await offeredCategory(grants, naming, resource.id), naming },
+					],
+					Promise.resolve([]),
+				);
 				const userId = await grants.findOrRecordPerson(principal.subject, now);
-				const judged: JudgedSelfGrant = {
-					caller: { subject: principal.subject, userId },
-					category,
-					expiresAt: input.expiresAt,
-					now,
-					record,
-					resource,
-					role,
-					sourceIp,
-					terms: {
-						holderUserId: userId,
-						recordCategoryId: category?.id ?? null,
-						resourceId: resource.id,
-						roleId: role.id,
+				const creationId = randomUUID();
+				const write = authority.kind === 'issue' ? issue : request;
+				const written = await judgedCategories.reduce<Promise<readonly JsonValue[]>>(
+					async (earlier, { category, naming }) => {
+						const before = await earlier;
+						const view = await write(grants, {
+							caller: { subject: principal.subject, userId },
+							category,
+							creationId,
+							expiresAt: input.expiresAt,
+							naming,
+							now,
+							record,
+							resource,
+							role,
+							sourceIp,
+							terms: {
+								holderUserId: userId,
+								recordCategoryId: category?.id ?? null,
+								resourceId: resource.id,
+								roleId: role.id,
+							},
+						});
+						await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
+						return [...before, view];
 					},
-				};
-				const outcome =
-					authority.kind === 'issue' ? await issue(grants, judged) : await request(grants, judged);
-				await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
-				return outcome;
+					Promise.resolve([]),
+				);
+				return authority.kind === 'issue'
+					? answered(201, { grants: [...written] })
+					: answered(202, { requests: [...written] });
 			}),
 			{
 				resources_retired_without_live_grants: GRANT_PROBLEMS.resourceNotFound,

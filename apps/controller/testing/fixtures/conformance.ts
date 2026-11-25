@@ -294,7 +294,7 @@ export const grantToAna = async (
 ): Promise<string> => {
 	const owner = harness.caller(await harness.tokens.management(CORPUS_OWNER));
 	const created = await createGrant(owner, {
-		category: `global.${category}`,
+		categories: [`global.${category}`],
 		...(expiresAt === undefined ? {} : { expiresAt }),
 		holder: { subject: CORPUS_ANA.subject },
 		resource,

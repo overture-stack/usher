@@ -41,6 +41,9 @@ export interface AdminOverrides {
  * contract's `ProblemDetails`).
  */
 export interface ProblemDetails {
+	/** The place in the request's `categories`, counted from 0, of the category a refusal names. */
+	categoryIndex?: number;
+
 	code: string;
 	detail?: string;
 	instance?: string;
@@ -67,7 +70,7 @@ export interface AdminResponse {
 
 /** An answer to a grant's creation, carrying the new grant's id when the API answered with one. */
 export interface GrantCreated extends AdminResponse {
-	/** The body's `id`, the grant's opaque id, when it is a string; `undefined` otherwise. */
+	/** The id of the first grant or request a creation wrote, or the body's own `id`, when it is a string; `undefined` otherwise. */
 	grantId: string | undefined;
 }
 
@@ -157,8 +160,8 @@ export interface ResourceFieldDefinition {
 
 /** What creating a grant sends. */
 export interface GrantCreation {
-	/** A scoped category name, `global.controlled`; absent on an owner's grant, and on a submitter's, which takes the instance's. */
-	category?: string;
+	/** Scoped category names, `global.controlled`, one grant each; absent on an owner's grant, and on a submitter's, which takes the instance's. */
+	categories?: readonly string[];
 
 	/** An instant with an offset; the grant never expires when absent. */
 	expiresAt?: string;
@@ -173,7 +176,9 @@ export interface GrantCreation {
 
 /** What an administrator's self-grant sends: the caller is the holder, and the expiry is required. */
 export interface SelfGrantCreation {
-	category?: string;
+	/** Scoped category names, one grant or request each. */
+	categories?: readonly string[];
+
 	expiresAt: string;
 	resource: string;
 	role: string;
@@ -487,9 +492,18 @@ const send = async (
 	return responseOf(response);
 };
 
+// The id an answer names: the first of the grants or requests a creation wrote, or the body's own.
+const firstIdIn = (body: unknown): unknown => {
+	if (typeof body !== 'object' || body === null) {
+		return undefined;
+	}
+	const written: unknown = Reflect.get(body, 'grants') ?? Reflect.get(body, 'requests');
+	const first: unknown = Array.isArray(written) ? written[0] : body;
+	return typeof first === 'object' && first !== null ? Reflect.get(first, 'id') : undefined;
+};
+
 const withGrantId = (response: AdminResponse): GrantCreated => {
-	const id: unknown =
-		typeof response.body === 'object' && response.body !== null ? Reflect.get(response.body, 'id') : undefined;
+	const id = firstIdIn(response.body);
 	return { ...response, grantId: typeof id === 'string' ? id : undefined };
 };
 
@@ -861,7 +875,7 @@ export const listResourceFields = (caller: AdminCaller, overrides?: AdminOverrid
  * @param caller the Controller and the caller's token.
  * @param creation the grant.
  * @param overrides departures from the request.
- * @returns the answer, with the new grant's id read from its body's `id`.
+ * @returns the answer, with the first grant's or request's id it wrote.
  */
 export const createGrant = async (
 	caller: AdminCaller,
@@ -920,7 +934,7 @@ export const removeSubmitter = (
  * @param caller the Controller and the caller's token.
  * @param creation the grant.
  * @param overrides departures from the request.
- * @returns the answer, with the new grant's id read from its body's `id`.
+ * @returns the answer, with the first grant's or request's id it wrote.
  */
 export const createSelfGrant = async (
 	caller: AdminCaller,

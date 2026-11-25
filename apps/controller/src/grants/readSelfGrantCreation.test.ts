@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
+import { GRANT_PROBLEMS } from './grantProblems.js';
 import { readSelfGrantCreation } from './readSelfGrantCreation.js';
 
 const NOW = Date.UTC(2026, 10, 12, 12, 0, 0);
@@ -12,7 +13,7 @@ const DAY_SECONDS = 86_400;
 const instant = (offsetMilliseconds: number): string => new Date(NOW + offsetMilliseconds).toISOString();
 
 const VIEWER = {
-	category: 'global.controlled',
+	categories: ['global.controlled'],
 	expiresAt: instant(2 * HOUR_MS),
 	resource: 'STUDY-A1',
 	role: 'viewer',
@@ -31,7 +32,7 @@ const outcomeOf = (
 };
 
 suite("reading a self-grant's creation", () => {
-	test('reads the resource, the role, the category and the expiry as an instant, every text as given', () => {
+	test('reads the resource, the role, the categories and the expiry as an instant, every text as given', () => {
 		assert.deepEqual(
 			outcomeOf({
 				...VIEWER,
@@ -39,7 +40,7 @@ suite("reading a self-grant's creation", () => {
 				resource: 'Study A1 ',
 			}),
 			{
-				category: 'global.controlled',
+				categories: ['global.controlled'],
 				expiresAt: new Date(NOW + 2 * HOUR_MS),
 				resource: 'Study A1 ',
 				role: 'viewer',
@@ -52,7 +53,7 @@ suite("reading a self-grant's creation", () => {
 				role: 'submitter',
 			}),
 			{
-				category: undefined,
+				categories: undefined,
 				expiresAt: new Date(NOW + 2 * HOUR_MS),
 				resource: 'STUDY-A1',
 				role: 'submitter',
@@ -72,10 +73,14 @@ suite("reading a self-grant's creation", () => {
 				{ ...VIEWER, expiresAt: null },
 				withoutRole,
 				{ ...VIEWER, resource: ['STUDY-A1'] },
-				{ ...VIEWER, category: 7 },
+				{ ...VIEWER, categories: 7 },
+				{ ...VIEWER, categories: [] },
+				{ ...VIEWER, category: 'global.controlled' },
 				{ ...VIEWER, expiresAt: null, holder: { subject: 'subject-cy' } },
 			].map((body) => outcomeOf(body)),
 			[
+				[400, 'unreadableBody'],
+				[400, 'unreadableBody'],
 				[400, 'unreadableBody'],
 				[400, 'unreadableBody'],
 				[400, 'unreadableBody'],
@@ -150,10 +155,21 @@ suite("reading a self-grant's creation", () => {
 				[422, 'expiryPassed'],
 				{
 					...owner,
-					category: undefined,
+					categories: undefined,
 					expiresAt: new Date(NOW + 2 * HOUR_MS),
 				},
 			],
 		);
+	});
+	test('refuses 422 a category named twice, in any letter case, naming the first repeat by its place', () => {
+		const reading = readSelfGrantCreation(
+			{ ...VIEWER, categories: ['global.controlled', 'Global.CONTROLLED'] },
+			{ administrator: false, maximumSeconds: DAY_SECONDS, now: NOW },
+		);
+
+		assert.deepEqual(reading.kind === 'refused' && reading.problem, {
+			...GRANT_PROBLEMS.duplicateCategory,
+			categoryIndex: 1,
+		});
 	});
 });

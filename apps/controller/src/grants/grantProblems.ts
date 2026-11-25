@@ -76,6 +76,12 @@ export const GRANT_PROBLEMS = Object.freeze({
 		'Grant not in force',
 		'The grant is revoked or has expired, and takes no answer.',
 	),
+	duplicateCategory: problem(
+		'duplicateCategory',
+		422,
+		'Category named twice',
+		'categories names each category once, in any letter case; categoryIndex is the place of the first repeat, counted from 0.',
+	),
 	expiryNotAnInstant: problem(
 		'expiryNotAnInstant',
 		422,

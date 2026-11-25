@@ -214,6 +214,7 @@ erDiagram
     uuid revoked_by FK "nullable"
     timestamptz ended_at "nullable"
     uuid requested_by FK "nullable"
+    uuid creation_id "nullable"
   }
   grant_decisions {
     uuid id PK
@@ -238,6 +239,7 @@ erDiagram
     timestamptz decided_at "nullable"
     text decision "nullable"
     uuid grant_id FK "nullable"
+    uuid creation_id "nullable"
   }
   grant_operations {
     uuid id PK

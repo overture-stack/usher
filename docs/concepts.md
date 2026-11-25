@@ -235,7 +235,8 @@ several.
 A **category grant** is the entry saying a specific user is granted a specific category in a
 specific resource. A viewer sees the records in that resource carrying that category. Where a record
 carries several categories, the viewer needs a grant for every one of them, so missing one is enough
-to see none of that record.
+to see none of that record. One request may name several categories, and writes a grant for each:
+each is then its own, expiring, revoked and answered on its own.
 
 **A note on granularity, because it changes what you can express.** A category selects records
 within a resource, so a resource holding a mix of sensitivities does not have to be split: a viewer

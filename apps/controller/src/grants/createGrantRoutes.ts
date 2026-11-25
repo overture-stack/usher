@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { RouteOptions } from 'fastify';
 import pg from 'pg';
 
@@ -15,7 +17,7 @@ import { addressedAnswer, type AddressedTerms, unansweredRefusal } from './addre
 import { countedWithRefusal } from './countedWithRefusal.js';
 import { unresolvedByDirectory } from './directoryOutcome.js';
 import { administratorGrants, grantAuthority } from './grantAuthority.js';
-import { categoryNamingOf, offeredCategory } from './grantCategory.js';
+import { categoryNamingsOf, forCategory, offeredCategory } from './grantCategory.js';
 import { grantChangeOperation } from './grantChangeOperation.js';
 import {
 	ownGrantListingOperation,
@@ -48,10 +50,29 @@ import type {
 	GrantStore,
 	JudgedCreation,
 	StoredGrant,
+	JudgedCategory,
 	StoredRole,
 	ViewedGrant,
 } from './types.js';
 import { writeGrant } from './writeGrant.js';
+
+// The categories a creation's grants take, as a payload names them, in order; none for the whole
+// resource.
+const categoryNamesOf = (categories: readonly JudgedCategory[]): readonly string[] | undefined => {
+	const named = categories.flatMap(({ category }) => (category === null ? [] : [category.scopedName]));
+	return named.length === 0 ? undefined : named;
+};
+
+// Runs a step for each item in turn, each after the one before has settled, on one connection, so the
+// first refusal in order is the one answered and nothing runs after it.
+const inOrder = <Item, Result>(
+	items: readonly Item[],
+	step: (item: Item) => Promise<Result>,
+): Promise<readonly Result[]> =>
+	items.reduce<Promise<readonly Result[]>>(
+		async (earlier, item) => [...(await earlier), await step(item)],
+		Promise.resolve([]),
+	);
 
 // Whether a grant makes its holder a counted owner of its resource now: an owner grant, live, whose
 // holder's latest answer accepted it.
@@ -80,21 +101,22 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
  *
  * Creating a grant, `POST /admin/grants`, reads its body with {@link readGrantCreation}, then
  * judges in turn: a role the instance does not define, in its exact letter case, 422 `unknownRole`;
- * a control-plane role naming a category 422 `wholeResourceRole`, and a data-plane role naming none
+ * a control-plane role naming categories 422 `wholeResourceRole`, and a data-plane role naming none
  * 422 `categoryRequired`, except `submitter`, which takes the instance's submitter category; the
  * grant's authority, decided by {@link grantAuthority} on the resource's row locked for share,
  * whether the resource has a counted owner read for a platform administrator granting a role other
- * than `submitter` and `owner` alone; a category the resource does not offer 422
- * `categoryNotOffered`; and a request's expiry, as {@link orphanedResourceExpiry} judges it. It
- * then writes the grant with {@link writeGrant}, its granter the caller, recorded on first meeting
- * them, refusing 409 `alreadyHolds` a holder holding one on its terms neither revoked nor ended,
- * and answers 201 with the grant. A creation whose commit fails since its resource was retired
+ * than `submitter` and `owner` alone; each category named, in order, that the resource does not
+ * offer 422 `categoryNotOffered`; and a request's expiry, as {@link orphanedResourceExpiry} judges
+ * it. It then writes a grant per category, in order, with {@link writeGrant}, its granter the
+ * caller, recorded on first meeting them, every grant sharing one creation id, refusing 409
+ * `alreadyHolds` a holder holding one on its terms neither revoked nor ended, and answers 201 with
+ * the grants. A refusal of one category writes nothing and names its place in `categories`. A creation whose commit fails since its resource was retired
  * first is answered 404 `resourceNotFound`. Its event, refused, names the resource the body names.
  *
  * A platform administrator's grant of a role other than `submitter` and `owner`, on a resource that
  * has no counted owner, is asked for instead: {@link askForOrphanedResource} writes it as a grant
  * request of kind `orphanedResource`, its requestedBy the caller asking, recorded on first meeting them, and
- * its holder the person named, and it answers 202 with the request. Its holder is named as a
+ * its holder the person named, one per category, and it answers 202 with the requests. Its holder is named as a
  * grant's is, and a refusal of it records `grant.creation` as a grant's does.
  *
  * A holder named by address is resolved through the directory only once every other rule is judged,
@@ -128,9 +150,9 @@ const showsRole = (shown: readonly string[], { capabilities }: StoredRole): bool
  * reason; an event of an answer or a revocation refused names the grant when one held by a person
  * has the id.
  *
- * Each request of a grant write, a creation, an answer, a revocation, a self-grant, a change, a
- * request's decision or a submitter's removal, is counted against the grant rate once, by its
- * caller: as the last step of the transaction committing it, a change keeping a grant as it was
+ * Each request of a grant write, an answer, a revocation, a change, a request's decision or a
+ * submitter's removal, is counted against the grant rate once, by its caller, and a creation or a
+ * self-grant once for each grant or request it writes: as the last step of the transaction committing it, a change keeping a grant as it was
  * included, or else in the transaction recording its refusal or failure, as for an owner's creation
  * naming an address no single account holds. A listing is never counted, and the count refuses no
  * write.
@@ -192,7 +214,7 @@ export const createGrantRoutes = (
 		holderSubject: string | undefined,
 	): Promise<JudgedCreation> => {
 		const role = (await grants.findRole(input.role)) ?? refuseWithin(GRANT_PROBLEMS.unknownRole);
-		const naming = categoryNamingOf(role, input.category, settings.submitterCategory);
+		const namings = categoryNamingsOf(role, input.categories, settings.submitterCategory);
 		const standing = await grants.readStanding({
 			externalId: input.resource,
 			lock,
@@ -214,7 +236,10 @@ export const createGrantRoutes = (
 			refuseWithin(authority.problem, authority.recordedReason);
 		}
 		const resource = standing ?? refuseWithin(GRANT_PROBLEMS.resourceNotFound);
-		const category = await offeredCategory(grants, naming, resource.id);
+		const categories = await inOrder(namings, async (naming) => ({
+			category: await offeredCategory(grants, naming, resource.id),
+			naming,
+		}));
 		return {
 			authority:
 				authority.kind === 'request'
@@ -226,7 +251,7 @@ export const createGrantRoutes = (
 							kind: 'request',
 						}
 					: { kind: 'issue' },
-			category,
+			categories,
 			kind: 'judged',
 			resource,
 			role,
@@ -234,19 +259,22 @@ export const createGrantRoutes = (
 	};
 
 	// Writes a creation for the holder's subject in one transaction, judging every rule again on the
-	// resource's row locked for share: its grant, answered as `answerOf` says, or the request a
-	// platform administrator asks for on a resource with no counted owner, answered 202.
+	// resource's row locked for share: a grant for each category named, in order, answered as
+	// `answerOf` says, or a request for each a platform administrator asks for on a resource with no
+	// counted owner, answered 202 with every request. Every grant and request the call writes shares one
+	// creation id, and each is counted against the grant rate.
 	const writeCreation = (
 		request: { input: GrantCreation; now: Date; principal: Principal },
 		holderSubject: string,
 		sourceIp: string,
-		answerOf: (written: ViewedGrant) => OperationOutcome,
+		answerOf: (written: readonly ViewedGrant[]) => OperationOutcome,
 	): Promise<OperationOutcome> => {
 		const { now, principal } = request;
+		const creationId = randomUUID();
 		return changeOutcome(
 			trail.inTransaction(actorOf(principal), async ({ connection, record }): Promise<OperationOutcome> => {
 				const grants = grantStoreOf(connection);
-				const { authority, category, resource, role } = await judgeCreation(
+				const { authority, categories, resource, role } = await judgeCreation(
 					grants,
 					{ ...request, lock: 'share' },
 					holderSubject,
@@ -255,32 +283,44 @@ export const createGrantRoutes = (
 					subject: principal.subject,
 					userId: await grants.findOrRecordPerson(principal.subject, now),
 				};
-				const terms = {
+				const termsOf = ({ category }: JudgedCategory) => ({
 					category,
+					creationId,
 					holderSubject,
 					resource: { externalId: resource.externalId, id: resource.id },
 					role,
 					sourceIp,
+				});
+				const counted = async <Written>(written: Written): Promise<Written> => {
+					await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
+					return written;
 				};
-				const outcome =
-					authority.kind === 'request'
-						? await askForOrphanedResource(grants, record, {
-								...terms,
+				if (authority.kind === 'request') {
+					const requests = await inOrder(categories, async (judged) =>
+						counted(
+							await askForOrphanedResource(grants, record, {
+								...termsOf(judged),
 								expiresAt: authority.expiresAt,
+								naming: judged.naming,
 								now,
 								requestedBy: granter,
-							})
-						: answerOf(
-								(await writeGrant(grants, record, {
-									...terms,
-									autoAccept: settings.grantAutoAccept,
-									expiresAt: request.input.expiresAt ?? null,
-									grantedAt: now,
-									granter,
-								})) ?? refuseWithin(GRANT_PROBLEMS.alreadyHolds),
-							);
-				await grantRate.count({ connection, record }, { sourceIp, subject: principal.subject });
-				return outcome;
+							}),
+						),
+					);
+					return answered(202, { requests: [...requests] });
+				}
+				const written = await inOrder(categories, async (judged) =>
+					counted(
+						(await writeGrant(grants, record, {
+							...termsOf(judged),
+							autoAccept: settings.grantAutoAccept,
+							expiresAt: request.input.expiresAt ?? null,
+							grantedAt: now,
+							granter,
+						})) ?? refuseWithin(forCategory(GRANT_PROBLEMS.alreadyHolds, judged.naming)),
+					),
+				);
+				return answerOf(written);
 			}),
 			{
 				resources_retired_without_live_grants: GRANT_PROBLEMS.resourceNotFound,
@@ -310,7 +350,7 @@ export const createGrantRoutes = (
 			return unresolvedByDirectory(resolution, 'holderBySubject');
 		}
 		const terms: AddressedTerms = {
-			category: judged.category?.scopedName ?? null,
+			categories: categoryNamesOf(judged.categories),
 			email,
 			resource: judged.resource.externalId,
 			role: judged.role.name,
@@ -344,7 +384,7 @@ export const createGrantRoutes = (
 			const request = { input, now: new Date(clock.now()), principal };
 			return input.holder.kind === 'subject'
 				? writeCreation(request, input.holder.subject, sourceIp, (written) =>
-						answered(201, grantView(written, request.now.getTime())),
+						answered(201, { grants: written.map((grant) => grantView(grant, request.now.getTime())) }),
 					)
 				: createByAddress(request, input.holder.email, sourceIp);
 		},

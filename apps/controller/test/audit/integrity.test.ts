@@ -96,7 +96,7 @@ suite('audit integrity', () => {
 			const owner = await personCaller(harness, PEOPLE.owner);
 			const beforeControl = await highestPosition(harness.clients.migration);
 			const control = await createGrant(owner, {
-				category: CONTROLLED,
+				categories: [CONTROLLED],
 				holder: { subject: PEOPLE.ana.subject },
 				resource: RESOURCES.a1,
 				role: 'viewer',
@@ -106,7 +106,7 @@ suite('audit integrity', () => {
 			const before = await highestPosition(harness.clients.migration);
 
 			const refused = await createGrant(owner, {
-				category: CONTROLLED,
+				categories: [CONTROLLED],
 				holder: { subject: PEOPLE.bo.subject },
 				resource: RESOURCES.a1,
 				role: 'viewer',
@@ -126,7 +126,7 @@ suite('audit integrity', () => {
 			const since = markOf(log);
 
 			const requested = await createSelfGrant(administrator, {
-				category: CONTROLLED,
+				categories: [CONTROLLED],
 				expiresAt: instantIn(3_600_000),
 				resource: RESOURCES.a1,
 				role: 'viewer',

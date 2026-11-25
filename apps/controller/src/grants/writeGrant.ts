@@ -9,6 +9,9 @@ export interface GrantToPlace {
 	 */
 	acceptance: readonly string[] | undefined;
 
+	/** Shared by every grant one call writes; none for a grant written by deciding a request. */
+	creationId: string | null;
+
 	/** None for a grant that never expires. */
 	expiresAt: Date | null;
 
@@ -36,11 +39,12 @@ export interface GrantToPlace {
  */
 export const placeGrant = async (
 	store: GrantStore,
-	{ acceptance, expiresAt, grantedAt, grantedBy, requestedBy, terms }: GrantToPlace,
+	{ acceptance, creationId, expiresAt, grantedAt, grantedBy, requestedBy, terms }: GrantToPlace,
 ): Promise<{ decision: StoredDecision | null; id: string } | undefined> => {
 	await store.endExpiredGrant(terms, grantedAt);
 	const id = await store.insertGrant({
 		...terms,
+		creationId,
 		expiresAt,
 		grantedAt,
 		grantedBy,
@@ -73,6 +77,9 @@ export interface GrantToWrite {
 
 	/** Its record category, by id and as a payload names it; `null` for the whole resource. */
 	category: { id: string; scopedName: string } | null;
+
+	/** Shared by every grant one call writes. */
+	creationId: string;
 
 	/** None for a grant that never expires. */
 	expiresAt: Date | null;
@@ -112,11 +119,23 @@ export interface GrantToWrite {
 export const writeGrant = async (
 	store: GrantStore,
 	record: (event: AuditEvent) => Promise<string>,
-	{ autoAccept, category, expiresAt, grantedAt, granter, holderSubject, resource, role, sourceIp }: GrantToWrite,
+	{
+		autoAccept,
+		category,
+		creationId,
+		expiresAt,
+		grantedAt,
+		granter,
+		holderSubject,
+		resource,
+		role,
+		sourceIp,
+	}: GrantToWrite,
 ): Promise<ViewedGrant | undefined> => {
 	const holderUserId = await store.findOrRecordPerson(holderSubject, grantedAt);
 	const placed = await placeGrant(store, {
 		acceptance: autoAccept ? role.capabilities : undefined,
+		creationId,
 		expiresAt,
 		grantedAt,
 		grantedBy: granter.userId,

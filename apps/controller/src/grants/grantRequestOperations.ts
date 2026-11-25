@@ -72,6 +72,7 @@ const grant = async (
 	const placed =
 		(await placeGrant(grants, {
 			acceptance: ACCEPTANCE_OF[request.kind](request, role, autoAccept),
+			creationId: null,
 			expiresAt: request.expiresAt,
 			grantedAt: now,
 			grantedBy: decidedBy.userId,

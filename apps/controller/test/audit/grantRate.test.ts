@@ -83,7 +83,7 @@ const targets = (from: number, count: number): readonly Target[] => TARGETS.slic
 const grantEach = (caller: AdminCaller, each: readonly Target[]): Promise<readonly GrantCreated[]> =>
 	inTurn(each, ([person, resource]) =>
 		createGrant(caller, {
-			category: CONTROLLED,
+			categories: [CONTROLLED],
 			holder: { subject: person.subject },
 			resource,
 			role: 'viewer',

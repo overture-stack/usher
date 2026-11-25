@@ -57,6 +57,22 @@ const ROLES: Readonly<Record<string, StoredRole>> = {
 	viewer: VIEWER,
 };
 
+// What a recorded call shows in place of a creation id the route generated: a version 4 uuid, which a
+// test cannot know before the call, so it is compared by its form.
+const CREATION_ID = 'a generated creation id';
+
+const VERSION_4_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+const withCreationIdMarked = (value: unknown): unknown => {
+	if (typeof value !== 'object' || value === null || !Object.hasOwn(value, 'creationId')) {
+		return value;
+	}
+	const creationId: unknown = Reflect.get(value, 'creationId');
+	return typeof creationId === 'string' && VERSION_4_UUID.test(creationId)
+		? { ...value, creationId: CREATION_ID }
+		: value;
+};
+
 const STUDY_A1: ResourceStanding = {
 	accessLevel: 'grant',
 	countedOwner: false,
@@ -231,7 +247,7 @@ const WORLD: World = {
 // A store answering from the world given, keeping each call made of it in order.
 const fakeStore = (world: World, calls: Call[]): GrantStore => {
 	const called = (method: keyof GrantStore, ...values: unknown[]): void => {
-		calls.push({ method, values });
+		calls.push({ method, values: values.map(withCreationIdMarked) });
 	};
 	return {
 		appendDecision: async (decision: NewDecision) => {
@@ -536,7 +552,7 @@ const send = (
 	});
 
 const VIEWER_CREATION = {
-	category: 'global.controlled',
+	categories: ['global.controlled'],
 	holder: { subject: 'subject-cy' },
 	resource: 'STUDY-A1',
 	role: 'viewer',
@@ -562,6 +578,13 @@ const revoke = (stand: Stand, caller: string, grantId: string = GRANT_ID, body?:
 const parsed = (answered: { body: string }): Readonly<Record<string, unknown>> =>
 	JSON.parse(answered.body) as Readonly<Record<string, unknown>>;
 
+// The first grant or request a creation's answer holds.
+const firstWritten = (answered: { body: string }): Readonly<Record<string, unknown>> => {
+	const body = parsed(answered);
+	const written = body['grants'] ?? body['requests'];
+	return Array.isArray(written) ? (written[0] as Readonly<Record<string, unknown>>) : body;
+};
+
 const outcomeOf = (answered: { body: string; statusCode: number }): readonly unknown[] => [
 	answered.statusCode,
 	answered.statusCode < 300 ? undefined : parsed(answered)['code'],
@@ -581,7 +604,7 @@ suite('creating a grant', () => {
 		const created = await create(stand, 'ana');
 
 		assert.equal(created.statusCode, 201);
-		assert.deepEqual(parsed(created), {
+		assert.deepEqual(firstWritten(created), {
 			category: 'global.controlled',
 			decision: null,
 			expiresAt: null,
@@ -632,6 +655,7 @@ suite('creating a grant', () => {
 					values: [
 						{
 							...terms,
+							creationId: CREATION_ID,
 							expiresAt: null,
 							grantedAt: new Date(NOW),
 							grantedBy: 'person-ana',
@@ -661,12 +685,12 @@ suite('creating a grant', () => {
 		const created = await create(stand, 'ana');
 
 		assert.equal(created.statusCode, 201);
-		assert.deepEqual(parsed(created)['decision'], {
+		assert.deepEqual(firstWritten(created)['decision'], {
 			capabilities: VIEWER.capabilities,
 			decidedAt: '2026-11-12T12:00:00.000Z',
 			decision: 'accepted',
 		});
-		assert.equal(parsed(created)['state'], 'accepted');
+		assert.equal(firstWritten(created)['state'], 'accepted');
 		assert.deepEqual(stand.calls.find(({ method }) => method === 'appendDecision')?.values, [
 			{
 				capabilities: VIEWER.capabilities,
@@ -688,7 +712,7 @@ suite('creating a grant', () => {
 		});
 
 		assert.equal(created.statusCode, 201);
-		assert.equal(parsed(created)['category'], 'global.unmarked');
+		assert.equal(firstWritten(created)['category'], 'global.unmarked');
 		assert.deepEqual(stand.calls.find(({ method }) => method === 'findOfferedCategory')?.values, [
 			'global.unmarked',
 			'resource-a1',
@@ -836,7 +860,7 @@ suite('creating a grant', () => {
 
 		const refused = await create(stand, 'ana', {
 			...VIEWER_CREATION,
-			category: 'resource.internal',
+			categories: ['resource.internal'],
 		});
 
 		assert.deepEqual(outcomeOf(refused), [422, 'categoryNotOffered']);
@@ -875,8 +899,8 @@ suite('creating a grant whose holder is named by address', () => {
 		const created = await create(stand, 'administrator', submitterAt('Sub.Bo@Example.ORG'));
 
 		assert.equal(created.statusCode, 201);
-		assert.equal(parsed(created)['kind'], 'grant');
-		assert.deepEqual(parsed(created)['holder'], {
+		assert.equal(firstWritten(created)['kind'], 'grant');
+		assert.deepEqual(firstWritten(created)['holder'], {
 			hasAccount: true,
 			subject: 'subject-bo',
 		});
@@ -914,14 +938,14 @@ suite('creating a grant whose holder is named by address', () => {
 
 		const answers = [
 			await create(stand, 'ana', { ...viewerAt, role: 'Viewer' }),
-			await create(stand, 'ana', { ...viewerAt, category: undefined }),
+			await create(stand, 'ana', { ...viewerAt, categories: undefined }),
 			await create(stand, 'administrator', viewerAt),
 			await create(stand, 'eli', viewerAt),
 			await create(stand, 'cy', { ...viewerAt, resource: 'STUDY-Z9' }),
 			await create(stand, 'bo', viewerAt),
 			await create(stand, 'ana', {
 				...viewerAt,
-				category: 'resource.internal',
+				categories: ['resource.internal'],
 			}),
 		];
 
@@ -971,14 +995,14 @@ suite('creating a grant whose holder is named by address', () => {
 		assert.equal(held.statusCode, 202);
 		assert.equal(unheld.statusCode, 202);
 		assert.deepEqual(parsed(held), {
-			category: 'global.controlled',
+			categories: ['global.controlled'],
 			email: 'Cy@Example.org',
 			kind: 'grantByAddress',
 			resource: 'STUDY-A1',
 			role: 'viewer',
 		});
 		assert.deepEqual(parsed(unheld), {
-			category: 'global.controlled',
+			categories: ['global.controlled'],
 			email: 'Nobody@Example.org',
 			kind: 'grantByAddress',
 			resource: 'STUDY-A1',
@@ -1116,7 +1140,7 @@ suite('creating a grant on a resource without a counted owner', () => {
 		const asked = await create(stand, 'administrator', ORPHANED_VIEWER);
 
 		assert.equal(asked.statusCode, 202);
-		assert.deepEqual(parsed(asked), {
+		assert.deepEqual(firstWritten(asked), {
 			category: 'global.controlled',
 			decidedAt: null,
 			expiresAt: '2026-11-12T14:00:00.000Z',
@@ -1162,6 +1186,7 @@ suite('creating a grant on a resource without a counted owner', () => {
 			{
 				...terms,
 				capabilities: VIEWER.capabilities,
+				creationId: CREATION_ID,
 				expiresAt: new Date(NOW + 2 * HOUR_MS),
 				kind: 'orphanedResource',
 				requestedAt: new Date(NOW),
@@ -1213,7 +1238,7 @@ suite('creating a grant on a resource without a counted owner', () => {
 		});
 
 		assert.equal(asked.statusCode, 202);
-		assert.deepEqual(parsed(asked)['holder'], {
+		assert.deepEqual(firstWritten(asked)['holder'], {
 			hasAccount: true,
 			subject: 'subject-cy',
 		});
@@ -1264,7 +1289,7 @@ suite('creating a grant on a resource without a counted owner', () => {
 			}),
 			await create(stand, 'administrator', {
 				...VIEWER_CREATION,
-				category: 'resource.internal',
+				categories: ['resource.internal'],
 			}),
 			await create(stand, 'administrator', {
 				...ORPHANED_VIEWER,
@@ -1840,7 +1865,7 @@ suite('revoking a grant', () => {
 });
 
 const SELF_VIEWER = {
-	category: 'global.controlled',
+	categories: ['global.controlled'],
 	expiresAt: new Date(NOW + 2 * HOUR_MS).toISOString(),
 	resource: 'STUDY-A1',
 	role: 'viewer',
@@ -1871,7 +1896,7 @@ suite('creating a self-grant', () => {
 		const created = await selfGrant(stand, 'ana');
 
 		assert.equal(created.statusCode, 201);
-		assert.deepEqual(parsed(created), {
+		assert.deepEqual(firstWritten(created), {
 			category: 'global.controlled',
 			decision: {
 				capabilities: VIEWER.capabilities,
@@ -1904,6 +1929,7 @@ suite('creating a self-grant', () => {
 		]);
 		assert.deepEqual(valuesOf(stand, 'insertGrant'), [
 			{
+				creationId: CREATION_ID,
 				expiresAt: new Date(NOW + 2 * HOUR_MS),
 				grantedAt: new Date(NOW),
 				grantedBy: 'person-ana',
@@ -1944,7 +1970,7 @@ suite('creating a self-grant', () => {
 		const asked = await selfGrant(stand, 'administrator');
 
 		assert.equal(asked.statusCode, 202);
-		assert.deepEqual(parsed(asked), {
+		assert.deepEqual(firstWritten(asked), {
 			category: 'global.controlled',
 			decidedAt: null,
 			expiresAt: '2026-11-12T14:00:00.000Z',
@@ -1989,6 +2015,7 @@ suite('creating a self-grant', () => {
 			{
 				...terms,
 				capabilities: VIEWER.capabilities,
+				creationId: CREATION_ID,
 				expiresAt: new Date(NOW + 2 * HOUR_MS),
 				kind: 'selfGrant',
 				requestedAt: new Date(NOW),
@@ -2045,7 +2072,7 @@ suite('creating a self-grant', () => {
 
 	test("refuses a control-plane role, an unknown role, and a data-plane role naming no category but submitter, 422 before reading the caller's standing", async (context) => {
 		const stand = standUp(context);
-		const { category: _category, ...uncategorized } = SELF_VIEWER;
+		const { categories: _categories, ...uncategorized } = SELF_VIEWER;
 
 		const refused = [
 			await selfGrant(stand, 'ana', { ...uncategorized, role: 'owner' }),
@@ -2064,7 +2091,7 @@ suite('creating a self-grant', () => {
 		]);
 		assert.equal(methodsCalled(stand).includes('readStanding'), false);
 		assert.equal(submitter.statusCode, 201);
-		assert.equal(parsed(submitter)['category'], 'global.unmarked');
+		assert.equal(firstWritten(submitter)['category'], 'global.unmarked');
 	});
 
 	test('answers a principal who may not see the resource as for one that does not exist, recording a refusal of authority, and one who may see it and owns it not 403 noAuthorityOnResource', async (context) => {
@@ -2160,6 +2187,7 @@ suite('deciding a grant request', () => {
 		]);
 		assert.deepEqual(valuesOf(stand, 'insertGrant'), [
 			{
+				creationId: null,
 				expiresAt: new Date(NOW + 2 * HOUR_MS),
 				grantedAt: new Date(NOW),
 				grantedBy: 'person-ana',
@@ -2308,6 +2336,7 @@ suite('deciding a grant request', () => {
 		]);
 		assert.deepEqual(valuesOf(stand, 'insertGrant'), [
 			{
+				creationId: null,
 				expiresAt: new Date(NOW + 2 * HOUR_MS),
 				grantedAt: new Date(NOW),
 				grantedBy: 'person-second-administrator',

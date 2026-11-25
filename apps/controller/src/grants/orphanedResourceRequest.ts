@@ -1,8 +1,8 @@
-import { type AuditEvent, eventInstant } from '../eventLog/index.js';
-import type { OperationOutcome } from '../managementApi/index.js';
+import { type AuditEvent, eventInstant, type JsonValue } from '../eventLog/index.js';
+import { type CategoryNaming, forCategory } from './grantCategory.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import { grantRequestView } from './grantRequestView.js';
-import { answered, refuseWithin } from './operationOutcome.js';
+import { refuseWithin } from './operationOutcome.js';
 import type { GrantStore, StoredRole } from './types.js';
 
 /**
@@ -34,10 +34,16 @@ export interface OrphanedResourceAsking {
 	/** Its record category, by id and as a payload names it; `null` for the whole resource. */
 	category: { id: string; scopedName: string } | null;
 
+	/** Shared by every request one call writes. */
+	creationId: string;
+
 	expiresAt: Date;
 
 	/** The subject of the person who would hold it, under the trusted issuer. */
 	holderSubject: string;
+
+	/** The category as the request named it, so a refusal names its place. */
+	naming: CategoryNaming;
 
 	/** The configured clock's instant. */
 	now: Date;
@@ -61,8 +67,8 @@ export interface OrphanedResourceAsking {
  * its terms, and 409 `alreadyRequested` a request of the asker's for the holder on its terms
  * that is undecided and has not lapsed; writes the request undecided, keeping what the role confers
  * then as what was shown; and records `grant.request` at warning, naming the holder's subject as
- * `granteeSubject` and the request's kind. No owner is told of it, the resource having none. It answers
- * 202 with the request.
+ * `granteeSubject` and the request's kind. No owner is told of it, the resource having none. It gives
+ * the request as an answer shows it; each refusal names the category's place in `categories`.
  *
  * @param grants the grant store, on the change's connection.
  * @param record records an event in the change's transaction.
@@ -71,8 +77,19 @@ export interface OrphanedResourceAsking {
 export const askForOrphanedResource = async (
 	grants: GrantStore,
 	record: (event: AuditEvent) => Promise<string>,
-	{ category, expiresAt, holderSubject, now, requestedBy, resource, role, sourceIp }: OrphanedResourceAsking,
-): Promise<OperationOutcome> => {
+	{
+		category,
+		creationId,
+		expiresAt,
+		holderSubject,
+		naming,
+		now,
+		requestedBy,
+		resource,
+		role,
+		sourceIp,
+	}: OrphanedResourceAsking,
+): Promise<JsonValue> => {
 	const terms = {
 		holderUserId: await grants.findOrRecordPerson(holderSubject, now),
 		recordCategoryId: category?.id ?? null,
@@ -80,7 +97,7 @@ export const askForOrphanedResource = async (
 		roleId: role.id,
 	};
 	if (await grants.holdsLiveGrant(terms, now)) {
-		refuseWithin(GRANT_PROBLEMS.alreadyHolds);
+		refuseWithin(forCategory(GRANT_PROBLEMS.alreadyHolds, naming));
 	}
 	if (
 		await grants.holdsPendingRequest({
@@ -90,11 +107,12 @@ export const askForOrphanedResource = async (
 			requestedBy: requestedBy.userId,
 		})
 	) {
-		refuseWithin(GRANT_PROBLEMS.alreadyRequested);
+		refuseWithin(forCategory(GRANT_PROBLEMS.alreadyRequested, naming));
 	}
 	const requestId = await grants.insertGrantRequest({
 		...terms,
 		capabilities: role.capabilities,
+		creationId,
 		expiresAt,
 		kind: 'orphanedResource',
 		requestedAt: now,
@@ -115,24 +133,21 @@ export const askForOrphanedResource = async (
 		severity: 'warning',
 		type: 'grant.request',
 	});
-	return answered(
-		202,
-		grantRequestView(
-			{
-				category: category?.scopedName ?? null,
-				decidedAt: null,
-				decision: null,
-				expiresAt,
-				grantId: null,
-				holderSubject,
-				id: requestId,
-				kind: 'orphanedResource',
-				requestedAt: now,
-				requestedBySubject: requestedBy.subject,
-				resource: resource.externalId,
-				role: role.name,
-			},
-			now.getTime(),
-		),
+	return grantRequestView(
+		{
+			category: category?.scopedName ?? null,
+			decidedAt: null,
+			decision: null,
+			expiresAt,
+			grantId: null,
+			holderSubject,
+			id: requestId,
+			kind: 'orphanedResource',
+			requestedAt: now,
+			requestedBySubject: requestedBy.subject,
+			resource: resource.externalId,
+			role: role.name,
+		},
+		now.getTime(),
 	);
 };
