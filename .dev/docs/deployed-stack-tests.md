@@ -31,13 +31,14 @@ the suites below already cover.
 
 ## The stack
 
-| Part              | As deployed                                                                                                                                   |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Identity provider | Keycloak, with self-registration and email verification, and a mail catcher for the verification and reset emails                             |
-| Sign-in client    | A public client using the authorization code flow with PKCE, whose access tokens carry the Arranger application's id in `aud`                 |
-| Controller        | One instance or more, with the Management API                                                                                                 |
-| Arranger          | The search server image with `ENABLE_ACCESS_ENFORCEMENT=true`, its `USHER_*` settings, and an `auth.json` beside each catalogue's `base.json` |
-| Search engine     | The catalogues' indices on synthetic data, the role holding the privileges Arranger's feature-flags reference lists for enforcement           |
+| Part              | As deployed                                                                                                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity provider | Keycloak, with self-registration and email verification, and a mail catcher for the verification and reset emails                                                                                     |
+| Sign-in client    | A public client using the authorization code flow with PKCE, whose access tokens carry the Arranger application's id in `aud`                                                                         |
+| Controller        | One instance or more, with the Management API                                                                                                                                                         |
+| Arranger          | The search server image with `ENABLE_ACCESS_ENFORCEMENT=true`, its `USHER_*` settings, and an `auth.json` beside each catalogue's `base.json`                                                         |
+| Directory         | Keycloak's admin API, read by the Controller through a confidential client whose service account holds `realm-management`'s `query-users` and `view-users` alone, on the instances whose cases use it |
+| Search engine     | The catalogues' indices on synthetic data, the role holding the privileges Arranger's feature-flags reference lists for enforcement                                                                   |
 
 ---
 
@@ -45,15 +46,19 @@ the suites below already cover.
 
 The data is synthetic throughout, so reading records in full is fine.
 
-| Fixture            | What it is                                                                                                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The application    | Arranger's search server, registered in the Controller, its key held only in the deployment's secret store                                                                     |
-| The resource       | One resource on the catalogue's resource field, access level `grant`, served by the application                                                                                |
-| The category       | `global.controlled`, defined in the catalogue's `auth.json` as a SQON condition on a keyword field that splits the records roughly in half                                     |
-| Open catalogues    | Every other catalogue declared open in its `auth.json`                                                                                                                         |
-| Roles              | One carrying `record.view`; one carrying `record.view` and `artifact.create`                                                                                                   |
-| Test users         | Each self-registered with an address at a reserved domain, and verified through the mail catcher                                                                               |
-| Test administrator | A test user nominated as platform administrator for setup and teardown, kept for later runs and removed through `DELETE /admin/administrators/{subject}` once no longer needed |
+| Fixture              | What it is                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The application      | Arranger's search server, registered in the Controller, its key held only in the deployment's secret store                                                                                       |
+| The resource         | One resource on the catalogue's resource field, access level `grant`, served by the application                                                                                                  |
+| The category         | `global.controlled`, defined in the catalogue's `auth.json` as a SQON condition on a keyword field that splits the records roughly in half                                                       |
+| Open catalogues      | Every other catalogue declared open in its `auth.json`                                                                                                                                           |
+| Roles                | One carrying `record.view`; one carrying `record.view` and `artifact.create`                                                                                                                     |
+| Test users           | Each self-registered with an address at a reserved domain, and verified through the mail catcher                                                                                                 |
+| The test application | `usher-tests`, registered in the Controller and kept across runs, its key in the deployment's secret store for the test runner alone, through which the tests exchange sign-in tokens themselves |
+| The test client      | A Keycloak client whose audience mapper puts `usher-tests` in `aud`, kept across runs                                                                                                            |
+| The directory client | The confidential client the Controller reads Keycloak's admin API through, configured with the deployment and never changed by a run                                                             |
+| Fresh accounts       | Self-registered as the test users are, one per case needing a person Usher has never met, since a person once met stays met                                                                      |
+| Test administrator   | A test user nominated as platform administrator for setup and teardown, kept for later runs and removed through `DELETE /admin/administrators/{subject}` once no longer needed                   |
 
 | Test user | Grants                                                                           |
 | --------- | -------------------------------------------------------------------------------- |
@@ -91,13 +96,43 @@ The data is synthetic throughout, so reading records in full is fine.
 
 ---
 
+## Knowing a person
+
+The Controller knows a person in one of two ways: it has met them, when a sign-in token of theirs was
+exchanged through an application, or a configured directory finds their account. Each way gets its
+own cases, the first on an instance with no directory configured.
+
+**Without a directory.** Each case starts from a fresh account.
+
+| Case                                                                             | Expected                                                                                                                                                           |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The test administrator nominates the account before it has exchanged             | 404 `nomineeNotFound`                                                                                                                                              |
+| The account exchanges once through `usher-tests`, then is nominated              | 201, the nomination `pending`                                                                                                                                      |
+| The account exchanges a token whose `aud` lacks `usher-tests`, then is nominated | The exchange refused 403 `credentialRefused`, recorded `denied` under `otherAudience`; the nomination 404 `nomineeNotFound`, since a refused exchange meets nobody |
+
+**With a directory.**
+
+| Case                                                                                                                         | Expected                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The test administrator nominates a realm account Usher has never met                                                         | 201, the nomination `pending`                                                                                                                         |
+| A grant whose holder is named by address, and a resource registered with an owner by address, both by the test administrator | Each names the subject of the account holding that address, as the resource's grant listing shows                                                     |
+| Listings naming people, to a principal other than a platform administrator                                                   | Given and family names as the directory holds them                                                                                                    |
+| The same listings to the test administrator                                                                                  | Each holder by subject, with the address the directory holds                                                                                          |
+| Keycloak's admin API unreachable: a grant naming its holder by address, and a listing naming people by name                  | 503 `directoryUnavailable`, with no `Retry-After`; the instance writes `directory.unavailable` at error, naming its cause and no URL, token or secret |
+
+---
+
 ## Setup and teardown
 
-Setup runs in this order: the test users and the test administrator; the application, its key into
-the secret store; the sign-in client's audience mapper; the category, the resource and the grants;
+Setup runs in this order: the test users, the fresh accounts and the test administrator; the
+application, its key into the secret store; `usher-tests` and the test client, where they do not
+exist yet; the sign-in client's audience mapper; the category, the resource and the grants;
 the search engine privileges; then Arranger's `auth.json` files and settings, and a rollout.
 
-Teardown reverses it: Arranger's settings and files back, the audience mapper removed. The test
-users, their grants and the test administrator may stay for the next run.
+Teardown reverses it: Arranger's settings and files back, the audience mapper removed, and every
+nomination a run left pending revoked. The test users, their grants and the test administrator may
+stay for the next run. `usher-tests`, the test client and the directory client always stay: the
+first two are permanent fixtures, and the directory client is the deployment's configuration. A
+fresh account, once met, is never fresh again, so each run registers its own.
 
 Each run's requests are paced, capped in number, and limited to the stack under test.
