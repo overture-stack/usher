@@ -707,8 +707,9 @@ export const openCacheConnection = async (
 
 /**
  * Removes every key a cache holds (`FLUSHALL`), over a connection of its own signed in with the
- * credentials its URL carries: so a test starts on an empty cache (#215 Q1). Flush only a cache of the
- * test file's own, never the run's shared one, which every other file is using.
+ * credentials its URL carries: so a test starts on an empty cache (`.dev/docs/controller-tests.md`
+ * § Seeding). Flush only a cache of the test file's own, never the run's shared one, which every
+ * other file is using.
  *
  * @param cacheUrl the cache's URL, as `containers.ts` gives it.
  * @throws when the cache refuses the connection, the credentials or the flush, or the connection ends,
@@ -729,7 +730,8 @@ export const flushValkey = async (cacheUrl: string): Promise<void> => {
 /**
  * A Valkey a suite's tests share, started by the first test asking for it and removed once the
  * suite's tests have ended, and flushed for each test asking: so each test runs on an empty cache
- * without flushing the run's shared Valkey (#215 Q1). Call it in the suite's body.
+ * without flushing the run's shared Valkey (`.dev/docs/controller-tests.md` § Seeding). Call it in
+ * the suite's body.
  *
  * @param scope the suite's cleanup, from `waiting.ts`'s `suiteCleanup`, which removes the Valkey.
  * @returns a function giving the Valkey's URL once it has been flushed.

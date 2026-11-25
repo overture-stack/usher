@@ -2619,7 +2619,7 @@
 		"securitySchemes": {
 			"channelAssertion": {
 				"bearerFormat": "JWT",
-				"description": "A channel assertion: a JWT signed by the bridge with HS256 under the channel-assertion subkey of its application key, typed `usher-channel+jwt`, naming its application's id in `iss` and `usher:controller` in `aud`, living at most 60 seconds, with a `jti`. One assertion serves every exchange and every poll made within its lifetime, and is presented to the stream route once at most: a second presentation there is refused `401`, whatever else the request carries. When an application holds two live keys, the controller checks the assertion against each and answers under the key that verified it, for tokens and notices alike.",
+				"description": "A channel assertion: a JWT signed by the bridge with HS256 under the channel-assertion subkey of its application key, typed `usher-channel+jwt`, naming its application's id in `iss` and `usher:controller` in `aud`, living at most 60 seconds, with a `jti`. The controller's clock tolerance is 30 seconds: an assertion whose `exp` passed 30 seconds ago or more, or whose `iat` is 30 seconds or more ahead, is refused. One assertion serves every exchange and every poll made within its lifetime, and is presented to the stream route once at most: a second presentation there is refused `401`, whatever else the request carries. When an application holds two live keys, the controller checks the assertion against each and answers under the key that verified it, for tokens and notices alike.",
 				"scheme": "bearer",
 				"type": "http"
 			},

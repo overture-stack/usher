@@ -83,7 +83,7 @@ const pagedController = (request: RecordedRequest): ScriptedAnswer => {
 };
 
 suite("the bridge's timing profiles", () => {
-	test("maps #217's letters to the bridge's settings, and keeps the bridge's order between them", () => {
+	test("maps the timing profiles' letters to the bridge's settings, and keeps the bridge's order between them", () => {
 		const compressed = resolvedBridgeTiming('compressed');
 
 		assert.deepEqual(compressed, {

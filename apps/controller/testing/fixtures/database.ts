@@ -38,7 +38,7 @@ import {
 	SYSTEM_ACTOR,
 } from '../harness/policy.js';
 
-// The database tests' own support (#207). Every table, column and stored form it relies on comes from
+// The database tests' own support. Every table, column and stored form it relies on comes from
 // policy.ts.
 
 const {
@@ -1230,9 +1230,9 @@ export const mayKeepHistory = (table: NamedTable, operation: LaterOperation): bo
 	Object.entries(HISTORY_KEPT).some(([name, operations]) => name === table.name && operations.includes(operation));
 
 /**
- * The tables raising the policy generation (R6) on every change: the policy tables named by #207 Q3,
- * with `applications` left out, and without `application_keys` (ruled), since neither changes what a
- * token holds.
+ * The tables raising the policy generation (`.dev/design/schema.md` § The change record) on every
+ * change: the policy tables it names, with `applications` left out, and without `application_keys`
+ * (ruled), since neither changes what a token holds.
  */
 export const POLICY_GENERATION_TABLES: readonly NamedTable[] = Object.freeze([
 	applicationResources,
@@ -1719,14 +1719,17 @@ type ColumnShapes<Table extends keyof PolicyTables> = Readonly<
 
 /**
  * The type and nullability of every column `schema.md` names, as the rulings adjust it:
- * `resources.external_id` (O16, #207 Q5), its retirement (#320 B), the capabilities' plane (#207
- * Q14), the notices' resource and audience columns (#207 Q5), an invitation's nullable expiry, the
- * resulting grant's (#207 Q9), each audit event's severity (#214 Q2; text, required, as `schema.md`
- * § The audit log has it), a person held apart from their identities in `user_identities` (several
- * identities per person), and the subject identifier named `idp_subject_id` wherever it is stored.
- * The tables the rulings add are checked by their columns alone, unless a ruling fixes their types,
- * as it does for `user_identities` and `grant_requests`, and as `schema.md` § Applications does for
- * an application's id, its display name and its keys' two tables.
+ * `resources.external_id` (`.dev/design/schema.md` § Resources and categories), its retirement
+ * (the contract's `retireResource`), the capabilities' plane (`.dev/design/schema.md`
+ * § Capabilities, roles and permissions), the notices' resource and audience columns
+ * (`.dev/design/schema.md` § The notice stream), an invitation's nullable expiry, the resulting
+ * grant's (`.dev/design/schema.md` § Invitations), each audit event's severity (the contract's
+ * `AuditEvent`; text, required, as `schema.md` § The audit log has it), a person held apart from
+ * their identities in `user_identities` (several identities per person), and the subject identifier
+ * named `idp_subject_id` wherever it is stored. The tables the rulings add are checked by their
+ * columns alone, unless a ruling fixes their types, as it does for `user_identities` and
+ * `grant_requests`, and as `schema.md` § Applications does for an application's id, its display
+ * name and its keys' two tables.
  */
 export const DESIGNED_COLUMNS: {
 	readonly [Table in keyof PolicyTables]?: ColumnShapes<Table>;

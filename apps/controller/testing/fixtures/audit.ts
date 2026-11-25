@@ -53,10 +53,11 @@ import {
 } from '../harness/policy.js';
 import { type Cleanup, eventually, nowSeconds } from '../harness/waiting.js';
 
-// The fixture and helpers of #214's tests alone: audit logging. Every path, table, column, person,
-// problem code, reason and event registration they use comes from the shared support modules. The people are the shared cast: `owner` owns STUDY-A1 to STUDY-C3 and makes the consumer
-// grants (#212 Q4), Ana, Bo, Cy, Dana and Eli hold or receive them, and the administrator is one the harness
-// seeds into the store, since a token makes no administrator.
+// The fixture and helpers of the audit tests alone. Every path, table, column, person, problem
+// code, reason and event registration they use comes from the shared support modules. The people
+// are the shared cast: `owner` owns STUDY-A1 to STUDY-C3 and makes the consumer grants (the
+// contract's `createGrant`), Ana, Bo, Cy, Dana and Eli hold or receive them, and the administrator
+// is one the harness seeds into the store, since a token makes no administrator.
 
 /**
  * The application the audit tests exchange through unless they name another, by its display name,
@@ -84,7 +85,7 @@ export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze(['record.cou
 
 /**
  * The grant rate threshold the rate tests run under: more than 3 operations by one actor within 30 s
- * (#214 Q19), a window no run's operations outlast.
+ * (`docs/deployment.md` § Settings), a window no run's operations outlast.
  */
 export const RATE_THRESHOLD: ControllerConfiguration['grantRateThreshold'] = Object.freeze({
 	operationCount: 3,
@@ -100,7 +101,10 @@ export const BOUNDARY_RATE_THRESHOLD: ControllerConfiguration['grantRateThreshol
 /** A fixed code's form, as the Bridge's reasons and the API's problem codes take it: camelCase ASCII. */
 export const FIXED_CODE = /^[a-z][A-Za-z0-9]*$/u;
 
-/** The CloudEvents attributes an event carries, `severity` beside the standard's own (#214 Q2). */
+/**
+ * The CloudEvents attributes an event carries, `severity` beside the standard's own (the contract's
+ * `AuditEvent`).
+ */
 export const ENVELOPE_ATTRIBUTES: readonly string[] = Object.freeze([
 	'data',
 	'id',
@@ -111,7 +115,10 @@ export const ENVELOPE_ATTRIBUTES: readonly string[] = Object.freeze([
 	'type',
 ]);
 
-/** The properties `audit-events.md` names as recurring across entities, with `instance` (#214 Q17). */
+/**
+ * The properties `audit-events.md` names as recurring across entities, with `instance`
+ * (`docs/deployment.md` § This instance and its events).
+ */
 export const RECURRING_PROPERTIES = Object.freeze({
 	actorId: 'actorId',
 	actorType: 'actorType',
@@ -121,9 +128,10 @@ export const RECURRING_PROPERTIES = Object.freeze({
 });
 
 /**
- * The observations among the Controller's events: noticed by the system, so carrying no `result`. One
- * recorded while a request is served, such as `grant.rateExceeded` or `applicationKey.confirmation`,
- * carries that request's `sourceIp` (`audit-events.md` § The payload; #214 Q19).
+ * The observations among the Controller's events: noticed by the system, so carrying no `result`.
+ * One recorded while a request is served, such as `grant.rateExceeded` or
+ * `applicationKey.confirmation`, carries that request's `sourceIp` (`audit-events.md` § The
+ * payload; `docs/deployment.md` § Settings).
  */
 export const OBSERVATION_TYPES: readonly AuditEventType[] = Object.freeze([
 	'admission.shareExceededTally',
@@ -137,7 +145,10 @@ export const OBSERVATION_TYPES: readonly AuditEventType[] = Object.freeze([
 	'token.exchangeRefusalTally',
 ]);
 
-/** The severity each `result` gives an event whose row's severity follows it (#214 Q3). */
+/**
+ * The severity each `result` gives an event whose row's severity follows it
+ * (`.dev/design/audit-events.md` § A note on vocabulary).
+ */
 export const RESULT_SEVERITIES: Readonly<Record<string, Severity>> = Object.freeze({
 	denied: 'warning',
 	failed: 'error',
@@ -172,11 +183,12 @@ export const APPLICATIONS_ONLY: PolicyFixture = Object.freeze({
 });
 
 /**
- * The audit fixture with a test's own policy over it: `controlled` a global category; STUDY-A1 open,
- * STUDY-B2 registered, STUDY-C3 grant and STUDY-D4 registered; `search-portal` serving STUDY-A1,
- * STUDY-B2 and STUDY-D4, `submission-portal` STUDY-B2 and STUDY-C3; Ana, Bo, Cy, Dana, Eli and the
- * owner of the shared cast; and the owner's accepted owner grants on STUDY-A1 to STUDY-C3, since a
- * consumer grant through the API is made by the resource's owner (#212 Q4). STUDY-D4 has no owner.
+ * The audit fixture with a test's own policy over it: `controlled` a global category; STUDY-A1
+ * open, STUDY-B2 registered, STUDY-C3 grant and STUDY-D4 registered; `search-portal` serving
+ * STUDY-A1, STUDY-B2 and STUDY-D4, `submission-portal` STUDY-B2 and STUDY-C3; Ana, Bo, Cy, Dana,
+ * Eli and the owner of the shared cast; and the owner's accepted owner grants on STUDY-A1 to
+ * STUDY-C3, since a consumer grant through the API is made by the resource's owner (the contract's
+ * `createGrant`). STUDY-D4 has no owner.
  *
  * @param policy the test's own entries, merged over the fixture's by name.
  */

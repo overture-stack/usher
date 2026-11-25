@@ -40,12 +40,12 @@ import {
 } from '../harness/policy.js';
 import { nowSeconds } from '../harness/waiting.js';
 
-// The fixture and helpers of #209's tests alone: permissions and token issuance, under
-// test/exchange/issuance/. Every table, column, person and wire shape they use comes from the shared
-// support modules. The people are the shared cast: Ana, Bo and Cy are the plan's principals, Dana
-// owns STUDY-A1, STUDY-C3 and STUDY-D4 and makes the consumer grants a test writes through the API
-// (#212 Q4), Eli is an administrator the harness seeds into the store, and Fen is never
-// seeded.
+// The fixture and helpers of the issuance tests alone: permissions and token issuance, under
+// test/exchange/issuance/. Every table, column, person and wire shape they use comes from the
+// shared support modules. The people are the shared cast: Ana, Bo and Cy are the plan's principals,
+// Dana owns STUDY-A1, STUDY-C3 and STUDY-D4 and makes the consumer grants a test writes through the
+// API (the contract's `createGrant`), Eli is an administrator the harness seeds into the store, and
+// Fen is never seeded.
 
 /**
  * The default application of the issuance tests' exchanges, by its display name, which is its label
@@ -135,9 +135,11 @@ const BASE_USERS = Object.freeze(
  * The plan's fixture, synthetic throughout, with a test's entries added over it: the global
  * categories `controlled` and `community-governed` beside the seeded `unmarked`; STUDY-A1 to
  * STUDY-E5 at the plan's base tiers; `arranger-test` serving STUDY-A1 to STUDY-D4 and `lyric-test`
- * STUDY-A1 and STUDY-E5; the test-defined `assembler` role; Ana, Bo, Cy and Dana of the shared cast;
- * and Dana's accepted owner grants on STUDY-A1, STUDY-C3 and STUDY-D4. No resource lists a global
- * category, since a global category applies to every resource whose records match it (#209 Q4).
+ * STUDY-A1 and STUDY-E5; the test-defined `assembler` role; Ana, Bo, Cy and Dana of the shared
+ * cast; and Dana's accepted owner grants on STUDY-A1, STUDY-C3 and STUDY-D4. No resource lists a
+ * global category, since a global category applies to every resource whose records match it
+ * (`.dev/design/decisions.md` § A category is a condition over records, and a record needs every
+ * category it matches).
  *
  * @param extra entries added over the fixture's, by the same names; decisions, invitations and
  *   revocations follow the fixture's own.
@@ -398,8 +400,9 @@ export const heldEntries = (
 	);
 
 /**
- * A clock fixed at one instant, for the three tests needing a known now (#209 Q2), injected through
- * the configuration and never the environment.
+ * A clock fixed at one instant, for the three tests needing a known now (`.dev/design/decisions.md`
+ * § The Controller's clock is configuration, and every duration it measures runs on it), injected
+ * through the configuration and never the environment.
  *
  * @param instant milliseconds since the Unix epoch.
  */
@@ -495,8 +498,8 @@ export interface ApiGrant {
 }
 
 /**
- * Writes a consumer grant through the API as the resource's owner, Dana (#212 Q4), then accepts it
- * as its holder, as #212's write paths do.
+ * Writes a consumer grant through the API as the resource's owner, Dana (the contract's
+ * `createGrant`), then accepts it as its holder, as the grant tests' write paths do.
  *
  * @param harness the running harness.
  * @param grant the grant, and what its holder is shown.
@@ -552,8 +555,9 @@ export interface ScaleFixtureOptions {
 
 /**
  * A fixture of many resources, each a 64-character external identifier, all served by
- * `arranger-test`, with Ana's accepted grants on the first of them, for the token size tests (#209
- * Q17). `lyric-test` is registered and serves none.
+ * `arranger-test`, with Ana's accepted grants on the first of them, for the token size tests
+ * (`.dev/design/decisions.md` § An Usher token carries about a thousand held resources within its
+ * 1 MiB cap). `lyric-test` is registered and serves none.
  *
  * @param options the base tier, the count, and how many Ana holds.
  */

@@ -51,9 +51,11 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  * of assumptions lists each one no design document fixes. Among those:
  *
  * - `notice_retention`, one row owned by the migration role and readable by the Controller's role
- *   alone: the retention floor the deployment command sets, which `trim_notices` reads (R3).
+ *   alone: the retention floor the deployment command sets, which `trim_notices` reads
+ *   (`.dev/design/schema.md` § The notice stream).
  * - `policy_generation`, one row: the generation the policy triggers raise in each change's
- *   transaction, which the payload cache's key carries (R6).
+ *   transaction, which the payload cache's key carries (`.dev/design/schema.md` § The change
+ *   record).
  * - `settings`, one row per setting, and `settings_generation`, one row: the settings the Controller
  *   reads from the store, and the generation each change of them raises; `identity_provider_configuration`
  *   holds the identity provider's identifiers as the Controller last started with them.
@@ -61,13 +63,14 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  *   which the index allowing one live grant per holder, resource, category and role no longer
  *   counts it; `null` while it has not been replaced (ruled).
  * - `resources.retired_at` and `retired_by`: a retired resource keeps its row, so the unique index
- *   on its external identifier goes on reserving it (#320 B).
+ *   on its external identifier goes on reserving it (`.dev/design/schema.md` § Resources and
+ *   categories).
  * - `sid_sign_outs` and `subject_sign_outs`: the sign-outs relayed from the identity provider, by
  *   `sid`, and by subject for a token carrying no `sid`, each kept until its `expires_at`, the sign-out
- *   plus the longest sign-in token lifetime (R7).
+ *   plus the longest sign-in token lifetime (`docs/deployment.md` § Sign-outs).
  * - `exchanged_sids`: each `sid` a sign-in exchange carried, with its issuer, subject and the sign-in
  *   token's expiry, kept no longer than that token's life, so a logout naming only the `sid` reaches
- *   its subject (R7, option a).
+ *   its subject (`docs/deployment.md` § Sign-outs).
  * - `everyone_sign_outs`: each sign-out of everyone, who recorded it, when, and a fixed reason code; its
  *   insert writes the signOutEveryone notice and raises the policy generation in its transaction.
  * - `nominations` and `administrators`: each nomination of a person to be an administrator, kept as
@@ -91,7 +94,8 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  *   `idp_issuer` wherever the issuer is stored (ruled): in `user_identities`, `exchanged_sids`,
  *   `notices`, both sign-out tables and `change_records`. `notices.idp_subject_id` holds the subject
  *   alone; see {@link noticeSubject}.
- * - `audit_log.severity`: the event's severity as its line carries it (#214 Q2).
+ * - `audit_log.severity`: the event's severity as its line carries it (the contract's
+ *   `AuditEvent`).
  * - `grant_requests` (ruled): a person's request for a grant someone else decides, by its `kind`:
  *   `selfGrant`, asked for by its holder, or `orphanedResource`, asked for by a platform administrator
  *   for another person on a resource with no counted owner, the principal asking in `requested_by`
@@ -488,11 +492,12 @@ export const POLICY_TABLES = {
 
 /**
  * The constraints and indexes a test names, as PostgreSQL reports them in a refusal: the decisions'
- * key on person, grant and time (#207 Q12); the identities' key on issuer and subject identifier,
- * so one identity belongs to one person; the partial unique index allowing one grant per holder,
- * resource, category and role that is neither revoked nor ended (#212 Q17); the check that a grant
- * ends only once it has expired (`grantEndedAfterExpiry`); and the rule keeping an ended grant's
- * end, expiry and role as written (`grantEndKept`). The two keys carry PostgreSQL's default names.
+ * key on person, grant and time (`.dev/design/schema.md` § Grants and decisions); the identities'
+ * key on issuer and subject identifier, so one identity belongs to one person; the partial unique
+ * index allowing one grant per holder, resource, category and role that is neither revoked nor
+ * ended (the contract's `createGrant`); the check that a grant ends only once it has expired
+ * (`grantEndedAfterExpiry`); and the rule keeping an ended grant's end, expiry and role as written
+ * (`grantEndKept`). The two keys carry PostgreSQL's default names.
  *
  * A grant request's rules (ruled; the names assumed): its kind one the store knows
  * (`grantRequestKind`), a self-grant asked for by its holder (`grantRequestSelfHeld`), an orphaned
@@ -545,14 +550,14 @@ export const POLICY_CONSTRAINTS: Readonly<{
 });
 
 /**
- * The functions a test calls. `trimNotices` names two functions, each owned by the migration role and
- * executable by the Controller's role alone (R3). The one taking no argument reads the floor from
- * `notice_retention`, deletes the notices through the watermark that floor gives, raises
- * `trimmed_through` in the same transaction, and returns it. The one taking an `integer`, `max_rows`
- * (ruled), trims the same way but reaches no further than the highest position among the oldest
- * `max_rows` notices the other would delete, so one call deletes at most `max_rows`, and refuses a
- * `max_rows` below 1, or none. No caller can choose the floor, so none can trim a notice a Bridge may
- * still need.
+ * The functions a test calls. `trimNotices` names two functions, each owned by the migration role
+ * and executable by the Controller's role alone (`.dev/design/schema.md` § The notice stream). The
+ * one taking no argument reads the floor from `notice_retention`, deletes the notices through the
+ * watermark that floor gives, raises `trimmed_through` in the same transaction, and returns it. The
+ * one taking an `integer`, `max_rows` (ruled), trims the same way but reaches no further than the
+ * highest position among the oldest `max_rows` notices the other would delete, so one call deletes
+ * at most `max_rows`, and refuses a `max_rows` below 1, or none. No caller can choose the floor, so
+ * none can trim a notice a Bridge may still need.
  */
 export const POLICY_FUNCTIONS: Readonly<{ trimNotices: string }> = Object.freeze({ trimNotices: 'trim_notices' });
 
@@ -626,7 +631,10 @@ export const NOTICE_KINDS = Object.freeze([
 	'signOutEveryone',
 ] as const);
 
-/** The kind of the outbox row that tells a resource's owners of a self-grant on it (#212 Q13). */
+/**
+ * The kind of the outbox row that tells a resource's owners of a self-grant on it (the contract's
+ * `createSelfGrant`).
+ */
 export const SELF_GRANT_NOTIFICATION = 'selfGrant';
 
 /** The kind of the outbox row that tells a resource's owners of a grant request on it (ruled). */
@@ -643,10 +651,11 @@ export const ORPHANED_RESOURCE_REQUEST = 'orphanedResource';
 
 /**
  * The seeded role whose holders own a resource (permissions-model.md). An owner grant is a person's
- * grant of this role; a group's grant of it never makes anyone an owner. Only an accepted, unexpired,
- * unrevoked owner grant counts as an owner (#211 Q13 with #212 Q20): the no-owner invariant, held by
- * the database from a resource's first owner on, counts those alone, and a retirement ends them in its
- * own transaction (#320 B, as the developer adjusted it).
+ * grant of this role; a group's grant of it never makes anyone an owner. Only an accepted,
+ * unexpired, unrevoked owner grant counts as an owner (the contract's `createGrant`): the no-owner
+ * invariant, held by the database from a resource's first owner on, counts those alone, and a
+ * retirement ends them in its own transaction (the contract's `retireResource`, as the developer
+ * adjusted it).
  */
 export const OWNER_ROLE = 'owner';
 
@@ -686,11 +695,12 @@ const seededRole = (plane: FixtureRole['plane'], capabilities: readonly string[]
  *   creates and updates; `curator` does all that and deletes. `submitter`, off the staircase, creates
  *   and updates and reads nothing.
  * - The control plane's checklist: `owner` holds `grant.*` (create, view, extend, reduce, revoke),
- *   `invitation.create`, `resource.view`, `update`, `suppress` and `restore`, and `ownership.transfer`;
- *   `admin` holds all of an owner's and the four platform-wide ones beside them, `resource.register`,
- *   `category.create`, `role.define` and `group.*` (create, view, update, addMember, removeMember).
- *   An administrator is one the store records, never one by a token's role (#212 Q3); the row is the
- *   matrix's.
+ *   `invitation.create`, `resource.view`, `update`, `suppress` and `restore`, and
+ *   `ownership.transfer`; `admin` holds all of an owner's and the four platform-wide ones beside
+ *   them, `resource.register`, `category.create`, `role.define` and `group.*` (create, view,
+ *   update, addMember, removeMember). An administrator is one the store records, never one by a
+ *   token's role (`.dev/design/decisions.md` § Usher keeps its own admins, and a first user only
+ *   nominates the first); the row is the matrix's.
  */
 export const SEEDED_ROLES: Readonly<Record<SeededRole, Readonly<FixtureRole>>> = Object.freeze({
 	admin: seededRole('control', [
@@ -766,7 +776,7 @@ export interface FixtureResource {
 
 	/**
 	 * Categories of the resource's own, keyed by name, written at the database: no operation of the
-	 * first release registers one (#211 Q10).
+	 * first release registers one (`.dev/design/schema.md` § What is not in the first release).
 	 */
 	categories?: Readonly<Record<string, FixtureCategory>>;
 
@@ -793,7 +803,10 @@ export interface FixtureResource {
 	/** A fixture user; the steward by default. */
 	registeredBy?: string;
 
-	/** Retired at the given time, the transaction's clock by default, by the given fixture user, the steward by default (#320 B). */
+	/**
+	 * Retired at the given time, the transaction's clock by default, by the given fixture user, the
+	 * steward by default (`.dev/design/schema.md` § Resources and categories).
+	 */
 	retired?: { at?: Date; by?: string };
 
 	/** False by default. */
@@ -922,10 +935,13 @@ export interface FixtureInvitation {
 	/** As a grant names it; `null` for the control plane's wildcard. */
 	category: string | null;
 
-	/** The address invited, as the store holds it: lower-cased (#207 Q9). */
+	/**
+	 * The address invited, as the store holds it: lower-cased (`.dev/design/schema.md`
+	 * § Invitations).
+	 */
 	email: string;
 
-	/** The resulting grant's expiry; none when absent (#207 Q9). */
+	/** The resulting grant's expiry; none when absent (`.dev/design/schema.md` § Invitations). */
 	expiresAt?: Date;
 
 	/** The transaction's clock by default. */
@@ -1585,17 +1601,17 @@ export const inTransactionAs = async <Result>(
 };
 
 /**
- * Seeds a fixture in one transaction under the system actor (R9), as the policy tables name it:
- * people, each with their one identity (`added_by` `null`, as on a first meeting), the fixture's
- * roles and their capabilities, global categories, resources, their own categories and what each
- * offers, a retirement, resource fields and their values, applications and what they serve, groups
- * and their members, grants, decisions, principal revocations and invitations; then the resources'
- * registration and change times, read back as the store holds them. Run it as the migration role.
- * It can run more than once on one database: a person already holding the identity a fixture user
- * names, found through `user_identities`, and an application already held, by its id
- * ({@link FixtureApplication}), are found again rather than written twice, and a resource already
- * held can be named by externalId. A name the fixture refers to and does not hold throws, naming it,
- * and nothing is written.
+ * Seeds a fixture in one transaction under the system actor (`.dev/design/schema.md` § The change
+ * record), as the policy tables name it: people, each with their one identity (`added_by` `null`,
+ * as on a first meeting), the fixture's roles and their capabilities, global categories, resources,
+ * their own categories and what each offers, a retirement, resource fields and their values,
+ * applications and what they serve, groups and their members, grants, decisions, principal
+ * revocations and invitations; then the resources' registration and change times, read back as the
+ * store holds them. Run it as the migration role. It can run more than once on one database: a
+ * person already holding the identity a fixture user names, found through `user_identities`, and an
+ * application already held, by its id ({@link FixtureApplication}), are found again rather than
+ * written twice, and a resource already held can be named by externalId. A name the fixture refers
+ * to and does not hold throws, naming it, and nothing is written.
  *
  * @param client a connection under the migration role, holding no transaction.
  * @param fixture the policy to write.
@@ -1643,8 +1659,8 @@ export interface OpenTrim {
 }
 
 /**
- * Runs the trimming function, `trim_notices()` (R3), as the connection's role, in a transaction it
- * leaves open.
+ * Runs the trimming function, `trim_notices()` (`.dev/design/schema.md` § The notice stream), as
+ * the connection's role, in a transaction it leaves open.
  *
  * @param runtime a connection under the Controller's runtime role, holding no transaction.
  * @throws what the function threw, the transaction rolled back.
@@ -1962,11 +1978,12 @@ export const addAcceptedOwner = (
 
 /**
  * Retires a resource by SQL, under the system actor, in one transaction that also ends its owner
- * grants: every person's grant of {@link OWNER_ROLE} on it neither revoked nor expired, revoked at the
- * retirement's instant by who retires it. The no-owner invariant lives in the database and permits
- * ending a resource's last owner grant only in the transaction retiring it, so the two are never
- * written apart. The resource's row is kept (#320 B). It writes no notice and no event; whatever a
- * trigger of the migrations writes, it writes.
+ * grants: every person's grant of {@link OWNER_ROLE} on it neither revoked nor expired, revoked at
+ * the retirement's instant by who retires it. The no-owner invariant lives in the database and
+ * permits ending a resource's last owner grant only in the transaction retiring it, so the two are
+ * never written apart. The resource's row is kept (`.dev/design/schema.md` § Resources and
+ * categories). It writes no notice and no event; whatever a trigger of the migrations writes, it
+ * writes.
  *
  * @param client a connection under the migration role, holding no transaction.
  * @param retirement the resource, by externalId; who retires it, as a `users.id`; and when, the
@@ -2475,10 +2492,10 @@ const HOLD_LOCK = Object.freeze({ classid: 210, objid: 1 });
 const testObject = (name: string): string => `${pg.escapeIdentifier(USHER_SCHEMA)}.${pg.escapeIdentifier(name)}`;
 
 /**
- * Installs #210's holding trigger under the migration role: after a notice naming one of the
- * subjects is inserted, its writer's transaction takes a test-reserved advisory lock the test holds,
- * so it stays open after its notice insert until released. The instrumentation goes once the
- * cleanup runs.
+ * Installs the revocation channel tests' holding trigger under the migration role: after a notice
+ * naming one of the subjects is inserted, its writer's transaction takes a test-reserved advisory
+ * lock the test holds, so it stays open after its notice insert until released. The instrumentation
+ * goes once the cleanup runs.
  *
  * @param scope the cleanup removing it.
  * @param client a connection under the migration role, which holds the lock.
@@ -2543,8 +2560,9 @@ export interface NoticeRefusal {
 }
 
 /**
- * Installs #210's raising trigger under the migration role: every notice insert raises, so the
- * transaction writing it rolls back. It goes once the cleanup runs, or earlier through `remove`.
+ * Installs the revocation channel tests' raising trigger under the migration role: every notice
+ * insert raises, so the transaction writing it rolls back. It goes once the cleanup runs, or
+ * earlier through `remove`.
  *
  * @param scope the cleanup removing it.
  * @param client a connection under the migration role.
@@ -2862,7 +2880,7 @@ export const grantCountOn = async (client: pg.ClientBase, externalId: string): P
 };
 
 /**
- * Whether the store marks a resource retired (#320 B).
+ * Whether the store marks a resource retired (the contract's `retireResource`).
  *
  * @param client a connection under the migration role.
  * @param externalId the resource.
@@ -2898,7 +2916,8 @@ export const servedByInStore = async (client: pg.ClientBase, externalId: string)
 		.toSorted();
 
 /**
- * How many change records the store holds for one table (C1): one per row a change wrote there.
+ * How many change records the store holds for one table (`.dev/design/schema.md` § The change
+ * record): one per row a change wrote there.
  *
  * @param client a connection under the migration role.
  * @param table an entry of {@link POLICY_TABLES}.

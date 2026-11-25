@@ -34,14 +34,17 @@ import { withHarness } from '../../../testing/harness/harness.js';
 import { startIdentityProvider } from '../../../testing/peripherals/identityProvider.js';
 import { cleanupFor, eventually, nowSeconds } from '../../../testing/harness/waiting.js';
 
-// #215's tests of the exchange as the bridge reads it, for the behaviours no #209 test covers (B1).
+// The conformance tests of the exchange as the bridge reads it, for the behaviours no issuance test
+// covers (`.dev/docs/controller-tests.md` § Conformance).
 
-// The bridge's clock off the controller's by up to this much, within the 30 s tolerance (#215 Q9).
+// The bridge's clock off the controller's by up to this much, within the 30 s tolerance (the
+// contract's `securitySchemes.channelAssertion`).
 const CLOCK_DIFFERENCE_SECONDS = 20;
 
-// The ruled bound (#209 Q17 with #215 Q11): in payload v1, about 1,000 held resources at 1,000 served
-// fit the bridge's 1 MiB cap, and 10,000 served fit with 200 held (#209's own test). At 10,000 served,
-// payload v1 cannot carry 1,000 held within the cap; a more compact payload is post-MVP.
+// The ruled bound (`.dev/design/decisions.md` § An Usher token carries about a thousand held
+// resources within its 1 MiB cap): in payload v1, about 1,000 held resources at 1,000 served fit
+// the bridge's 1 MiB cap, and 10,000 served fit with 200 held (the issuance tests' own). At 10,000
+// served, payload v1 cannot carry 1,000 held within the cap; a more compact payload is post-MVP.
 const DESIGNED_SCALE = 1_000;
 
 // Well past the cap: 4,000 resources served and held, about 1.4 MiB in payload v1.
@@ -337,14 +340,14 @@ suite('the exchange, as the bridge reads it', () => {
 	);
 });
 
-// The developer writes these cases by hand from ticket #215's test plan, its "the exchange, as the
+// The developer writes these cases by hand from the conformance tests, their "the exchange, as the
 // bridge reads it" suite: a sign-in token signed by a key the provider does not publish, among the
 // refused tokens that must be answered alike; and a channel assertion signed under another
 // application's key, under the raw application key, under the notice subkey, under an algorithm other
 // than HS256 or none, or naming an issuer the controller holds no key for. Each must be answered with
 // no token: 403 for the sign-in token, 401 for the assertion.
 suite(
-	"accepts an exchange only with a sign-in token its provider signed with a published key and a channel assertion its application signed under its own subkey with the standard algorithm: the developer writes these cases by hand from ticket #215's test plan, suite 'the exchange, as the bridge reads it'",
+	"accepts an exchange only with a sign-in token its provider signed with a published key and a channel assertion its application signed under its own subkey with the standard algorithm: the developer writes these cases by hand from the conformance tests, suite 'the exchange, as the bridge reads it'",
 	{ todo: true },
 	() => {},
 );

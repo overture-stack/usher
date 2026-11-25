@@ -31,9 +31,9 @@ import {
 	SYSTEM_ACTOR,
 } from '../harness/policy.js';
 
-// The fixture and helpers of #212's tests alone: grants and acceptance decisions. Every path, body,
-// table and column they use comes from the shared support modules; what this file assumes beyond
-// them is listed in its own TSDoc, for the README's table.
+// The fixture and helpers of the grant tests alone: grants and acceptance decisions. Every path,
+// body, table and column they use comes from the shared support modules; what this file assumes
+// beyond them is listed in its own TSDoc, for the README's table.
 
 /**
  * The plan's people, by the part each plays, every one from the shared cast: Ana owns STUDY-A1 and
@@ -87,16 +87,28 @@ export const UNKNOWN_STUDY = 'STUDY-ZZ';
 /** The global category the fixture registers, as a grant names it. */
 export const CONTROLLED = 'global.controlled';
 
-/** The global category the migrations write, and the instance's submitter category by default (#212 Q6). */
+/**
+ * The global category the migrations write, and the instance's submitter category by default (the
+ * contract's `createGrant`).
+ */
 export const UNMARKED = 'global.unmarked';
 
-/** STUDY-B2's own category, as a grant names it, written at the database (#211 Q10). */
+/**
+ * STUDY-B2's own category, as a grant names it, written at the database (`.dev/design/schema.md`
+ * § What is not in the first release).
+ */
 export const B2_OWN_CATEGORY = 'resource.internal';
 
-/** The signing-key cache's refetch cooldown (#208 Q5), in milliseconds. */
+/**
+ * The signing-key cache's refetch cooldown (`docs/deployment.md` § The identity provider), in
+ * milliseconds.
+ */
 export const KEY_REFETCH_COOLDOWN_MS = 30_000;
 
-/** A clock a test moves forward, configured as the Controller's own (#209 Q2). */
+/**
+ * A clock a test moves forward, configured as the Controller's own (`.dev/design/decisions.md`
+ * § The Controller's clock is configuration, and every duration it measures runs on it).
+ */
 export interface AdjustableClock {
 	/** Moves the clock forward. */
 	advance(milliseconds: number): void;
@@ -226,8 +238,8 @@ export const atOffset = (instant: Date, offsetMinutes: number): string => {
 };
 
 /**
- * The harness's default applications, by label, serving nothing, since serving is not #212's: the
- * harness registers them through the API once its Controller listens.
+ * The harness's default applications, by label, serving nothing, since serving is not the grant
+ * tests': the harness registers them through the API once its Controller listens.
  */
 export const APPLICATIONS: Readonly<Record<string, FixtureApplication>> = Object.freeze({
 	'arranger-test': { serves: [] },
@@ -284,10 +296,10 @@ const BASE_GRANTS: Readonly<Record<string, FixtureGrant>> = Object.freeze({
 /**
  * The plan's fixture, synthetic throughout, with a test's entries over it: the global category
  * `controlled` beside the seeded `unmarked`; STUDY-A1 and STUDY-B2 at the `grant` tier, so only
- * holders of a live grant on one, its owners and administrators may see it (#211 Q6), STUDY-B2
- * offering a category of its own; STUDY-C3 open and STUDY-D4 registered, owned by nobody; every
- * seeded part of {@link CAST} as a user; Ana's and Dana's accepted owner grants and Bo's accepted
- * curator grant.
+ * holders of a live grant on one, its owners and administrators may see it (the contract's
+ * `createGrant`), STUDY-B2 offering a category of its own; STUDY-C3 open and STUDY-D4 registered,
+ * owned by nobody; every seeded part of {@link CAST} as a user; Ana's and Dana's accepted owner
+ * grants and Bo's accepted curator grant.
  *
  * @param extra entries over the fixture's, by the same names; decisions follow the fixture's own.
  */
@@ -549,7 +561,10 @@ export const storedDecisions = async (harness: Harness, grantId: string): Promis
 	return rows;
 };
 
-/** An owner notification as the outbox holds it (#212 Q13), its recipient by subject. */
+/**
+ * An owner notification as the outbox holds it (the contract's `createSelfGrant`), its recipient by
+ * subject.
+ */
 export interface StoredNotification {
 	deliveredAt: Date | null;
 	kind: string;

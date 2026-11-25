@@ -31,8 +31,9 @@ import { type EvaluatedRecord, matchesSqon } from '../peripherals/sqonEvaluator.
 import { type Cleanup, eventually } from './waiting.js';
 
 // The vendored Bridge's public core and Express middleware, run against the Controller as a host
-// runs them (#215's expectations and scenario suites, #217): reached through a fetch that records
-// each request, logging to a logger that records each event.
+// runs them (the conformance tests' expectations and scenario suites, the Bridge and Controller
+// tests): reached through a fetch that records each request, logging to a logger that records each
+// event.
 
 /** The fetch the Bridge reaches the Controller through, as its options take one. */
 export type ControllerFetch = NonNullable<BridgeOptions['fetch']>;
@@ -66,7 +67,7 @@ export interface TimingProfile {
 }
 
 /**
- * #217's two timing profiles.
+ * The two timing profiles of `.dev/docs/controller-tests.md` § Time.
  *
  * - `compressed`: the Bridge at T 2 s, D 0.5 s, G 4 s, R 1 s, I 1.5 s, a 1 s exchange timeout, a 10 s
  *   token TTL and a 1 s failure hold, and the Controller at harness.ts's

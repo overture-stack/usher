@@ -1301,7 +1301,7 @@ suite('comparing two answers', () => {
 	});
 });
 
-suite("C2's refusals, asserted", () => {
+suite("the contract's refusals, asserted", () => {
 	test('accepts each refusal of its status and code, and fails one of another', async (context) => {
 		const answers = await answersTo(context, [
 			refusal(400, { code: 'unreadableBody' }),
@@ -1551,7 +1551,7 @@ suite('a large body sent slowly', () => {
 		assert.equal(PROBLEMS.bodyTooLarge.status, 413);
 	});
 
-	test('holds the longest externalId #211 allows in one place: 128 characters', () => {
+	test('holds the longest externalId the contract allows in one place: 128 characters', () => {
 		assert.equal(EXTERNAL_ID_MAXIMUM_LENGTH, 128);
 	});
 });

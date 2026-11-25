@@ -11,21 +11,26 @@ import type { Clock } from '../harness/controller.js';
 // before its clock reads the instant, so each wait reads its clock again before it settles.
 
 /**
- * The signing-key cache's refetch cooldown (#208 Q5), in milliseconds: the Controller fetches the
- * identity provider's keys again for a key it lacks at most once in this long, measured on its
- * configured clock, so a test moves past it by advancing an {@link adjustableClock}.
+ * The signing-key cache's refetch cooldown (`docs/deployment.md` § The identity provider), in
+ * milliseconds: the Controller fetches the identity provider's keys again for a key it lacks at
+ * most once in this long, measured on its configured clock, so a test moves past it by advancing an
+ * {@link adjustableClock}.
  */
 export const KEY_REFETCH_COOLDOWN_MS = 30_000;
 
 /**
- * A clock fixed at one instant, for the tests needing a known now (#209 Q2), given to the Controller
- * through its configuration and never the environment.
+ * A clock fixed at one instant, for the tests needing a known now (`.dev/design/decisions.md` § The
+ * Controller's clock is configuration, and every duration it measures runs on it), given to the
+ * Controller through its configuration and never the environment.
  *
  * @param instant milliseconds since the Unix epoch.
  */
 export const fixedClock = (instant: number): Clock => Object.freeze({ now: () => instant });
 
-/** A clock a test moves forward, configured as the Controller's own (#209 Q2). */
+/**
+ * A clock a test moves forward, configured as the Controller's own (`.dev/design/decisions.md`
+ * § The Controller's clock is configuration, and every duration it measures runs on it).
+ */
 export interface AdjustableClock {
 	/** Moves the clock forward. */
 	advance(milliseconds: number): void;

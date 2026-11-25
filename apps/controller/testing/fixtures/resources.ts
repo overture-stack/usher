@@ -13,7 +13,7 @@ import { PEOPLE } from '../harness/exchange.js';
 import type { Harness } from '../harness/harness.js';
 import { type FixtureGrant, mergedPolicy, POLICY_TABLES, type PolicyFixture } from '../harness/policy.js';
 
-// The fixture and helpers of #211's tests alone: the Policy Management API for resources and
+// The fixture and helpers of the resource tests alone: the Policy Management API for resources and
 // categories, under test/admin/resources/. Every path, body, answer reader, refusal and vocabulary
 // comes from admin.ts, and every table and store reader from policy.ts. The people are the shared cast: Ana owns STUDY-A1, Dana owns STUDY-B2,
 // Bo holds a pending curator grant on STUDY-A1, Eli an accepted viewer grant, Émile a revoked one,
@@ -52,18 +52,19 @@ export const applicationIdsOf = (harness: Harness, displayNames: readonly string
 export const ABSENT = 'STUDY-ZZ';
 
 /**
- * The characters the widened instance adds to the default set (#211 Q1): the long s (U+017F) among
- * them, which Unicode case folding reads as `s` and `lower()` leaves as it is.
+ * The characters the widened instance adds to the default set (`docs/deployment.md` § Registering
+ * resources): the long s (U+017F) among them, which Unicode case folding reads as `s` and `lower()`
+ * leaves as it is.
  */
 export const WIDENED_CHARACTERS = ' :*/Ééſ';
 
-/** The administrator-defined field every fixture defines (#211 Q12). */
+/** The administrator-defined field every fixture defines (the contract's `defineResourceField`). */
 export const ORGANIZATION = 'organization';
 
 /** A second administrator-defined field, for a value left alone while another changes. */
 export const FUNDER = 'funder';
 
-/** The length limits, in characters after NFC (#211 Q3). */
+/** The length limits, in characters after NFC (`docs/deployment.md` § Registering resources). */
 export const LIMITS = Object.freeze({
 	description: 4096,
 	displayName: 256,
@@ -100,7 +101,10 @@ export const RESOURCES = Object.freeze({
 	r1: 'STUDY-R1',
 });
 
-/** The global categories as the API names them (#211 Q8). */
+/**
+ * The global categories as the API names them (the contract's `registerCategory`, `updateCategory`
+ * and `listCategories`).
+ */
 export const GLOBAL = Object.freeze({
 	communityGoverned: 'global.community-governed',
 	controlled: 'global.controlled',
@@ -218,13 +222,13 @@ const BASE_FIXTURE = {
 } as const satisfies PolicyFixture;
 
 /**
- * The fixture most #211 suites share, synthetic throughout, with a test's entries added over it: the
- * two applications, `arranger-clinical` serving STUDY-A1; the global categories `controlled` and
- * `community-governed` beside the seeded `unmarked`; the fields `organization` and `funder`;
- * STUDY-A1 and STUDY-B2 at `grant`, each with a category of its own, STUDY-O1 at `open` and STUDY-R1
- * at `registered`; Ana's and Dana's accepted owner grants on STUDY-A1 and STUDY-B2; and on STUDY-A1
- * Bo's pending curator grant and Eli's accepted, Émile's revoked, Long's expired and Cy2's declined
- * viewer grants.
+ * The fixture most of the resource tests share, synthetic throughout, with a test's entries added
+ * over it: the two applications, `arranger-clinical` serving STUDY-A1; the global categories
+ * `controlled` and `community-governed` beside the seeded `unmarked`; the fields `organization` and
+ * `funder`; STUDY-A1 and STUDY-B2 at `grant`, each with a category of its own, STUDY-O1 at `open`
+ * and STUDY-R1 at `registered`; Ana's and Dana's accepted owner grants on STUDY-A1 and STUDY-B2;
+ * and on STUDY-A1 Bo's pending curator grant and Eli's accepted, Émile's revoked, Long's expired
+ * and Cy2's declined viewer grants.
  *
  * @param extra entries added over the fixture's, by the same names; its decisions and invitations
  *   follow the fixture's own.

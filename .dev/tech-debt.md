@@ -136,7 +136,7 @@ suites marked `todo`: one each in `createChannelAssertionVerifier.test.ts`,
 `createTokenVerifier.test.ts`, `test/exchange/issuance/channelAssertion.test.ts` and
 `conformanceGaps.test.ts`, and three in `test/audit/tokenExchange.test.ts`. The test runner counts a
 todo suite as a suite, so a run's todo total shows one where eight exist.
-fix: write each case from its source (tickets #209, #214 and #215, and the refused-subject ruling),
+fix: write each case from its source (the issuance, audit and conformance tests, and the refused-subject ruling),
 the forged-subject case first, and decide whether the two-encodings case is written or removed.
 Until then, a placeholder stays a `todo`, so it never reads as a passing test.
 standalone: no

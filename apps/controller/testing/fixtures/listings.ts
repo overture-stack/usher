@@ -20,7 +20,7 @@ import {
 } from '../harness/policy.js';
 import { type Cleanup, eventually, suiteCleanup } from '../harness/waiting.js';
 
-// The listing suites' own fixture (#213): a real Keycloak holding the cast, and the policy the plan
+// The listing suites' own fixture: a real Keycloak holding the cast, and the policy the plan
 // seeds. The listing's answers, parameters and refusals are read through admin.ts.
 
 /**
@@ -45,7 +45,10 @@ export const STUDIES = Object.freeze({
 /** A study id no world registers. */
 export const MISSING_STUDY = 'STUDY-ZZ';
 
-/** The retired study of the retirement world (#320 B, #213 Q10). */
+/**
+ * The retired study of the retirement world (the contract's `retireResource`, `listResources` and
+ * `listResourceGrants`).
+ */
 export const RETIRED_STUDY = 'STUDY-R9';
 
 /** An address no account of the realm holds. */
@@ -54,7 +57,9 @@ export const NOBODY_ADDRESS = 'nobody@example.org';
 /** The address of the main world's pending invitation, which no account holds. */
 export const INVITEE_ADDRESS = 'invitee@example.org';
 
-/** How a sharer with neither a given nor a family name is named (#213 Q9). */
+/**
+ * How a sharer with neither a given nor a family name is named (the contract's `NamedPrincipal`).
+ */
 export const UNNAMED_SHARER = 'a data steward';
 
 /** The capabilities the seeded `submitter` role carries, as `entity.action` names (permissions-model.md). */
@@ -71,7 +76,10 @@ export const BO_SHOWN_CAPABILITIES: readonly string[] = Object.freeze([
 	'record.update',
 ]);
 
-/** The categories a listing names, as the payload names them (#214 Q7). */
+/**
+ * The categories a listing names, as the payload names them (`.dev/design/decisions.md` § Category
+ * names carry their scope from the first release).
+ */
 export const CATEGORIES = Object.freeze({
 	controlled: 'global.controlled',
 	unmarked: 'global.unmarked',
@@ -100,10 +108,13 @@ export const CAST_NAMES: readonly CastName[] = Object.freeze(
 	Object.keys(CAST).filter((name): name is CastName => Object.hasOwn(CAST, name)),
 );
 
-/** The full name a sharer with a given and a family name is shown by (#213 Q9). */
+/**
+ * The full name a sharer with a given and a family name is shown by (the contract's
+ * `NamedPrincipal`).
+ */
 export const HAL_NAME = 'Hal Example';
 
-/** Ana's full name, as a granter is shown to an owner (#213 Q7). */
+/** Ana's full name, as a granter is shown to an owner (the contract's `NamedPrincipal`). */
 export const ANA_NAME = 'Ana Example';
 
 /** The run's shared realm holding the listing cast, each member's subject learned from it. */
@@ -118,8 +129,8 @@ export interface ListingRealm {
 
 	/**
 	 * Every name a listing could show a cast member by once the directory has resolved them, as a
-	 * sharer is named (#213 Q9): given and family names together, or {@link UNNAMED_SHARER} for one
-	 * with neither.
+	 * sharer is named (the contract's `NamedPrincipal`): given and family names together, or
+	 * {@link UNNAMED_SHARER} for one with neither.
 	 */
 	resolvedNames: readonly string[];
 

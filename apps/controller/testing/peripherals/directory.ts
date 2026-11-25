@@ -61,9 +61,9 @@ export interface DirectoryLookup {
 }
 
 /**
- * A stand-in for the identity provider's directory (#216 Q9), lighter than a Keycloak and set per
- * test: it answers the parts of Keycloak's admin API the Controller's directory reads, behind a token
- * from the client credentials grant, as a realm does.
+ * A stand-in for the identity provider's directory (`docs/deployment.md` § The directory), lighter
+ * than a Keycloak and set per test: it answers the parts of Keycloak's admin API the Controller's
+ * directory reads, behind a token from the client credentials grant, as a realm does.
  */
 export interface DirectoryStandIn {
 	/** The configuration fields pointing the Controller's directory at the stand-in. */

@@ -38,13 +38,15 @@ import { type EvaluatedRecord, matchesSqon } from '../peripherals/sqonEvaluator.
 import { requestsTo, type StartedBridge, startBridge, type TimingProfileName } from '../harness/vendoredBridge.js';
 import { type Cleanup, eventually } from '../harness/waiting.js';
 
-// The fixture and helpers of #215's tests alone: the conformance corpus replayed against the
-// Controller, its expectations rendered by the Bridge, the Bridge's own scenarios and the
-// mock's cues caused for real, under test/conformance/, and the gap tests #215 adds beside #209's and
-// #210's (B1). The corpus, its configurations and Ana come from conformanceCorpus.ts, and every path,
-// table and wire shape from the shared support modules. The people are the corpus's Ana and the
-// shared cast: the owner owns every resource of a configuration and makes Ana's grants through the API
-// (#212 Q4), Bo is a second signed-in person, and Cy is the person whose identity a test revokes.
+// The fixture and helpers of the conformance tests alone: the conformance corpus replayed against
+// the Controller, its expectations rendered by the Bridge, the Bridge's own scenarios and the
+// mock's cues caused for real, under test/conformance/, and the gap tests the conformance tests add
+// beside the issuance and revocation tests' (`.dev/docs/controller-tests.md` § Conformance). The
+// corpus, its configurations and Ana come from conformanceCorpus.ts, and every path, table and wire
+// shape from the shared support modules. The people are the corpus's Ana and the shared cast: the
+// owner owns every resource of a configuration and makes Ana's grants through the API (the
+// contract's `createGrant`), Bo is a second signed-in person, and Cy is the person whose identity a
+// test revokes.
 
 /** The person who owns every resource of a conformance configuration and grants Ana through the API. */
 export const CORPUS_OWNER: Person = PEOPLE.owner;
@@ -58,7 +60,10 @@ export const ARRANGER_PROD = CONFORMANCE_APPLICATIONS.arrangerProd;
 /** The label of the application serving `STUDY-A1` alone, `lyric-example`. */
 export const LYRIC_EXAMPLE = CONFORMANCE_APPLICATIONS.lyricExample;
 
-/** The test-defined role carrying `artifact.create` alone, for case 27 (B2). */
+/**
+ * The test-defined role carrying `artifact.create` alone, for case 27 (`.dev/design/schema.md`
+ * § What is not in the first release).
+ */
 export const ARTIFACT_ROLE = 'artifact-creator';
 
 /** What each role a corpus grant names carries, as `entity.action` names, as the person accepting it is shown. */
@@ -129,9 +134,10 @@ export interface CorpusGroupGrant {
 export const groupGrantName = (group: CorpusGroup): string => `${group}Grant`;
 
 /**
- * The policy of the corpus's group cases (04 to 09, 16, 22), seeded by SQL since groups have no write
- * path in the first release (B2): each group on its grant's resource with Ana a member, its grant,
- * and Ana's answer to it; and, for a positive control, Bo a member too, having accepted it.
+ * The policy of the corpus's group cases (04 to 09, 16, 22), seeded by SQL since groups have no
+ * write path in the first release (`.dev/design/schema.md` § What is not in the first release):
+ * each group on its grant's resource with Ana a member, its grant, and Ana's answer to it; and, for
+ * a positive control, Bo a member too, having accepted it.
  *
  * @param grants each group's grant, one per group.
  */
@@ -275,8 +281,8 @@ export interface AnaGrant {
 }
 
 /**
- * Creates a grant to Ana through the API as the resource's owner (#212 Q4), awaiting her answer
- * unless auto-accept is on.
+ * Creates a grant to Ana through the API as the resource's owner (the contract's `createGrant`),
+ * awaiting her answer unless auto-accept is on.
  *
  * @param harness the running harness.
  * @param grant the resource, the category, the role and the expiry.
@@ -331,8 +337,8 @@ export const revokeAsOwner = async (harness: Harness, grantId: string): Promise<
 };
 
 /**
- * Changes a grant's role through the API as the resource's owner (#215 Q3, ruled), with
- * `PATCH /admin/grants/{grantId}`.
+ * Changes a grant's role through the API as the resource's owner (the contract's `changeGrant`,
+ * ruled), with `PATCH /admin/grants/{grantId}`.
  *
  * @param harness the running harness.
  * @param grantId the grant's id.
@@ -405,9 +411,9 @@ export type RecordOutcome = 'denied' | 'served' | 'withheld';
 /**
  * What the Bridge's enforcement does to one record, as the Bridge's own conformance test reads it
  * (`rendering.conformance.test.ts` `outcomeOf`): an allow serves it, a deny refuses the catalogue,
- * and a narrowing serves it only when usher-types' SQON evaluator matches it (B3). A test asserts the
- * access holds a result for the key before reading one, since an adapter reads a missing result as a
- * deny.
+ * and a narrowing serves it only when usher-types' SQON evaluator matches it
+ * (`.dev/docs/controller-tests.md` § Conformance). A test asserts the access holds a result for the
+ * key before reading one, since an adapter reads a missing result as a deny.
  *
  * @param enforcement the key's result in the request's access.
  * @param record the record's values by field name.

@@ -3,6 +3,11 @@
 Key architectural choices and the reasoning behind them, including tools reviewed and not adopted.
 Where a reviewed tool influenced the design, that contribution is noted.
 
+**A ruling is written into this file when it is made**, and code and documents cite the section
+that holds it, never the conversation or the round that made it. A reader can open a section; a
+round number means nothing to someone who was not there. An entry written after the fact, from the
+code and the contract, says so where it begins.
+
 ---
 
 ## Tools reviewed before building
@@ -3760,3 +3765,31 @@ one per holder, and never to what a rule confers.
 
 The `Auto-accept` flag is unaffected and remains the instance-level exception, for machine-to-machine
 sharing and internal pipelines where an acknowledgment has no one to come from.
+
+---
+
+### The Controller's clock is configuration, and every duration it measures runs on it
+
+_Reconstructed on 2026-11-25 from the code and the contract; the ruling that made it is not on
+record._
+
+The Controller reads time from a clock it is given, never from the environment and never from the
+system directly. The durations it measures run on that clock, among them a token's lifetime and its
+clock tolerance, and the identity provider's key set, trusted for 10 minutes and fetched at most
+once in 30 seconds. Without it, a test of anything that expires would wait in real time or not test
+it at all, and a production instance whose durations ran on different clocks could judge one token
+by two times. Production passes the system clock, and tests pass a fixed or an adjustable one, so an
+expiry is tested by moving the clock, never by waiting.
+
+### An Usher token carries about a thousand held resources within its 1 MiB cap
+
+_Reconstructed on 2026-11-25 from the tests and the contract; the ruling that made it is not on
+record._
+
+The Controller refuses to issue a token over 1 MiB, as `tokenOverResponseCap`, the Bridge's default
+response cap. Version 1 of the payload is designed to hold about 1,000 held resources where an
+application serves 1,000, and 200 held where it serves 10,000. Past that, the principal is refused
+rather than given a token the Bridge cannot read, and a principal holding grants on that many
+resources is told nothing about which. A more compact payload, carrying more, is after the first
+release. The token size bound in [to-discuss.md](to-discuss.md) is the open question of what to do
+before a principal reaches it.

@@ -466,6 +466,8 @@ is a step for the deployment's SOPs.
 Each migration run stores it, and a change to `tokenLifetimeSeconds`, `retentionGraceSeconds` or
 `retentionMarginSeconds` sets it in that change's own transaction. The Controller's role may read it and not
 write it, so a defect in the Controller can never trim a notice a Bridge may still act on.
+The trim itself is `trim_notices(max_rows)`, owned by the migration role, which reads the floor and
+deletes at most that many notices below it; beside its owner, only the Controller's role may run it.
 
 **Decide E: category notices are filtered by audience, and principal notices are tagged per
 audience.** The Controller holds which applications serve which resources, since a token names only
@@ -529,6 +531,19 @@ table writes the operation, the row's key, its values before and after, and the 
 transaction declared, so a change made outside the Controller's code still leaves a record. The
 audit log says what a person did; the change record says what each row became. A secret column is
 never copied: an application key's record leaves out `encrypted_key`.
+
+**The changing transaction declares its actor**, with `set_config('usher.actor_type', ..., true)`,
+one of `human`, `serviceAccount`, `anonymous` or `system`, and `set_config('usher.actor_id', ...,
+true)`, the subject, or empty for nobody. A change declaring no actor is refused, and a start's
+seeding declares the system.
+
+**The policy tables are the ones whose rows decide what a token holds**: `resources`, `categories`,
+`resource_categories`, `application_resources`, `resource_fields`, `resource_field_values`,
+`capabilities`, `roles`, `role_permissions`, `grants`, `grant_decisions`, `groups`, `group_users`,
+`principal_revocations` and `everyone_sign_outs`. A trigger on each raises the policy generation in
+the changing transaction, so a value computed before a change can be told from one computed after
+it. Other tables, such as `applications` and `application_keys`, are recorded but raise no
+generation.
 
 ### Instance settings
 

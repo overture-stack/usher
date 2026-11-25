@@ -134,6 +134,7 @@ contributors, human and AI.
   requirement and user-flow traceability, and the atlas of longer-form roadmap detail.
 - **`design/`**: design documents covering security workflow, permissions model, adapter
   integration, and the management UI. Start at `design/README.md`.
+  A ruling goes into `design/decisions.md` when it is made, as that file's opening says.
 
 ## AI tooling
 

@@ -255,12 +255,12 @@ export interface ComparableWireRefusal {
 }
 
 /**
- * A refusal at the exchange or the channel as two that must be identical are compared (#209, #210,
- * #215): the same status, the same body text, and the same headers, every name compared and every
- * value but those of {@link PER_ANSWER_HEADERS}, whose names alone are compared. A header one refusal
- * carries and the other lacks tells them apart, and so does a connection header's value, since it is
- * on the wire too and a Controller sets it alike for every refusal; only a value that differs between
- * any two answers by its nature is left out.
+ * A refusal at the exchange or the channel as two that must be identical are compared
+ * (`.dev/docs/controller-tests.md` § Refusals): the same status, the same body text, and the same
+ * headers, every name compared and every value but those of {@link PER_ANSWER_HEADERS}, whose names
+ * alone are compared. A header one refusal carries and the other lacks tells them apart, and so
+ * does a connection header's value, since it is on the wire too and a Controller sets it alike for
+ * every refusal; only a value that differs between any two answers by its nature is left out.
  *
  * @param answer the exchange's or the poll's answer.
  */

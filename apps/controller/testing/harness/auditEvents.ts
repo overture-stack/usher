@@ -686,8 +686,8 @@ export const NOT_EMITTED_IN_THIS_EPIC: Readonly<Partial<Record<AuditEventType, s
 	'invitation.claim': 'no invitation operation exists in this epic',
 	'invitation.creation': 'no invitation operation exists in this epic',
 	'invitation.lapse': 'no invitation operation exists in this epic',
-	'ownership.transfer': 'admin.ts holds no ownership transfer operation (#214 Q14)',
-	'resource.orphaned': 'post-MVP in the first release (#214 Q20)',
+	'ownership.transfer': 'admin.ts holds no ownership transfer operation (`.dev/design/audit-events.md` § Open items)',
+	'resource.orphaned': 'post-MVP in the first release (`.dev/design/audit-events.md` § Open items)',
 });
 
 /**
@@ -710,14 +710,14 @@ export const severityOfChanges = (
 };
 
 /**
- * The CloudEvents extension attribute an event's line carries its severity in (#214 Q2), as the
- * Bridge names it.
+ * The CloudEvents extension attribute an event's line carries its severity in (the contract's
+ * `AuditEvent`), as the Bridge names it.
  */
 export const SEVERITY_ATTRIBUTE = 'severity';
 
 /**
  * The member of a log line naming the logger's level, at which a critical event is written as the
- * logger's error level (#214 Q2).
+ * logger's error level (`docs/deployment.md` § Logs).
  */
 export const LOG_LEVEL_MEMBER = 'level';
 
@@ -738,12 +738,12 @@ export const EVENT_INSTANT_FORM = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)
 export const CAUSED_BY_MEMBER = 'causedBy';
 
 /**
- * The member marking an event as the EGO import's, and its value (ruled, #216 Q8 option 2 and Q15),
- * named here alone: `resource.registration`, `grant.creation` and `grant.decision` carry `origin`
- * `import` for each write an import's real run makes, the imported submitters' recorded
- * acceptances included, whose actor is the administrator who ran it. An event of a write made through
- * any other operation carries no `origin` (assumed). The decision row's own mark is policy.ts's
- * `DECISION_ORIGIN_COLUMN`, holding the same value.
+ * The member marking an event as the EGO import's, and its value (ruled,
+ * `.dev/design/audit-events.md` § Events), named here alone: `resource.registration`,
+ * `grant.creation` and `grant.decision` carry `origin` `import` for each write an import's real run
+ * makes, the imported submitters' recorded acceptances included, whose actor is the administrator
+ * who ran it. An event of a write made through any other operation carries no `origin` (assumed).
+ * The decision row's own mark is policy.ts's `DECISION_ORIGIN_COLUMN`, holding the same value.
  */
 export const IMPORT_ORIGIN = Object.freeze({
 	member: 'origin',
@@ -751,10 +751,11 @@ export const IMPORT_ORIGIN = Object.freeze({
 } as const);
 
 /**
- * The events carrying {@link IMPORT_ORIGIN} for the import's writes (ruled, #216 Q15), each also
- * carrying {@link CAUSED_BY_MEMBER} holding the CloudEvents `id` of the `import.run` event of the run
- * that wrote it (ruled, "#216's export details, member reasons and the run's event" 3), so every
- * registration, grant and decision a run writes is answerable from the trail to that run.
+ * The events carrying {@link IMPORT_ORIGIN} for the import's writes (ruled,
+ * `.dev/design/audit-events.md` § Events), each also carrying {@link CAUSED_BY_MEMBER} holding the
+ * CloudEvents `id` of the `import.run` event of the run that wrote it (ruled,
+ * `.dev/design/audit-events.md` § Events), so every registration, grant and decision a run writes
+ * is answerable from the trail to that run.
  */
 export const IMPORT_ORIGIN_EVENT_TYPES: readonly AuditEventType[] = Object.freeze([
 	'grant.creation',
@@ -789,9 +790,10 @@ export const GRANT_BEYOND_USE_LOG_LINE = Object.freeze({
 } as const);
 
 /**
- * How the exchange's event names a token past the Bridge's response cap (ruled, "#215's role route
- * and the held-grant scale" 2: the limit, the principal's held count and the token's size, never an
- * id, as `audit-events.md` § Events names them): the `token.exchange` event, its `reason` this limit's
+ * How the exchange's event names a token past the Bridge's response cap (ruled,
+ * `.dev/design/decisions.md` § An Usher token carries about a thousand held resources within its 1
+ * MiB cap: the limit, the principal's held count and the token's size, never an id, as
+ * `audit-events.md` § Events names them): the `token.exchange` event, its `reason` this limit's
  * fixed code, with the principal's held resource count and the token's size in bytes, never a
  * resource's id.
  */

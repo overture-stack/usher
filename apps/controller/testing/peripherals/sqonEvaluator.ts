@@ -1,11 +1,12 @@
 import { canonicalOperatorOf, isLiteralValue } from '@overture-stack/usher-types';
 
-// A copy of usher-types' test-only SQON evaluator (ruling B3): the repository's
-// modules/types/src/sqonEvaluator.ts, which the package keeps off its root, with the three helpers it
-// takes from modules/types/src/plainData.ts, which the package keeps internal too. It reads a filter
-// against one record as the search engine would, so a test judges what a rendered narrowing serves,
-// and throws for anything it does not evaluate rather than guess. When the Bridge's file changes,
-// change this copy to match; it goes once usher-types exports an evaluator.
+// A copy of usher-types' test-only SQON evaluator (`.dev/docs/controller-tests.md` § Conformance):
+// the repository's modules/types/src/sqonEvaluator.ts, which the package keeps off its root, with
+// the three helpers it takes from modules/types/src/plainData.ts, which the package keeps internal
+// too. It reads a filter against one record as the search engine would, so a test judges what a
+// rendered narrowing serves, and throws for anything it does not evaluate rather than guess. When
+// the Bridge's file changes, change this copy to match; it goes once usher-types exports an
+// evaluator.
 
 const hasPlainPrototype = (value: object): boolean => {
 	const prototype: object | null = Object.getPrototypeOf(value);

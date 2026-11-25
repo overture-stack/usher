@@ -336,7 +336,7 @@ suite("a payload compared with the corpus's", () => {
 });
 
 suite('the configurations the corpus was computed against', () => {
-	test('seed as fixtures, A by A and B by B, their settings as #215 defines them', async () => {
+	test('seed as fixtures, A by A and B by B, their settings as the conformance tests define them', async () => {
 		const seen = await Promise.all(
 			(
 				Object.entries(CONFORMANCE_CONFIGURATIONS) as [

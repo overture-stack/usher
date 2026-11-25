@@ -36,7 +36,10 @@ export interface AdminOverrides {
 	query?: Readonly<Record<string, string>>;
 }
 
-/** An RFC 9457 problem details object, as the API answers a refusal, carrying a `code` (C2). */
+/**
+ * An RFC 9457 problem details object, as the API answers a refusal, carrying a `code` (the
+ * contract's `ProblemDetails`).
+ */
 export interface ProblemDetails {
 	code: string;
 	detail?: string;
@@ -117,8 +120,9 @@ export interface ResourceRegistration {
 }
 
 /**
- * The longest a resource's externalId may be, in characters after NFC (#211 Q3): a registration with a
- * longer one is refused, and the EGO import reports a study whose id is longer as `tooLong`.
+ * The longest a resource's externalId may be, in characters after NFC (`docs/deployment.md`
+ * § Registering resources): a registration with a longer one is refused, and the EGO import reports
+ * a study whose id is longer as `tooLong`.
  */
 export const EXTERNAL_ID_MAXIMUM_LENGTH = 128;
 
@@ -183,7 +187,7 @@ export interface GrantDecision {
 	decision: 'accept' | 'decline';
 }
 
-/** The audit log's query parameters (#214 Q13), each optional. */
+/** The audit log's query parameters (the contract's `readAudit`), each optional. */
 export interface AuditQuery {
 	actorId?: string;
 
@@ -506,8 +510,8 @@ export const assertSucceeded = (response: AdminResponse, operation: string): voi
 };
 
 /**
- * The back-channel logout endpoint's URL (#210 Q8), as an identity provider is configured with it:
- * `backchannel-logout`, relative to the Controller's URL.
+ * The back-channel logout endpoint's URL (the contract's `relayBackChannelLogout`), as an identity
+ * provider is configured with it: `backchannel-logout`, relative to the Controller's URL.
  *
  * @param controllerUrl the Controller's URL, ending in `/`.
  */
@@ -706,7 +710,7 @@ export const restoreResource = (
 
 /**
  * Retires a resource whose only live grants are its owners', ending them, and that no pending
- * invitation names (#320 B):
+ * invitation names (the contract's `retireResource`):
  * `POST /admin/resources/{externalId}/retirement`.
  *
  * @param caller the Controller and the caller's token.
@@ -721,8 +725,8 @@ export const retireResource = (
 	send(caller, { method: 'POST', path: PATHS.resourceAction(externalId, 'retirement') }, overrides);
 
 /**
- * Deletes a registration that never held a grant or an invitation (#320 D):
- * `DELETE /admin/resources/{externalId}`.
+ * Deletes a registration that never held a grant or an invitation (the contract's
+ * `deleteResource`): `DELETE /admin/resources/{externalId}`.
  *
  * @param caller the Controller and the caller's token.
  * @param externalId the resource.
@@ -735,8 +739,9 @@ export const deleteResource = (
 ): Promise<AdminResponse> => send(caller, { method: 'DELETE', path: PATHS.resource(externalId) }, overrides);
 
 /**
- * Adds one application to a resource's served set (#211 Q5), succeeding without a write when it is
- * already there: `PUT /admin/resources/{externalId}/applications/{applicationId}`.
+ * Adds one application to a resource's served set (the contract's `serveResource`), succeeding
+ * without a write when it is already there:
+ * `PUT /admin/resources/{externalId}/applications/{applicationId}`.
  *
  * @param caller the Controller and the caller's token.
  * @param externalId the resource.
@@ -776,7 +781,7 @@ export const stopServingResource = (
 	);
 
 /**
- * Registers a global category (#211 Q8): `POST /admin/categories`.
+ * Registers a global category (the contract's `registerCategory`): `POST /admin/categories`.
  *
  * @param caller the Controller and the caller's token.
  * @param registration the category.
@@ -790,7 +795,8 @@ export const registerCategory = (
 	send(caller, { json: { ...registration }, method: 'POST', path: PATHS.categories }, overrides);
 
 /**
- * Updates a category (#211 Q8): `PATCH /admin/categories/{scopedName}` as a JSON Merge Patch.
+ * Updates a category (the contract's `updateCategory`): `PATCH /admin/categories/{scopedName}` as a
+ * JSON Merge Patch.
  *
  * @param caller the Controller and the caller's token.
  * @param scopedName the category, as `global.controlled`.
@@ -815,7 +821,7 @@ export const updateCategory = (
 	);
 
 /**
- * Lists the categories (#211 Q8): `GET /admin/categories`.
+ * Lists the categories (the contract's `listCategories`): `GET /admin/categories`.
  *
  * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
@@ -824,8 +830,9 @@ export const listCategories = (caller: AdminCaller, overrides?: AdminOverrides):
 	send(caller, { method: 'GET', path: PATHS.categories }, overrides);
 
 /**
- * Defines a resource field, instance-wide (#207 Q8): `POST /admin/resource-fields`. A resource's
- * values are set and cleared through {@link updateResource}.
+ * Defines a resource field, instance-wide (the contract's `defineResourceField`):
+ * `POST /admin/resource-fields`. A resource's values are set and cleared through
+ * {@link updateResource}.
  *
  * @param caller the Controller and the caller's token.
  * @param definition the field.
@@ -848,7 +855,8 @@ export const listResourceFields = (caller: AdminCaller, overrides?: AdminOverrid
 	send(caller, { method: 'GET', path: PATHS.resourceFields }, overrides);
 
 /**
- * Creates a grant, its holder by subject or by address (#212 Q1): `POST /admin/grants`.
+ * Creates a grant, its holder by subject or by address (the contract's `createGrant`):
+ * `POST /admin/grants`.
  *
  * @param caller the Controller and the caller's token.
  * @param creation the grant.
@@ -864,7 +872,8 @@ export const createGrant = async (
 
 /**
  * Adds a submitter to a study by address: a grant of the `submitter` role naming no category, which
- * takes the instance's submitter category (#212 Q6), through `POST /admin/grants`.
+ * takes the instance's submitter category (the contract's `createGrant`), through
+ * `POST /admin/grants`.
  *
  * @param caller the Controller and the caller's token.
  * @param externalId the study.
@@ -880,8 +889,8 @@ export const addSubmitter = (
 	createGrant(caller, { holder: { email }, resource: externalId, role: 'submitter' }, overrides);
 
 /**
- * Removes a submitter from a study by address, the address in the body (#212 Q1):
- * `POST /admin/resources/{externalId}/submitters/removal`.
+ * Removes a submitter from a study by address, the address in the body (the contract's
+ * `removeSubmitter`): `POST /admin/resources/{externalId}/submitters/removal`.
  *
  * @param caller the Controller and the caller's token.
  * @param externalId the study.
@@ -905,7 +914,8 @@ export const removeSubmitter = (
 	);
 
 /**
- * Creates the caller's own grant, which is its acceptance (#212 Q14): `POST /admin/grants/self`.
+ * Creates the caller's own grant, which is its acceptance (the contract's `createSelfGrant`):
+ * `POST /admin/grants/self`.
  *
  * @param caller the Controller and the caller's token.
  * @param creation the grant.
@@ -962,7 +972,7 @@ export const listGrantRequests = (caller: AdminCaller, overrides?: AdminOverride
  *
  * @param caller the Controller and the caller's token.
  * @param grantId the grant's id.
- * @param options the reason, which is optional (#212 Q11).
+ * @param options the reason, which is optional (the contract's `revokeGrant`).
  * @param overrides departures from the request.
  */
 export const revokeGrant = (
@@ -1057,7 +1067,8 @@ export const changeGrantRole = (
 	);
 
 /**
- * Lists the grants on a resource (#213): `GET /admin/resources/{externalId}/grants`.
+ * Lists the grants on a resource (the contract's `listResourceGrants`):
+ * `GET /admin/resources/{externalId}/grants`.
  *
  * @param caller the Controller and the caller's token.
  * @param externalId the resource.
@@ -1071,8 +1082,8 @@ export const listResourceGrants = (
 	send(caller, { method: 'GET', path: PATHS.resourceAction(externalId, 'grants') }, overrides);
 
 /**
- * Lists a person's grants by exact address, the address in the body (#213 Q2):
- * `POST /admin/people/grants`.
+ * Lists a person's grants by exact address, the address in the body (the contract's
+ * `listPersonGrants`): `POST /admin/people/grants`.
  *
  * @param caller the Controller and the caller's token.
  * @param email the person's address.
@@ -1085,7 +1096,7 @@ export const listPersonGrants = (
 ): Promise<AdminResponse> => send(caller, { json: { email }, method: 'POST', path: PATHS.personGrants }, overrides);
 
 /**
- * Lists the caller's own grants (#213 Q3): `GET /admin/me/grants`.
+ * Lists the caller's own grants (the contract's `listOwnGrants`): `GET /admin/me/grants`.
  *
  * @param caller the Controller and the caller's token.
  * @param overrides departures from the request.
@@ -1179,8 +1190,8 @@ export const removeAdministrator = (
 ): Promise<AdminResponse> => send(caller, { method: 'DELETE', path: PATHS.administrator(subject) }, overrides);
 
 /**
- * Revokes a principal's identity entirely (#210 Q1, #212): `POST /admin/people/revocations`, the
- * subject in the body.
+ * Revokes a principal's identity entirely (the contract's `revokePrincipal`):
+ * `POST /admin/people/revocations`, the subject in the body.
  *
  * @param caller the Controller and the caller's token.
  * @param revocation the principal's subject, and the reason.
@@ -1217,7 +1228,8 @@ export const liftIdentityRevocation = (
 	send(caller, { json: { subject }, method: 'POST', path: PATHS.identityRevocationLifts }, overrides);
 
 /**
- * Revokes every user of a resource at once (#210 Q1): `POST /admin/resources/{externalId}/revocations`.
+ * Revokes every user of a resource at once (the contract's `revokeResourceAccess`):
+ * `POST /admin/resources/{externalId}/revocations`.
  *
  * @param caller the Controller and the caller's token.
  * @param externalId the resource.
@@ -1241,7 +1253,8 @@ export const revokeResourceUsers = (
 	);
 
 /**
- * Signs out everyone, confirmed in the request (#210 Q1): `POST /admin/sign-outs`.
+ * Signs out everyone, confirmed in the request (the contract's `signOutEveryone`):
+ * `POST /admin/sign-outs`.
  *
  * @param caller the Controller and the caller's token.
  * @param signOut the reason.
@@ -1287,7 +1300,7 @@ export const changeRoleCapabilities = (
 	);
 
 /**
- * Reads the audit log (#214): `GET /admin/audit`, with the parameters given.
+ * Reads the audit log (the contract's `readAudit`): `GET /admin/audit`, with the parameters given.
  *
  * @param caller the Controller and the caller's token.
  * @param query the filters and the page.
@@ -1367,10 +1380,10 @@ export const updateSettings = (
  * administrators alone, taking `{ audiences, export }` and running dry unless `apply: true` is
  * added beside them. `audiences` names, by id, the applications serving each resource the run
  * registers (ruled): an empty list is refused 422 `importNeedsAnAudience`, and an id naming no
- * registered application 422 `unknownApplication`. Either run answers 200 with the import's
- * report as its JSON body, returned unread; a dry run is a read-only transaction writing nothing,
- * its audit row included (#216 Q16). The export is sent as given, so this function holds no view of
- * its format.
+ * registered application 422 `unknownApplication`. Either run answers 200 with the import's report
+ * as its JSON body, returned unread; a dry run is a read-only transaction writing nothing, its
+ * audit row included (the contract's planned `importFromEgo`). The export is sent as given, so this
+ * function holds no view of its format.
  *
  * @param caller the Controller and an administrator's token.
  * @param egoExport the export, sent unchanged as the request's `export` member.
@@ -1398,8 +1411,9 @@ export const importFromEgo = (
 	);
 
 /**
- * Posts a logout token to the back-channel logout endpoint (#210 Q8): `POST /backchannel-logout`,
- * form-encoded as one `logout_token` parameter, with no `authorization` header.
+ * Posts a logout token to the back-channel logout endpoint (the contract's
+ * `relayBackChannelLogout`): `POST /backchannel-logout`, form-encoded as one `logout_token`
+ * parameter, with no `authorization` header.
  *
  * @param controllerUrl the Controller's URL, ending in `/`.
  * @param logoutToken the logout token.
@@ -1452,8 +1466,8 @@ export const readApiDocsContract = (controllerUrl: URL, overrides?: AdminOverrid
 	unauthenticatedGet(controllerUrl, PATHS.apiDocsContract, overrides);
 
 /**
- * Asks whether the Controller is ready to serve (#214 Q18): `GET /health/ready`, unauthenticated,
- * answered 200 or 503 with no detail in the body.
+ * Asks whether the Controller is ready to serve (`docs/deployment.md` § Readiness and liveness):
+ * `GET /health/ready`, unauthenticated, answered 200 or 503 with no detail in the body.
  *
  * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
@@ -1462,9 +1476,9 @@ export const readReadiness = (controllerUrl: URL, overrides?: AdminOverrides): P
 	unauthenticatedGet(controllerUrl, PATHS.readiness, overrides);
 
 /**
- * Asks whether the Controller's process should go on running (#214 Q18): `GET /health/live`,
- * unauthenticated, answered 200 until the Controller's log stream fails a write and 503 after, with
- * no detail in the body.
+ * Asks whether the Controller's process should go on running (`docs/deployment.md` § Readiness and
+ * liveness): `GET /health/live`, unauthenticated, answered 200 until the Controller's log stream
+ * fails a write and 503 after, with no detail in the body.
  *
  * @param controllerUrl the Controller's URL, ending in `/`.
  * @param overrides departures from the request.
@@ -1506,10 +1520,11 @@ export type ManagementTokenConfiguration = Pick<
 >;
 
 /**
- * The claims of a management token over the stand-in's Keycloak-shaped defaults (#212 Q3): `aud`
- * the management API, `azp` the first configured management client, the person's subject and
- * address, and Keycloak's default realm roles, with the first-user role beside them for the first
- * user. A token makes no administrator: the store holds who administers.
+ * The claims of a management token over the stand-in's Keycloak-shaped defaults
+ * (`.dev/design/decisions.md` § Usher keeps its own admins, and a first user only nominates the
+ * first): `aud` the management API, `azp` the first configured management client, the person's
+ * subject and address, and Keycloak's default realm roles, with the first-user role beside them for
+ * the first user. A token makes no administrator: the store holds who administers.
  *
  * @param provider the stand-in, whose realm names the default roles.
  * @param configuration the management audience and clients, and the first-user role.
@@ -1573,8 +1588,9 @@ const problem = <Code extends string, Status extends number>(
 
 /**
  * Every problem code a refusal of the Policy Management API carries, with the status it comes with:
- * C2's mapping as the rulings amend it. Every refusal is RFC 9457 problem details carrying a `code`
- * and no internal detail, and never repeats a value the caller sent.
+ * the contract's mapping (`info.description` and `ProblemDetails`) as the rulings amend it. Every
+ * refusal is RFC 9457 problem details carrying a `code` and no internal detail, and never repeats a
+ * value the caller sent.
  *
  * - 400, no code ruled: a body or query unreadable by its shape (not JSON, not an object, a
  *   required member missing, a member of the wrong type, or a member the operation does not take,
@@ -1586,13 +1602,13 @@ const problem = <Code extends string, Status extends number>(
  *   `notFirstUser`, a nomination by a principal whose token lacks the first-user role, before its
  *   body is read; `serviceAccountNotPermitted`, a service account's token, on every operation
  *   before any lookup; `administratorOnly`, an administrator-only operation (retiring, deleting,
- *   serving, a category's update, asking for revoked grants or retired resources), to everyone
- *   else before any lookup, so identical whether or not the resource exists;
+ *   serving, a category's update, asking for revoked grants or retired resources), to everyone else
+ *   before any lookup, so identical whether or not the resource exists;
  *   `ownersAndAdministratorsOnly`, the category listing, to a caller neither owning a resource nor
  *   administering; `administratorGrantsNoConsumerAccess`, an administrator granting someone
- *   consumer access, which is the owner's (#212 Q4); `administratorSelfOwnership`, an
- *   administrator naming themself owner; `noAuthorityOnResource`, a caller who may see the resource
- *   and holds no authority for the operation on it.
+ *   consumer access, which is the owner's (the contract's `createGrant`);
+ *   `administratorSelfOwnership`, an administrator naming themself owner; `noAuthorityOnResource`,
+ *   a caller who may see the resource and holds no authority for the operation on it.
  * - 404: `resourceNotFound`, a resource the caller may not see or that does not exist;
  *   `holderNotFound`, no account, only once the caller's authority on the resource is established;
  *   `grantNotFound`, any grant id the caller may not act on; `applicationNotFound`, an unregistered
@@ -1615,8 +1631,7 @@ const problem = <Code extends string, Status extends number>(
  *   nomination a later one replaced; `nominationRevoked`, an answer to a nomination the first user
  *   revoked.
  * - 413: `bodyTooLarge`, a body over its endpoint's limit ({@link BODY_LIMIT_BYTES}), the detail
- *   naming the limit and holding nothing of the body (ruled, "#216: faults mid-run, 401 and 413"
- *   4).
+ *   naming the limit and holding nothing of the body (ruled, the contract's `BodyTooLarge`).
  * - 415: `unsupportedMediaType`, a body in a media type other than `application/json`, or in none.
  * - 422, a well-formed request breaking a rule, a member named by the operation's 422 included:
  *   `registrationHasHistory`, deleting a registration that ever held a grant or an invitation, its
@@ -1632,8 +1647,8 @@ const problem = <Code extends string, Status extends number>(
  *   `Retry-After`; `directoryUnavailable`, an address operation the directory cannot answer;
  *   `importNotConfigured`, a run of the EGO import while its settings are missing, before its
  *   export is read; `storeUnavailable`, an operation that would write on a Controller whose
- *   database role may only read, failing closed with no partial effect (#216's refusals and the
- *   read-only role).
+ *   database role may only read, failing closed with no partial effect (the contract's `ChangeUnavailable`;
+ *   `.dev/design/schema.md` § The data access layer).
  */
 export const PROBLEMS = Object.freeze({
 	administratorGrantsNoConsumerAccess: problem('administratorGrantsNoConsumerAccess', 403),
@@ -1794,18 +1809,19 @@ export const RESTORATION_REASONS = Object.freeze({
 
 /**
  * The member a grant's creation would name a field category by. The first release takes none
- * (#212 Q16). A grant has a field category (schema.md's `field_category_id`), so a body carrying one
- * breaks a rule and is refused 422, not 400 (#211 review point 3); the name is assumed, since no ruling
- * names it.
+ * (`.dev/design/schema.md` § What is not in the first release). A grant has a field category
+ * (schema.md's `field_category_id`), so a body carrying one breaks a rule and is refused 422, not
+ * 400 (the contract's `info.description`); the name is assumed, since no ruling names it.
  */
 export const FIELD_CATEGORY_MEMBER = 'fieldCategory';
 
 /**
- * The largest request body each endpoint reads, in bytes (ruled, "#216's reasons, export size and
- * prefixes" 2): 10 MiB for the EGO import's endpoint alone, which checks the administrator before
- * it reads the body; 64 KiB for every other, as #208 Q13 set for the exchange. A body over its limit
- * is refused 413 `bodyTooLarge` in problem details whose detail names the limit and holds nothing of
- * the body (ruled, "#216: faults mid-run, 401 and 413" 4); {@link namesBodyLimit} reads the detail.
+ * The largest request body each endpoint reads, in bytes (ruled, the contract's `importFromEgo`):
+ * 10 MiB for the EGO import's endpoint alone, which checks the administrator before it reads the
+ * body; 64 KiB for every other, as the contract's `BodyTooLarge` sets for the exchange. A body over
+ * its limit is refused 413 `bodyTooLarge` in problem details whose detail names the limit and holds
+ * nothing of the body (ruled, the contract's `BodyTooLarge`); {@link namesBodyLimit} reads the
+ * detail.
  */
 export const BODY_LIMIT_BYTES = Object.freeze({
 	egoImport: 10_485_760,
@@ -1824,9 +1840,10 @@ export const namesBodyLimit = (problem: ProblemDetails | undefined, limit: numbe
 	new RegExp(`(?<!\\d)${String(limit)}(?!\\d)`, 'u').test(problem?.detail ?? '');
 
 /**
- * The query parameters a listing takes (#213 Q4, Q5, Q10): the page's cursor and size, as the audit
- * log names them (#214 Q13), and the two an administrator sends, each as `true`, to see revoked
- * grants and retired resources; anyone else asking is refused 403 `administratorOnly`.
+ * The query parameters a listing takes (the contract's `listResources` and `listResourceGrants`):
+ * the page's cursor and size, as the audit log names them (the contract's `readAudit`), and the two
+ * an administrator sends, each as `true`, to see revoked grants and retired resources; anyone else
+ * asking is refused 403 `administratorOnly`.
  */
 export const LISTING_QUERY = Object.freeze({
 	cursor: 'cursor',
@@ -1835,17 +1852,20 @@ export const LISTING_QUERY = Object.freeze({
 	limit: 'limit',
 } as const);
 
-/** The overrides asking a listing for revoked grants (#213 Q4). */
+/** The overrides asking a listing for revoked grants (the contract's `listResourceGrants`). */
 export const INCLUDING_REVOKED: AdminOverrides = Object.freeze({
 	query: { [LISTING_QUERY.includeRevoked]: 'true' },
 });
 
-/** The overrides asking a listing for retired resources (#213 Q10). */
+/** The overrides asking a listing for retired resources (the contract's `listResources`). */
 export const INCLUDING_RETIRED: AdminOverrides = Object.freeze({
 	query: { [LISTING_QUERY.includeRetired]: 'true' },
 });
 
-/** A grant's state as a listing names it (#213 Q4); `accepted` and `declined` as decisions name them (#212 Q15). */
+/**
+ * A grant's state as a listing names it (the contract's `listResourceGrants`); `accepted` and
+ * `declined` as decisions name them (the contract's `answerGrant`).
+ */
 export const GRANT_STATES = Object.freeze({
 	accepted: 'accepted',
 	declined: 'declined',
@@ -1865,7 +1885,10 @@ const recordsIn = (value: unknown): readonly Readonly<Record<string, unknown>>[]
 
 const sortedIfList = (value: unknown): unknown => (Array.isArray(value) ? value.map(String).toSorted() : value);
 
-/** A capability as the caller's own listing shows what a grant would let them do (#213). */
+/**
+ * A capability as the caller's own listing shows what a grant would let them do (the contract's
+ * `listOwnGrants`).
+ */
 export interface CapabilityView {
 	description: unknown;
 	displayName: unknown;
@@ -1882,9 +1905,9 @@ export interface DecisionView {
 }
 
 /**
- * A grant's holder as a listing shows one, `{ subject, email, hasAccount }`: the address the directory
- * holds now, resolved at read time and never stored (#213 Q1), absent for a holder the directory no
- * longer knows, whose `hasAccount` is `false`.
+ * A grant's holder as a listing shows one, `{ subject, email, hasAccount }`: the address the
+ * directory holds now, resolved at read time and never stored (`docs/deployment.md` § The
+ * directory), absent for a holder the directory no longer knows, whose `hasAccount` is `false`.
  */
 export interface HolderView {
 	email: unknown;
@@ -1893,12 +1916,13 @@ export interface HolderView {
 }
 
 /**
- * A grant as a listing shows it, each member as the answer holds it: `capabilities` (the caller's own
- * listing: `name`, `displayName`, `description`), `category` (scoped, `null` for the wildcard),
+ * A grant as a listing shows it, each member as the answer holds it: `capabilities` (the caller's
+ * own listing: `name`, `displayName`, `description`), `category` (scoped, `null` for the wildcard),
  * `decision` (`decision`, `decidedAt`, `capabilities`), `expiresAt` (`null` for none), `grantedAt`,
- * `grantedBy` (`{ subject }` to an administrator, `{ name }` to an owner and a recipient, #213 Q7 and
- * Q9), `holder`, `id` (the opaque id), `resource` (the externalId), `revokedAt`, `role`, `selfGrant`
- * (`true` for an administrator's own grant) and `state` (one of {@link GRANT_STATES}).
+ * `grantedBy` (`{ subject }` to an administrator, `{ name }` to an owner and a recipient, the
+ * contract's `NamedPrincipal`), `holder`, `id` (the opaque id), `resource` (the externalId),
+ * `revokedAt`, `role`, `selfGrant` (`true` for an administrator's own grant) and `state` (one of
+ * {@link GRANT_STATES}).
  */
 export interface GrantView {
 	capabilities: readonly CapabilityView[] | undefined;
@@ -1924,12 +1948,13 @@ export interface GrantView {
 /**
  * A resource as a registration's answer, a read's and a listing's entry show it, each member as the
  * answer holds it: the registration's members (`externalId`, `displayName`, `description`,
- * `accessLevel`, `applications` by id, `fields` as values by field name), `categories` (the resource's
- * own, scoped), `registeredAt` and `updatedAt` (instants), `registeredBy` (`{ subject }`), `suppressed`,
- * `retired` (`true` for a retired resource, listed only to an administrator asking, #213 Q10),
- * `grants` (its grants, holders included) and `grantSummary`: to administrators and owners alone, the
- * holders of each role counted, a holder being an accepted, unexpired, unrevoked grant, pending and
- * declined ones left out (#213 Q8); a holder who owns nothing gets no such member.
+ * `accessLevel`, `applications` by id, `fields` as values by field name), `categories` (the
+ * resource's own, scoped), `registeredAt` and `updatedAt` (instants), `registeredBy`
+ * (`{ subject }`), `suppressed`, `retired` (`true` for a retired resource, listed only to an
+ * administrator asking, the contract's `listResources`), `grants` (its grants, holders included)
+ * and `grantSummary`: to administrators and owners alone, the holders of each role counted, a
+ * holder being an accepted, unexpired, unrevoked grant, pending and declined ones left out (the
+ * contract's `Resource.grantSummary`); a holder who owns nothing gets no such member.
  */
 export interface ResourceView {
 	accessLevel: unknown;
@@ -2321,7 +2346,7 @@ export const listedResource = (response: AdminResponse, externalId: string): Res
 
 /**
  * The cursor of the page after this one, the body's `next`, absent or `null` on the last page
- * (#213 Q5, and the audit log's alike).
+ * (the contract's `listResources` and `listResourceGrants`, and the audit log's alike).
  *
  * @param response a page.
  */
@@ -2404,7 +2429,7 @@ export const rolesHeld = (summary: unknown): Readonly<Record<string, unknown>> =
 
 /**
  * Whether a read's body carries a grant summary at all, which one read by a holder who owns nothing
- * does not (#213 Q8, ruled).
+ * does not (the contract's `Resource.grantSummary`, ruled).
  *
  * @param body the read's body.
  */
@@ -2544,9 +2569,9 @@ export interface ComparableSuccess {
 
 /**
  * A successful answer as two are compared for being indistinguishable, such as an owner's addition
- * by an address an account holds and by one none holds (#212 Q7): the status, the media type, every
- * header's name and the body's shape. Values differ legitimately between the two, so they are left
- * out; a header such as `location` sent only when a row was written is not.
+ * by an address an account holds and by one none holds (the contract's `createGrant`): the status,
+ * the media type, every header's name and the body's shape. Values differ legitimately between the
+ * two, so they are left out; a header such as `location` sent only when a row was written is not.
  *
  * @param response the answer.
  */
@@ -2567,9 +2592,9 @@ const outcomeOf = (response: AdminResponse): string =>
 	`${response.status}${response.problem === undefined ? '' : ` ${response.problem.code}`}`;
 
 /**
- * Fails unless an answer is the refusal expected (C2): its status; RFC 9457 problem details, as
- * `application/problem+json` carrying a string `code`; the code expected, where one is; and
- * `WWW-Authenticate` naming the Bearer scheme on a 401.
+ * Fails unless an answer is the refusal expected (the contract's `info.description`): its status;
+ * RFC 9457 problem details, as `application/problem+json` carrying a string `code`; the code
+ * expected, where one is; and `WWW-Authenticate` naming the Bearer scheme on a 401.
  *
  * @param response the answer.
  * @param expected the status, and the code where a ruling names one.
@@ -2592,7 +2617,8 @@ export const assertRefused = (response: AdminResponse, { code, status }: Expecte
 };
 
 /**
- * Fails unless an answer refuses a request unreadable by its shape: 400 (C2).
+ * Fails unless an answer refuses a request unreadable by its shape: 400 (the contract's
+ * `info.description`).
  *
  * @param response the answer.
  * @param label what was refused, for the failure's message.
@@ -2601,7 +2627,8 @@ export const assertUnreadable = (response: AdminResponse, label: string): void =
 	assertRefused(response, { status: 400 }, label);
 
 /**
- * Fails unless an answer refuses the credential: 401 with `WWW-Authenticate: Bearer` (C2).
+ * Fails unless an answer refuses the credential: 401 with `WWW-Authenticate: Bearer` (the
+ * contract's `info.description`).
  *
  * @param response the answer.
  * @param label what was refused, for the failure's message.
@@ -2610,7 +2637,7 @@ export const assertCredentialRefused = (response: AdminResponse, label: string):
 	assertRefused(response, { status: 401 }, label);
 
 /**
- * Fails unless an answer is a 403 carrying the code given (C2).
+ * Fails unless an answer is a 403 carrying the code given (the contract's `ProblemDetails`).
  *
  * @param response the answer.
  * @param label what was refused, for the failure's message.
@@ -2620,7 +2647,7 @@ export const assertForbidden = (response: AdminResponse, label: string, code: Pr
 	assertRefused(response, { code, status: 403 }, label);
 
 /**
- * Fails unless an answer is a 404 carrying the code given (C2).
+ * Fails unless an answer is a 404 carrying the code given (the contract's `ProblemDetails`).
  *
  * @param response the answer.
  * @param label what was refused, for the failure's message.
@@ -2630,7 +2657,7 @@ export const assertNotFound = (response: AdminResponse, label: string, code: Pro
 	assertRefused(response, { code, status: 404 }, label);
 
 /**
- * Fails unless an answer is a 409 carrying the code given (C2).
+ * Fails unless an answer is a 409 carrying the code given (the contract's `ProblemDetails`).
  *
  * @param response the answer.
  * @param label what was refused, for the failure's message.

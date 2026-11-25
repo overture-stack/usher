@@ -65,10 +65,11 @@ export interface ControllerSettings {
 	baseline: readonly RecordAction[];
 
 	/**
-	 * The Controller's wall clock. Set only through the configuration, never from the environment, so a
-	 * test can fix now. Every duration the Controller measures runs on it, the signing-key cache's
-	 * maximum age (10 min) and refetch cooldown (30 s) included (#208 Q5), so a test moves past either by
-	 * advancing this clock.
+	 * The Controller's wall clock. Set only through the configuration, never from the environment,
+	 * so a test can fix now. Every duration the Controller measures runs on it, the signing-key
+	 * cache's maximum age (10 min) and refetch cooldown (30 s) included (`.dev/design/decisions.md`
+	 * § The Controller's clock is configuration, and every duration it measures runs on it), so a
+	 * test moves past either by advancing this clock.
 	 */
 	clock: Clock;
 
@@ -113,8 +114,8 @@ export interface ControllerSettings {
 
 	/**
 	 * The client whose service account the controller's directory signs in as, through the client
-	 * credentials grant (#212, #213 Q1); read while `directoryUrl` names a directory, empty by
-	 * default.
+	 * credentials grant (`docs/deployment.md` § The directory); read while `directoryUrl` names a
+	 * directory, empty by default.
 	 */
 	directoryClientId: string;
 
@@ -138,7 +139,10 @@ export interface ControllerSettings {
 	 */
 	directoryUrl: string;
 
-	/** The CloudEvents `source` every event carries: one per deployment, the same on every instance (#214). */
+	/**
+	 * The CloudEvents `source` every event carries: one per deployment, the same on every instance
+	 * (`.dev/design/audit-events.md` § The envelope).
+	 */
 	eventSource: string;
 
 	/**
@@ -149,15 +153,17 @@ export interface ControllerSettings {
 	firstUserRole: string;
 
 	/**
-	 * When `grant.rateExceeded` fires: more grant operations by one actor than `operationCount` within
-	 * `windowSeconds` (#214 Q19). A setting the store holds, written to it by {@link storedSettingsOf}.
+	 * When `grant.rateExceeded` fires: more grant operations by one actor than `operationCount`
+	 * within `windowSeconds` (`docs/deployment.md` § Settings). A setting the store holds, written
+	 * to it by {@link storedSettingsOf}.
 	 */
 	grantRateThreshold: GrantRateThreshold;
 
 	/**
-	 * How long an open notice stream may stay silent before the Controller writes a heartbeat comment,
-	 * in milliseconds: 10,000 by default (#210 Q15), short enough for the Bridge's 25 s idle timer.
-	 * Configurable so a test can run the Bridge's compressed profile (#215 Q10, #217 Q2).
+	 * How long an open notice stream may stay silent before the Controller writes a heartbeat
+	 * comment, in milliseconds: 10,000 by default (`docs/deployment.md` § Settings), short enough
+	 * for the Bridge's 25 s idle timer. Configurable so a test can run the Bridge's compressed
+	 * profile (`docs/deployment.md` § Settings).
 	 */
 	heartbeatMilliseconds: number;
 
@@ -167,7 +173,10 @@ export interface ControllerSettings {
 	/** The identity provider's issuer, exactly as its discovery document and tokens carry it: https, or http to a loopback host only. */
 	identityProviderIssuer: string;
 
-	/** This instance's name, the `instance` every event it emits carries (#214 Q17); unique among the deployment's instances. */
+	/**
+	 * This instance's name, the `instance` every event it emits carries (`docs/deployment.md`
+	 * § This instance and its events); unique among the deployment's instances.
+	 */
 	instanceName: string;
 
 	/** The Controller's own issuer: every Usher token's `iss`. */
@@ -195,12 +204,16 @@ export interface ControllerSettings {
 	/** The clients a management token's `azp` may name: the management screens' client identifiers. */
 	managementClients: readonly string[];
 
-	/** The most notices one poll answer carries before it names a next page: 500 by default (#210 Q13). */
+	/**
+	 * The most notices one poll answer carries before it names a next page: 500 by default
+	 * (`docs/deployment.md` § Settings).
+	 */
 	noticePageLimit: number;
 
 	/**
 	 * How often each instance reads the notice stream again when no wake-up has arrived through the
-	 * cache, in milliseconds: 2,000 by default (#210 Q14), so a lost wake-up costs at most that.
+	 * cache, in milliseconds: 2,000 by default (`docs/deployment.md` § Settings), so a lost wake-up
+	 * costs at most that.
 	 */
 	noticeRereadMilliseconds: number;
 
@@ -215,9 +228,9 @@ export interface ControllerSettings {
 
 	/**
 	 * The longest a self-grant may last, in seconds, from the instant it is asked for: 86,400 by
-	 * default (#212). An owner's self-grant and a platform administrator's request are held to it,
-	 * and so is a change to a self-grant's end. A setting the store holds, written to it by
-	 * {@link storedSettingsOf}.
+	 * default (`docs/deployment.md` § Settings). An owner's self-grant and a platform
+	 * administrator's request are held to it, and so is a change to a self-grant's end. A setting
+	 * the store holds, written to it by {@link storedSettingsOf}.
 	 */
 	selfGrantMaximumLifetimeSeconds: number;
 
@@ -226,7 +239,7 @@ export interface ControllerSettings {
 
 	/**
 	 * The longest lifetime, in seconds, of a sign-in token the deployment accepts: how long a relayed
-	 * sign-out naming a subject alone is kept (R7).
+	 * sign-out naming a subject alone is kept (`docs/deployment.md` § Sign-outs).
 	 */
 	signInTokenMaximumLifetimeSeconds: number;
 
@@ -237,9 +250,10 @@ export interface ControllerSettings {
 	signedInRule: readonly RecordAction[];
 
 	/**
-	 * How long the Controller waits on the store for one request before it answers it unavailable, in
-	 * milliseconds: half the Bridge's poll deadline D, 5,000 by default against the Bridge's 10 s
-	 * (#210 Q13), so a poll waiting on a stalled store is answered 503 within the Bridge's deadline.
+	 * How long the Controller waits on the store for one request before it answers it unavailable,
+	 * in milliseconds: half the Bridge's poll deadline D, 5,000 by default against the Bridge's
+	 * 10 s (`docs/deployment.md` § The database), so a poll waiting on a stalled store is answered
+	 * 503 within the Bridge's deadline.
 	 */
 	storeTimeoutMilliseconds: number;
 
@@ -255,13 +269,19 @@ export interface ControllerSettings {
 	/** The notices queued for one stream before the Controller closes a stream whose reader has stopped reading; 1,000 by default. */
 	streamQueueLimit: number;
 
-	/** The category a submitter grant naming none takes, as the payload names it: `global.unmarked` by default (#212 Q6). */
+	/**
+	 * The category a submitter grant naming none takes, as the payload names it: `global.unmarked`
+	 * by default (the contract's `createGrant`).
+	 */
 	submitterCategory: string;
 
 	/** How long an Usher token lives, in seconds; 300 by default. */
 	tokenLifetimeSeconds: number;
 
-	/** The addresses and CIDR ranges whose `X-Forwarded-For` the Controller believes when it records `sourceIp` (#214 Q15); none by default. */
+	/**
+	 * The addresses and CIDR ranges whose `X-Forwarded-For` the Controller believes when it records
+	 * `sourceIp` (`docs/deployment.md` § Listening); none by default.
+	 */
 	trustedProxies: readonly string[];
 }
 
@@ -274,9 +294,9 @@ export interface ControllerSettings {
  */
 export interface PendingSettings {
 	/**
-	 * The characters an instance adds to the default set an externalId may hold (ASCII letters, digits,
-	 * dot, underscore and hyphen, #211 Q1); none by default. Letters beyond ASCII are compared by Unicode
-	 * case folding after NFC.
+	 * The characters an instance adds to the default set an externalId may hold (ASCII letters,
+	 * digits, dot, underscore and hyphen, `docs/deployment.md` § Registering resources); none by
+	 * default. Letters beyond ASCII are compared by Unicode case folding after NFC.
 	 */
 	allowedCharactersExtra: string;
 
@@ -290,25 +310,27 @@ export interface PendingSettings {
 	cacheUrl: string;
 
 	/**
-	 * The EGO policies granting every study, by name, matched as literal text (ruled, "#216: all-study
-	 * policies and data without a policy" 1): `ENVIRONMENTAL` in iMS. None by default. A run reads no
-	 * study from such a policy and writes its holders no grant; it lists each holding in the report's
-	 * `allStudyAccess`, for the administrator to decide each person deliberately.
+	 * The EGO policies granting every study, by name, matched as literal text (ruled, the
+	 * contract's planned `importFromEgo`): `ENVIRONMENTAL` in iMS. None by default. A run reads no
+	 * study from such a policy and writes its holders no grant; it lists each holding in the
+	 * report's `allStudyAccess`, for the administrator to decide each person deliberately.
 	 */
 	egoImportAllStudyPolicies: readonly string[];
 
 	/**
-	 * The base tier of each resource the EGO import registers (#216 Q12); `null`, none, by default,
-	 * and an import run while none is configured is refused before it reads its export.
+	 * The base tier of each resource the EGO import registers (the contract's planned
+	 * `importFromEgo`); `null`, none, by default, and an import run while none is configured is
+	 * refused before it reads its export.
 	 */
 	egoImportBaseTier: 'grant' | 'open' | 'registered' | null;
 
 	/**
-	 * The prefixes the EGO import reads a study id after in a policy's name, matched as literal text
-	 * in their configured letter case (#216 Q4, Q7): `PX-` and `PX-FILES-` in iMS. None by default, and a
-	 * import run while none is configured answers 503 `importNotConfigured` before it reads its
-	 * export; an empty prefix, or one listed twice, refuses the Controller's start, naming this field's
-	 * variable (ruled, "#216's reasons, export size and prefixes" 3).
+	 * The prefixes the EGO import reads a study id after in a policy's name, matched as literal
+	 * text in their configured letter case (the contract's planned `importFromEgo`): `PX-` and
+	 * `PX-FILES-` in iMS. None by default, and a import run while none is configured answers 503
+	 * `importNotConfigured` before it reads its export; an empty prefix, or one listed twice,
+	 * refuses the Controller's start, naming this field's variable (ruled, the contract's planned
+	 * `importFromEgo`).
 	 */
 	egoImportPrefixes: readonly string[];
 }

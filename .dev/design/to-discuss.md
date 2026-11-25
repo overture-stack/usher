@@ -848,4 +848,4 @@ with a refresh token, on a password reset, on a "not before" revocation, and whe
 Related: the erasure item above, which decides what may be kept about a person; the "revoke user
 everywhere" item above, which a deletion's revocation would use; the identity provider features table in
 [admin-model.md](admin-model.md), whose admin events row anticipates learning of a deleted account
-without designing it; and the EGO import (#216), which resolves members by subject first.
+without designing it; and the EGO import, which resolves members by subject first.

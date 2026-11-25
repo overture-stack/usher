@@ -80,10 +80,10 @@ const addressClients = (managementAudience: string, managementClient: string): r
 ];
 
 /**
- * The realm for the suites resolving addresses (#212, #213), at its own realm name: realm `overture`
- * with the address people only, the management client and the directory client. It is the part of
- * the shared realm {@link sharedRealmOptions} holds that those suites read, so a Keycloak started for
- * them alone holds the same accounts.
+ * The realm for the suites resolving addresses (the grant tests and the listing tests), at its own
+ * realm name: realm `overture` with the address people only, the management client and the
+ * directory client. It is the part of the shared realm {@link sharedRealmOptions} holds that those
+ * suites read, so a Keycloak started for them alone holds the same accounts.
  *
  * @param options the first-user role, the management API's audience and client, each the harness's by default.
  */
@@ -103,8 +103,9 @@ export const addressKeycloakRealm = ({
 	realmRoles: [firstUserRole],
 });
 
-// The listing cast beyond the address people, each with the names it is shown by (#213 Q9). Quinn never
-// signs in, since Keycloak may refuse a person with no names a direct access grant.
+// The listing cast beyond the address people, each with the names it is shown by (the contract's
+// `NamedPrincipal`). Quinn never signs in, since Keycloak may refuse a person with no names a
+// direct access grant.
 const LISTING_ADDITIONS: readonly {
 	firstName: string | null;
 	lastName: string | null;

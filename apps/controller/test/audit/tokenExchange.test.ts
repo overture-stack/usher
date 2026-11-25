@@ -566,13 +566,13 @@ suite('token.exchange', () => {
 });
 
 suite(
-	"records an exchange whose sign-in token is signed by an unknown key as denied, naming its own fixed reason: the developer writes these cases by hand from ticket #214's test plan, suite 'token.exchange'",
+	"records an exchange whose sign-in token is signed by an unknown key as denied, naming its own fixed reason: the developer writes these cases by hand from the audit tests, suite 'token.exchange'",
 	{ todo: true },
 	() => {},
 );
 
 suite(
-	"records an exchange whose sign-in token can't be read as denied, naming unreadableToken: the developer writes these cases by hand from ticket #214's test plan, suite 'token.exchange'",
+	"records an exchange whose sign-in token can't be read as denied, naming unreadableToken: the developer writes these cases by hand from the audit tests, suite 'token.exchange'",
 	{ todo: true },
 	() => {},
 );

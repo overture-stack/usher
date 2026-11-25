@@ -323,7 +323,7 @@ suite('the channel assertion', () => {
 	});
 });
 
-// The developer writes these cases by hand from ticket #209's test plan, the "the channel assertion"
+// The developer writes these cases by hand from the issuance tests, the "the channel assertion"
 // suite: a channel assertion that is unsigned, signed by another application's key, signed by the
 // raw application key rather than its channel-assertion subkey, signed by an algorithm other than
 // HS256, carrying a key in its own header, or naming an application the controller has no key for.

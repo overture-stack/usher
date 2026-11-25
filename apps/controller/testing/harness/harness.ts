@@ -108,13 +108,14 @@ export interface HarnessOptions {
 	configuration?: Partial<ControllerConfiguration>;
 
 	/**
-	 * Policy seeded by SQL, the stand-in's issuer its users' by default, once the Controller has started
-	 * and the harness has registered its applications, since the Controller writes the seeded roles at
-	 * its start (#207 Q11): each of the fixture's applications is seeded under its registered id
-	 * ({@link withRegisteredIds}), so seeding writes only what each serves. Registered through the API,
-	 * an application takes its description from the fixture, and its registrant is the platform
-	 * administrator whose token the harness holds, never a user named by the fixture. Nothing is seeded
-	 * before the start.
+	 * Policy seeded by SQL, the stand-in's issuer its users' by default, once the Controller has
+	 * started and the harness has registered its applications, since the Controller writes the
+	 * seeded roles at its start (`.dev/design/schema.md` § Capabilities, roles and permissions):
+	 * each of the fixture's applications is seeded under its registered id
+	 * ({@link withRegisteredIds}), so seeding writes only what each serves. Registered through the
+	 * API, an application takes its description from the fixture, and its registrant is the
+	 * platform administrator whose token the harness holds, never a user named by the fixture.
+	 * Nothing is seeded before the start.
 	 */
 	fixture?: PolicyFixture;
 
@@ -269,14 +270,18 @@ export const HARNESS_LOGOUT_CLIENT = 'portal-ui-test';
 /** The one management client the harness's Controller lists by default, `managementClients`. */
 export const HARNESS_MANAGEMENT_CLIENT = 'usher-ui-test';
 
-/** The CloudEvents `source` the harness's Controller emits under, one for the whole deployment (#214). */
+/**
+ * The CloudEvents `source` the harness's Controller emits under, one for the whole deployment
+ * (`.dev/design/audit-events.md` § The envelope).
+ */
 export const HARNESS_EVENT_SOURCE = 'https://usher.example.org/controller';
 
 /**
- * The Controller's half of #217's compressed timing profile (#217 Q2): a 0.5 s heartbeat, 10 s Usher
- * tokens, a 20 s notice retention floor, the token lifetime with the Bridge's compressed 4 s grace
- * period and a 6 s margin, and a 250 ms store timeout, half the Bridge's compressed 0.5 s poll
- * deadline (#210 Q13). Give it as a harness's configuration, since the floor is set when the test's
+ * The Controller's half of the compressed timing profile (`.dev/docs/controller-tests.md` § Time;
+ * `docs/deployment.md` § Settings): a 0.5 s heartbeat, 10 s Usher tokens, a 20 s notice retention
+ * floor, the token lifetime with the Bridge's compressed 4 s grace period and a 6 s margin, and a
+ * 250 ms store timeout, half the Bridge's compressed 0.5 s poll deadline (`docs/deployment.md`
+ * § The database). Give it as a harness's configuration, since the floor is set when the test's
  * database is created. The Bridge's half, and the pair, are in `vendoredBridge.ts`.
  */
 export const COMPRESSED_CONTROLLER_TIMING: Readonly<
@@ -488,14 +493,15 @@ const STARTED_STORE_SETTINGS: Readonly<Pick<SeededPolicySettings, 'clock'>> = Ob
 
 /**
  * The Controller's template with the policy a start seeds written by the Controller's own code
- * (#207 Q11), under {@link STARTED_STORE_SETTINGS}: the capability vocabulary, `SEEDED_ROLES` with their
+ * (`.dev/design/schema.md` § Capabilities, roles and permissions), under
+ * {@link STARTED_STORE_SETTINGS}: the capability vocabulary, `SEEDED_ROLES` with their
  * capabilities, and the settings a start under {@link configurationToRead}'s defaults writes
- * ({@link writeStartSettings}), so a start on it writes no setting. It is a store as a started Controller
- * leaves it, but for the key-encryption key's fingerprint and the identity provider's record, which the first
- * start under a configuration records: the record's six rows are left null, as the migration creates them, so
- * a first start on the template fills them. For a test seeding a fixture that names the seeded roles while
- * starting no Controller. Run again on a clone, it writes nothing the migrations and the Controller would not
- * write again.
+ * ({@link writeStartSettings}), so a start on it writes no setting. It is a store as a started
+ * Controller leaves it, but for the key-encryption key's fingerprint and the identity provider's
+ * record, which the first start under a configuration records: the record's six rows are left null,
+ * as the migration creates them, so a first start on the template fills them. For a test seeding a
+ * fixture that names the seeded roles while starting no Controller. Run again on a clone, it writes
+ * nothing the migrations and the Controller would not write again.
  */
 export const STARTED_STORE_TEMPLATE: DatabaseTemplate = Object.freeze({
 	migrate: async (options: MigrationOptions) => {
@@ -517,8 +523,9 @@ export const STARTED_STORE_TEMPLATE: DatabaseTemplate = Object.freeze({
 });
 
 /**
- * The notice retention floor a configuration gives, which the deployment command sets (R3): the
- * token lifetime, the grace period and the margin, in seconds.
+ * The notice retention floor a configuration gives, which the deployment command sets
+ * (`.dev/design/schema.md` § The notice stream): the token lifetime, the grace period and the
+ * margin, in seconds.
  *
  * @param configuration the three durations.
  */
@@ -1011,13 +1018,14 @@ const seedOf = ({ eventSource, firstUserRole, issuer }: Partial<ControllerConfig
 /**
  * Stands up everything a test file needs, in order: its own database, cloned through `database.ts`
  * with the retention floor its configuration gives, on the run's PostgreSQL or the test file's own;
- * an identity provider stand-in, or the test's own; a configuration from {@link harnessConfiguration}
- * and the test's overrides; the Controller, started through `controller.ts`, unless the test starts
- * its own, with the harness's applications, the fixture's among them, registered through the API
- * once it listens; and then the fixture, seeded by SQL under the registered ids, since the Controller
- * writes the seeded roles at its start (#207 Q11). Whatever started before a failure is stopped
- * before the failure is thrown, so while the Controller is missing the harness fails with the seam's
- * message and leaves nothing running.
+ * an identity provider stand-in, or the test's own; a configuration from
+ * {@link harnessConfiguration} and the test's overrides; the Controller, started through
+ * `controller.ts`, unless the test starts its own, with the harness's applications, the fixture's
+ * among them, registered through the API once it listens; and then the fixture, seeded by SQL under
+ * the registered ids, since the Controller writes the seeded roles at its start
+ * (`.dev/design/schema.md` § Capabilities, roles and permissions). Whatever started before a
+ * failure is stopped before the failure is thrown, so while the Controller is missing the harness
+ * fails with the seam's message and leaves nothing running.
  *
  * @param options the applications, configuration overrides, a fixture, a stand-in and a PostgreSQL
  *   of the test file's own, whether to start a Controller, and the template.
@@ -1160,8 +1168,9 @@ export const startInstance = async (
 /**
  * Starts another Controller instance beside the harness's, as {@link startInstance} does, on the
  * database's read-only role ({@link TestDatabase.readOnlyUrl}): for the dry run of the EGO import,
- * which completes under a role that may only read (#216 Q16). Its start writes nothing, so it starts
- * once the harness's own Controller has started on the database and written what a start writes.
+ * which completes under a role that may only read (the contract's planned `importFromEgo`). Its
+ * start writes nothing, so it starts once the harness's own Controller has started on the database
+ * and written what a start writes.
  *
  * @param scope the cleanup stopping it.
  * @param harness the harness whose database, cache, stand-in and keys it shares.
@@ -1187,11 +1196,12 @@ export const takeSnapshot = (harness: Harness): Promise<StoreSnapshot> =>
 	takeStoreSnapshot(harness.clients.migration, harness.database.schema);
 
 /**
- * Restores a snapshot as a restore's standard operating procedure (SOP) does (#215 Q12, #217 Q3): the harness's Controller
- * stopped, the snapshot restored over the store, a new `notice_stream.epoch` written unless the test
- * keeps the snapshot's, and a Controller started again on the same configuration and port. Every
- * instance a test started beside the harness must be stopped first. A start refused is thrown, the
- * store restored all the same.
+ * Restores a snapshot as a restore's standard operating procedure (SOP) does
+ * (`.dev/docs/controller-tests.md` § Outages and restarts): the harness's Controller stopped, the
+ * snapshot restored over the store, a new `notice_stream.epoch` written unless the test keeps the
+ * snapshot's, and a Controller started again on the same configuration and port. Every instance a
+ * test started beside the harness must be stopped first. A start refused is thrown, the store
+ * restored all the same.
  *
  * @param harness the harness.
  * @param snapshot what {@link takeSnapshot} took.

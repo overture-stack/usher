@@ -8,13 +8,15 @@ import type { Person } from '../harness/exchange.js';
 import type { HarnessOptions } from '../harness/harness.js';
 import type { PolicyFixture } from '../harness/policy.js';
 
-// What #215 needs of the conformance corpus: the static case lists its tests register from, the
-// reader of the corpus's entries, the payload comparison, the configurations the corpus was computed
-// against, and Ana. The corpus itself is read only inside a test body, never at module load.
+// What the conformance tests need of the conformance corpus: the static case lists its tests
+// register from, the reader of the corpus's entries, the payload comparison, the configurations the
+// corpus was computed against, and Ana. The corpus itself is read only inside a test body, never at
+// module load.
 
 /**
- * Where the corpus lives: `.dev/design/conformance/` at the repository's root, in its corrected form
- * (#215 Q2: the baseline and the signed-in rule grant read, count, view and export).
+ * Where the corpus lives: `.dev/design/conformance/` at the repository's root, in its corrected
+ * form (`.dev/design/conformance/README.md`: the baseline and the signed-in rule grant read, count,
+ * view and export).
  */
 export const CORPUS_DIRECTORY = new URL('../../../../.dev/design/conformance/', import.meta.url);
 
@@ -24,19 +26,19 @@ export const CORPUS_FILES = Object.freeze({
 	principals: 'principals.json',
 } as const);
 
-/** A configuration's name, as #215's plan names it. */
+/** A configuration's name, as the conformance tests name it. */
 export type ConformanceConfigurationName = "A'" | 'A' | 'A-auto' | 'A-off' | 'B' | 'B-off';
 
 /**
- * The corpus's cases, from #215's plan as the rulings settle it, so a test file registers its tests
- * from this list and never from the corpus file:
+ * The corpus's cases, from the conformance tests as the rulings settle them, so a test file
+ * registers its tests from this list and never from the corpus file:
  *
  * - `replayed`: every case run against the Controller, with the configuration it runs under;
  * - `unreachable`: every entry `principals.json` holds that no test replays, with why;
  * - `omitted`: every case the corpus lists under `omitted`, holding no payload, with what tests it.
  *
- * Every entry of the corpus is in exactly one of the three, which #215's first test checks against the
- * file itself, inside its body.
+ * Every entry of the corpus is in exactly one of the three, which the conformance tests' first test
+ * checks against the file itself, inside its body.
  */
 export const CORPUS_CASES: Readonly<{
 	omitted: Readonly<Record<string, string>>;
@@ -44,7 +46,7 @@ export const CORPUS_CASES: Readonly<{
 	unreachable: Readonly<Record<string, string>>;
 }> = Object.freeze({
 	omitted: Object.freeze({
-		'25': 'a grant pairing record.delete with a field category is refused at writing, so no token exists: #212 and #207 test the refusal',
+		'25': 'a grant pairing record.delete with a field category is refused at writing, so no token exists: the grant tests and the database tests test the refusal',
 		'33': "a revoked identity is refused 403 at the exchange, so no payload exists: the exchange's 403 test replays it, and her payload once the revocation is lifted",
 		'34': "a sign-in token past its exp is refused 403 at the exchange, so no payload exists: the exchange's 403 test replays it",
 	}),
@@ -81,11 +83,11 @@ export const CORPUS_CASES: Readonly<{
 		'35': 'B',
 	}),
 	unreachable: Object.freeze({
-		'17': 'resource categories ship after the first release (#211 Q10), and a global category applies to every resource (O16), so no resource stops offering one: unreachable until resource categories ship (B2)',
+		'17': 'resource categories ship after the first release (`.dev/design/schema.md` § What is not in the first release), and a global category applies to every resource (`.dev/design/decisions.md` § A category is a condition over records, and a record needs every category it matches), so no resource stops offering one: unreachable until resource categories ship',
 		'21': "the corpus marks it not yet implementable: nothing can withhold yet, and its payload is case 05's (token-calculation.md, case 21)",
-		'24': 'field categories are post-MVP and unconfigured in the first release (B2, #215 Q6)',
-		'24b': 'field categories are post-MVP and unconfigured in the first release (B2, #215 Q6)',
-		'26': 'revision is post-MVP, so no role carries revision.view (B2, #215 Q6)',
+		'24': 'field categories are post-MVP and unconfigured in the first release (`.dev/design/schema.md` § What is not in the first release; `.dev/design/permissions-model.md` § Data plane)',
+		'24b': 'field categories are post-MVP and unconfigured in the first release (`.dev/design/schema.md` § What is not in the first release; `.dev/design/permissions-model.md` § Data plane)',
+		'26': 'revision is post-MVP, so no role carries revision.view (`.dev/design/schema.md` § What is not in the first release; `.dev/design/permissions-model.md` § Data plane)',
 	}),
 });
 
@@ -135,7 +137,10 @@ export interface CorpusExpectation {
 	records: readonly CorpusRecord[];
 }
 
-/** Every case the corpus names, as #215's first test checks them against {@link CORPUS_CASES}. */
+/**
+ * Every case the corpus names, as the conformance tests' first test checks them against
+ * {@link CORPUS_CASES}.
+ */
 export interface CorpusIndex {
 	/** Each entry's case number, in the file's order. */
 	entries: readonly string[];
@@ -178,7 +183,8 @@ const readCorpusFile = (file: string, directory: URL): unknown => {
 const UNMARKED = 'global.unmarked';
 
 // An anonymous principal holds what the baseline confers and nothing else, so an anonymous entry
-// granting view alone on unmarked records is the baseline before #215 Q2 corrected it to read.
+// granting view alone on unmarked records is the baseline before the correction in
+// `.dev/design/conformance/README.md` made it read.
 const grantsViewAlone = (entry: unknown): boolean => {
 	const payload = member(entry, 'payload');
 	const permissions = member(payload, 'permissions');
@@ -193,9 +199,9 @@ const grantsViewAlone = (entry: unknown): boolean => {
 };
 
 // The corrected corpus holds expectations.json beside principals.json, and its baseline grants read
-// (#215 Q2). The form this branch held before the branches meet lacks both, and every payload replayed
-// against it would differ from what a correct Controller issues, so it is refused before any is
-// compared, and no difference can be read as the Controller's.
+// (`.dev/design/conformance/README.md`). The form this branch held before the branches meet lacks
+// both, and every payload replayed against it would differ from what a correct Controller issues,
+// so it is refused before any is compared, and no difference can be read as the Controller's.
 const currentPrincipals = (directory: URL): unknown => {
 	const principals = readCorpusFile(CORPUS_FILES.principals, directory);
 	readCorpusFile(CORPUS_FILES.expectations, directory);
@@ -207,7 +213,7 @@ const currentPrincipals = (directory: URL): unknown => {
 
 /**
  * Every case the corpus's `principals.json` names, entries and omitted cases apart. Call it inside a
- * test body, never at module load: this is where #215 reads the corpus.
+ * test body, never at module load: this is where the conformance tests read the corpus.
  *
  * @param directory where the corpus is: {@link CORPUS_DIRECTORY} by default.
  * @throws naming the corpus and the branch its corrected form comes with, while a file is missing or
@@ -224,8 +230,9 @@ export const readCorpusIndex = (directory: URL = CORPUS_DIRECTORY): CorpusIndex 
 
 /**
  * One case's entry in the corpus's `principals.json`, its payload checked by usher-types'
- * `validatePayload`. Call it inside a test body, never at module load: this is where #215 reads the
- * corpus, and each test reading it marks the place with a short comment naming the corpus.
+ * `validatePayload`. Call it inside a test body, never at module load: this is where the
+ * conformance tests read the corpus, and each test reading it marks the place with a short comment
+ * naming the corpus.
  *
  * @param caseNumber the case, as `token-calculation.md` numbers it: `05`, `19b`.
  * @param directory where the corpus is: {@link CORPUS_DIRECTORY} by default.
@@ -265,7 +272,8 @@ const isOutcome = (value: unknown): value is CorpusRecord['outcome'] => OUTCOMES
 
 /**
  * One case of the corpus's `expectations.json`, by the case number of the principal it judges. Call
- * it inside a test body, never at module load: this is where #215 reads the corpus's expectations.
+ * it inside a test body, never at module load: this is where the conformance tests read the
+ * corpus's expectations.
  *
  * @param caseNumber the case: `01`, `10`, `22` or `23`.
  * @param directory where the corpus is: {@link CORPUS_DIRECTORY} by default.
@@ -303,11 +311,11 @@ export const readCorpusExpectation = (caseNumber: string, directory: URL = CORPU
 type ComparableEntity = readonly string[] | Readonly<Record<string, readonly string[]>>;
 
 /**
- * A payload as #215 compares it with the corpus's: `payloadVersion`, `sub`, `iss` and `aud` as they
- * are; `permissions` by resource, category and entity, each entity's actions as a set (sorted), a
- * field entity's by field category; `globalCategories`, `servedResources` and each
- * `resourceCategories` list as sets (sorted, #215 Q8); and no temporal claim, since the corpus's
- * instants are fixed and illustrative.
+ * A payload as the conformance tests compare it with the corpus's: `payloadVersion`, `sub`, `iss`
+ * and `aud` as they are; `permissions` by resource, category and entity, each entity's actions as a
+ * set (sorted), a field entity's by field category; `globalCategories`, `servedResources` and each
+ * `resourceCategories` list as sets (sorted, `.dev/docs/controller-tests.md` § Conformance); and no
+ * temporal claim, since the corpus's instants are fixed and illustrative.
  */
 export interface ComparablePayload {
 	aud: string;
@@ -333,7 +341,8 @@ const comparableEntity = (held: unknown): ComparableEntity =>
 			);
 
 /**
- * The form of a payload #215 compares with the corpus's: see {@link ComparablePayload}.
+ * The form of a payload the conformance tests compare with the corpus's: see
+ * {@link ComparablePayload}.
  *
  * @param payload a payload `validatePayload` accepted.
  */
@@ -380,7 +389,8 @@ export interface CorpusAudiences {
 }
 
 /**
- * Asserts that a payload the Controller issued conforms to the corpus's (#215's payload comparison):
+ * Asserts that a payload the Controller issued conforms to the corpus's (the conformance tests'
+ * payload comparison):
  * usher-types' `validatePayload` accepts it, and its {@link comparablePayload} equals the corpus
  * payload's, the corpus's `aud`, an application's label, read as the id that application was
  * registered under. Temporal claims are never compared here; the temporal test bounds them.
@@ -424,9 +434,9 @@ export const CONFORMANCE_APPLICATIONS = Object.freeze({
 
 /**
  * Ana, the corpus's principal: the subject every signed-in corpus payload names, and an example.org
- * address. Her sign-in tokens come from the stand-in, Keycloak-shaped as #215's plan lists (RS256 with
- * `kid`, the realm's path as `iss`, `aud` a list naming the application, `azp`), through the harness's
- * `tokens.signIn`.
+ * address. Her sign-in tokens come from the stand-in, Keycloak-shaped as the conformance tests list
+ * (RS256 with `kid`, the realm's path as `iss`, `aud` a list naming the application, `azp`),
+ * through the harness's `tokens.signIn`.
  */
 export const CORPUS_ANA: Person = Object.freeze({
 	email: 'ana.corpus@example.org',
@@ -492,11 +502,12 @@ const configured = (fixture: PolicyFixture, overrides: Partial<ControllerConfigu
 	});
 
 /**
- * The configurations the corpus was computed against, as #215's plan defines them, each as a harness's
- * applications, configuration and policy: give one to `startHarness`, a case's grants added to its
- * fixture. Global categories are `controlled` and `community-governed` in the first table and
- * `controlled` alone in the signed-in rule's; a global category applies to every resource (O16), so no
- * resource offers one in the store.
+ * The configurations the corpus was computed against, as the conformance tests define them, each as
+ * a harness's applications, configuration and policy: give one to `startHarness`, a case's grants
+ * added to its fixture. Global categories are `controlled` and `community-governed` in the first
+ * table and `controlled` alone in the signed-in rule's; a global category applies to every resource
+ * (`.dev/design/decisions.md` § A category is a condition over records, and a record needs every
+ * category it matches), so no resource offers one in the store.
  *
  * - `A`: HEART_STUDY, LUNG_COHORT and REEF_ARCHIVE open, VOID_INDEX by grant, all four served by
  *   `arranger-prod`; the baseline on. `STUDY-A1`, by grant, is served by `lyric-example` alone
@@ -508,8 +519,9 @@ const configured = (fixture: PolicyFixture, overrides: Partial<ControllerConfigu
  *   HEART_STUDY open, all four served by `arranger-prod`; the baseline and the signed-in rule on.
  * - `B-off`: B with the baseline off.
  *
- * The baseline and the signed-in rule grant read, which is count, view and export (#215 Q2), and are
- * configuration (B4); Ana is seeded in each, as {@link CORPUS_ANA_USER}.
+ * The baseline and the signed-in rule grant read, which is count, view and export
+ * (`.dev/design/conformance/README.md`), and are configuration
+ * (`docs/deployment.md` § Grant rules); Ana is seeded in each, as {@link CORPUS_ANA_USER}.
  */
 export const CONFORMANCE_CONFIGURATIONS: Readonly<Record<ConformanceConfigurationName, ConformanceConfiguration>> =
 	Object.freeze({

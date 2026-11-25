@@ -31,7 +31,8 @@ const TRIM = `${pg.escapeIdentifier(USHER_SCHEMA)}.${pg.escapeIdentifier(POLICY_
 const SEARCH_PATH = 'search_path=';
 
 // The schemas a definer function may search: its own and the catalogue, with the temporary schema,
-// which any session can write to, searched last (R3's pin).
+// which any session can write to, searched last (the pin in `.dev/design/schema.md`
+// § The notice stream).
 const TRUSTED_SCHEMAS: ReadonlySet<string> = new Set(['pg_catalog', 'pg_temp', USHER_SCHEMA]);
 
 const insertAged = async (client: pg.ClientBase, kind: string, ageSeconds: number): Promise<bigint> => {

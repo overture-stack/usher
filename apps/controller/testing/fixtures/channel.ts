@@ -62,7 +62,7 @@ import {
 } from '../harness/policy.js';
 import { type Cleanup, eventually, nowSeconds } from '../harness/waiting.js';
 
-// The revocation channel's own fixture (#210): its audiences, resources and policy, ways to read what
+// The revocation channel's own fixture: its audiences, resources and policy, ways to read what
 // the Controller writes on both channels, and small wrappers deferring each shared helper's cleanup.
 
 /**
@@ -108,21 +108,29 @@ export const READ_ACTIONS: readonly RecordAction[] = Object.freeze(['count', 'vi
 export const VIEWER_CAPABILITIES: readonly string[] = Object.freeze(['record.count', 'record.export', 'record.view']);
 
 /**
- * The longest externalId #211 allows (Q3, as recommended: 128 characters), made of the default
- * set's characters, the first a letter.
+ * The longest externalId allowed (`docs/deployment.md` § Registering resources, as recommended: 128
+ * characters), made of the default set's characters, the first a letter.
  */
 export const LONGEST_EXTERNAL_ID = 'S'.padEnd(128, 'a1.b2_c3-');
 
-/** The page limit (#210 Q13). */
+/** The page limit (`docs/deployment.md` § Settings). */
 export const PAGE_LIMIT = 500;
 
-/** The Bridge's poll deadline, the iMS default (O14). */
+/**
+ * The Bridge's poll deadline, its default (`modules/bridge--express/README.md` § Bounds and
+ * defaults).
+ */
 export const POLL_DEADLINE_MS = 10_000;
 
-/** How often each instance re-reads the stream with no wake-up (#210 Q14). */
+/**
+ * How often each instance re-reads the stream with no wake-up (`docs/deployment.md` § Settings).
+ */
 export const REREAD_INTERVAL_MS = 2_000;
 
-/** The heartbeat interval, the `heartbeatMilliseconds` setting's default (#210 Q15). */
+/**
+ * The heartbeat interval, the `heartbeatMilliseconds` setting's default
+ * (`docs/deployment.md` § Settings).
+ */
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 
 /** The Bridge's response cap on a poll page (`configuration.ts` `responseCapBytes`). */
@@ -224,9 +232,10 @@ export const heldGrants = (names: readonly string[], resource: string, role = 'v
 /**
  * The channel's fixture with a test's own policy over it. Every person in `PEOPLE` but Fen is a
  * user; `controlled` is a global category; the four resources carry the plan's display names and
- * base tiers; `search-test` serves `STUDY-A1` and `STUDY-B2`, `submission-test` serves `STUDY-B2` and
- * `study.c_3`, `portal-test` serves none; and `owner` holds an accepted owner grant on each resource,
- * since a consumer grant through the API is made by the resource's owner (#212 Q4).
+ * base tiers; `search-test` serves `STUDY-A1` and `STUDY-B2`, `submission-test` serves `STUDY-B2`
+ * and `study.c_3`, `portal-test` serves none; and `owner` holds an accepted owner grant on each
+ * resource, since a consumer grant through the API is made by the resource's owner (the contract's
+ * `createGrant`).
  *
  * @param policy the test's own entries, merged over the fixture's by name.
  */
@@ -1103,7 +1112,8 @@ export interface RefusedCredential {
  * The channel credentials the Controller must refuse that need no forged signature: none; another
  * scheme; and assertions the application signed itself with `typ` absent, `JWT`, `usher+jwt` or
  * `USHER-CHANNEL+JWT`, `aud` absent or another, an unknown `iss`, `exp` past or `iat` ahead by more
- * than the clock tolerance of at most 30 s, or an `exp` more than 60 s after `iat` (#210 Q12).
+ * than the clock tolerance of at most 30 s, or an `exp` more than 60 s after `iat` (the contract's
+ * `securitySchemes.channelAssertion`).
  *
  * @param application the application the request comes from.
  */
@@ -1175,9 +1185,9 @@ export const pastTheFloor = (harness: Harness): Date =>
 	new Date(Date.now() - 2 * retentionFloorSeconds(harness.configuration) * 1000);
 
 /**
- * Runs the trimming function as the Controller's role, the one role it is granted to (R3), in a
- * transaction left open until `commit` is called, so a test can look from another connection before
- * the transaction ends.
+ * Runs the trimming function as the Controller's role, the one role it is granted to
+ * (`.dev/design/schema.md` § The notice stream), in a transaction left open until `commit` is
+ * called, so a test can look from another connection before the transaction ends.
  *
  * @param runtime a connection under the Controller's runtime role, holding no transaction.
  * @returns the watermark the function returned, and the commit.

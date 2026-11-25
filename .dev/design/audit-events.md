@@ -222,6 +222,8 @@ before any transaction begins.
 **Log levels:** the severity column maps directly to log levels: `info` is routine (nothing to
 see here), `warning` is anomalous and worth reviewing, `error` is a fault that denied or withheld
 something and needs fixing, `critical` demands immediate attention.
+Where a row's severity follows `result`, `succeeded` is `info`, `denied` is `warning` and `failed`
+is `error`.
 
 ---
 

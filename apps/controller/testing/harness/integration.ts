@@ -38,9 +38,9 @@ import {
 } from './vendoredBridge.js';
 import { type Cleanup, eventually } from './waiting.js';
 
-// #217's own fixture: the real Bridge, through a relay, against the Controller. Its applications, its
-// resources and policy, the keys every Bridge registers, the outage conditions the plan's causes table
-// names, and the waits and probes its suites share.
+// The Bridge and Controller tests' own fixture: the real Bridge, through a relay, against the
+// Controller. Its applications, its resources and policy, the keys every Bridge registers, the
+// outage conditions the plan's causes table names, and the waits and probes its suites share.
 
 /**
  * The two applications each integration harness registers, by label, each with a Bridge of its own
@@ -121,16 +121,25 @@ export const unmarkedRecord = (resource: string): EvaluatedRecord => ({
 	[RESOURCE_FIELD]: resource,
 });
 
-/** The compressed profile's Bridge timing, each letter of #217's plan resolved. */
+/**
+ * The compressed profile's Bridge timing, each letter of the profile in
+ * `.dev/docs/controller-tests.md` § Time resolved.
+ */
 export const COMPRESSED: ResolvedBridgeTiming = resolvedBridgeTiming('compressed');
 
 /** The iMS profile's Bridge timing: the Bridge's defaults. */
 export const IMS: ResolvedBridgeTiming = resolvedBridgeTiming('ims');
 
-/** The bound O13's "within seconds" takes on loopback (#217 Q8). */
+/**
+ * The bound the design's "within seconds" (`.dev/design/security-workflow.md` § Propagation: push +
+ * poll) takes on loopback (`.dev/docs/controller-tests.md` § Time).
+ */
 export const DELIVERY_BOUND_MS = 2_000;
 
-/** How far after the grace period a lapse may be logged (#217's plan, `modes.ts`). */
+/**
+ * How far after the grace period a lapse may be logged (`.dev/docs/controller-tests.md` § Time,
+ * `modes.ts`).
+ */
 export const LAPSE_TOLERANCE_MS = 100;
 
 /**
@@ -173,8 +182,8 @@ const viewerGrant = (user: string, resource: string): FixtureGrant => ({
  * The integration fixture with a test's own policy over it. Ana, Bo, Cy and the owner are users;
  * `controlled` is the one global category; the four resources carry their base tiers and are served
  * by both applications; the owner holds an accepted owner grant on each, since only an owner gives
- * others access to data (#212 Q4); and Ana and Bo each hold an accepted viewer grant on `STUDY-A1`'s
- * controlled records, named `ana` and `bo`.
+ * others access to data (the contract's `createGrant`); and Ana and Bo each hold an accepted viewer
+ * grant on `STUDY-A1`'s controlled records, named `ana` and `bo`.
  *
  * @param policy the test's own entries, merged over the fixture's by name.
  */
@@ -266,8 +275,9 @@ const INTEGRATION_EXCHANGE_CONNECTIONS = 60;
 
 /**
  * Starts a harness serving both applications, seeded with the integration fixture, on a profile's
- * Controller timing from the typed configuration (#217 Q2) and an exchange pool of 60 connections
- * unless the test's configuration sets another, and a relay in front of it; defers their stops.
+ * Controller timing from the typed configuration (`docs/deployment.md` § Settings) and an exchange
+ * pool of 60 connections unless the test's configuration sets another, and a relay in front of it;
+ * defers their stops.
  *
  * @param scope the test's cleanup.
  * @param options the configuration, the policy, a PostgreSQL of the test's own and the profile.
@@ -522,7 +532,10 @@ export const runsOf = (starts: readonly number[], gapMs: number): readonly (read
 export const gapsOf = (starts: readonly number[]): readonly number[] =>
 	starts.slice(1).map((start, index) => start - (starts[index] ?? start));
 
-/** One way the Controller becomes unreachable, slow or degraded, from #217's causes table. */
+/**
+ * One way the Controller becomes unreachable, slow or degraded, from
+ * `.dev/docs/controller-tests.md` § Outages and restarts.
+ */
 export interface OutageCondition {
 	/** Causes it. */
 	cause(): Promise<void>;
@@ -531,7 +544,10 @@ export interface OutageCondition {
 	end(): Promise<void>;
 }
 
-/** The conditions of #217's causes table a test can cause, by name. */
+/**
+ * The conditions of `.dev/docs/controller-tests.md` § Outages and restarts a test can cause, by
+ * name.
+ */
 export type OutageConditionName =
 	| 'channelHeldBack'
 	| 'crashed'
@@ -588,9 +604,10 @@ const inForceOnce = (scope: Cleanup, cause: () => Promise<void>, end: () => Prom
 };
 
 /**
- * Every condition of #217's causes table but a restore and trimmed history, each caused through
- * support's relay, the harness's Controller, the stand-in or a container of the test's own, and each
- * ended, if still in force, once the test ends, before anything deferred earlier stops:
+ * Every condition of `.dev/docs/controller-tests.md` § Outages and restarts but a restore and
+ * trimmed history, each caused through support's relay, the harness's Controller, the stand-in or a
+ * container of the test's own, and each ended, if still in force, once the test ends, before
+ * anything deferred earlier stops:
  * - `stopped`: the Controller stopped through the harness;
  * - `crashed`: the relay resetting every connection, then the Controller stopped;
  * - `frozen`: the relay freezing every path (hung, or a network cut);
@@ -698,14 +715,15 @@ export interface IdentityProviderOutage {
 }
 
 /**
- * Takes the identity provider away from the Controller with a key it lacks: the stand-in rotates to a
- * new signing key, published as Keycloak publishes one, which the Controller has not fetched, then
- * refuses every connection, and the Controller's clock moves past the refetch cooldown (#208 Q5), so a
- * sign-in token signed with the new key sends the Controller to the provider it can't reach. Restoring
- * accepts connections again and moves the clock past the cooldown once more, so the next exchange
- * fetches the key. The Controller's clock then runs about 61 s ahead: inside a channel assertion's
- * 60 s life and the Controller's 30 s tolerance on it (#215 Q9), so the Bridge's assertions are still
- * accepted. Connections are accepted again once the test ends, if still refused.
+ * Takes the identity provider away from the Controller with a key it lacks: the stand-in rotates to
+ * a new signing key, published as Keycloak publishes one, which the Controller has not fetched,
+ * then refuses every connection, and the Controller's clock moves past the refetch cooldown
+ * (`docs/deployment.md` § The identity provider), so a sign-in token signed with the new key sends
+ * the Controller to the provider it can't reach. Restoring accepts connections again and moves the
+ * clock past the cooldown once more, so the next exchange fetches the key. The Controller's clock
+ * then runs about 61 s ahead: inside a channel assertion's 60 s life and the Controller's 30 s
+ * tolerance on it (the contract's `securitySchemes.channelAssertion`), so the Bridge's assertions
+ * are still accepted. Connections are accepted again once the test ends, if still refused.
  *
  * @param scope the test's cleanup.
  * @param provider the harness's stand-in.
@@ -752,8 +770,9 @@ export const exchangesNaming = (lines: readonly string[], subjects: readonly str
 	);
 
 /**
- * The policy generation the store holds now (R6), read under the migration role, for a test that
- * needs a later change to reuse a generation number an abandoned timeline used.
+ * The policy generation the store holds now (`.dev/design/schema.md` § The change record), read
+ * under the migration role, for a test that needs a later change to reuse a generation number an
+ * abandoned timeline used.
  *
  * @param harness the harness.
  */

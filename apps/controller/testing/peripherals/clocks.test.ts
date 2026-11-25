@@ -24,7 +24,7 @@ suite('the clocks a test configures', () => {
 		assert.ok(read <= Date.now() + KEY_REFETCH_COOLDOWN_MS + 1);
 	});
 
-	test("puts the signing-key cache's refetch cooldown at 30 s (#208 Q5)", () => {
+	test("puts the signing-key cache's refetch cooldown at 30 s (`docs/deployment.md` § The identity provider)", () => {
 		assert.equal(KEY_REFETCH_COOLDOWN_MS, 30_000);
 	});
 });
