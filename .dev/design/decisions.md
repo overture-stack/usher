@@ -1834,7 +1834,7 @@ earlier decision set: unattributed sets listed, anonymous sets listed to no one.
 cannot reach answers exactly as a missing one, in the listing and in every filter naming it, so
 naming a set never confirms that it exists. Every read still narrows a set's records to the reader's
 own access, so reaching a set never reaches a record. Saving a set needs `artifact.create` on the
-resources it draws on, so whether anonymous requesters may save sets is whether the anonymous
+resources it draws on, so whether anonymous principals may save sets is whether the anonymous
 baseline confers it. Decided 2026-11-23, tightening the defaults decided 2026-11-02; how a set is
 shared, and where that is recorded, are open in the roadmap.
 
@@ -1856,9 +1856,10 @@ will later share access. So the seeded roles that read, `viewer`, `editor` and `
 roles are unchanged. Sharing a set still reaches none of its records, since each person reaches them
 through their own grants, and saving one needs `artifact.create` on everything it draws on, so a
 reader saves only from what a grant lets them read; reading through a grant rule alone lets a person
-read without saving. A store whose roles an earlier start seeded gains the capability through
-migration 0018, and a store no start has seeded gets it with the seeded roles at its first start.
-Ruled by the developer 2026-11-25.
+read without saving. Migration 0018 adds it to the seeded roles already in a store, and a store no
+start has seeded gets it with them at its first start. A grant confers only what its holder
+accepted, so a holder of an existing grant takes it on by answering that grant again. Ruled by the
+developer 2026-11-25.
 
 ---
 

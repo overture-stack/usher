@@ -588,8 +588,10 @@ any of them holds all three.
 **Every seeded role that reads makes sets from what it reads.** `artifact.create` sits beside `read`
 in `viewer`, `editor` and `curator`, so whoever reads a category's records may save a set from them,
 since a saved set is how a reader later shares what they found; each person it is shared with still
-reaches its records through their own grants. `submitter` reads nothing, and makes no set. See the
-decision in [decisions.md](decisions.md), § Whoever may read a category may make sets from it.
+reaches its records through their own grants. `submitter` reads nothing, and makes no set. A grant
+confers only what its holder accepted, so when a role gains a capability, a holder of an existing
+grant takes it on by answering the grant again. See the decision in [decisions.md](decisions.md), §
+Whoever may read a category may make sets from it.
 
 **The containment is a staircase and it is not a hierarchy.** `viewer`, `editor` and `curator`
 each add to the one before, which is what makes the table readable at a glance, and the

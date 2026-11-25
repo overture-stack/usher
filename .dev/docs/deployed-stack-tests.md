@@ -91,8 +91,9 @@ answer step runs as real users meet it.
 | A set reaching records its creator may read but not save from                | Covered by Arranger's GraphQL router suite: no test user reads a record of the resource they can't save from |
 | no-grants saves any set                                                      | Refused, naming `artifact.create`                                                                            |
 | A selection matching no records, by a user holding `artifact.create` nowhere | Refused                                                                                                      |
-| A token from a client whose tokens lack the application's audience           | Treated as unconfirmed: searches from the open tier, everything else answered as unavailable                 |
-| A malformed, expired, unsigned or signed-out token                           | The same, and never data beyond the open tier                                                                |
+| A token from a client whose tokens lack the application's audience           | Refused, 401, with the Bridge's refused text; nothing beyond the open tier                                   |
+| A malformed, expired, unsigned or signed-out token                           | Refused, 401, with the Bridge's refused text; nothing beyond the open tier                                   |
+| A credential sent twice, in another scheme, or in the address                | Refused, 400, with the Bridge's invalid-request text; nothing reaches the Controller                         |
 | Reading another user's set by its id                                         | Answers exactly as a missing set                                                                             |
 | Reading a set from another catalogue by its id                               | Answers exactly as a missing set                                                                             |
 | Any refusal or error                                                         | No stack trace, internal hostname, file path or record value in the answer                                   |

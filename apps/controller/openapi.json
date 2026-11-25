@@ -1101,7 +1101,7 @@
 			"GrantDecisionRequest": {
 				"properties": {
 					"capabilities": {
-						"description": "The capabilities shown to the holder.",
+						"description": "The `name` of each capability `GET /admin/me/grants` listed for this grant, as strings; the listed objects themselves are refused with `400`.",
 						"items": {
 							"type": "string"
 						},

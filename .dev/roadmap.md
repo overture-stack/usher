@@ -515,7 +515,7 @@ Schema implementation and migration tooling. Integrity controls: transactions, f
 
 ### Planned operations the Controller answers `501`
 
-The contract lists these operations, and the served documentation shows them marked planned. Each admits its caller as it will once built, then answers `501` `notImplemented` (decided by the developer, 2026-11-24).
+The contract lists these operations, and the served documentation shows them marked planned. Each admits its principal as it will once built, then answers `501` `notImplemented` (decided by the developer, 2026-11-24).
 
 - **Resource lifecycle:** deleting, updating, retiring, suppressing and restoring a resource, and revoking its access. Each waits on its unit, which carries the requirements in the next section; the `resource.*` events are already in the catalogue.
 - **The audit log's read, `GET /admin/audit`:** for the management UI's viewer. It waits on that UI's design (§ Implementation: Management UI), which settles what the viewer filters and pages by.
@@ -531,7 +531,7 @@ Requirements that surfaced while earlier units were reviewed, held here so each 
 - **Every unit, for its settings (decided by the developer, 2026-11-18, replacing the rule of 2026-11-09).** A setting lives in the store with a default, may be seeded by the seed file and is changed through the Controller, per [decisions.md](design/decisions.md) § An instance's settings live in its store, and change through the Controller. The Controller reads a setting only once code uses it, and each unit adds its setting's default, its seed entry and its operation in the commit that brings the code using it. A value from elsewhere stays in the Controller's environment: its secrets, how it reaches its store, and the identity provider's identifiers. The grants unit's rate threshold defaults to 10 operations within 60 seconds.
 - **Every unit building a Management API operation.** The contract already lists each operation's `503` codes, from the design. The unit checks that list against what its code can answer, and corrects whichever is wrong.
 - **A contract test, once the exchange has landed.** Every `$ref` in `openapi.json` resolves, and every code an implemented route can answer appears among its responses, so the contract and the code cannot drift apart unnoticed.
-- **The Management API contract in plain language (decided by the developer, 2026-11-20).** Every endpoint group reads as the nominations now do: it addresses the caller as "you", lists its checks in the order the code makes them, and explains each term a reader without the code would not know. Each path is checked for one form, a noun where the request passes an item in its body, such as `/decisions`. A `POST` passing nothing reads as an action rather than an item, and each one found goes to the developer to decide.
+- **The Management API contract in plain language (decided by the developer, 2026-11-20).** Every endpoint group reads as the nominations now do: it addresses the principal as "you", lists its checks in the order the code makes them, and explains each term a reader without the code would not know. Each path is checked for one form, a noun where the request passes an item in its body, such as `/decisions`. A `POST` passing nothing reads as an action rather than an item, and each one found goes to the developer to decide.
 - **Back-channel logout.** The identity provider calls it, so it follows OIDC Back-Channel Logout: a failed logout answers `400`, carrying `storeUnavailable`, `outcomeUnknown` or `identityProviderUnavailable` in its problem body, and a token naming an audience outside the configured list is refused.
 - **`role.define`.** It refuses a role carrying any `custodianship.*` capability while the self-appointment hole stands, per [permissions-model.md](design/permissions-model.md).
 - **Valkey, optional, after alpha.1 (decided by the developer, 2026-11-18).** The Controller answers correctly without it, so a deployment from scratch needs none and one can add it when it wants the speed. Once added, it carries the shared payload cache and the wake-ups that tell every Controller instance of a new notice at once, rather than at its next reread of the store. Its connection takes its password from a variable of its own, never from inside its URL, as the store's does from `USHER_DATABASE_PASSWORD`, and a URL carrying a password is refused. Its audit test checks that a reissue from the cached payload records the cached `generatedAt`, and runs only with Valkey configured, so the Controller without it stays tested as it runs.
@@ -585,6 +585,12 @@ The Lyric adapter and others, each applying the Bridge's enforcement results in 
 ## Implementation: Management UI
 
 Design not yet started; see `.dev/design/management-ui.md`. High-level scope: resource, role, and category management; assigning roles and grants; emergency revocation; audit log viewer.
+
+### Accepting a grant in plain language (MVP)
+
+Accepting a grant shows a summary, such as "<granter> invited you to join <study> as <role>, which lets you A, B and C", in place of the raw capability list. What the holder accepts is still recorded exactly, as the capability names. It needs a plain-language description for each capability, since today's are null and some display names repeat ("create" for both `grant.create` and `invitation.create`), and a short summary for each role.
+
+The answer is grouped: one answer covers every grant a single call created, so "join <study> as <role>" is accepted once, and each grant still records exactly the capabilities accepted. A multi-category self-grant's owner notifications are grouped the same way.
 
 ---
 
