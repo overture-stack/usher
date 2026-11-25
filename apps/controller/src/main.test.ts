@@ -8,6 +8,10 @@ import { fileURLToPath } from 'node:url';
 
 const ENTRY = fileURLToPath(new URL('./main.ts', import.meta.url));
 
+// The workspace packages the entry imports are read from their source, as the test runner reads them,
+// so no package needs a build first.
+const SOURCE_CONDITION = '--conditions=@overture-stack/source';
+
 const LOOPBACK = '127.0.0.1';
 
 interface Exit {
@@ -29,7 +33,7 @@ const unusedPort = (): Promise<number> =>
 // Runs the process entry through tsx given exactly this environment, nothing inherited.
 const runEntry = (environment: Readonly<Record<string, string>>): Promise<Exit> =>
 	new Promise((resolve, reject) => {
-		const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), ENTRY], {
+		const child = spawn(process.execPath, [SOURCE_CONDITION, '--import', import.meta.resolve('tsx'), ENTRY], {
 			env: environment,
 			stdio: ['ignore', 'pipe', 'pipe'],
 		});

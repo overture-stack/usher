@@ -31,7 +31,7 @@ RUN set -eu; \
     pnpm --version
 
 # Every workspace package's manifest, so the install resolves the workspace as the lockfile records
-# it; the libraries' sources are left out, since the controller imports only their types.
+# it. The Bridge's source is left out, since the controller does not import it.
 COPY apps/controller/package.json apps/controller/
 COPY modules/bridge--express/package.json modules/bridge--express/
 COPY modules/types/package.json modules/types/
@@ -40,6 +40,9 @@ COPY modules/types/package.json modules/types/
 # the trust policy, the block on exotic subdependencies and the refusal of unreviewed build scripts.
 RUN pnpm install --frozen-lockfile
 
+# usher-types' source, which the controller's build bundles: the controller imports it at run time,
+# and reads it through its `@overture-stack/source` condition, so its own build is never needed.
+COPY modules/types/ modules/types/
 COPY apps/controller/ apps/controller/
 
 # The controller's production dependencies alone, beside the build `deploy` copies with the package.

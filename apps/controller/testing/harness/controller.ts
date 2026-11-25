@@ -549,6 +549,10 @@ interface ControllerExport extends ControllerModule {
 	exportName: string;
 }
 
+// Selects each workspace package's source through its `@overture-stack/source` export condition, as
+// the test runner's own `--conditions` does.
+const SOURCE_CONDITION = '--conditions=@overture-stack/source';
+
 const CONTROLLER_MODULES = {
 	app: { exportName: 'createController', path: 'src/app/index.ts' },
 	applicationKeyCipher: { exportName: 'createApplicationKeyCipher', path: 'src/applications/index.ts' },
@@ -1074,11 +1078,17 @@ const acceptedWhile = async (running: () => boolean, host: string, port: number)
 };
 
 // A built entry runs under Node alone, as it is run outside the tests, so nothing tsx resolves or
-// transforms passes for the build's own; the source entry runs through tsx.
+// transforms passes for the build's own; the source entry runs through tsx, reading the workspace
+// packages it imports from their source, as the test runner does.
 const nodeArgumentsFor = async (builtEntry: URL | undefined): Promise<readonly string[]> =>
 	builtEntry
 		? [fileURLToPath(builtEntry)]
-		: ['--import', import.meta.resolve('tsx'), fileURLToPath(await presentModule(CONTROLLER_MODULES.main))];
+		: [
+				SOURCE_CONDITION,
+				'--import',
+				import.meta.resolve('tsx'),
+				fileURLToPath(await presentModule(CONTROLLER_MODULES.main)),
+			];
 
 interface RunOptions {
 	/** Where a listener is probed for while the process runs; nowhere when absent. */
