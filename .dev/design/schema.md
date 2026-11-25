@@ -186,23 +186,31 @@ resource impossible to write. Groups carry no rows in the first release, so this
 
     resources
       id                 uuid         primary key
-      name               text         not null  unique
+      external_id        text         not null
+      name               text         not null
       description        text
       base_tier          text         not null  check (base_tier in ('open', 'registered', 'grant'))
       suppressed         boolean      not null  default false
       registered_by      uuid         not null  references users
       registered_at      timestamptz  not null
       updated_at         timestamptz  not null
+      retired_at         timestamptz
+      retired_by         uuid                   references users
+      check (external_id is a usable identifier: not empty, not __proto__, holding no filter marker)
+      check ((retired_at is null) = (retired_by is null))
+      unique (lower(external_id collate "und-x-icu"))
 
-`name` is the identifier the data carries and the payload names, so it is unique; what happens when a
-registration collides with an existing one is the roadmap's "Resource identifier collision at
-creation". Registration accepts a name only from an allowed set of characters, by default letters,
-digits, dot, underscore and hyphen, which an instance can widen in configuration. It also refuses a
-name holding a marker that a search application reads as an instruction in a filter value, `*`,
-`__missing__` or `set_id:`, using the list `usher-types` exports, since `__missing__` is made only of
-allowed characters, and a name differing from an existing one only in letter case. The Bridge lists
-resource names in its filters and refuses any such value, so every narrowing naming that resource
-would otherwise fail.
+`external_id` is the identifier the data carries and the payload names, so it is unique in any
+letter case; what happens when a registration collides with an existing one is the roadmap's
+"Resource identifier collision at creation". `name` is the resource's display name, and need not be
+unique. A retired resource keeps its row, `retired_at` and `retired_by` recording the retirement, so
+its `external_id` stays reserved. Registration accepts an identifier only from an allowed set of
+characters, by default letters, digits, dot, underscore and hyphen, which an instance can widen in
+configuration. It also refuses an identifier holding a marker that a search application reads as an
+instruction in a filter value, `*`, `__missing__` or `set_id:`, using the list `usher-types`
+exports, since `__missing__` is made only of allowed characters, and an identifier differing from an
+existing one only in letter case. The Bridge lists resource identifiers in its filters and refuses
+any such value, so every narrowing naming that resource would otherwise fail.
 
     categories
       id                 uuid         primary key
@@ -311,6 +319,7 @@ the mapping is open, with resource registration in [admin-model.md](admin-model.
       id                 uuid         primary key
       entity             text         not null
       action             text         not null
+      plane              text         not null  check (plane in ('data', 'control'))
       display_name       text         not null
       description        text
       unique (entity, action)
@@ -348,10 +357,21 @@ to an existing seeded role's matrix reaches it only through a migration.
       expires_at         timestamptz
       revoked_at         timestamptz
       revoked_by         uuid                   references users
+      ended_at           timestamptz
+      requested_by       uuid                   references users
       check (num_nonnulls(holder_user_id, holder_group_id) = 1)
       check ((revoked_at is null) = (revoked_by is null))
       check (field_category_id is null or record_category_id is not null)
+      check (ended_at is null or (expires_at is not null and ended_at >= expires_at))
+      check (requested_by <> granted_by)
       foreign key (holder_group_id, resource_id) references groups (id, resource_id)
+      unique nulls not distinct (holder_user_id, holder_group_id, resource_id, record_category_id, role_id)
+        where revoked_at is null and ended_at is null
+
+A holder holds one live grant on the same resource, category and role: the partial unique index,
+`grants_live_unique`, counts a grant until it is revoked or ended. `ended_at` records a grant on the
+same terms replacing it once it had expired, and `requested_by` names the principal who asked for a
+grant written by granting their request.
 
 **Decide C: the holder is two columns rather than a type and an id.** The logical model's
 `holder_type` and `holder_id` fail closed either way, as it argues, but a polymorphic id cannot carry
@@ -372,6 +392,7 @@ role carries `record.delete` (case 25) when the grant is written, since both rul
       decision           text         not null  check (decision in ('accepted', 'declined'))
       capabilities       text[]       not null
       decided_at         timestamptz  not null
+      unique (user_id, grant_id, decided_at)
 
 `capabilities` is the snapshot of what the person was shown, as `entity.action` names, never a cache
 of what the role confers now. Pending is the absence of a row.
@@ -388,12 +409,12 @@ of what the role confers now. Pending is the absence of a row.
       link_token_hash    bytea        not null  unique
       invited_by         uuid         not null  references users
       invited_at         timestamptz  not null
-      expires_at         timestamptz  not null
+      expires_at         timestamptz
 
 The link binds the grant to whichever verified account confirms it, so only a hash of its token is
 stored: a leaked table cannot be replayed into grants. `email` is stored lower-cased, since a lookup
-by address must match however the recipient typed it. The row is deleted once its grants are
-written.
+by address must match however the recipient typed it. `expires_at` is the promised grant's expiry,
+and none when empty. The row is deleted once its grants are written.
 
 ### The notice stream
 

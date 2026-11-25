@@ -9,14 +9,15 @@ Every entry from every Overture service carries the same context attributes. The
 own, and their names are fixed by that specification, which restricts attribute names to lower-case
 letters and digits. That is why none of them carry an underscore.
 
-| Attribute     | Required | Description                                                                            |
-| ------------- | -------- | -------------------------------------------------------------------------------------- |
-| `specversion` | yes      | The CloudEvents version this entry conforms to                                         |
-| `id`          | yes      | Identifies this entry, unique per source                                               |
-| `source`      | yes      | Which deployment emitted it, as a URI reference. One per deployment, never per replica |
-| `type`        | yes      | What happened, from the table below, carrying the `bio.overture.` prefix               |
-| `time`        | yes here | When it happened. RFC 3339, UTC with `Z`, seconds always present                       |
-| `dataschema`  | optional | Names which definition of `data` applies, where one is published                       |
+| Attribute     | Required | Description                                                                              |
+| ------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `specversion` | yes      | The CloudEvents version this entry conforms to                                           |
+| `id`          | yes      | Identifies this entry, unique per source                                                 |
+| `source`      | yes      | Which deployment emitted it, as a URI reference. One per deployment, never per replica   |
+| `type`        | yes      | What happened, from the table below, carrying the `bio.overture.` prefix                 |
+| `time`        | yes here | When it happened. RFC 3339, UTC with `Z`, seconds always present                         |
+| `dataschema`  | optional | Names which definition of `data` applies, where one is published                         |
+| `severity`    | yes here | `info`, `warning`, `error` or `critical`, so a destination routes without reading `data` |
 
 `source` is what makes a complete audit trail possible: a health data access event needs Usher's
 entry correlated with the consuming application's, and each says where it came from without anyone
@@ -115,7 +116,7 @@ anything carrying a real principal is ever emitted. The usual order is the rever
 designed around the populated case with absence bolted on by whoever first hits it, which is how an
 empty string ends up where a null belongs.
 
-## Alerting happens through recording, and four events already work that way
+## Alerting happens through recording, and four events are designed that way
 
 Usher does not hold alerting rules or send notifications. It emits events rich enough that rules can
 be written against them elsewhere, and severity is what lets a destination route on an event without
@@ -129,7 +130,9 @@ what is already recorded, and encoding them here would put policy in the wrong s
 at release time.
 
 **A condition visible only to Usher becomes an event of its own type**, and that is the whole of the
-in-process detection. Four exist:
+in-process detection. Four are designed. The first release emits two, `grant.rateExceeded` and the
+Bridge's `revocationChannel.modeChange`; `grant.unguarded` arrives with community custodianship, and
+`resource.orphaned` after the first release, as the open items below say:
 
 | Event                          | What it detects                                                       | Why it cannot be a downstream rule                               |
 | ------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -606,6 +609,9 @@ import, which teaches operators to ignore it.
   per-catalogue adapter configuration, which Usher never holds, and the value is the resource's
   identifier, already carried as `resourceId`. Provisional: revisited when the audit path is
   implemented.
+- **`ownership.transfer` and `resource.orphaned` are not in the first release.** No operation
+  transfers ownership in it, and nothing detects a resource left with no owner, so nothing emits
+  either event.
 - **The three custodianship entries are post-MVP**, arriving with community custodianship:
   `custodianship.assignment`, `custodianship.removal`, and `grant.unguarded`. Nothing emits them in
   the first release, because nothing assigns a custodian in it.

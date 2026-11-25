@@ -2,7 +2,7 @@
 
 _Status: in progress. OIDC-first admin identification, role taxonomy, bootstrap, self-grant
 flow, admin listing visibility, service accounts, and audit integrity are documented. Open
-design questions: self-grant step-up authentication, self-grant owner notification, "list all
+design questions: self-grant step-up authentication, how a self-grant's owner notice is delivered, "list all
 users" scope and PHI implications, break-glass emergency access, rogue admin peer-grant impact,
 and the Custodian permission list. The audit event schema is no longer among them: it is specced
 in [audit-events.md](audit-events.md)._
@@ -594,10 +594,11 @@ re-authentication? NIST SP 800-63B recommends step-up for high-impact operations
 yes. Defer to v1+ only if owner notification (below) is implemented in v1 as the compensating
 control.
 
-**Self-grant owner notification:** when an admin self-grants access to a resource,
-should the resource owner receive an out-of-band notification? This is the primary compensating
-control when step-up auth is deferred. Requires notification infrastructure design. If step-up
-is deferred to v1+, this is required for v1. Both cannot be deferred simultaneously.
+**Self-grant owner notification (decided):** each other owner of a resource is told of an owner's
+self-grant on it, and each owner is told of a platform administrator's request for one, as
+`POST /admin/grants/self` in the contract describes. The Controller records each notice in its
+notification outbox, in the self-grant's or the request's own transaction. How a notice reaches the
+owner is designed in the roadmap's Notification mechanism.
 
 **Self-grant peer revocability (open; the admin API is built on option (a)):** self-grants are
 standard grants; any admin can revoke any grant, including a peer's self-grant. A
