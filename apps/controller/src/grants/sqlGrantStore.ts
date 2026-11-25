@@ -1,5 +1,6 @@
 import pg from 'pg';
 
+import { countLiveAdministrators } from '../administrators/index.js';
 import { ControllerError } from '../failures/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
 import { countedOwnerCondition, liveGrantCondition, readResourceStanding } from '../resourceStanding/index.js';
@@ -69,6 +70,7 @@ export const sqlGrantStore = (
 			);
 			return rows[0]?.count ?? 0;
 		},
+		countLiveAdministrators: () => countLiveAdministrators(connection, schema),
 		countedOwnersOf: async ({ now, resourceId }) =>
 			(
 				await connection.query<IdRow>(

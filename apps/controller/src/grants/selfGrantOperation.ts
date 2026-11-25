@@ -30,6 +30,9 @@ interface JudgedSelfGrant {
 	/** The category as the request named it, so a refusal names its place. */
 	naming: CategoryNaming;
 
+	/** Whether it is issued at once because nobody else could approve it. */
+	soleAdministrator: boolean;
+
 	/** The configured clock's instant. */
 	now: Date;
 
@@ -77,7 +80,20 @@ const tellOwners = async (
 // A counted owner's self-grant, issued at once with their acceptance.
 const issue = async (
 	grants: GrantStore,
-	{ caller, category, creationId, expiresAt, naming, now, record, resource, role, sourceIp, terms }: JudgedSelfGrant,
+	{
+		caller,
+		category,
+		creationId,
+		expiresAt,
+		naming,
+		now,
+		record,
+		resource,
+		role,
+		soleAdministrator,
+		sourceIp,
+		terms,
+	}: JudgedSelfGrant,
 ): Promise<JsonValue> => {
 	const placed =
 		(await placeGrant(grants, {
@@ -97,6 +113,7 @@ const issue = async (
 			resourceId: resource.externalId,
 			result: 'succeeded',
 			role: role.name,
+			...(soleAdministrator ? { soleAdministrator: true } : {}),
 			sourceIp,
 		},
 		severity: 'warning',
@@ -267,9 +284,19 @@ export const selfGrantOperation = ({
 					now,
 					subject: principal.subject,
 				});
+				// Nobody else could approve an administrator's request when they are the only live
+				// administrator and the resource has no counted owner; read only where it decides.
+				const unapprovable =
+					principal.administrator &&
+					standing !== undefined &&
+					!standing.retired &&
+					!standing.countedOwner &&
+					(await grants.countLiveAdministrators()) === 1 &&
+					(await grants.countedOwnersOf({ now, resourceId: standing.id })).length === 0;
 				const authority = selfGrantAuthority({
 					administrator: principal.administrator,
 					standing,
+					unapprovable,
 				});
 				if (authority.kind === 'refuse') {
 					refuseWithin(authority.problem, authority.recordedReason);
@@ -300,6 +327,7 @@ export const selfGrantOperation = ({
 							record,
 							resource,
 							role,
+							soleAdministrator: authority.kind === 'issue' && authority.soleAdministrator,
 							sourceIp,
 							terms: {
 								holderUserId: userId,

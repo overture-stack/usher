@@ -671,8 +671,9 @@ not capabilities: the self-grant endpoint requires a TTL, and it sets the flag t
 unqualified, so they may write themselves a grant on their own resource. That is recorded, visible
 and revocable like any other, and where a category carries a custodian, that custodian sees the
 grant and can revoke it. It softens "owning a resource says who may reach it, not that the owner
-may" into "an owner reaches it by an act visible to anyone", which the first release also accepts
-for an administrator until approvals arrive.
+may" into "an owner reaches it by an act visible to anyone". An administrator's self-grant takes
+that path only where they are a counted owner of the resource, or the only live administrator on a
+resource with no counted owner; otherwise it is a request someone else decides.
 
 **Most of these are already implied by the audit events**, since an event type and the permission
 whose exercise produces it differ only verb to noun. Where an event has no capability the reason is
@@ -1643,8 +1644,10 @@ and revocable on its own.
 
 Ownership is optional and per-resource. An Owner need not be the submitter: a Principal
 Investigator may be designated as owner for data submitted by a lab technician on their team.
-An Admin holds no standing data access and may grant it to themselves explicitly, which needs no
-approval in MVP and will need one once community custodianship exists. Granting access to _others_
+An Admin holds no standing data access and may grant it to themselves explicitly. On a resource
+they do not own that self-grant is a request, decided by a counted owner of the resource or another
+Admin, unless the only live administrator asks on a resource with no counted owner, which is granted
+at once and marked as such. Granting access to _others_
 is a control-plane act and belongs to these management roles, never to a data-plane role like
 `viewer` or `curator`. See the admin-authority decision in [decisions.md](decisions.md).
 

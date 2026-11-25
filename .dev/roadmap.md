@@ -17,14 +17,14 @@ Architectural diagram showing Usher's connections to Overture services and infra
 
 Four items stay open: self-grant compensating controls, self-grant peer revocability, the break-glass procedure, and where an adapter learns that a principal is an administrator (Usher's own role, adapter-side config, or the platform access model, and whether an administrator of an ushered application is the same principal as an administrator of Usher). The last one also gates the bypass audit requirement, since a bypass cannot be logged as such until its source is defined. Lower-priority follow-ups (step-up auth, audit schema, multi-tenancy) can trail v1. See [admin model open questions](docs/atlas/roadmap/admin-model-open-questions.md).
 
-**Self-grant is confirmed as a real path, and its approval requirement is scheduled to change.** It
-needs no approval in MVP and will need one once community custodianship is implemented. Build it as
-an authority check carrying an exception rather than as a bare write, so the later change removes a
-branch instead of introducing an approval workflow. Whose approval is not settled: the owner is the
-natural authority over the resource, while the trigger is custodianship, which points at the
-custodian. Treating a self-grant
-as an ordinary grant subject to the resource's and the category's authorities admits both without
-choosing now. See the admin-authority decision in [design/decisions.md](design/decisions.md).
+**Self-grant is a real path, approved by an owner or another administrator unless nobody else
+could.** A counted owner's self-grant, an administrator's included, is granted at once. An
+administrator's self-grant on a resource they do not own is a request a counted owner of the
+resource or another administrator decides, never the administrator who asked. The only live
+administrator, on a resource with no counted owner, is granted at once, its `grant.selfCreation`
+event marked `soleAdministrator: true`. Custodian approval follows community custodianship,
+post-MVP. See [design/decisions.md](design/decisions.md) § An administrator's self-grant is approved
+by an owner or another administrator, unless nobody else could.
 
 ### Complete permissions model
 
@@ -436,7 +436,7 @@ Uniqueness is scoped to the instance (decided 2026-10-20): one id names one stud
 
 The admin self-grant is zero standing privilege under another name: no standing access, a mandatory time limit, a logged event, recorded at `concepts.md`. The pattern matters because the people who will audit this platform already know it, and because standing grants answer "who held access to this data, when, and why" badly.
 
-Three gaps against the full pattern, each real rather than terminological. A request approved by someone else, where ours is self-service; the approval requirement is already scheduled to change. Expiry mandatory on the sensitive path, where `expires_at` exists everywhere and is required only for the self-grant. And zero standing privilege as a stated principle, which holds for administrators and for nobody else, since a curator's grant stands until revoked.
+Three gaps against the full pattern, each real rather than terminological. A request approved by someone else, which an administrator's self-grant on a resource they do not own is, while an owner's self-grant, and the only live administrator's on a resource with no counted owner, stay self-service. Expiry mandatory on the sensitive path, where `expires_at` exists everywhere and is required only for the self-grant. And zero standing privilege as a stated principle, which holds for administrators and for nobody else, since a curator's grant stands until revoked.
 
 One item points the other way and should be weighed as a departure rather than a feature: the post-MVP option letting an organization switch on administrator reads without a grant.
 

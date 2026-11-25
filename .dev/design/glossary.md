@@ -753,7 +753,9 @@ hold one, the other, both, or each on a different category of the same resource.
 A user Usher records as an administrator: nominated by an existing admin, or the first one by the
 first user, and accepting the nomination. Can manage all grants platform-wide. Does not have
 implicit data access; must explicitly self-grant access to any resource they want to read, with a
-mandatory TTL and a logged audit event. See [admin-model.md](admin-model.md).
+mandatory TTL and a logged audit event. On a resource they do not own, a counted owner of it or
+another admin approves the self-grant, unless they are the only live administrator and the resource
+has no counted owner, since nobody else could. See [admin-model.md](admin-model.md).
 
 ---
 

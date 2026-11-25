@@ -211,17 +211,25 @@ export interface SelfGrantAuthorityQuestion {
 	/** Whether the caller is a platform administrator. */
 	administrator: boolean;
 
+	/**
+	 * Whether nobody else could approve a platform administrator's request: the caller is the only live
+	 * administrator, and the resource has no counted owner.
+	 */
+	unapprovable: boolean;
+
 	/** Where the caller stands on the resource named, or none for a resource that does not exist. */
 	standing: ResourceStanding | undefined;
 }
 
 /**
- * The decision of a self-grant's authority, by its kind: issue the grant at once, take it as a
- * request someone else decides, or refuse it with its problem and, where it differs from the code
- * answered, the reason its event records.
+ * The decision of a self-grant's authority, by its kind: issue the grant at once, marked where it is
+ * issued because nobody else could approve it, take it as a request someone else decides, or refuse
+ * it with its problem and, where it differs from the code answered, the reason its event records.
  */
 export type SelfGrantAuthority =
-	{ kind: 'issue' } | { kind: 'refuse'; problem: Problem; recordedReason?: string } | { kind: 'request' };
+	| { kind: 'issue'; soleAdministrator: boolean }
+	| { kind: 'refuse'; problem: Problem; recordedReason?: string }
+	| { kind: 'request' };
 
 /** A grant's latest answer by its holder, as an answer shows it. */
 export interface StoredDecision {
@@ -481,6 +489,13 @@ export interface GrantStore {
 
 	/** The people who are counted owners of a resource at the instant given. */
 	countedOwnersOf(question: { now: Date; resourceId: string }): Promise<readonly string[]>;
+
+	/**
+	 * How many live administrators the store holds: accepted, not removed and not revoked. Read under
+	 * the administrators' lock an administrator's change holds, so no acceptance or removal
+	 * interleaves with it.
+	 */
+	countLiveAdministrators(): Promise<number>;
 
 	/**
 	 * Ends the grant on the terms given that is neither revoked nor ended and has expired at the

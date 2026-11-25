@@ -2592,28 +2592,43 @@ with what Usher does against a provider that lacks it.
 or refuses what depended on it, so supporting another provider can cost features and never
 confidentiality. The list is in [admin-model.md](admin-model.md), under the connector design.
 
-### Admin self-grant is approved by the data's owner or custodian, from a later release
+### An administrator's self-grant is approved by an owner or another administrator, unless nobody else could
 
 A system administrator granting themselves a resource's data would otherwise reach it with nobody
 who governs that data deciding, and the community whose data it is would have no say.
 
-**The approvers are the data-plane authorities.** A system administrator is control-plane only, so a
-self-grant reaching a resource's data needs the approval of that resource's owner or of a custodian
-of a category carried by the data, and either one suffices. An approver may never be the grantee.
+**Ruled by the developer 2026-11-25.** Who approves a self-grant, `POST /admin/grants/self`:
 
-**The first release has no approval step.** A self-grant there is recorded, flagged in the audit
-trail and limited in time, with a maximum configurable per instance and 24 hours recommended, and
-nobody approves it. Adding approval later needs no restructuring: it adds an approval record and one
-check, and any self-grant made before the switch expires within its time limit, so none is left to
-convert.
+1. A platform administrator who is also a counted owner of the resource is granted at once, as any
+   owner's self-grant is.
+2. A platform administrator who is not an owner of the resource asks, as a grant request, decided by
+   a counted owner of the resource or by another platform administrator, never by the administrator
+   who asked.
+3. A counted owner who is not an administrator is granted at once.
+4. The only live administrator, on a resource with no counted owner, is granted at once, since
+   nobody else could approve it. A live administrator is one who has accepted, is not removed and is
+   not revoked; a pending nomination does not count. Where another live administrator exists, or the
+   resource has a counted owner, it stays a request. Its `grant.selfCreation` audit event carries
+   `soleAdministrator: true`, so an audit can find these.
 
-**A resource with no available approver keeps its grants as they are until one is assigned.** The
-case needs a vacancy unexpected under the no-owner invariant, and no custodian. Existing grants are
-untouched, and a system administrator assigns a new owner, which in the first release needs no
-further approval. The new owner accepts the ownership grant as anyone accepts a grant. Once
-approvals exist, a self-grant on such a resource waits for the new approver rather than proceeding
-unapproved; the earlier stance, that an empty approver set is a satisfied one, predates owners being
-approvers and is not carried forward.
+**The approvers are those who already govern the resource, or a peer.** A system administrator is
+control-plane only, so a self-grant reaching data on a resource they do not own waits for that
+resource's owner, who governs it, or for another administrator, so no administrator reaches data on
+their word alone. An approver may never be the grantee. Approval by a custodian of a category carried
+by the data is post-MVP work, with community custodianship itself.
+
+**Every self-grant is recorded and limited in time, whoever approves it,** with a maximum
+configurable per instance and 24 hours recommended. Adding custodians as approvers needs no
+restructuring: it adds an approver to the same check, and the grant and its audit record keep their
+shape.
+
+**This is the one case where nobody else could approve**, so the self-grant is granted at once and
+its event is marked `soleAdministrator`; that mark, found by an audit, is the control that remains.
+
+**A resource with no counted owner keeps its grants as they are until one is assigned.** Existing
+grants are untouched, and a system administrator assigns a new owner, who accepts the ownership
+grant as anyone accepts a grant. Until then an administrator's self-grant on it is decided by
+another administrator, or is granted at once under the fourth case when there is none.
 
 ---
 
@@ -2628,13 +2643,14 @@ than reading data: assigning a role, making someone an owner, giving a permissio
 administrator cannot do is bypass what the data itself requires.
 
 **A grant passes two stages, and who started it changes only the first.** Authority to issue comes
-first, and an administrator holds it broadly. What the data requires comes second. From the release
-that adds approvals, an administrator's self-grant needs the approval of the resource's owner or of
-a category's custodian, as "Admin self-grant is approved by the data's owner or custodian" sets out;
-the first release records and time-limits it without one. The resource's owner and a category's
-custodian pass no gate: each governs their own scope, as "An owner governs the whole resource, and a
-custodian governs their category" sets out below. There is no administrative path that skips the
-approval, only a broader grant to enter it, **with one exception not yet reconciled**. The
+first, and an administrator holds it broadly. What the data requires comes second. An
+administrator's self-grant on a resource they do not own needs the approval of the resource's owner
+or of another administrator, as "An administrator's self-grant is approved by an owner or another
+administrator, unless nobody else could" sets out, along with the one case granted at once because
+nobody else could approve it. The resource's owner and a category's custodian pass no gate: each
+governs their own scope, as "An owner governs the whole resource, and a custodian governs their
+category" sets out below. Beyond that case there is no administrative path that skips the approval,
+only a broader grant to enter it, **with one exception not yet reconciled**. The
 adapter-level admin bypass in `admin-model.md` applies no filter at all and creates no grant; it is
 off by default for health-data instances, and whether it may remain enabled where a category carries
 a custodian is recorded as an open item in [to-discuss.md](to-discuss.md). Making oneself an owner
@@ -2739,8 +2755,9 @@ data: an administrator who could make themselves owner would reach data with nob
 **Both act without the other.** An owner may grant and revoke access to every category of their own
 resource, a custodian-governed one included. A custodian may grant and revoke access to their
 category in every resource carrying it. Neither needs the other's approval. An administrator's
-self-grant is the exception: from a later release it needs an owner's or a custodian's approval, as
-"Admin self-grant is approved by the data's owner or custodian" records.
+self-grant is the exception: on a resource they do not own it needs an owner's or another
+administrator's approval, unless nobody else could give it, as "An administrator's self-grant is
+approved by an owner or another administrator, unless nobody else could" records.
 
 **Why not a gate on owners.** Making the custodian's grant the final gate for an owner as well was
 weighed and set aside for now. Under it, assigning a custodian silently takes authority from an
@@ -2873,24 +2890,26 @@ produces no grant record, and the audit trail around administrative data access 
 Confining the administrator's authority to what Usher holds means there is nothing to audit rather than an
 unaudited permission, which is a better position than logging a power that need not exist.
 
-**Self-grant exists, and what changes over time is its approval requirement.** A system
-administrator holds no standing data access and may grant it to themselves explicitly. In MVP that
-self-grant needs no approval. Once community custodianship is implemented it will.
+**Self-grant exists, and it carries an approval requirement.** A system administrator holds no
+standing data access and may grant it to themselves explicitly. On a resource they do not own, that
+self-grant is a request an owner of the resource or another administrator decides, unless nobody
+else could, as "An administrator's self-grant is approved by an owner or another administrator,
+unless nobody else could" records.
 
-**So build it as an authority check carrying an exception, not as a bare write.** A self-grant is a
-grant like any other, and a grant is issued by a grant authority: a resource's owner for the
-resource, a category's custodian for the category. What MVP changes is not the mechanism but the
-presence of an exception letting an administrator bypass that authority for themselves. Written this
-way the later change removes a branch, rather than introducing an approval workflow where none
-existed. That is the difference between a configuration change and a redesign, and it is the reason
-to write it this way now rather than when custodianship arrives.
+**So it is an authority check carrying an exception, not a bare write.** A self-grant is a grant
+like any other, and a grant is issued by a grant authority: a resource's owner for the resource, a
+category's custodian for the category. An administrator who holds neither authority asks for the
+grant rather than issuing it, and the one exception lets the only live administrator, on a resource
+with no counted owner, issue it at once and marked. Adding custodians as approvers then adds an
+authority to the check rather than introducing an approval workflow where none existed. That is the
+difference between a configuration change and a redesign.
 
-**Open: whose approval.** Two answers point in different directions: permission from the resource's
-owners, or approval from the custodian of the category that made the approval necessary in the first
-place. The trigger for needing it at all is community custodianship, which favours the second. The grant-authority framing above
-admits both without having to choose now: an administrator self-granting into a resource carrying a
-category needs the resource's authority and that category's authority, and which apply follows from
-what the resource carries rather than from a separate rule. Worth confirming.
+**Whose approval: a counted owner of the resource, or another administrator.** Permission from the
+resource's owners and approval from a peer administrator are the approvers; either one suffices.
+Approval from the custodian of a category carried by the data, which community custodianship makes
+necessary, is post-MVP work with custodianship itself, and the grant-authority framing above admits
+it without restructuring, since which authorities apply follows from what the resource carries
+rather than from a separate rule.
 
 **Granting to others is a separate question and is unchanged.** The portal flows say sharing belongs
 exclusively to the data-plane roles. Nothing here contradicts that: self-grant is about an

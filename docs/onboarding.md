@@ -121,7 +121,7 @@ Four kinds of participant hold or govern access. They run from the narrowest to 
       <tbody>
         <tr><td><b>Viewer</b></td><td>The categories of a dataset they have been granted</td><td>Yes, as far as their grants cover</td></tr>
         <tr><td><b>Owner</b></td><td>One dataset, and may grant and revoke access to others within it</td><td>Usually yes in practice, because an owner is usually also a viewer</td></tr>
-        <tr><td><b>Administrator</b></td><td>The whole platform: registering "resources", granting the submitter and owner roles, revoking any grant, revoking a person outright, signing out everyone</td><td>No. Reaching it takes a self-grant that an owner of the dataset or another administrator decides, and it is recorded like any other grant</td></tr>
+        <tr><td><b>Administrator</b></td><td>The whole platform: registering "resources", granting the submitter and owner roles, revoking any grant, revoking a person outright, signing out everyone</td><td>No. Reaching it takes a self-grant that an owner of the dataset or another administrator decides, unless the administrator owns the dataset or nobody else could decide, and it is recorded like any other grant</td></tr>
       </tbody>
     </table>
   </div>

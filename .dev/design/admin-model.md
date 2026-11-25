@@ -231,8 +231,8 @@ governs all users. The grant is logged, traceable, and requires a deliberate act
    grant endpoint).
 2. They specify the resource, the categories needed, and a TTL.
 3. Usher creates a standard `grants` record. The `granted_by` field
-   is set to the admin's own `user_id`, flagging this as a self-grant. The audit log entry
-   carries `"self_grant": true`.
+   is set to the admin's own `user_id`, flagging this as a self-grant. The audit log records it
+   as the `grant.selfCreation` event.
 4. The self-grant endpoint enforces the TTL requirement and the audit flag. The standard grant
    endpoint rejects self-targeting with an error directing the principal to the self-grant endpoint.
    This is technical enforcement, not convention, and it applies to anyone holding `grant.create`
@@ -240,9 +240,14 @@ governs all users. The grant is logged, traceable, and requires a deliberate act
    takes the same path and the same TTL. There is no `grant.createSelf` capability, because the
    authority to grant is one authority; what differs is the endpoint's rules. See the capability
    vocabulary in [permissions-model.md](permissions-model.md).
-5. **No approval in the first release.** From a later release a self-grant needs the approval of the
-   resource's owner or of a custodian of one of the data's categories; see
-   [decisions.md](decisions.md) § Admin self-grant is approved by the data's owner or custodian.
+5. **Who approves it.** A counted owner of the resource, an administrator or not, is granted at
+   once. An administrator who is not an owner of the resource asks, as a grant request, decided by a
+   counted owner of the resource or by another administrator, never by the administrator who asked.
+   The only live administrator, on a resource with no counted owner, is granted at once, since
+   nobody else could approve it; a live administrator has accepted, is not removed and is not
+   revoked, and a pending nomination does not count. Its `grant.selfCreation` event carries
+   `soleAdministrator: true`. See [decisions.md](decisions.md) § An administrator's self-grant is
+   approved by an owner or another administrator, unless nobody else could.
 6. The resulting grant behaves identically to any other grant for PEP adapter purposes. The
    Usher token carries no admin flag; the adapter sees the same token structure
    regardless of whether the grantee is an admin.

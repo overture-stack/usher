@@ -71,13 +71,19 @@ export const grantAuthority = ({
  * Decides how a caller's self-grant is answered, judging in turn: a resource that does not exist,
  * or is retired, is refused 404 `resourceNotFound`, and so is one the caller may not see, its event
  * recording `noAuthorityOnResource`. A counted owner of the resource, a platform administrator
- * among them, is issued the grant at once; any other platform administrator asks for it, as a
- * request someone else decides; anyone else is refused 403 `noAuthorityOnResource`.
+ * among them, is issued the grant at once. A platform administrator who is the only live
+ * administrator, on a resource with no counted owner, is issued it at once too, marked as granted
+ * because nobody else could approve it; any other platform administrator asks for it, as a request
+ * someone else decides; anyone else is refused 403 `noAuthorityOnResource`.
  *
- * @param question whether the caller is a platform administrator, and where they stand on the
- *   resource.
+ * @param question whether the caller is a platform administrator, whether nobody else could approve
+ *   their request, and where they stand on the resource.
  */
-export const selfGrantAuthority = ({ administrator, standing }: SelfGrantAuthorityQuestion): SelfGrantAuthority => {
+export const selfGrantAuthority = ({
+	administrator,
+	standing,
+	unapprovable,
+}: SelfGrantAuthorityQuestion): SelfGrantAuthority => {
 	if (standing === undefined || standing.retired) {
 		return { kind: 'refuse', problem: GRANT_PROBLEMS.resourceNotFound };
 	}
@@ -89,7 +95,10 @@ export const selfGrantAuthority = ({ administrator, standing }: SelfGrantAuthori
 		};
 	}
 	if (standing.countedOwner) {
-		return { kind: 'issue' };
+		return { kind: 'issue', soleAdministrator: false };
 	}
-	return administrator ? { kind: 'request' } : { kind: 'refuse', problem: GRANT_PROBLEMS.noAuthorityOnResource };
+	if (!administrator) {
+		return { kind: 'refuse', problem: GRANT_PROBLEMS.noAuthorityOnResource };
+	}
+	return unapprovable ? { kind: 'issue', soleAdministrator: true } : { kind: 'request' };
 };

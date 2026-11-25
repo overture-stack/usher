@@ -157,6 +157,9 @@ interface World {
 	/** The people holding a counted owner grant on STUDY-A1. */
 	countedOwners: readonly string[];
 
+	/** How many live administrators the store holds. */
+	liveAdministrators: number;
+
 	/** The grant the store holds, by its id. */
 	grant: StoredGrant | undefined;
 
@@ -226,6 +229,7 @@ const WORLD: World = {
 		'global.unmarked': 'category-unmarked',
 	},
 	countedOwners: ['person-ana', 'person-dana'],
+	liveAdministrators: 2,
 	countedOwnersBesides: 1,
 	directory: 'answering',
 	grant: PENDING,
@@ -260,6 +264,10 @@ const fakeStore = (world: World, calls: Call[]): GrantStore => {
 		countedOwnersBesides: async (question) => {
 			called('countedOwnersBesides', question);
 			return world.countedOwnersBesides;
+		},
+		countLiveAdministrators: async () => {
+			called('countLiveAdministrators');
+			return world.liveAdministrators;
 		},
 		countedOwnersOf: async (question) => {
 			called('countedOwnersOf', question);
@@ -1988,6 +1996,7 @@ suite('creating a self-grant', () => {
 		assert.deepEqual(methodsCalled(stand), [
 			'findRole',
 			'readStanding',
+			'countLiveAdministrators',
 			'findOfferedCategory',
 			'findOrRecordPerson',
 			'holdsLiveGrant',

@@ -80,6 +80,21 @@ interface IdRow {
  * @param schema the Controller's schema.
  * @param identity the trusted issuer and the principal's subject.
  */
+/**
+ * How many live administrators the store holds: accepted, not removed, and whose person holds no
+ * standing revocation.
+ *
+ * @param connection the connection, in the transaction asking.
+ * @param schema the Controller's schema.
+ */
+export const countLiveAdministrators = async (connection: StoreReader, schema: string): Promise<number> =>
+	(
+		await connection.query<{ count: number }>(
+			`SELECT count(*)::int AS count FROM ${tableIn(schema)('administrators')} held
+        WHERE ${liveAdministrator(schema, 'held')}`,
+		)
+	).rows[0]?.count ?? 0;
+
 export const readAdministratorStatus = async (
 	store: StoreReader,
 	schema: string,
@@ -244,13 +259,7 @@ export const sqlAdministratorStore = (
 			}
 			return written;
 		},
-		countAdministrators: async () =>
-			(
-				await connection.query<{ count: number }>(
-					`SELECT count(*)::int AS count FROM ${table('administrators')} held
-                    WHERE ${liveAdministrator(schema, 'held')}`,
-				)
-			).rows[0]?.count ?? 0,
+		countAdministrators: () => countLiveAdministrators(connection, schema),
 		declineNomination: async ({ nominationId, now }) => {
 			await connection.query(
 				`INSERT INTO ${table('nomination_declines')} (nomination_id, declined_at) VALUES ($1, $2)`,

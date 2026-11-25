@@ -647,9 +647,10 @@ same question asked twice.
 
 **[HIGH] Self-grant prevention is not specified in the permissions model.**
 **Still open, and the grant-gating decision makes it sharper rather than answering it.** An
-administrator may self-grant, and from a later release needs an owner's or a custodian's approval
-to do so. An
-administrator who may appoint custodians can appoint themselves and then satisfy that gate, so the
+administrator may self-grant, and on a resource they do not own needs the approval of a counted
+owner of the resource or of another administrator, never their own, unless they are the only live
+administrator and the resource has no counted owner. Custodian approval joins those post-MVP, and an
+administrator who may appoint custodians could then appoint themselves and satisfy that gate, so the
 rule below and the gating decision have to be reconciled: either appointment is constrained, or
 grant must reject an approver who is also the grantee, or both. The audit event on appointment is
 the minimum and is not by itself a control.

@@ -267,8 +267,10 @@ them, and that study belongs with the communities concerned rather than in a des
 `submitter` and `owner` roles, revoking any grant, revoking a person outright, and signing out
 everyone. An Admin does not have implicit data access. To read a resource, an Admin must ask for a
 self-grant, with a mandatory time limit. An owner of the resource or another Admin decides the
-request, never the Admin who asked, and the request and the decision are logged. The full Admin
-model, covering bootstrap, self-grant flow, and audit integrity design, is in
+request, never the Admin who asked, and the request and the decision are logged. An Admin who owns
+the resource is granted at once, as any owner is. So is the only live administrator, on a resource
+with no counted owner, since nobody else could approve it, and its audit event marks it as such. The
+full Admin model, covering bootstrap, self-grant flow, and audit integrity design, is in
 [admin-model.md](https://github.com/overture-stack/usher/blob/main/.dev/design/admin-model.md).
 
 ---

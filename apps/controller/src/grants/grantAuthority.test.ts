@@ -241,8 +241,11 @@ const selfOutcomeOf = (authority: SelfGrantAuthority): readonly unknown[] =>
 			]
 		: [authority.kind];
 
-const selfDecided = (administrator: boolean, seen: ResourceStanding | undefined): readonly unknown[] =>
-	selfOutcomeOf(selfGrantAuthority({ administrator, standing: seen }));
+const selfDecided = (
+	administrator: boolean,
+	seen: ResourceStanding | undefined,
+	unapprovable = false,
+): readonly unknown[] => selfOutcomeOf(selfGrantAuthority({ administrator, standing: seen, unapprovable }));
 
 suite("deciding a self-grant's authority", () => {
 	test('issues a counted owner the grant on their own resource at once, a platform administrator among them', () => {
@@ -261,6 +264,18 @@ suite("deciding a self-grant's authority", () => {
 			seen.map((standingSeen) => selfDecided(true, standingSeen)),
 			seen.map(() => ['request']),
 		);
+	});
+
+	test('issues the grant at once, marked, to a platform administrator whose request nobody else could approve', () => {
+		const decided = selfGrantAuthority({ administrator: true, standing: standing(), unapprovable: true });
+
+		assert.deepEqual(decided, { kind: 'issue', soleAdministrator: true });
+		assert.deepEqual(selfDecided(false, standing({ accessLevel: 'open' }), true), [
+			'refuse',
+			403,
+			'noAuthorityOnResource',
+			'noAuthorityOnResource',
+		]);
 	});
 
 	test('refuses a resource that does not exist, or a retired one, 404 resourceNotFound, to an administrator and an owner alike', () => {

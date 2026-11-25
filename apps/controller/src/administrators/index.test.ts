@@ -8,6 +8,7 @@ suite('the administrators module', () => {
 		assert.deepEqual(Object.keys(administrators).toSorted(), [
 			'ADMINISTRATOR_PROBLEMS',
 			'confirmAdministratorAuthority',
+			'countLiveAdministrators',
 			'createAdministratorRoutes',
 			'readAdministratorStatus',
 			'sqlAdministratorStore',
