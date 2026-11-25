@@ -331,8 +331,8 @@ export const revokeAsOwner = async (harness: Harness, grantId: string): Promise<
 };
 
 /**
- * Changes a grant's role through the API as the resource's owner (#215 Q3, ruled: the API's own
- * operation once it exists).
+ * Changes a grant's role through the API as the resource's owner (#215 Q3, ruled), with
+ * `PATCH /admin/grants/{grantId}`.
  *
  * @param harness the running harness.
  * @param grantId the grant's id.

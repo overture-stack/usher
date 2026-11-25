@@ -791,7 +791,7 @@ export const GRANT_BEYOND_USE_LOG_LINE = Object.freeze({
 /**
  * How the exchange's event names a token past the Bridge's response cap (ruled, "#215's role route
  * and the held-grant scale" 2: the limit, the principal's held count and the token's size, never an
- * id; the names assumed until Usher's docs pass): the `token.exchange` event, its `reason` this limit's
+ * id, as `audit-events.md` § Events names them): the `token.exchange` event, its `reason` this limit's
  * fixed code, with the principal's held resource count and the token's size in bytes, never a
  * resource's id.
  */

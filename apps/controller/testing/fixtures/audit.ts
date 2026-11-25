@@ -55,8 +55,8 @@ import { type Cleanup, eventually, nowSeconds } from '../harness/waiting.js';
 
 // The fixture and helpers of #214's tests alone: audit logging. Every path, table, column, person,
 // problem code, reason and event registration they use comes from the shared support modules. The people are the shared cast: `owner` owns STUDY-A1 to STUDY-C3 and makes the consumer
-// grants (#212 Q4), Ana, Bo, Cy, Dana and Eli hold or receive them, and the administrator is one by the
-// management token's realm role alone.
+// grants (#212 Q4), Ana, Bo, Cy, Dana and Eli hold or receive them, and the administrator is one the harness
+// seeds into the store, since a token makes no administrator.
 
 /**
  * The application the audit tests exchange through unless they name another, by its display name,
@@ -121,8 +121,9 @@ export const RECURRING_PROPERTIES = Object.freeze({
 });
 
 /**
- * The observations among the Controller's events: noticed by the system, so carrying no `result` and,
- * being system-generated, no `sourceIp` (`audit-events.md` § Two families of event; #214 Q19).
+ * The observations among the Controller's events: noticed by the system, so carrying no `result`. One
+ * recorded while a request is served, such as `grant.rateExceeded` or `applicationKey.confirmation`,
+ * carries that request's `sourceIp` (`audit-events.md` § The payload; #214 Q19).
  */
 export const OBSERVATION_TYPES: readonly AuditEventType[] = Object.freeze([
 	'admission.shareExceededTally',

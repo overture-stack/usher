@@ -44,7 +44,7 @@ import { nowSeconds } from '../harness/waiting.js';
 // test/exchange/issuance/. Every table, column, person and wire shape they use comes from the shared
 // support modules. The people are the shared cast: Ana, Bo and Cy are the plan's principals, Dana
 // owns STUDY-A1, STUDY-C3 and STUDY-D4 and makes the consumer grants a test writes through the API
-// (#212 Q4), Eli is an administrator by the management token's realm role alone, and Fen is never
+// (#212 Q4), Eli is an administrator the harness seeds into the store, and Fen is never
 // seeded.
 
 /**

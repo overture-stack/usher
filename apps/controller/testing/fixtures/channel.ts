@@ -122,7 +122,7 @@ export const POLL_DEADLINE_MS = 10_000;
 /** How often each instance re-reads the stream with no wake-up (#210 Q14). */
 export const REREAD_INTERVAL_MS = 2_000;
 
-/** The heartbeat interval, fixed (#210 Q15). */
+/** The heartbeat interval, the `heartbeatMilliseconds` setting's default (#210 Q15). */
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 
 /** The Bridge's response cap on a poll page (`configuration.ts` `responseCapBytes`). */

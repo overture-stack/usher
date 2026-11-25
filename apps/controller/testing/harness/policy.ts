@@ -689,7 +689,8 @@ const seededRole = (plane: FixtureRole['plane'], capabilities: readonly string[]
  *   `invitation.create`, `resource.view`, `update`, `suppress` and `restore`, and `ownership.transfer`;
  *   `admin` holds all of an owner's and the four platform-wide ones beside them, `resource.register`,
  *   `category.create`, `role.define` and `group.*` (create, view, update, addMember, removeMember).
- *   An administrator is one by the management token's realm role (#212 Q3); the row is the matrix's.
+ *   An administrator is one the store records, never one by a token's role (#212 Q3); the row is the
+ *   matrix's.
  */
 export const SEEDED_ROLES: Readonly<Record<SeededRole, Readonly<FixtureRole>>> = Object.freeze({
 	admin: seededRole('control', [

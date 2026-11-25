@@ -18,7 +18,7 @@ import { type FixtureGrant, mergedPolicy, POLICY_TABLES, type PolicyFixture } fr
 // comes from admin.ts, and every table and store reader from policy.ts. The people are the shared cast: Ana owns STUDY-A1, Dana owns STUDY-B2,
 // Bo holds a pending curator grant on STUDY-A1, Eli an accepted viewer grant, Émile a revoked one,
 // Long an expired one and Cy2 a declined one, Cy holds nothing, and the administrator and the second
-// administrator are each one by the management token's realm role alone.
+// administrator are each one the harness seeds into the store, since a token makes none.
 
 /**
  * The application serving STUDY-A1 in the fixture, by its display name, which is its label there;

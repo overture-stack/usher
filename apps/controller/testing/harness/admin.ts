@@ -705,7 +705,8 @@ export const restoreResource = (
 	);
 
 /**
- * Retires a resource no live grant or pending invitation names (#320 B):
+ * Retires a resource whose only live grants are its owners', ending them, and that no pending
+ * invitation names (#320 B):
  * `POST /admin/resources/{externalId}/retirement`.
  *
  * @param caller the Controller and the caller's token.

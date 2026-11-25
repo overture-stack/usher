@@ -81,8 +81,8 @@ const person = (email: string, subject: string): Person => Object.freeze({ email
  * address. The subjects take the forms a provider can send: Keycloak's UUIDs (Ana, Dana, Eli, Fen),
  * characters needing escaping (Bo), a pair differing only in letter case (Cy and Cy2), non-ASCII text
  * beyond what OpenID Connect allows, as a hostile provider could send (Émile), and the 255 ASCII
- * characters OpenID Connect allows at most (Long). The administrator is one by the management token's
- * realm role alone; Fen is for a subject the Controller has never seen, so no fixture seeds Fen.
+ * characters OpenID Connect allows at most (Long). The administrator is one the harness seeds into the
+ * store, since a token makes none; Fen is for a subject the Controller has never seen, so no fixture seeds Fen.
  *
  * Four more carry subjects a generic provider can issue and an encoder or a query can mishandle: a
  * quote and a backslash (`quoted`); a quote, a backslash, a line break, U+2028 and markup (`markup`);

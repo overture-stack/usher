@@ -1721,8 +1721,8 @@ type ColumnShapes<Table extends keyof PolicyTables> = Readonly<
  * The type and nullability of every column `schema.md` names, as the rulings adjust it:
  * `resources.external_id` (O16, #207 Q5), its retirement (#320 B), the capabilities' plane (#207
  * Q14), the notices' resource and audience columns (#207 Q5), an invitation's nullable expiry, the
- * resulting grant's (#207 Q9), each audit event's severity (#214 Q2; no ruling fixes its type, so
- * text, required), a person held apart from their identities in `user_identities` (several
+ * resulting grant's (#207 Q9), each audit event's severity (#214 Q2; text, required, as `schema.md`
+ * § The audit log has it), a person held apart from their identities in `user_identities` (several
  * identities per person), and the subject identifier named `idp_subject_id` wherever it is stored.
  * The tables the rulings add are checked by their columns alone, unless a ruling fixes their types,
  * as it does for `user_identities` and `grant_requests`, and as `schema.md` § Applications does for

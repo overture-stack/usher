@@ -34,8 +34,7 @@ import { withHarness } from '../../../testing/harness/harness.js';
 import { startIdentityProvider } from '../../../testing/peripherals/identityProvider.js';
 import { cleanupFor, eventually, nowSeconds } from '../../../testing/harness/waiting.js';
 
-// #215's tests of the exchange as the bridge reads it, for the behaviours its coverage table
-// (test/conformance/coverage.md) finds no #209 test covering (B1).
+// #215's tests of the exchange as the bridge reads it, for the behaviours no #209 test covers (B1).
 
 // The bridge's clock off the controller's by up to this much, within the 30 s tolerance (#215 Q9).
 const CLOCK_DIFFERENCE_SECONDS = 20;
