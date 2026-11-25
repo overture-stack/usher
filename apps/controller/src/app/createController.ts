@@ -47,6 +47,7 @@ import { type AfterCommitStepName, type ManagementDependencies, refusalTallyEven
 import { type Migration, readMigrations, unknownMigrations } from '../migrations/index.js';
 import { createNoticeChannel, createUsedAssertions } from '../noticeChannel/index.js';
 import { createCursorCipher, createNoticeReader } from '../noticeStream/index.js';
+import { createPlannedOperationRoutes } from '../plannedOperations/index.js';
 import { createReadiness } from '../readiness/index.js';
 import { createResourceRoutes } from '../resources/index.js';
 import { createRetentionSweep } from '../retention/index.js';
@@ -451,6 +452,7 @@ export const createController = (configuration: ControllerConfiguration): Contro
 			},
 			management,
 		),
+		...createPlannedOperationRoutes(management),
 		...channel.routes,
 		exchange.route,
 		createSignOutRoute({

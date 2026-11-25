@@ -517,6 +517,16 @@ Two parts of this are design prerequisites rather than implementation, and their
 
 Schema implementation and migration tooling. Integrity controls: transactions, foreign key constraints, audit triggers for policy changes.
 
+### Planned operations the Controller answers `501`
+
+The contract lists these operations, and the served documentation shows them marked planned. Each admits its caller as it will once built, then answers `501` `notImplemented` (decided by the developer, 2026-11-24).
+
+- **Resource lifecycle:** deleting, updating, retiring, suppressing and restoring a resource, and revoking its access. Each waits on its unit, which carries the requirements in the next section; the `resource.*` events are already in the catalogue.
+- **The audit log's read, `GET /admin/audit`:** for the management UI's viewer. It waits on that UI's design (§ Implementation: Management UI), which settles what the viewer filters and pages by.
+- **A role's capabilities, `PUT /admin/roles/{roleName}/capabilities`:** waits on the open capability vocabulary (§ Complete permissions model and § Align the permissions model with RABAC), and carries the `role.define` requirement in the next section.
+- **Resource fields, `/admin/resource-fields`:** post-MVP, with § Category dictionary introspection.
+- **The EGO import, `POST /admin/imports/ego`:** waits on its unit, which carries the transaction-timeout requirement in the next section.
+
 ### What the Controller's later units carry
 
 Requirements that surfaced while earlier units were reviewed, held here so each later unit's brief starts from them.

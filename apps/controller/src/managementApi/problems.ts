@@ -58,6 +58,12 @@ export const PROBLEMS = Object.freeze({
 		'Not the first user',
 		"Only the first user nominates Usher's first administrator: the principal the configured first user names.",
 	),
+	notImplemented: problem(
+		'notImplemented',
+		501,
+		'Not implemented',
+		'This operation is not implemented yet. The contract lists it as planned.',
+	),
 	outcomeUnknown: problem(
 		'outcomeUnknown',
 		503,

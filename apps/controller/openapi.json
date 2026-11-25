@@ -365,6 +365,28 @@
 				},
 				"description": "The body is in a media type other than `application/merge-patch+json`, or in none; `unsupportedMediaType`."
 			},
+			"NotImplemented": {
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"allOf": [
+								{
+									"$ref": "#/components/schemas/ProblemDetails"
+								},
+								{
+									"properties": {
+										"code": {
+											"enum": ["notImplemented"]
+										}
+									},
+									"type": "object"
+								}
+							]
+						}
+					}
+				},
+				"description": "`notImplemented`: the operation is planned and not implemented yet. You are answered this once Usher has admitted you as it admits you for the operation once built, so a refusal of your credential or your authority comes first."
+			},
 			"NoticeVersionUnserved": {
 				"content": {
 					"application/problem+json": {
@@ -3201,7 +3223,7 @@
 		},
 		"/admin/audit": {
 			"get": {
-				"description": "Reads the audit log, for platform administrators, a page at a time: every stored event exactly as it was written, in order of `time` and then of `id`.\n\nEach filter narrows the events, and a filter value is matched literally, its wildcard characters included. `from` is inclusive and `to` exclusive, and an instant written with any offset is read as the same instant in UTC.\n\nThe audit event `audit.read` records each read.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nReads the audit log, for platform administrators, a page at a time: every stored event exactly as it was written, in order of `time` and then of `id`.\n\nEach filter narrows the events, and a filter value is matched literally, its wildcard characters included. `from` is inclusive and `to` exclusive, and an instant written with any offset is read as the same instant in UTC.\n\nThe audit event `audit.read` records each read.",
 				"operationId": "readAudit",
 				"parameters": [
 					{
@@ -3314,6 +3336,9 @@
 							}
 						},
 						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
+					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
 					},
 					"503": {
 						"$ref": "#/components/responses/ReadUnavailable"
@@ -4750,7 +4775,7 @@
 		},
 		"/admin/imports/ego": {
 			"post": {
-				"description": "Imports EGO's study groups from an export, for platform administrators. The administrator is checked before the body is read, and the body may be up to 10 MiB.\n\nA run is dry unless `apply: true` is sent beside the export. A dry run writes nothing and reports exactly what a real run on the same data then does. A real run writes all of its changes or none of them, and holds a lock that refuses a second run until it ends.\n\nEach resource registered by a run takes the instance's configured base tier and is served by every application named in `audiences`. The prefixes that read a study's id from a policy's name, and the policies granting every study, come from the instance's configuration.\n\nEither run answers its report to the administrator alone. The report is never written to the log stream.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nImports EGO's study groups from an export, for platform administrators. The administrator is checked before the body is read, and the body may be up to 10 MiB.\n\nA run is dry unless `apply: true` is sent beside the export. A dry run writes nothing and reports exactly what a real run on the same data then does. A real run writes all of its changes or none of them, and holds a lock that refuses a second run until it ends.\n\nEach resource registered by a run takes the instance's configured base tier and is served by every application named in `audiences`. The prefixes that read a study's id from a policy's name, and the policies granting every study, come from the instance's configuration.\n\nEither run answers its report to the administrator alone. The report is never written to the log stream.",
 				"operationId": "importFromEgo",
 				"requestBody": {
 					"content": {
@@ -4862,6 +4887,9 @@
 							}
 						},
 						"description": "`unknownApplication`: `audiences` names an application that is not registered. `importNeedsAnAudience`: `audiences` is empty."
+					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
 					},
 					"503": {
 						"content": {
@@ -5678,7 +5706,7 @@
 		},
 		"/admin/resource-fields": {
 			"get": {
-				"description": "Lists the resource fields defined by the instance.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nLists the resource fields defined by the instance.",
 				"operationId": "listResourceFields",
 				"responses": {
 					"400": {
@@ -5709,6 +5737,9 @@
 						},
 						"description": "A service account calls; `serviceAccountNotPermitted`, before any lookup. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
+					},
 					"503": {
 						"$ref": "#/components/responses/ReadUnavailable"
 					},
@@ -5732,7 +5763,7 @@
 				"tags": ["Resource fields"]
 			},
 			"post": {
-				"description": "Defines a resource field for every resource of the instance, for platform administrators. A resource's value for it is set and cleared through the resource's update.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nDefines a resource field for every resource of the instance, for platform administrators. A resource's value for it is set and cleared through the resource's update.",
 				"operationId": "defineResourceField",
 				"requestBody": {
 					"content": {
@@ -5783,6 +5814,9 @@
 					},
 					"415": {
 						"$ref": "#/components/responses/JsonOnly"
+					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
@@ -6073,7 +6107,7 @@
 		},
 		"/admin/resources/{externalId}": {
 			"delete": {
-				"description": "Deletes a registration that never held a grant or an invitation, for platform administrators, freeing its externalId. A registration that ever held either is retired instead.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nDeletes a registration that never held a grant or an invitation, for platform administrators, freeing its externalId. A registration that ever held either is retired instead.",
 				"operationId": "deleteResource",
 				"parameters": [
 					{
@@ -6156,6 +6190,9 @@
 							}
 						},
 						"description": "The registration ever held a grant or an invitation; `registrationHasHistory`, its text saying to retire it instead."
+					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
@@ -6282,7 +6319,7 @@
 				"tags": ["Resources"]
 			},
 			"patch": {
-				"description": "Updates a resource's details, access level and field values as a JSON Merge Patch: a member left out keeps its value, and `null` clears a description or a field value. The externalId stays as registered.\n\nPlatform administrators and the resource's owners update it, under the rules applied at registration.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nUpdates a resource's details, access level and field values as a JSON Merge Patch: a member left out keeps its value, and `null` clears a description or a field value. The externalId stays as registered.\n\nPlatform administrators and the resource's owners update it, under the rules applied at registration.",
 				"operationId": "updateResource",
 				"parameters": [
 					{
@@ -6370,6 +6407,9 @@
 							}
 						},
 						"description": "A rule applied at registration is broken, a display name is cleared, or the update names a member it may not set, such as `externalId`."
+					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
@@ -6689,7 +6729,7 @@
 		},
 		"/admin/resources/{externalId}/restoration": {
 			"post": {
-				"description": "Restores a suppressed resource. Platform administrators and the resource's owners restore it.\n\nThe body is sent only with a reason. Without one, the controller records `unspecified`, a reason it alone assigns and refuses from anyone else.\n\nA baseline notice reaches every application.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nRestores a suppressed resource. Platform administrators and the resource's owners restore it.\n\nThe body is sent only with a reason. Without one, the controller records `unspecified`, a reason it alone assigns and refuses from anyone else.\n\nA baseline notice reaches every application.",
 				"operationId": "restoreResource",
 				"parameters": [
 					{
@@ -6778,6 +6818,9 @@
 						},
 						"description": "The reason is not one of the restoration reasons."
 					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
+					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
 					},
@@ -6796,7 +6839,7 @@
 		},
 		"/admin/resources/{externalId}/retirement": {
 			"post": {
-				"description": "Retires a resource, for platform administrators, once its owners' grants are the only live grants on it and no invitation to it is pending. Retiring ends its owner grants, each revoked for `resourceRetired`.\n\nA retired resource is named in no Usher token, and its externalId stays reserved in every letter case.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nRetires a resource, for platform administrators, once its owners' grants are the only live grants on it and no invitation to it is pending. Retiring ends its owner grants, each revoked for `resourceRetired`.\n\nA retired resource is named in no Usher token, and its externalId stays reserved in every letter case.",
 				"operationId": "retireResource",
 				"parameters": [
 					{
@@ -6880,6 +6923,9 @@
 						},
 						"description": "A live grant other than an owner's, or a pending invitation, names the resource; `grantsOrInvitationsRemain`, its text saying to revoke them first."
 					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
+					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
 					},
@@ -6898,7 +6944,7 @@
 		},
 		"/admin/resources/{externalId}/revocations": {
 			"post": {
-				"description": "Revokes every principal holding access to one resource at once, for the reason given. A principal notice names each principal it changes, and the audit event `resource.revocation` records it at `critical`.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nRevokes every principal holding access to one resource at once, for the reason given. A principal notice names each principal it changes, and the audit event `resource.revocation` records it at `critical`.",
 				"operationId": "revokeResourceAccess",
 				"parameters": [
 					{
@@ -6986,6 +7032,9 @@
 							}
 						},
 						"description": "The reason is not one of the resource revocation reasons."
+					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
@@ -7165,7 +7214,7 @@
 		},
 		"/admin/resources/{externalId}/suppression": {
 			"post": {
-				"description": "Suppresses a resource: it leaves the permissions of every Usher token and stays among each application's served resources. Platform administrators and the resource's owners suppress it.\n\nThe body is sent only with a reason. Without one, the controller records `unspecified`, a reason it alone assigns and refuses from anyone else.\n\nA category notice naming the resource reaches each application serving it.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nSuppresses a resource: it leaves the permissions of every Usher token and stays among each application's served resources. Platform administrators and the resource's owners suppress it.\n\nThe body is sent only with a reason. Without one, the controller records `unspecified`, a reason it alone assigns and refuses from anyone else.\n\nA category notice naming the resource reaches each application serving it.",
 				"operationId": "suppressResource",
 				"parameters": [
 					{
@@ -7253,6 +7302,9 @@
 							}
 						},
 						"description": "The reason is not one of the suppression reasons."
+					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
@@ -7352,7 +7404,7 @@
 		},
 		"/admin/roles/{roleName}/capabilities": {
 			"put": {
-				"description": "Replaces every capability carried by a role, for platform administrators. A principal notice names each holder of the role, and each Usher token issued afterwards confers the role's capabilities as they stand.",
+				"description": "**Planned, not implemented yet.** This operation answers `501` `notImplemented` once it has admitted you; the rest of this description is what it will do once built.\n\nReplaces every capability carried by a role, for platform administrators. A principal notice names each holder of the role, and each Usher token issued afterwards confers the role's capabilities as they stand.",
 				"operationId": "changeRoleCapabilities",
 				"parameters": [
 					{
@@ -7418,6 +7470,9 @@
 							}
 						},
 						"description": "A capability not defined by the instance."
+					},
+					"501": {
+						"$ref": "#/components/responses/NotImplemented"
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
